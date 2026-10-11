@@ -3,6 +3,10 @@ import type { Mock } from "vitest";
 import { mockLogger } from "./helpers/mockLogger.ts";
 import { mockTxConnection } from "./helpers/repoMocks.ts";
 import { loose } from "./helpers/partial.ts";
+import { parse as parseVision } from "../src/services/importPipeline/adapters/vision.ts";
+import { useTempCSV } from "./helpers/tempFile.ts";
+
+const writeTempCSV = useTempCSV("staging-rejected");
 
 const {
   clientQuery,
@@ -59,7 +63,7 @@ const query = rawQuery as unknown as Mock<
 >;
 
 /** Parsed rows as an adapter returns them: the array carries its skip count. */
-type ParsedRows<T> = T[] & { skipped?: number };
+type ParsedRows<T> = T[] & { skipped?: number; excluded?: number };
 
 // loose: an opaque placeholder. Both parsers are mocked, so the tests only
 // check that the config is forwarded untouched, not that it is well formed.
@@ -167,6 +171,47 @@ describe("stageBatch adapter resolution", () => {
     ).rejects.toThrow(/Unknown adapter/);
   });
 
+  it("rejects a mixed Vision file before inserting even its valid row", async () => {
+    getAdapter.mockReturnValue({ parse: parseVision });
+    const filePath =
+      writeTempCSV(`Date,Bank Account,Recipient,Memo,Amount,Currency
+2026-03-01,Main Account,John Doe,Dinner,-45.20,EUR
+INVALID_DATE,Main Account,Skip Date,Note,-10.00,EUR
+2026-03-02,Main Account,Skip Amount,Note,INVALID,EUR
+`);
+    await expect(
+      stageBatch({ batchId: 7, filePath, adapterName: "vision" }),
+    ).rejects.toMatchObject({
+      status: 400,
+      code: "VALIDATION_ERROR",
+      message: expect.stringContaining("2 source row(s)"),
+      details: { rejected_rows: 2, parsed_rows: 1 },
+    });
+    expect(clientQuery).not.toHaveBeenCalled();
+    expect(query.mock.calls.some(([sql]) => sql.includes("rows_total"))).toBe(
+      false,
+    );
+  });
+
+  it("rejects an entirely invalid custom file instead of reporting zero-row success", async () => {
+    const rows = Object.assign([], { skipped: 2 });
+    getAdapter.mockReturnValue({
+      parseWithConfig: vi.fn().mockResolvedValue(rows),
+    });
+    await expect(
+      stageBatch({
+        batchId: 8,
+        filePath: "/tmp/custom.csv",
+        adapterName: "generic",
+        customConfig: CONFIG,
+      }),
+    ).rejects.toMatchObject({
+      status: 400,
+      details: { rejected_rows: 2, parsed_rows: 0 },
+    });
+    expect(clientQuery).not.toHaveBeenCalled();
+  });
+
   it("shares zero-row and 500-row chunk progress across both stage pipelines", async () => {
     const bankRows: ParsedRows<{
       date: Date;
@@ -178,6 +223,7 @@ describe("stageBatch adapter resolution", () => {
       currency: "EUR",
     }));
     bankRows.skipped = 2;
+    bankRows.excluded = 2;
     getAdapter.mockReturnValue({ parse: vi.fn().mockResolvedValue(bankRows) });
     const bankProgress: unknown[] = [];
 
@@ -221,6 +267,7 @@ describe("stageBatch adapter resolution", () => {
   it("persists and reports the zero-row lifecycle without opening a chunk transaction", async () => {
     const emptyBankRows: ParsedRows<unknown> = [];
     emptyBankRows.skipped = 7;
+    emptyBankRows.excluded = 7;
     getAdapter.mockReturnValue({
       parse: vi.fn().mockResolvedValue(emptyBankRows),
     });

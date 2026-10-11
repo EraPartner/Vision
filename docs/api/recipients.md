@@ -4,8 +4,8 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/recipients
 description: Recipient (payee/payer) management with atomic merge and normalization-based matching
-date: 2026-10-08
-updated: 2026-10-08
+date: 2026-10-11
+updated: 2026-10-11
 tags: [api, recipients, payees, merge, atomic, phase-6, recipient-clusters]
 status: active
 aliases: [recipients-api, payee, payer, counterparty, recipient-management]
@@ -75,6 +75,11 @@ use the default.
   "links": []
 }
 ```
+
+`name` and `search` use Unicode case-insensitive matching, including accented upper/lowercase
+pairs on native C-locale clusters. PostgreSQL 18's `pg_catalog.pg_unicode_fast` is applied to
+search expressions only. Accents are not removed. Response shape, stored names and sorting are
+unchanged; no schema migration is required.
 
 Implementation note:
 

@@ -59,6 +59,7 @@ describe("SABBAdapter", () => {
     expect(txns).toHaveLength(1);
     expect(txns[0]!.amount).toBe(-20);
     expect(txns.skipped).toBe(3);
+    expect(txns.excluded).toBe(3);
   });
 
   it("builds comment when status posting date and other currency are present", async () => {

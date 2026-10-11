@@ -136,16 +136,27 @@ export async function parse(filePath: string): Promise<ParsedBankTransactions> {
     relax_column_count: true,
   });
   const transactions: ParsedBankTransactions = [];
+  let excluded = 0;
   let skipped = 0;
 
   for (const [i, parts] of records.entries()) {
     if (i === 0 && parts[0] && parts[0].trim() === "Type") continue;
+
+    if (
+      parts.length >= MIN_FIELDS &&
+      (parts[8] || "").trim().toUpperCase() !== "COMPLETED"
+    ) {
+      skipped++;
+      excluded++;
+      continue;
+    }
     const tx = parseRow(parts);
     if (tx) transactions.push(tx);
     else skipped++;
   }
 
   transactions.skipped = skipped;
+  transactions.excluded = excluded;
   logger.info(
     `Revolut CSV parsed: ${transactions.length} transactions, ${skipped} skipped`,
   );

@@ -55,9 +55,11 @@ export function useResearchNewsQuery(symbol: string, enabled: boolean) {
 
 export function usePortfolioForecastQuery(
     input: Parameters<typeof apiClient.getPortfolioForecast>[0],
+    enabled = true,
 ) {
     return useQuery({
         queryKey: ["portfolio-forecast", input],
+        enabled,
         queryFn: () => apiClient.getPortfolioForecast(input),
         staleTime: 5 * 60 * 1000,
     });

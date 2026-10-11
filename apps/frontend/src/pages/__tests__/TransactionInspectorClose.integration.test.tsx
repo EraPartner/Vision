@@ -103,3 +103,54 @@ describe("Transaction inspector dismissal (integration)", () => {
         },
     );
 });
+
+describe("Quick Look dismissal (integration)", () => {
+    it.each(["Space", "Escape", "pointer"])(
+        "restores focus without opening the inspector after %s",
+        async (dismissal) => {
+            server.use(
+                http.get(`${API_BASE}/api/transactions`, () =>
+                    ok(
+                        transactionsBody({
+                            items: [
+                                transactionRow({
+                                    id: 42,
+                                    recipient_name: "Quick Look payee",
+                                    amount: -25,
+                                }),
+                            ],
+                        }),
+                    ),
+                ),
+            );
+            const user = userEvent.setup();
+            renderTransactionsPage();
+            const row = await screen.findByRole("row", {
+                name: /Quick Look payee/,
+            });
+            act(() => row.focus());
+            await screen.findByRole("complementary", {
+                name: /transaction details/i,
+            });
+            await user.click(screen.getByRole("button", { name: /^close$/i }));
+            await waitFor(() => expect(row).toHaveFocus());
+            await user.keyboard(" ");
+            await screen.findByRole("dialog", { name: /quick look/i });
+            if (dismissal === "pointer")
+                await user.click(
+                    screen.getByRole("button", { name: /^close$/i }),
+                );
+            else await user.keyboard(dismissal === "Escape" ? "{Escape}" : " ");
+            await waitFor(() =>
+                expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+            );
+            await waitFor(() => expect(row).toHaveFocus());
+            expect(
+                screen.queryByRole("complementary", {
+                    name: /transaction details/i,
+                }),
+            ).not.toBeInTheDocument();
+            expect(row).toHaveAttribute("aria-selected", "false");
+        },
+    );
+});

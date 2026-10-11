@@ -2,9 +2,9 @@
 title: Feature - Portfolio & Investments
 type: feature
 status: active
-date: 2026-10-10
-last_modified: 2026-10-08
-updated: 2026-10-10
+date: 2026-10-11
+last_modified: 2026-10-11
+updated: 2026-10-11
 tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, phase-14, pdf-export, offline-resilience, stale-prices, online-status-detection, graceful-degradation, portfolio-summary, realtime-totals, decimal-precision, monetary-math, snapshot-valuation-parity, fixed-income-accrual, real-estate-appreciation, net-worth-reconciliation, historical-fx, snapshot-fx, loading-states, error-states, page-error, skeleton, portfolio-unit-math, shared-utils, splits-event, return-of-capital, banker-rounding, fx-attribution, asset-gain, fx-gain, purchase-date-rates, value-fx-neutral, adr-074, adr-091, adr-100, per-account, move-holding, close-account, brokerage-fanout, rebalancing, saved-plans, cash-aware, cross-workspace, adr-098, portfolio-ticker, marquee, live-quotes, ticker-manager, show-in-ticker, migration-0061, fx-aware-pnl, unified-detail-dialog, useFxAwarePnl]
 aliases: [portfolio-feature, investments-feature, holdings, net-worth, stocks, crypto, real-estate, savings, bonds, metals, performance, watchlist]
 description: "Track stocks, ETFs, crypto, metals, real estate, savings, and bonds; includes Phase 8 PDF report export with 6 portfolio sections. 2026-05-29 adds historical FX in snapshots and loading/error states on all asset pages. June 2026 adds snapshotBuilder split/return_of_capital events, APP_TIMEZONE day-boundary fix, shared portfolioUnitMath.ts, and FX attribution UI (ADR-074): asset gain / FX effect decomposition on overview, performance, asset pages, and investment detail."
@@ -842,7 +842,7 @@ A Wall-Street-style horizontally scrolling ticker tape was added to the Portfoli
 
 ### Behaviour
 
-- **Source**: From the full set of holdings with a ticker symbol quotable by Yahoo Finance (the _manageable universe_), only those where `show_in_ticker !== false` are actually quoted and displayed (the _included_ set). Non-symbol holdings such as real estate and savings are excluded from the manageable universe automatically.
+- **Source**: The _manageable universe_ contains holdings configured with `price_provider: yahoo` and a nonempty provider identifier (or symbol when that Yahoo identifier is absent). Of these, only holdings where `show_in_ticker !== false` are actually quoted and displayed (the _included_ set). Manual and other-provider holdings are excluded even when they have a bare symbol. Non-symbol holdings such as real estate and savings are also excluded. Returned quotes must match the configured Yahoo identifier exactly; crypto pairs never fall back to the bare base symbol.
 - **Excluded holdings make no network requests**: symbols filtered out by `show_in_ticker === false` are not passed to the Yahoo batch quote call — a deliberate network saving.
 - **Symbol resolution**: Prefers `price_provider_id` when `price_provider === 'yahoo'`; falls back to the bare `symbol`. This mirrors how the rest of the codebase requests Yahoo quotes (e.g. a holding named "Apple" priced via provider id `AAPL` quotes as `AAPL`).
 - **Live data**: Fetches batch day-change quotes from `GET /api/market/quote` with `detail=basic` (same endpoint as the Market Overview research page and the command palette ticker lookup). Returns `price`, `change`, `changePercent`, `currency` per symbol.
@@ -1349,3 +1349,9 @@ Those supporting columns start hidden and their visibility lasts for the mounted
 presentation only; calculations and available investment records are unchanged. Savings rates use
 the selected number format. Supporting summary cards align at their top edge instead of stretching
 to match neighbouring explanatory content.
+
+### Savings interest explanation
+
+The annual-interest estimate is remaining principal multiplied by the annual rate, excluding accrued
+interest already included in current value. Savings and bond help text uses this principal basis;
+the valuation calculation remains the one defined by [[docs/adr/061-snapshot-valuation-parity]].

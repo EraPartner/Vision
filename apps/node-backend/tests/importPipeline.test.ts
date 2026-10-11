@@ -293,7 +293,8 @@ describe("stageBatch", () => {
         currency: "EUR",
       },
     ]);
-    parsed.skipped = 3; // adapter reported 3 unparseable rows
+    parsed.skipped = 3; // adapter deliberately excluded 3 non-settled rows
+    parsed.excluded = 3;
     getAdapter.mockReturnValue(
       partial<BankCsvAdapter>({ parse: vi.fn().mockResolvedValue(parsed) }),
     );

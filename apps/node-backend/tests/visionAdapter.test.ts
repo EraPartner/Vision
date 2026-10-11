@@ -26,6 +26,10 @@ INVALID_DATE,Main Account,Skip Date,Note,-10.00,EUR,944.80,OTHER,invalid date
 
     expect(txns).toHaveLength(1);
     expect(txns.skipped).toBe(2);
+    expect(txns.issues).toEqual([
+      "Data row 2: Date is invalid",
+      "Data row 3: Amount is invalid",
+    ]);
     expect(txns[0]!.recipient).toBe("JOHN DOE");
     expect(txns[0]!.amount).toBe(-45.2);
     expect(txns[0]!.balance).toBe(954.8);

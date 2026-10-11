@@ -25,16 +25,16 @@ const BANK_LABEL = "Vision";
 
 /**
  * @param row a `columns: true` csv-parse record
- * @returns null when the row is unusable (no date / non-numeric amount)
+ * @throws a safe field diagnostic when date or amount is unusable
  */
 function rowToTransaction(
   row: Record<string, string>,
-): ParsedBankTransaction | null {
+): ParsedBankTransaction {
   const dateStr = (row["Date"] || "").trim();
-  if (!dateStr) return null;
+  if (!dateStr) throw new Error("Date is required");
 
   const date = parseDateFlexibleUtc(dateStr);
-  if (!date) return null;
+  if (!date) throw new Error("Date is invalid");
 
   // Strip a leading "'": older exports ran numeric cells through the CSV
   // formula-injection guard, which prepended "'" to negatives ("'-12.34").
@@ -44,7 +44,7 @@ function rowToTransaction(
   // an EU-decimal "12,34" into 1234 (a silent 100× error).
   const amountStr = (row["Amount"] || "").replace(/'/g, "").trim();
   const amount = parseAmountField(amountStr);
-  if (isNaN(amount)) return null;
+  if (!Number.isFinite(amount)) throw new Error("Amount is invalid");
 
   const bankAccount = normalizeToUppercase(
     (row["Bank Account"] || "VISION").trim(),
@@ -123,16 +123,25 @@ export async function parse(filePath: string): Promise<ParsedBankTransactions> {
 
   const transactions: ParsedBankTransactions = [];
   let skipped = 0;
-  for (const row of records) {
+  const issues: string[] = [];
+  for (const [index, row] of records.entries()) {
     try {
-      const tx = rowToTransaction(row);
-      if (tx) transactions.push(tx);
-      else skipped++;
-    } catch {
+      transactions.push(rowToTransaction(row));
+    } catch (error) {
       skipped++;
+      // Never echo source values or arbitrary parser exceptions.
+      const reason =
+        error instanceof Error &&
+        ["Date is required", "Date is invalid", "Amount is invalid"].includes(
+          error.message,
+        )
+          ? error.message
+          : "Date or Amount could not be parsed";
+      if (issues.length < 10) issues.push(`Data row ${index + 1}: ${reason}`);
     }
   }
   transactions.skipped = skipped;
+  transactions.issues = issues;
 
   logger.info(
     `Vision CSV parsed: ${transactions.length} transactions, ${skipped} skipped`,

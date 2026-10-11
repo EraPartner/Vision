@@ -3,8 +3,8 @@ title: Backend Architecture
 type: architecture
 status: active
 description: "Node.js backend architecture and diagrams. Phase 3: infoRepository split into 7 domain-specific sub-modules. Phase 9: Decimal.js enforcement on all monetary paths. Phase E: Forecast cache materialization with 6-hour TTL and nightly job. May 2026: Transaction tags as orthogonal dimension (ADR-052). June 2026: Route→service boundary enforced (ADR-067, 14 new thin seams); global API rate limiter + trusted-proxy XFF + VISION_DEV fail-safe (ADR security); mv_recipient_monthly dropped (ADR-068); @vision/shared-utils package + banker's rounding canonical (ADR-069). September 2026: transaction ownership uses the ADR-088 Account entity and canonical account_id foreign keys."
-date: 2026-10-10
-last_modified: 2026-10-08
+date: 2026-10-11
+last_modified: 2026-10-11
 tags: [architecture, backend, uml, plantuml, phase-3, phase-6, phase-9, phase-e, decimal, money, precision, caching, materialization, nightly-job, startup, dependency-ordering, db-polling, graceful-shutdown, signal-handling, offline-resilience, network-reachability, tags, tagging, orthogonal-dimension, route-service-boundary, thin-seams, global-rate-limiter, trusted-proxies, vision-dev, mv-recipient-monthly-drop, shared-utils, banker-rounding]
 aliases: [backend architecture, node architecture, server design]
 ---
@@ -1434,6 +1434,12 @@ The raw PlantUML source files are stored in `docs/diagrams/`:
 - `backend-database-schema.puml` - Database ERD
 
 **Import & Processing:**
+
+Bank staging rejects malformed transaction data before storing any rows; intentional non-settled
+exclusions remain allowed. Both diagrams show this early failure path.
+
+![[docs/diagrams/import-pipeline.puml]]
+![[docs/diagrams/import-sequence.puml]]
 
 - `import-pipeline.puml` - CSV import flow
 - `import-sequence.puml` - Detailed import sequence

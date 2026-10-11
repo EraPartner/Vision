@@ -5,10 +5,14 @@ import userEvent from "@testing-library/user-event";
 import { renderWithApp } from "@/test/renderWithApp";
 import PortfolioForecastPage from "./PortfolioForecastPage";
 
-const { inputs } = vi.hoisted(() => ({ inputs: [] as unknown[] }));
+const { inputs, enabledStates } = vi.hoisted(() => ({
+    inputs: [] as unknown[],
+    enabledStates: [] as boolean[],
+}));
 
 vi.mock("@/features/research/useResearchQueries", () => ({
-    usePortfolioForecastQuery: (input: unknown) => {
+    usePortfolioForecastQuery: (input: unknown, enabled: boolean) => {
+        enabledStates.push(enabled);
         inputs.push(input);
         return { data: undefined, isFetching: false, isError: false };
     },
@@ -126,5 +130,41 @@ describe("PortfolioForecastPage locale inputs", () => {
         expect(contribution).toHaveAttribute("inputmode", "decimal");
         expect(target).toHaveAttribute("type", "text");
         expect(target).toHaveAttribute("inputmode", "decimal");
+    });
+    it("rejects malformed and negative assumptions and resumes after correction", async () => {
+        const user = userEvent.setup();
+        renderWithApp(<PortfolioForecastPage />);
+        const contribution =
+            await screen.findByLabelText(/monthly contribution/i);
+        const target = screen.getByLabelText(/target value/i);
+        await user.type(contribution, "-1");
+        expect(contribution).toHaveAttribute("aria-invalid", "true");
+        expect(screen.getByRole("alert")).toHaveAttribute(
+            "id",
+            "contribution-error",
+        );
+        expect(enabledStates.at(-1)).toBe(false);
+        await user.clear(contribution);
+        await user.type(contribution, "12,,3");
+        expect(contribution).toHaveAttribute("aria-invalid", "true");
+        expect(enabledStates.at(-1)).toBe(false);
+        await user.clear(contribution);
+        await user.type(contribution, "0");
+        await user.type(target, "12,,3");
+        expect(target).toHaveAttribute("aria-invalid", "true");
+        expect(enabledStates.at(-1)).toBe(false);
+        await user.clear(target);
+        await user.type(target, "0");
+        expect(target).toHaveAttribute("aria-invalid", "true");
+        await user.clear(target);
+        await user.type(target, "2.500,50");
+        await waitFor(() => expect(enabledStates.at(-1)).toBe(true), {
+            timeout: 2000,
+        });
+        expect(inputs.at(-1)).toMatchObject({
+            monthlyContribution: 0,
+            targetValue: 2500.5,
+        });
+        expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     });
 });

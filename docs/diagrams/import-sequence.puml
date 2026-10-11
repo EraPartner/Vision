@@ -17,7 +17,15 @@ group 1. Prepare the uploaded rows
   User -> Frontend : Upload CSV and choose adapter
   Frontend -> Route : POST /api/import/csv/stream\nMultipart CSV + bank_name
   Route -> Pipeline : runImportPipeline(filePath, adapterName, onProgress)
-  Pipeline -> DB : createBatch() and stageBatch()\nStore parsed rows with source metadata
+  Pipeline -> DB : createBatch()\nRecord pending batch
+  Pipeline -> Pipeline : stageBatch() parses the file
+  break Unparseable transaction rows (not deliberate exclusions)
+    Pipeline -> DB : Mark batch failed with error summary
+    Pipeline --> Route : ValidationError, no staging inserts
+    Route --> Frontend : error event: VALIDATION_ERROR + detail
+    Frontend --> User : Correct source fields and upload again
+  end
+  Pipeline -> DB : Store parsed rows with source metadata
   Pipeline -> Pipeline : validateBatch()\nRequired fields + source/occurrence identity
   Pipeline -> DB : Mark validated or error rows; persist fingerprints
   Pipeline -> Pipeline : matchBatch()\nPatterns, exact/fuzzy, then new recipients

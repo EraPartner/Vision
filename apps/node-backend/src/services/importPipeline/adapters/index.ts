@@ -58,7 +58,12 @@ function withOutputContract(adapter: BankCsvAdapter): BankCsvAdapter {
   const checked = (rows: ParsedBankTransactions) => {
     checkDataContract(
       parsedBankTransactionsSchema,
-      { rows, skipped: rows.skipped },
+      {
+        rows,
+        skipped: rows.skipped,
+        excluded: rows.excluded,
+        issues: rows.issues,
+      },
       `bank adapter "${adapter.name}" output`,
     );
     return rows;

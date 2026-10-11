@@ -117,8 +117,14 @@ export async function parse(filePath: string): Promise<ParsedBankTransactions> {
   });
 
   const transactions: ParsedBankTransactions = [];
+  let excluded = 0;
   let skipped = 0;
   for (const row of records) {
+    if (NON_COMPLETED_STATUS_RE.test((row["Status"] || "").trim())) {
+      skipped++;
+      excluded++;
+      continue;
+    }
     try {
       const tx = rowToTransaction(row);
       if (tx) transactions.push(tx);
@@ -128,6 +134,7 @@ export async function parse(filePath: string): Promise<ParsedBankTransactions> {
     }
   }
   transactions.skipped = skipped;
+  transactions.excluded = excluded;
 
   logger.info(
     `SABB CSV parsed: ${transactions.length} transactions, ${skipped} skipped`,

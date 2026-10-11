@@ -184,6 +184,7 @@ function InspectorContent({
     const [editingField, setEditingField] = useState<InfoEditableField | null>(
         null,
     );
+    const [amountError, setAmountError] = useState(false);
     const [editingValue, setEditingValue] = useState("");
     const [editingAccountId, setEditingAccountId] = useState<number | null>(
         null,
@@ -216,11 +217,13 @@ function InspectorContent({
         recipient.default_category_id !== txn.categoryId;
 
     const startEdit = (field: InfoEditableField, currentValue: string) => {
+        setAmountError(false);
         setEditingField(field);
         setEditingValue(currentValue);
         setEditingAccountId(field === "bank" ? (txn.accountId ?? null) : null);
     };
     const cancelEdit = () => {
+        setAmountError(false);
         setEditingField(null);
         setEditingValue("");
         setEditingAccountId(null);
@@ -241,7 +244,11 @@ function InspectorContent({
                 },
                 appSettings.numberFormat,
             ).safeParse(trimmed);
-            if (!parsed.success) return;
+            if (!parsed.success) {
+                setAmountError(true);
+                return;
+            }
+            setAmountError(false);
             payload.amount = parsed.data;
             localValue = parsed.data;
         } else if (editingField === "date") {
@@ -389,7 +396,7 @@ function InspectorContent({
                             field.editField &&
                             editingField === field.editField ? (
                                 <form
-                                    className="flex items-center gap-1"
+                                    className="flex flex-wrap items-center gap-1"
                                     onSubmit={(event) => {
                                         event.preventDefault();
                                         void saveEdit();
@@ -427,9 +434,10 @@ function InspectorContent({
                                             id={`transaction-info-${field.editField}`}
                                             value={editingValue}
                                             rows={2}
-                                            onChange={(e) =>
-                                                setEditingValue(e.target.value)
-                                            }
+                                            onChange={(e) => {
+                                                setEditingValue(e.target.value);
+                                                setAmountError(false);
+                                            }}
                                             onKeyDown={(e) => {
                                                 if (
                                                     e.key === "Enter" &&
@@ -451,8 +459,20 @@ function InspectorContent({
                                                     : undefined
                                             }
                                             value={editingValue}
-                                            onChange={(e) =>
-                                                setEditingValue(e.target.value)
+                                            onChange={(e) => {
+                                                setEditingValue(e.target.value);
+                                                setAmountError(false);
+                                            }}
+                                            aria-invalid={
+                                                (field.editField === "amount" &&
+                                                    amountError) ||
+                                                undefined
+                                            }
+                                            aria-describedby={
+                                                field.editField === "amount" &&
+                                                amountError
+                                                    ? "transaction-amount-error"
+                                                    : undefined
                                             }
                                             className="h-8 w-36"
                                         />
@@ -478,6 +498,16 @@ function InspectorContent({
                                     >
                                         <X className="h-3.5 w-3.5" />
                                     </Button>
+                                    {field.editField === "amount" &&
+                                        amountError && (
+                                            <p
+                                                id="transaction-amount-error"
+                                                role="alert"
+                                                className="basis-full type-footnote text-destructive"
+                                            >
+                                                {t("addTxn.invalidAmount")}
+                                            </p>
+                                        )}
                                 </form>
                             ) : (
                                 <>

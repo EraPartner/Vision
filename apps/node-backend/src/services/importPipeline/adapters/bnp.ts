@@ -153,6 +153,7 @@ export async function parse(filePath: string): Promise<ParsedBankTransactions> {
     },
   });
   const transactions: ParsedBankTransactions = [];
+  let excluded = 0;
   let skipped = malformed;
   let headerSeen = false;
 
@@ -163,12 +164,22 @@ export async function parse(filePath: string): Promise<ParsedBankTransactions> {
       continue;
     }
     if (!headerSeen) continue;
+
+    if (
+      parts.length >= MIN_FIELDS &&
+      isNonExecutedRow((parts[11] || "").trim(), (parts[12] || "").trim())
+    ) {
+      skipped++;
+      excluded++;
+      continue;
+    }
     const tx = parseLine(parts);
     if (tx) transactions.push(tx);
     else skipped++;
   }
 
   transactions.skipped = skipped;
+  transactions.excluded = excluded;
   logger.info(
     `BNP CSV parsed: ${transactions.length} transactions, ${skipped} skipped`,
   );

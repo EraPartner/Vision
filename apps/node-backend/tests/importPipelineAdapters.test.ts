@@ -111,6 +111,7 @@ describe("BNP adapter — parseAmountField edge cases", () => {
     const txns = await parseBnp(writeTempCSV("bnp", csv));
     expect(txns.map((t) => t.amount)).toEqual([-42, -7]);
     expect(txns.skipped).toBe(2);
+    expect(txns.excluded).toBe(2);
   });
 });
 

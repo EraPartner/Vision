@@ -7232,6 +7232,10 @@ paths:
     get:
       summary: List recipients
       operationId: getRecipients
+      description: >-
+        Name and general search filters use Unicode case-insensitive matching,
+        including accented uppercase/lowercase pairs on native C-locale clusters.
+        Accents are preserved. Stored names, sort order and response shape are unchanged.
       tags: [Recipients]
       parameters:
         - in: query
@@ -11520,6 +11524,13 @@ paths:
     post:
       summary: Import transactions from bank CSV
       operationId: importCsv
+      description: >-
+        Rejects the whole file before staging if any transaction data row cannot
+        be parsed. No transactions are imported from a rejected file. Correct the
+        reported dates, amounts or CSV structure and upload again. Intentionally
+        excluded non-settled records do not trigger this rejection. JSON uploads
+        return 400 VALIDATION_ERROR; streaming uploads emit an error event with
+        code VALIDATION_ERROR and an actionable detail message.
       tags: [Import]
       requestBody:
         required: true
@@ -11563,6 +11574,13 @@ paths:
     post:
       summary: Import CSV with custom column mapping
       operationId: importCsvCustom
+      description: >-
+        Rejects the whole file before staging if any transaction data row cannot
+        be parsed. No transactions are imported from a rejected file. Correct the
+        reported dates, amounts or CSV structure and upload again. Intentionally
+        excluded non-settled records do not trigger this rejection. JSON uploads
+        return 400 VALIDATION_ERROR; streaming uploads emit an error event with
+        code VALIDATION_ERROR and an actionable detail message.
       tags: [Import]
       requestBody:
         required: true
@@ -11643,6 +11661,13 @@ paths:
     post:
       summary: Stream-import large CSV file
       operationId: importCsvStream
+      description: >-
+        Rejects the whole file before staging if any transaction data row cannot
+        be parsed. No transactions are imported from a rejected file. Correct the
+        reported dates, amounts or CSV structure and upload again. Intentionally
+        excluded non-settled records do not trigger this rejection. JSON uploads
+        return 400 VALIDATION_ERROR; streaming uploads emit an error event with
+        code VALIDATION_ERROR and an actionable detail message.
       tags: [Import]
       requestBody:
         required: true

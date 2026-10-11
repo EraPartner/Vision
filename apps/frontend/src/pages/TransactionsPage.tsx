@@ -156,7 +156,14 @@ export default function TransactionsPage() {
     );
     const closeQuickLook = useCallback(() => {
         setQuickLookTransaction(null);
-        requestAnimationFrame(() => quickLookReturnFocusRef.current?.focus());
+        requestAnimationFrame(() => {
+            restoringInspectorFocusRef.current = true;
+            try {
+                quickLookReturnFocusRef.current?.focus();
+            } finally {
+                restoringInspectorFocusRef.current = false;
+            }
+        });
     }, []);
 
     const recipientIdFilter = searchParams.get("recipient_id")

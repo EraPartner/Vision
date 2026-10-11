@@ -4,9 +4,9 @@ type: endpoint
 method: POST, GET, PATCH, DELETE
 path: /api/import
 description: CSV import for transactions, recipients, and categories; CRUD for saved named custom CSV parsers
-date: 2026-10-08
-updated: 2026-10-08
-last_modified: 2026-09-27
+date: 2026-10-11
+updated: 2026-10-11
+last_modified: 2026-10-11
 tags:
   [
     api,
@@ -123,6 +123,14 @@ bank parsers retain their own numeric rules.
 `encoding` accepts UTF-8 (`utf-8`/`utf8`), Latin-1 (`latin1`/`latin-1`/`iso-8859-1`), and
 `windows-1252`. Windows-1252 is decoded as that encoding, including euro/punctuation. Unsupported
 names return 400 rather than a Buffer decoding error. See [[docs/features/import]].
+
+Malformed transaction rows now reject the entire bank file before staging or recipient matching.
+JSON upload endpoints return `400 VALIDATION_ERROR`; the SSE upload sends `error` with
+`code: VALIDATION_ERROR` and an actionable `detail`. No canonical transactions are written.
+The diagnostic gives the rejected count; Vision files also include up to ten source data-row
+ordinals and date/amount reasons. Intentional non-settled exclusions remain allowed. This is a
+behavioral breaking change for clients relying on partial acceptance of malformed files; response
+schemas and operation paths are unchanged.
 
 ### POST /api/import/csv/stream
 
