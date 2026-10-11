@@ -242,6 +242,58 @@ const REGION_SCENARIOS: Scenario[] = [
             expect(r.partners[0]?.ownHomeCreditRegime).toBe("none");
         },
     },
+    {
+        id: "RG-12",
+        description: "separate assessment: the chèque habitat child increase follows the partner the child is a dependant of",
+        rows: ["cheque-habitat-formula", "hh-supplements-allocation"],
+        articles: "WIB 92 Walloon art. 145/46ter §2 (\"par enfant à charge\"); WIB 92 arts 126 §1, 136",
+        status: "verified",
+        household: {
+            ...household(
+                [partner("A", [activity("employee", 50_000)]), partner("B", [activity("employee", 20_000)])],
+                {
+                    region: "wallonia",
+                    communalSurchargePercent: 7.5,
+                    dependents: { children: 1, otherPersons: 0, claimantPartnerId: "B" },
+                    home: home({
+                        mortgageInterestPaid: 4_000,
+                        mortgageCapitalRepaid: 2_000,
+                        mortgageStartYear: 2016,
+                        firstQualifyingYear: 2016,
+                        mortgageCreditPartnerId: "A",
+                    }),
+                },
+            ),
+        },
+        verify: (r) => {
+            // No legal union → separate (art. 126 §1); the child is B's dependant (B claims the
+            // art. 132 supplement), so A's chèque habitat has no child increase:
+            // 1,520 − (37,535 − 27,353) × 1.275% = 1,390.1795
+            // A: 10,275.25 − 1,390.1795 = 8,885.0705 × 1.075 = 9,551.4507875
+            expect(r.assessment.mode).toBe("separate");
+            eur(r.partners[1]?.exemption.dependentSupplements, 1_980);
+            eur(r.partners[0]?.ownHomeCredit, 1_390.1795);
+            eur(r.partners[0]?.totalPIT, 9_551.4507875);
+        },
+    },
+    {
+        id: "RG-13",
+        description: "separate assessment: the woonbonus +80 for three children follows the children's claimant",
+        rows: ["woonbonus-extra", "hh-supplements-allocation"],
+        articles: "WIB 92 Flemish art. 145/38/2 §2 (\"drie of meer kinderen ten laste\"); WIB 92 arts 126 §1, 136",
+        status: "verified",
+        household: household(
+            [partner("A", [activity("employee", 50_000)]), partner("B", [activity("employee", 20_000)])],
+            {
+                dependents: { children: 3, otherPersons: 0, claimantPartnerId: "B" },
+                home: home({ mortgageInterestPaid: 3_000, mortgageCapitalRepaid: 3_000, mortgageStartYear: 2018 }),
+            },
+        ),
+        verify: (r) => {
+            // A has no dependants: (1,520 + 760) × 40% = 912 (no +80)
+            eur(r.partners[0]?.ownHomeCredit, 912);
+        },
+    },
     ...VOUCHER_TABLE.map(([year, region, expected, arithmetic]): Scenario => ({
         id: `SV-${year}-${region}`,
         description: `service vouchers, ${region}, IY ${year}, spend 2,000: ${arithmetic}`,
