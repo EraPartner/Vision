@@ -14,7 +14,8 @@
  *   taxableIncome = grossIncome − employeeSS − professionalExpenses − otherDeductions
  *   totalPIT      = federalPITAfterReductions + communalSurcharge
  *   totalTaxBurden= totalPIT + employeeSS + specialSS + propertyTaxEstimate
- *   netTakeHome   = grossIncome − totalTaxBurden
+ *   netTakeHome   = grossIncome + spouseProfessionalIncome − totalTaxBurden
+ * (the spouse row appears only under a joint assessment with spouse income)
  * The bracket/exemption step is deliberately prose, not a signed row: it is not
  * a plain subtraction (regional autonomy factor), and `PitBreakdownCard` below
  * itemises it.
@@ -196,7 +197,20 @@ export function TaxComputationFlow({
             tone: "text-loss",
             weight: 1,
             chip: `${t("tax.masthead.meta.effectiveBurden")} · ${formatPercent(calculation.effectiveRate, { digits: 1 })}`,
-            then: { items: [{ label: t("tax.flow.op.netOut") }] },
+            then: {
+                items: [
+                    { label: t("tax.flow.op.netOut") },
+                    ...(calculation.spouseProfessionalIncome > 0
+                        ? [
+                              {
+                                  label: t("tax.pit.row.spouseIncome"),
+                                  value: calculation.spouseProfessionalIncome,
+                                  sign: "+" as const,
+                              },
+                          ]
+                        : []),
+                ],
+            },
         },
         {
             id: "net",

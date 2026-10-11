@@ -646,23 +646,35 @@ export function computeBelgianPIT(
         table.savingsInterestExcessRate;
 
     // 13. Aggregate totals — distinct meanings, no double-counting.
+    //     Under a joint assessment `totalPIT` and the CSSS cover both spouses, so the
+    //     household aggregates (gross, net take-home, effective rate) include the spouse's
+    //     professional income as well; the per-step rows above stay the earner's.
+    const spouseIncome =
+        profile.filingStatus === "married_joint"
+            ? Math.max(profile.spouseProfessionalIncome || 0, 0)
+            : 0;
+    const householdGross = gross + spouseIncome;
     const totalPIT = federalPITAfterReductions + communalSurcharge;
     const totalTaxBurden =
         totalPIT + employeeSS + specialSS + propertyTaxEstimate;
-    const effectiveRate = gross > 0 ? (totalTaxBurden / gross) * 100 : 0;
+    const effectiveRate =
+        householdGross > 0 ? (totalTaxBurden / householdGross) * 100 : 0;
 
     let marginalRate = table.brackets[0].rate * 100;
     for (const b of table.brackets) {
         if (taxableIncome > b.from) marginalRate = b.rate * 100;
     }
 
-    const netTakeHome = gross - totalTaxBurden;
+    const netTakeHome = householdGross - totalTaxBurden;
     const monthlyTaxReserve = totalPIT / 12;
 
     const federalPITBeforeExemption = pitBeforeExemption.total;
 
     const breakdown = [
         { label: "Gross Income", amount: gross },
+        ...(spouseIncome > 0
+            ? [{ label: "Spouse professional income", amount: spouseIncome }]
+            : []),
         {
             label: "Employee Social Security",
             amount: -employeeSS,
@@ -791,6 +803,8 @@ export function computeBelgianPIT(
 
     return {
         grossIncome: gross,
+        spouseProfessionalIncome: spouseIncome,
+        householdGrossIncome: householdGross,
         employeeSocialSecurity: employeeSS,
         specialSocialSecurityContribution: specialSS,
         personalExemptionAmount: personalExemptionTotal,

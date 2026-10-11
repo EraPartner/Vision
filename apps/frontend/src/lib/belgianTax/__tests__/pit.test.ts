@@ -778,6 +778,14 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
         expect(joint.federalPITBeforeExemption - joint.personalExemptionBenefit).toBeGreaterThan(
             earnerOnly.federalPITBeforeExemption - earnerOnly.personalExemptionBenefit,
         );
+        // Household aggregates include the spouse's income, since totalPIT and the CSSS do.
+        expect(joint.grossIncome).toBe(50_000);
+        expect(joint.spouseProfessionalIncome).toBe(35_000);
+        expect(joint.householdGrossIncome).toBe(85_000);
+        expect(joint.netTakeHome).toBeCloseTo(85_000 - joint.totalTaxBurden, 6);
+        expect(joint.effectiveRate).toBeCloseTo((joint.totalTaxBurden / 85_000) * 100, 6);
+        expect(joint.breakdown.find((r) => r.label === "Spouse professional income")?.amount).toBe(35_000);
+        expect(earnerOnly.householdGrossIncome).toBe(50_000);
     });
 
     test("marital quotient ignored for single filer even if spouse income set", () => {

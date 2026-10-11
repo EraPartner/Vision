@@ -4225,6 +4225,7 @@
   "tax.pit.row.portfolioTaxesYear": "Portfolio taxes ({year})",
   "tax.pit.row.propertyTaxEstimate": "Estimated property tax",
   "tax.pit.row.specialSS": "Special social security contribution",
+  "tax.pit.row.spouseIncome": "Spouse professional income",
   "tax.pit.row.taxableIncome": "Taxable income",
   "tax.pit.row.totalBurden": "Total burden (income tax + social security)",
   "tax.pit.row.totalPIT": "Total income tax",

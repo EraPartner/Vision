@@ -240,7 +240,16 @@ export interface BracketTax {
 }
 
 export interface BelgianTaxCalculation {
+    /** The taxpayer's own gross income (salary + other taxable income). */
     grossIncome: number;
+    /**
+     * Spouse's professional income counted under a joint assessment (0 otherwise).
+     * `totalPIT` and the special social security contribution cover both spouses, so
+     * `householdGrossIncome`, `netTakeHome` and `effectiveRate` include it.
+     */
+    spouseProfessionalIncome: number;
+    /** `grossIncome + spouseProfessionalIncome`; the base of `netTakeHome` and `effectiveRate`. */
+    householdGrossIncome: number;
     employeeSocialSecurity: number;
     specialSocialSecurityContribution: number;
     personalExemptionAmount: number;

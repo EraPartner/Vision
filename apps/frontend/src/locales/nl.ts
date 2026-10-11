@@ -4227,6 +4227,7 @@ const nl: Record<string, string> = {
   'tax.pit.row.portfolioTaxesYear': 'Portefeuillebelastingen ({year})',
   'tax.pit.row.propertyTaxEstimate': 'Geschatte onroerende voorheffing',
   'tax.pit.row.specialSS': 'Speciale sociale zekerheidsbijdrage',
+  'tax.pit.row.spouseIncome': 'Beroepsinkomen partner',
   'tax.pit.row.taxableIncome': 'Belastbaar inkomen',
   'tax.pit.row.totalBurden': 'Totale druk (personenbelasting + sociale zekerheid)',
   'tax.pit.row.totalPIT': 'Totale personenbelasting',
