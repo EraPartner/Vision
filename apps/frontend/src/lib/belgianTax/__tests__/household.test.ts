@@ -143,6 +143,36 @@ describe("household assembly", () => {
         expect(r.issues).toContainEqual({ code: "joint_reduction_allocation_unverified", severity: "needs_source" });
     });
 
+    test("service-voucher spend is capped per partner (art. 145/21, Wallonia IY 2025: 30% up to €1,850)", () => {
+        const h = married([activity("employee", 50_000)], [activity("employee", 30_000)]);
+        h.region = "wallonia";
+        h.partners[0]!.reductions = { ...h.partners[0]!.reductions, serviceVoucherEligible: true, serviceVoucherSpend: 3_000 };
+        h.partners[1]!.reductions = { ...h.partners[1]!.reductions, serviceVoucherEligible: true, serviceVoucherCount: 50 };
+        const r = computeHouseholdTax(h);
+        expect(r.partners[0]!.reductions.serviceVouchers).toBeCloseTo(1_850 * 0.3, 9);
+        // Legacy count × €10 = €500 spend.
+        expect(r.partners[1]!.reductions.serviceVouchers).toBeCloseTo(500 * 0.3, 9);
+    });
+
+    test("own-home credit uses the claiming partner's income (Walloon chèque habitat phase-out)", () => {
+        const h = married([activity("employee", 15_000)], [activity("employee", 60_000)]);
+        h.region = "wallonia";
+        h.home = {
+            ...h.home,
+            mortgageIsPrimaryResidence: true,
+            mortgageStartYear: 2018,
+            mortgageInterestPaid: 4_000,
+            mortgageCreditPartnerId: "B",
+        };
+        const r = computeHouseholdTax(h);
+        const b = r.partners[1]!;
+        expect(b.ownHomeCredit).toBeCloseTo(
+            1_520 - (b.taxableIncomeBeforeQuotient - 27_353) * 0.01275,
+            9,
+        );
+        expect(r.partners[0]!.ownHomeCredit).toBe(0);
+    });
+
     test("alimony beyond the payer's income is charged on the other spouse (art. 105, 3°)", () => {
         const h = married([activity("employee", 0)], [activity("net_professional_amount", 40_000)]);
         h.partners[0]!.alimonyPaid = 10_000;

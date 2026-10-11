@@ -55,6 +55,7 @@ const TAX_PROFILE_MONEY_FIELDS = [
   "spouseProfessionalIncome",
   "annualDividendIncome",
   "annualSavingsInterest",
+  "serviceVoucherSpend",
 ];
 const TAX_PROFILE_COUNT_FIELDS = [
   "dependentChildren",

@@ -49,6 +49,7 @@ const profileArb: fc.Arbitrary<BelgianTaxProfile> = fc
         childcareEligibleDays: fc.integer({ min: 0, max: 250 }),
         serviceVoucherEligible: fc.boolean(),
         serviceVoucherCount: fc.integer({ min: 0, max: 200 }),
+        serviceVoucherSpend: fc.option(money(3_000), { nil: undefined }),
         cadastralIncome: money(3_000),
         mortgageIsPrimaryResidence: fc.boolean(),
         mortgageInterestPaid: money(8_000),

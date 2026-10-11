@@ -209,39 +209,37 @@ export type ReductionInputs = Pick<
     | "domesticHelpCosts"
     | "domesticHelpEligible"
     | "serviceVoucherCount"
+    | "serviceVoucherSpend"
     | "serviceVoucherEligible"
     | "medicalExpenses"
 >;
 
 /**
- * Regional service-voucher (dienstencheques / titres-services) tax reduction.
+ * Regional service-voucher (dienstencheques / titres-services) tax reduction, WIB 92 art. 145/21
+ * in its regional versions: rate × min(expenses paid, cap per taxpayer). Rates and caps are in
+ * `table.serviceVoucherRegional` (sources in constants.ts and the rule matrix).
  *
- * Three different scheme shapes:
- *  - Brussels: 15% of voucher cost on the first 172 vouchers.
- *  - Wallonia: fixed €0.90 per voucher on the first 150 vouchers.
- *  - Flanders: abolished from 1 Jan 2025 (rate/amount = 0).
- *
- * Returns 0 when the eligibility flag is false or count is 0.
+ * The expense is `serviceVoucherSpend` when set; otherwise the legacy `serviceVoucherCount` ×
+ * the table's `voucherPrice`. Returns 0 when the eligibility flag is false, nothing was spent, or
+ * the region has abolished the reduction for the year.
  */
 export function computeServiceVoucherCredit(
-    inputs: Pick<ReductionInputs, "serviceVoucherCount" | "serviceVoucherEligible">,
+    inputs: Pick<
+        ReductionInputs,
+        "serviceVoucherCount" | "serviceVoucherSpend" | "serviceVoucherEligible"
+    >,
     region: BelgianRegion,
     table: BelgianTaxYearTable,
 ): number {
     if (!inputs.serviceVoucherEligible) return 0;
-    const count = Math.max(inputs.serviceVoucherCount || 0, 0);
-    if (count <= 0) return 0;
     const params = table.serviceVoucherRegional[region];
-    if (!params) return 0;
-    const eligibleCount = Math.min(count, params.maxCount);
-    if (eligibleCount <= 0) return 0;
-    if (params.amountPerVoucher > 0) {
-        return eligibleCount * params.amountPerVoucher;
-    }
-    if (params.rate > 0) {
-        return eligibleCount * params.voucherPrice * params.rate;
-    }
-    return 0;
+    if (!params || params.rate <= 0 || params.spendCap <= 0) return 0;
+    const spend =
+        typeof inputs.serviceVoucherSpend === "number"
+            ? Math.max(inputs.serviceVoucherSpend, 0)
+            : Math.max(inputs.serviceVoucherCount || 0, 0) * params.voucherPrice;
+    if (spend <= 0) return 0;
+    return Math.min(spend, params.spendCap) * params.rate;
 }
 
 export interface TaxReductionBreakdown {
@@ -362,7 +360,19 @@ export type OwnHomeCreditInputs = Pick<
     | "mortgageRegion"
     | "region"
     | "dependentChildren"
+    | "dependentChildrenDisabled"
 >;
+
+/** Figures of the taxpayer who claims the own-home credit. */
+export interface OwnHomeCreditTaxpayer {
+    /**
+     * Taxable income of the period. The chèque habitat income limits refer to the art. 6
+     * taxable income without non-professional movable income (art. 145/46ter §2).
+     */
+    taxableIncome: number;
+    /** Highest art. 130 rate reached, in percent (the pre-2015 woonbonus rate). */
+    marginalRatePercent: number;
+}
 
 /**
  * Resolve the regional own-home credit regime applicable to the user's mortgage.
@@ -378,59 +388,93 @@ export function resolveMortgageRegime(
     const startYear = inputs.mortgageStartYear ?? 0;
     if (region === "flanders" && startYear > 0 && startYear < 2020)
         return "flemish_woonbonus";
-    if (region === "wallonia" && startYear >= 2016)
+    // Chèque habitat: loans "contracté à partir du 1er janvier 2016 et au plus tard le
+    // 31 décembre 2024" (art. 145/46quater §1, 3°, as amended by the Walloon decree of
+    // 5 Dec 2024; FPS circular 2026/C/18).
+    if (region === "wallonia" && startYear >= 2016 && startYear <= 2024)
         return "walloon_cheque_habitat";
     return "none";
 }
 
 /**
- * Compute the regional own-home tax credit.
+ * Compute the regional own-home tax credit of the claiming taxpayer.
  *
- * Flemish woonbonus (pre-2020, primary residence) — two sub-regimes by origination year:
- *   - Pre-2016 ("ordinary" woonbonus): base €2,280 (IY 2025)
- *   - 2016-2019 ("geïntegreerde" woonbonus): base €1,520 (IY 2025; merged housing & ordinary
- *     credits into a single, reduced-cap scheme)
- *   credit = min(interest + capital, base_cap [+ first-10y supplement] [+ 3+ children supplement]) × 40%
+ * Flemish woonbonus (loans signed before 2020, primary residence; WIB 92 Flemish version):
+ *   - before 2015 (art. 145/37 §2): base €2,280, reduction at the taxpayer's highest art. 130
+ *     rate with a 30% minimum;
+ *   - 2015 (art. 145/37 §3): base €1,520, 40%;
+ *   - 2016-2019 "geïntegreerde woonbonus" (art. 145/38/2): base €1,520, 40%.
+ *   During the first ten taxable periods the base rises by €760, and by a further €80 with three
+ *   or more dependent children ("De verhoging, vermeld in het tweede lid, wordt bijkomend
+ *   verhoogd met 80 euro"). Expenses = interest + capital, capped at the base.
  *
- * Walloon chèque habitat (post-2016, primary residence, first 10 loan years):
- *   credit = base [+ €125 × dependent children]
- *   (Simplified — actual scheme has income-based phaseout and decreasing tail in years 11–20.)
+ * Walloon chèque habitat (loans signed 2016-2024; art. 145/46ter as coordinated in FPS circular
+ * 2026/C/18):
+ *   - §2: taxable income ≤ lower limit → €1,520; between the limits → €1,520 minus 1.275% of
+ *     the income above the lower limit; above the upper limit → 0. Plus €125 per dependent child
+ *     (disabled children count twice), except above the upper limit.
+ *   - §3: halved from the eleventh taxable period. The halving for a second home is not
+ *     modelled (no input).
+ *   - §4: never more than the interest, capital and premiums actually paid.
  *
- * All other cases (Brussels, post-2020 Flemish, secondary residences): 0.
+ * All other cases (Brussels, post-2020 Flemish, post-2024 Walloon, secondary residences): 0.
  */
 export function computeOwnHomeCredit(
     inputs: OwnHomeCreditInputs,
     table: BelgianTaxYearTable,
     regime: MortgageCreditRegime,
+    taxpayer: OwnHomeCreditTaxpayer,
 ): number {
     if (regime === "none") return 0;
     const interest = Math.max(inputs.mortgageInterestPaid || 0, 0);
     const capital = Math.max(inputs.mortgageCapitalRepaid || 0, 0);
+    const startYear = inputs.mortgageStartYear ?? 0;
+    // Taxable periods since the loan year: 0 is the first period, 10 the eleventh.
+    const loanAge = Math.max(0, table.year - startYear);
 
     if (regime === "flemish_woonbonus") {
-        const startYear = inputs.mortgageStartYear ?? 0;
-        const loanAge = Math.max(0, table.year - startYear);
-        // 2016 reform: loans signed 2016+ use the lower "geïntegreerde" base cap.
-        const isIntegrated = startYear >= 2016;
-        let cap = isIntegrated
-            ? table.flemishIntegratedWoonbonusBaseCap
-            : table.flemishWoonbonusBaseCap;
-        if (loanAge < 10) cap += table.flemishWoonbonusExtraFirst10y;
-        if ((inputs.dependentChildren || 0) >= 3)
-            cap += table.flemishWoonbonusExtraChildren;
-        const eligibleExpenses = Math.min(interest + capital, cap);
-        return eligibleExpenses * table.flemishWoonbonusRate;
+        let cap: number;
+        let rate: number;
+        if (startYear < 2015) {
+            cap = table.flemishWoonbonusBaseCap;
+            rate = Math.max(
+                taxpayer.marginalRatePercent / 100,
+                table.flemishWoonbonusPre2015MinimumRate,
+            );
+        } else if (startYear === 2015) {
+            cap = table.flemishWoonbonus2015BaseCap;
+            rate = table.flemishWoonbonusRate;
+        } else {
+            cap = table.flemishIntegratedWoonbonusBaseCap;
+            rate = table.flemishWoonbonusRate;
+        }
+        if (loanAge < 10) {
+            cap += table.flemishWoonbonusExtraFirst10y;
+            if ((inputs.dependentChildren || 0) >= 3)
+                cap += table.flemishWoonbonusExtraChildren;
+        }
+        return Math.min(interest + capital, cap) * rate;
     }
 
     if (regime === "walloon_cheque_habitat") {
-        const startYear = inputs.mortgageStartYear ?? 0;
-        const loanAge = Math.max(0, table.year - startYear);
-        // First 10 years only in our simplified model.
-        if (loanAge >= 10) return 0;
+        const income = Math.max(taxpayer.taxableIncome, 0);
+        const { lower, upper } = table.walloonChequeHabitatIncomeThresholds;
+        if (income > upper) return 0;
+        const base =
+            income <= lower
+                ? table.walloonChequeHabitatBase
+                : table.walloonChequeHabitatBase -
+                  (income - lower) * table.walloonChequeHabitatPhaseOutRate;
+        const children = Math.max(inputs.dependentChildren || 0, 0);
+        const disabled = Math.min(
+            Math.max(inputs.dependentChildrenDisabled || 0, 0),
+            children,
+        );
         const childSupplement =
-            Math.max(inputs.dependentChildren || 0, 0) *
-            table.walloonChequeHabitatChildSupplement;
-        return table.walloonChequeHabitatBase + childSupplement;
+            (children + disabled) * table.walloonChequeHabitatChildSupplement;
+        let credit = Math.max(base, 0) + childSupplement;
+        if (loanAge >= 10) credit /= 2;
+        return Math.min(credit, interest + capital);
     }
 
     return 0;

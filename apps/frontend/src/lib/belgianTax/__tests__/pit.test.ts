@@ -92,11 +92,11 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
         const result = computeWithParity(profile({ grossAnnualIncome: 15_000 }));
         expect(result.employeeSocialSecurity).toBeCloseTo(1_960.5, 5);
         expect(result.professionalExpenses).toBeCloseTo(3_911.85, 5);
-        // Civil servants: 11.07% comes off first as well.
+        // Civil servants: 11.05% comes off first as well.
         const civil = computeWithParity(
             profile({ employmentType: "civil_servant", grossAnnualIncome: 15_000 }),
         );
-        expect(civil.professionalExpenses).toBeCloseTo(15_000 * (1 - 0.1107) * 0.3, 5);
+        expect(civil.professionalExpenses).toBeCloseTo(15_000 * (1 - 0.1105) * 0.3, 5);
     });
 
     test("director gets 3% / €3,130 cap forfait", () => {
@@ -363,16 +363,22 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
         ).toBe(740);
     });
 
-    test("regional autonomy factor reduces federal PIT after credits by ~0.49% (PwC calibration)", () => {
-        // The factor multiplies federalPITAfterReductions and propagates into communal
-        // surcharge & totalPIT. Cross-check by re-deriving via the documented multiplier.
-        const r = computeWithParity(profile({ grossAnnualIncome: 60_000 }));
-        const tbl = getTaxTable(2025);
-        expect(tbl.regionalAutonomyFactor.flanders).toBeCloseTo(0.9951, 4);
-        // Sanity: federalPITAfterReductions reflects the multiplier — it cannot equal
-        // the raw (pre-autonomy) value when the factor is < 1.
-        expect(r.federalPITAfterReductions).toBeLessThan(
-            r.federalPITBeforeExemption,
+    test("state + regional factor: 1.0000 Flanders and Wallonia, 0.9950 Brussels (75.043% × opcentiemen)", () => {
+        // Reduced state tax 75.043% (RD 19 Dec 2017) × (1 + 33.257%) or × (1 + 32.591%).
+        for (const year of [2024, 2025, 2026]) {
+            const tbl = getTaxTable(year);
+            expect(tbl.regionalAutonomyFactor.flanders).toBeCloseTo(0.75043 * 1.33257, 4);
+            expect(tbl.regionalAutonomyFactor.wallonia).toBeCloseTo(0.75043 * 1.33257, 4);
+            expect(tbl.regionalAutonomyFactor.brussels).toBeCloseTo(0.75043 * 1.32591, 4);
+        }
+        // The factor multiplies the PIT after reductions and propagates to the surcharge.
+        const flanders = computeWithParity(profile({ grossAnnualIncome: 60_000 }));
+        const brussels = computeWithParity(
+            profile({ grossAnnualIncome: 60_000, region: "brussels" }),
+        );
+        expect(brussels.federalPITAfterReductions).toBeCloseTo(
+            flanders.federalPITAfterReductions * 0.995,
+            6,
         );
     });
 
@@ -613,7 +619,7 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
         );
     });
 
-    test('Flemish "ordinary" woonbonus (pre-2016 loan) uses €2,280 base cap', () => {
+    test("Flemish woonbonus, loan signed in 2015: €1,520 base at 40% (art. 145/37 §3)", () => {
         const result = computeWithParity(
             profile({
                 grossAnnualIncome: 50_000,
@@ -626,9 +632,47 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
             }),
         );
         expect(result.ownHomeCreditRegime).toBe("flemish_woonbonus");
-        // 2015 mortgage → loanAge 10 in IY 2025 → no first-10y supplement.
-        // Pre-2016 = "ordinary" regime: cap = 2_280. credit = 2_280 × 0.40 = 912.
-        expect(result.ownHomeCredit).toBeCloseTo(912, 1);
+        // 2015 mortgage → eleventh period in IY 2025 → no €760 increase. 1_520 × 0.40 = 608.
+        expect(result.ownHomeCredit).toBeCloseTo(608, 1);
+    });
+
+    test("Flemish woonbonus, loan signed before 2015: €2,280 at the marginal rate, minimum 30% (art. 145/37 §2)", () => {
+        const base = {
+            region: "flanders" as const,
+            mortgageIsPrimaryResidence: true,
+            mortgageStartYear: 2012,
+            mortgageRegion: "flanders" as const,
+            mortgageInterestPaid: 2_000,
+            mortgageCapitalRepaid: 3_000,
+        };
+        // Gross 50,000 → taxable income in the 45% bracket (IY 2025: 28,800-49,840).
+        const high = computeWithParity(profile({ grossAnnualIncome: 50_000, ...base }));
+        expect(high.marginalRate).toBe(45);
+        expect(high.ownHomeCredit).toBeCloseTo(2_280 * 0.45, 2);
+        // Gross 15,000 → 25% bracket → the 30% minimum applies.
+        const low = computeWithParity(profile({ grossAnnualIncome: 15_000, ...base }));
+        expect(low.marginalRate).toBe(25);
+        expect(low.ownHomeCredit).toBeCloseTo(2_280 * 0.3, 2);
+    });
+
+    test("Flemish woonbonus: the €80 for 3+ children applies only with the first-ten-years €760", () => {
+        const loan = (startYear: number) =>
+            computeWithParity(
+                profile({
+                    grossAnnualIncome: 50_000,
+                    dependentChildren: 3,
+                    region: "flanders",
+                    mortgageIsPrimaryResidence: true,
+                    mortgageStartYear: startYear,
+                    mortgageRegion: "flanders",
+                    mortgageInterestPaid: 5_000,
+                    mortgageCapitalRepaid: 3_000,
+                }),
+            );
+        // 2019 loan, IY 2025 (seventh period): (1_520 + 760 + 80) × 40%.
+        expect(loan(2019).ownHomeCredit).toBeCloseTo((1_520 + 760 + 80) * 0.4, 2);
+        // 2015 loan, IY 2025 (eleventh period): 1_520 × 40%, no €760 and no €80.
+        expect(loan(2015).ownHomeCredit).toBeCloseTo(1_520 * 0.4, 2);
     });
 
     test('Flemish "geïntegreerde" woonbonus (2016-2019 loan) uses €1,520 base + first-10y supplement', () => {
@@ -648,10 +692,11 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
         expect(result.ownHomeCredit).toBeCloseTo(912, 1);
     });
 
-    test('Flemish woonbonus: pre-2016 + first-10y diverges from "geïntegreerde" regime', () => {
-        // IY 2024 lets us put a pre-2016 loan inside its first 10 years and compare regimes.
-        //   2015 loan (pre-2016 "ordinary"): cap = 2_280 + 760 = 3_040 → credit 1_216.
-        //   2019 loan (2016+ "integrated"):  cap = 1_520 + 760 = 2_280 → credit   912.
+    test("Flemish woonbonus IY 2024: a 2015 loan in its first ten periods matches the integrated regime", () => {
+        // IY 2024 puts a 2015 loan in its tenth period: art. 145/37 §3 gives 1_520 + 760 at 40%,
+        // the same as a 2016-2019 integrated woonbonus (art. 145/38/2).
+        //   2015 loan:  cap = 1_520 + 760 = 2_280 → credit 912.
+        //   2019 loan:  cap = 1_520 + 760 = 2_280 → credit 912.
         const ordinary = computeWithParity(
             profile({
                 taxYear: 2024,
@@ -676,25 +721,69 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
                 mortgageCapitalRepaid: 3_000,
             }),
         );
-        expect(ordinary.ownHomeCredit).toBeCloseTo(1_216, 1);
+        expect(ordinary.ownHomeCredit).toBeCloseTo(912, 1);
         expect(integrated.ownHomeCredit).toBeCloseTo(912, 1);
     });
 
-    test("Walloon chèque habitat applied for post-2016 primary residence in Wallonia", () => {
-        const result = computeWithParity(
+    const walloon = (overrides: Partial<BelgianTaxProfile>) =>
+        computeWithParity(
             profile({
-                grossAnnualIncome: 50_000,
                 region: "wallonia",
                 mortgageIsPrimaryResidence: true,
                 mortgageStartYear: 2018,
                 mortgageRegion: "wallonia",
                 mortgageInterestPaid: 4_000,
-                dependentChildren: 2,
+                ...overrides,
             }),
         );
+
+    test("Walloon chèque habitat between the income limits: 1,520 − 1.275% × (income − lower limit) + 125 per child", () => {
+        const result = walloon({ grossAnnualIncome: 50_000, dependentChildren: 2 });
         expect(result.ownHomeCreditRegime).toBe("walloon_cheque_habitat");
-        // 1_520 + 2 × 125 = 1_770.
-        expect(result.ownHomeCredit).toBeCloseTo(1_770, 1);
+        // Art. 145/46ter §2, 2° (circular 2026/C/18); IY 2025 lower limit 27,353 (N26).
+        const expected = 1_520 - (result.taxableIncome - 27_353) * 0.01275 + 2 * 125;
+        expect(result.taxableIncome).toBeGreaterThan(27_353);
+        expect(result.ownHomeCredit).toBeCloseTo(expected, 2);
+    });
+
+    test("Walloon chèque habitat at or below the lower limit: full 1,520; disabled children count twice", () => {
+        const result = walloon({
+            grossAnnualIncome: 20_000,
+            dependentChildren: 2,
+            dependentChildrenDisabled: 1,
+        });
+        expect(result.taxableIncome).toBeLessThanOrEqual(27_353);
+        // 1_520 + (2 + 1) × 125.
+        expect(result.ownHomeCredit).toBeCloseTo(1_895, 2);
+    });
+
+    test("Walloon chèque habitat above the upper limit: nothing, not even the child increase", () => {
+        const result = walloon({ grossAnnualIncome: 200_000, dependentChildren: 2 });
+        expect(result.taxableIncome).toBeGreaterThan(105_503);
+        expect(result.ownHomeCredit).toBe(0);
+    });
+
+    test("Walloon chèque habitat: halved from the eleventh period, capped at the amounts paid", () => {
+        // 2016 loan in IY 2026 is the eleventh period (§3).
+        const eleventh = walloon({
+            taxYear: 2026,
+            grossAnnualIncome: 20_000,
+            mortgageStartYear: 2016,
+        });
+        expect(eleventh.ownHomeCredit).toBeCloseTo(1_520 / 2, 2);
+        // §4: never more than the interest and capital actually paid.
+        const capped = walloon({
+            grossAnnualIncome: 20_000,
+            mortgageInterestPaid: 500,
+            mortgageCapitalRepaid: 300,
+        });
+        expect(capped.ownHomeCredit).toBeCloseTo(800, 2);
+    });
+
+    test("Walloon chèque habitat: loans signed from 1 Jan 2025 do not qualify", () => {
+        const result = walloon({ grossAnnualIncome: 20_000, mortgageStartYear: 2025 });
+        expect(result.ownHomeCreditRegime).toBe("none");
+        expect(result.ownHomeCredit).toBe(0);
     });
 
     test("Brussels primary residence: no own-home credit modeled", () => {
@@ -841,7 +930,7 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
         expect(result.maritalQuotientTransfer).toBeCloseTo(13_460 - 5_000, 0);
     });
 
-    test("service vouchers: Brussels 15% rate applies to first 172 vouchers", () => {
+    test("service vouchers: Brussels 15% of the spend (legacy count × €10 when no spend is set)", () => {
         const result = computeWithParity(
             profile({
                 region: "brussels",
@@ -849,20 +938,42 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
                 serviceVoucherEligible: true,
             }),
         );
-        // 100 × €10 × 15% = €150
+        // 100 × €10 = €1,000 spend, under the €1,850 cap → 15% = €150.
         expect(result.serviceVoucherCredit).toBeCloseTo(150, 2);
     });
 
-    test("service vouchers: Wallonia fixed €0.90 per voucher, capped at 150", () => {
+    test("service vouchers: spend overrides the count and is capped per year and region", () => {
+        const credit = (region: BelgianTaxProfile["region"], taxYear: number) =>
+            computeWithParity(
+                profile({
+                    region,
+                    taxYear,
+                    serviceVoucherCount: 10,
+                    serviceVoucherSpend: 5_000,
+                    serviceVoucherEligible: true,
+                }),
+            ).serviceVoucherCredit;
+        // WIB 92 art. 145/21, regional versions (Fisconetplus).
+        expect(credit("flanders", 2024)).toBeCloseTo(1_790 * 0.2, 2);
+        expect(credit("flanders", 2025)).toBe(0);
+        expect(credit("wallonia", 2024)).toBeCloseTo(1_790 * 0.3, 2);
+        expect(credit("wallonia", 2025)).toBeCloseTo(1_850 * 0.3, 2);
+        expect(credit("wallonia", 2026)).toBeCloseTo(1_890 * 0.3, 2);
+        expect(credit("brussels", 2024)).toBeCloseTo(1_790 * 0.15, 2);
+        expect(credit("brussels", 2025)).toBeCloseTo(1_850 * 0.15, 2);
+        // Brussels ordinance of 18 Dec 2025: abolished from AY 2027 (circular 2026/C/34).
+        expect(credit("brussels", 2026)).toBe(0);
+    });
+
+    test("service vouchers: Wallonia 30% of the spend below the cap", () => {
         const result = computeWithParity(
             profile({
                 region: "wallonia",
-                serviceVoucherCount: 200, // over cap
+                serviceVoucherSpend: 900,
                 serviceVoucherEligible: true,
             }),
         );
-        // 150 × €0.90 = €135
-        expect(result.serviceVoucherCredit).toBeCloseTo(135, 2);
+        expect(result.serviceVoucherCredit).toBeCloseTo(270, 2);
     });
 
     test("service vouchers: Flanders rate is 0 for IY 2025+", () => {
@@ -931,6 +1042,12 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
 describe("PwC AY 2026 worked sample — end-to-end pipeline", () => {
     // Reference: PwC Worldwide Tax Summaries — Belgium — Individual — Sample personal income
     // tax calculation. Married, single-earner couple, 2 dependent children, AY 2026 (IY 2025).
+    // PwC is a SECONDARY source (rule matrix P1). Its worked example implies a combined
+    // state + regional factor of 0.99501, which equals the Brussels product 0.75043 × 1.32591,
+    // not the Flemish 0.75043 × 1.33257 = 1.0000 the engine now uses (RD 19 Dec 2017, special
+    // finance law art. 81quater). The sample is therefore re-derived here with the primary
+    // factor for Flanders, and reproduced as published when run with the Brussels factor.
+    //
     // PwC starts the worked example from "salary after social security = €50,000". To feed our
     // pre-SS pipeline, gross = 50,000 / (1 − 0.1307) ≈ 57,517.59 so net-after-SS rounds to €50k.
     //
@@ -939,10 +1056,11 @@ describe("PwC AY 2026 worked sample — end-to-end pipeline", () => {
     //   • Marital-quotient transfer:      €13,221 (= 30% × 44,070, under the €13,460 cap)
     //   • Earner exemption benefit (2 kids): 25%×11,460 + 30%×4,560 = €4,233
     //   • Spouse exemption benefit:        25%×10,910 = €2,727.50
-    //   • Combined federal (after autonomy × 0.9951): ~€6,307
+    //   • Combined federal after the factor: PwC ~€6,307 (× 0.99501)
     //   • Communal surcharge 7%:           ~€441.5
     //   • CSSS (joint, base €44,070):      €422.94
     //   • Final tax due:                   €7,171.55 (PwC; we accept ±€2 for in-period rounding)
+    // Re-derived for Flanders (factor 1.0000): (7,171.55 − 422.94) / 0.99501 + 422.94 ≈ €7,205.39.
 
     const pwcSample = (overrides: Partial<BelgianTaxProfile> = {}) =>
         profile({
@@ -957,32 +1075,39 @@ describe("PwC AY 2026 worked sample — end-to-end pipeline", () => {
             ...overrides,
         });
 
-    test("reproduces PwC AY 2026 sample within €2 of €7,171.55 final tax due", () => {
+    const finalTaxDue = (r: ReturnType<typeof computeWithParity>) =>
+        r.federalPITAfterReductions + r.communalSurcharge + r.specialSocialSecurityContribution;
+
+    test("feeder values match the PwC AY 2026 sample", () => {
         const r = computeWithParity(pwcSample());
-        // Sanity: feeder values match PwC's worked sample.
         expect(r.professionalExpenses).toBe(5_930);
         expect(r.taxableIncome).toBeCloseTo(44_070, 0);
         expect(r.maritalQuotientTransfer).toBeCloseTo(13_221, 0);
         expect(r.personalExemptionAmount).toBe(16_020); // 10,910 + 5,110 for 2 kids
         // CSSS — joint filer at €44,070 net taxable professional income → €422.94.
         expect(r.specialSocialSecurityContribution).toBeCloseTo(422.94, 1);
-        // End-to-end: federal PIT after credits + communal surcharge + CSSS.
-        // PwC rounds the bracket-3 slice (2,050 instead of 2,049), producing a ~€0.70
-        // gap from our exact arithmetic. Allow ±€2 to absorb their published rounding.
-        const finalTaxDue =
-            r.federalPITAfterReductions +
-            r.communalSurcharge +
-            r.specialSocialSecurityContribution;
-        expect(Math.abs(finalTaxDue - 7_171.55)).toBeLessThan(2);
     });
 
-    test("regional autonomy factor 0.9951 is visible in the pipeline output", () => {
+    test("Flanders (factor 1.0000): final tax due within €2 of the re-derived €7,205.39", () => {
+        // PwC rounds the bracket-3 slice (2,050 instead of 2,049), producing a ~€0.70
+        // gap from our exact arithmetic. Allow ±€2 to absorb their published rounding.
         const r = computeWithParity(pwcSample());
-        // Federal PIT before autonomy = brackets − exemption benefit (both spouses combined).
-        // After autonomy it must be smaller by exactly the documented factor.
-        const expectedAfter =
-            (r.federalPITBeforeExemption - r.personalExemptionBenefit) * 0.9951;
-        expect(r.federalPITAfterReductions).toBeCloseTo(expectedAfter, 1);
+        expect(Math.abs(finalTaxDue(r) - 7_205.39)).toBeLessThan(2);
+    });
+
+    test("Brussels (factor 0.9950) reproduces PwC's published €7,171.55 within €2", () => {
+        const r = computeWithParity(pwcSample({ region: "brussels" }));
+        expect(Math.abs(finalTaxDue(r) - 7_171.55)).toBeLessThan(2);
+    });
+
+    test("the state + regional factor is visible in the pipeline output", () => {
+        // Federal PIT before the factor = brackets − exemption benefit (both spouses combined).
+        const flanders = computeWithParity(pwcSample());
+        const beforeFactor =
+            flanders.federalPITBeforeExemption - flanders.personalExemptionBenefit;
+        expect(flanders.federalPITAfterReductions).toBeCloseTo(beforeFactor * 1.0, 1);
+        const brussels = computeWithParity(pwcSample({ region: "brussels" }));
+        expect(brussels.federalPITAfterReductions).toBeCloseTo(beforeFactor * 0.995, 1);
     });
 });
 

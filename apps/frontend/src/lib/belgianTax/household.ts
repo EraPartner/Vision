@@ -479,14 +479,26 @@ export function computeHouseholdTax(
         ...household.home,
         region: household.region,
         dependentChildren: household.dependents.children,
+        dependentChildrenDisabled: household.dependents.childrenDisabled ?? 0,
     };
     const ownHomeCreditRegime = resolveMortgageRegime(homeInputs);
-    const ownHomeCreditTotal = computeOwnHomeCredit(homeInputs, table, ownHomeCreditRegime);
     const mortgagePartnerId: PartnerId | undefined = partners.some(
         (p) => p.id === (household.home.mortgageCreditPartnerId ?? "A"),
     )
         ? (household.home.mortgageCreditPartnerId ?? "A")
         : partners[0]?.id;
+    // The claimant's taxable income before the quotient sets the woonbonus marginal rate and the
+    // chèque habitat income limits, as in `computeBelgianPIT`.
+    const mortgageIncome = incomes.find((inc) => inc.partner.id === mortgagePartnerId);
+    const ownHomeCreditTotal = mortgageIncome
+        ? computeOwnHomeCredit(homeInputs, table, ownHomeCreditRegime, {
+              taxableIncome: mortgageIncome.taxableIncomeBeforeQuotient,
+              marginalRatePercent: computeMarginalRate(
+                  mortgageIncome.taxableIncomeBeforeQuotient,
+                  table.brackets,
+              ),
+          })
+        : 0;
 
     const autonomyFactor = table.regionalAutonomyFactor?.[household.region] ?? 1;
     const surchargePct = household.communalSurchargePercent;

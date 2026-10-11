@@ -82,6 +82,7 @@ const reductionsSchema = z.looseObject({
   domesticHelpCosts: money.optional(),
   domesticHelpEligible: z.boolean().optional(),
   serviceVoucherCount: count.optional(),
+  serviceVoucherSpend: money.optional(),
   serviceVoucherEligible: z.boolean().optional(),
   medicalExpenses: money,
 });

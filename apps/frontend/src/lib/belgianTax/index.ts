@@ -31,6 +31,7 @@ export { computePropertyTaxEstimate } from "./propertyTax";
 export {
     computeEmployeeSocialSecurity,
     computeSpecialSocialSecurityContribution,
+    estimateSelfEmployedContributions,
 } from "./socialSecurity";
 export type {
     PartnerId,

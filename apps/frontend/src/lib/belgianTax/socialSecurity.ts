@@ -6,7 +6,8 @@ import type { ActivityKind } from './householdTypes';
  * Employee social security contribution (RSZ / ONSS).
  *
  * Applied to gross **salary** only (not other taxable income such as rental, dividends).
- * Civil servants pay a reduced rate (no unemployment insurance portion).
+ * Statutory civil servants pay 11.05%: the 3.55% health-care contribution plus the 7.5%
+ * survivors'-pension deduction (sources in constants.ts).
  */
 export function computeEmployeeSocialSecurity(profile: BelgianTaxProfile, table: BelgianTaxYearTable): number {
     if (profile.employmentType === 'employee') {
@@ -74,7 +75,7 @@ export function evaluateCsssScale(
 }
 
 /**
- * Personal social security on one activity's gross income: 13.07% for employees, the reduced
+ * Personal social security on one activity's gross income: 13.07% for employees, the 11.05%
  * civil-servant rate for statutory civil servants, 0 for every other activity kind (the
  * self-employed pay their own contributions, which the household engine stores but does not
  * deduct).
@@ -88,4 +89,27 @@ export function computeActivitySocialSecurity(
     if (kind === 'employee') return gross * table.employeeSSRate;
     if (kind === 'civil_servant') return gross * table.civilServantSSRate;
     return 0;
+}
+
+/**
+ * Estimated yearly self-employed social contributions (RSVZ / INASTI) for a main-occupation
+ * self-employed person before pension age: Royal Decree no. 38 of 27 July 1967 art. 12 §1.
+ *  - 20.50% on the income up to `threshold1`, computed on at least `minimumIncome` ("worden de
+ *    beroepsinkomsten van de onderworpene geacht … te bereiken");
+ *  - 14.16% on the part between `threshold1` and `threshold2`;
+ *  - nothing above `threshold2`.
+ * Thresholds are indexed yearly under art. 14 (`selfEmployedContributions` in the year table).
+ * Secondary occupation, starters, pensioners and the management fees of the social insurance
+ * funds are not covered. This is an estimate helper: the household engine deducts the amount the
+ * user enters as `socialContributionsPaid`, not this value.
+ */
+export function estimateSelfEmployedContributions(
+    netProfessionalIncome: number,
+    table: Pick<BelgianTaxYearTable, 'selfEmployedContributions'>,
+): number {
+    const p = table.selfEmployedContributions;
+    const income = Number.isFinite(netProfessionalIncome) ? Math.max(netProfessionalIncome, 0) : 0;
+    const band1 = Math.min(Math.max(income, p.minimumIncome), p.threshold1);
+    const band2 = Math.max(Math.min(income, p.threshold2) - p.threshold1, 0);
+    return band1 * p.rate1 + band2 * p.rate2;
 }
