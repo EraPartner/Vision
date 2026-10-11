@@ -3,7 +3,8 @@
  *
  * Persisted domain state and actions live in the Belgian-tax slice of settingsStore.
  * This provider only hydrates/persists that slice and keeps the existing provider-scope
- * contract. New consumers should pass a narrow selector to useBelgianTaxProfile.
+ * contract. The household (v2) keys are the stored source of truth; on first load the v1
+ * keys are upgraded and the v2 keys written (ADR-200). New consumers should pass a narrow selector to useBelgianTaxProfile.
  */
 import {
     createContext,
@@ -23,14 +24,19 @@ import {
     type BelgianTaxSlice,
 } from "@/stores/belgianTaxStore";
 import { useSettingsStore, type SettingsStore } from "@/stores/settingsStore";
+import { apiClient } from "@/lib/api";
+import logger from "@/lib/logger";
 import type {
     BelgianTaxProfile,
     BelgianTaxProfileSnapshotMetas,
-    BelgianTaxProfileSnapshots,
 } from "@/lib/belgianTax";
 
+// v1 keys are read only, as the source of the one-time upgrade (ADR-200). No backend
+// consumer reads them, so they are no longer written.
 const PROFILE_SETTINGS_KEY = "belgian_tax_profile";
 const SNAPSHOTS_SETTINGS_KEY = "belgian_tax_profile_snapshots_v1";
+const HOUSEHOLD_SETTINGS_KEY = "belgian_tax_household_v2";
+const HOUSEHOLD_SNAPSHOTS_SETTINGS_KEY = "belgian_tax_household_snapshots_v2";
 const SNAPSHOT_METAS_SETTINGS_KEY = "belgian_tax_profile_snapshot_meta_v1";
 
 const BelgianTaxProfileScope = createContext(false);
@@ -43,6 +49,9 @@ type PublicBelgianTaxProfileState = Omit<
 const selectPublicState = (
     state: SettingsStore,
 ): PublicBelgianTaxProfileState => ({
+    household: state.household,
+    householdSnapshots: state.householdSnapshots,
+    householdResult: state.householdResult,
     profile: state.profile,
     calculation: state.calculation,
     snapshots: state.snapshots,
@@ -78,7 +87,13 @@ export function BelgianTaxProfileProvider({
     const { value: preloadedProfile, isLoading: preloadProfileLoading } =
         usePreloadedSetting<BelgianTaxProfile>(PROFILE_SETTINGS_KEY);
     const { value: preloadedSnapshots, isLoading: preloadSnapshotsLoading } =
-        usePreloadedSetting<BelgianTaxProfileSnapshots>(SNAPSHOTS_SETTINGS_KEY);
+        usePreloadedSetting<unknown>(SNAPSHOTS_SETTINGS_KEY);
+    const { value: preloadedHousehold, isLoading: preloadHouseholdLoading } =
+        usePreloadedSetting<unknown>(HOUSEHOLD_SETTINGS_KEY);
+    const {
+        value: preloadedHouseholdSnapshots,
+        isLoading: preloadHouseholdSnapshotsLoading,
+    } = usePreloadedSetting<unknown>(HOUSEHOLD_SNAPSHOTS_SETTINGS_KEY);
     const { value: preloadedMetas, isLoading: preloadMetasLoading } =
         usePreloadedSetting<BelgianTaxProfileSnapshotMetas>(
             SNAPSHOT_METAS_SETTINGS_KEY,
@@ -86,8 +101,10 @@ export function BelgianTaxProfileProvider({
     const hydrate = useSettingsStore((state) => state._hydrate);
     const beginHydration = useSettingsStore((state) => state._beginHydration);
     const markSaveError = useSettingsStore((state) => state._markSaveError);
-    const profile = useSettingsStore((state) => state.profile);
-    const snapshots = useSettingsStore((state) => state.snapshots);
+    const household = useSettingsStore((state) => state.household);
+    const householdSnapshots = useSettingsStore(
+        (state) => state.householdSnapshots,
+    );
     const snapshotMetas = useSettingsStore((state) => state.snapshotMetas);
     const isLoading = useSettingsStore((state) => state.isLoading);
 
@@ -97,23 +114,91 @@ export function BelgianTaxProfileProvider({
         if (
             preloadProfileLoading ||
             preloadSnapshotsLoading ||
+            preloadHouseholdLoading ||
+            preloadHouseholdSnapshotsLoading ||
             preloadMetasLoading
         )
             return;
-        const mergedProfile = {
-            ...DEFAULT_BELGIAN_TAX_PROFILE,
-            ...(preloadedProfile ?? {}),
+        let cancelled = false;
+        // The household engine and its zod schemas load on demand to keep them out of the
+        // boot bundle (ADR-200).
+        void import("@/lib/belgianTax/householdRuntime")
+            .then((runtime) => {
+                if (cancelled) return;
+                const mergedProfile = {
+                    ...DEFAULT_BELGIAN_TAX_PROFILE,
+                    ...(preloadedProfile ?? {}),
+                };
+                const loaded = runtime.loadHouseholdSettings({
+                    profileV1: {
+                        ...mergedProfile,
+                        profileConfigured:
+                            hasMeaningfulBelgianTaxData(mergedProfile),
+                    },
+                    hasProfileV1: preloadedProfile != null,
+                    snapshotsV1: preloadedSnapshots,
+                    householdV2: preloadedHousehold,
+                    snapshotsV2: preloadedHouseholdSnapshots,
+                });
+                for (const warning of loaded.warnings) {
+                    logger.warn(
+                        "Invalid Belgian tax household setting; using the v1 upgrade instead",
+                        warning,
+                    );
+                }
+                let liveHousehold = loaded.household;
+                if (
+                    !liveHousehold.profileConfigured &&
+                    hasMeaningfulBelgianTaxData(
+                        runtime.projectHouseholdToProfileV1(liveHousehold),
+                    )
+                ) {
+                    liveHousehold = {
+                        ...liveHousehold,
+                        profileConfigured: true,
+                    };
+                }
+                hydrate(
+                    runtime,
+                    liveHousehold,
+                    loaded.snapshots,
+                    preloadedMetas ?? {},
+                );
+                // First load after the upgrade: persist the v2 keys now (no confirmation, v1 kept).
+                const save = (key: string, value: unknown, message: string) =>
+                    apiClient.saveSetting(key, value).catch((err: unknown) => {
+                        logger.error(message, err);
+                        markSaveError();
+                    });
+                if (loaded.writeHousehold)
+                    void save(
+                        HOUSEHOLD_SETTINGS_KEY,
+                        liveHousehold,
+                        "Failed to save the upgraded Belgian tax household:",
+                    );
+                if (loaded.writeSnapshots)
+                    void save(
+                        HOUSEHOLD_SNAPSHOTS_SETTINGS_KEY,
+                        loaded.snapshots,
+                        "Failed to save the upgraded Belgian tax household snapshots:",
+                    );
+            })
+            .catch((err: unknown) => {
+                logger.error(
+                    "Failed to load the Belgian tax household engine:",
+                    err,
+                );
+            });
+        return () => {
+            cancelled = true;
         };
-        hydrate(
-            {
-                ...mergedProfile,
-                profileConfigured: hasMeaningfulBelgianTaxData(mergedProfile),
-            },
-            preloadedSnapshots ?? {},
-            preloadedMetas ?? {},
-        );
     }, [
         hydrate,
+        markSaveError,
+        preloadedHousehold,
+        preloadHouseholdLoading,
+        preloadedHouseholdSnapshots,
+        preloadHouseholdSnapshotsLoading,
         preloadedMetas,
         preloadMetasLoading,
         preloadedProfile,
@@ -123,18 +208,18 @@ export function BelgianTaxProfileProvider({
     ]);
 
     useDebouncedSetting(
-        PROFILE_SETTINGS_KEY,
-        profile,
+        HOUSEHOLD_SETTINGS_KEY,
+        household,
         isLoading,
         markSaveError,
-        "Failed to save Belgian tax profile:",
+        "Failed to save Belgian tax household:",
     );
     useDebouncedSetting(
-        SNAPSHOTS_SETTINGS_KEY,
-        snapshots,
+        HOUSEHOLD_SNAPSHOTS_SETTINGS_KEY,
+        householdSnapshots,
         isLoading,
         markSaveError,
-        "Failed to save Belgian tax profile snapshots:",
+        "Failed to save Belgian tax household snapshots:",
     );
     useDebouncedSetting(
         SNAPSHOT_METAS_SETTINGS_KEY,
@@ -167,7 +252,7 @@ export function BelgianTaxSaveErrorToaster() {
 }
 
 // Compatibility hook stays beside its provider, matching the other hydration bridges.
-// eslint-disable-next-line react-refresh/only-export-components
+ 
 export function useBelgianTaxProfile(): PublicBelgianTaxProfileState;
 export function useBelgianTaxProfile<T>(
     selector: (state: PublicBelgianTaxProfileState) => T,
