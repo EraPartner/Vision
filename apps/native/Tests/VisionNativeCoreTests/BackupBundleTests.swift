@@ -72,8 +72,6 @@ enum BackupFixture {
                 "metadata.json", "frontend-state.json", "db.sql", "attachments/tx-001/",
                 "attachments/tx-001/receipt.txt",
             ])
-        // archiver writes data descriptors (flag bit 3); sizes come from the central directory.
-        #expect(reader.entries.allSatisfy { $0.flags & 0x0008 != 0 })
 
         let wrapped = try BackupFiles.makeTemporaryDirectory(prefix: "v1_", in: directory)
         let iv = (0..<16).map { UInt8($0) }

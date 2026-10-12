@@ -45,7 +45,8 @@ private func backupHarness(dumpContent: String = "-- dump\n") throws -> Harness 
         #expect(harness.fileSystem.text("/tmp/vision_bak_1/db.sql") == "-- dump\n")
         #expect(try harness.fileSystem.mode("/tmp/vision_bak_1/db.sql") == 0o600)
         #expect(harness.fileSystem.node("/tmp/vision_bak_1/db.sql.partial") == nil)
-        let dump = try #require(harness.runner.calls(named: "pg_dump").first)
+        // Tool discovery probes each binary with `--version` first; skip the probe.
+        let dump = try #require(harness.runner.calls(named: "pg_dump").first { $0.arguments != ["--version"] })
         for flag in ["--no-owner", "--no-acl", "--no-comments", "--format=plain"] {
             #expect(dump.arguments.contains(flag))
         }
@@ -82,7 +83,7 @@ private func backupHarness(dumpContent: String = "-- dump\n") throws -> Harness 
         #expect(token.liveDatabase == "vision_native")
         #expect(harness.databases.contains("vision_native"))
         #expect(harness.databases.contains(token.previousDatabase))
-        #expect(harness.runner.calls(named: "pg_restore").isEmpty)
+        #expect(harness.runner.calls(named: "pg_restore").allSatisfy { $0.arguments == ["--version"] })
         let restore = try #require(
             harness.runner.calls(named: "psql").first { $0.arguments.contains("/tmp/vision_restore_1/db.sql") })
         #expect(restore.arguments.contains("--single-transaction"))

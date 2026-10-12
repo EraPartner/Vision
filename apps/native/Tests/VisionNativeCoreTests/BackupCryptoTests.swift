@@ -201,6 +201,17 @@ func readBytes(_ path: String) throws -> [UInt8] {
         #expect(!BackupFiles.exists(directory + "/v1.out"))
     }
 
+    @Test func pkcs7PaddingIsCheckedLikeOpenSSL() {
+        let valid = [UInt8](repeating: 0x41, count: 13) + [3, 3, 3]
+        #expect(EncryptedFile.pkcs7Unpad(valid) == [UInt8](repeating: 0x41, count: 13))
+        let full = [UInt8](repeating: 16, count: 16)
+        #expect(EncryptedFile.pkcs7Unpad(full) == [])
+        #expect(EncryptedFile.pkcs7Unpad([UInt8](repeating: 0x41, count: 15) + [25]) == nil)
+        #expect(EncryptedFile.pkcs7Unpad([UInt8](repeating: 0x41, count: 15) + [0]) == nil)
+        #expect(EncryptedFile.pkcs7Unpad([UInt8](repeating: 0x41, count: 13) + [2, 3, 3]) == nil)
+        #expect(EncryptedFile.pkcs7Unpad([3, 3, 3]) == nil)
+    }
+
     @Test func aMissingPassphraseOrUnknownMagicIsReported() throws {
         let directory = try makeBackupScratchDirectory()
         defer { try? FileManager.default.removeItem(atPath: directory) }

@@ -5,7 +5,8 @@ import Foundation
 final class AESCryptor {
     private var reference: CCCryptorRef?
 
-    /// `options` is `kCCOptionECBMode` for raw blocks or `kCCOptionPKCS7Padding` for CBC.
+    /// `options` is `kCCOptionECBMode` for raw blocks, 0 for CBC without padding, or
+    /// `kCCOptionPKCS7Padding` for padded CBC.
     init(operation: Int, key: [UInt8], iv: [UInt8]?, options: Int) throws {
         guard key.count == kCCKeySizeAES256 else { throw BackupFailure("AES-256 requires a 32-byte key") }
         var created: CCCryptorRef?

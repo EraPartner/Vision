@@ -127,24 +127,53 @@ public enum EncryptedFile {
             throw BackupFailure(format.requiredError)
         }
         defer { key.withUnsafeMutableBufferPointer { $0.update(repeating: 0) } }
-        let cryptor = try AESCryptor(operation: kCCDecrypt, key: key, iv: iv, options: kCCOptionPKCS7Padding)
+        // CBC without CommonCrypto's padding: its PKCS#7 removal does not reliably report a
+        // bad pad, so the last block is held back and checked here like OpenSSL's
+        // `decipher.final()` ("bad decrypt", "wrong final block length").
+        let cryptor = try AESCryptor(operation: kCCDecrypt, key: key, iv: iv, options: 0)
         let output = try BackupFiles.createFile(destinationPath)
         do {
             defer { try? output.close() }
+            var held: [UInt8] = []
+            var ciphertextBytes = 0
             while true {
                 let chunk = try BackupFiles.read(input, upTo: BackupFiles.chunkSize)
                 if chunk.isEmpty { break }
-                try output.write(contentsOf: try cryptor.update([UInt8](chunk)))
+                ciphertextBytes += chunk.count
+                held += try cryptor.update([UInt8](chunk))
+                if held.count > kCCBlockSizeAES128 {
+                    let ready = held.count - kCCBlockSizeAES128
+                    try output.write(contentsOf: Array(held[..<ready]))
+                    held.removeFirst(ready)
+                }
             }
-            try output.write(contentsOf: try cryptor.finish())
+            guard ciphertextBytes > 0, ciphertextBytes % kCCBlockSizeAES128 == 0 else {
+                throw AESCryptorError(status: CCCryptorStatus(kCCAlignmentError))
+            }
+            held += try cryptor.finish()
+            guard let plaintext = pkcs7Unpad(held) else {
+                throw AESCryptorError(status: CCCryptorStatus(kCCDecodeError))
+            }
+            try output.write(contentsOf: plaintext)
         } catch is AESCryptorError {
-            // Bad padding: the wrong passphrase ("bad decrypt" / "wrong final block length").
+            // Bad padding or length: the wrong passphrase ("bad decrypt" / "wrong final block length").
             BackupFiles.remove(destinationPath)
             throw BackupFailure(format.invalidError)
         } catch {
             BackupFiles.remove(destinationPath)
             throw error
         }
+    }
+
+    /// Removes PKCS#7 padding from the final block; `nil` when the padding is invalid.
+    static func pkcs7Unpad(_ block: [UInt8]) -> [UInt8]? {
+        guard block.count == kCCBlockSizeAES128, let last = block.last else { return nil }
+        let pad = Int(last)
+        guard pad >= 1, pad <= kCCBlockSizeAES128 else { return nil }
+        var difference: UInt8 = 0
+        for byte in block.suffix(pad) { difference |= byte ^ last }
+        guard difference == 0 else { return nil }
+        return Array(block.prefix(block.count - pad))
     }
 
     private static func decryptV2(
