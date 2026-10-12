@@ -257,6 +257,16 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 proportion (art. 147 al. 1, 2°, b-c), tests the statutory-pension limit on the gross amount, keeps
 the art. 153 limit on the total net income and applies AAFisc 40/2011 no. 19 under the quotient.
 
+### 2026-10-12: Vision Native is a Swift app target
+
+[[docs/adr/204-vision-native-swift-app-target|ADR-204]] records a separate Swift app, Vision
+Native (`apps/native/`, `com.vaultvoyager.vision-native`), with its own data directory. It runs
+only on the Demo dataset until the phase 4 switch-over, targets Apple-silicon Macs on current
+macOS, installs locally with a personal-team signature and has no updater. The backend and data
+are unchanged. It supersedes nothing yet. Swift checks run on a GitHub-hosted macOS runner, and
+the Belgian tax engine (which runs in the frontend today) moves behind a backend endpoint before
+the Tax screen goes native.
+
 ### 2026-10-11: The household region decides the own-home regime
 
 [[docs/adr/202-belgian-tax-region-and-own-home-baskets|ADR-202]] supersedes ADR-054 for the
