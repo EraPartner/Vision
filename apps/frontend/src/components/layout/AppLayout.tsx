@@ -32,6 +32,7 @@ import { isShortcutSafeTarget, isTypingTarget } from "@/lib/keyboard";
 import { readSidebarCollapsed } from "@/hooks/useSidebarPreferences";
 import { cn } from "@/lib/utils";
 import { BackgroundQueryIndicator } from "@/components/shared/BackgroundQueryIndicator";
+import { isNativeNavigation, reportNativeRoute } from "@/lib/api/electron";
 
 interface AppLayoutProps {
     children: React.ReactNode;
@@ -50,6 +51,9 @@ export function AppLayout({ children }: AppLayoutProps) {
     // The labelled sidebar is the default; icons-only is the user's
     // remembered choice (ADR-180). Read once, before the provider mounts.
     const [sidebarDefaultOpen] = useState(() => !readSidebarCollapsed());
+    // Vision Native draws the sidebar itself (ADR-204 phase 2); the bridge flag
+    // is fixed for the page's lifetime.
+    const [nativeNavigation] = useState(isNativeNavigation);
 
     const writeSettingsSection = useCallback(
         (section: SettingsSectionId, replace: boolean) => {
@@ -188,7 +192,23 @@ export function AppLayout({ children }: AppLayoutProps) {
     // this, focus is stranded on the just-clicked sidebar link and screen readers
     // get no page-change cue. <main> is tabIndex={-1} (programmatic-focus only,
     // no visible ring on mouse nav).
-    const { pathname } = location;
+    const { pathname, search } = location;
+    // Vision Native shows the page over a native screen while the palette or the
+    // shortcuts overlay is open; reporting the same route again when it closes
+    // tells the shell the page has nothing more to show.
+    const overlayOpen = paletteOpen || shortcutsOpen;
+    const lastNativeReportRef = useRef<
+        { route: string; overlayOpen: boolean } | undefined
+    >(undefined);
+    useEffect(() => {
+        if (!nativeNavigation) return;
+        const route = `${pathname}${search}`;
+        const last = lastNativeReportRef.current;
+        lastNativeReportRef.current = { route, overlayOpen };
+        const overlayClosed = last?.overlayOpen === true && !overlayOpen;
+        if (last?.route === route && !overlayClosed) return;
+        reportNativeRoute(route);
+    }, [nativeNavigation, pathname, search, overlayOpen]);
     const isPrintReport =
         pathname === "/tax" ||
         pathname === "/statistics" ||
@@ -216,6 +236,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                 <ElectronBridge
                     onOpenSettings={openSettingsOnTab}
                     onOpenShortcuts={openShortcuts}
+                    onOpenPalette={openPalette}
                 />
                 <VisualEffectsController />
                 <div
@@ -250,16 +271,20 @@ export function AppLayout({ children }: AppLayoutProps) {
                         )}
                         <div className="liquid-canvas-grain" />
                     </div>
-                    <AppSidebar
-                        onOpenSettings={openGeneralSettings}
-                        onOpenPalette={openPalette}
-                    />
+                    {!nativeNavigation && (
+                        <AppSidebar
+                            onOpenSettings={openGeneralSettings}
+                            onOpenPalette={openPalette}
+                        />
+                    )}
                     <div className="flex-1 flex flex-col min-w-0">
                         <header
                             data-scrolled={scrolled}
                             className="app-topbar h-14 flex items-center px-4 sticky top-0 z-30"
                         >
-                            <SidebarTrigger className="mr-4" />
+                            {!nativeNavigation && (
+                                <SidebarTrigger className="mr-4" />
+                            )}
                             <TopbarPageTitle visible={titleVisible} />
                             <div className="flex-1" />
                             {/* The search field lives in the sidebar; on a
@@ -272,7 +297,10 @@ export function AppLayout({ children }: AppLayoutProps) {
                                 aria-label={t("commandPalette.openLabel")}
                                 className="md:hidden"
                             >
-                                <Search className="h-4 w-4" aria-hidden="true" />
+                                <Search
+                                    className="h-4 w-4"
+                                    aria-hidden="true"
+                                />
                             </Button>
                             <BackgroundQueryIndicator />
                         </header>

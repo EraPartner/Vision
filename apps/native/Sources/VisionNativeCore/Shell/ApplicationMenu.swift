@@ -14,8 +14,18 @@ public struct MenuAction: Hashable, Sendable {
     public static let openShortcuts = MenuAction("open-shortcuts")
     public static let newTransaction = MenuAction("new-transaction")
     public static let toggleSidebar = MenuAction("toggle-sidebar")
+    /// Native navigation only: opens CommandPalette (the web sidebar's search field).
+    public static let openPalette = MenuAction("open-palette")
+
+    /// Native navigation only: whether the native sidebar is shown, so the page insets its
+    /// topbar for the traffic lights only while the sidebar is hidden.
+    public static func nativeSidebar(visible: Bool) -> MenuAction {
+        MenuAction("native-sidebar", payload: visible ? "visible" : "hidden")
+    }
 
     public static func navigate(_ path: String) -> MenuAction { MenuAction("navigate", payload: path) }
+    /// Native navigation only: `navigate(path, { replace: true })`, for `?tab` changes.
+    public static func replaceRoute(_ path: String) -> MenuAction { MenuAction("replace-route", payload: path) }
     public static func setTheme(_ mode: String) -> MenuAction { MenuAction("set-theme", payload: mode) }
 }
 

@@ -1,0 +1,10 @@
+# The OpenAPI operations Vision Native calls (ADR-204 phase 2). `bun run native:generate-api`
+# generates a Swift struct for each one, and the models they reference, into
+# Sources/VisionNativeCore/API/Generated/. Add an operationId here when a native screen needs it.
+
+# Admin > Exchange rates
+getExchangeRates
+refreshExchangeRates
+
+# App settings (number and date formats, admin mode) for native screens
+getSetting

@@ -27,7 +27,7 @@ aliases: [phase 1 exit, native parity exit, phase-1 exit checklist]
 > [!abstract] Summary
 > Phase 1 of [[docs/adr/204-vision-native-swift-app-target|ADR-204]] exits when Vision Native has
 > feature parity with the Electron shell, backups round-trip both ways and a hand-over ADR exists
-> ([[docs/adr/205-vision-native-hand-over|ADR-205]], proposed). This page checks every action row of
+> ([[docs/adr/205-vision-native-hand-over|ADR-205]], accepted). This page checks every action row of
 > [[docs/reference/native-parity/shell-and-settings|the shell and settings inventory]] against the
 > code on the phase 1e branch. Of 205 action rows, 158 run in the hosted frontend unchanged, 39 have
 > native code, 3 are cut by decision, 3 are gaps (#203 and #204 in Vision Native, #148 inherited from

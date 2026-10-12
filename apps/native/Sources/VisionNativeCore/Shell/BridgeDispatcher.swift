@@ -49,6 +49,9 @@ public protocol BridgeHost: AnyObject {
     func openLogs() throws -> String
     func startWindowDrag()
     func titlebarDoubleClicked()
+    /// `shell:route-changed`: the page's router is at `route`. The page also reports an
+    /// unchanged route when its palette or shortcuts overlay closes.
+    func routeDidChange(_ route: NativeRoute)
 }
 
 /// A frame's security origin (`WKSecurityOrigin`): protocol, host and port, where port 0
@@ -191,6 +194,9 @@ public enum BridgeDispatcher {
             return .success
         case .windowTitlebarDoubleClick:
             host.titlebarDoubleClicked()
+            return .success
+        case .routeChanged(let route):
+            host.routeDidChange(route)
             return .success
         case .unavailable(let channel):
             return .reject(BridgeContract.unavailableMessage(BridgeContract.entry(for: channel)))

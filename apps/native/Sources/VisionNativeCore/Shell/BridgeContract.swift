@@ -1,7 +1,8 @@
 import Foundation
 
 /// The invoke channels of `ElectronInvokeContract` (packaging/electron/electron-api.d.ts),
-/// plus two Vision Native channels for the topbar drag region.
+/// plus three Vision Native channels: two for the topbar drag region and the router
+/// report of the native navigation shell.
 public enum BridgeChannel: String, CaseIterable, Sendable {
     case updateCheckGithub = "update:check-github"
     case updateInstallShell = "update:install-shell"
@@ -36,6 +37,8 @@ public enum BridgeChannel: String, CaseIterable, Sendable {
     // mouse-down on the topbar and the shell starts the window drag.
     case windowDrag = "native:window-drag"
     case windowTitlebarDoubleClick = "native:window-titlebar-double-click"
+    // The page's router reports `pathname + search` to the native sidebar (phase 2).
+    case routeChanged = "shell:route-changed"
 }
 
 /// The channels of `ElectronEventContract`, sent from the shell to the page.
@@ -67,7 +70,8 @@ public struct BridgeEntry: Equatable, Sendable {
     public let channel: BridgeChannel
     /// The `window.<bridge>` object that exposes the method.
     public let bridge: String
-    /// The method name in preload.ts; `nil` for native-only channels.
+    /// The method name in preload.ts; `nil` for native-only channels the user script calls
+    /// itself. A native-only channel with a method is exposed only by Vision Native.
     public let method: String?
     /// The parameter names the method passes, in order (its arity).
     public let parameters: [String]
@@ -150,6 +154,7 @@ public enum BridgeContract {
             .implemented),
         entry(.windowDrag, "", nil, [], "startWindowDrag", .nativeOnly),
         entry(.windowTitlebarDoubleClick, "", nil, [], "titlebarDoubleClicked", .nativeOnly),
+        entry(.routeChanged, "electronAPI", "routeChanged", ["route"], "routeDidChange", .nativeOnly),
     ]
 
     public static func entry(for channel: BridgeChannel) -> BridgeEntry {

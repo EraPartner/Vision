@@ -1,0 +1,1248 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "common.error": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't load this page"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kon deze pagina niet laden"
+          }
+        }
+      }
+    },
+    "common.retry": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retry"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opnieuw proberen"
+          }
+        }
+      }
+    },
+    "exchangeRates.col.currency": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Currency"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Valuta"
+          }
+        }
+      }
+    },
+    "exchangeRates.col.eurToUnit": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 EUR in units"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 EUR in eenheden"
+          }
+        }
+      }
+    },
+    "exchangeRates.col.hundredInEur": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "100 units in EUR"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "100 eenheden in EUR"
+          }
+        }
+      }
+    },
+    "exchangeRates.col.unitToEur": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 unit in EUR"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 eenheid in EUR"
+          }
+        }
+      }
+    },
+    "exchangeRates.failedToLoad": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't load exchange rates."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kon wisselkoersen niet laden."
+          }
+        }
+      }
+    },
+    "exchangeRates.fallbackCurrencies": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fallback currencies"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Terugvalvaluta's"
+          }
+        }
+      }
+    },
+    "exchangeRates.fallbackCurrenciesDesc": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mirror live rates after each fetch"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kopiëren live-koersen na elke ophaalactie"
+          }
+        }
+      }
+    },
+    "exchangeRates.fallbackDesc": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Used only when neither the ECB nor stored rates are available. Refreshed in memory after every successful ECB fetch."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alleen gebruikt wanneer noch de ECB noch opgeslagen koersen beschikbaar zijn. Na elke geslaagde ECB-ophaalactie in het geheugen ververst."
+          }
+        }
+      }
+    },
+    "exchangeRates.fallbackNote": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fallback rates are updated in-memory whenever a successful ECB fetch occurs and match the live rates above."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Terugvalkoersen worden in het geheugen bijgewerkt bij elke geslaagde ECB-ophaalactie en komen overeen met de live-koersen hierboven."
+          }
+        }
+      }
+    },
+    "exchangeRates.fallbackRates": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fallback rates"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Terugvalkoersen"
+          }
+        }
+      }
+    },
+    "exchangeRates.fetchedAt": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fetched {date}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opgehaald op {date}"
+          }
+        }
+      }
+    },
+    "exchangeRates.latestEcbDesc": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count} currencies · rate date {date} · fetched {fetchedAt}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count} valuta's · koersdatum {date} · opgehaald {fetchedAt}"
+          }
+        }
+      }
+    },
+    "exchangeRates.latestEcbRates": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Latest ECB rates"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meest recente ECB-koersen"
+          }
+        }
+      }
+    },
+    "exchangeRates.latestFetch": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Latest fetch"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Laatste ophaling"
+          }
+        }
+      }
+    },
+    "exchangeRates.liveRates": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Live rates"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Live-koersen"
+          }
+        }
+      }
+    },
+    "exchangeRates.noDataFetched": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No data fetched yet"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nog geen gegevens opgehaald"
+          }
+        }
+      }
+    },
+    "exchangeRates.noRates": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No exchange rates stored yet. They will be fetched automatically from ECB on startup."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nog geen wisselkoersen opgeslagen. Ze worden automatisch opgehaald vanuit de ECB bij opstarten."
+          }
+        }
+      }
+    },
+    "exchangeRates.refresh": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Refresh"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vernieuwen"
+          }
+        }
+      }
+    },
+    "exchangeRates.refreshError": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't refresh exchange rates"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kon wisselkoersen niet vernieuwen"
+          }
+        }
+      }
+    },
+    "exchangeRates.refreshSuccess": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exchange rates refreshed from ECB"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wisselkoersen vernieuwd vanuit ECB"
+          }
+        }
+      }
+    },
+    "exchangeRates.storedRates": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stored rates"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opgeslagen koersen"
+          }
+        }
+      }
+    },
+    "exchangeRates.storedRatesDesc": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Latest values only, no history"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alleen meest recente waarden, geen geschiedenis"
+          }
+        }
+      }
+    },
+    "exchangeRates.subtitle": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Latest ECB rates. The fallback updates automatically after each successful fetch."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meest recente ECB-koersen. De terugvaloptie wordt automatisch bijgewerkt na elke geslaagde ophaalactie."
+          }
+        }
+      }
+    },
+    "exchangeRates.title": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exchange rates"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wisselkoersen"
+          }
+        }
+      }
+    },
+    "exchangeRates.viewLabel": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Which rates to show"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Welke koersen tonen"
+          }
+        }
+      }
+    },
+    "layout.settings": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Settings"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Instellingen"
+          }
+        }
+      }
+    },
+    "nav.accounts": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Accounts"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rekeningen"
+          }
+        }
+      }
+    },
+    "nav.admin": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Admin"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Admin"
+          }
+        }
+      }
+    },
+    "nav.adminEndpoints": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Endpoints"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eindpunten"
+          }
+        }
+      }
+    },
+    "nav.adminOverview": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Overview"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Overzicht"
+          }
+        }
+      }
+    },
+    "nav.adminProviders": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Data Sources"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gegevensbronnen"
+          }
+        }
+      }
+    },
+    "nav.aiChat": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AI chat"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AI-chat"
+          }
+        }
+      }
+    },
+    "nav.analysisMonitors": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Analysis monitors"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Analysemonitors"
+          }
+        }
+      }
+    },
+    "nav.analysisWorkspace": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Analysis workspace"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Analysewerkruimte"
+          }
+        }
+      }
+    },
+    "nav.categories": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Categories"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Categorieën"
+          }
+        }
+      }
+    },
+    "nav.chartBuilder": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chart builder"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Grafiekbouwer"
+          }
+        }
+      }
+    },
+    "nav.compare": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compare"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vergelijken"
+          }
+        }
+      }
+    },
+    "nav.crypto": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crypto"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crypto"
+          }
+        }
+      }
+    },
+    "nav.dbMaintenance": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Database maintenance"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Databaseonderhoud"
+          }
+        }
+      }
+    },
+    "nav.dossiers": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dossiers"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dossiers"
+          }
+        }
+      }
+    },
+    "nav.exchangeRates": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exchange rates"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wisselkoersen"
+          }
+        }
+      }
+    },
+    "nav.forecast": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Forecast"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prognose"
+          }
+        }
+      }
+    },
+    "nav.home": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Home"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Home"
+          }
+        }
+      }
+    },
+    "nav.importExport": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import & Export"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importeren & exporteren"
+          }
+        }
+      }
+    },
+    "nav.marketLookup": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Market lookup"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Marktopzoeker"
+          }
+        }
+      }
+    },
+    "nav.markets": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Markets"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Markten"
+          }
+        }
+      }
+    },
+    "nav.metals": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Metals"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Metalen"
+          }
+        }
+      }
+    },
+    "nav.money": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Money"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geld"
+          }
+        }
+      }
+    },
+    "nav.netWorth": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Net worth"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nettovermogen"
+          }
+        }
+      }
+    },
+    "nav.plannedPayments": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Planned Payments"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geplande betalingen"
+          }
+        }
+      }
+    },
+    "nav.portfolio": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Portfolio"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Portefeuille"
+          }
+        }
+      }
+    },
+    "nav.portfolioImport": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import portfolio history"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Portefeuillegeschiedenis importeren"
+          }
+        }
+      }
+    },
+    "nav.portfolioTaxes": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Portfolio taxes"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Portefeuillebelastingen"
+          }
+        }
+      }
+    },
+    "nav.primary": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Main navigation"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hoofdnavigatie"
+          }
+        }
+      }
+    },
+    "nav.realEstate": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Real estate"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vastgoed"
+          }
+        }
+      }
+    },
+    "nav.rebalance": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rebalance"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Herbalanceren"
+          }
+        }
+      }
+    },
+    "nav.recipients": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Payees"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ontvangers"
+          }
+        }
+      }
+    },
+    "nav.research": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Research"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Onderzoek"
+          }
+        }
+      }
+    },
+    "nav.researchHome": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Research home"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Onderzoek-startpagina"
+          }
+        }
+      }
+    },
+    "nav.savingsBonds": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Savings & bonds"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sparen & obligaties"
+          }
+        }
+      }
+    },
+    "nav.statistics": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Insights"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inzichten"
+          }
+        }
+      }
+    },
+    "nav.stocksEtfs": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stocks & ETFs"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aandelen & ETF's"
+          }
+        }
+      }
+    },
+    "nav.taxes": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Taxes"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Belastingen"
+          }
+        }
+      }
+    },
+    "nav.transactions": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transactions"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transacties"
+          }
+        }
+      }
+    },
+    "nav.watchlist": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Watchlist"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volglijst"
+          }
+        }
+      }
+    },
+    "nav.wealth": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wealth"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vermogen"
+          }
+        }
+      }
+    },
+    "nav.whoOwesYou": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Who owes you"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wie jou iets verschuldigd is"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

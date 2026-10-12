@@ -165,6 +165,8 @@ public enum BridgeCall: Equatable, Sendable {
     case recoveryOpenLogs
     case windowDrag
     case windowTitlebarDoubleClick
+    /// `shell:route-changed` with a valid app-relative route.
+    case routeChanged(NativeRoute)
     /// A pending or removed channel; it rejects without looking at arguments.
     case unavailable(BridgeChannel)
 }
@@ -367,6 +369,12 @@ public enum BridgeCodec {
         case .windowTitlebarDoubleClick:
             try expectArity(arguments, 0)
             return .windowTitlebarDoubleClick
+        case .routeChanged:
+            try expectArity(arguments, 1)
+            guard let raw = argument(arguments, 0)?.stringValue, let route = NativeRoute(raw) else {
+                throw InvalidArguments("Invalid route")
+            }
+            return .routeChanged(route)
         default:
             return .unavailable(channel)
         }

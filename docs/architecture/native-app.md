@@ -25,8 +25,13 @@ tags:
     demo,
     adr-204,
     adr-205,
+    phase-2,
+    openapi,
+    design-tokens,
+    string-catalog,
+    navigation,
   ]
-description: "Vision Native is the Swift macOS app under apps/native/ that replaces the Electron shell in phases (ADR-204). Covers the directory layout, the runtime supervisor that starts its own PostgreSQL 18 cluster and backend on synthetic Demo data, payload discovery, the phase 1c shell (window, launch state, preload bridge, web view navigation and download policy, menus, dock and vibrancy), phase 1d backup and restore (bundle format compatibility, Keychain passphrase, restore allow-list, quit-time backup), the phase 1e audit anchor and Keychain witness with restore continuity, the standard and Demo variants of one build, the Debug-only backend override, the Native (macOS) CI job with the backup and audit interop job, and install-native.sh."
+description: "Vision Native is the Swift macOS app under apps/native/ that replaces the Electron shell in phases (ADR-204). Covers the directory layout, the runtime supervisor that starts its own PostgreSQL 18 cluster and backend on synthetic Demo data, payload discovery, the phase 1c shell (window, launch state, preload bridge, web view navigation and download policy, menus, dock and vibrancy), phase 1d backup and restore (bundle format compatibility, Keychain passphrase, restore allow-list, quit-time backup), the phase 1e audit anchor and Keychain witness with restore continuity, the standard and Demo variants of one build, the Debug-only backend override, the phase 2 foundations (generated OpenAPI client, design tokens, String Catalog and sidebar registry, the native NavigationSplitView shell with the shell:route-changed bridge message, and the native Exchange rates screen), the Native (macOS) CI job with the backup and audit interop job, and install-native.sh."
 aliases: [vision native, native app, swift app]
 ---
 
@@ -39,25 +44,35 @@ aliases: [vision native, native app, swift app]
 > ([[docs/adr/204-vision-native-swift-app-target|ADR-204]]). In phase 1 it hosts the existing
 > React frontend in a `WKWebView` and runs its own runtime on synthetic Demo data only. The Electron
 > "Vision" app stays the daily app until the phase 4 switch-over. The phase 1 hand-over is
-> proposed in [[docs/adr/205-vision-native-hand-over|ADR-205]], and
+> recorded in [[docs/adr/205-vision-native-hand-over|ADR-205]] (accepted), and
 > [[docs/reference/native-parity/phase-1-exit|the phase 1 exit checklist]] maps every shell and
-> settings action to its Swift code.
+> settings action to its Swift code. Phase 2 adds a native sidebar around the web view and the
+> first native screen, Exchange rates (see
+> [[docs/architecture/native-app#Native navigation and screens (phase 2)|phase 2]]).
 
 ## Layout
 
-| Path                                            | Purpose                                                                               |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `apps/native/project.yml`                       | XcodeGen spec: project `VisionNative`, macOS app target "Vision Native", macOS 26.0   |
-| `apps/native/Config/Signing.xcconfig`           | `DEVELOPMENT_TEAM` from `VISION_NATIVE_TEAM_ID`, optional gitignored `Local.xcconfig` |
-| `apps/native/VisionNative/`                     | AppKit entry point, window, menus, `WKWebView` shell and the SwiftUI launch state     |
-| `apps/native/Package.swift`                     | SwiftPM package (Swift 6 language mode) with the `VisionNativeCore` library, no deps  |
-| `apps/native/Sources/VisionNativeCore/`         | `BackendLocator` and `BackendHealth`: non-UI logic, testable without the Xcode UI     |
-| `apps/native/Sources/VisionNativeCore/Runtime/` | Runtime supervisor, PostgreSQL and backend lifecycle, Demo seeding, system seams      |
-| `apps/native/Sources/VisionNativeCore/Shell/`   | Shell logic without AppKit: bridge contract, codec, policy, menu model, window frame  |
-| `apps/native/Sources/VisionNativeCore/Backup/`  | Backup bundles, encryption, restore and the `electronBackup` service (phase 1d)       |
-| `apps/native/Sources/VisionNativeCore/Audit/`   | Audit anchor, Keychain witness, backend audit bridge and `electronAudit` (phase 1e)   |
-| `apps/native/Tests/VisionNativeCoreTests/`      | Swift Testing tests and fixtures (Electron backup bundle, Electron audit anchor)      |
-| `install-native.sh`                             | Local Release build and install, by default to `/Applications/Vision Native Demo.app` |
+| Path                                               | Purpose                                                                               |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `apps/native/project.yml`                          | XcodeGen spec: project `VisionNative`, macOS app target "Vision Native", macOS 26.0   |
+| `apps/native/Config/Signing.xcconfig`              | `DEVELOPMENT_TEAM` from `VISION_NATIVE_TEAM_ID`, optional gitignored `Local.xcconfig` |
+| `apps/native/VisionNative/`                        | AppKit entry point, window, menus, `WKWebView` shell and the SwiftUI launch state     |
+| `apps/native/Package.swift`                        | SwiftPM package (Swift 6), libraries `VisionNativeCore` and `VisionNativeUI`, no deps |
+| `apps/native/Sources/VisionNativeCore/`            | `BackendLocator` and `BackendHealth`: non-UI logic, testable without the Xcode UI     |
+| `apps/native/Sources/VisionNativeCore/API/`        | `APIClient` (the Swift `client.ts`) and the generated OpenAPI models and operations   |
+| `apps/native/Sources/VisionNativeCore/Design/`     | Generated design tokens and `ThemeSelection` (variant and appearance of the page)     |
+| `apps/native/Sources/VisionNativeCore/Navigation/` | Generated sidebar registry, routes, shortcuts and the `NativeShellModel` (phase 2)    |
+| `apps/native/Sources/VisionNativeCore/Screens/`    | View models and presentation of native screens (Exchange rates)                       |
+| `apps/native/Sources/VisionNativeUI/`              | SwiftUI shell, native screens and the generated `Localizable.xcstrings` (phase 2)     |
+| `apps/native/openapi-operations.txt`               | The operationIds the Swift client is generated for                                    |
+| `apps/native/i18n-keys.txt`                        | The `i18n/source` keys copied into the String Catalog                                 |
+| `apps/native/Sources/VisionNativeCore/Runtime/`    | Runtime supervisor, PostgreSQL and backend lifecycle, Demo seeding, system seams      |
+| `apps/native/Sources/VisionNativeCore/Shell/`      | Shell logic without AppKit: bridge contract, codec, policy, menu model, window frame  |
+| `apps/native/Sources/VisionNativeCore/Backup/`     | Backup bundles, encryption, restore and the `electronBackup` service (phase 1d)       |
+| `apps/native/Sources/VisionNativeCore/Audit/`      | Audit anchor, Keychain witness, backend audit bridge and `electronAudit` (phase 1e)   |
+| `apps/native/Tests/VisionNativeCoreTests/`         | Swift Testing tests and fixtures (Electron backup bundle, Electron audit anchor)      |
+| `apps/native/Tests/VisionNativeUITests/`           | String Catalog completeness (EN and NL) and SwiftUI layout tests                      |
+| `install-native.sh`                                | Local Release build and install, by default to `/Applications/Vision Native Demo.app` |
 
 The generated `apps/native/VisionNative.xcodeproj`, its `Info.plist`, `apps/native/build/` and
 the SwiftPM state are gitignored. The app target uses Swift 6 with complete strict concurrency,
@@ -269,6 +284,7 @@ JavaScriptCore with a stub message handler.
 | `electronAPI`      | `app:renderer-ready`, `app:set-badge`, `app:set-language`, `app:set-vibrancy`, `app:get-accent-color`, `theme:persist-splash` | Implemented (queue flush, dock badge, menus, material, accent, palette) |
 | (user script)      | `app:renderer-failure`                                                                                                        | Logged as kind, name, source file and line only                         |
 | (Vision Native)    | `native:window-drag`, `native:window-titlebar-double-click`                                                                   | Topbar drag region                                                      |
+| `electronAPI`      | `shell:route-changed` (`routeChanged(route)`, Vision Native only)                                                             | The native sidebar's route (phase 2)                                    |
 
 The backup settings use the same baseline writes and `settings.json` mirror (`backupDir`,
 `backupOnQuit`) as the services settings, and `save-settings` refuses system directories like
@@ -276,6 +292,10 @@ The backup settings use the same baseline writes and `settings.json` mirror (`ba
 configured directory, `load-settings` answers the iCloud Drive default like
 `resolveBackupSettingsWithDefaults`, and the quit-time backup reads the database value, else the
 mirror.
+
+`electronAPI` also carries `nativeNavigation: true`, which Electron never defines. The page then
+leaves out its own sidebar and reports `pathname + search` with `routeChanged` (see
+[[docs/architecture/native-app#Native navigation and screens (phase 2)|phase 2]]).
 
 Events: `menu:action`, `app:csv-opened` (a CSV opened with the app, at most 25 MiB),
 `window:fullscreen` and `app:accent-color-changed` (on `AppleColorPreferencesChangedNotification`)
@@ -314,7 +334,8 @@ Window and Help (Keyboard Shortcuts, Source Code, Documentation). Labels that El
 `t()` use the same keys from `i18n/source/en.json` and `nl.json`, which a build phase copies to
 `Contents/Resources/i18n/`; role items keep Electron's English labels. `app:set-language` reloads
 the strings, persists `nativeLanguage` and rebuilds the menus. Items that act in the page send
-`menu:action` through the bridge, showing the window first. The Toggle Developer Tools item is
+`menu:action` through the bridge, showing the window first. From phase 2, Toggle Sidebar hides and
+shows the native sidebar instead of the page's. The Toggle Developer Tools item is
 left out: Debug builds are inspectable from Safari's Develop menu.
 
 The dock menu has New transaction and Home. `app:set-badge` sets the dock badge to the planned-
@@ -555,6 +576,106 @@ seed. `native-demo-cli.js reset --execute --target vision-native` targets the st
 `bun run demo:reset-native` still targets Electron's Vision Demo. Electron Vision Demo has no reset
 action in the app, so Vision Native has none either.
 
+## Native navigation and screens (phase 2)
+
+Phase 2 lays the foundations for native screens: four generators turn the existing sources of truth
+into Swift, a native sidebar replaces the web sidebar, and one screen, Exchange rates, is drawn in
+SwiftUI. Every other route still shows the web app.
+
+### Generated sources
+
+`bun run native:generate` runs the four generators; CI's Verify Generated Artifacts job reruns it
+and fails when `apps/native/` changes. The outputs are committed.
+
+| Script                            | Inputs                                                        | Output                                                         |
+| --------------------------------- | ------------------------------------------------------------- | -------------------------------------------------------------- |
+| `scripts/native-openapi.ts`       | `openapi.yaml`, `apps/native/openapi-operations.txt`          | `Sources/VisionNativeCore/API/Generated/` (models, operations) |
+| `scripts/native-design-tokens.ts` | `styles/tokens.css`, `styles/skin-v2.css`, `styles/themes.ts` | `Sources/VisionNativeCore/Design/Generated/DesignTokens.swift` |
+| `scripts/native-strings.ts`       | `i18n/source/{en,nl}.json`, `apps/native/i18n-keys.txt`       | `Sources/VisionNativeUI/Resources/Localizable.xcstrings`       |
+| `scripts/native-navigation.ts`    | `apps/frontend/src/lib/navigation.ts`                         | `Sources/VisionNativeCore/Navigation/Generated/`               |
+
+The OpenAPI generator emits one `APIOperation` struct per allow-listed operationId and the
+component schemas they reach, plus the ADR-026 `Envelope` and `ErrorPayload`. Numbers become
+`Decimal`, dates stay strings, and an untyped schema becomes `JSONValue`. An operation whose
+response is a bare envelope decodes its `data` as `JSONValue`, so typing the response in
+`openapi.yaml` is how a native screen gets a model. The token generator resolves the cascade the
+browser applies: a variant's inline palette from `themes.ts`, then `--gain`/`--loss` from
+`tokens.css` (classic) and `skin-v2.css` (colorblind-safe). The navigation generator maps each
+Lucide icon to an SF Symbol and fails on an icon without one or a label key missing from
+`i18n-keys.txt`.
+
+### API client
+
+`APIClient` is the Swift `apiRequest` of `apps/frontend/src/lib/api/client.ts`: the same
+`Content-Type` and `X-Request-Id` headers (one id for every attempt), ADR-026 envelope unwrapping,
+`ApiClientError` from the failure envelope with the status fallback codes, `ApiContractError` for a
+body that does not decode (paths and problems only, never values), a 30-second timeout and two
+retries of idempotent methods on 408, 429, 502, 503 and 504, timeouts and network errors, with
+500 ms × 2^n backoff plus up to 200 ms of jitter. Validation, rate-limit, auth, not-found and
+conflict errors are not retried. The transport is a protocol; the app uses an ephemeral
+`URLSession`, and the tests use a fake.
+
+The admin token stays where the web app keeps it, in the page's `sessionStorage`
+(`vision.adminToken`), never in `settings.json` or the Keychain. Before a request the client reads
+it from the web view with `callAsyncJavaScript` and sends it as `Authorization: Bearer`; a page
+that does not answer within 5 seconds gives no token. Without a token, as in a fresh session, the backend's loopback allowlist decides, exactly as for the web app
+in the same window.
+
+### Theme and strings
+
+`ThemeSelection.resolve` recovers the page's theme from the `splashTheme` it persists
+(`theme:persist-splash`): the resolved mode, and the variant whose `--background` and
+`--foreground` match. `VisionNativeUI` exposes it to SwiftUI as the `visionTheme` environment
+value, together with `Color(token:)`; the colorblind skin follows `app_settings`. The sidebar and
+native screens take the page's appearance; the web view keeps following the system, as before.
+
+`CatalogStrings` is the native `t()`: it reads the compiled String Catalog of `VisionNativeUI`
+for the page's language (`app:set-language`), fills every `{name}` placeholder and falls back to
+the key. A test checks every listed key in both languages against `i18n/source`.
+
+### Navigation shell
+
+`ShellRootView` is a `NavigationSplitView` hosted in the window in place of the bare web view. The
+sidebar is a source list built from `NavigationRegistry`: the sections of `NAV_SECTIONS` with
+collapsible headers (hidden sections are stored per Mac, and a section that holds the active page
+opens), the admin section in admin mode only, and the footer entries with Settings, which opens the
+page's settings dialog. The detail column shows the native screen for the route, or the web view,
+which stays in the hierarchy so the page keeps its state.
+
+The web router stays the source of truth. `AppLayout` reports `pathname + search` through
+`electronAPI.routeChanged` (`shell:route-changed`, validated as an app-relative route of at most
+2 KiB, with the query read like `URLSearchParams`, so a malformed percent-escape stays as written).
+A sidebar click or a native shortcut only sends the `navigate` menu action; the route, the detail
+column and the sidebar selection change when the page reports the new route, so an unsaved-changes
+prompt opens on the visible page and a blocked move keeps the route. A native `?tab` change sends
+`replace-route`, which the page applies with `replace`, like `useTabParam`; the page accepts
+`navigate` and `replace-route` payloads that start with one `/` only.
+
+`app_settings` is read again when the page reports a new path and when the settings dialog closes
+(`?settings` removed), plus once more 600 ms after that close, because the page saves its settings
+500 ms after a change. Admin mode and number and date formats follow the page that way. The native
+shell never redirects: an admin route shows a native screen only while `app_settings` says admin mode
+is on, and otherwise the web view, where `RequireAdmin` redirects and reports the new route. The
+page's topbar keeps its traffic-light inset only while the native sidebar is hidden
+(`native-sidebar`).
+
+The command palette and the shortcuts stay the page's. On a native screen, which takes the key
+events, `NativeShortcuts` handles the same keys: ⌘K sends `open-palette`, `?` opens the shortcuts
+overlay, `g` then a key, `[`, `]` and `N` navigate. Opening a page dialog (palette, settings,
+shortcuts) shows the web view at the same route until the route changes or the dialog closes:
+settings close by removing `?settings`, and when the palette or the shortcuts overlay closes the
+page reports its unchanged route again.
+
+### Exchange rates
+
+`/admin/exchange-rates` is the first native screen
+([[docs/reference/native-parity/admin|admin parity]]). `ExchangeRatesModel` mirrors
+`useExchangeRatesQuery` (`db_only=true`, 10-minute stale time, one request at a time) and the
+refresh mutation (toast, then refetch); `ExchangeRatesPresentation` produces the summary cards and
+tables with the web's formats through `VisionFormat` (six and four fraction digits, money with the
+`showDecimalPlaces` setting, `Intl`-compatible locales of the four number formats, the five app date
+formats and a two-digit local time). The Live/Fallback tab lives in `?tab`.
+
 ## CI
 
 Linux cannot build macOS apps, so the `native-macos` job ("Native (macOS)") in
@@ -562,7 +683,10 @@ Linux cannot build macOS apps, so the `native-macos` job ("Native (macOS)") in
 generates the project, builds the Debug app with `CODE_SIGNING_ALLOWED=NO` and runs
 `swift test --package-path apps/native`. It selects Xcode 26.6 with `xcode-select` and prints
 `xcodebuild -version`, and installs XcodeGen 2.46.0 from its release zip after checking a pinned
-SHA-256. CI builds without a runtime payload. The `changes` job sets `native` to true when a pull request
+SHA-256. `swift test` runs both test targets, `VisionNativeCoreTests` and `VisionNativeUITests`. CI
+builds without a runtime payload. The generated Swift sources and String Catalog are checked on
+Linux by the Verify Generated Artifacts job (`bun run native:generate`, then no change below
+`apps/native/`). The `changes` job sets `native` to true when a pull request
 touches `apps/native/`, `packaging/electron/backup/`, `install-native.sh`, `ci.yml`,
 `packaging/electron/audit-anchor.ts` or `packaging/electron/scripts/native-audit-fixture.ts`, on
 every push to `main` and whenever the diff cannot be classified (`scripts/ci-classify.py`).
@@ -600,7 +724,7 @@ signature changes on every build. There is no updater: rerunning the script is t
 - [[docs/reference/native-parity/index|Native parity inventory]]
 - [[docs/reference/native-parity/shell-and-settings|Native parity: shell, menus, dock and bridge]]
 - [[docs/reference/native-parity/phase-1-exit|Native parity: phase 1 exit checklist]]
-- [[docs/adr/205-vision-native-hand-over|ADR-205 (proposed)]]
+- [[docs/adr/205-vision-native-hand-over|ADR-205]]
 - [[docs/architecture/electron|Electron Desktop Architecture]]
 - [[docs/reference/scripts|Scripts Reference]]
 - [[docs/guides/native-macos-runtime|Native macOS Runtime Guide]]

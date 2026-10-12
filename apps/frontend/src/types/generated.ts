@@ -4489,6 +4489,33 @@ export interface components {
             code?: string;
             status?: number;
         };
+        ExchangeRate: {
+            /** @description ISO 4217 currency code */
+            currency: string;
+            /** @description The value of one unit in EUR */
+            rate_to_eur: number;
+            /** Format: date */
+            rate_date: string;
+            /** Format: date-time */
+            fetched_at: string;
+        };
+        ExchangeRates: {
+            total_rates: number;
+            rates: components["schemas"]["ExchangeRate"][];
+            /** @description Built-in rates to EUR by currency code, used when no stored rate exists */
+            fallback_rates: {
+                [key: string]: number;
+            };
+            /** @enum {string} */
+            source: "database" | "fallback";
+            /** @description The stored rate date is before today */
+            is_stale: boolean;
+            /** Format: date-time */
+            last_fetched_at: string | null;
+        };
+        InfoMessage: {
+            message: string;
+        };
         /** @description Citation snapshot. Document metadata is optional, but requires documentId when present; the server pins document version and digest on save. The snapshot remains after source deletion. */
         ResearchDossierSource: {
             title: string;
@@ -12007,8 +12034,8 @@ export interface operations {
     getExchangeRates: {
         parameters: {
             query?: {
-                base?: string;
-                month?: string;
+                /** @description Serve the stored rates without starting a background refresh when they are stale (default false). Accepts true/false/1/0. */
+                db_only?: boolean;
             };
             header?: never;
             path?: never;
@@ -12016,13 +12043,15 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Exchange rate map */
+            /** @description The latest stored rate per currency and the built-in fallback rates */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["ExchangeRates"];
+                    };
                 };
             };
         };
@@ -12042,7 +12071,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["InfoMessage"];
+                    };
                 };
             };
         };

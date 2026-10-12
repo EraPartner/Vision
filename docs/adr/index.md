@@ -249,9 +249,9 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 
 ## Recent Decisions
 
-### 2026-10-12: Vision Native phase 1 hand-over (proposed)
+### 2026-10-12: Vision Native phase 1 hand-over (accepted)
 
-[[docs/adr/205-vision-native-hand-over|ADR-205]] is a proposed draft, not accepted. It records what
+[[docs/adr/205-vision-native-hand-over|ADR-205]] was accepted on 2026-10-12. It records what
 phase 1 of Vision Native delivered (runtime, shell, backup, audit anchor, Demo variant, the
 [[docs/reference/native-parity/phase-1-exit|phase 1 exit checklist]] and backup interop in CI),
 keeps the Demo-only rule until phase 4, lists the switch-over steps deferred to phase 4 (restore

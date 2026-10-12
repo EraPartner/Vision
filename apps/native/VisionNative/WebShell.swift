@@ -1,5 +1,6 @@
 import AppKit
 import OSLog
+import SwiftUI
 import VisionNativeCore
 import WebKit
 
@@ -259,5 +260,25 @@ final class BridgeMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
             to: message.body as? String, sender: sender, appURL: controller.appURL, host: controller)
         let encoded = reply.scriptReply
         return (encoded.result, encoded.error)
+    }
+}
+
+/// Places the shell's one web view in the SwiftUI detail column (`ShellRootView`). The view
+/// is created once by `WebShell` and only hidden while a native screen covers it, so the
+/// page keeps its state and keeps reporting routes.
+struct WebViewHost: NSViewRepresentable {
+    let webView: ShellWebView
+    let hidden: Bool
+
+    func makeNSView(context: Context) -> ShellWebView {
+        webView.isHidden = hidden
+        return webView
+    }
+
+    func updateNSView(_ nsView: ShellWebView, context: Context) {
+        guard nsView.isHidden != hidden else { return }
+        nsView.isHidden = hidden
+        // Back from a native screen: the page takes the keyboard again.
+        if !hidden, let window = nsView.window { window.makeFirstResponder(nsView) }
     }
 }
