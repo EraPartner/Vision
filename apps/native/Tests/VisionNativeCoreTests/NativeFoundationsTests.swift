@@ -112,7 +112,7 @@ import Testing
         // Database maintenance and the table editor stay in the web app.
         #expect(NativeScreen.screen(forPath: "/admin/db") == nil)
         #expect(NativeScreen.screen(forPath: "/admin/db/transactions") == nil)
-        #expect(NativeScreen.allCases.allSatisfy(\.requiresAdmin))
+        #expect(NativeScreen.allCases.allSatisfy { $0.requiresAdmin })
     }
 }
 
