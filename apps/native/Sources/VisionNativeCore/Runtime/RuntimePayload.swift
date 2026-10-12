@@ -34,6 +34,7 @@ public struct NativeTools: Sendable, Equatable {
 /// and `resolveAlembic` in `packaging/electron/runtime/native.ts`.
 public enum RuntimePayload {
     /// Development override: an absolute path to a prepared `native-runtime` directory.
+    /// Honoured in Debug builds only.
     public static let environmentKey = "VISION_NATIVE_RUNTIME_DIR"
     /// `Contents/Resources/runtime` in the app bundle (install-native.sh stages it).
     public static let bundleDirectoryName = "runtime"
@@ -41,18 +42,20 @@ public enum RuntimePayload {
 
     public static let missingPayloadMessage =
         "This Vision Native build has no runtime payload (PostgreSQL 18, the backend and Chrome Headless Shell). "
-        + "Install with ./install-native.sh, which stages the payload into the app, or set "
+        + "Install with ./install-native.sh, which stages the payload into the app, or, in a Debug build, set "
         + "\(environmentKey) to a prepared native-runtime directory "
         + "(cd packaging/electron && bun run prepare:native)."
 
-    /// `VISION_NATIVE_RUNTIME_DIR` when set, else `<resources>/runtime`. The Demo seed is
-    /// the `demo-seed` sibling of the runtime directory in both cases.
+    /// `VISION_NATIVE_RUNTIME_DIR` when set and `allowOverride` (Debug builds), else
+    /// `<resources>/runtime`, so a Release build only ever runs its own signed payload.
+    /// The Demo seed is the `demo-seed` sibling of the runtime directory in both cases.
     public static func locate(
         environment: [String: String],
         resourcesDirectory: String?,
+        allowOverride: Bool,
         fileSystem: any RuntimeFileSystem
     ) throws -> RuntimePayloadLocation {
-        if let raw = environment[environmentKey], !raw.isEmpty {
+        if allowOverride, let raw = environment[environmentKey], !raw.isEmpty {
             guard raw.hasPrefix("/") else {
                 throw NativeRuntimeError(
                     "NATIVE_RUNTIME_DIR_INVALID", "\(environmentKey) must be an absolute path; got \(raw).")

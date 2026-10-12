@@ -218,6 +218,8 @@ final class FakeRunner: ProcessRunning, @unchecked Sendable {
     private let lock = NSLock()
     private var recorded: [Call] = []
     var handler: @Sendable (Call) throws -> RunResult = { _ in RunResult() }
+    /// Awaited before `handler`, so a test can hold a call in flight.
+    var gate: (@Sendable (Call) async -> Void)?
 
     var calls: [Call] {
         lock.lock()
@@ -230,7 +232,36 @@ final class FakeRunner: ProcessRunning, @unchecked Sendable {
     func run(_ executable: String, _ arguments: [String], options: RunOptions) async throws -> RunResult {
         let call = Call(executable: executable, arguments: arguments, options: options)
         lock.withLock { recorded.append(call) }
+        if let gate { await gate(call) }
         return try handler(call)
+    }
+}
+
+/// A one-shot signal that any number of tasks can wait for.
+final class Latch: @unchecked Sendable {
+    private let lock = NSLock()
+    private var isOpen = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    func open() {
+        let waiting = lock.withLock { () -> [CheckedContinuation<Void, Never>] in
+            isOpen = true
+            let waiting = waiters
+            waiters = []
+            return waiting
+        }
+        for waiter in waiting { waiter.resume() }
+    }
+
+    func wait() async {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            let resumeNow = lock.withLock { () -> Bool in
+                if isOpen { return true }
+                waiters.append(continuation)
+                return false
+            }
+            if resumeNow { continuation.resume() }
+        }
     }
 }
 

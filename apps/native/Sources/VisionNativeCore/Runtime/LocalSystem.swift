@@ -36,30 +36,89 @@ private final class ExitWaiter: @unchecked Sendable {
     private var continuation: CheckedContinuation<Int32, Never>?
 
     func finish(_ value: Int32) {
-        lock.lock()
-        status = value
-        let waiting = continuation
-        continuation = nil
-        lock.unlock()
+        let waiting = lock.withLock { () -> CheckedContinuation<Int32, Never>? in
+            status = value
+            let waiting = continuation
+            continuation = nil
+            return waiting
+        }
         waiting?.resume(returning: value)
     }
 
     func wait() async -> Int32 {
         await withCheckedContinuation { (continuation: CheckedContinuation<Int32, Never>) in
-            lock.lock()
-            if let status {
-                lock.unlock()
-                continuation.resume(returning: status)
-                return
+            let finished = lock.withLock { () -> Int32? in
+                if let status { return status }
+                self.continuation = continuation
+                return nil
             }
-            self.continuation = continuation
-            lock.unlock()
+            if let finished { continuation.resume(returning: finished) }
         }
     }
 }
 
+/// Collects one pipe's output through `readabilityHandler`, so waiting for EOF can be
+/// bounded: a grandchild that inherited the pipe may keep it open after the child exits.
+private final class PipeCollector: @unchecked Sendable {
+    private let lock = NSLock()
+    private let handle: FileHandle
+    private var data = Data()
+    private var finished = false
+    private var continuation: CheckedContinuation<Void, Never>?
+
+    init(_ handle: FileHandle) {
+        self.handle = handle
+        handle.readabilityHandler = { [weak self] readable in
+            let chunk = readable.availableData
+            guard let self else { return }
+            if chunk.isEmpty {
+                readable.readabilityHandler = nil
+                self.finish()
+            } else {
+                self.lock.withLock { if !self.finished { self.data.append(chunk) } }
+            }
+        }
+    }
+
+    private func finish() {
+        let waiting: CheckedContinuation<Void, Never>? = lock.withLock {
+            guard !finished else { return nil }
+            finished = true
+            let waiting = continuation
+            continuation = nil
+            return waiting
+        }
+        waiting?.resume()
+    }
+
+    /// The output up to EOF, or up to `seconds` from now, whichever comes first.
+    func collect(waitingAtMost seconds: TimeInterval) async -> Data {
+        let deadline = Task.detached { [weak self] in
+            try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+            self?.finish()
+        }
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            let done = lock.withLock { () -> Bool in
+                if finished { return true }
+                self.continuation = continuation
+                return false
+            }
+            if done { continuation.resume() }
+        }
+        deadline.cancel()
+        handle.readabilityHandler = nil
+        try? handle.close()
+        return lock.withLock { data }
+    }
+}
+
 /// Runs short-lived tools (`initdb`, `psql`, `pg_ctl`, `ps`) with `Foundation.Process`.
+/// A timeout or task cancellation sends `SIGTERM`, then `SIGKILL` after `killGrace`;
+/// output still open after exit is read for at most `drainGrace`.
 public struct FoundationProcessRunner: ProcessRunning {
+    public static let killGrace: TimeInterval = 2
+    public static let drainGrace: TimeInterval = 2
+
     public init() {}
 
     public func run(_ executable: String, _ arguments: [String], options: RunOptions) async throws -> RunResult {
@@ -92,24 +151,34 @@ public struct FoundationProcessRunner: ProcessRunning {
                 message: "\(name) failed to start: \(error.localizedDescription)"
             )
         }
+        let stdoutCollector = PipeCollector(stdoutPipe.fileHandleForReading)
+        let stderrCollector = PipeCollector(stderrPipe.fileHandleForReading)
         let box = UncheckedBox(process)
+        let pid = process.processIdentifier
         let timedOut = LockedValue(false)
+        let cancelled = LockedValue(false)
         let timeoutNanoseconds = UInt64(max(options.timeout, 0.001) * 1_000_000_000)
         let timer = Task.detached {
             try await Task.sleep(nanoseconds: timeoutNanoseconds)
             timedOut.withLock { $0 = true }
-            if box.value.isRunning { box.value.terminate() }
+            Self.terminate(box, pid: pid)
         }
-        let stdoutHandle = UncheckedBox(stdoutPipe.fileHandleForReading)
-        let stderrHandle = UncheckedBox(stderrPipe.fileHandleForReading)
-        async let stdoutData = Self.readToEnd(stdoutHandle)
-        async let stderrData = Self.readToEnd(stderrHandle)
-        let status = await waiter.wait()
+        let status = await withTaskCancellationHandler {
+            await waiter.wait()
+        } onCancel: {
+            cancelled.withLock { $0 = true }
+            Self.terminate(box, pid: pid)
+        }
         timer.cancel()
+        async let stdoutData = stdoutCollector.collect(waitingAtMost: Self.drainGrace)
+        async let stderrData = stderrCollector.collect(waitingAtMost: Self.drainGrace)
         let stdout = String(decoding: await stdoutData, as: UTF8.self)
         let stderr = String(decoding: await stderrData, as: UTF8.self)
         if timedOut.withLock({ $0 }) {
             throw ProcessRunError(executable: executable, exitStatus: status, message: "\(name) timed out")
+        }
+        if cancelled.withLock({ $0 }) {
+            throw ProcessRunError(executable: executable, exitStatus: status, message: "\(name) was cancelled")
         }
         guard status == 0 else {
             let trimmed = stderr.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -122,12 +191,13 @@ public struct FoundationProcessRunner: ProcessRunning {
         return RunResult(stdout: stdout, stderr: stderr)
     }
 
-    private static func readToEnd(_ box: UncheckedBox<FileHandle>) async -> Data {
-        await withCheckedContinuation { (continuation: CheckedContinuation<Data, Never>) in
-            DispatchQueue.global(qos: .utility).async {
-                let data = (try? box.value.readToEnd()) ?? Data()
-                continuation.resume(returning: data)
-            }
+    /// `SIGTERM`, then `SIGKILL` if the child is still running after `killGrace`.
+    private static func terminate(_ box: UncheckedBox<Process>, pid: Int32) {
+        guard box.value.isRunning else { return }
+        box.value.terminate()
+        Task.detached {
+            try? await Task.sleep(nanoseconds: UInt64(Self.killGrace * 1_000_000_000))
+            if box.value.isRunning { _ = Darwin.kill(pid, SIGKILL) }
         }
     }
 }
@@ -300,16 +370,48 @@ public struct LocalFileSystem: RuntimeFileSystem {
         if info(parent) == nil {
             try createDirectory(parent, mode: 0o700)
         }
-        let temporary = "\(path).tmp-\(getpid())-\(epochMilliseconds(Date()))"
-        guard manager.createFile(atPath: temporary, contents: data, attributes: [.posixPermissions: mode]) else {
-            throw FileSystemError.failed(temporary, "could not write file")
+        let temporary = "\(path).tmp-\(getpid())-\(UUID().uuidString)"
+        // The sibling is created with its final mode before any byte is written.
+        let descriptor = Darwin.open(
+            temporary, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, mode_t(mode))
+        guard descriptor >= 0 else {
+            throw FileSystemError.failed(temporary, String(cString: strerror(errno)))
+        }
+        var failure: String?
+        if Darwin.fchmod(descriptor, mode_t(mode)) != 0 {
+            failure = String(cString: strerror(errno))
+        } else if let message = Self.writeAll(descriptor, data) {
+            failure = message
+        } else if Darwin.fsync(descriptor) != 0 {
+            failure = String(cString: strerror(errno))
+        }
+        Darwin.close(descriptor)
+        if let failure {
+            _ = Darwin.unlink(temporary)
+            throw FileSystemError.failed(temporary, failure)
         }
         do {
             try move(temporary, path)
-            try setMode(path, mode)
         } catch {
             _ = Darwin.unlink(temporary)
             throw error
+        }
+    }
+
+    /// `write(2)` until every byte is written; the error message on failure.
+    private static func writeAll(_ descriptor: Int32, _ data: Data) -> String? {
+        data.withUnsafeBytes { (raw: UnsafeRawBufferPointer) -> String? in
+            guard let base = raw.baseAddress else { return nil }
+            var offset = 0
+            while offset < raw.count {
+                let written = Darwin.write(descriptor, base + offset, raw.count - offset)
+                if written < 0 {
+                    if errno == EINTR { continue }
+                    return String(cString: strerror(errno))
+                }
+                offset += written
+            }
+            return nil
         }
     }
 

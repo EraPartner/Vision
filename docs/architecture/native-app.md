@@ -101,8 +101,10 @@ Vision Demo (54330), so all three can run at once.
 The payload (PostgreSQL 18.6, `vision-backend`, `vision-alembic`, Chrome Headless Shell and the
 built frontend) is not committed. The supervisor looks for it in this order:
 
-1. `VISION_NATIVE_RUNTIME_DIR`: an absolute path to a prepared `native-runtime` directory (for
-   example `packaging/electron/native-runtime` or `apps/native/build/payload/native-runtime`).
+1. `VISION_NATIVE_RUNTIME_DIR`, in Debug builds only: an absolute path to a prepared
+   `native-runtime` directory (for example `packaging/electron/native-runtime` or
+   `apps/native/build/payload/native-runtime`). A Release build ignores it with a logged warning,
+   like `VISION_NATIVE_BACKEND_URL`.
 2. `Contents/Resources/runtime/` in the app bundle, which `install-native.sh` stages.
 
 The synthetic seed is the `demo-seed/` sibling of the runtime directory in both cases. A missing
@@ -114,10 +116,11 @@ SHA-256, no unlisted, symlinked or special files), and `postgres/runtime.json` a
 ### Start sequence
 
 `ShellResolver` calls `RuntimeSupervisor.launch()`. Concurrent calls share one launch, and a call
-after a failure retries.
+after a failure retries. A failed launch stops the backend it started and leaves PostgreSQL
+running, so Retry starts a fresh backend.
 
 1. Take the exclusive lock on `vision-native.lock`. A second instance fails with
-   `NATIVE_ALREADY_RUNNING`.
+   `NATIVE_ALREADY_RUNNING`. Only the instance that holds the lock rotates `main.log`.
 2. Locate the payload and resolve the app port: the persisted `appPort`, otherwise a random free
    port from 20000 to 59999 (64 tries, then 3002), persisted to `settings.json`. A corrupt
    `settings.json` is renamed to `settings.json.corrupt-<ms>`.
@@ -131,7 +134,9 @@ after a failure retries.
    `vision.conf`, starts `postgres` on the loopback port with Unix sockets disabled, inspects the
    server (major 18, loopback-only, our data directory), bootstraps the roles, database and
    extensions, then spawns `vision-backend` with the allowlisted environment. A port held by
-   another process fails closed. A backend `PORT_COLLISION` re-picks the app port once.
+   another process fails closed. A backend `PORT_COLLISION` re-picks the app port once. A recorded
+   backend of ours that does not answer `/health` within three probes is stopped and replaced.
+   Electron fails here with `BACKEND_STALE_PID`.
 6. After a seed switch, wait for `/health/detailed` to report a connected database, recheck the
    stable counts and finalize the switch. Any failure rolls the switch back.
 7. Poll `GET /health/detailed` (20 probes at 100 ms, then every 300 ms, about 3 minutes) and load
@@ -141,12 +146,17 @@ after a failure retries.
 ### Stop sequence
 
 On quit the app delegate answers `terminateLater` and calls `RuntimeSupervisor.shutdown()` with
-a 45-second hard limit. When `keepServicesOnQuit` is on (the database setting first, then the
+a 45-second hard limit. Like Electron, the quit does not wait for a launch in progress. It cancels
+the launch, which ends a running tool such as `initdb` or `pg_restore`. The runtime then refuses
+to spawn PostgreSQL or the backend or to begin a database switch. A Demo staging database
+without a persisted switch plan is dropped. A persisted plan is rolled back on the next launch.
+Tools run with `Foundation.Process` get `SIGTERM` on timeout or cancellation, then `SIGKILL` after 2
+seconds, and their output is read for at most 2 more seconds after exit. When `keepServicesOnQuit` is on (the database setting first, then the
 `settings.json` mirror), both processes keep running. Otherwise the backend gets `SIGTERM` and,
 after 10 seconds, `SIGKILL`, and PostgreSQL stops with `pg_ctl stop -m fast`. Vision Native
 signals a recorded PID only when `ps -o command=` shows its own `vision-backend`, removes stale
 records, and treats PIDs of 1 or less as untrusted. On the next launch a healthy backend from an
-earlier run is reused.
+earlier run is reused, and an unhealthy one is replaced.
 
 Phase 1b leaves out backup on quit and directory-switch tokens (phase 1d), the audit anchor and
 Keychain witness (phase 1e), external PostgreSQL clusters, the Bun source mode and the health

@@ -8,7 +8,7 @@ import Testing
         let location = try RuntimePayload.locate(
             environment: [RuntimePayload.environmentKey: testRuntimeRoot + "/"],
             resourcesDirectory: "/Applications/Vision Native.app/Contents/Resources",
-            fileSystem: harness.fileSystem)
+            allowOverride: true, fileSystem: harness.fileSystem)
         #expect(location.source == .environment)
         #expect(location.runtimeDirectory == testRuntimeRoot)
         #expect(location.demoSeedDirectory == testSeedRoot)
@@ -19,12 +19,12 @@ import Testing
         #expect(throws: NativeRuntimeError.self) {
             try RuntimePayload.locate(
                 environment: [RuntimePayload.environmentKey: "payload/native-runtime"], resourcesDirectory: nil,
-                fileSystem: harness.fileSystem)
+                allowOverride: true, fileSystem: harness.fileSystem)
         }
         let error = #expect(throws: NativeRuntimeError.self) {
             try RuntimePayload.locate(
                 environment: [RuntimePayload.environmentKey: "/payload/missing"], resourcesDirectory: nil,
-                fileSystem: harness.fileSystem)
+                allowOverride: true, fileSystem: harness.fileSystem)
         }
         #expect(error?.code == "NATIVE_RUNTIME_MISSING")
     }
@@ -34,17 +34,35 @@ import Testing
         let resources = "/Applications/Vision Native.app/Contents/Resources"
         fileSystem.addFile("\(resources)/runtime/manifest.json", #"{"version":1,"entries":[]}"#)
         let location = try RuntimePayload.locate(
-            environment: [:], resourcesDirectory: resources, fileSystem: fileSystem)
+            environment: [:], resourcesDirectory: resources, allowOverride: true, fileSystem: fileSystem)
         #expect(location.source == .appBundle)
         #expect(location.runtimeDirectory == "\(resources)/runtime")
         #expect(location.demoSeedDirectory == "\(resources)/demo-seed")
+    }
+
+    @Test func releaseBuildsIgnoreTheOverride() throws {
+        let harness = try Harness()
+        let resources = "/Applications/Vision Native.app/Contents/Resources"
+        harness.fileSystem.addFile("\(resources)/runtime/manifest.json", #"{"version":1,"entries":[]}"#)
+        let location = try RuntimePayload.locate(
+            environment: [RuntimePayload.environmentKey: testRuntimeRoot], resourcesDirectory: resources,
+            allowOverride: false, fileSystem: harness.fileSystem)
+        #expect(location.source == .appBundle)
+        #expect(location.runtimeDirectory == "\(resources)/runtime")
+
+        let error = #expect(throws: NativeRuntimeError.self) {
+            try RuntimePayload.locate(
+                environment: [RuntimePayload.environmentKey: testRuntimeRoot], resourcesDirectory: nil,
+                allowOverride: false, fileSystem: harness.fileSystem)
+        }
+        #expect(error?.code == "NATIVE_RUNTIME_MISSING")
     }
 
     @Test func missingPayloadGivesAnActionableError() {
         let error = #expect(throws: NativeRuntimeError.self) {
             try RuntimePayload.locate(
                 environment: [:], resourcesDirectory: "/Applications/Vision Native.app/Contents/Resources",
-                fileSystem: FakeFileSystem())
+                allowOverride: true, fileSystem: FakeFileSystem())
         }
         #expect(error?.code == "NATIVE_RUNTIME_MISSING")
         #expect(error?.message.contains("install-native.sh") == true)

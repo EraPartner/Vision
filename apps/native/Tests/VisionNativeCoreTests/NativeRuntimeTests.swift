@@ -151,6 +151,37 @@ import Testing
         #expect(harness.spawner.spawns.filter { $0.executable.hasSuffix("vision-backend") }.count == 1)
     }
 
+    @Test func unhealthyRecordedBackendIsStoppedAndReplaced() async throws {
+        let harness = try Harness()
+        harness.processes.add(778)
+        harness.fileSystem.addFile(harness.layout.pid, #"{"pid":778,"port":41000}"#)
+        harness.http.handler = { _ in HTTPResponse(status: 503) }
+        let result = try await harness.makeRuntime().start()
+        guard case .started(let pid, let port, _) = result else {
+            Issue.record("expected a fresh backend, got \(result)")
+            return
+        }
+        #expect(pid != 778)
+        #expect(port == 41_000)
+        #expect(harness.processes.sentSignals.map { $0.0 } == [778])
+        #expect(harness.processes.sentSignals.map { $0.1 } == [SIGTERM])
+        #expect(!harness.processes.exists(778))
+        #expect(harness.fileSystem.json(harness.layout.pid)?["pid"] == .int(Int(pid)))
+    }
+
+    @Test func runtimeEnvThatIsNotARegularFileIsRefused() async throws {
+        for node in [FakeFileSystem.Node.symlink("/Users/demo/elsewhere.env"), .fifo] {
+            let harness = try Harness()
+            harness.fileSystem.addFile("/Users/demo/elsewhere.env", "PGPORT=54331\n", mode: 0o644)
+            harness.fileSystem.addNode(harness.layout.env, node)
+            let runtime = try harness.makeRuntime()
+            let error = await #expect(throws: NativeRuntimeError.self) { try await runtime.prepareLayout() }
+            #expect(error?.code == "INVALID_RUNTIME_ENV")
+            #expect(harness.fileSystem.node(harness.layout.env) == node)
+            #expect(try harness.fileSystem.mode("/Users/demo/elsewhere.env") == 0o644)
+        }
+    }
+
     @Test func recordedPIDOwnedByAnotherProgramIsNeverSignalled() async throws {
         let harness = try Harness()
         harness.processes.add(777)

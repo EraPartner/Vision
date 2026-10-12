@@ -55,6 +55,9 @@ public actor NativeRuntime: DemoSeedingRuntime {
     private var postgresChild: SpawnedChild?
     private var backendChild: SpawnedChild?
     public private(set) var newClusterCreatedThisLaunch = false
+    private var shuttingDown = false
+    /// The staging database of a Demo restore whose switch plan is not persisted yet.
+    private var stagingRestoreDatabase: String?
 
     public init(
         layout: RuntimeLayout,
@@ -115,6 +118,18 @@ public actor NativeRuntime: DemoSeedingRuntime {
 
     public var currentAppPort: Int { appPort }
 
+    /// From now on refuses to spawn PostgreSQL or the backend and to begin a database
+    /// switch, so a launch that is still running cannot start anything behind a quit.
+    public func beginShutdown() {
+        shuttingDown = true
+    }
+
+    private func ensureNotShuttingDown() throws {
+        if shuttingDown {
+            throw NativeRuntimeError("SHUTTING_DOWN", "Vision Native is quitting.")
+        }
+    }
+
     public func setAppPort(_ port: Int) {
         appPort = port
     }
@@ -128,19 +143,22 @@ public actor NativeRuntime: DemoSeedingRuntime {
         for directory in [layout.nativeRoot, layout.logs, layout.attachments, layout.cache, layout.postgresRoot] {
             try fileSystem.createDirectory(directory, mode: 0o700)
         }
-        if let existingData = try fileSystem.readIfPresent(layout.env) {
-            let existing = String(decoding: existingData, as: UTF8.self)
+        let text: String
+        switch try readRuntimeEnv() {
+        case .some(let existing):
             let upgraded = RuntimeEnvFile.ensureAdmin(existing, names: names, random: dependencies.random)
             _ = try RuntimeEnvFile.databaseConfig(upgraded)
-            if upgraded != existing { try fileSystem.writeText(layout.env, upgraded, mode: 0o600) }
-            try fileSystem.setMode(layout.env, 0o600)
-        } else {
-            try fileSystem.writeText(
-                layout.env,
-                RuntimeEnvFile.render(names: names, postgresPort: postgresPort, random: dependencies.random),
-                mode: 0o600)
+            if upgraded != existing {
+                try fileSystem.writeText(layout.env, upgraded, mode: 0o600)
+            } else {
+                try fileSystem.setMode(layout.env, 0o600)
+            }
+            text = upgraded
+        case .none:
+            text = RuntimeEnvFile.render(names: names, postgresPort: postgresPort, random: dependencies.random)
+            try fileSystem.writeText(layout.env, text, mode: 0o600)
         }
-        let config = try RuntimeEnvFile.databaseConfig(try fileSystem.readText(layout.env))
+        let config = try RuntimeEnvFile.databaseConfig(text)
         guard config.port == postgresPort else {
             throw NativeRuntimeError(
                 "POSTGRES_PORT_MISMATCH", "Native runtime configuration targets a different PostgreSQL port.")
@@ -150,6 +168,19 @@ public actor NativeRuntime: DemoSeedingRuntime {
 
     public func ensureLayout() async throws {
         try prepareLayout()
+    }
+
+    /// `runtime.env` holds every database secret, so it is read without following a
+    /// symlink and must be a regular file; `nil` when it does not exist yet.
+    private func readRuntimeEnv() throws -> String? {
+        switch try fileSystem.readNoFollow(layout.env) {
+        case .missing:
+            return nil
+        case .unsafe:
+            throw NativeRuntimeError("INVALID_RUNTIME_ENV", "Native runtime.env is not a regular file")
+        case .contents(let data):
+            return String(decoding: data, as: UTF8.self)
+        }
     }
 
     /// `discover`: verifies the payload manifest and finds every tool.
@@ -333,6 +364,7 @@ public actor NativeRuntime: DemoSeedingRuntime {
         }
         let recordPath = layout.postgresPid
         let spawnedPID = LockedValue<Int32>(0)
+        try ensureNotShuttingDown()
         let child = try dependencies.spawner.spawn(
             try tool("postgres"),
             PostgresSQL.serverArguments(dataDirectory: layout.postgresData, port: postgresPort),
@@ -576,6 +608,8 @@ public actor NativeRuntime: DemoSeedingRuntime {
     /// `start`: bootstraps the database, reuses a healthy backend this runtime started
     /// earlier, refuses to touch a PID owned by another program, then spawns the
     /// compiled backend on the loopback app port with the allowlisted environment.
+    /// Unlike Electron (`BACKEND_STALE_PID`), a recorded backend of ours that does not
+    /// answer `/health` is stopped and replaced, so Retry can recover from it.
     public func start() async throws -> BackendStartResult {
         try await assertNativeActive()
         let config = try await bootstrapDatabase()
@@ -589,12 +623,10 @@ public actor NativeRuntime: DemoSeedingRuntime {
                     "BACKEND_PID_OWNERSHIP_MISMATCH",
                     "The recorded backend process id belongs to another process; refusing to signal it.")
             }
-            guard (try? await health()) != nil else {
-                throw NativeRuntimeError(
-                    "BACKEND_STALE_PID",
-                    "A recorded Vision backend process exists but is not healthy; stop it before restart.")
+            if (try? await waitUntilReady(attempts: 3, intervalMilliseconds: 500)) != nil {
+                return .alreadyRunning(pid: existing, port: appPort)
             }
-            return .alreadyRunning(pid: existing, port: appPort)
+            try await stopBackend()
         }
         try? fileSystem.remove(layout.pid)
 
@@ -613,6 +645,7 @@ public actor NativeRuntime: DemoSeedingRuntime {
             chrome: tools.chrome)
         let recordPath = layout.pid
         let spawnedPID = LockedValue<Int32>(0)
+        try ensureNotShuttingDown()
         let child = try dependencies.spawner.spawn(
             tools.compiledBackend, [], cwd: runtimeRoot, environment: environment, logPath: layout.backendLog,
             onExit: { [self] in
@@ -820,14 +853,23 @@ public actor NativeRuntime: DemoSeedingRuntime {
         let staging = try temporaryDatabaseName(config.database, "restore")
         let previous = try temporaryDatabaseName(config.database, "previous")
         var token: DatabaseSwitchToken?
-        try await createEmptyDatabase(staging, owner: config.ownerRole)
+        stagingRestoreDatabase = staging
+        do {
+            try await createEmptyDatabase(staging, owner: config.ownerRole)
+        } catch {
+            stagingRestoreDatabase = nil
+            throw error
+        }
         do {
             try await restoreIntoDatabase(path, staging, config)
             try await validateRestoredDatabase(staging, config, expectedSchemaHead: expectedSchemaHead)
+            try ensureNotShuttingDown()
             let plan = DatabaseSwitchToken(
                 version: 1, liveDatabase: config.database, previousDatabase: previous, activatedDatabase: staging,
                 activatedAt: isoTimestamp(now()))
             token = plan
+            // From here the persisted plan owns the staging database (rollback handles it).
+            stagingRestoreDatabase = nil
             try await writeState(set: ["pendingDatabaseSwitch": try JSONValue(encoding: plan)], remove: [])
             try await stop(keepPostgres: true)
             try await terminateDatabaseConnections(config.database)
@@ -845,12 +887,25 @@ public actor NativeRuntime: DemoSeedingRuntime {
                         "Native database activation failed and automatic rollback did not complete; Vision remains stopped."
                     )
                 }
-            } else if (try? await databaseExists(staging)) == true {
-                try? await terminateDatabaseConnections(staging)
-                try? await adminPsql(try PostgresSQL.dropDatabase(staging))
+            } else {
+                stagingRestoreDatabase = nil
+                if (try? await databaseExists(staging)) == true {
+                    try? await terminateDatabaseConnections(staging)
+                    try? await adminPsql(try PostgresSQL.dropDatabase(staging))
+                }
             }
             throw error
         }
+    }
+
+    /// Drops the staging database of a Demo restore that a quit interrupted before its
+    /// switch plan was persisted. A persisted plan is rolled back on the next launch.
+    public func discardStagingRestore() async {
+        guard let staging = stagingRestoreDatabase else { return }
+        stagingRestoreDatabase = nil
+        guard (try? await databaseExists(staging)) == true else { return }
+        try? await terminateDatabaseConnections(staging)
+        try? await adminPsql(try PostgresSQL.dropDatabase(staging))
     }
 
     /// `rollbackDatabaseSwitch`: restores the previous database for every interruption

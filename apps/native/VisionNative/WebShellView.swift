@@ -16,13 +16,8 @@ enum ShellResolver {
     /// otherwise Vision Native starts its own PostgreSQL and backend and waits until the
     /// backend is ready.
     static func resolve() async -> ShellState {
-        #if DEBUG
-            let allowOverride = true
-        #else
-            let allowOverride = false
-        #endif
         switch BackendLocator.developerOverride(
-            environment: ProcessInfo.processInfo.environment, allowOverride: allowOverride)
+            environment: ProcessInfo.processInfo.environment, allowOverride: AppRuntime.isDebugBuild)
         {
         case .use(let url):
             return await checkOverride(url)

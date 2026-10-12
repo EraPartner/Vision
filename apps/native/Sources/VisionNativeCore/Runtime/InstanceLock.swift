@@ -47,29 +47,61 @@ public final class FileInstanceLock: InstanceLocking, @unchecked Sendable {
 /// Where lifecycle events are written.
 public protocol RuntimeLogging: Sendable {
     func log(_ level: String, _ message: String)
+    /// Called once the single-instance lock is held, so only the owning instance
+    /// rotates the shared log.
+    func rotate()
+}
+
+extension RuntimeLogging {
+    public func rotate() {}
 }
 
 /// `<userData>/logs/main.log`, rotated once to `main.log.1` past 2 MB at startup, like
 /// `initFileLogger` in `packaging/electron/main.ts`. Best effort: failures are ignored.
+/// With `rotate: false` the constructor never renames the file; `rotate()` then does
+/// it later, after the caller has taken the single-instance lock.
 public final class FileRuntimeLog: RuntimeLogging, @unchecked Sendable {
+    public static let rotationThreshold = 2 * 1024 * 1024
+
     private let lock = NSLock()
     private let path: String
     private var handle: FileHandle?
+    private var rotated = false
 
-    public init(path: String) {
+    public init(path: String, rotate: Bool = true) {
         self.path = path
-        let manager = FileManager.default
-        let directory = PathUtilities.dirname(path)
-        try? manager.createDirectory(
-            atPath: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-        if let size = (try? manager.attributesOfItem(atPath: path))?[.size] as? NSNumber,
-            size.intValue > 2 * 1024 * 1024
-        {
-            _ = Darwin.rename(path, "\(path).1")
+        try? FileManager.default.createDirectory(
+            atPath: PathUtilities.dirname(path), withIntermediateDirectories: true,
+            attributes: [.posixPermissions: 0o700])
+        lock.withLock {
+            if rotate { rotateLocked() }
+            handle = Self.open(path)
         }
-        let descriptor = Darwin.open(path, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, mode_t(0o600))
-        handle = descriptor >= 0 ? FileHandle(fileDescriptor: descriptor, closeOnDealloc: true) : nil
         log("log", "Vision Native logger started (pid \(ProcessInfo.processInfo.processIdentifier))")
+    }
+
+    private static func open(_ path: String) -> FileHandle? {
+        let descriptor = Darwin.open(path, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, mode_t(0o600))
+        return descriptor >= 0 ? FileHandle(fileDescriptor: descriptor, closeOnDealloc: true) : nil
+    }
+
+    /// Renames a log past the threshold to `main.log.1`, at most once per instance.
+    private func rotateLocked() {
+        guard !rotated else { return }
+        rotated = true
+        guard let size = (try? FileManager.default.attributesOfItem(atPath: path))?[.size] as? NSNumber,
+            size.intValue > Self.rotationThreshold
+        else { return }
+        _ = Darwin.rename(path, "\(path).1")
+    }
+
+    public func rotate() {
+        lock.withLock {
+            guard !rotated else { return }
+            rotateLocked()
+            try? handle?.close()
+            handle = Self.open(path)
+        }
     }
 
     public func log(_ level: String, _ message: String) {

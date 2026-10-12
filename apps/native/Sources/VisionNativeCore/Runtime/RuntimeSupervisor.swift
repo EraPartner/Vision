@@ -25,19 +25,24 @@ public struct SupervisorConfiguration: Sendable {
     /// `HEALTH_POLL_BUILD_ATTEMPTS`: a cold start may initialize PostgreSQL, seed the
     /// Demo and run migrations, so the first navigation waits up to about 3 minutes.
     public var readinessAttempts: Int
+    /// Whether `VISION_NATIVE_RUNTIME_DIR` is honoured (Debug builds only, like the
+    /// backend URL override).
+    public var allowPayloadOverride: Bool
 
     public init(
         environment: [String: String],
         homeDirectory: String,
         resourcesDirectory: String?,
         postgresPort: Int = VisionNativeIdentity.postgresPort,
-        readinessAttempts: Int = 600
+        readinessAttempts: Int = 600,
+        allowPayloadOverride: Bool = false
     ) {
         self.environment = environment
         self.homeDirectory = homeDirectory
         self.resourcesDirectory = resourcesDirectory
         self.postgresPort = postgresPort
         self.readinessAttempts = readinessAttempts
+        self.allowPayloadOverride = allowPayloadOverride
     }
 }
 
@@ -47,7 +52,9 @@ public struct SupervisorConfiguration: Sendable {
 ///     idle → locatingPayload → preparingDatabase → seedingDemo → startingBackend
 ///          → waitingForReadiness → running(url) → stopping → stopped
 ///
-/// Any step can end in `failed(reason)`; `launch()` may then be called again (Retry).
+/// Any step can end in `failed(reason)`; the backend it started is then stopped and
+/// PostgreSQL keeps running, and `launch()` may be called again (Retry). A quit during a
+/// launch does not wait for it: the launch is cancelled and stops at its next phase.
 public actor RuntimeSupervisor {
     private let configuration: SupervisorConfiguration
     private let dependencies: RuntimeDependencies
@@ -57,6 +64,8 @@ public actor RuntimeSupervisor {
     private var runtime: NativeRuntime?
     private var launchTask: Task<URL, Error>?
     private var shutdownRequested = false
+    private var shutdownInProgress = false
+    private var logRotated = false
 
     public init(
         configuration: SupervisorConfiguration,
@@ -71,18 +80,22 @@ public actor RuntimeSupervisor {
     }
 
     /// The live supervisor for the app.
+    /// The live supervisor for the app. `main.log` is rotated only once the
+    /// single-instance lock is held, so a second instance never renames it.
     public static func live(
         environment: [String: String] = ProcessInfo.processInfo.environment,
         homeDirectory: String = FileManager.default.homeDirectoryForCurrentUser.path,
-        resourcesDirectory: String? = Bundle.main.resourcePath
+        resourcesDirectory: String? = Bundle.main.resourcePath,
+        allowPayloadOverride: Bool
     ) -> RuntimeSupervisor {
         let userData = VisionNativeIdentity.userDataDirectory(homeDirectory: homeDirectory)
         return RuntimeSupervisor(
             configuration: SupervisorConfiguration(
-                environment: environment, homeDirectory: homeDirectory, resourcesDirectory: resourcesDirectory),
+                environment: environment, homeDirectory: homeDirectory, resourcesDirectory: resourcesDirectory,
+                allowPayloadOverride: allowPayloadOverride),
             dependencies: .live(),
             instanceLock: FileInstanceLock(),
-            logger: FileRuntimeLog(path: PathUtilities.join(userData, "logs", "main.log"))
+            logger: FileRuntimeLog(path: PathUtilities.join(userData, "logs", "main.log"), rotate: false)
         )
     }
 
@@ -93,21 +106,37 @@ public actor RuntimeSupervisor {
         logger.log("log", "[runtime] phase \(next)")
     }
 
+    private static let shuttingDownError = NativeRuntimeError("SHUTTING_DOWN", "Vision Native is quitting.")
+
+    private func checkShutdown() throws {
+        if shutdownRequested { throw Self.shuttingDownError }
+    }
+
+    /// Enters the next launch phase unless a quit has been requested meanwhile.
+    private func enterLaunchPhase(_ next: RuntimePhase) throws {
+        try checkShutdown()
+        enter(next)
+    }
+
     /// Starts the runtime once and returns the frontend URL (`http://localhost:<port>`).
     /// Concurrent callers share one launch; after a failure the next call retries.
     public func launch() async throws -> URL {
         if case .running(let url) = phase { return url }
         if let launchTask { return try await launchTask.value }
+        guard !shutdownInProgress else { throw Self.shuttingDownError }
         shutdownRequested = false
         let task = Task { try await self.performLaunch() }
         launchTask = task
         do {
             let url = try await task.value
             launchTask = nil
+            try checkShutdown()
             enter(.running(url))
             return url
         } catch {
             launchTask = nil
+            // The quit owns the phase (`stopping`, then `stopped`) and the processes.
+            if shutdownRequested { throw error }
             let reason = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             logger.log("error", "[runtime] launch failed: \(error)")
             enter(.failed(reason))
@@ -115,7 +144,24 @@ public actor RuntimeSupervisor {
         }
     }
 
+    /// A failed launch stops the backend it started and keeps PostgreSQL running, so a
+    /// Retry starts from a clean backend and a quit does not leave one behind.
     private func performLaunch() async throws -> URL {
+        do {
+            return try await launchSteps()
+        } catch {
+            if !shutdownRequested, let runtime {
+                do {
+                    try await runtime.stop(keepPostgres: true)
+                } catch {
+                    logger.log("warn", "[runtime] could not stop the backend after a failed launch: \(error)")
+                }
+            }
+            throw error
+        }
+    }
+
+    private func launchSteps() async throws -> URL {
         let layout = try RuntimeLayout(
             userDataDirectory: VisionNativeIdentity.userDataDirectory(homeDirectory: configuration.homeDirectory))
         try fileSystem.createDirectory(layout.userDataDirectory, mode: 0o700)
@@ -124,14 +170,23 @@ public actor RuntimeSupervisor {
                 "NATIVE_ALREADY_RUNNING",
                 "Another Vision Native instance is already running. Quit it before opening this one.")
         }
+        if !logRotated {
+            logRotated = true
+            logger.rotate()
+        }
 
-        enter(.locatingPayload)
+        try enterLaunchPhase(.locatingPayload)
+        if !configuration.allowPayloadOverride, configuration.environment[RuntimePayload.environmentKey] != nil {
+            logger.log("warn", "[runtime] \(RuntimePayload.environmentKey) is ignored in Release builds.")
+        }
         let payload = try RuntimePayload.locate(
             environment: configuration.environment,
             resourcesDirectory: configuration.resourcesDirectory,
+            allowOverride: configuration.allowPayloadOverride,
             fileSystem: fileSystem)
         logger.log("log", "[runtime] payload \(payload.runtimeDirectory) (\(payload.source))")
         let appPort = await resolveAppPort(layout)
+        try checkShutdown()
         let runtime = try NativeRuntime(
             layout: layout,
             postgresPort: configuration.postgresPort,
@@ -141,9 +196,9 @@ public actor RuntimeSupervisor {
             dependencies: dependencies)
         self.runtime = runtime
 
-        enter(.preparingDatabase)
+        try enterLaunchPhase(.preparingDatabase)
         try await runtime.ensureLayout()
-        enter(.seedingDemo)
+        try enterLaunchPhase(.seedingDemo)
         let clock = dependencies.clock
         let now: @Sendable () -> Date = { clock.now() }
         let prepared = try await NativeDemo.prepare(
@@ -155,7 +210,7 @@ public actor RuntimeSupervisor {
             logger.log("warn", warning)
         }
         do {
-            enter(.startingBackend)
+            try enterLaunchPhase(.startingBackend)
             let started: BackendStartResult
             do {
                 started = try await runtime.start()
@@ -167,6 +222,7 @@ public actor RuntimeSupervisor {
             logger.log("log", "[runtime] backend \(started)")
             if prepared.switchToken != nil {
                 try await runtime.waitUntilReady(detailed: true)
+                try checkShutdown()
                 if let warning = try await NativeDemo.finalize(
                     runtime: runtime, prepared: prepared, fileSystem: fileSystem, now: now)
                 {
@@ -174,13 +230,14 @@ public actor RuntimeSupervisor {
                 }
             }
         } catch {
-            if prepared.switchToken != nil {
+            // During a quit the persisted switch plan is rolled back on the next launch.
+            if prepared.switchToken != nil, !shutdownRequested {
                 try await NativeDemo.rollback(runtime: runtime, prepared: prepared, now: now)
             }
             throw error
         }
 
-        enter(.waitingForReadiness)
+        try enterLaunchPhase(.waitingForReadiness)
         let port = await runtime.currentAppPort
         guard let url = URL(string: "http://localhost:\(port)") else {
             throw NativeRuntimeError("BACKEND_URL_INVALID", "Invalid backend URL for port \(port)")
@@ -188,8 +245,10 @@ public actor RuntimeSupervisor {
         do {
             try await pollReady(url)
         } catch {
-            let tail = await runtime.backendLogTail()
-            logger.log("error", "[startup-diagnostics] native backend log\n\(tail)")
+            if !shutdownRequested {
+                let tail = await runtime.backendLogTail()
+                logger.log("error", "[startup-diagnostics] native backend log\n\(tail)")
+            }
             throw error
         }
         return url
@@ -200,9 +259,7 @@ public actor RuntimeSupervisor {
     private func pollReady(_ baseURL: URL) async throws {
         let url = baseURL.appendingPathComponent("health/detailed", isDirectory: false)
         for attempt in 0..<configuration.readinessAttempts {
-            if shutdownRequested {
-                throw NativeRuntimeError("SHUTTING_DOWN", "Vision Native is quitting.")
-            }
+            try checkShutdown()
             if let response = try? await dependencies.http.get(url, timeout: 2),
                 HealthReadiness.navigationReadiness(status: response.status, body: response.body) == true
             {
@@ -259,21 +316,30 @@ public actor RuntimeSupervisor {
     // MARK: - Quit
 
     /// The `will-quit` path without backup-on-quit (phase 1d): stops the backend and
-    /// PostgreSQL unless "keep services running on quit" is enabled. The caller bounds
-    /// it with the 45-second hard timeout.
+    /// PostgreSQL unless "keep services running on quit" is enabled. Like Electron it
+    /// does not wait for a launch in progress: the launch is cancelled (which ends its
+    /// running tool), the runtime refuses to spawn anything further, and a Demo staging
+    /// database without a persisted switch plan is dropped. The caller bounds it with the
+    /// 45-second hard timeout.
     public func shutdown() async {
         shutdownRequested = true
-        if let launchTask { _ = try? await launchTask.value }
+        shutdownInProgress = true
+        defer { shutdownInProgress = false }
+        launchTask?.cancel()
         guard let runtime else {
             enter(.stopped)
             return
         }
         enter(.stopping)
+        await runtime.beginShutdown()
         if await keepServicesOnQuit(runtime) {
             logger.log("log", "[runtime] keepServicesOnQuit is on; leaving services running")
+            await runtime.discardStagingRestore()
         } else {
             do {
-                try await runtime.stop(keepPostgres: false)
+                try await runtime.stopBackend()
+                await runtime.discardStagingRestore()
+                try await runtime.stopPostgres()
             } catch {
                 logger.log("error", "runtime shutdown failed: \(error)")
             }

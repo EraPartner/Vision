@@ -59,12 +59,15 @@ backend and PostgreSQL unless "keep services running on quit" is on. Logs are in
 
 The payload is found in this order:
 
-1. `VISION_NATIVE_RUNTIME_DIR`, an absolute path to a prepared `native-runtime` directory. The
-   synthetic seed must be its `demo-seed` sibling.
+1. `VISION_NATIVE_RUNTIME_DIR`, an absolute path to a prepared `native-runtime` directory, in
+   Debug builds only. A Release build ignores it with a logged warning. The synthetic seed must
+   be its `demo-seed` sibling.
 2. `Contents/Resources/runtime/` in the app bundle.
 
-Without a payload the window shows the reason and a Retry button. To run a Debug build against a
-payload, run `./install-native.sh` once (it leaves `native-runtime/` and `demo-seed/` in
+Without a payload the window shows the reason and a Retry button. A failed launch stops the
+backend it started and keeps PostgreSQL running, so Retry starts a fresh backend.
+
+To run a Debug build against a payload, run `./install-native.sh` once (it leaves `native-runtime/` and `demo-seed/` in
 `apps/native/build/payload/`), then set `VISION_NATIVE_RUNTIME_DIR` to
 `<repo>/apps/native/build/payload/native-runtime` in the scheme's Run environment (Product > Scheme >
 Edit Scheme > Run > Arguments).
