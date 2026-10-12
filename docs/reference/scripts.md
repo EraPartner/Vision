@@ -48,6 +48,20 @@ The Electron shell in `packaging/electron/` is strict TypeScript compiled into
 `node packaging/electron/out/scripts/native-development.js`. The Electron package's own `start`,
 `prepare:*` and `dist*` scripts run `bun build.ts` first in the same way.
 
+## Root install scripts
+
+| Script              | Purpose                                                                           |
+| ------------------- | --------------------------------------------------------------------------------- |
+| `install.sh`        | Build the Electron Vision app and install it to `/Applications/Vision.app`        |
+| `install-demo.sh`   | Build the Electron Vision Demo app with synthetic data                            |
+| `install-native.sh` | Build Vision Native (Release) and install it to `/Applications/Vision Native.app` |
+
+`install-native.sh` needs `xcodegen` and `xcodebuild`. It signs with the free personal team from
+`VISION_NATIVE_TEAM_ID`, or ad-hoc with a warning when that is unset. The Swift package and the
+Debug app are built and tested in CI by the `native-macos` job ("Native (macOS)") on a
+GitHub-hosted `macos-26` runner whenever `apps/native/`, `install-native.sh` or `ci.yml` changes
+([[docs/architecture/native-app|Vision Native App Architecture]]).
+
 ## Build and release inputs
 
 | Script           | Purpose                                                                   |
