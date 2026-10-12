@@ -5,8 +5,23 @@ import os
 import subprocess
 from collections.abc import Collection, Sequence
 
-NATIVE_PREFIX = "apps/native/"
-NATIVE_FILES = frozenset({"install-native.sh", ".github/workflows/ci.yml"})
+# The Swift app, and the Electron readers the native-interop job runs against its output.
+NATIVE_PREFIXES = ("apps/native/", "packaging/electron/backup/")
+NATIVE_FILES = frozenset(
+    {
+        "install-native.sh",
+        ".github/workflows/ci.yml",
+        "packaging/electron/audit-anchor.ts",
+        "packaging/electron/scripts/native-audit-fixture.ts",
+        # What the native-interop job installs and compiles the Electron readers with.
+        "packaging/electron/build.ts",
+        "packaging/electron/package.json",
+        "packaging/electron/bun.lock",
+        "packaging/electron/tsconfig.base.json",
+        "packaging/electron/tsconfig.json",
+        "packaging/electron/tsconfig.preload.json",
+    }
+)
 
 
 def classify(paths: Sequence[str], special_paths: Collection[str] = ()) -> bool:
@@ -28,7 +43,7 @@ def classify_native(paths: Sequence[str]) -> bool:
     """Decide whether the macOS Vision Native job must run (ADR-204)."""
     if not paths:
         return True
-    return any(path.startswith(NATIVE_PREFIX) or path in NATIVE_FILES for path in paths)
+    return any(path.startswith(NATIVE_PREFIXES) or path in NATIVE_FILES for path in paths)
 
 
 def git(*args: str) -> bytes:

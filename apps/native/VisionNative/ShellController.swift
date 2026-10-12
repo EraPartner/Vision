@@ -6,10 +6,11 @@ import VisionNativeCore
 import WebKit
 
 /// Owns the window, menus, dock and web shell, and answers the page's bridge calls
-/// (the main-process side of packaging/electron/main.ts for phases 1c and 1d).
+/// (the main-process side of packaging/electron/main.ts for phases 1c, 1d and 1e).
 @MainActor
-final class ShellController: NSObject, NSWindowDelegate, BridgeHost {
-    static let appName = "Vision Native"
+final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell {
+    /// "Vision Native" or "Vision Native Demo" (`APP_NAME`).
+    static var appName: String { AppRuntime.variant.appName }
     /// `RENDERER_READY_TIMEOUT_MS` is 12 s in Electron; the page normally calls `ready()`
     /// long before this, and the window shows the web view without it after this delay.
     static let revealFallback: Duration = .seconds(3)
@@ -24,6 +25,8 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost {
     private let settingsTransport: URLSessionSettingsTransport
     private let settingsWriter: SettingsWriter
     private let backupService: BackupService
+    /// The six `electronAudit` channels, the closure timer and the audit notices.
+    private lazy var auditChannels = makeAuditChannels()
     /// `ALLOWED_RESTORE_PATHS`: only paths the restore picker returned may be restored.
     private(set) var restorePathAllowList = RestorePathAllowList()
     private(set) var window: NSWindow?
@@ -35,10 +38,17 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost {
     private(set) var appURL: URL?
     private var queue = RendererMessageQueue()
     private var launchTask: Task<Void, Never>?
+    private var pageLoadTask: Task<Void, Never>?
     private var revealTask: Task<Void, Never>?
     private var frameSaveTask: Task<Void, Never>?
     private var languageRequest = 0
     private var accentObserver: NSObjectProtocol?
+
+    private func makeAuditChannels() -> AuditChannels {
+        AuditChannels(
+            runtimeProvider: { await AppRuntime.supervisor.auditRuntime() }, shell: self,
+            log: { message in AppRuntime.shellLogger.warning("\(message, privacy: .public)") })
+    }
 
     private static var localeDirectory: String? {
         Bundle.main.resourceURL?.appendingPathComponent("i18n", isDirectory: true).path
@@ -63,12 +73,16 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost {
                 environment: ProcessInfo.processInfo.environment,
                 appVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
                     ?? "unknown",
-                userDataDirectory: VisionNativeIdentity.userDataDirectory(homeDirectory: home),
+                userDataDirectory: AppRuntime.variant.userDataDirectory(homeDirectory: home),
                 homeDirectory: home,
                 appName: ShellController.appName),
             settings: AppRuntime.supervisor,
             runtimeProvider: { await AppRuntime.supervisor.backupRuntime() },
-            logger: OSLogRuntimeLog(logger: AppRuntime.shellLogger))
+            passphraseStoreFactory: { [service = AppRuntime.variant.backupPassphraseService] account in
+                KeychainPassphraseStore(account: account, service: service)
+            },
+            logger: OSLogRuntimeLog(logger: AppRuntime.shellLogger),
+            auditProvider: { await AppRuntime.supervisor.auditRuntime() })
         super.init()
         launchModel.onRetry = { [weak self] in self?.launch() }
         launchModel.onOpenLogs = { [weak self] in _ = try? self?.openLogs() }
@@ -97,6 +111,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost {
     /// Shows the launch state and resolves the runtime; Retry and `recovery:retry` call it again.
     func launch() {
         launchTask?.cancel()
+        pageLoadTask?.cancel()
         revealTask?.cancel()
         launchModel.state = .checking
         launchModel.statusKey = LaunchAppearance.statusKey(for: .idle)
@@ -126,7 +141,14 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost {
             let shell = webShell ?? makeWebShell()
             shell.webView.isHidden = true
             queue.documentChanged()
-            shell.load(url)
+            // `loadApplicationPage`: the audit session is established before the page
+            // loads; the closure timer then runs while the page is up.
+            pageLoadTask?.cancel()
+            pageLoadTask = Task { [weak self] in
+                await self?.auditChannels.applicationWillLoad()
+                guard !Task.isCancelled, let self, self.appURL == url else { return }
+                shell.load(url)
+            }
         }
     }
 
@@ -151,6 +173,8 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost {
         frameSaveTask?.cancel()
         await saveFrame()
         await runQuitBackup()
+        // After the quit backup, before the services stop (Electron's `will-quit`).
+        await auditChannels.endSession()
     }
 
     /// The `will-quit` backup: the database setting (else the `settings.json` mirror),
@@ -567,7 +591,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost {
     }
 
     /// A sheet on the window when it is visible, else an app-modal panel.
-    private func runPanel(_ panel: NSOpenPanel) async -> NSApplication.ModalResponse {
+    private func runPanel(_ panel: NSSavePanel) async -> NSApplication.ModalResponse {
         guard let window, window.isVisible else { return panel.runModal() }
         return await withCheckedContinuation { (continuation: CheckedContinuation<NSApplication.ModalResponse, Never>) in
             panel.beginSheetModal(for: window) { response in continuation.resume(returning: response) }
@@ -582,21 +606,62 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost {
     /// restarts the backend itself.
     func restoreBackup(_ path: String, passphrase: String?) async -> JSONValue {
         let fileName = (path as NSString).lastPathComponent
-        return await backupService.restore(
+        // `stopHealthWatchdog` stops the closure timer for the restore;
+        // `startHealthWatchdog` starts it again.
+        auditChannels.stopClosureTimer()
+        let result = await backupService.restore(
             path: path, passphrase: passphrase,
-            confirm: { [weak self] in await self?.confirmRestore(fileName: fileName) ?? false })
+            confirm: { [weak self] in await self?.confirmRestore(fileName: fileName) ?? false },
+            confirmAuditRecovery: { [weak self] status in
+                await self?.confirmAuditRecovery(fileName: fileName, auditStatus: status) ?? false
+            })
+        if result["auditStatus"]?.stringValue == "unavailable" {
+            auditChannels.report("unavailable")
+        }
+        await auditChannels.startClosureTimer()
+        return result
     }
 
     private func confirmRestore(fileName: String) async -> Bool {
+        await confirm(
+            AuditConfirmation(
+                title: strings.t("settings.restore.title", fallback: "Restore Backup"),
+                message: strings.t(
+                    "settings.restore.warning",
+                    fallback: "This will permanently replace all current data and cannot be undone."),
+                detail: fileName,
+                confirmLabel: strings.t("settings.restore.runNow", fallback: "Restore"),
+                cancelLabel: strings.t("settings.restore.cancelButton", fallback: "Cancel")))
+    }
+
+    /// The second warning of `restoreWithAuditRecovery`.
+    private func confirmAuditRecovery(fileName: String, auditStatus: String?) async -> Bool {
+        await auditChannels.confirmAuditRecovery(fileName: fileName, auditStatus: auditStatus)
+    }
+
+    // MARK: - Audit
+
+    func enrollAudit() async -> JSONValue { await auditChannels.enroll() }
+    func readAudit(_ range: AuditViewer.ReadRange) async -> JSONValue { await auditChannels.read(range) }
+    func exportAuditSnapshot() async -> JSONValue { await auditChannels.exportSnapshot() }
+    func exportAuditTransfer(password: String) async -> JSONValue {
+        await auditChannels.exportTransfer(password: password)
+    }
+    func importAuditTransfer(password: String) async -> JSONValue {
+        await auditChannels.importTransfer(password: password)
+    }
+    func rotateAuditKey() async -> JSONValue { await auditChannels.rotateKey() }
+
+    /// A warning alert, as a sheet when the window is visible; Cancel is the default
+    /// button (`defaultId: 1, cancelId: 1`).
+    func confirm(_ confirmation: AuditConfirmation) async -> Bool {
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = strings.t("settings.restore.title", fallback: "Restore Backup")
-        alert.informativeText =
-            "\(strings.t("settings.restore.warning", fallback: "This will permanently replace all current data and cannot be undone."))\n\n\(fileName)"
-        let restore = alert.addButton(withTitle: strings.t("settings.restore.runNow", fallback: "Restore"))
-        let cancel = alert.addButton(withTitle: strings.t("settings.restore.cancelButton", fallback: "Cancel"))
-        // Cancel is the default, like Electron's `defaultId: 1`.
-        restore.keyEquivalent = ""
+        alert.messageText = confirmation.title
+        alert.informativeText = [confirmation.message, confirmation.detail].compactMap { $0 }.joined(separator: "\n\n")
+        let accept = alert.addButton(withTitle: confirmation.confirmLabel)
+        let cancel = alert.addButton(withTitle: confirmation.cancelLabel)
+        accept.keyEquivalent = ""
         cancel.keyEquivalent = "\r"
         showWindow()
         let response: NSApplication.ModalResponse
@@ -609,6 +674,41 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost {
             response = alert.runModal()
         }
         return response == .alertFirstButtonReturn
+    }
+
+    /// `dialog.showSaveDialog`.
+    func chooseSaveLocation(_ request: AuditFilePanel) async -> String? {
+        let panel = NSSavePanel()
+        panel.title = request.title
+        panel.canCreateDirectories = true
+        if let name = request.defaultName { panel.nameFieldStringValue = name }
+        panel.allowedContentTypes = request.extensions.compactMap { UTType(filenameExtension: $0) }
+        guard await runPanel(panel) == .OK, let url = panel.url else { return nil }
+        return url.path
+    }
+
+    /// `dialog.showOpenDialog` with one file.
+    func chooseFile(_ request: AuditFilePanel) async -> String? {
+        let panel = NSOpenPanel()
+        panel.title = request.title
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = request.extensions.compactMap { UTType(filenameExtension: $0) }
+        guard await runPanel(panel) == .OK, let url = panel.url else { return nil }
+        return url.path
+    }
+
+    /// Electron's `notify`. Vision Native has no notification entitlement, so the notice
+    /// goes to the log (done by `AuditChannels`) and, while the window is visible, to a
+    /// non-blocking informational sheet.
+    func showAuditNotice(_ message: String) {
+        guard let window, window.isVisible, window.attachedSheet == nil else { return }
+        let alert = NSAlert()
+        alert.alertStyle = .informational
+        alert.messageText = Self.appName
+        alert.informativeText = message
+        alert.beginSheetModal(for: window, completionHandler: nil)
     }
 
     func backupEncryptionStatus() async -> PassphraseStatus {

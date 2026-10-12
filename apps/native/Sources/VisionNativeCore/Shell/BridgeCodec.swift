@@ -154,11 +154,18 @@ public enum BridgeCall: Equatable, Sendable {
     case getBackupEncryptionStatus
     /// `backup:set-passphrase` with the untrimmed value (the handler trims it).
     case setBackupPassphrase(String)
+    case auditEnroll
+    case auditRead(AuditViewer.ReadRange)
+    case auditExport
+    /// `audit:transfer-export` with a password of 16 to 1024 UTF-16 code units.
+    case auditTransferExport(password: String)
+    case auditTransferImport(password: String)
+    case auditRotateKey
     case recoveryRetry
     case recoveryOpenLogs
     case windowDrag
     case windowTitlebarDoubleClick
-    /// A pending (phase 1e) or removed channel; it rejects without looking at arguments.
+    /// A pending or removed channel; it rejects without looking at arguments.
     case unavailable(BridgeChannel)
 }
 
@@ -201,7 +208,12 @@ public enum BridgeCodec {
 
     private struct InvalidArguments: Error {
         let message: String
-        init(_ message: String) { self.message = message }
+        /// `IpcArgumentError.code`, read by the audit transfer `invalidResult`.
+        let code: String?
+        init(_ message: String, code: String? = nil) {
+            self.message = message
+            self.code = code
+        }
     }
 
     /// `expectArity`: anything beyond the declared arity must be absent (JSON `null`).
@@ -231,7 +243,7 @@ public enum BridgeCodec {
         do {
             return .call(try call(request.channel, arguments, isAllowedRestorePath: isAllowedRestorePath))
         } catch let error as InvalidArguments {
-            return .invalid(invalidResult(request.channel, error.message))
+            return .invalid(invalidResult(request.channel, error.message, code: error.code))
         } catch {
             return .invalid(invalidResult(request.channel, "Invalid IPC arguments"))
         }
@@ -321,6 +333,28 @@ public enum BridgeCodec {
                 throw InvalidArguments("Invalid backup passphrase")
             }
             return .setBackupPassphrase(passphrase)
+        case .auditEnroll:
+            try expectArity(arguments, 0)
+            return .auditEnroll
+        case .auditRead:
+            try expectArity(arguments, 1)
+            do {
+                return .auditRead(try AuditViewer.validateReadOptions(argument(arguments, 0)))
+            } catch let error as AuditViewer.ViewerError {
+                throw InvalidArguments(error.message)
+            }
+        case .auditExport:
+            try expectArity(arguments, 0)
+            return .auditExport
+        case .auditTransferExport:
+            try expectArity(arguments, 1)
+            return .auditTransferExport(password: try transferPassword(argument(arguments, 0)))
+        case .auditTransferImport:
+            try expectArity(arguments, 1)
+            return .auditTransferImport(password: try transferPassword(argument(arguments, 0)))
+        case .auditRotateKey:
+            try expectArity(arguments, 0)
+            return .auditRotateKey
         case .recoveryRetry:
             try expectArity(arguments, 0)
             return .recoveryRetry
@@ -338,9 +372,29 @@ public enum BridgeCodec {
         }
     }
 
+    /// `auditTransferArguments`: the same bounds as `AuditAnchor.isValidTransferPassword`,
+    /// checked first so an invalid password never reaches the verification or the panels.
+    private static func transferPassword(_ value: JSONValue?) throws -> String {
+        guard let password = value?.stringValue, AuditAnchor.isValidTransferPassword(password) else {
+            throw InvalidArguments("Invalid audit transfer password", code: "transfer_password_invalid")
+        }
+        return password
+    }
+
     /// `invalidResult` per channel in `createIpcArgumentContracts`.
-    static func invalidResult(_ channel: BridgeChannel, _ message: String) -> BridgeReply {
+    static func invalidResult(_ channel: BridgeChannel, _ message: String, code: String? = nil) -> BridgeReply {
         switch channel {
+        case .auditEnroll, .auditExport, .auditRotateKey:
+            return .failed(message)
+        case .auditRead:
+            return .resolve(
+                .object(["success": .bool(false), "status": .string("failed"), "error": .string(message)]))
+        case .auditTransferExport, .auditTransferImport:
+            return .resolve(
+                .object([
+                    "success": .bool(false), "status": .string("failed"),
+                    "reason": .string(code ?? "transfer_failed"),
+                ]))
         case .getAccentColor:
             return .resolve(.null)
         case .servicesLoadSettings, .backupLoadSettings, .backupGetEncryptionStatus:

@@ -73,7 +73,9 @@ import Testing
             case "electronBackup":
                 // Phase 1d answers every backup channel.
                 #expect(entry.availability == .implemented)
-            case "electronAudit": #expect(entry.availability == .pending(phase: "1e"))
+            case "electronAudit":
+                // Phase 1e answers every audit channel.
+                #expect(entry.availability == .implemented)
             case "electronServices", "electronAPI", "electronRecovery": #expect(entry.availability == .implemented)
             default: #expect(entry.method == nil)
             }
@@ -81,8 +83,16 @@ import Testing
     }
 
     @Test func unavailableMessagesNameTheMethodAndPhase() {
-        let audit = BridgeContract.unavailableMessage(BridgeContract.entry(for: .auditRead))
-        #expect(audit.contains("not available in Vision Native yet") && audit.contains("phase 1e"))
+        let pending = BridgeEntry(
+            channel: .auditRead, bridge: "electronAudit", method: "read", parameters: ["options"], handler: "x",
+            availability: .pending(phase: "2"))
+        let message = BridgeContract.unavailableMessage(pending)
+        #expect(message.contains("electronAudit.read is not available in Vision Native yet") && message.contains("phase 2"))
+        let pendingCount = BridgeContract.entries.filter {
+            if case .pending = $0.availability { return true }
+            return false
+        }.count
+        #expect(pendingCount == 0)
         let updater = BridgeContract.unavailableMessage(BridgeContract.entry(for: .updateCheckGithub))
         #expect(updater.contains("no updater"))
     }

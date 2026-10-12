@@ -1,6 +1,15 @@
 # XcodeGen spec for Vision Native (ADR-204). Generate the project with:
 #   xcodegen generate --spec apps/native/project.yml
 # The generated VisionNative.xcodeproj and VisionNative/Info.plist are gitignored.
+#
+# One target builds both variants (phase 1e). The build setting VISION_NATIVE_VARIANT
+# (standard | demo) picks the product name and bundle id and is copied into Info.plist as
+# VisionNativeVariant, which the app reads at launch (NativeVariant):
+#   standard -> "Vision Native.app",      com.vaultvoyager.vision-native,      vision_native, 54331
+#   demo     -> "Vision Native Demo.app", com.vaultvoyager.vision-native-demo, vision_native_demo, 54332
+# install-native.sh builds the demo variant unless VISION_NATIVE_VARIANT=standard; a
+# plain Xcode or CI build is the standard variant. Override it on the command line:
+#   xcodebuild ... VISION_NATIVE_VARIANT=demo
 name: VisionNative
 options:
   bundleIdPrefix: com.vaultvoyager
@@ -66,9 +75,14 @@ targets:
           ditto "$VISION_NATIVE_PAYLOAD_DIR/demo-seed" "$resources/demo-seed"
     settings:
       base:
-        PRODUCT_NAME: Vision Native
+        VISION_NATIVE_VARIANT: standard
+        VISION_NATIVE_PRODUCT_NAME_standard: Vision Native
+        VISION_NATIVE_PRODUCT_NAME_demo: Vision Native Demo
+        VISION_NATIVE_BUNDLE_ID_standard: com.vaultvoyager.vision-native
+        VISION_NATIVE_BUNDLE_ID_demo: com.vaultvoyager.vision-native-demo
+        PRODUCT_NAME: $(VISION_NATIVE_PRODUCT_NAME_$(VISION_NATIVE_VARIANT))
         PRODUCT_MODULE_NAME: VisionNative
-        PRODUCT_BUNDLE_IDENTIFIER: com.vaultvoyager.vision-native
+        PRODUCT_BUNDLE_IDENTIFIER: $(VISION_NATIVE_BUNDLE_ID_$(VISION_NATIVE_VARIANT))
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"
         CODE_SIGN_STYLE: Automatic
@@ -84,8 +98,10 @@ targets:
     info:
       path: VisionNative/Info.plist
       properties:
-        CFBundleName: Vision Native
-        CFBundleDisplayName: Vision Native
+        CFBundleName: $(PRODUCT_NAME)
+        CFBundleDisplayName: $(PRODUCT_NAME)
+        # NativeVariant.infoPlistKey: "standard" or "demo".
+        VisionNativeVariant: $(VISION_NATIVE_VARIANT)
         CFBundleIdentifier: $(PRODUCT_BUNDLE_IDENTIFIER)
         CFBundleExecutable: $(EXECUTABLE_NAME)
         CFBundlePackageType: APPL

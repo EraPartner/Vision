@@ -109,8 +109,10 @@ private let childEnvironment = ["PATH": "/usr/bin:/bin"]
         let elapsed = Date().timeIntervalSince(started)
         #expect(error?.message == "sh timed out")
         #expect(error?.exitStatus == 128 + SIGKILL)
-        // 0.5 s timeout + 2 s kill grace + at most 2 s for the orphaned sleep's pipe.
-        #expect(elapsed < 10)
+        // 0.5 s timeout + 2 s kill grace + at most 2 s for the orphaned sleep's pipe. The
+        // bound only has to prove the kill happened before the 30 s sleep ended on its own:
+        // CPU-bound suites (scrypt) running in parallel delayed this to 14 s on the CI runner.
+        #expect(elapsed < 25)
     }
 
     @Test(.timeLimit(.minutes(1))) func cancellationTerminatesTheChild() async throws {

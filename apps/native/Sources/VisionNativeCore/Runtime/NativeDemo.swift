@@ -112,11 +112,14 @@ public enum NativeDemo {
     }
 
     /// `assertDemoRuntimeIsolation`: seeding only ever touches Vision Native's own runtime.
+    /// The data directory and the runtime id must belong to the same variant.
     public static func assertIsolation(_ layout: RuntimeLayout) throws {
-        guard layout.runtimeId == VisionNativeIdentity.runtimeId else {
+        guard NativeVariant.allCases.contains(where: { $0.runtimeId == layout.runtimeId }) else {
             throw NativeRuntimeError("DEMO_RUNTIME_UNSAFE", "Native Demo seeding requires the Vision Native runtime id")
         }
-        guard PathUtilities.basename(layout.userDataDirectory) == VisionNativeIdentity.userDataName else {
+        guard let variant = NativeVariant.owning(userDataDirectory: layout.userDataDirectory),
+            variant.runtimeId == layout.runtimeId
+        else {
             throw NativeRuntimeError(
                 "DEMO_RUNTIME_UNSAFE", "Native Demo seeding is restricted to the Vision Native data directory")
         }
