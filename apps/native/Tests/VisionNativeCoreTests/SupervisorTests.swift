@@ -230,7 +230,9 @@ private func makeSupervisor(
         let restoring = Latch()
         let release = Latch()
         harness.runner.gate = { call in
-            guard call.name == "pg_restore", !call.arguments.contains("--list") else { return }
+            // Skip the `--version` discovery probe and the `--list` dump validation.
+            guard call.name == "pg_restore", !call.arguments.contains("--list"), call.arguments != ["--version"]
+            else { return }
             restoring.open()
             await release.wait()
         }
