@@ -30,7 +30,7 @@ stays the project-file tool (ADR-204 decision 3). The deployment target and the 
 | `Sources/VisionNativeCore/API/`        | `APIClient` and the generated OpenAPI client (2)      |
 | `Sources/VisionNativeCore/Design/`     | Generated design tokens, `ThemeSelection` (2)         |
 | `Sources/VisionNativeCore/Navigation/` | Generated sidebar registry, routes, shell model (2)   |
-| `Sources/VisionNativeCore/Screens/`    | Native screen view models (Exchange rates)            |
+| `Sources/VisionNativeCore/Screens/`    | Native screen view models (Exchange rates, Admin)     |
 | `Sources/VisionNativeUI/`              | SwiftUI shell and screens, `Localizable.xcstrings`    |
 | `openapi-operations.txt`               | operationIds the Swift client is generated for        |
 | `i18n-keys.txt`                        | `i18n/source` keys copied into the String Catalog     |
@@ -139,7 +139,9 @@ See [the architecture page](../../docs/architecture/native-app.md#native-navigat
   and a detail column with the web view or a native screen. The page reports its route through
   `electronAPI.routeChanged` (`shell:route-changed`) and hides its own sidebar when
   `electronAPI.nativeNavigation` is set.
-- `/admin/exchange-rates` is native, in admin mode only. Native requests carry the page's admin
+- `/admin`, `/admin/providers`, `/admin/endpoints` and `/admin/exchange-rates` are native, in
+  admin mode only; `/admin/db` stays in the web view. The admin token card writes the page's
+  `sessionStorage`, and the audit history card uses the native audit channels. Native requests carry the page's admin
   token from `sessionStorage`, read from the web view, and nothing else stores it.
 - To add a screen: list its operations and keys, run `bun run native:generate`, add a model in
   `Sources/VisionNativeCore/Screens/`, a view in `Sources/VisionNativeUI/`, and a `NativeScreen`

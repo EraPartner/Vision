@@ -5,7 +5,7 @@ import Foundation
 
 /// One struct per operationId in `apps/native/openapi-operations.txt`, in its order.
 public enum OpenAPIOperations {
-    public static let operationIds = ["getExchangeRates", "refreshExchangeRates", "getSetting"]
+    public static let operationIds = ["getExchangeRates", "refreshExchangeRates", "adminDatabaseStats", "adminProvidersHealth", "adminProviderProbe", "adminMetricsRequests", "adminListEndpoints", "getSetting"]
 }
 
 extension OpenAPIOperations {
@@ -43,6 +43,70 @@ extension OpenAPIOperations {
         public init() {}
 
         public var path: String { "/api/info/exchange-rates/refresh" }
+    }
+
+    /// GET /api/admin/database/stats: Database size and table row counts
+    public struct AdminDatabaseStats: APIOperation {
+        public typealias Response = OpenAPI.DbStats
+        public static let operationId = "adminDatabaseStats"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/admin/database/stats"
+
+        public init() {}
+
+        public var path: String { "/api/admin/database/stats" }
+    }
+
+    /// GET /api/admin/providers/health: Check all price-provider health
+    public struct AdminProvidersHealth: APIOperation {
+        public typealias Response = OpenAPI.ProviderHealthList
+        public static let operationId = "adminProvidersHealth"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/admin/providers/health"
+
+        public init() {}
+
+        public var path: String { "/api/admin/providers/health" }
+    }
+
+    /// POST /api/admin/providers/{provider}/probe: Probe specific price provider
+    public struct AdminProviderProbe: APIOperation {
+        public typealias Response = OpenAPI.ProbeResult
+        public static let operationId = "adminProviderProbe"
+        public static let method = HTTPMethod.post
+        public static let pathTemplate = "/api/admin/providers/{provider}/probe"
+
+        public var provider: String
+
+        public init(provider: String) {
+            self.provider = provider
+        }
+
+        public var path: String { "/api/admin/providers/\(APIPath.segment(APIQuery.value(provider)))/probe" }
+    }
+
+    /// GET /api/admin/metrics/requests: Get request metrics (rate, errors, latencies)
+    public struct AdminMetricsRequests: APIOperation {
+        public typealias Response = OpenAPI.RouteMetricList
+        public static let operationId = "adminMetricsRequests"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/admin/metrics/requests"
+
+        public init() {}
+
+        public var path: String { "/api/admin/metrics/requests" }
+    }
+
+    /// GET /api/admin/endpoints: List all registered API endpoints
+    public struct AdminListEndpoints: APIOperation {
+        public typealias Response = OpenAPI.EndpointList
+        public static let operationId = "adminListEndpoints"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/admin/endpoints"
+
+        public init() {}
+
+        public var path: String { "/api/admin/endpoints" }
     }
 
     /// GET /api/settings/{key}: Get single setting

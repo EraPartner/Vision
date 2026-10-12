@@ -130,7 +130,9 @@ private let childEnvironment = ["PATH": "/usr/bin:/bin"]
             return
         }
         #expect((error as? ProcessRunError)?.message == "sh was cancelled")
-        #expect(Date().timeIntervalSince(started) < 10)
+        // The bound only has to prove the cancel killed the child before its 30 s sleep ended
+        // on its own; CPU-bound suites running in parallel delayed this to 16 s on the CI runner.
+        #expect(Date().timeIntervalSince(started) < 25)
     }
 }
 

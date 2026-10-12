@@ -15,6 +15,20 @@ public enum VisionFormat {
                 .rounded(rule: .toNearestOrAwayFromZero))
     }
 
+    /// `formatPercent(value, { digits, locale })`: the number with `digits` fraction digits
+    /// and grouping, then `%`.
+    public static func percent(_ value: Decimal, digits: Int = 1, locale: Locale) -> String {
+        guard (0...20).contains(digits), !value.isNaN else { return "\(value)%" }
+        return decimal(value, fractionDigits: digits, locale: locale) + "%"
+    }
+
+    /// `String(number)` for a JSON number: no grouping, `.` as the separator, no trailing
+    /// zeros (`18`, `12.5`).
+    public static func plain(_ value: Decimal) -> String {
+        if value.isNaN { return "NaN" }
+        return NSDecimalNumber(decimal: value).stringValue
+    }
+
     /// `count.toLocaleString(locale)`.
     public static func integer(_ value: Int, locale: Locale) -> String {
         value.formatted(IntegerFormatStyle<Int>(locale: locale))

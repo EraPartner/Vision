@@ -8,6 +8,89 @@ import Foundation
 public enum OpenAPI {}
 
 extension OpenAPI {
+    public struct DbStats: Codable, Equatable, Sendable {
+        public let tables: [OpenAPI.DbTableStat]
+        /// pg_size_pretty of the database size
+        public let dbSize: String?
+
+        public init(tables: [OpenAPI.DbTableStat], dbSize: String? = nil) {
+            self.tables = tables
+            self.dbSize = dbSize
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case tables = "tables"
+            case dbSize = "db_size"
+        }
+    }
+
+    public struct DbTableStat: Codable, Equatable, Sendable {
+        public let schemaname: String
+        public let tableName: String
+        /// BIGINT estimate from pg_stat_user_tables, as decimal text
+        public let liveRows: String
+        /// BIGINT estimate from pg_stat_user_tables, as decimal text
+        public let deadRows: String
+        public let lastAutovacuum: String?
+        public let lastAutoanalyze: String?
+        /// pg_size_pretty of the total relation size
+        public let size: String
+        /// BIGINT byte count, as decimal text
+        public let sizeBytes: String
+
+        public init(schemaname: String, tableName: String, liveRows: String, deadRows: String, lastAutovacuum: String? = nil, lastAutoanalyze: String? = nil, size: String, sizeBytes: String) {
+            self.schemaname = schemaname
+            self.tableName = tableName
+            self.liveRows = liveRows
+            self.deadRows = deadRows
+            self.lastAutovacuum = lastAutovacuum
+            self.lastAutoanalyze = lastAutoanalyze
+            self.size = size
+            self.sizeBytes = sizeBytes
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case schemaname = "schemaname"
+            case tableName = "table_name"
+            case liveRows = "live_rows"
+            case deadRows = "dead_rows"
+            case lastAutovacuum = "last_autovacuum"
+            case lastAutoanalyze = "last_autoanalyze"
+            case size = "size"
+            case sizeBytes = "size_bytes"
+        }
+    }
+
+    public struct EndpointEntry: Codable, Equatable, Sendable {
+        public let method: String
+        public let path: String
+
+        public init(method: String, path: String) {
+            self.method = method
+            self.path = path
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case method = "method"
+            case path = "path"
+        }
+    }
+
+    public struct EndpointList: Codable, Equatable, Sendable {
+        public let items: [OpenAPI.EndpointEntry]
+        public let total: Int
+
+        public init(items: [OpenAPI.EndpointEntry], total: Int) {
+            self.items = items
+            self.total = total
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case items = "items"
+            case total = "total"
+        }
+    }
+
     public struct Envelope: Codable, Equatable, Sendable {
         public let ok: Bool
         /// Present on success
@@ -106,6 +189,127 @@ extension OpenAPI {
 
         enum CodingKeys: String, CodingKey {
             case message = "message"
+        }
+    }
+
+    public struct ProbeResult: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let provider: OpenAPI.ProviderHealth
+        /// The probe error, only when ok is false
+        public let error: String?
+
+        public init(ok: Bool, provider: OpenAPI.ProviderHealth, error: String? = nil) {
+            self.ok = ok
+            self.provider = provider
+            self.error = error
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case provider = "provider"
+            case error = "error"
+        }
+    }
+
+    public struct ProviderHealth: Codable, Equatable, Sendable {
+        public let provider: String
+        /// The provider kind: price, fx, inflation or research
+        public let kind: String
+        public let label: String
+        public let lastSuccessAt: String?
+        public let lastErrorAt: String?
+        public let lastError: String?
+        public let consecutiveFailures: Int
+        public let updatedAt: String?
+
+        public init(provider: String, kind: String, label: String, lastSuccessAt: String? = nil, lastErrorAt: String? = nil, lastError: String? = nil, consecutiveFailures: Int, updatedAt: String? = nil) {
+            self.provider = provider
+            self.kind = kind
+            self.label = label
+            self.lastSuccessAt = lastSuccessAt
+            self.lastErrorAt = lastErrorAt
+            self.lastError = lastError
+            self.consecutiveFailures = consecutiveFailures
+            self.updatedAt = updatedAt
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case provider = "provider"
+            case kind = "kind"
+            case label = "label"
+            case lastSuccessAt = "last_success_at"
+            case lastErrorAt = "last_error_at"
+            case lastError = "last_error"
+            case consecutiveFailures = "consecutive_failures"
+            case updatedAt = "updated_at"
+        }
+    }
+
+    public struct ProviderHealthList: Codable, Equatable, Sendable {
+        public let items: [OpenAPI.ProviderHealth]
+        public let total: Int
+
+        public init(items: [OpenAPI.ProviderHealth], total: Int) {
+            self.items = items
+            self.total = total
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case items = "items"
+            case total = "total"
+        }
+    }
+
+    public struct RouteMetric: Codable, Equatable, Sendable {
+        /// METHOD:path
+        public let route: String
+        public let method: String
+        public let path: String
+        public let count: Int
+        public let errors: Int
+        /// errors / count, from 0 to 1
+        public let errorRate: Decimal
+        public let p50Ms: Decimal?
+        public let p95Ms: Decimal?
+        public let windowMinutes: Decimal
+
+        public init(route: String, method: String, path: String, count: Int, errors: Int, errorRate: Decimal, p50Ms: Decimal? = nil, p95Ms: Decimal? = nil, windowMinutes: Decimal) {
+            self.route = route
+            self.method = method
+            self.path = path
+            self.count = count
+            self.errors = errors
+            self.errorRate = errorRate
+            self.p50Ms = p50Ms
+            self.p95Ms = p95Ms
+            self.windowMinutes = windowMinutes
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case route = "route"
+            case method = "method"
+            case path = "path"
+            case count = "count"
+            case errors = "errors"
+            case errorRate = "error_rate"
+            case p50Ms = "p50_ms"
+            case p95Ms = "p95_ms"
+            case windowMinutes = "window_minutes"
+        }
+    }
+
+    public struct RouteMetricList: Codable, Equatable, Sendable {
+        public let items: [OpenAPI.RouteMetric]
+        public let total: Int
+
+        public init(items: [OpenAPI.RouteMetric], total: Int) {
+            self.items = items
+            self.total = total
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case items = "items"
+            case total = "total"
         }
     }
 

@@ -73,6 +73,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             theme: ThemeSelection.resolve(
                 splashTheme: LaunchAppearance.theme(fromSettings: initialSettings), systemIsDark: systemIsDark),
             exchangeRates: ExchangeRatesModel(service: client),
+            admin: AdminScreens.make(service: client, token: makeAdminTokenAccess(), audit: auditChannels),
             hiddenSections: Self.loadHiddenSections(),
             loadSettings: { try await client.appSettings() },
             saveHiddenSections: { Self.saveHiddenSections($0) },
@@ -137,9 +138,44 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
 
     private static let adminTokenTimeout: Duration = .seconds(5)
 
-    private static let adminTokenScript = """
-        try { return String(window.sessionStorage.getItem("vision.adminToken") || ""); } catch { return ""; }
-        """
+    private static let adminTokenScript = AdminTokenScript.read
+
+    /// The admin token card's access to the page's `sessionStorage`.
+    private func makeAdminTokenAccess() -> AdminTokenAccess {
+        AdminTokenAccess(
+            read: { [weak self] in await self?.adminToken() },
+            write: { [weak self] token in await self?.writeAdminToken(token) ?? false })
+    }
+
+    /// `setAdminToken(token)` in the page: the trimmed token, or removal for a blank one. The
+    /// token goes in as a script argument, never as script text. `false` when the page is not
+    /// ready, the script fails or the page does not answer within `adminTokenTimeout`; the
+    /// storage is then unchanged as far as the card knows.
+    private func writeAdminToken(_ token: String) async -> Bool {
+        guard queue.isReady, let webView = webShell?.webView else { return false }
+        return await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
+            let pending = OSAllocatedUnfairLock<CheckedContinuation<Bool, Never>?>(initialState: continuation)
+            let resume: @Sendable (Bool) -> Void = { stored in
+                let waiting = pending.withLock { state -> CheckedContinuation<Bool, Never>? in
+                    defer { state = nil }
+                    return state
+                }
+                waiting?.resume(returning: stored)
+            }
+            let delay = Self.adminTokenTimeout
+            let timeout = Task {
+                try? await Task.sleep(for: delay)
+                resume(false)
+            }
+            // The script answers "ok", or an empty string when `sessionStorage` is unavailable.
+            webView.callAsyncJavaScript(
+                AdminTokenScript.write, arguments: [AdminTokenScript.argument: token], in: nil, in: .page
+            ) { result in
+                resume(((try? result.get()) as? String) == "ok")
+                timeout.cancel()
+            }
+        }
+    }
 
     private static var localeDirectory: String? {
         Bundle.main.resourceURL?.appendingPathComponent("i18n", isDirectory: true).path
@@ -306,6 +342,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         effectView.material = .underWindowBackground
         effectView.blendingMode = .behindWindow
         effectView.state = .followsWindowActiveState
+        effectView.appearance = Self.vibrancyAppearance(palette)
         effectView.isHidden = true
         container.addSubview(effectView)
         let launchView = NSHostingView(rootView: LaunchStateView(model: launchModel))
@@ -523,7 +560,13 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     private func applyPalette() {
         window?.backgroundColor = .hsl(palette.base)
         webShell?.webView.underPageBackgroundColor = .hsl(palette.base)
+        effectView?.appearance = Self.vibrancyAppearance(palette)
         launchModel.palette = palette
+    }
+
+    /// The vibrancy follows the page theme, not the macOS appearance.
+    private static func vibrancyAppearance(_ palette: LaunchPalette) -> NSAppearance? {
+        NSAppearance(named: palette.isLight ? .aqua : .darkAqua)
     }
 
     private func observeAccentColor() {
