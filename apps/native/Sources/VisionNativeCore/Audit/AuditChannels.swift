@@ -81,7 +81,7 @@ public final class AuditChannels {
 
     public init(
         runtimeProvider: @escaping @Sendable () async -> AuditRuntime?, shell: any AuditShell,
-        log: @escaping @Sendable (String) -> Void = { _ in }
+        log: @escaping @Sendable (String) -> Void
     ) {
         self.runtimeProvider = runtimeProvider
         self.shell = shell

@@ -26,9 +26,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     private let settingsWriter: SettingsWriter
     private let backupService: BackupService
     /// The six `electronAudit` channels, the closure timer and the audit notices.
-    private lazy var auditChannels = AuditChannels(
-        runtimeProvider: { await AppRuntime.supervisor.auditRuntime() }, shell: self,
-        log: { message in AppRuntime.shellLogger.warning("\(message, privacy: .public)") })
+    private lazy var auditChannels = makeAuditChannels()
     /// `ALLOWED_RESTORE_PATHS`: only paths the restore picker returned may be restored.
     private(set) var restorePathAllowList = RestorePathAllowList()
     private(set) var window: NSWindow?
@@ -45,6 +43,12 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     private var frameSaveTask: Task<Void, Never>?
     private var languageRequest = 0
     private var accentObserver: NSObjectProtocol?
+
+    private func makeAuditChannels() -> AuditChannels {
+        AuditChannels(
+            runtimeProvider: { await AppRuntime.supervisor.auditRuntime() }, shell: self,
+            log: { message in AppRuntime.shellLogger.warning("\(message, privacy: .public)") })
+    }
 
     private static var localeDirectory: String? {
         Bundle.main.resourceURL?.appendingPathComponent("i18n", isDirectory: true).path
