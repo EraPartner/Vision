@@ -90,11 +90,17 @@ public struct NativeRoute: Equatable, Sendable {
 
 /// The screens Vision Native draws itself; every other route shows the web app.
 public enum NativeScreen: String, CaseIterable, Sendable {
+    case adminOverview
+    case providerHealth
+    case endpointLiveness
     case exchangeRates
 
-    /// The route path it replaces.
+    /// The route path it replaces. `/admin/db` and `/admin/db/:table` stay in the web app.
     public var path: String {
         switch self {
+        case .adminOverview: return "/admin"
+        case .providerHealth: return "/admin/providers"
+        case .endpointLiveness: return "/admin/endpoints"
         case .exchangeRates: return "/admin/exchange-rates"
         }
     }

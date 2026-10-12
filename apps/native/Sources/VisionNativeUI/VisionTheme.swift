@@ -26,6 +26,12 @@ public struct VisionTheme: Equatable, Sendable {
     public var border: Color { Color(token: palette.border) }
     public var primary: Color { Color(token: palette.primary) }
     public var destructive: Color { Color(token: palette.destructive) }
+    public var success: Color { Color(token: palette.success) }
+    public var warning: Color { Color(token: palette.warning) }
+    public var info: Color { Color(token: palette.info) }
+    public var muted: Color { Color(token: palette.muted) }
+    /// The sidebar and detail-column glass of the native shell.
+    public var glass: ShellGlass { ShellGlass(selection: selection) }
     public var gain: Color { Color(token: selection.gain) }
     public var loss: Color { Color(token: selection.loss) }
 }

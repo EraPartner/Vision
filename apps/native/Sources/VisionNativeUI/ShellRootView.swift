@@ -49,31 +49,26 @@ public struct ShellRootView<WebContent: View>: View {
     }
 }
 
-/// `AppSidebar` as a source list: the sections (admin in admin mode), collapsible section
-/// headers, and the footer entries with Settings.
+/// `AppSidebar`: the sections (admin in admin mode), collapsible section headers, and the
+/// footer entries with Settings, on the web sidebar's glass chrome with its emerald pill for
+/// the active page instead of the system selection.
 struct NativeSidebar: View {
     let model: NativeShellModel
+    @Environment(\.visionTheme) private var theme
 
     var body: some View {
-        List(selection: selection) {
+        List {
             ForEach(model.sections) { section in
                 sectionView(section)
             }
         }
         .listStyle(.sidebar)
+        .scrollContentBackground(.hidden)
         .accessibilityLabel(model.strings.t("nav.primary"))
         .safeAreaInset(edge: .bottom, spacing: 0) {
             footer
         }
-    }
-
-    /// Selecting a row navigates; the highlight follows the reported route.
-    private var selection: Binding<String?> {
-        Binding(
-            get: { model.selectedItemURL },
-            set: { url in
-                if let url, url != model.route.path { model.navigate(to: url) }
-            })
+        .background(SidebarGlassBackground())
     }
 
     @ViewBuilder
@@ -103,10 +98,27 @@ struct NativeSidebar: View {
             set: { model.setSection(section.id, expanded: $0) })
     }
 
+    /// A click navigates; the pill follows the route the page reports.
     private func rows(_ items: [NavItem]) -> some View {
         ForEach(items) { item in
-            Label(model.strings.t(item.titleKey), systemImage: item.symbol)
-                .tag(item.url as String?)
+            let isActive = model.selectedItemURL == item.url
+            Button {
+                if item.url != model.route.path { model.navigate(to: item.url) }
+            } label: {
+                Label {
+                    Text(model.strings.t(item.titleKey))
+                        .fontWeight(isActive ? .semibold : .regular)
+                        .foregroundStyle(Color(token: theme.glass.foreground))
+                } icon: {
+                    Image(systemName: item.symbol)
+                        .foregroundStyle(Color(token: theme.glass.icon))
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .listRowBackground(SidebarSelectionPill(isActive: isActive))
+            .accessibilityAddTraits(isActive ? .isSelected : [])
         }
     }
 
@@ -145,7 +157,7 @@ struct NativeSidebar: View {
         .buttonStyle(.plain)
         .background(
             RoundedRectangle(cornerRadius: DesignTokens.Radius.chip)
-                .fill(isActive ? Color.primary.opacity(0.08) : Color.clear))
+                .fill(isActive ? Color(token: theme.glass.selection, opacity: theme.glass.selectionOpacity) : Color.clear))
         .accessibilityAddTraits(isActive ? .isSelected : [])
     }
 }
@@ -160,7 +172,7 @@ struct NativeScreenContainer: View {
     var body: some View {
         content
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(theme.background)
+            .background(DetailGlassBackground())
             .focusable()
             .focusEffectDisabled()
             .focused($focused)
@@ -177,6 +189,12 @@ struct NativeScreenContainer: View {
     @ViewBuilder
     private var content: some View {
         switch screen {
+        case .adminOverview:
+            AdminOverviewView(model: model.admin.overview, shell: model)
+        case .providerHealth:
+            ProviderHealthView(model: model.admin.providers, shell: model)
+        case .endpointLiveness:
+            EndpointLivenessView(model: model.admin.endpoints, shell: model)
         case .exchangeRates:
             ExchangeRatesView(model: model.exchangeRates, shell: model)
         }

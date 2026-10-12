@@ -73,6 +73,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             theme: ThemeSelection.resolve(
                 splashTheme: LaunchAppearance.theme(fromSettings: initialSettings), systemIsDark: systemIsDark),
             exchangeRates: ExchangeRatesModel(service: client),
+            admin: AdminScreens.make(service: client, token: makeAdminTokenAccess(), audit: auditChannels),
             hiddenSections: Self.loadHiddenSections(),
             loadSettings: { try await client.appSettings() },
             saveHiddenSections: { Self.saveHiddenSections($0) },
@@ -137,9 +138,42 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
 
     private static let adminTokenTimeout: Duration = .seconds(5)
 
-    private static let adminTokenScript = """
-        try { return String(window.sessionStorage.getItem("vision.adminToken") || ""); } catch { return ""; }
-        """
+    private static let adminTokenScript = AdminTokenScript.read
+
+    /// The admin token card's access to the page's `sessionStorage`.
+    private func makeAdminTokenAccess() -> AdminTokenAccess {
+        AdminTokenAccess(
+            read: { [weak self] in await self?.adminToken() },
+            write: { [weak self] token in await self?.writeAdminToken(token) })
+    }
+
+    /// `setAdminToken(token)` in the page: the trimmed token, or removal for a blank one. The
+    /// token goes in as a script argument, never as script text. A page that is not ready or
+    /// does not answer within `adminTokenTimeout` leaves the storage unchanged.
+    private func writeAdminToken(_ token: String) async {
+        guard queue.isReady, let webView = webShell?.webView else { return }
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            let pending = OSAllocatedUnfairLock<CheckedContinuation<Void, Never>?>(initialState: continuation)
+            let resume: @Sendable () -> Void = {
+                let waiting = pending.withLock { state -> CheckedContinuation<Void, Never>? in
+                    defer { state = nil }
+                    return state
+                }
+                waiting?.resume()
+            }
+            let delay = Self.adminTokenTimeout
+            let timeout = Task {
+                try? await Task.sleep(for: delay)
+                resume()
+            }
+            webView.callAsyncJavaScript(
+                AdminTokenScript.write, arguments: [AdminTokenScript.argument: token], in: nil, in: .page
+            ) { _ in
+                resume()
+                timeout.cancel()
+            }
+        }
+    }
 
     private static var localeDirectory: String? {
         Bundle.main.resourceURL?.appendingPathComponent("i18n", isDirectory: true).path

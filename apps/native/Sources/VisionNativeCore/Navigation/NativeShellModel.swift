@@ -33,6 +33,8 @@ public final class NativeShellModel {
     /// The route a sidebar click or shortcut asked the page for, until the page reports one.
     public private(set) var pendingRoute: NativeRoute?
     public let exchangeRates: ExchangeRatesModel
+    /// `/admin`, `/admin/providers` and `/admin/endpoints`.
+    public let admin: AdminScreens
 
     @ObservationIgnored private let loadSettings: @Sendable () async throws -> NativeAppSettings
     @ObservationIgnored private let saveHiddenSections: @MainActor ([NavSectionID: Bool]) -> Void
@@ -54,6 +56,7 @@ public final class NativeShellModel {
         strings: any Localizing,
         theme: ThemeSelection,
         exchangeRates: ExchangeRatesModel,
+        admin: AdminScreens,
         hiddenSections: [NavSectionID: Bool]? = nil,
         loadSettings: @escaping @Sendable () async throws -> NativeAppSettings,
         saveHiddenSections: @escaping @MainActor ([NavSectionID: Bool]) -> Void = { _ in },
@@ -64,6 +67,7 @@ public final class NativeShellModel {
         self.strings = strings
         self.theme = theme
         self.exchangeRates = exchangeRates
+        self.admin = admin
         self.hiddenSections = hiddenSections ?? Self.defaultHiddenSections
         self.loadSettings = loadSettings
         self.saveHiddenSections = saveHiddenSections

@@ -4516,6 +4516,74 @@ export interface components {
         InfoMessage: {
             message: string;
         };
+        DbTableStat: {
+            schemaname: string;
+            table_name: string;
+            /** @description BIGINT estimate from pg_stat_user_tables */
+            live_rows: string;
+            /** @description BIGINT estimate from pg_stat_user_tables */
+            dead_rows: string;
+            last_autovacuum: string | null;
+            last_autoanalyze: string | null;
+            /** @description pg_size_pretty of the total relation size */
+            size: string;
+            /** @description BIGINT byte count */
+            size_bytes: string;
+        };
+        DbStats: {
+            tables: components["schemas"]["DbTableStat"][];
+            /** @description pg_size_pretty of the database size */
+            db_size: string | null;
+        };
+        ProviderHealth: {
+            provider: string;
+            /** @description The provider kind: price, fx, inflation or research */
+            kind: string;
+            label: string;
+            /** Format: date-time */
+            last_success_at: string | null;
+            /** Format: date-time */
+            last_error_at: string | null;
+            last_error: string | null;
+            consecutive_failures: number;
+            /** Format: date-time */
+            updated_at: string | null;
+        };
+        ProviderHealthList: {
+            items: components["schemas"]["ProviderHealth"][];
+            total: number;
+        };
+        ProbeResult: {
+            ok: boolean;
+            provider: components["schemas"]["ProviderHealth"];
+            /** @description The probe error */
+            error?: string;
+        };
+        RouteMetric: {
+            /** @description METHOD:path */
+            route: string;
+            method: string;
+            path: string;
+            count: number;
+            errors: number;
+            /** @description errors / count */
+            error_rate: number;
+            p50_ms: number | null;
+            p95_ms: number | null;
+            window_minutes: number;
+        };
+        RouteMetricList: {
+            items: components["schemas"]["RouteMetric"][];
+            total: number;
+        };
+        EndpointEntry: {
+            method: string;
+            path: string;
+        };
+        EndpointList: {
+            items: components["schemas"]["EndpointEntry"][];
+            total: number;
+        };
         /** @description Citation snapshot. Document metadata is optional, but requires documentId when present; the server pins document version and digest on save. The snapshot remains after source deletion. */
         ResearchDossierSource: {
             title: string;
@@ -16034,13 +16102,15 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description DB stats */
+            /** @description Table statistics and the database size */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["DbStats"];
+                    };
                 };
             };
         };
@@ -16358,17 +16428,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Provider health rows */
+            /** @description Provider health rows (canonical `{items, total}` body) */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: {
-                            items: Record<string, never>[];
-                            total: number;
-                        };
+                        data?: components["schemas"]["ProviderHealthList"];
                     };
                 };
             };
@@ -16385,13 +16452,15 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Probe result */
+            /** @description Probe result; a failed probe is `ok false` with `error`, not an HTTP error */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["ProbeResult"];
+                    };
                 };
             };
         };
@@ -16412,10 +16481,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: {
-                            items: Record<string, never>[];
-                            total: number;
-                        };
+                        data?: components["schemas"]["RouteMetricList"];
                     };
                 };
             };
@@ -16430,20 +16496,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Endpoint list */
+            /** @description Endpoint list (canonical `{items, total}` body) */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: {
-                            items: {
-                                method?: string;
-                                path?: string;
-                            }[];
-                            total: number;
-                        };
+                        data?: components["schemas"]["EndpointList"];
                     };
                 };
             };

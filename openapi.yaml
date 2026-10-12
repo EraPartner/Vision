@@ -248,6 +248,128 @@ components:
       properties:
         message: { type: string }
 
+    # GET /api/admin/database/stats (routes/admin.ts, DbStatsSchema)
+    DbTableStat:
+      type: object
+      required:
+        [
+          schemaname,
+          table_name,
+          live_rows,
+          dead_rows,
+          last_autovacuum,
+          last_autoanalyze,
+          size,
+          size_bytes,
+        ]
+      properties:
+        schemaname: { type: string }
+        table_name: { type: string }
+        live_rows:
+          { type: string, description: BIGINT estimate from pg_stat_user_tables, as decimal text }
+        dead_rows:
+          { type: string, description: BIGINT estimate from pg_stat_user_tables, as decimal text }
+        last_autovacuum: { type: string, nullable: true }
+        last_autoanalyze: { type: string, nullable: true }
+        size: { type: string, description: pg_size_pretty of the total relation size }
+        size_bytes: { type: string, description: BIGINT byte count, as decimal text }
+    DbStats:
+      type: object
+      required: [tables, db_size]
+      properties:
+        tables:
+          type: array
+          items: { $ref: "#/components/schemas/DbTableStat" }
+        db_size:
+          { type: string, nullable: true, description: pg_size_pretty of the database size }
+    # /api/admin/providers/* (services/providerHealthService.ts, ProviderHealthSchema)
+    ProviderHealth:
+      type: object
+      required:
+        [
+          provider,
+          kind,
+          label,
+          last_success_at,
+          last_error_at,
+          last_error,
+          consecutive_failures,
+          updated_at,
+        ]
+      properties:
+        provider: { type: string }
+        kind:
+          { type: string, description: "The provider kind: price, fx, inflation or research" }
+        label: { type: string }
+        last_success_at: { type: string, format: date-time, nullable: true }
+        last_error_at: { type: string, format: date-time, nullable: true }
+        last_error: { type: string, nullable: true }
+        consecutive_failures: { type: integer, minimum: 0 }
+        updated_at: { type: string, format: date-time, nullable: true }
+    ProviderHealthList:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ProviderHealth" }
+        total: { type: integer, minimum: 0 }
+    ProbeResult:
+      type: object
+      required: [ok, provider]
+      properties:
+        ok: { type: boolean }
+        provider: { $ref: "#/components/schemas/ProviderHealth" }
+        error: { type: string, description: The probe error, only when ok is false }
+    # GET /api/admin/metrics/requests (middleware/requestMetrics.ts, RouteMetricSchema)
+    RouteMetric:
+      type: object
+      required:
+        [
+          route,
+          method,
+          path,
+          count,
+          errors,
+          error_rate,
+          p50_ms,
+          p95_ms,
+          window_minutes,
+        ]
+      properties:
+        route: { type: string, description: "METHOD:path" }
+        method: { type: string }
+        path: { type: string }
+        count: { type: integer, minimum: 0 }
+        errors: { type: integer, minimum: 0 }
+        error_rate: { type: number, description: errors / count, from 0 to 1 }
+        p50_ms: { type: number, nullable: true }
+        p95_ms: { type: number, nullable: true }
+        window_minutes: { type: number }
+    RouteMetricList:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/RouteMetric" }
+        total: { type: integer, minimum: 0 }
+    # GET /api/admin/endpoints (getRouteManifest)
+    EndpointEntry:
+      type: object
+      required: [method, path]
+      properties:
+        method: { type: string }
+        path: { type: string }
+    EndpointList:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/EndpointEntry" }
+        total: { type: integer, minimum: 0 }
+
     ResearchDossierSource:
       type: object
       additionalProperties: false
@@ -13531,11 +13653,16 @@ paths:
       tags: [Admin]
       responses:
         "200":
-          description: DB stats
+          description: Table statistics and the database size
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/DbStats"
 
   /api/admin/database/vacuum:
     post:
@@ -13799,7 +13926,7 @@ paths:
       tags: [Admin]
       responses:
         "200":
-          description: Provider health rows
+          description: Provider health rows (canonical `{items, total}` body)
           content:
             application/json:
               schema:
@@ -13808,15 +13935,7 @@ paths:
                   - type: object
                     properties:
                       data:
-                        type: object
-                        required: [items, total]
-                        properties:
-                          items:
-                            type: array
-                            items:
-                              type: object
-                          total:
-                            type: integer
+                        $ref: "#/components/schemas/ProviderHealthList"
 
   /api/admin/providers/{provider}/probe:
     parameters:
@@ -13831,11 +13950,16 @@ paths:
       tags: [Admin]
       responses:
         "200":
-          description: Probe result
+          description: Probe result; a failed probe is `ok false` with `error`, not an HTTP error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/ProbeResult"
 
   /api/admin/metrics/requests:
     get:
@@ -13853,15 +13977,7 @@ paths:
                   - type: object
                     properties:
                       data:
-                        type: object
-                        required: [items, total]
-                        properties:
-                          items:
-                            type: array
-                            items:
-                              type: object
-                          total:
-                            type: integer
+                        $ref: "#/components/schemas/RouteMetricList"
 
   /api/admin/endpoints:
     get:
@@ -13870,7 +13986,7 @@ paths:
       tags: [Admin]
       responses:
         "200":
-          description: Endpoint list
+          description: Endpoint list (canonical `{items, total}` body)
           content:
             application/json:
               schema:
@@ -13879,18 +13995,7 @@ paths:
                   - type: object
                     properties:
                       data:
-                        type: object
-                        required: [items, total]
-                        properties:
-                          items:
-                            type: array
-                            items:
-                              type: object
-                              properties:
-                                method: { type: string }
-                                path: { type: string }
-                          total:
-                            type: integer
+                        $ref: "#/components/schemas/EndpointList"
 
   /api/admin/endpoint-liveness:
     get:

@@ -62,7 +62,7 @@ aliases: [vision native, native app, swift app]
 | `apps/native/Sources/VisionNativeCore/API/`        | `APIClient` (the Swift `client.ts`) and the generated OpenAPI models and operations   |
 | `apps/native/Sources/VisionNativeCore/Design/`     | Generated design tokens and `ThemeSelection` (variant and appearance of the page)     |
 | `apps/native/Sources/VisionNativeCore/Navigation/` | Generated sidebar registry, routes, shortcuts and the `NativeShellModel` (phase 2)    |
-| `apps/native/Sources/VisionNativeCore/Screens/`    | View models and presentation of native screens (Exchange rates)                       |
+| `apps/native/Sources/VisionNativeCore/Screens/`    | View models and presentation of native screens (Exchange rates, Admin)                |
 | `apps/native/Sources/VisionNativeUI/`              | SwiftUI shell, native screens and the generated `Localizable.xcstrings` (phase 2)     |
 | `apps/native/openapi-operations.txt`               | The operationIds the Swift client is generated for                                    |
 | `apps/native/i18n-keys.txt`                        | The `i18n/source` keys copied into the String Catalog                                 |
@@ -636,11 +636,18 @@ the key. A test checks every listed key in both languages against `i18n/source`.
 ### Navigation shell
 
 `ShellRootView` is a `NavigationSplitView` hosted in the window in place of the bare web view. The
-sidebar is a source list built from `NavigationRegistry`: the sections of `NAV_SECTIONS` with
+sidebar is a list built from `NavigationRegistry`: the sections of `NAV_SECTIONS` with
 collapsible headers (hidden sections are stored per Mac, and a section that holds the active page
 opens), the admin section in admin mode only, and the footer entries with Settings, which opens the
 page's settings dialog. The detail column shows the native screen for the route, or the web view,
 which stays in the hierarchy so the page keeps its state.
+
+The shell looks like the web sidebar (`ShellGlass`, phase 3a): the sidebar column is a
+behind-window sidebar material under the `.glass-chrome` gradient of `--sidebar-background`
+(0.55 to 0.72, dark 0.74), with the `--glass-highlight` top line and the `--sidebar-border` rail
+edge, and the active row gets the emerald `--primary` pill (0.12, dark 0.16) and primary icons
+instead of the system selection. Native screens sit on a behind-window material tinted with the
+page's `--background`, with opaque cards on top, in every theme variant.
 
 The web router stays the source of truth. `AppLayout` reports `pathname + search` through
 `electronAPI.routeChanged` (`shell:route-changed`, validated as an app-relative route of at most
@@ -665,6 +672,20 @@ overlay, `g` then a key, `[`, `]` and `N` navigate. Opening a page dialog (palet
 shortcuts) shows the web view at the same route until the route changes or the dialog closes:
 settings close by removing `?settings`, and when the palette or the shortcuts overlay closes the
 page reports its unchanged route again.
+
+### Admin screens (phase 3a)
+
+`/admin`, `/admin/providers` and `/admin/endpoints` are native in admin mode
+([[docs/reference/native-parity/admin|admin parity]]); `/admin/db` and `/admin/db/:table` stay in
+the web view. `AdminScreens` holds their models over one `AdminService` (the five admin operations
+of the generated client); `ScreenQuery` mirrors one React Query query (data and error kept side by
+side, stale time, one request at a time) and `AdminErrorState` the page's auth alert, whose link
+navigates to `/admin`. The overview's tiles keep the web thresholds and link to their pages. Its
+admin token card writes the page's own `sessionStorage` (`vision.adminToken`) through
+`callAsyncJavaScript` with the token as an argument, so the web admin pages and the native client
+share one token and nothing else stores it. The audit history card calls `AuditChannels` directly,
+so its confirmations, save and open panels and notices are the phase 1e ones. A probe on Data
+sources marks the overview's provider query stale.
 
 ### Exchange rates
 

@@ -6,5 +6,12 @@
 getExchangeRates
 refreshExchangeRates
 
+# Admin > Overview, Data sources and Endpoint liveness
+adminDatabaseStats
+adminProvidersHealth
+adminProviderProbe
+adminMetricsRequests
+adminListEndpoints
+
 # App settings (number and date formats, admin mode) for native screens
 getSetting

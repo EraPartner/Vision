@@ -19,7 +19,8 @@ extension APIClient: ExchangeRatesService {
     }
 }
 
-/// A toast: `toast.success` / `toast.error` with a catalog key.
+/// A toast: `toast.success` / `toast.error` with a catalog key, its `t()` variables and
+/// an optional `description` line.
 public struct ScreenNotice: Equatable, Sendable, Identifiable {
     public enum Kind: Equatable, Sendable {
         case success
@@ -29,11 +30,16 @@ public struct ScreenNotice: Equatable, Sendable, Identifiable {
     public let id: Int
     public let kind: Kind
     public let key: String
+    public let variables: [String: String]
+    /// The toast's `description`, shown as is.
+    public let detail: String?
 
-    public init(id: Int, kind: Kind, key: String) {
+    public init(id: Int, kind: Kind, key: String, variables: [String: String] = [:], detail: String? = nil) {
         self.id = id
         self.kind = kind
         self.key = key
+        self.variables = variables
+        self.detail = detail
     }
 }
 
