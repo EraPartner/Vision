@@ -65,6 +65,7 @@ public final class ExchangeRatesModel {
     @ObservationIgnored private let service: any ExchangeRatesService
     @ObservationIgnored private let now: @Sendable () -> Date
     @ObservationIgnored private var fetchedAt: Date?
+    @ObservationIgnored private var inFlight: Task<Void, Never>?
     @ObservationIgnored private var noticeCount = 0
 
     public init(service: any ExchangeRatesService, now: @escaping @Sendable () -> Date = { Date() }) {
@@ -122,9 +123,21 @@ public final class ExchangeRatesModel {
         if notice?.id == id { notice = nil }
     }
 
-    /// One request at a time, like a React Query fetch; the phase changes only when it ends.
+    /// One request at a time, like a React Query fetch: a second caller (the view's `.task`
+    /// and a test, or Retry during a refetch) awaits the request in flight instead of
+    /// returning before it settles. The phase changes only when the request ends.
     private func fetch() async {
-        guard !isFetching else { return }
+        if let inFlight {
+            await inFlight.value
+            return
+        }
+        let request = Task { await run() }
+        inFlight = request
+        await request.value
+        inFlight = nil
+    }
+
+    private func run() async {
         isFetching = true
         if case .idle = phase { phase = .loading }
         defer { isFetching = false }
