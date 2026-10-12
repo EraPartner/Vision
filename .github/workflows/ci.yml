@@ -97,6 +97,10 @@ jobs:
   #
   # Fails safe: if the base cannot be resolved for any reason, `code` is 'true'
   # and the full pipeline runs.
+  #
+  # `native` is 'true' when a PR touches apps/native/, install-native.sh or this
+  # workflow, on every push, and whenever classification fails; it gates the
+  # macOS Vision Native job (ADR-203).
   # ─────────────────────────────────────────────────────────────────────────────
   changes:
     name: Detect Changes
@@ -106,6 +110,7 @@ jobs:
       contents: read
     outputs:
       code: ${{ steps.classify.outputs.code }}
+      native: ${{ steps.classify.outputs.native }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
         with:
@@ -667,6 +672,38 @@ jobs:
         run: python3 scripts/check-destructive-migrations.py
 
   # ─────────────────────────────────────────────────────────────────────────────
+  # Vision Native — the Swift app under apps/native/ (ADR-203). Linux cannot
+  # build macOS apps, so this is the only job on a GitHub-hosted macOS runner and
+  # the only compiler the Swift code has. It runs only when `changes` says the
+  # native tree (or this workflow) changed, and feeds Quality Gate, which
+  # tolerates 'skipped' for unrelated diffs and fails on a failed build or test.
+  # ─────────────────────────────────────────────────────────────────────────────
+  native-macos:
+    name: Native (macOS)
+    needs: [changes]
+    if: needs.changes.outputs.native == 'true'
+    runs-on: macos-26
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+        with:
+          persist-credentials: false
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate the Xcode project
+        run: xcodegen generate --spec apps/native/project.yml
+
+      - name: Build the app (Debug, unsigned)
+        run: xcodebuild -project apps/native/VisionNative.xcodeproj -scheme "Vision Native" -configuration Debug CODE_SIGNING_ALLOWED=NO build
+
+      - name: Test the Swift package
+        run: swift test --package-path apps/native
+
+  # ─────────────────────────────────────────────────────────────────────────────
   # Quality Gate — all static and unit-level quality checks must pass before the
   # native production-process checks run.
   # ─────────────────────────────────────────────────────────────────────────────
@@ -694,6 +731,7 @@ jobs:
       - test-frontend
       - test-backend
       - verify-destructive-migrations
+      - native-macos
     if: always()
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
