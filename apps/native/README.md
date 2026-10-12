@@ -6,18 +6,21 @@ React frontend in a `WKWebView` and runs its own PostgreSQL 18 cluster and backe
 Demo data in `~/Library/Application Support/Vision Native/`. It never reads or changes the Vision
 or Vision Demo data directories.
 
-Requirements: an Apple-silicon Mac, Xcode 26 (macOS 26 deployment target) and XcodeGen.
+Requirements: an Apple-silicon Mac, Xcode 26 (macOS 26 deployment target) and XcodeGen. XcodeGen
+stays the project-file tool (ADR-204 decision 3). The deployment target and the CI runner label
+(`macos-26` in `.github/workflows/ci.yml`) are pinned and raised together.
 
 ## Layout
 
-| Path                           | Purpose                                             |
-| ------------------------------ | --------------------------------------------------- |
-| `project.yml`                  | XcodeGen spec for the "Vision Native" app target    |
-| `Config/Signing.xcconfig`      | Signing team from `VISION_NATIVE_TEAM_ID`           |
-| `VisionNative/`                | SwiftUI app and the `WKWebView` shell               |
-| `Package.swift`                | SwiftPM package with the `VisionNativeCore` library |
-| `Sources/VisionNativeCore/`    | Non-UI logic: runtime supervision, health, override |
-| `Tests/VisionNativeCoreTests/` | Swift Testing tests                                 |
+| Path                              | Purpose                                             |
+| --------------------------------- | --------------------------------------------------- |
+| `project.yml`                     | XcodeGen spec for the "Vision Native" app target    |
+| `Config/Signing.xcconfig`         | Signing team from `VISION_NATIVE_TEAM_ID`           |
+| `VisionNative/`                   | AppKit app, window, menus and the `WKWebView` shell |
+| `Package.swift`                   | SwiftPM package with the `VisionNativeCore` library |
+| `Sources/VisionNativeCore/`       | Non-UI logic: runtime supervision, health, override |
+| `Sources/VisionNativeCore/Shell/` | Bridge contract and codec, web view policy, menus   |
+| `Tests/VisionNativeCoreTests/`    | Swift Testing tests                                 |
 
 `VisionNative.xcodeproj`, `VisionNative/Info.plist`, `build/`, `.build/` and
 `Config/Local.xcconfig` are generated or local and are gitignored.
@@ -71,6 +74,25 @@ To run a Debug build against a payload, run `./install-native.sh` once (it leave
 `apps/native/build/payload/`), then set `VISION_NATIVE_RUNTIME_DIR` to
 `<repo>/apps/native/build/payload/native-runtime` in the scheme's Run environment (Product > Scheme >
 Edit Scheme > Run > Arguments).
+
+## Shell
+
+The window hosts the unchanged React frontend and behaves like the Electron shell
+(see [the architecture page](../../docs/architecture/native-app.md#shell-phase-1c)):
+
+- A user script defines the `window.electron*` bridges of `packaging/electron/preload.ts`, backed by
+  a `WKScriptMessageHandlerWithReply` named `visionNative`. `Shell/BridgeContract.swift` maps every
+  Electron channel to its Swift handler. Backup (`electronBackup`) and audit (`electronAudit`) calls
+  reject with "not available in Vision Native yet" until phases 1d and 1e; the updater is not
+  ported.
+- The web view loads only the backend origin. The repository and documentation links open in the
+  default browser, other navigations and new windows are cancelled, and downloads open a save
+  panel.
+- The menu bar, dock menu, dock badge, window frame (`windowBounds` in `settings.json`), hide on
+  close, full screen and vibrancy follow `packaging/electron/main.ts`. Menu labels come from
+  `i18n/source/{en,nl}.json`, copied to `Contents/Resources/i18n/` by a build phase.
+- The launch screen uses the splash palette and shows the runtime status, or the error with Open
+  logs and Try again.
 
 ## Developer backend override
 

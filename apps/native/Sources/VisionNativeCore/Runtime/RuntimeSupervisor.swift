@@ -313,6 +313,42 @@ public actor RuntimeSupervisor {
         return port
     }
 
+    // MARK: - Shell settings
+
+    private func settingsLayout() throws -> RuntimeLayout {
+        try RuntimeLayout(
+            userDataDirectory: VisionNativeIdentity.userDataDirectory(homeDirectory: configuration.homeDirectory))
+    }
+
+    /// `settings.json` for the shell (window frame, language, splash theme, services mirror).
+    public func currentSettings() -> [String: JSONValue] {
+        guard let layout = try? settingsLayout() else { return [:] }
+        return loadSettings(layout)
+    }
+
+    /// `updateSettings`: a read-modify-write that runs on this actor, so it never interleaves
+    /// with the runtime's own `appPort` writes.
+    public func updateSettings(_ update: @Sendable (inout [String: JSONValue]) -> Void) throws {
+        let layout = try settingsLayout()
+        try fileSystem.createDirectory(layout.userDataDirectory, mode: 0o700)
+        var settings = loadSettings(layout)
+        update(&settings)
+        try fileSystem.writeFile(layout.settings, try JSONValue.object(settings).serialized(), mode: 0o600)
+    }
+
+    /// The runtime's log folder (`activeRuntime.paths.logs`), which `recovery:open-logs` opens.
+    public nonisolated var logsDirectory: String {
+        PathUtilities.join(
+            VisionNativeIdentity.userDataDirectory(homeDirectory: configuration.homeDirectory), "native",
+            VisionNativeIdentity.runtimeId, "logs")
+    }
+
+    /// `settings.json`, read synchronously before the window exists (`readSavedWindowBounds`).
+    /// Unlike `currentSettings()` it never renames a corrupt file.
+    public nonisolated var settingsPath: String {
+        PathUtilities.join(VisionNativeIdentity.userDataDirectory(homeDirectory: configuration.homeDirectory), "settings.json")
+    }
+
     // MARK: - Quit
 
     /// The `will-quit` path without backup-on-quit (phase 1d): stops the backend and

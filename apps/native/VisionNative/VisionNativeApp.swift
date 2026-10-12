@@ -1,6 +1,5 @@
 import AppKit
 import OSLog
-import SwiftUI
 import VisionNativeCore
 
 /// Process-wide runtime objects.
@@ -15,20 +14,66 @@ enum AppRuntime {
     /// Starts and stops Vision Native's own PostgreSQL 18 cluster and backend.
     static let supervisor = RuntimeSupervisor.live(allowPayloadOverride: AppRuntime.isDebugBuild)
     static let logger = Logger(subsystem: "com.vaultvoyager.vision-native", category: "runtime")
+    static let shellLogger = Logger(subsystem: "com.vaultvoyager.vision-native", category: "shell")
     /// The `will-quit` hard timeout in `packaging/electron/main.ts`.
     static let shutdownTimeout: Duration = .seconds(45)
 }
 
-/// Stops the supervised runtime before the app terminates.
+/// An AppKit entry point rather than a SwiftUI `App`, so the menu bar, dock menu and window
+/// chrome follow Electron's shell instead of SwiftUI's defaults. SwiftUI draws the launch
+/// state inside the window.
+@main
+@MainActor
+enum VisionNativeMain {
+    static let delegate = AppDelegate()
+
+    static func main() {
+        let application = NSApplication.shared
+        application.delegate = delegate
+        application.setActivationPolicy(.regular)
+        application.run()
+    }
+}
+
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    private let shell = ShellController()
     private var shutdownFinished = false
     private var shutdownStarted = false
 
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        shell.start()
+    }
+
+    /// Electron's `activate`: a dock click shows the hidden window again.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag { shell.showWindow() }
+        return true
+    }
+
+    func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
+        shell.dockMenu()
+    }
+
+    /// The red close button hides the window; only Quit ends the app.
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        false
+    }
+
+    func application(_ application: NSApplication, open urls: [URL]) {
+        shell.openFiles(urls)
+    }
+
+    func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool {
+        true
+    }
+
+    /// Stops the supervised runtime before the app terminates.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         if shutdownFinished { return .terminateNow }
         if shutdownStarted { return .terminateLater }
         shutdownStarted = true
+        shell.prepareForQuit()
         Task.detached {
             await AppRuntime.supervisor.shutdown()
             await MainActor.run { self.finishShutdown(sender) }
@@ -45,17 +90,5 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard !shutdownFinished else { return }
         shutdownFinished = true
         sender.reply(toApplicationShouldTerminate: true)
-    }
-}
-
-@main
-struct VisionNativeApp: App {
-    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-
-    var body: some Scene {
-        WindowGroup("Vision Native") {
-            ShellRootView()
-        }
-        .defaultSize(width: 1440, height: 900)
     }
 }
