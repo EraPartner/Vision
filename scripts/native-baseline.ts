@@ -170,13 +170,19 @@ function parseOptions(argv: string[]): Options {
       case "--cdp-port":
         options.cdpPort = port(next());
         break;
-      case "--app":
-        options.app = next();
+      case "--app": {
+        const app = next();
+        if (!ALLOWED_APPS.includes(app))
+          throw new Error(
+            `--app must be one of ${ALLOWED_APPS.map((a) => JSON.stringify(a)).join(", ")}; the real Vision app holds real financial data and is never a baseline target (AGENTS.md provider rules)`,
+          );
+        options.app = app;
         break;
+      }
       case "--help":
       case "-h":
         log(
-          'Usage: bun scripts/native-baseline.ts [--skip-screenshots] [--skip-launch] [--port <backend port>] [--cdp-port <n>] [--app "Vision Demo"]',
+          'Usage: bun scripts/native-baseline.ts [--skip-screenshots] [--skip-launch] [--port <backend port>] [--cdp-port <n>] [--app "Vision Demo"|"Vision Native"]',
         );
         process.exit(0);
         break;
@@ -204,6 +210,12 @@ interface AppPaths {
  * (resolveAppPort() in main.ts). The native PostgreSQL cluster sits below the
  * same directory (native/vision_demo, see the provider rules in AGENTS.md).
  */
+/**
+ * Apps the script may launch, reconfigure and screenshot. Both run on synthetic
+ * data only; "Vision" (the real app and the real database) is rejected.
+ */
+const ALLOWED_APPS: readonly string[] = ["Vision Demo", "Vision Native"];
+
 function appPaths(app: string): AppPaths {
   const supportDir = path.join(
     os.homedir(),
@@ -294,12 +306,11 @@ async function measureSize(target: string): Promise<BundleSize> {
   };
 }
 
-async function measureBundles(): Promise<BundleSize[]> {
+async function measureBundles(selected: string): Promise<BundleSize[]> {
   const sizes: BundleSize[] = [];
-  for (const bundle of [
-    "/Applications/Vision.app",
-    "/Applications/Vision Demo.app",
-  ]) {
+  const bundles = ["/Applications/Vision.app", "/Applications/Vision Demo.app"];
+  if (!bundles.includes(selected)) bundles.push(selected);
+  for (const bundle of bundles) {
     const contents = path.join(bundle, "Contents");
     const runtime = path.join(contents, "Resources", "native-runtime");
     const targets = [
@@ -1471,7 +1482,7 @@ async function main(): Promise<void> {
   log("Toolchain …");
   const toolchainFile = await writeToolchain();
   log("Bundle sizes …");
-  const bundles = await measureBundles();
+  const bundles = await measureBundles(paths.bundle);
 
   const launches: LaunchRun[] = [];
   if (!options.skipLaunch) {
@@ -1597,16 +1608,28 @@ async function main(): Promise<void> {
     page?.client.close();
   }
 
+  // A run after an unclean quit (processes retained, e.g. keepServicesOnQuit)
+  // measures a warm backend, not a cold start, so it never enters the medians.
+  const cleanLaunches = launches.filter((r) => r.quitClean);
+  for (const r of launches)
+    if (!r.quitClean)
+      warn(
+        `run ${r.run}: unclean quit before launch; excluded from the medians`,
+      );
   const launchSummary = {
     runs: launches,
     medianHealthMs: median(
-      launches.flatMap((r) => (r.healthMs === undefined ? [] : [r.healthMs])),
+      cleanLaunches.flatMap((r) =>
+        r.healthMs === undefined ? [] : [r.healthMs],
+      ),
     ),
     medianWindowMs: median(
-      launches.flatMap((r) => (r.windowMs === undefined ? [] : [r.windowMs])),
+      cleanLaunches.flatMap((r) =>
+        r.windowMs === undefined ? [] : [r.windowMs],
+      ),
     ),
     medianRendererTargetMs: median(
-      launches.flatMap((r) =>
+      cleanLaunches.flatMap((r) =>
         r.rendererTargetMs === undefined ? [] : [r.rendererTargetMs],
       ),
     ),
@@ -1739,9 +1762,9 @@ function renderMarkdown(baseline: {
     "| --: | ---------------: | --------------: | -------------------: | ---------- |",
     ...baseline.coldLaunch.runs.map(
       (r) =>
-        `| ${r.run} | ${fmt(r.healthMs)} | ${fmt(r.windowMs)} | ${fmt(r.rendererTargetMs)} | ${r.quitClean ? "yes" : "no"} |`,
+        `| ${r.run} | ${fmt(r.healthMs)} | ${fmt(r.windowMs)} | ${fmt(r.rendererTargetMs)} | ${r.quitClean ? "yes" : "no (excluded)"} |`,
     ),
-    `| median | ${fmt(baseline.coldLaunch.medianHealthMs)} | ${fmt(baseline.coldLaunch.medianWindowMs)} | ${fmt(baseline.coldLaunch.medianRendererTargetMs)} | |`,
+    `| median (clean runs) | ${fmt(baseline.coldLaunch.medianHealthMs)} | ${fmt(baseline.coldLaunch.medianWindowMs)} | ${fmt(baseline.coldLaunch.medianRendererTargetMs)} | |`,
     "",
     "## Memory",
     "",
