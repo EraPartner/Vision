@@ -617,8 +617,8 @@ conflict errors are not retried. The transport is a protocol; the app uses an ep
 
 The admin token stays where the web app keeps it, in the page's `sessionStorage`
 (`vision.adminToken`), never in `settings.json` or the Keychain. Before a request the client reads
-it from the web view with `callAsyncJavaScript` and sends it as `Authorization: Bearer`. Without a
-token, as in a fresh session, the backend's loopback allowlist decides, exactly as for the web app
+it from the web view with `callAsyncJavaScript` and sends it as `Authorization: Bearer`; a page
+that does not answer within 5 seconds gives no token. Without a token, as in a fresh session, the backend's loopback allowlist decides, exactly as for the web app
 in the same window.
 
 ### Theme and strings
@@ -644,16 +644,27 @@ which stays in the hierarchy so the page keeps its state.
 
 The web router stays the source of truth. `AppLayout` reports `pathname + search` through
 `electronAPI.routeChanged` (`shell:route-changed`, validated as an app-relative route of at most
-2 KiB); a sidebar click sets the route natively and sends the `navigate` menu action, and a native
-`?tab` change sends `replace-route`, which the page applies with `replace`, like `useTabParam`.
-`app_settings` is read again on every route change, so admin mode and number and date formats
-follow the page. An admin route without admin mode goes to `/`, like `RequireAdmin`. The page's
-topbar keeps its traffic-light inset only while the native sidebar is hidden (`native-sidebar`).
+2 KiB, with the query read like `URLSearchParams`, so a malformed percent-escape stays as written).
+A sidebar click or a native shortcut only sends the `navigate` menu action; the route, the detail
+column and the sidebar selection change when the page reports the new route, so an unsaved-changes
+prompt opens on the visible page and a blocked move keeps the route. A native `?tab` change sends
+`replace-route`, which the page applies with `replace`, like `useTabParam`; the page accepts
+`navigate` and `replace-route` payloads that start with one `/` only.
+
+`app_settings` is read again when the page reports a new path and when the settings dialog closes
+(`?settings` removed), plus once more 600 ms after that close, because the page saves its settings
+500 ms after a change. Admin mode and number and date formats follow the page that way. The native
+shell never redirects: an admin route shows a native screen only while `app_settings` says admin mode
+is on, and otherwise the web view, where `RequireAdmin` redirects and reports the new route. The
+page's topbar keeps its traffic-light inset only while the native sidebar is hidden
+(`native-sidebar`).
 
 The command palette and the shortcuts stay the page's. On a native screen, which takes the key
 events, `NativeShortcuts` handles the same keys: ⌘K sends `open-palette`, `?` opens the shortcuts
 overlay, `g` then a key, `[`, `]` and `N` navigate. Opening a page dialog (palette, settings,
-shortcuts) shows the web view at the same route until the route changes or settings close.
+shortcuts) shows the web view at the same route until the route changes or the dialog closes:
+settings close by removing `?settings`, and when the palette or the shortcuts overlay closes the
+page reports its unchanged route again.
 
 ### Exchange rates
 

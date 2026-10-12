@@ -2,8 +2,8 @@
 title: Info & Analytics API
 type: endpoint
 status: active
-date: 2026-10-11
-updated: 2026-10-11
+date: 2026-10-12
+updated: 2026-10-12
 tags: [api, analytics, statistics, dashboard, phase-g-deprecation, ing, bnp, supported-adapters]
 description: API endpoints for statistics, analytics, and dashboard data. Phase G removed 6 overlapping endpoints; see aggregations API for their replacements. May 2026: Added ING and BNP Paribas Fortis adapters (8 total banks supported).
 aliases: [info-api, analytics-api, statistics-api, dashboard-api]
@@ -532,9 +532,22 @@ Get spending insights per recipient/merchant.
 
 ### GET /api/info/exchange-rates
 
-Get cached exchange rates from database.
+Get the latest stored exchange rate per currency from the database
+([[apps/node-backend/src/routes/info/rates.ts]], schema `ExchangeRates` in `openapi.yaml`).
+
+**Query parameters:**
+
+| Parameter | Type    | Default | Description                                                                                                            |
+| --------- | ------- | ------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `db_only` | boolean | `false` | Serve the stored rates without starting a background refresh when they are stale. Accepts `true`, `false`, `1` or `0`. |
 
 Notes:
+
+- When the stored rates are stale and `db_only` is not set, the backend clears its in-memory rate cache and starts a background refresh; the response never waits for it.
+- `source` is `database` when stored rates exist and `fallback` when there are none (clients then use `fallback_rates`).
+- `is_stale` is `true` when the stored rate date is before today, or when nothing is stored.
+- `last_fetched_at` is the latest `fetched_at` of the returned rows as an ISO timestamp, or `null` when there are none.
+- Contract change (October 2026, non-breaking): `openapi.yaml` now types the response and documents `db_only`, `source`, `is_stale` and `last_fetched_at`, which the route already returned or accepted. It drops the `base` and `month` query parameters, which the route never read.
 
 - Rates are fetched from ECB and supplemented with open.er-api for non-ECB currencies.
 - Stats endpoints can be requested in any valid 3-letter code (ISO-style), with EUR fallback when invalid.
@@ -556,7 +569,10 @@ Notes:
       "fetched_at": "2025-03-18T10:30:00Z"
     }
   ],
-  "fallback_rates": { "USD": 0.917, "GBP": 1.176 }
+  "fallback_rates": { "USD": 0.917, "GBP": 1.176 },
+  "source": "database",
+  "is_stale": false,
+  "last_fetched_at": "2025-03-18T10:30:00.000Z"
 }
 ```
 

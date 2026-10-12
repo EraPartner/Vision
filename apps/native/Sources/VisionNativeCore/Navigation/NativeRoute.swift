@@ -28,15 +28,24 @@ public struct NativeRoute: Equatable, Sendable {
         guard Self.isValid(raw) else { return nil }
         let parts = raw.split(separator: "?", maxSplits: 1, omittingEmptySubsequences: false)
         let path = String(parts.first ?? "/")
-        var query: [URLQueryItem] = []
-        if parts.count > 1 {
-            var components = URLComponents()
-            // `URLSearchParams` reads `+` as a space.
-            components.percentEncodedQuery = String(parts[1]).replacingOccurrences(of: "+", with: "%20")
-            guard let items = components.queryItems else { return nil }
-            query = items
-        }
+        let query = parts.count > 1 ? Self.parseQuery(String(parts[1])) : []
         self.init(path: path, query: query)
+    }
+
+    /// `new URLSearchParams(search)`: pairs split on `&`, then on the first `=`; `+` is a
+    /// space, and a malformed percent-escape stays as written instead of failing.
+    static func parseQuery(_ search: String) -> [URLQueryItem] {
+        search.split(separator: "&", omittingEmptySubsequences: true).map { pair in
+            let parts = pair.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+            let name = decode(parts[0])
+            let value = parts.count > 1 ? decode(parts[1]) : ""
+            return URLQueryItem(name: name, value: value)
+        }
+    }
+
+    private static func decode(_ raw: Substring) -> String {
+        let spaced = raw.replacingOccurrences(of: "+", with: " ")
+        return spaced.removingPercentEncoding ?? spaced
     }
 
     /// `pathname + search`, with query values escaped like `URLSearchParams`.

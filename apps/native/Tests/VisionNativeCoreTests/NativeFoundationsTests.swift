@@ -72,6 +72,22 @@ import Testing
         #expect(NativeRoute("/")?.query.isEmpty == true)
     }
 
+    @Test func readsAMalformedQueryLikeURLSearchParams() throws {
+        // An invalid percent-escape stays as written instead of failing the route.
+        let badEscape = try #require(NativeRoute("/p?a=%zz"))
+        #expect(badEscape.value("a") == "%zz")
+        let brackets = try #require(NativeRoute("/p?x=[1]"))
+        #expect(brackets.value("x") == "[1]")
+        let trailing = try #require(NativeRoute("/admin/exchange-rates?tab=live&"))
+        #expect(trailing.query.count == 1)
+        #expect(trailing.value("tab") == "live")
+        let bare = try #require(NativeRoute("/p?k"))
+        #expect(bare.value("k") == "")
+        #expect(bare.string == "/p?k=")
+        let equals = try #require(NativeRoute("/p?a=b=c"))
+        #expect(equals.value("a") == "b=c")
+    }
+
     @Test func refusesAnythingButAnAppRelativeRoute() {
         for raw in ["", "admin", "//evil.example/x", "https://evil.example/", "/a#b", "/a\\b", "/a\nb"] {
             #expect(NativeRoute(raw) == nil, "\(raw)")

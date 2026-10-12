@@ -30,6 +30,21 @@ actor FakeExchangeRatesService: ExchangeRatesService {
     }
 }
 
+/// `app_settings` reads that answer from a script; the last answer repeats.
+actor SettingsScript {
+    private var answers: [NativeAppSettings]
+    private(set) var calls = 0
+
+    init(_ answers: [NativeAppSettings]) {
+        self.answers = answers
+    }
+
+    func next() -> NativeAppSettings {
+        calls += 1
+        return answers.count > 1 ? answers.removeFirst() : answers[0]
+    }
+}
+
 @MainActor
 final class ShellRecorder {
     var actions: [MenuAction] = []
@@ -51,7 +66,8 @@ final class ShellRecorder {
             loadSettings: { settings },
             saveHiddenSections: { recorder.saved.append($0) },
             onNavigate: { recorder.actions.append($0) },
-            onSidebarVisibilityChange: { recorder.sidebar.append($0) })
+            onSidebarVisibilityChange: { recorder.sidebar.append($0) },
+            settingsReloadDelay: .milliseconds(1))
     }
 
     @Test func theExchangeRatesScreenIsNativeOnlyInAdminMode() async throws {
@@ -68,23 +84,56 @@ final class ShellRecorder {
         #expect(recorder.actions.isEmpty)
     }
 
-    @Test func withoutAdminModeAnAdminRouteGoesHome() async throws {
+    @Test func withoutAdminModeTheWebAppKeepsTheAdminRoute() async throws {
+        // A stale `adminMode: false` (the page saves 500 ms after a change) must not move
+        // the page: its RequireAdmin redirects and reports the new route itself.
         let recorder = ShellRecorder()
         let model = makeModel(settings: NativeAppSettings(adminMode: false), recorder: recorder)
         model.routeDidChange(try #require(NativeRoute("/admin/exchange-rates?tab=fallback")))
         await model.settingsSettled()
-        #expect(model.route == .home)
+        #expect(model.route.path == "/admin/exchange-rates")
         #expect(model.detail == .web)
-        #expect(recorder.actions == [.replaceRoute("/")])
+        #expect(recorder.actions.isEmpty)
         #expect(!model.sections.contains { $0.id == .admin })
     }
 
-    @Test func sidebarClicksNavigateThePage() {
+    @Test func closingSettingsReadsThemAgainAfterThePageSaved() async throws {
+        let recorder = ShellRecorder()
+        let off = NativeAppSettings(adminMode: false)
+        // The route report and the immediate read on close see the old value; the delayed
+        // read sees the saved one.
+        let script = SettingsScript([off, off, NativeAppSettings(adminMode: true)])
+        let model = NativeShellModel(
+            strings: DictionaryStrings(language: .en, table: [:]),
+            theme: ThemeSelection(appearance: .light),
+            exchangeRates: ExchangeRatesModel(service: FakeExchangeRatesService()),
+            loadSettings: { await script.next() },
+            onNavigate: { recorder.actions.append($0) },
+            settingsReloadDelay: .milliseconds(100))
+        model.routeDidChange(try #require(NativeRoute("/admin/exchange-rates?settings=general")))
+        await model.settingsSettled()
+        #expect(model.detail == .web)
+        model.routeDidChange(try #require(NativeRoute("/admin/exchange-rates")))
+        await model.settingsSettled()
+        let calls = await script.calls
+        #expect(calls == 3)
+        #expect(model.settings.adminMode)
+        #expect(model.detail == .native(.exchangeRates))
+        #expect(recorder.actions.isEmpty)
+    }
+
+    @Test func sidebarClicksWaitForThePageToMove() throws {
         let recorder = ShellRecorder()
         let model = makeModel(recorder: recorder)
         model.navigate(to: "/transactions")
-        #expect(model.route.path == "/transactions")
+        // The page may hold the route behind an unsaved-changes prompt, so nothing moves yet.
+        #expect(model.route == .home)
+        #expect(model.selectedItemURL == NavigationRegistry.matchItem(path: "/")?.url)
+        #expect(model.pendingRoute?.path == "/transactions")
         #expect(recorder.actions == [.navigate("/transactions")])
+        model.routeDidChange(try #require(NativeRoute("/transactions")))
+        #expect(model.route.path == "/transactions")
+        #expect(model.pendingRoute == nil)
         model.navigate(to: "https://example.com")
         #expect(recorder.actions.count == 1)
     }
@@ -108,6 +157,11 @@ final class ShellRecorder {
         #expect(model.handleKey("k", command: true))
         #expect(model.detail == .web)
         #expect(recorder.actions == [.openPalette])
+        // The palette closed without navigating: the page reports the same route again.
+        model.routeDidChange(try #require(NativeRoute("/admin/exchange-rates")))
+        #expect(model.detail == .native(.exchangeRates))
+        #expect(model.handleKey("k", command: true))
+        #expect(model.detail == .web)
         model.routeDidChange(try #require(NativeRoute("/admin")))
         model.routeDidChange(try #require(NativeRoute("/admin/exchange-rates")))
         await model.settingsSettled()

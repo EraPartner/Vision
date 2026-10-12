@@ -193,9 +193,22 @@ export function AppLayout({ children }: AppLayoutProps) {
     // get no page-change cue. <main> is tabIndex={-1} (programmatic-focus only,
     // no visible ring on mouse nav).
     const { pathname, search } = location;
+    // Vision Native shows the page over a native screen while the palette or the
+    // shortcuts overlay is open; reporting the same route again when it closes
+    // tells the shell the page has nothing more to show.
+    const overlayOpen = paletteOpen || shortcutsOpen;
+    const lastNativeReportRef = useRef<
+        { route: string; overlayOpen: boolean } | undefined
+    >(undefined);
     useEffect(() => {
-        if (nativeNavigation) reportNativeRoute(`${pathname}${search}`);
-    }, [nativeNavigation, pathname, search]);
+        if (!nativeNavigation) return;
+        const route = `${pathname}${search}`;
+        const last = lastNativeReportRef.current;
+        lastNativeReportRef.current = { route, overlayOpen };
+        const overlayClosed = last?.overlayOpen === true && !overlayOpen;
+        if (last?.route === route && !overlayClosed) return;
+        reportNativeRoute(route);
+    }, [nativeNavigation, pathname, search, overlayOpen]);
     const isPrintReport =
         pathname === "/tax" ||
         pathname === "/statistics" ||
@@ -284,7 +297,10 @@ export function AppLayout({ children }: AppLayoutProps) {
                                 aria-label={t("commandPalette.openLabel")}
                                 className="md:hidden"
                             >
-                                <Search className="h-4 w-4" aria-hidden="true" />
+                                <Search
+                                    className="h-4 w-4"
+                                    aria-hidden="true"
+                                />
                             </Button>
                             <BackgroundQueryIndicator />
                         </header>

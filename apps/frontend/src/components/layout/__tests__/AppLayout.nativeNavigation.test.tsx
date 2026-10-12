@@ -8,10 +8,13 @@ import {
     it,
     vi,
 } from "vitest";
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { http } from "msw";
 import { useNavigate } from "react-router";
-import type { ElectronApiBridge } from "@vision/types/electron";
+import type {
+    ElectronApiBridge,
+    ElectronMenuAction,
+} from "@vision/types/electron";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { ok } from "@/test/msw/handlers";
@@ -41,6 +44,8 @@ function renderLayout() {
     );
 }
 
+let menuAction: ((action: ElectronMenuAction) => void) | undefined;
+
 /** The `window.electronAPI` Vision Native's user script defines. */
 function installNativeBridge(nativeNavigation: boolean) {
     const unsubscribe = () => {};
@@ -54,7 +59,12 @@ function installNativeBridge(nativeNavigation: boolean) {
         getAccentColor: vi.fn(() => Promise.resolve(null)),
         persistSplashTheme: vi.fn(success),
         onAccentColorChanged: vi.fn(() => unsubscribe),
-        onMenuAction: vi.fn(() => unsubscribe),
+        onMenuAction: vi.fn(
+            (listener: (action: ElectronMenuAction) => void) => {
+                menuAction = listener;
+                return unsubscribe;
+            },
+        ),
         onCsvOpen: vi.fn(() => unsubscribe),
         onFullScreenChange: vi.fn(() => unsubscribe),
         ...(nativeNavigation
@@ -123,6 +133,28 @@ describe("AppLayout with Vision Native's sidebar", () => {
                 "/admin/exchange-rates?tab=fallback",
             ),
         );
+    });
+
+    it("reports the route again when the palette closes", async () => {
+        const api = installNativeBridge(true);
+        renderLayout();
+        await screen.findByText("page content");
+        await waitFor(() =>
+            expect(api.routeChanged).toHaveBeenLastCalledWith("/?keep=1"),
+        );
+        const before = vi.mocked(api.routeChanged!).mock.calls.length;
+
+        act(() => menuAction?.({ action: "open-palette" }));
+        await screen.findByRole("dialog");
+        expect(api.routeChanged).toHaveBeenCalledTimes(before);
+
+        fireEvent.keyDown(document.activeElement ?? document.body, {
+            key: "Escape",
+        });
+        await waitFor(() =>
+            expect(api.routeChanged).toHaveBeenCalledTimes(before + 1),
+        );
+        expect(api.routeChanged).toHaveBeenLastCalledWith("/?keep=1");
     });
 
     it("keeps the web sidebar in Electron, which has no route channel", async () => {

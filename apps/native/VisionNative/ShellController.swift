@@ -1,5 +1,6 @@
 import AppKit
 import OSLog
+import os
 import SwiftUI
 import UniformTypeIdentifiers
 import VisionNativeCore
@@ -105,18 +106,36 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     /// The admin Bearer token of the page's session. The web app keeps it only in
     /// `sessionStorage` (`vision.adminToken`, never in settings.json), so native requests
     /// read it from the page; without one the backend's loopback allowlist applies.
+    /// A page that never answers (hung or reloading) gives no token after `adminTokenTimeout`.
     private func adminToken() async -> String? {
         guard queue.isReady, let webView = webShell?.webView else { return nil }
         return await withCheckedContinuation { (continuation: CheckedContinuation<String?, Never>) in
+            // Whichever comes first, the page's answer or the timeout, resumes exactly once.
+            let pending = OSAllocatedUnfairLock<CheckedContinuation<String?, Never>?>(initialState: continuation)
+            let resume: @Sendable (String?) -> Void = { token in
+                let waiting = pending.withLock { state -> CheckedContinuation<String?, Never>? in
+                    defer { state = nil }
+                    return state
+                }
+                waiting?.resume(returning: token)
+            }
+            let delay = Self.adminTokenTimeout
+            let timeout = Task {
+                try? await Task.sleep(for: delay)
+                resume(nil)
+            }
             // Always a string: a `null` result is where WebKit's Swift bridging is fragile.
             webView.callAsyncJavaScript(
                 Self.adminTokenScript, arguments: [:], in: nil, in: .page
             ) { result in
                 let token = (try? result.get()) as? String
-                continuation.resume(returning: token.flatMap { $0.isEmpty ? nil : $0 })
+                resume(token.flatMap { $0.isEmpty ? nil : $0 })
+                timeout.cancel()
             }
         }
     }
+
+    private static let adminTokenTimeout: Duration = .seconds(5)
 
     private static let adminTokenScript = """
         try { return String(window.sessionStorage.getItem("vision.adminToken") || ""); } catch { return ""; }

@@ -12,8 +12,9 @@ public enum NativeShellDetail: Equatable, Sendable {
 /// route, the `app_settings` native screens read, the theme and the sidebar.
 ///
 /// The web router stays the source of truth. The page reports every route through
-/// `shell:route-changed`; a sidebar click sets the route here at once and asks the page
-/// to follow with the `navigate` menu action, so the page reports the same route back.
+/// `shell:route-changed`; a sidebar click only asks the page to move with the `navigate`
+/// menu action, and the route here changes when the page reports it. The page may keep
+/// its route (an unsaved-changes prompt) or redirect (`RequireAdmin`).
 @MainActor
 @Observable
 public final class NativeShellModel {
@@ -26,8 +27,11 @@ public final class NativeShellModel {
     public private(set) var isSidebarVisible = true
     public private(set) var hiddenSections: [NavSectionID: Bool]
     /// The page is presenting something over its route (palette, settings, shortcuts), so
-    /// the web view shows even where a native screen exists, until the route changes.
+    /// the web view shows even where a native screen exists, until the page reports a route
+    /// again (it re-reports the same route when the palette or shortcuts overlay closes).
     public private(set) var isPresentingWeb = false
+    /// The route a sidebar click or shortcut asked the page for, until the page reports one.
+    public private(set) var pendingRoute: NativeRoute?
     public let exchangeRates: ExchangeRatesModel
 
     @ObservationIgnored private let loadSettings: @Sendable () async throws -> NativeAppSettings
@@ -35,6 +39,8 @@ public final class NativeShellModel {
     @ObservationIgnored private let onNavigate: @MainActor (MenuAction) -> Void
     @ObservationIgnored private let onSidebarVisibilityChange: @MainActor (Bool) -> Void
     @ObservationIgnored private var settingsTask: Task<Void, Never>?
+    @ObservationIgnored private var delayedSettingsTask: Task<Void, Never>?
+    @ObservationIgnored private let settingsReloadDelay: Duration
     @ObservationIgnored private var shortcuts = NativeShortcuts()
 
     /// - Parameters:
@@ -42,6 +48,8 @@ public final class NativeShellModel {
     ///   - onNavigate: sends a menu action to the page (`navigate`, `replace-route`,
     ///     `open-palette`, `open-shortcuts`, `open-settings`).
     ///   - onSidebarVisibilityChange: the sidebar was shown or hidden.
+    ///   - settingsReloadDelay: how long after the settings dialog closes `app_settings` is
+    ///     read once more; the page saves them 500 ms after a change.
     public init(
         strings: any Localizing,
         theme: ThemeSelection,
@@ -50,7 +58,8 @@ public final class NativeShellModel {
         loadSettings: @escaping @Sendable () async throws -> NativeAppSettings,
         saveHiddenSections: @escaping @MainActor ([NavSectionID: Bool]) -> Void = { _ in },
         onNavigate: @escaping @MainActor (MenuAction) -> Void,
-        onSidebarVisibilityChange: @escaping @MainActor (Bool) -> Void = { _ in }
+        onSidebarVisibilityChange: @escaping @MainActor (Bool) -> Void = { _ in },
+        settingsReloadDelay: Duration = .milliseconds(600)
     ) {
         self.strings = strings
         self.theme = theme
@@ -60,6 +69,7 @@ public final class NativeShellModel {
         self.saveHiddenSections = saveHiddenSections
         self.onNavigate = onNavigate
         self.onSidebarVisibilityChange = onSidebarVisibilityChange
+        self.settingsReloadDelay = settingsReloadDelay
     }
 
     /// `DEFAULT_HIDDEN` of useSidebarPreferences.
@@ -72,7 +82,8 @@ public final class NativeShellModel {
     // MARK: Route
 
     /// The native screen for the route, or the web app. An admin screen is shown only
-    /// once `app_settings` says admin mode is on, like `RequireAdmin`.
+    /// once `app_settings` says admin mode is on; otherwise the page shows the route and
+    /// its `RequireAdmin` redirects, which the page then reports.
     public var detail: NativeShellDetail {
         guard !isPresentingWeb, let screen = NativeScreen.screen(forPath: route.path) else { return .web }
         if screen.requiresAdmin && !(settingsLoaded && settings.adminMode) { return .web }
@@ -88,13 +99,15 @@ public final class NativeShellModel {
         NavigationRegistry.matchItem(path: route.path)?.url
     }
 
-    /// `shell:route-changed`: the page's router moved.
+    /// `shell:route-changed`: the page's router moved, or an overlay closed on the same route.
     public func routeDidChange(_ next: NativeRoute) {
         let pathChanged = next.path != route.path
         let settingsClosed = route.value("settings") != nil && next.value("settings") == nil
-        // A new page, or the settings dialog closing (`?settings` removed), ends a web
-        // presentation over a native screen.
-        if pathChanged || settingsClosed { isPresentingWeb = false }
+        // A new page, the settings dialog closing (`?settings` removed), or the same route
+        // again (the palette or shortcuts overlay closed) ends a web presentation over a
+        // native screen.
+        if pathChanged || settingsClosed || next == route { isPresentingWeb = false }
+        pendingRoute = nil
         route = next
         if let section = NavigationRegistry.matchSection(path: next.path), hiddenSections[section] == true {
             // Landing inside a hidden section shows it for good, like the web sidebar.
@@ -103,16 +116,17 @@ public final class NativeShellModel {
         // The page may have changed `app_settings` (admin mode, formats) in its settings
         // dialog or on the previous page.
         if pathChanged || settingsClosed { reloadSettings() }
-        enforceAdminGate()
+        // The page saves `app_settings` 500 ms after a change, so a read right after the
+        // dialog closes can still see the old values.
+        if settingsClosed { reloadSettingsLater() }
     }
 
-    /// A sidebar click or another native link.
+    /// A sidebar click or another native link. The page moves (or keeps its route behind an
+    /// unsaved-changes prompt) and reports the result; until then the route stays.
     public func navigate(to url: String) {
         guard let next = NativeRoute(url) else { return }
-        isPresentingWeb = false
-        route = next
+        pendingRoute = next
         onNavigate(.navigate(next.string))
-        enforceAdminGate()
     }
 
     /// `setSearchParams(..., { replace: true })` for the current route.
@@ -196,7 +210,6 @@ public final class NativeShellModel {
         settings = next
         settingsLoaded = true
         theme.colorblindGainLoss = next.colorblindGainLoss
-        enforceAdminGate()
     }
 
     /// Reads `app_settings` again; the page may have changed them. A newer request
@@ -210,17 +223,21 @@ public final class NativeShellModel {
         }
     }
 
-    /// Waits for the pending settings request, for tests.
-    public func settingsSettled() async {
-        await settingsTask?.value
+    /// Reads `app_settings` once more after `settingsReloadDelay`, replacing a pending
+    /// delayed read.
+    private func reloadSettingsLater() {
+        delayedSettingsTask?.cancel()
+        let delay = settingsReloadDelay
+        delayedSettingsTask = Task { [weak self] in
+            try? await Task.sleep(for: delay)
+            guard !Task.isCancelled else { return }
+            self?.reloadSettings()
+        }
     }
 
-    /// `RequireAdmin`: an admin route without admin mode goes home.
-    private func enforceAdminGate() {
-        guard settingsLoaded, !settings.adminMode, let screen = NativeScreen.screen(forPath: route.path),
-            screen.requiresAdmin
-        else { return }
-        route = .home
-        onNavigate(.replaceRoute(NativeRoute.home.string))
+    /// Waits for the pending settings requests, the delayed one included, for tests.
+    public func settingsSettled() async {
+        await delayedSettingsTask?.value
+        await settingsTask?.value
     }
 }

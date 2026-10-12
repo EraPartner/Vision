@@ -300,7 +300,10 @@ export interface ElectronApiBridge {
    * page leaves out its own. Electron never defines it.
    */
   nativeNavigation?: boolean;
-  /** Vision Native only: reports `pathname + search` to the native sidebar. */
+  /**
+   * Vision Native only: reports `pathname + search` to the native sidebar, and the same
+   * route again when the command palette or shortcuts overlay closes.
+   */
   routeChanged?: (route: string) => Promise<ElectronSuccessResult>;
 }
 

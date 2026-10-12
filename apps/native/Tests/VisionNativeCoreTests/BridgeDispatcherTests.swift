@@ -168,6 +168,11 @@ final class RecordingBridgeHost: BridgeHost {
         let host = RecordingBridgeHost()
         let changed = #"{"channel":"shell:route-changed","args":["/admin/exchange-rates?tab=fallback"]}"#
         #expect(await reply(changed, host: host) == .success)
+        // The page reports the same route again when its palette or shortcuts overlay
+        // closes, so a repeat reaches the host too.
+        #expect(await reply(changed, host: host) == .success)
+        // A malformed percent-escape in the query is the page's to keep, not a crash.
+        #expect(await reply(#"{"channel":"shell:route-changed","args":["/p?a=%zz"]}"#, host: host) == .success)
         for invalid in [
             #"{"channel":"shell:route-changed","args":["https://example.com/"]}"#,
             #"{"channel":"shell:route-changed","args":["//example.com/x"]}"#,
@@ -177,7 +182,11 @@ final class RecordingBridgeHost: BridgeHost {
         ] {
             #expect(await reply(invalid, host: host) == .failure, "\(invalid)")
         }
-        #expect(host.calls == ["route:/admin/exchange-rates?tab=fallback"])
+        #expect(
+            host.calls == [
+                "route:/admin/exchange-rates?tab=fallback", "route:/admin/exchange-rates?tab=fallback",
+                "route:/p?a=%25zz",
+            ])
     }
 
     @Test func languageReportsASupersededRequest() async {

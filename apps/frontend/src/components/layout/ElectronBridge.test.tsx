@@ -104,8 +104,13 @@ describe("ElectronBridge menu routes", () => {
                 action: "navigate",
                 payload: "/research/watchlist",
             });
+            mocks.menuAction?.({
+                action: "navigate",
+                payload: "//example.com/",
+            });
         });
 
+        expect(mocks.navigate).toHaveBeenCalledTimes(1);
         expect(mocks.navigate).toHaveBeenCalledWith("/research/watchlist");
     });
 
@@ -167,6 +172,10 @@ describe("ElectronBridge native navigation (Vision Native)", () => {
             mocks.menuAction?.({
                 action: "replace-route",
                 payload: "https://example.com/",
+            });
+            mocks.menuAction?.({
+                action: "replace-route",
+                payload: "//example.com/",
             });
             mocks.menuAction?.({ action: "open-palette" });
             mocks.menuAction?.({ action: "native-sidebar", payload: "hidden" });

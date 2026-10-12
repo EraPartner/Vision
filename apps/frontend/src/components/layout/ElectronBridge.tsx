@@ -13,6 +13,15 @@ import {
 } from "@/lib/api/electron";
 import { registerPendingImportFile } from "@/lib/importHandoff";
 
+/** An app-relative route; `//host` is protocol-relative, not one. */
+function isAppRoute(payload: unknown): payload is string {
+    return (
+        typeof payload === "string" &&
+        payload.startsWith("/") &&
+        !payload.startsWith("//")
+    );
+}
+
 const THEME_MODES: ReadonlyArray<ThemeMode> = [
     "light",
     "dark",
@@ -98,11 +107,7 @@ export function ElectronBridge({
                 const h = handlersRef.current;
                 switch (action) {
                     case "navigate":
-                        if (
-                            typeof payload === "string" &&
-                            payload.startsWith("/")
-                        )
-                            h.navigate(payload);
+                        if (isAppRoute(payload)) h.navigate(payload);
                         break;
                     case "open-settings":
                         h.onOpenSettings("general");
@@ -123,10 +128,7 @@ export function ElectronBridge({
                         break;
                     case "replace-route":
                         // A native `?tab` change: useTabParam's `replace`.
-                        if (
-                            typeof payload === "string" &&
-                            payload.startsWith("/")
-                        )
+                        if (isAppRoute(payload))
                             h.navigate(payload, { replace: true });
                         break;
                     case "open-palette":

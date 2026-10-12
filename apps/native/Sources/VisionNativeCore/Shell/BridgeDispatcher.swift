@@ -49,7 +49,8 @@ public protocol BridgeHost: AnyObject {
     func openLogs() throws -> String
     func startWindowDrag()
     func titlebarDoubleClicked()
-    /// `shell:route-changed`: the page's router is at `route`.
+    /// `shell:route-changed`: the page's router is at `route`. The page also reports an
+    /// unchanged route when its palette or shortcuts overlay closes.
     func routeDidChange(_ route: NativeRoute)
 }
 
