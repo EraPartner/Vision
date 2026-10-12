@@ -21,3 +21,23 @@ adminDatabaseVacuum
 adminGetTableSchema
 adminGetTableRows
 adminMutateTableRows
+
+# Planned payments (/planned): the list, its mutations, matches and detected patterns
+getPlannedTransactions
+createPlannedTransaction
+updatePlannedTransaction
+deletePlannedTransaction
+executePlannedTransaction
+getPlannedMatchSuggestions
+getRecurringPatterns
+# Pickers of the planned-payment sheet and the Mark as paid dialog
+getRecipients
+getRecipient
+getAccounts
+getCategoryTree
+getTags
+createTag
+# Mark as paid candidates and the Payment history lookups (`transaction_id`)
+getTransactions
+# The `dismissed_recurring_patterns` setting
+saveSetting

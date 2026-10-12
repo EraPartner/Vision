@@ -167,6 +167,73 @@ final class StaticAuditHistory: AuditHistoryService {
     func rotateKey() async -> JSONValue { .object(["success": .bool(true)]) }
 }
 
+/// A planned-payments service with fixed rows; `failing` fails the list.
+actor StaticPlannedService: PlannedPaymentsService {
+    let rows: [OpenAPI.PlannedTransaction]
+    let failing: Bool
+
+    init(rows: [OpenAPI.PlannedTransaction] = [], failing: Bool = false) {
+        self.rows = rows
+        self.failing = failing
+    }
+
+    func plannedPayments(includePaused: Bool) async throws -> [OpenAPI.PlannedTransaction] {
+        if failing { throw APIError.network("The network connection was lost.") }
+        return includePaused ? rows : rows.filter { row in row.isActive }
+    }
+
+    func setPlannedPaymentActive(id: Int, isActive: Bool) async throws -> OpenAPI.PlannedTransaction {
+        guard let row = rows.first(where: { candidate in candidate.id == id }) else { throw APIError.network("missing") }
+        return OpenAPI.PlannedTransaction(
+            id: row.id, plannedDate: row.plannedDate, recipientName: row.recipientName, memo: row.memo,
+            amount: row.amount, currency: row.currency, categoryName: row.categoryName, url: row.url,
+            isRecurring: row.isRecurring, recurrencePattern: row.recurrencePattern, isLoan: row.isLoan,
+            loanTermMonths: row.loanTermMonths, isExecuted: row.isExecuted, lastExecutedDate: row.lastExecutedDate,
+            executedTransactionId: row.executedTransactionId, executionCount: row.executionCount,
+            executions: row.executions, isActive: isActive, links: [])
+    }
+
+    func deletePlannedPayment(id: Int) async throws {}
+
+    func transaction(id: Int) async throws -> OpenAPI.Transaction? {
+        OpenAPI.Transaction(
+            id: id, transactionDate: "2026-10-01", recipientName: "Landlord", memo: nil, amount: -950,
+            currency: "EUR", categoryName: "Housing", links: [])
+    }
+
+    /// The local day `offset` days from today, as `planned_date`.
+    static func day(_ offset: Int) -> String {
+        let calendar = PlannedDates.local
+        let date = calendar.date(byAdding: .day, value: offset, to: calendar.startOfDay(for: Date())) ?? Date()
+        let parts = calendar.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d-%02d-%02d", parts.year ?? 2026, parts.month ?? 1, parts.day ?? 1)
+    }
+
+    static var sample: [OpenAPI.PlannedTransaction] {
+        [
+            OpenAPI.PlannedTransaction(
+                id: 1, plannedDate: day(0), recipientName: "Landlord", memo: "Rent", amount: -950, currency: "EUR",
+                categoryName: "Housing", url: "https://example.com/lease", isRecurring: true,
+                recurrencePattern: "monthly", isExecuted: true, executedTransactionId: 31, executionCount: 4,
+                executions: [
+                    OpenAPI.PlannedTransactionExecution(id: 1, executedTransactionId: 31, executionDate: day(-30))
+                ],
+                isActive: true, links: []),
+            OpenAPI.PlannedTransaction(
+                id: 2, plannedDate: day(3), memo: "Streaming", amount: Decimal(string: "-12.99")!, currency: "USD",
+                categoryName: "Leisure", isRecurring: true, recurrencePattern: "every 14 days", isExecuted: false,
+                executionCount: 0, isActive: true, links: []),
+            OpenAPI.PlannedTransaction(
+                id: 3, plannedDate: day(40), memo: "Car loan", amount: -310, currency: "EUR", isRecurring: true,
+                recurrencePattern: "monthly", isLoan: true, loanTermMonths: 48, isExecuted: false, executionCount: 0,
+                isActive: true, links: []),
+            OpenAPI.PlannedTransaction(
+                id: 4, plannedDate: day(-2), memo: "Old gym", amount: -40, currency: "XYZ", isRecurring: false,
+                isExecuted: false, executionCount: 0, isActive: false, links: []),
+        ]
+    }
+}
+
 /// The SwiftUI screens build and lay out in both languages and appearances.
 @MainActor
 @Suite struct NativeScreenStructureTests {
@@ -182,16 +249,19 @@ final class StaticAuditHistory: AuditHistoryService {
 
     func makeShell(
         language: NativeLanguage, appearance: ThemeAppearance, failing: Bool = false,
-        database: StaticDatabaseService = StaticDatabaseService()
+        database: StaticDatabaseService = StaticDatabaseService(),
+        planned: StaticPlannedService = StaticPlannedService(), adminMode: Bool = true
     ) -> NativeShellModel {
-        NativeShellModel(
+        let rates = ExchangeRatesModel(service: StaticRatesService(Self.rates))
+        return NativeShellModel(
             strings: CatalogStrings(language: language),
             theme: ThemeSelection(appearance: appearance),
-            exchangeRates: ExchangeRatesModel(service: StaticRatesService(Self.rates)),
+            exchangeRates: rates,
             admin: AdminScreens.make(
                 service: StaticAdminService(failing: failing), database: database,
                 token: AdminTokenAccess(read: { "token" }, write: { _ in true }), audit: StaticAuditHistory()),
-            loadSettings: { NativeAppSettings(adminMode: true) },
+            planned: PlannedPaymentsModel(service: planned, rates: rates),
+            loadSettings: { NativeAppSettings(adminMode: adminMode) },
             onNavigate: { _ in })
     }
 
@@ -291,6 +361,83 @@ final class StaticAuditHistory: AuditHistoryService {
         await readOnly.appear()
         #expect(readOnly.isReadOnly)
         #expect(layOut(TableDataEditorView(model: readOnly, shell: shell).environment(\.visionTheme, theme)).fittingSize.height > 0)
+    }
+
+    func layOutPlanned(_ shell: NativeShellModel) -> NSHostingView<some View> {
+        layOut(
+            PlannedPaymentsView(model: shell.planned, shell: shell)
+                .environment(\.visionTheme, VisionTheme(selection: shell.theme)))
+    }
+
+    @Test(arguments: [NativeLanguage.en, .nl], [ThemeAppearance.light, .dark])
+    func thePlannedPaymentsScreenLaysOutInEveryState(_ language: NativeLanguage, _ appearance: ThemeAppearance)
+        async throws
+    {
+        let shell = makeShell(
+            language: language, appearance: appearance, planned: StaticPlannedService(rows: StaticPlannedService.sample))
+        let model = shell.planned
+        // The view's own load reads `show_all` from the route, so the route and the test agree.
+        shell.routeDidChange(try #require(NativeRoute("/planned?show_all=true")))
+        // Loading.
+        #expect(model.isLoading)
+        #expect(layOutPlanned(shell).fittingSize.width > 0)
+        // Loaded with paused rows: the strip, Estimated monthly and the table.
+        await model.appear(showAll: true, defaultCurrency: "EUR")
+        #expect(model.payments.count == 4)
+        #expect(model.tablePayments.count == 4)
+        #expect(model.strip.dueCount == 2)
+        #expect(model.strip.windowTotal.unavailableCount == 0)
+        #expect(model.estimatedMonthly.unavailableCount == 0)
+        #expect(layOutPlanned(shell).fittingSize.height > 0)
+        // Sorted and filtered, then filtered to nothing.
+        model.table.toggleSort(PlannedColumn.amount.rawValue)
+        model.table.setFilter(PlannedColumn.category.rawValue, to: "hous")
+        #expect(model.visibleRows.count == 1)
+        #expect(layOutPlanned(shell).fittingSize.height > 0)
+        model.table.search = "nothing matches"
+        #expect(model.emptyState == .noFilterResults)
+        #expect(layOutPlanned(shell).fittingSize.height > 0)
+        model.table.clearAll()
+        // The Undo toast.
+        await model.toggleActive(model.payments[1])
+        #expect(model.undo != nil)
+        #expect(layOutPlanned(shell).fittingSize.height > 0)
+        // The Payment history dialog, loading and loaded.
+        let theme = VisionTheme(selection: shell.theme)
+        #expect(layOut(PlannedHistorySheet(model: model, shell: shell).environment(\.visionTheme, theme)).fittingSize.height > 0)
+        await model.history.load(payments: model.payments)
+        #expect(model.history.entries.count == 1)
+        #expect(layOut(PlannedHistorySheet(model: model, shell: shell).environment(\.visionTheme, theme)).fittingSize.height > 0)
+        // No payments at all, and every payment paused.
+        let empty = makeShell(language: language, appearance: appearance)
+        await empty.planned.appear(showAll: false, defaultCurrency: "EUR")
+        #expect(empty.planned.emptyState == .noPayments)
+        #expect(empty.planned.strip.dueCount == 0)
+        #expect(layOutPlanned(empty).fittingSize.height > 0)
+        let paused = makeShell(
+            language: language, appearance: appearance,
+            planned: StaticPlannedService(rows: [StaticPlannedService.sample[3]]))
+        await paused.planned.appear(showAll: false, defaultCurrency: "EUR")
+        #expect(paused.planned.emptyState == .allPaused || paused.planned.payments.isEmpty)
+        #expect(layOutPlanned(paused).fittingSize.height > 0)
+        // The error state.
+        let failing = makeShell(
+            language: language, appearance: appearance, planned: StaticPlannedService(failing: true))
+        await failing.planned.appear(showAll: false, defaultCurrency: "EUR")
+        #expect(failing.planned.error != nil)
+        #expect(layOutPlanned(failing).fittingSize.height > 0)
+    }
+
+    @Test func theShellShowsThePlannedScreenWithoutAdminMode() async throws {
+        let shell = makeShell(
+            language: .en, appearance: .light, planned: StaticPlannedService(rows: StaticPlannedService.sample),
+            adminMode: false)
+        let host = layOut(ShellRootView(model: shell) { hidden in Color.clear.accessibilityHidden(hidden) })
+        shell.routeDidChange(try #require(NativeRoute("/planned?show_all=true")))
+        await shell.settingsSettled()
+        #expect(shell.detail == .native(.plannedPayments))
+        host.layoutSubtreeIfNeeded()
+        #expect(!host.subviews.isEmpty)
     }
 
     @Test func theShellShowsTheDatabaseScreensForTheirRoutes() async throws {

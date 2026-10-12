@@ -68,13 +68,17 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     private func makeShellModel() -> NativeShellModel {
         let client = apiClient
         let systemIsDark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        // The rates page and the planned payments page share one rates cache, like the web's
+        // shared query key.
+        let rates = ExchangeRatesModel(service: client)
         return NativeShellModel(
             strings: CatalogStrings(language: strings.language),
             theme: ThemeSelection.resolve(
                 splashTheme: LaunchAppearance.theme(fromSettings: initialSettings), systemIsDark: systemIsDark),
-            exchangeRates: ExchangeRatesModel(service: client),
+            exchangeRates: rates,
             admin: AdminScreens.make(
                 service: client, database: client, token: makeAdminTokenAccess(), audit: auditChannels),
+            planned: PlannedPaymentsModel(service: client, rates: rates),
             hiddenSections: Self.loadHiddenSections(),
             loadSettings: { try await client.appSettings() },
             saveHiddenSections: { Self.saveHiddenSections($0) },

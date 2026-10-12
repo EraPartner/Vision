@@ -2148,6 +2148,21 @@ components:
           type: string
           format: date-time
 
+    TransactionTagRef:
+      type: object
+      description: A tag as transaction and planned-transaction reads embed it (no timestamps).
+      required: [id, slug, color, is_active]
+      properties:
+        id:
+          type: integer
+        slug:
+          type: string
+        color:
+          type: string
+          nullable: true
+        is_active:
+          type: boolean
+
     TagList:
       allOf:
         - $ref: "#/components/schemas/OptionalPaginationFields"
@@ -2658,7 +2673,8 @@ components:
           description: Origin of transfer classification, including automatic, manual, system or brokerage.
         bank_account:
           type: string
-          description: Canonical display name projected from the linked account; use account_id as the stable identity
+          nullable: true
+          description: Canonical display name projected from the linked account (null when account_id is); use account_id as the stable identity
         recipient_id:
           type: integer
         recipient_name:
@@ -2690,11 +2706,12 @@ components:
         tags:
           type: array
           items:
-            $ref: "#/components/schemas/Tag"
+            $ref: "#/components/schemas/TransactionTagRef"
           description: Tags attached to this transaction
         created_at:
           type: string
           format: date-time
+          nullable: true
         updated_at:
           type: string
           format: date-time
@@ -2841,7 +2858,7 @@ components:
 
     PlannedTransactionExecution:
       type: object
-      required: [id, executed_transaction_id, execution_date, created_at]
+      required: [id, executed_transaction_id, execution_date]
       properties:
         id:
           type: integer
@@ -2853,6 +2870,7 @@ components:
         created_at:
           type: string
           format: date-time
+          nullable: true
 
     PlannedTransaction:
       type: object
@@ -2860,13 +2878,11 @@ components:
         [
           id,
           planned_date,
-          bank_account,
           amount,
           is_recurring,
           is_executed,
           execution_count,
           is_active,
-          created_at,
           links,
         ]
       properties:
@@ -2877,6 +2893,8 @@ components:
           format: date
         bank_account:
           type: string
+          nullable: true
+          description: Display name of the linked account; null or absent when account_id is null
         account_id:
           type: integer
           nullable: true
@@ -2960,16 +2978,18 @@ components:
         tags:
           type: array
           items:
-            $ref: "#/components/schemas/Tag"
+            $ref: "#/components/schemas/TransactionTagRef"
           description: Tags attached to this planned transaction
         is_active:
           type: boolean
         created_at:
           type: string
           format: date-time
+          nullable: true
         updated_at:
           type: string
           format: date-time
+          nullable: true
         links:
           type: array
           items:
@@ -8951,6 +8971,12 @@ paths:
           name: is_executed
           schema:
             type: boolean
+        - in: query
+          name: active
+          description: "true (the default) lists active payments only; false includes paused ones."
+          schema:
+            type: boolean
+            default: true
       responses:
         "200":
           description: Planned transaction list
@@ -9110,8 +9136,11 @@ paths:
                 planned_date:
                   type: string
                   format: date
-                bank_account:
-                  type: string
+                account_id:
+                  type: integer
+                  minimum: 1
+                  nullable: true
+                  description: Canonical account identity (the retired bank_account string is rejected)
                 recipient_id:
                   type: integer
                 memo:
@@ -9139,6 +9168,26 @@ paths:
                   nullable: true
                 is_active:
                   type: boolean
+                is_loan:
+                  type: boolean
+                loan_type:
+                  $ref: "#/components/schemas/PlannedLoanType"
+                loan_principal:
+                  type: number
+                loan_annual_interest_rate:
+                  type: number
+                loan_term_months:
+                  type: integer
+                loan_start_date:
+                  type: string
+                  format: date
+                loan_payment_day:
+                  type: integer
+                tags:
+                  type: array
+                  items:
+                    type: string
+                  description: Tag slugs; replaces the attached set
       responses:
         "200":
           description: Updated

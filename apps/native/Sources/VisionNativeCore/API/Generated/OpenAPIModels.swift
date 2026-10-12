@@ -8,6 +8,269 @@ import Foundation
 public enum OpenAPI {}
 
 extension OpenAPI {
+    public struct Account: Codable, Equatable, Sendable {
+        public let id: Int
+        public let name: String
+        public let displayName: String?
+        public let institution: String?
+        /// ISO 4217 currency code
+        public let currency: String
+        public let type: String
+        public let liquidityClass: String
+        public let spendable: Bool
+        public let inNetWorth: Bool
+        public let taxWrapper: String
+        public let owner: String
+        public let multiCurrencyCash: Bool
+        public let hasCashSleeve: Bool
+        public let fundingAccountId: Int?
+        /// Authoritative statement readings per native currency (ADR-089 D2).
+        public let statementBalances: [StatementBalancesItem]?
+        /// The account's anchor+delta computed balance (ADR-094), denominated in `currency`. On a
+        /// multi-currency account each currency partition is computed separately and converted into
+        /// `currency` at today's rate, so this figure moves with exchange rates. A partition with no
+        /// usable source or target rate is excluded rather than treated as 1:1; when that happens
+        /// `balance_incomplete` is true and the native amount is available in `balance_parts`.
+        public let computedBalance: Decimal?
+        /// Native per-currency ledger balances; only returned by the list endpoint.
+        public let balanceParts: [BalancePartsItem]?
+        /// Whether computed_balance excludes at least one partition because a conversion rate is
+        /// unavailable; only returned by the list endpoint.
+        public let balanceIncomplete: Bool?
+        /// Currency codes excluded from computed_balance because a conversion rate is unavailable; only
+        /// returned by the list endpoint.
+        public let unconvertedCurrencies: [String]?
+        /// The reconciliation base: the computed balance of the single currency partition the selected
+        /// statement reading is a statement for, in `reconcilable_currency` and NOT FX-converted.
+        /// Equals `computed_balance` for a single-currency account and differs on a multi-currency one,
+        /// so the reconcile dialog previews an entered reading against THIS figure — it is what `POST
+        /// /accounts/{id}/reconcile` resolves against. The declared `currency` partition wins whenever
+        /// it exists, including at exactly zero. Zero/sub-cent filtering applies only to the fallback
+        /// when that partition is absent. Only returned by the list endpoint.
+        public let reconcilableBalance: Decimal?
+        /// Currency of `reconcilable_balance` and `drift` — normally `currency`, but the account's sole
+        /// funded partition's code when the declared currency partition is absent and the ledger
+        /// contains one funded foreign partition. Only returned by the list endpoint.
+        public let reconcilableCurrency: String?
+        /// selected statement balance − reconcilable_balance, in `reconcilable_currency` (ADR-094);
+        /// null if no statement balance. Native-currency by design — never statement balance −
+        /// computed_balance, which on a multi-currency account would make the badge move with the daily
+        /// exchange rate.
+        public let drift: Decimal?
+        /// YYYY-MM-DD date of the stamped statement balance anchoring computed_balance (WP-A1
+        /// provenance); absent when nothing is stamped. Only returned by the list endpoint.
+        public let anchorDate: String?
+        /// Active ledger entries after the anchor, or all active entries when unstamped — the "{n}
+        /// entries since" / "sum of {n} entries" figure (WP-A1 provenance). Only returned by the list
+        /// endpoint.
+        public let postAnchorCount: Int?
+        /// Whether the account has any active ledger rows; only returned by the list endpoint.
+        public let hasTransactions: Bool?
+        public let isActive: Bool
+        /// Server-stamped when the account is closed (is_active=false); cleared on reactivate (ADR-088
+        /// addendum, D5)
+        public let closedAt: String?
+        public let createdAt: String
+        public let updatedAt: String
+
+        public init(id: Int, name: String, displayName: String? = nil, institution: String? = nil, currency: String, type: String, liquidityClass: String, spendable: Bool, inNetWorth: Bool, taxWrapper: String, owner: String, multiCurrencyCash: Bool, hasCashSleeve: Bool, fundingAccountId: Int? = nil, statementBalances: [StatementBalancesItem]? = nil, computedBalance: Decimal? = nil, balanceParts: [BalancePartsItem]? = nil, balanceIncomplete: Bool? = nil, unconvertedCurrencies: [String]? = nil, reconcilableBalance: Decimal? = nil, reconcilableCurrency: String? = nil, drift: Decimal? = nil, anchorDate: String? = nil, postAnchorCount: Int? = nil, hasTransactions: Bool? = nil, isActive: Bool, closedAt: String? = nil, createdAt: String, updatedAt: String) {
+            self.id = id
+            self.name = name
+            self.displayName = displayName
+            self.institution = institution
+            self.currency = currency
+            self.type = type
+            self.liquidityClass = liquidityClass
+            self.spendable = spendable
+            self.inNetWorth = inNetWorth
+            self.taxWrapper = taxWrapper
+            self.owner = owner
+            self.multiCurrencyCash = multiCurrencyCash
+            self.hasCashSleeve = hasCashSleeve
+            self.fundingAccountId = fundingAccountId
+            self.statementBalances = statementBalances
+            self.computedBalance = computedBalance
+            self.balanceParts = balanceParts
+            self.balanceIncomplete = balanceIncomplete
+            self.unconvertedCurrencies = unconvertedCurrencies
+            self.reconcilableBalance = reconcilableBalance
+            self.reconcilableCurrency = reconcilableCurrency
+            self.drift = drift
+            self.anchorDate = anchorDate
+            self.postAnchorCount = postAnchorCount
+            self.hasTransactions = hasTransactions
+            self.isActive = isActive
+            self.closedAt = closedAt
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case name = "name"
+            case displayName = "display_name"
+            case institution = "institution"
+            case currency = "currency"
+            case type = "type"
+            case liquidityClass = "liquidity_class"
+            case spendable = "spendable"
+            case inNetWorth = "in_net_worth"
+            case taxWrapper = "tax_wrapper"
+            case owner = "owner"
+            case multiCurrencyCash = "multi_currency_cash"
+            case hasCashSleeve = "has_cash_sleeve"
+            case fundingAccountId = "funding_account_id"
+            case statementBalances = "statement_balances"
+            case computedBalance = "computed_balance"
+            case balanceParts = "balance_parts"
+            case balanceIncomplete = "balance_incomplete"
+            case unconvertedCurrencies = "unconverted_currencies"
+            case reconcilableBalance = "reconcilable_balance"
+            case reconcilableCurrency = "reconcilable_currency"
+            case drift = "drift"
+            case anchorDate = "anchor_date"
+            case postAnchorCount = "post_anchor_count"
+            case hasTransactions = "has_transactions"
+            case isActive = "is_active"
+            case closedAt = "closed_at"
+            case createdAt = "created_at"
+            case updatedAt = "updated_at"
+        }
+
+        public struct StatementBalancesItem: Codable, Equatable, Sendable {
+            public let currency: String
+            public let balance: Decimal
+            public let balanceDate: String
+
+            public init(currency: String, balance: Decimal, balanceDate: String) {
+                self.currency = currency
+                self.balance = balance
+                self.balanceDate = balanceDate
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case currency = "currency"
+                case balance = "balance"
+                case balanceDate = "balance_date"
+            }
+        }
+
+        public struct BalancePartsItem: Codable, Equatable, Sendable {
+            public let currency: String
+            public let balance: Decimal
+
+            public init(currency: String, balance: Decimal) {
+                self.currency = currency
+                self.balance = balance
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case currency = "currency"
+                case balance = "balance"
+            }
+        }
+    }
+
+    public struct AccountList: Codable, Equatable, Sendable {
+        public let total: Int
+        public let limit: Int?
+        public let offset: Int?
+        public let items: [OpenAPI.Account]
+        public let links: [OpenAPI.Link]?
+
+        public init(total: Int, limit: Int? = nil, offset: Int? = nil, items: [OpenAPI.Account], links: [OpenAPI.Link]? = nil) {
+            self.total = total
+            self.limit = limit
+            self.offset = offset
+            self.items = items
+            self.links = links
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case total = "total"
+            case limit = "limit"
+            case offset = "offset"
+            case items = "items"
+            case links = "links"
+        }
+    }
+
+    public struct CategoryNode: Codable, Equatable, Sendable {
+        public let id: Int
+        public let name: String
+        public let parentId: Int?
+        public let pathIds: [Int]
+        public let path: [String]
+        /// Display projection only. Use path or pathIds for hierarchy logic.
+        public let categoryName: String
+        public let depth: Int
+        public let description: String?
+        public let isActive: Bool
+        public let hierarchyOnly: Bool
+        public let legacyCompatible: Bool
+
+        public init(id: Int, name: String, parentId: Int? = nil, pathIds: [Int], path: [String], categoryName: String, depth: Int, description: String? = nil, isActive: Bool, hierarchyOnly: Bool, legacyCompatible: Bool) {
+            self.id = id
+            self.name = name
+            self.parentId = parentId
+            self.pathIds = pathIds
+            self.path = path
+            self.categoryName = categoryName
+            self.depth = depth
+            self.description = description
+            self.isActive = isActive
+            self.hierarchyOnly = hierarchyOnly
+            self.legacyCompatible = legacyCompatible
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case name = "name"
+            case parentId = "parentId"
+            case pathIds = "pathIds"
+            case path = "path"
+            case categoryName = "category_name"
+            case depth = "depth"
+            case description = "description"
+            case isActive = "is_active"
+            case hierarchyOnly = "hierarchyOnly"
+            case legacyCompatible = "legacyCompatible"
+        }
+    }
+
+    public struct CategoryTreeEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let data: Data?
+        public let error: OpenAPI.ErrorPayload?
+
+        public init(ok: Bool, data: Data? = nil, error: OpenAPI.ErrorPayload? = nil) {
+            self.ok = ok
+            self.data = data
+            self.error = error
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case data = "data"
+            case error = "error"
+        }
+
+        public struct Data: Codable, Equatable, Sendable {
+            public let items: [OpenAPI.CategoryNode]
+            public let total: Int
+
+            public init(items: [OpenAPI.CategoryNode], total: Int) {
+                self.items = items
+                self.total = total
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case items = "items"
+                case total = "total"
+            }
+        }
+    }
+
     public struct DbEditorColumn: Codable, Equatable, Sendable {
         public let name: String
         /// information_schema data_type
@@ -358,6 +621,306 @@ extension OpenAPI {
         }
     }
 
+    public struct Link: Codable, Equatable, Sendable {
+        public let rel: String
+        public let href: String
+        public let method: String
+        public let title: String?
+
+        public init(rel: String, href: String, method: String, title: String? = nil) {
+            self.rel = rel
+            self.href = href
+            self.method = method
+            self.title = title
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case rel = "rel"
+            case href = "href"
+            case method = "method"
+            case title = "title"
+        }
+    }
+
+    public struct PlannedLoanScheduleEntry: Codable, Equatable, Sendable {
+        public let installmentNumber: Int
+        public let dueDate: String
+        public let paymentAmount: Decimal
+        public let principalAmount: Decimal
+        public let interestAmount: Decimal
+        public let remainingPrincipal: Decimal
+
+        public init(installmentNumber: Int, dueDate: String, paymentAmount: Decimal, principalAmount: Decimal, interestAmount: Decimal, remainingPrincipal: Decimal) {
+            self.installmentNumber = installmentNumber
+            self.dueDate = dueDate
+            self.paymentAmount = paymentAmount
+            self.principalAmount = principalAmount
+            self.interestAmount = interestAmount
+            self.remainingPrincipal = remainingPrincipal
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case installmentNumber = "installment_number"
+            case dueDate = "due_date"
+            case paymentAmount = "payment_amount"
+            case principalAmount = "principal_amount"
+            case interestAmount = "interest_amount"
+            case remainingPrincipal = "remaining_principal"
+        }
+    }
+
+    public enum PlannedLoanType: String, Codable, Sendable, CaseIterable {
+        case amortizing = "amortizing"
+        case fixedPrincipal = "fixed_principal"
+        case interestOnly = "interest_only"
+    }
+
+    public struct PlannedTransaction: Codable, Equatable, Sendable {
+        public let id: Int
+        public let plannedDate: String
+        /// Display name of the linked account; null or absent when account_id is null
+        public let bankAccount: String?
+        /// Stable linked account identity
+        public let accountId: Int?
+        public let recipientId: Int?
+        public let recipientName: String?
+        public let memo: String?
+        public let amount: Decimal
+        public let currency: String?
+        public let categoryId: Int?
+        public let categoryName: String?
+        public let comment: String?
+        public let url: String?
+        public let isRecurring: Bool
+        public let recurrencePattern: String?
+        /// Recurrence bound — the series completes once the next occurrence would fall past this date.
+        public let recurrenceEndDate: String?
+        /// Recurrence bound — the series completes at this execution count.
+        public let maxOccurrences: Int?
+        public let isLoan: Bool?
+        public let loanType: OpenAPI.PlannedLoanType?
+        public let loanPrincipal: Decimal?
+        public let loanAnnualInterestRate: Decimal?
+        public let loanTermMonths: Int?
+        public let loanStartDate: String?
+        public let loanPaymentDay: Int?
+        public let loanRegularPaymentAmount: Decimal?
+        public let loanFirstPaymentDate: String?
+        public let loanSchedule: [OpenAPI.PlannedLoanScheduleEntry]?
+        public let isExecuted: Bool
+        public let lastExecutedDate: String?
+        public let executedTransactionId: Int?
+        public let executionCount: Int
+        public let executions: [OpenAPI.PlannedTransactionExecution]?
+        /// Tags attached to this planned transaction
+        public let tags: [OpenAPI.TransactionTagRef]?
+        public let isActive: Bool
+        public let createdAt: String?
+        public let updatedAt: String?
+        public let links: [OpenAPI.Link]
+
+        public init(id: Int, plannedDate: String, bankAccount: String? = nil, accountId: Int? = nil, recipientId: Int? = nil, recipientName: String? = nil, memo: String? = nil, amount: Decimal, currency: String? = nil, categoryId: Int? = nil, categoryName: String? = nil, comment: String? = nil, url: String? = nil, isRecurring: Bool, recurrencePattern: String? = nil, recurrenceEndDate: String? = nil, maxOccurrences: Int? = nil, isLoan: Bool? = nil, loanType: OpenAPI.PlannedLoanType? = nil, loanPrincipal: Decimal? = nil, loanAnnualInterestRate: Decimal? = nil, loanTermMonths: Int? = nil, loanStartDate: String? = nil, loanPaymentDay: Int? = nil, loanRegularPaymentAmount: Decimal? = nil, loanFirstPaymentDate: String? = nil, loanSchedule: [OpenAPI.PlannedLoanScheduleEntry]? = nil, isExecuted: Bool, lastExecutedDate: String? = nil, executedTransactionId: Int? = nil, executionCount: Int, executions: [OpenAPI.PlannedTransactionExecution]? = nil, tags: [OpenAPI.TransactionTagRef]? = nil, isActive: Bool, createdAt: String? = nil, updatedAt: String? = nil, links: [OpenAPI.Link]) {
+            self.id = id
+            self.plannedDate = plannedDate
+            self.bankAccount = bankAccount
+            self.accountId = accountId
+            self.recipientId = recipientId
+            self.recipientName = recipientName
+            self.memo = memo
+            self.amount = amount
+            self.currency = currency
+            self.categoryId = categoryId
+            self.categoryName = categoryName
+            self.comment = comment
+            self.url = url
+            self.isRecurring = isRecurring
+            self.recurrencePattern = recurrencePattern
+            self.recurrenceEndDate = recurrenceEndDate
+            self.maxOccurrences = maxOccurrences
+            self.isLoan = isLoan
+            self.loanType = loanType
+            self.loanPrincipal = loanPrincipal
+            self.loanAnnualInterestRate = loanAnnualInterestRate
+            self.loanTermMonths = loanTermMonths
+            self.loanStartDate = loanStartDate
+            self.loanPaymentDay = loanPaymentDay
+            self.loanRegularPaymentAmount = loanRegularPaymentAmount
+            self.loanFirstPaymentDate = loanFirstPaymentDate
+            self.loanSchedule = loanSchedule
+            self.isExecuted = isExecuted
+            self.lastExecutedDate = lastExecutedDate
+            self.executedTransactionId = executedTransactionId
+            self.executionCount = executionCount
+            self.executions = executions
+            self.tags = tags
+            self.isActive = isActive
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
+            self.links = links
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case plannedDate = "planned_date"
+            case bankAccount = "bank_account"
+            case accountId = "account_id"
+            case recipientId = "recipient_id"
+            case recipientName = "recipient_name"
+            case memo = "memo"
+            case amount = "amount"
+            case currency = "currency"
+            case categoryId = "category_id"
+            case categoryName = "category_name"
+            case comment = "comment"
+            case url = "url"
+            case isRecurring = "is_recurring"
+            case recurrencePattern = "recurrence_pattern"
+            case recurrenceEndDate = "recurrence_end_date"
+            case maxOccurrences = "max_occurrences"
+            case isLoan = "is_loan"
+            case loanType = "loan_type"
+            case loanPrincipal = "loan_principal"
+            case loanAnnualInterestRate = "loan_annual_interest_rate"
+            case loanTermMonths = "loan_term_months"
+            case loanStartDate = "loan_start_date"
+            case loanPaymentDay = "loan_payment_day"
+            case loanRegularPaymentAmount = "loan_regular_payment_amount"
+            case loanFirstPaymentDate = "loan_first_payment_date"
+            case loanSchedule = "loan_schedule"
+            case isExecuted = "is_executed"
+            case lastExecutedDate = "last_executed_date"
+            case executedTransactionId = "executed_transaction_id"
+            case executionCount = "execution_count"
+            case executions = "executions"
+            case tags = "tags"
+            case isActive = "is_active"
+            case createdAt = "created_at"
+            case updatedAt = "updated_at"
+            case links = "links"
+        }
+    }
+
+    public struct PlannedTransactionCreate: Codable, Equatable, Sendable {
+        public let plannedDate: String
+        /// Canonical account identity
+        public let accountId: Int
+        public let recipientId: Int
+        public let memo: String?
+        public let amount: Decimal
+        public let currency: String?
+        public let categoryId: Int?
+        public let comment: String?
+        public let url: String?
+        public let isRecurring: Bool?
+        public let recurrencePattern: String?
+        /// Recurrence bound — the series completes once the next occurrence would fall past this date.
+        public let recurrenceEndDate: String?
+        /// Recurrence bound — the series completes at this execution count.
+        public let maxOccurrences: Int?
+        public let isLoan: Bool?
+        public let loanType: OpenAPI.PlannedLoanType?
+        public let loanPrincipal: Decimal?
+        public let loanAnnualInterestRate: Decimal?
+        public let loanTermMonths: Int?
+        public let loanStartDate: String?
+        public let loanPaymentDay: Int?
+        /// Tag slugs to assign
+        public let tags: [String]?
+
+        public init(plannedDate: String, accountId: Int, recipientId: Int, memo: String? = nil, amount: Decimal, currency: String? = nil, categoryId: Int? = nil, comment: String? = nil, url: String? = nil, isRecurring: Bool? = nil, recurrencePattern: String? = nil, recurrenceEndDate: String? = nil, maxOccurrences: Int? = nil, isLoan: Bool? = nil, loanType: OpenAPI.PlannedLoanType? = nil, loanPrincipal: Decimal? = nil, loanAnnualInterestRate: Decimal? = nil, loanTermMonths: Int? = nil, loanStartDate: String? = nil, loanPaymentDay: Int? = nil, tags: [String]? = nil) {
+            self.plannedDate = plannedDate
+            self.accountId = accountId
+            self.recipientId = recipientId
+            self.memo = memo
+            self.amount = amount
+            self.currency = currency
+            self.categoryId = categoryId
+            self.comment = comment
+            self.url = url
+            self.isRecurring = isRecurring
+            self.recurrencePattern = recurrencePattern
+            self.recurrenceEndDate = recurrenceEndDate
+            self.maxOccurrences = maxOccurrences
+            self.isLoan = isLoan
+            self.loanType = loanType
+            self.loanPrincipal = loanPrincipal
+            self.loanAnnualInterestRate = loanAnnualInterestRate
+            self.loanTermMonths = loanTermMonths
+            self.loanStartDate = loanStartDate
+            self.loanPaymentDay = loanPaymentDay
+            self.tags = tags
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case plannedDate = "planned_date"
+            case accountId = "account_id"
+            case recipientId = "recipient_id"
+            case memo = "memo"
+            case amount = "amount"
+            case currency = "currency"
+            case categoryId = "category_id"
+            case comment = "comment"
+            case url = "url"
+            case isRecurring = "is_recurring"
+            case recurrencePattern = "recurrence_pattern"
+            case recurrenceEndDate = "recurrence_end_date"
+            case maxOccurrences = "max_occurrences"
+            case isLoan = "is_loan"
+            case loanType = "loan_type"
+            case loanPrincipal = "loan_principal"
+            case loanAnnualInterestRate = "loan_annual_interest_rate"
+            case loanTermMonths = "loan_term_months"
+            case loanStartDate = "loan_start_date"
+            case loanPaymentDay = "loan_payment_day"
+            case tags = "tags"
+        }
+    }
+
+    public struct PlannedTransactionExecution: Codable, Equatable, Sendable {
+        public let id: Int
+        public let executedTransactionId: Int
+        public let executionDate: String
+        public let createdAt: String?
+
+        public init(id: Int, executedTransactionId: Int, executionDate: String, createdAt: String? = nil) {
+            self.id = id
+            self.executedTransactionId = executedTransactionId
+            self.executionDate = executionDate
+            self.createdAt = createdAt
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case executedTransactionId = "executed_transaction_id"
+            case executionDate = "execution_date"
+            case createdAt = "created_at"
+        }
+    }
+
+    public struct PlannedTransactionList: Codable, Equatable, Sendable {
+        public let total: Int
+        public let limit: Int
+        public let offset: Int
+        public let items: [OpenAPI.PlannedTransaction]
+        public let links: [OpenAPI.Link]
+
+        public init(total: Int, limit: Int, offset: Int, items: [OpenAPI.PlannedTransaction], links: [OpenAPI.Link]) {
+            self.total = total
+            self.limit = limit
+            self.offset = offset
+            self.items = items
+            self.links = links
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case total = "total"
+            case limit = "limit"
+            case offset = "offset"
+            case items = "items"
+            case links = "links"
+        }
+    }
+
     public struct ProbeResult: Codable, Equatable, Sendable {
         public let ok: Bool
         public let provider: OpenAPI.ProviderHealth
@@ -423,6 +986,78 @@ extension OpenAPI {
         enum CodingKeys: String, CodingKey {
             case items = "items"
             case total = "total"
+        }
+    }
+
+    public struct Recipient: Codable, Equatable, Sendable {
+        public let id: Int
+        public let name: String
+        public let primaryBankAccount: String?
+        public let defaultCategoryId: Int?
+        public let defaultCategoryName: String?
+        public let primaryRecipientId: Int?
+        public let primaryRecipientName: String?
+        public let aliasCount: Int?
+        public let notes: String?
+        public let isActive: Bool
+        public let createdAt: String
+        public let updatedAt: String?
+        public let links: [OpenAPI.Link]
+
+        public init(id: Int, name: String, primaryBankAccount: String? = nil, defaultCategoryId: Int? = nil, defaultCategoryName: String? = nil, primaryRecipientId: Int? = nil, primaryRecipientName: String? = nil, aliasCount: Int? = nil, notes: String? = nil, isActive: Bool, createdAt: String, updatedAt: String? = nil, links: [OpenAPI.Link]) {
+            self.id = id
+            self.name = name
+            self.primaryBankAccount = primaryBankAccount
+            self.defaultCategoryId = defaultCategoryId
+            self.defaultCategoryName = defaultCategoryName
+            self.primaryRecipientId = primaryRecipientId
+            self.primaryRecipientName = primaryRecipientName
+            self.aliasCount = aliasCount
+            self.notes = notes
+            self.isActive = isActive
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
+            self.links = links
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case name = "name"
+            case primaryBankAccount = "primary_bank_account"
+            case defaultCategoryId = "default_category_id"
+            case defaultCategoryName = "default_category_name"
+            case primaryRecipientId = "primary_recipient_id"
+            case primaryRecipientName = "primary_recipient_name"
+            case aliasCount = "alias_count"
+            case notes = "notes"
+            case isActive = "is_active"
+            case createdAt = "created_at"
+            case updatedAt = "updated_at"
+            case links = "links"
+        }
+    }
+
+    public struct RecipientList: Codable, Equatable, Sendable {
+        public let total: Int
+        public let limit: Int
+        public let offset: Int
+        public let items: [OpenAPI.Recipient]
+        public let links: [OpenAPI.Link]
+
+        public init(total: Int, limit: Int, offset: Int, items: [OpenAPI.Recipient], links: [OpenAPI.Link]) {
+            self.total = total
+            self.limit = limit
+            self.offset = offset
+            self.items = items
+            self.links = links
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case total = "total"
+            case limit = "limit"
+            case offset = "offset"
+            case items = "items"
+            case links = "links"
         }
     }
 
@@ -500,4 +1135,202 @@ extension OpenAPI {
     /// Persisted JSON from the read that produced the edit. Absence is distinct from JSON null.
     /// A oneOf/anyOf schema, decoded as plain JSON.
     public typealias SettingBaseline = JSONValue
+
+    public struct Tag: Codable, Equatable, Sendable {
+        public let id: Int
+        public let slug: String
+        public let color: String?
+        public let isActive: Bool
+        public let createdAt: String
+        public let updatedAt: String
+
+        public init(id: Int, slug: String, color: String? = nil, isActive: Bool, createdAt: String, updatedAt: String) {
+            self.id = id
+            self.slug = slug
+            self.color = color
+            self.isActive = isActive
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case slug = "slug"
+            case color = "color"
+            case isActive = "is_active"
+            case createdAt = "created_at"
+            case updatedAt = "updated_at"
+        }
+    }
+
+    public struct TagCreate: Codable, Equatable, Sendable {
+        /// Slugified by the server; empty after normalization returns 400.
+        public let slug: String
+        public let color: String?
+
+        public init(slug: String, color: String? = nil) {
+            self.slug = slug
+            self.color = color
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case slug = "slug"
+            case color = "color"
+        }
+    }
+
+    public struct TagList: Codable, Equatable, Sendable {
+        public let total: Int
+        public let limit: Int?
+        public let offset: Int?
+        public let items: [OpenAPI.Tag]
+
+        public init(total: Int, limit: Int? = nil, offset: Int? = nil, items: [OpenAPI.Tag]) {
+            self.total = total
+            self.limit = limit
+            self.offset = offset
+            self.items = items
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case total = "total"
+            case limit = "limit"
+            case offset = "offset"
+            case items = "items"
+        }
+    }
+
+    public struct Transaction: Codable, Equatable, Sendable {
+        public let id: Int
+        /// YYYY-MM-DD
+        public let transactionDate: String
+        /// Stable linked account identity
+        public let accountId: Int?
+        /// True when ordinary income/spending statistics exclude this internal movement.
+        public let isTransfer: Bool?
+        /// Existing transaction on the other account, when a reciprocal transfer is paired.
+        public let transferPeerId: Int?
+        /// Origin of transfer classification, including automatic, manual, system or brokerage.
+        public let transferSource: String?
+        /// Canonical display name projected from the linked account (null when account_id is); use
+        /// account_id as the stable identity
+        public let bankAccount: String?
+        public let recipientId: Int?
+        public let recipientName: String?
+        public let memo: String?
+        public let amount: Decimal
+        public let amountEur: Decimal?
+        public let currency: String?
+        public let balance: Decimal?
+        /// Per-account, per-currency running balance over the filtered set before pagination. The
+        /// latest preceding stored statement balance resets the cumulative amount; later unstamped rows
+        /// advance it. Present only when include_balance=true. Rows with no currency are treated as
+        /// EUR.
+        public let runningBalance: Decimal?
+        public let categoryId: Int?
+        /// Format: GENERAL:DETAIL
+        public let categoryName: String?
+        public let comment: String?
+        /// Tags attached to this transaction
+        public let tags: [OpenAPI.TransactionTagRef]?
+        public let createdAt: String?
+        public let updatedAt: String?
+        public let links: [OpenAPI.Link]
+
+        public init(id: Int, transactionDate: String, accountId: Int? = nil, isTransfer: Bool? = nil, transferPeerId: Int? = nil, transferSource: String? = nil, bankAccount: String? = nil, recipientId: Int? = nil, recipientName: String? = nil, memo: String? = nil, amount: Decimal, amountEur: Decimal? = nil, currency: String? = nil, balance: Decimal? = nil, runningBalance: Decimal? = nil, categoryId: Int? = nil, categoryName: String? = nil, comment: String? = nil, tags: [OpenAPI.TransactionTagRef]? = nil, createdAt: String? = nil, updatedAt: String? = nil, links: [OpenAPI.Link]) {
+            self.id = id
+            self.transactionDate = transactionDate
+            self.accountId = accountId
+            self.isTransfer = isTransfer
+            self.transferPeerId = transferPeerId
+            self.transferSource = transferSource
+            self.bankAccount = bankAccount
+            self.recipientId = recipientId
+            self.recipientName = recipientName
+            self.memo = memo
+            self.amount = amount
+            self.amountEur = amountEur
+            self.currency = currency
+            self.balance = balance
+            self.runningBalance = runningBalance
+            self.categoryId = categoryId
+            self.categoryName = categoryName
+            self.comment = comment
+            self.tags = tags
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
+            self.links = links
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case transactionDate = "transaction_date"
+            case accountId = "account_id"
+            case isTransfer = "is_transfer"
+            case transferPeerId = "transfer_peer_id"
+            case transferSource = "transfer_source"
+            case bankAccount = "bank_account"
+            case recipientId = "recipient_id"
+            case recipientName = "recipient_name"
+            case memo = "memo"
+            case amount = "amount"
+            case amountEur = "amount_eur"
+            case currency = "currency"
+            case balance = "balance"
+            case runningBalance = "running_balance"
+            case categoryId = "category_id"
+            case categoryName = "category_name"
+            case comment = "comment"
+            case tags = "tags"
+            case createdAt = "created_at"
+            case updatedAt = "updated_at"
+            case links = "links"
+        }
+    }
+
+    public struct TransactionList: Codable, Equatable, Sendable {
+        public let total: Int
+        public let limit: Int
+        public let offset: Int
+        public let items: [OpenAPI.Transaction]
+        public let links: [OpenAPI.Link]
+
+        public init(total: Int, limit: Int, offset: Int, items: [OpenAPI.Transaction], links: [OpenAPI.Link]) {
+            self.total = total
+            self.limit = limit
+            self.offset = offset
+            self.items = items
+            self.links = links
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case total = "total"
+            case limit = "limit"
+            case offset = "offset"
+            case items = "items"
+            case links = "links"
+        }
+    }
+
+    /// A tag as transaction and planned-transaction reads embed it (no timestamps).
+    public struct TransactionTagRef: Codable, Equatable, Sendable {
+        public let id: Int
+        public let slug: String
+        public let color: String?
+        public let isActive: Bool
+
+        public init(id: Int, slug: String, color: String? = nil, isActive: Bool) {
+            self.id = id
+            self.slug = slug
+            self.color = color
+            self.isActive = isActive
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case slug = "slug"
+            case color = "color"
+            case isActive = "is_active"
+        }
+    }
 }

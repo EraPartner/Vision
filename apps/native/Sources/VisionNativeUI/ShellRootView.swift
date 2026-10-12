@@ -222,6 +222,8 @@ struct NativeScreenContainer: View {
             EndpointLivenessView(model: model.admin.endpoints, shell: model)
         case .exchangeRates:
             ExchangeRatesView(model: model.exchangeRates, shell: model)
+        case .plannedPayments:
+            PlannedPaymentsView(model: model.planned, shell: model)
         }
     }
 }

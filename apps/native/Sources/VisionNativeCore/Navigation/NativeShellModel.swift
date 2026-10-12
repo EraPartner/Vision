@@ -38,7 +38,7 @@ public struct NativeLeaveGuard {
 public final class NativeShellModel {
     public private(set) var route: NativeRoute = .home
     public private(set) var settings: NativeAppSettings = .defaults
-    /// `false` until `app_settings` has been read once; admin screens wait for it.
+    /// `false` until `app_settings` has been read once; native screens wait for it.
     public private(set) var settingsLoaded = false
     public var strings: any Localizing
     public var theme: ThemeSelection
@@ -53,6 +53,8 @@ public final class NativeShellModel {
     public let exchangeRates: ExchangeRatesModel
     /// `/admin`, `/admin/db`, `/admin/db/:table`, `/admin/providers` and `/admin/endpoints`.
     public let admin: AdminScreens
+    /// `/planned`.
+    public let planned: PlannedPaymentsModel
     /// The navigation the Leave this page? alert holds while it asks (`blocker.location`).
     public private(set) var leaveConfirmation: NativeRoute?
 
@@ -78,6 +80,7 @@ public final class NativeShellModel {
         theme: ThemeSelection,
         exchangeRates: ExchangeRatesModel,
         admin: AdminScreens,
+        planned: PlannedPaymentsModel,
         hiddenSections: [NavSectionID: Bool]? = nil,
         loadSettings: @escaping @Sendable () async throws -> NativeAppSettings,
         saveHiddenSections: @escaping @MainActor ([NavSectionID: Bool]) -> Void = { _ in },
@@ -89,6 +92,7 @@ public final class NativeShellModel {
         self.theme = theme
         self.exchangeRates = exchangeRates
         self.admin = admin
+        self.planned = planned
         self.hiddenSections = hiddenSections ?? Self.defaultHiddenSections
         self.loadSettings = loadSettings
         self.saveHiddenSections = saveHiddenSections
@@ -106,12 +110,15 @@ public final class NativeShellModel {
 
     // MARK: Route
 
-    /// The native screen for the route, or the web app. An admin screen is shown only
-    /// once `app_settings` says admin mode is on; otherwise the page shows the route and
-    /// its `RequireAdmin` redirects, which the page then reports.
+    /// The native screen for the route, or the web app. A native screen is shown once
+    /// `app_settings` has been read (its formats and default currency); an admin screen only
+    /// while it says admin mode is on, otherwise the page shows the route and its
+    /// `RequireAdmin` redirects, which the page then reports.
     public var detail: NativeShellDetail {
-        guard !isPresentingWeb, let screen = NativeScreen.screen(forPath: route.path) else { return .web }
-        if screen.requiresAdmin && !(settingsLoaded && settings.adminMode) { return .web }
+        guard !isPresentingWeb, settingsLoaded, let screen = NativeScreen.screen(forPath: route.path) else {
+            return .web
+        }
+        if screen.requiresAdmin && !settings.adminMode { return .web }
         return .native(screen)
     }
 
@@ -193,9 +200,10 @@ public final class NativeShellModel {
         send(next)
     }
 
-    /// `setSearchParams(..., { replace: true })` for the current route.
-    public func replaceQuery(_ name: String, with value: String) {
-        let next = route.setting(name, to: value)
+    /// `setSearchParams(..., { replace: true })` for the current route; `nil` deletes the
+    /// parameter (`useSearchParamState` writing a default value).
+    public func replaceQuery(_ name: String, with value: String?) {
+        let next = value.map { route.setting(name, to: $0) } ?? route.removing(name)
         route = next
         onNavigate(.replaceRoute(next.string))
     }

@@ -80,6 +80,11 @@ public struct NativeRoute: Equatable, Sendable {
         return NativeRoute(path: path, query: items)
     }
 
+    /// `next.delete(name)`: removes every value of `name`, keeping the other parameters.
+    public func removing(_ name: String) -> NativeRoute {
+        NativeRoute(path: path, query: query.filter { $0.name != name })
+    }
+
     private static let unreserved = CharacterSet(
         charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
 
@@ -97,10 +102,12 @@ public enum NativeScreen: Equatable, Hashable, Sendable {
     case providerHealth
     case endpointLiveness
     case exchangeRates
+    /// `/planned`, the first screen outside the admin section (phase 3c).
+    case plannedPayments
 
     /// The screens at a fixed path.
     public static let fixedScreens: [NativeScreen] = [
-        .adminOverview, .databaseMaintenance, .providerHealth, .endpointLiveness, .exchangeRates,
+        .adminOverview, .databaseMaintenance, .providerHealth, .endpointLiveness, .exchangeRates, .plannedPayments,
     ]
 
     /// The route path it replaces.
@@ -112,6 +119,7 @@ public enum NativeScreen: Equatable, Hashable, Sendable {
         case .providerHealth: return "/admin/providers"
         case .endpointLiveness: return "/admin/endpoints"
         case .exchangeRates: return "/admin/exchange-rates"
+        case .plannedPayments: return PlannedPaymentsRoute.path
         }
     }
 

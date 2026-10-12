@@ -5646,6 +5646,13 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
         };
+        /** @description A tag as transaction and planned-transaction reads embed it (no timestamps). */
+        TransactionTagRef: {
+            id: number;
+            slug: string;
+            color: string | null;
+            is_active: boolean;
+        };
         TagList: components["schemas"]["OptionalPaginationFields"] & {
             items: components["schemas"]["Tag"][];
         };
@@ -5859,8 +5866,8 @@ export interface components {
             transfer_peer_id?: number | null;
             /** @description Origin of transfer classification, including automatic, manual, system or brokerage. */
             transfer_source?: string | null;
-            /** @description Canonical display name projected from the linked account; use account_id as the stable identity */
-            bank_account: string;
+            /** @description Canonical display name projected from the linked account (null when account_id is); use account_id as the stable identity */
+            bank_account: string | null;
             recipient_id?: number;
             recipient_name?: string;
             memo?: string;
@@ -5881,9 +5888,9 @@ export interface components {
             category_name?: string;
             comment?: string;
             /** @description Tags attached to this transaction */
-            tags?: components["schemas"]["Tag"][];
+            tags?: components["schemas"]["TransactionTagRef"][];
             /** Format: date-time */
-            created_at: string;
+            created_at: string | null;
             /** Format: date-time */
             updated_at?: string;
             links: components["schemas"]["Link"][];
@@ -5950,13 +5957,14 @@ export interface components {
             /** Format: date */
             execution_date: string;
             /** Format: date-time */
-            created_at: string;
+            created_at?: string | null;
         };
         PlannedTransaction: {
             id: number;
             /** Format: date */
             planned_date: string;
-            bank_account: string;
+            /** @description Display name of the linked account; null or absent when account_id is null */
+            bank_account?: string | null;
             /** @description Stable linked account identity */
             account_id?: number | null;
             recipient_id?: number;
@@ -5996,12 +6004,12 @@ export interface components {
             execution_count: number;
             executions?: components["schemas"]["PlannedTransactionExecution"][];
             /** @description Tags attached to this planned transaction */
-            tags?: components["schemas"]["Tag"][];
+            tags?: components["schemas"]["TransactionTagRef"][];
             is_active: boolean;
             /** Format: date-time */
-            created_at: string;
+            created_at?: string | null;
             /** Format: date-time */
-            updated_at?: string;
+            updated_at?: string | null;
             links: components["schemas"]["Link"][];
         };
         PlannedTransactionCreate: {
@@ -11631,6 +11639,8 @@ export interface operations {
                 account_id?: number;
                 is_recurring?: boolean;
                 is_executed?: boolean;
+                /** @description true (the default) lists active payments only; false includes paused ones. */
+                active?: boolean;
             };
             header?: never;
             path?: never;
@@ -11804,7 +11814,8 @@ export interface operations {
                 "application/json": {
                     /** Format: date */
                     planned_date?: string;
-                    bank_account?: string;
+                    /** @description Canonical account identity (the retired bank_account string is rejected) */
+                    account_id?: number | null;
                     recipient_id?: number;
                     memo?: string;
                     amount?: number;
@@ -11818,6 +11829,16 @@ export interface operations {
                     recurrence_end_date?: string | null;
                     max_occurrences?: number | null;
                     is_active?: boolean;
+                    is_loan?: boolean;
+                    loan_type?: components["schemas"]["PlannedLoanType"];
+                    loan_principal?: number;
+                    loan_annual_interest_rate?: number;
+                    loan_term_months?: number;
+                    /** Format: date */
+                    loan_start_date?: string;
+                    loan_payment_day?: number;
+                    /** @description Tag slugs; replaces the attached set */
+                    tags?: string[];
                 };
             };
         };
