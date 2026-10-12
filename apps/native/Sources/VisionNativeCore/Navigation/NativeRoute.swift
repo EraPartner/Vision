@@ -89,16 +89,26 @@ public struct NativeRoute: Equatable, Sendable {
 }
 
 /// The screens Vision Native draws itself; every other route shows the web app.
-public enum NativeScreen: String, CaseIterable, Sendable {
+public enum NativeScreen: Equatable, Hashable, Sendable {
     case adminOverview
+    case databaseMaintenance
+    /// `/admin/db/:table`, with the decoded table name.
+    case tableEditor(table: String)
     case providerHealth
     case endpointLiveness
     case exchangeRates
 
-    /// The route path it replaces. `/admin/db` and `/admin/db/:table` stay in the web app.
+    /// The screens at a fixed path.
+    public static let fixedScreens: [NativeScreen] = [
+        .adminOverview, .databaseMaintenance, .providerHealth, .endpointLiveness, .exchangeRates,
+    ]
+
+    /// The route path it replaces.
     public var path: String {
         switch self {
         case .adminOverview: return "/admin"
+        case .databaseMaintenance: return TableEditorRoute.maintenancePath
+        case .tableEditor(let table): return TableEditorRoute.path(for: table)
         case .providerHealth: return "/admin/providers"
         case .endpointLiveness: return "/admin/endpoints"
         case .exchangeRates: return "/admin/exchange-rates"
@@ -111,6 +121,7 @@ public enum NativeScreen: String, CaseIterable, Sendable {
     }
 
     public static func screen(forPath path: String) -> NativeScreen? {
-        allCases.first { $0.path == path }
+        if let screen = fixedScreens.first(where: { $0.path == path }) { return screen }
+        return TableEditorRoute.table(forPath: path).map { NativeScreen.tableEditor(table: $0) }
     }
 }

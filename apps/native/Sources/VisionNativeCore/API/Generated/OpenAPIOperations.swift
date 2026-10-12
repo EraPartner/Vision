@@ -5,7 +5,7 @@ import Foundation
 
 /// One struct per operationId in `apps/native/openapi-operations.txt`, in its order.
 public enum OpenAPIOperations {
-    public static let operationIds = ["getExchangeRates", "refreshExchangeRates", "adminDatabaseStats", "adminProvidersHealth", "adminProviderProbe", "adminMetricsRequests", "adminListEndpoints", "getSetting"]
+    public static let operationIds = ["getExchangeRates", "refreshExchangeRates", "adminDatabaseStats", "adminProvidersHealth", "adminProviderProbe", "adminMetricsRequests", "adminListEndpoints", "getSetting", "adminDatabaseVacuum", "adminGetTableSchema", "adminGetTableRows", "adminMutateTableRows"]
 }
 
 extension OpenAPIOperations {
@@ -123,5 +123,165 @@ extension OpenAPIOperations {
         }
 
         public var path: String { "/api/settings/\(APIPath.segment(APIQuery.value(key)))" }
+    }
+
+    /// POST /api/admin/database/vacuum: Run VACUUM ANALYZE on database
+    public struct AdminDatabaseVacuum: APIOperation {
+        public typealias Response = OpenAPI.DbVacuumResult
+        public static let operationId = "adminDatabaseVacuum"
+        public static let method = HTTPMethod.post
+        public static let pathTemplate = "/api/admin/database/vacuum"
+
+        public var body: Body?
+
+        public init(body: Body? = nil) {
+            self.body = body
+        }
+
+        public var path: String { "/api/admin/database/vacuum" }
+
+        public func encodedBody() throws -> Data? {
+            try body.map { try APIBody.encode($0) }
+        }
+
+        public struct Body: Codable, Equatable, Sendable {
+            /// User table to vacuum; omit or null for every table
+            public let table: String?
+
+            public init(table: String? = nil) {
+                self.table = table
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case table = "table"
+            }
+        }
+    }
+
+    /// GET /api/admin/database/tables/{table}/schema: Get a table's column metadata (Data Editor,
+    /// ADR-101)
+    public struct AdminGetTableSchema: APIOperation {
+        public typealias Response = OpenAPI.DbEditorTableSchema
+        public static let operationId = "adminGetTableSchema"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/admin/database/tables/{table}/schema"
+
+        /// Table name (validated against the live catalog)
+        public var table: String
+
+        public init(table: String) {
+            self.table = table
+        }
+
+        public var path: String { "/api/admin/database/tables/\(APIPath.segment(APIQuery.value(table)))/schema" }
+    }
+
+    /// GET /api/admin/database/tables/{table}/rows: Read paginated rows from a table (Data Editor,
+    /// ADR-101)
+    public struct AdminGetTableRows: APIOperation {
+        public typealias Response = OpenAPI.DbEditorRows
+        public static let operationId = "adminGetTableRows"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/admin/database/tables/{table}/rows"
+
+        public var table: String
+        public var limit: Int?
+        /// Opaque continuation cursor returned by the preceding page. It is bound to the table, sort,
+        /// direction, and filters.
+        public var cursor: String?
+        public var orderBy: String?
+        public var dir: String?
+        /// JSON-encoded array of `{ column, op?, value? }` objects; `column` and `op` are strings.
+        /// Invalid JSON, a non-array, or a non-object entry returns 400.
+        public var filters: String?
+
+        public init(table: String, limit: Int? = nil, cursor: String? = nil, orderBy: String? = nil, dir: String? = nil, filters: String? = nil) {
+            self.table = table
+            self.limit = limit
+            self.cursor = cursor
+            self.orderBy = orderBy
+            self.dir = dir
+            self.filters = filters
+        }
+
+        public var path: String { "/api/admin/database/tables/\(APIPath.segment(APIQuery.value(table)))/rows" }
+
+        public var queryItems: [URLQueryItem] {
+            var items: [URLQueryItem] = []
+            if let limit { items.append(URLQueryItem(name: "limit", value: APIQuery.value(limit))) }
+            if let cursor { items.append(URLQueryItem(name: "cursor", value: APIQuery.value(cursor))) }
+            if let orderBy { items.append(URLQueryItem(name: "orderBy", value: APIQuery.value(orderBy))) }
+            if let dir { items.append(URLQueryItem(name: "dir", value: APIQuery.value(dir))) }
+            if let filters { items.append(URLQueryItem(name: "filters", value: APIQuery.value(filters))) }
+            return items
+        }
+    }
+
+    /// POST /api/admin/database/tables/{table}/mutate: Apply row mutations to a table (Data Editor,
+    /// ADR-101)
+    public struct AdminMutateTableRows: APIOperation {
+        public typealias Response = OpenAPI.DbEditorMutationResult
+        public static let operationId = "adminMutateTableRows"
+        public static let method = HTTPMethod.post
+        public static let pathTemplate = "/api/admin/database/tables/{table}/mutate"
+
+        public var table: String
+        public var body: Body
+
+        public init(table: String, body: Body) {
+            self.table = table
+            self.body = body
+        }
+
+        public var path: String { "/api/admin/database/tables/\(APIPath.segment(APIQuery.value(table)))/mutate" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+
+        public struct Body: Codable, Equatable, Sendable {
+            /// Preview the SQL statements without applying them. Must be a JSON boolean; a string such as
+            /// "true" returns 400.
+            public let dryRun: Bool?
+            public let changes: [ChangesItem]
+
+            public init(dryRun: Bool? = nil, changes: [ChangesItem]) {
+                self.dryRun = dryRun
+                self.changes = changes
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case dryRun = "dryRun"
+                case changes = "changes"
+            }
+
+            public struct ChangesItem: Codable, Equatable, Sendable {
+                public let op: String
+                /// Primary-key column values (required for update/delete)
+                public let pk: JSONValue?
+                /// Column values for an insert
+                public let values: JSONValue?
+                /// Column values to write for an update
+                public let set: JSONValue?
+                /// Optimistic-concurrency token captured at read time
+                public let xmin: JSONValue?
+
+                public init(op: String, pk: JSONValue? = nil, values: JSONValue? = nil, set: JSONValue? = nil, xmin: JSONValue? = nil) {
+                    self.op = op
+                    self.pk = pk
+                    self.values = values
+                    self.set = set
+                    self.xmin = xmin
+                }
+
+                enum CodingKeys: String, CodingKey {
+                    case op = "op"
+                    case pk = "pk"
+                    case values = "values"
+                    case set = "set"
+                    case xmin = "xmin"
+                }
+            }
+        }
     }
 }

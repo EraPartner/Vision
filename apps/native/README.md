@@ -140,7 +140,8 @@ See [the architecture page](../../docs/architecture/native-app.md#native-navigat
   `electronAPI.routeChanged` (`shell:route-changed`) and hides its own sidebar when
   `electronAPI.nativeNavigation` is set.
 - `/admin`, `/admin/providers`, `/admin/endpoints` and `/admin/exchange-rates` are native, in
-  admin mode only; `/admin/db` stays in the web view. The admin token card writes the page's
+  admin mode only, and so are `/admin/db` and `/admin/db/:table`; the table editor holds
+  navigation behind a native Leave this page? alert while it has pending changes. The admin token card writes the page's
   `sessionStorage`, and the audit history card uses the native audit channels. Native requests carry the page's admin
   token from `sessionStorage`, read from the web view, and nothing else stores it.
 - To add a screen: list its operations and keys, run `bun run native:generate`, add a model in

@@ -4535,6 +4535,64 @@ export interface components {
             /** @description pg_size_pretty of the database size */
             db_size: string | null;
         };
+        DbVacuumResult: {
+            /** @description The vacuumed table, or `all` for every table */
+            vacuumed: string;
+        };
+        DbEditorColumn: {
+            name: string;
+            /** @description information_schema data_type */
+            dataType: string;
+            /** @description information_schema udt_name */
+            udtName: string;
+            nullable: boolean;
+            hasDefault: boolean;
+            generated: boolean;
+            /** @description False for generated and identity-always columns */
+            writable: boolean;
+        };
+        DbEditorTableSchema: {
+            table: string;
+            columns: components["schemas"]["DbEditorColumn"][];
+            primaryKey: string[];
+        };
+        DbEditorRows: components["schemas"]["DbEditorTableSchema"] & {
+            /** @description The page's rows by column name; each row also carries its `__xmin` row version as text. */
+            rows: {
+                [key: string]: unknown;
+            }[];
+            /** @description Exact total only when the first page is shorter than the requested limit. */
+            total?: number;
+            limit: number;
+            hasMore: boolean;
+            /** @description Opaque cursor of the next page, null on the last page */
+            nextCursor: string | null;
+        };
+        DbEditorStatement: {
+            op: string;
+            /** @description The SQL statement with its parameters rendered as literals */
+            preview: string;
+        };
+        /** @description A dry run returns `count` and `statements`; a commit returns `applied`, `results` and `refreshScheduled`. */
+        DbEditorMutationResult: {
+            dryRun: boolean;
+            /** @description Dry run only */
+            count?: number;
+            /** @description Dry run only */
+            statements?: components["schemas"]["DbEditorStatement"][];
+            /** @description Commit only */
+            applied?: number;
+            /** @description Commit only */
+            results?: {
+                op: string;
+                /** @description The written row; absent for a delete */
+                after?: {
+                    [key: string]: unknown;
+                };
+            }[];
+            /** @description Commit only; true when the dashboard materialized views refresh */
+            refreshScheduled?: boolean;
+        };
         ProviderHealth: {
             provider: string;
             /** @description The provider kind: price, fx, inflation or research */
@@ -16137,7 +16195,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["DbVacuumResult"];
+                    };
                 };
             };
             /** @description VALIDATION_ERROR — `table` is not a non-empty string, or names an unknown table */
@@ -16175,19 +16235,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: {
-                            table?: string;
-                            primaryKey?: string[];
-                            columns?: {
-                                name?: string;
-                                dataType?: string;
-                                udtName?: string;
-                                nullable?: boolean;
-                                hasDefault?: boolean;
-                                generated?: boolean;
-                                writable?: boolean;
-                            }[];
-                        };
+                        data?: components["schemas"]["DbEditorTableSchema"];
                     };
                 };
             };
@@ -16233,17 +16281,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: {
-                            table?: string;
-                            columns?: Record<string, never>[];
-                            primaryKey?: string[];
-                            rows?: Record<string, never>[];
-                            /** @description Exact total only when the first page is shorter than the requested limit. */
-                            total?: number;
-                            limit?: number;
-                            hasMore?: boolean;
-                            nextCursor?: string | null;
-                        };
+                        data?: components["schemas"]["DbEditorRows"];
                     };
                 };
             };
@@ -16306,7 +16344,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["DbEditorMutationResult"];
+                    };
                 };
             };
             /** @description Malformed change set or non-boolean dryRun */

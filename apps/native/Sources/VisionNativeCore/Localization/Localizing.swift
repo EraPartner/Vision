@@ -11,6 +11,32 @@ public protocol Localizing: Sendable {
 
 extension Localizing {
     public func t(_ key: String) -> String { t(key, [:]) }
+
+    /// `tc(key, count, vars)` (LanguageHydration): `key.<category>` for the CLDR plural
+    /// category of `count`, then `key.other`, then `key`; `{count}` is always filled, and a
+    /// `count` among `variables` wins, as in `{ count, ...vars }`.
+    public func tc(_ key: String, _ count: Int, _ variables: [String: String] = [:]) -> String {
+        let filled = ["count": String(count)].merging(variables) { _, given in given }
+        for candidate in ["\(key).\(PluralCategory.of(count, language: language).rawValue)", "\(key).other"] {
+            // A key the table lacks comes back as itself (it holds no placeholders).
+            let text = t(candidate, filled)
+            if text != candidate { return text }
+        }
+        return t(key, filled)
+    }
+}
+
+/// The CLDR plural category `Intl.PluralRules(language).select(count)` returns for an
+/// integer. English and Dutch have the same cardinal rule: `one` for 1, `other` otherwise.
+public enum PluralCategory: String, Sendable {
+    case one
+    case other
+
+    public static func of(_ count: Int, language: NativeLanguage) -> PluralCategory {
+        switch language {
+        case .en, .nl: return count == 1 ? .one : .other
+        }
+    }
 }
 
 public enum Placeholders {

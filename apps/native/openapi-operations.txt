@@ -15,3 +15,9 @@ adminListEndpoints
 
 # App settings (number and date formats, admin mode) for native screens
 getSetting
+
+# Admin > Database maintenance and the table data editor (ADR-101)
+adminDatabaseVacuum
+adminGetTableSchema
+adminGetTableRows
+adminMutateTableRows

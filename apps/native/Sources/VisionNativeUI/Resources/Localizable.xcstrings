@@ -955,6 +955,24 @@
         }
       }
     },
+    "admin.moreActions": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "More actions"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meer acties"
+          }
+        }
+      }
+    },
     "admin.overview.allHealthy": {
       "comment": "Generated from i18n/source by scripts/native-strings.ts.",
       "extractionState": "manual",
@@ -1783,6 +1801,780 @@
         }
       }
     },
+    "dbEditor.addRow": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add row"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rij toevoegen"
+          }
+        }
+      }
+    },
+    "dbEditor.applyFilters": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apply filters"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filters toepassen"
+          }
+        }
+      }
+    },
+    "dbEditor.back": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Back"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Terug"
+          }
+        }
+      }
+    },
+    "dbEditor.cancel": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Annuleren"
+          }
+        }
+      }
+    },
+    "dbEditor.cellLabel": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{column}, row {row}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{column}, rij {row}"
+          }
+        }
+      }
+    },
+    "dbEditor.clickToEdit": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Click to edit"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Klik om te bewerken"
+          }
+        }
+      }
+    },
+    "dbEditor.commit": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Commit to database"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Naar database wegschrijven"
+          }
+        }
+      }
+    },
+    "dbEditor.commitFailed": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Commit failed"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wegschrijven mislukt"
+          }
+        }
+      }
+    },
+    "dbEditor.commitSuccess": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Changes committed"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wijzigingen weggeschreven"
+          }
+        }
+      }
+    },
+    "dbEditor.commitSummary": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{inserts} new rows, {updates} changed rows, {deletes} deleted rows"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{inserts} nieuwe rijen, {updates} gewijzigde rijen, {deletes} verwijderde rijen"
+          }
+        }
+      }
+    },
+    "dbEditor.committing": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Committing…"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bezig met wegschrijven…"
+          }
+        }
+      }
+    },
+    "dbEditor.deleteRow": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mark row for deletion"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rij markeren voor verwijdering"
+          }
+        }
+      }
+    },
+    "dbEditor.deleteWarning": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This includes row deletions, which permanently remove data and cannot be undone after committing."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dit bevat rijverwijderingen die gegevens permanent verwijderen en na het wegschrijven niet ongedaan kunnen worden gemaakt."
+          }
+        }
+      }
+    },
+    "dbEditor.discard": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Discard changes"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wijzigingen verwerpen"
+          }
+        }
+      }
+    },
+    "dbEditor.discardNewRow": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Discard new row"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nieuwe rij verwijderen"
+          }
+        }
+      }
+    },
+    "dbEditor.empty": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No rows"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geen rijen"
+          }
+        }
+      }
+    },
+    "dbEditor.filterPlaceholder": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filter…"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filter…"
+          }
+        }
+      }
+    },
+    "dbEditor.loadError": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Failed to load table data"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tabelgegevens laden mislukt"
+          }
+        }
+      }
+    },
+    "dbEditor.lockedWhilePending": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filtering, sorting and paging are paused while you have uncommitted changes. Commit or discard them first."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filteren, sorteren en bladeren zijn gepauzeerd zolang er niet-weggeschreven wijzigingen zijn. Schrijf ze eerst weg of verwerp ze."
+          }
+        }
+      }
+    },
+    "dbEditor.nextPage": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Next page"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volgende pagina"
+          }
+        }
+      }
+    },
+    "dbEditor.pageNumber": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Page {page}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pagina {page}"
+          }
+        }
+      }
+    },
+    "dbEditor.pendingCount.one": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count} pending change"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count} openstaande wijziging"
+          }
+        }
+      }
+    },
+    "dbEditor.pendingCount.other": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count} pending changes"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count} openstaande wijzigingen"
+          }
+        }
+      }
+    },
+    "dbEditor.prevPage": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Previous page"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vorige pagina"
+          }
+        }
+      }
+    },
+    "dbEditor.preview": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preview SQL"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SQL voorvertonen"
+          }
+        }
+      }
+    },
+    "dbEditor.previewDescription": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "These statements will run in a single transaction. Review them before committing."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deze opdrachten worden in één transactie uitgevoerd. Controleer ze voordat je wegschrijft."
+          }
+        }
+      }
+    },
+    "dbEditor.previewEmpty": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No changes to apply"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geen wijzigingen om toe te passen"
+          }
+        }
+      }
+    },
+    "dbEditor.previewFailed": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not build preview"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voorvertoning kon niet worden opgebouwd"
+          }
+        }
+      }
+    },
+    "dbEditor.previewTitle": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review pending changes"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Openstaande wijzigingen controleren"
+          }
+        }
+      }
+    },
+    "dbEditor.readOnlyCol": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Read-only column"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alleen-lezen kolom"
+          }
+        }
+      }
+    },
+    "dbEditor.refresh": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Refresh"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vernieuwen"
+          }
+        }
+      }
+    },
+    "dbEditor.revertCell": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Revert cell change"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Celwijziging ongedaan maken"
+          }
+        }
+      }
+    },
+    "dbEditor.revertRow": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Revert changes to this row"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wijzigingen aan deze rij terugdraaien"
+          }
+        }
+      }
+    },
+    "dbEditor.rowMenu": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Actions for this row"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Acties voor deze rij"
+          }
+        }
+      }
+    },
+    "dbEditor.rowsOnPage.one": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count} row on this page"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count} rij op deze pagina"
+          }
+        }
+      }
+    },
+    "dbEditor.rowsOnPage.other": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count} rows on this page"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count} rijen op deze pagina"
+          }
+        }
+      }
+    },
+    "dbEditor.setNull": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set NULL"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Op NULL zetten"
+          }
+        }
+      }
+    },
+    "dbEditor.statementsApplied": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "statement(s) applied"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "opdracht(en) toegepast"
+          }
+        }
+      }
+    },
+    "dbEditor.subtitle": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Browse, filter and edit rows. Changes commit straight to PostgreSQL."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rijen bekijken, filteren en bewerken. Wijzigingen gaan rechtstreeks naar PostgreSQL."
+          }
+        }
+      }
+    },
+    "dbEditor.undoDelete": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Undo delete"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verwijderen ongedaan maken"
+          }
+        }
+      }
+    },
+    "dbEditor.warning": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Direct edits bypass the app's validation and business logic; Postgres still enforces foreign keys, checks and uniqueness."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Directe bewerkingen omzeilen de validatie en bedrijfslogica van de app; Postgres blijft foreign keys, checks en uniciteit afdwingen."
+          }
+        }
+      }
+    },
+    "dbEditor.warningMatview": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dashboard materialized views refresh automatically after you commit changes to this table."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Materialized views van het dashboard worden automatisch vernieuwd nadat je wijzigingen aan deze tabel wegschrijft."
+          }
+        }
+      }
+    },
+    "dbMaintenance.allTables": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All tables"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle tabellen"
+          }
+        }
+      }
+    },
     "dbMaintenance.col.actions": {
       "comment": "Generated from i18n/source by scripts/native-strings.ts.",
       "extractionState": "manual",
@@ -1797,6 +2589,402 @@
           "stringUnit": {
             "state": "translated",
             "value": "Acties"
+          }
+        }
+      }
+    },
+    "dbMaintenance.col.deadRows": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dead rows"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dode rijen"
+          }
+        }
+      }
+    },
+    "dbMaintenance.col.lastAnalyze": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last analyze"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Laatste analyse"
+          }
+        }
+      }
+    },
+    "dbMaintenance.col.lastVacuum": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last vacuum"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Laatste vacuum"
+          }
+        }
+      }
+    },
+    "dbMaintenance.col.liveRows": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Live rows"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Actieve rijen"
+          }
+        }
+      }
+    },
+    "dbMaintenance.col.size": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Size"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Grootte"
+          }
+        }
+      }
+    },
+    "dbMaintenance.col.table": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Table"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tabel"
+          }
+        }
+      }
+    },
+    "dbMaintenance.loadError": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Failed to load database stats"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Databasestatistieken konden niet worden geladen"
+          }
+        }
+      }
+    },
+    "dbMaintenance.noTables": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No tables found. Check the database connection and schema permissions, then refresh this page."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geen tabellen gevonden. Controleer de databaseverbinding en schemarechten en vernieuw daarna deze pagina."
+          }
+        }
+      }
+    },
+    "dbMaintenance.openTable": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Browse rows"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rijen bekijken"
+          }
+        }
+      }
+    },
+    "dbMaintenance.refresh": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Refresh"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vernieuwen"
+          }
+        }
+      }
+    },
+    "dbMaintenance.rowMenu": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Actions for {table}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Acties voor {table}"
+          }
+        }
+      }
+    },
+    "dbMaintenance.statsNote": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Row counts are PostgreSQL planner estimates and may differ slightly from exact totals. Run VACUUM to refresh statistics and reclaim space from dead rows."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rijaantallen zijn schattingen van de PostgreSQL-planner en kunnen licht afwijken van de exacte totalen. Voer VACUUM uit om de statistieken te verversen en ruimte van dode rijen vrij te maken."
+          }
+        }
+      }
+    },
+    "dbMaintenance.subtitle": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Monitor table health and run VACUUM ANALYZE to reclaim storage"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bekijk tabelgezondheid en voer VACUUM ANALYZE uit om opslag vrij te maken"
+          }
+        }
+      }
+    },
+    "dbMaintenance.tableCount": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tables"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tabellen"
+          }
+        }
+      }
+    },
+    "dbMaintenance.tableStats": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Table statistics"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tabelstatistieken"
+          }
+        }
+      }
+    },
+    "dbMaintenance.title": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Database maintenance"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Databaseonderhoud"
+          }
+        }
+      }
+    },
+    "dbMaintenance.totalSize": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Total DB size"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Totale DB-grootte"
+          }
+        }
+      }
+    },
+    "dbMaintenance.vacuumAll": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vacuum all tables"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vacuum uitvoeren op alle tabellen"
+          }
+        }
+      }
+    },
+    "dbMaintenance.vacuumFailed": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vacuum failed"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vacuum mislukt"
+          }
+        }
+      }
+    },
+    "dbMaintenance.vacuumSuccess": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vacuum completed"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vacuum voltooid"
+          }
+        }
+      }
+    },
+    "dbMaintenance.vacuumTable": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Run vacuum"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vacuum uitvoeren"
+          }
+        }
+      }
+    },
+    "dbMaintenance.vacuuming": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vacuuming…"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bezig met vacuum…"
           }
         }
       }
@@ -3003,6 +4191,78 @@
           "stringUnit": {
             "state": "translated",
             "value": "Wie jou iets verschuldigd is"
+          }
+        }
+      }
+    },
+    "unsavedChanges.description": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You have unsaved work on this page. Leaving now will discard it."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Je hebt niet-opgeslagen werk op deze pagina. Als je nu weggaat, gaat dit verloren."
+          }
+        }
+      }
+    },
+    "unsavedChanges.leave": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leave and discard"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verlaten en verwerpen"
+          }
+        }
+      }
+    },
+    "unsavedChanges.stay": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stay on page"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Op pagina blijven"
+          }
+        }
+      }
+    },
+    "unsavedChanges.title": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leave this page?"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deze pagina verlaten?"
           }
         }
       }

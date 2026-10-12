@@ -36,6 +36,17 @@ public struct ShellRootView<WebContent: View>: View {
             }
         }
         .environment(\.visionTheme, theme)
+        // `UnsavedChangesProvider`'s Leave this page? alert. The buttons decide; the binding
+        // only reads, so a dismissal never drops the held navigation by itself.
+        .alert(
+            model.strings.t("unsavedChanges.title"),
+            isPresented: Binding(get: { model.leaveConfirmation != nil }, set: { _ in })
+        ) {
+            Button(model.strings.t("unsavedChanges.stay"), role: .cancel) { model.stayOnPage() }
+            Button(model.strings.t("unsavedChanges.leave"), role: .destructive) { model.leavePage() }
+        } message: {
+            Text(model.strings.t("unsavedChanges.description"))
+        }
         .onChange(of: model.isSidebarVisible) { _, visible in
             let target: NavigationSplitViewVisibility = visible ? .all : .detailOnly
             if columnVisibility != target {
@@ -197,6 +208,14 @@ struct NativeScreenContainer: View {
         switch screen {
         case .adminOverview:
             AdminOverviewView(model: model.admin.overview, shell: model)
+        case .databaseMaintenance:
+            DatabaseMaintenanceView(model: model.admin.database.maintenance, shell: model)
+        case .tableEditor(let table):
+            // The shell opens the table's editor when the route reports it.
+            if let editor = model.admin.database.editor, editor.table == table {
+                TableDataEditorView(model: editor, shell: model)
+                    .id(table)
+            }
         case .providerHealth:
             ProviderHealthView(model: model.admin.providers, shell: model)
         case .endpointLiveness:

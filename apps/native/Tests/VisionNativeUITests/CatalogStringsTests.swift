@@ -50,6 +50,18 @@ import VisionNativeCore
         #expect(used.subtracting(keys).isEmpty, "\(used.subtracting(keys).sorted())")
     }
 
+    @Test func pluralKeysFollowTheCount() {
+        let en = CatalogStrings(language: .en)
+        let nl = CatalogStrings(language: .nl)
+        #expect(en.tc("dbEditor.pendingCount", 1) == "1 pending change")
+        #expect(en.tc("dbEditor.pendingCount", 3) == "3 pending changes")
+        #expect(nl.tc("dbEditor.pendingCount", 1) == "1 openstaande wijziging")
+        #expect(nl.tc("dbEditor.pendingCount", 2) == "2 openstaande wijzigingen")
+        #expect(en.tc("dbEditor.rowsOnPage", 0) == "0 rows on this page")
+        #expect(nl.tc("dbEditor.rowsOnPage", 1) == "1 rij op deze pagina")
+        #expect(nl.tc("dbEditor.rowsOnPage", 100) == "100 rijen op deze pagina")
+    }
+
     @Test func dutchDiffersFromEnglishAndPlaceholdersAreFilled() {
         let en = CatalogStrings(language: .en)
         let nl = CatalogStrings(language: .nl)

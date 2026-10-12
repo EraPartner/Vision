@@ -226,28 +226,40 @@ public final class AdminOverviewModel {
     }
 }
 
-/// The native admin screens of phase 3a, sharing one admin service.
+/// The native admin screens of phases 3a and 3b, sharing one admin service.
 public struct AdminScreens: Sendable {
     public let overview: AdminOverviewModel
     public let providers: ProviderHealthModel
     public let endpoints: EndpointLivenessModel
+    /// `/admin/db` and `/admin/db/:table`.
+    public let database: DatabaseScreens
 
-    public init(overview: AdminOverviewModel, providers: ProviderHealthModel, endpoints: EndpointLivenessModel) {
+    public init(
+        overview: AdminOverviewModel, providers: ProviderHealthModel, endpoints: EndpointLivenessModel,
+        database: DatabaseScreens
+    ) {
         self.overview = overview
         self.providers = providers
         self.endpoints = endpoints
+        self.database = database
     }
 
-    /// The three models over one service; a probe on the Data sources page marks the
-    /// overview's provider query stale, as `invalidateQueries(adminKeys.providerHealth)` does.
+    /// The models over one service; a probe on the Data sources page marks the overview's
+    /// provider query stale, as `invalidateQueries(adminKeys.providerHealth)` does, and a
+    /// vacuum or a refresh on Database maintenance marks its database query stale
+    /// (`adminKeys.dbStats`).
     @MainActor
     public static func make(
-        service: any AdminService, token: AdminTokenAccess, audit: any AuditHistoryService
+        service: any AdminService, database: any DatabaseAdminService, token: AdminTokenAccess,
+        audit: any AuditHistoryService
     ) -> AdminScreens {
         let overview = AdminOverviewModel(service: service, token: token, audit: AuditHistoryModel(service: audit))
         let providers = ProviderHealthModel(
             service: service, onProvidersChanged: { [weak overview] in overview?.providers.invalidate() })
+        let databaseScreens = DatabaseScreens(
+            service: database, onStatsChanged: { [weak overview] in overview?.dbStats.invalidate() })
         return AdminScreens(
-            overview: overview, providers: providers, endpoints: EndpointLivenessModel(service: service))
+            overview: overview, providers: providers, endpoints: EndpointLivenessModel(service: service),
+            database: databaseScreens)
     }
 }
