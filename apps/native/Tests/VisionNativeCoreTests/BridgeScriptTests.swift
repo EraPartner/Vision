@@ -71,7 +71,7 @@
             #expect(bool(context, "window.__visionNativeDispatch.toString().indexOf('listeners') !== -1"))
         }
 
-        @Test func dispatchedEventsReachSubscribers() throws {
+        @Test @MainActor func dispatchedEventsReachSubscribers() throws {
             let context = try makeContext()
             context.evaluateScript(
                 """
