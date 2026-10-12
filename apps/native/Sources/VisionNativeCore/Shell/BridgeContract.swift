@@ -49,9 +49,11 @@ public enum BridgeEvent: String, CaseIterable, Sendable {
 }
 
 public enum BridgeAvailability: Equatable, Sendable {
-    /// Answered by Vision Native (phase 1c, backup and restore since phase 1d).
+    /// Answered by Vision Native (phase 1c, backup and restore since phase 1d, the audit
+    /// channels since phase 1e).
     case implemented
-    /// Rejects with `BridgeContract.unavailableMessage` until the named phase ports it.
+    /// Rejects with `BridgeContract.unavailableMessage` until the named phase ports it. No
+    /// channel is pending after phase 1e; the case stays for later phases.
     case pending(phase: String)
     /// Not part of Vision Native (ADR-204 decision 5 cuts the updater); the user script
     /// does not define the method, and a direct call rejects.
@@ -102,8 +104,6 @@ public enum BridgeContract {
             availability: availability)
     }
 
-    private static let audit = BridgeAvailability.pending(phase: "1e")
-
     public static let entries: [BridgeEntry] = [
         entry(.updateCheckGithub, "electronUpdater", "checkRelease", [], "none (updater cut)", .removed),
         entry(.updateInstallShell, "electronUpdater", "installShellUpdate", [], "none (updater cut)", .removed),
@@ -127,12 +127,16 @@ public enum BridgeContract {
             .servicesSaveSettings, "electronServices", "saveSettings", ["settings"], "saveServicesSettings",
             .implemented),
         entry(.servicesLoadSettings, "electronServices", "loadSettings", [], "loadServicesSettings", .implemented),
-        entry(.auditEnroll, "electronAudit", "enroll", [], "stub", audit),
-        entry(.auditRead, "electronAudit", "read", ["options"], "stub", audit),
-        entry(.auditExport, "electronAudit", "exportSnapshot", [], "stub", audit),
-        entry(.auditTransferExport, "electronAudit", "exportTransfer", ["password"], "stub", audit),
-        entry(.auditTransferImport, "electronAudit", "importTransfer", ["password"], "stub", audit),
-        entry(.auditRotateKey, "electronAudit", "rotateKey", [], "stub", audit),
+        entry(.auditEnroll, "electronAudit", "enroll", [], "enrollAudit", .implemented),
+        entry(.auditRead, "electronAudit", "read", ["options"], "readAudit", .implemented),
+        entry(.auditExport, "electronAudit", "exportSnapshot", [], "exportAuditSnapshot", .implemented),
+        entry(
+            .auditTransferExport, "electronAudit", "exportTransfer", ["password"], "exportAuditTransfer",
+            .implemented),
+        entry(
+            .auditTransferImport, "electronAudit", "importTransfer", ["password"], "importAuditTransfer",
+            .implemented),
+        entry(.auditRotateKey, "electronAudit", "rotateKey", [], "rotateAuditKey", .implemented),
         entry(.recoveryRetry, "electronRecovery", "retry", [], "retryLaunch", .implemented),
         entry(.recoveryOpenLogs, "electronRecovery", "openLogs", [], "openLogs", .implemented),
         entry(.rendererFailure, "", nil, ["payload"], "rendererDidFail (user script listeners)", .implemented),
@@ -162,8 +166,6 @@ public enum BridgeContract {
     public static func unavailableMessage(_ entry: BridgeEntry) -> String {
         let name = entry.method.map { "\(entry.bridge).\($0)" } ?? entry.channel.rawValue
         switch entry.availability {
-        case .pending(let phase) where phase == "1e":
-            return "\(name) is not available in Vision Native yet (the audit anchor arrives in phase 1e)."
         case .pending(let phase):
             return "\(name) is not available in Vision Native yet (phase \(phase))."
         case .removed:

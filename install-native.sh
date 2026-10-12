@@ -6,13 +6,28 @@ set -euo pipefail
 # synthetic Demo seed) into the app, and install it to /Applications. Vision Native
 # runs only on synthetic Demo data in its own application-data directory.
 #
+# VISION_NATIVE_VARIANT picks the build (phase 1e):
+#   demo (default) -> /Applications/Vision Native Demo.app, data in
+#                     ~/Library/Application Support/Vision Native Demo, PostgreSQL 54332
+#   standard       -> /Applications/Vision Native.app, data in
+#                     ~/Library/Application Support/Vision Native, PostgreSQL 54331
+#
 # VISION_NATIVE_SKIP_PAYLOAD=1 builds without a payload (the app then explains how to
 # provide one). The payload uses the same prepare scripts as install-demo.sh.
 
 REPO_PATH="$(cd "$(dirname "$0")" && pwd)"
 NATIVE_PATH="$REPO_PATH/apps/native"
 ELECTRON_DIR="$REPO_PATH/packaging/electron"
-APP_DEST="/Applications/Vision Native.app"
+VARIANT="${VISION_NATIVE_VARIANT:-demo}"
+case "$VARIANT" in
+  demo) APP_NAME="Vision Native Demo" ;;
+  standard) APP_NAME="Vision Native" ;;
+  *)
+    echo "ERROR: VISION_NATIVE_VARIANT must be demo or standard (got: $VARIANT)."
+    exit 1
+    ;;
+esac
+APP_DEST="/Applications/$APP_NAME.app"
 DERIVED_DATA="$NATIVE_PATH/build"
 PAYLOAD_DIR="$NATIVE_PATH/build/payload"
 LOCAL_XCCONFIG="$NATIVE_PATH/Config/Local.xcconfig"
@@ -26,6 +41,7 @@ source "$REPO_PATH/scripts/lib/mac-install.sh"
 
 echo "==> Vision Native builder"
 echo "    Repo: $REPO_PATH"
+echo "    Variant: $VARIANT ($APP_NAME)"
 
 # The documented Local.xcconfig line `VISION_NATIVE_TEAM_ID = <id>` must win over the
 # ad-hoc fallback below, which would otherwise override it on the command line.
@@ -96,19 +112,20 @@ else
   )
 fi
 
-echo "==> Building Vision Native (Release)..."
+echo "==> Building $APP_NAME (Release)..."
 xcodebuild \
   -project "$NATIVE_PATH/VisionNative.xcodeproj" \
   -scheme "Vision Native" \
   -configuration Release \
   -derivedDataPath "$DERIVED_DATA" \
+  "VISION_NATIVE_VARIANT=$VARIANT" \
   "${SIGNING_ARGS[@]}" \
   ${PAYLOAD_ARGS[@]+"${PAYLOAD_ARGS[@]}"} \
   build
 
 APP_SRC="$(find_built_app \
-  "$DERIVED_DATA/Build/Products/Release/Vision Native.app")" || {
-  echo "ERROR: could not find the completed Vision Native.app."
+  "$DERIVED_DATA/Build/Products/Release/$APP_NAME.app")" || {
+  echo "ERROR: could not find the completed $APP_NAME.app."
   exit 1
 }
 
@@ -130,9 +147,12 @@ fi
 install_app_bundle "$APP_SRC" "$APP_DEST"
 
 echo ""
-echo "  Vision Native installed successfully."
+echo "  $APP_NAME installed successfully."
 echo "  Open it with:"
 echo "    open \"$APP_DEST\""
 echo ""
 echo "  It starts its own PostgreSQL 18 cluster and backend on synthetic Demo data in"
-echo "  ~/Library/Application Support/Vision Native/. Your Vision and Vision Demo data are untouched."
+echo "  ~/Library/Application Support/$APP_NAME/. Your Vision and Vision Demo data are untouched."
+if [ "$VARIANT" = "demo" ]; then
+  echo "  Reset its synthetic dataset with: bun run demo:reset-vision-native (then reopen it)."
+fi

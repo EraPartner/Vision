@@ -26,19 +26,22 @@ public struct KeychainError: Error, Equatable, Sendable, LocalizedError {
 }
 
 /// A generic password in the login Keychain: service
-/// `com.vaultvoyager.vision-native.backup-passphrase`, account = the backup device id.
+/// `com.vaultvoyager.vision-native.backup-passphrase` (the Demo variant's own
+/// `NativeVariant.backupPassphraseService`), account = the backup device id.
 public struct KeychainPassphraseStore: PassphraseStore {
-    public static let service = "com.vaultvoyager.vision-native.backup-passphrase"
+    public static let standardService = "com.vaultvoyager.vision-native.backup-passphrase"
     public let account: String
+    public let service: String
 
-    public init(account: String) {
+    public init(account: String, service: String = KeychainPassphraseStore.standardService) {
         self.account = account
+        self.service = service
     }
 
     private var query: [String: Any] {
         [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: Self.service,
+            kSecAttrService as String: service,
             kSecAttrAccount as String: account,
         ]
     }

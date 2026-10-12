@@ -43,31 +43,41 @@ Bun runs directly, for example `bun scripts/validate-locales.ts`. Run them with 
 
 The Electron shell in `packaging/electron/` is strict TypeScript compiled into
 `packaging/electron/out/` ([[docs/adr/196-electron-shell-typescript|ADR-196]]). The `dev`,
-`electron:dev`, `electron:prod`, `native:*`, `demo:reset-native` and `test:electron` scripts run
+`electron:dev`, `electron:prod`, `native:*`, `demo:reset-native`, `demo:reset-vision-native` and
+`test:electron` scripts run
 `bun packaging/electron/build.ts` first and then run the compiled JavaScript, for example
 `node packaging/electron/out/scripts/native-development.js`. The Electron package's own `start`,
 `prepare:*` and `dist*` scripts run `bun build.ts` first in the same way.
 
+`demo:reset-native` asks Electron's Vision Demo to restore its canonical seed at the next launch.
+`demo:reset-vision-native` writes the same request into `Vision Native Demo/` for Vision Native
+Demo (`native-demo-cli.js reset --execute --target vision-native-demo`; `--target vision-native`
+picks the standard Vision Native variant).
+
 ## Root install scripts
 
-| Script              | Purpose                                                                           |
-| ------------------- | --------------------------------------------------------------------------------- |
-| `install.sh`        | Build the Electron Vision app and install it to `/Applications/Vision.app`        |
-| `install-demo.sh`   | Build the Electron Vision Demo app with synthetic data                            |
-| `install-native.sh` | Build Vision Native (Release) and install it to `/Applications/Vision Native.app` |
+| Script              | Purpose                                                                                     |
+| ------------------- | ------------------------------------------------------------------------------------------- |
+| `install.sh`        | Build the Electron Vision app and install it to `/Applications/Vision.app`                  |
+| `install-demo.sh`   | Build the Electron Vision Demo app with synthetic data                                      |
+| `install-native.sh` | Build Vision Native Demo (Release) and install it to `/Applications/Vision Native Demo.app` |
 
 `install-native.sh` needs `xcodegen` and `xcodebuild`. It prepares the runtime payload with the
 same steps as `install-demo.sh` (`prepare_native_macos_build`, then `prepare-native-runtime` and
 `build-demo-seed` from `packaging/electron/scripts/`) into `apps/native/build/payload/`, and the
 Xcode build stages it into `Contents/Resources/runtime/` and `Contents/Resources/demo-seed/` before
-signing. The script then checks the staged files and the signature. Set
+signing. The script then checks the staged files and the signature. It builds the Demo variant
+unless `VISION_NATIVE_VARIANT=standard` is set, which installs `/Applications/Vision Native.app`. Set
 `VISION_NATIVE_SKIP_PAYLOAD=1` to build without a payload. It signs with the free personal team from
 `VISION_NATIVE_TEAM_ID`, or from `VISION_NATIVE_TEAM_ID = <id>` in
 `apps/native/Config/Local.xcconfig`, or ad-hoc with a warning when neither is set. The Swift package
 and the Debug app are built and tested in CI, without a payload, by the `native-macos` job
 ("Native (macOS)") on a GitHub-hosted `macos-26` runner. The job runs when `apps/native/`,
-`install-native.sh` or `ci.yml` changes, on every push to `main`, and when the diff cannot be
-classified ([[docs/architecture/native-app|Vision Native App Architecture]]).
+`packaging/electron/backup/`, `install-native.sh`, `ci.yml`, `packaging/electron/audit-anchor.ts`
+or `packaging/electron/scripts/native-audit-fixture.ts` changes, on every push to `main`, and when
+the diff cannot be classified. It uploads a plain and an encrypted backup bundle and an audit
+transfer written by the Swift code, and the `native-interop` job opens them on Linux with the
+Electron readers ([[docs/architecture/native-app|Vision Native App Architecture]]).
 
 ## Build and release inputs
 

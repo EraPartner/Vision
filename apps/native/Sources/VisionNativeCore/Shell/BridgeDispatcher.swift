@@ -36,6 +36,14 @@ public protocol BridgeHost: AnyObject {
     func restoreBackup(_ path: String, passphrase: String?) async -> JSONValue
     func backupEncryptionStatus() async -> PassphraseStatus
     func setBackupPassphrase(_ passphrase: String) async -> PassphraseUpdateResult
+    /// The six `electronAudit` channels; each answers the preload result shape
+    /// (`AuditChannels`).
+    func enrollAudit() async -> JSONValue
+    func readAudit(_ range: AuditViewer.ReadRange) async -> JSONValue
+    func exportAuditSnapshot() async -> JSONValue
+    func exportAuditTransfer(password: String) async -> JSONValue
+    func importAuditTransfer(password: String) async -> JSONValue
+    func rotateAuditKey() async -> JSONValue
     func retryLaunch()
     /// Opens the log folder and returns its path.
     func openLogs() throws -> String
@@ -156,6 +164,18 @@ public enum BridgeDispatcher {
             return .resolve(await host.backupEncryptionStatus().jsonValue)
         case .setBackupPassphrase(let passphrase):
             return .resolve(await host.setBackupPassphrase(passphrase).jsonValue)
+        case .auditEnroll:
+            return .resolve(await host.enrollAudit())
+        case .auditRead(let range):
+            return .resolve(await host.readAudit(range))
+        case .auditExport:
+            return .resolve(await host.exportAuditSnapshot())
+        case .auditTransferExport(let password):
+            return .resolve(await host.exportAuditTransfer(password: password))
+        case .auditTransferImport(let password):
+            return .resolve(await host.importAuditTransfer(password: password))
+        case .auditRotateKey:
+            return .resolve(await host.rotateAuditKey())
         case .recoveryRetry:
             host.retryLaunch()
             return .success

@@ -249,6 +249,15 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 
 ## Recent Decisions
 
+### 2026-10-12: Vision Native phase 1 hand-over (proposed)
+
+[[docs/adr/205-vision-native-hand-over|ADR-205]] is a proposed draft, not accepted. It records what
+phase 1 of Vision Native delivered (runtime, shell, backup, audit anchor, Demo variant, the
+[[docs/reference/native-parity/phase-1-exit|phase 1 exit checklist]] and backup interop in CI),
+keeps the Demo-only rule until phase 4, lists the switch-over steps deferred to phase 4 (restore
+through a backup, audit key and witness migration, Keychain service names, iCloud backup folder)
+and the product questions for Tor.
+
 ### 2026-10-12: The pension type follows the tax return
 
 [[docs/adr/203-belgian-tax-pension-type-activity-income|ADR-203]] adds the optional

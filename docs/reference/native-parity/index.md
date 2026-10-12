@@ -42,6 +42,13 @@ aliases: [native parity, parity inventory, swift parity checklist]
 
 Counts are the pages' own. The 44 screens are the 40 manifest routes, the `/portfolio/performance` redirect, and the shell page's app chrome, 404 page and Electron startup error page. Shared components (`VirtualDataTable`, comboboxes, `DatePicker`, `RowMenu`, `ExportDialog`) are inventoried in full on the first page that uses them and referenced from the others.
 
+## Phase 1 exit
+
+[[docs/reference/native-parity/phase-1-exit|The phase 1 exit checklist]] maps each of the shell
+page's 205 action rows, its keyboard shortcuts and its bridge methods to the Vision Native code at
+the end of phase 1, and counts the gaps that remain for the hand-over
+([[docs/adr/205-vision-native-hand-over|ADR-205]], proposed).
+
 ## Findings that change the plan
 
 - **The Belgian tax engine runs in the frontend**, not the backend: `apps/frontend/src/lib/belgianTax/` (about 9,500 lines), lazy-loaded by `BelgianTaxProfileContext`. The backend stores the profile and renders the PDF. The rewrite plan assumed a backend service; Tor decided on 2026-10-12 that the engine moves behind a backend OpenAPI operation before the Tax screen goes native (ADR-204 §6).
@@ -61,5 +68,6 @@ Each page's "Gaps and unsure" section lists where a feature doc in `docs/feature
 ## Related
 
 - [[docs/adr/204-vision-native-swift-app-target|ADR-204: Vision Native]]
+- [[docs/reference/native-parity/phase-1-exit|Native parity: phase 1 exit checklist]]
 - [[docs/reference/frontend-routes|Frontend Routes]]
 - [[docs/reference/index|Reference index]]

@@ -41,7 +41,7 @@ public enum DatabaseSwitchState: Sendable, Equatable {
 /// discovery, `initdb`, role and extension bootstrap, PostgreSQL start and stop, the
 /// backend child, PID ownership, health, the database switch used by Demo seeding and
 /// restore, the plain dump and the attachment switch used by backup and restore (phase
-/// 1d). The audit bridge is a later phase.
+/// 1d), and the per-launch audit bridge token the backend receives (phase 1e).
 public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
     public nonisolated let layout: RuntimeLayout
     public nonisolated let names: RuntimeNames
@@ -51,6 +51,8 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
 
     private let inheritedEnvironment: [String: String]
     private let dependencies: RuntimeDependencies
+    /// `VISION_AUDIT_BRIDGE_TOKEN`: 64 lowercase hex characters, new every launch.
+    private let auditBridgeToken: String?
     private var appPort: Int
     private var tools: NativeTools?
     private var postgresChild: SpawnedChild?
@@ -66,8 +68,15 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
         runtimeRoot: String,
         appPort: Int,
         inheritedEnvironment: [String: String],
-        dependencies: RuntimeDependencies
+        dependencies: RuntimeDependencies,
+        auditBridgeToken: String? = nil
     ) throws {
+        if let auditBridgeToken,
+            auditBridgeToken.range(of: "^[0-9a-f]{64}\\z", options: .regularExpression) == nil
+        {
+            throw NativeRuntimeError("INVALID_AUDIT_BRIDGE_TOKEN", "Invalid native audit bridge token")
+        }
+        self.auditBridgeToken = auditBridgeToken
         self.layout = layout
         names = try RuntimeNames(runtimeId: layout.runtimeId)
         self.postgresPort = try validateNetworkPort(postgresPort, "native PostgreSQL port")
@@ -610,7 +619,9 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
     /// earlier, refuses to touch a PID owned by another program, then spawns the
     /// compiled backend on the loopback app port with the allowlisted environment.
     /// Unlike Electron (`BACKEND_STALE_PID`), a recorded backend of ours that does not
-    /// answer `/health` is stopped and replaced, so Retry can recover from it.
+    /// answer `/health` is stopped and replaced, so Retry can recover from it. With an
+    /// audit bridge token a healthy backend is restarted too, like Electron: a backend kept
+    /// alive across launches holds the previous launch's token.
     public func start() async throws -> BackendStartResult {
         try await assertNativeActive()
         let config = try await bootstrapDatabase()
@@ -624,7 +635,9 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
                     "BACKEND_PID_OWNERSHIP_MISMATCH",
                     "The recorded backend process id belongs to another process; refusing to signal it.")
             }
-            if (try? await waitUntilReady(attempts: 3, intervalMilliseconds: 500)) != nil {
+            if auditBridgeToken == nil,
+                (try? await waitUntilReady(attempts: 3, intervalMilliseconds: 500)) != nil
+            {
                 return .alreadyRunning(pid: existing, port: appPort)
             }
             try await stopBackend()
@@ -643,7 +656,8 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
             layout: layout,
             runtimeRoot: runtimeRoot,
             alembic: tools.alembic,
-            chrome: tools.chrome)
+            chrome: tools.chrome,
+            auditBridgeToken: auditBridgeToken)
         let recordPath = layout.pid
         let spawnedPID = LockedValue<Int32>(0)
         try ensureNotShuttingDown()

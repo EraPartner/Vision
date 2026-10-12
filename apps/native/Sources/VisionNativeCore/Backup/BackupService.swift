@@ -70,6 +70,8 @@ public actor BackupService {
     private let context: BackupContext
     private let settings: any BackupSettingsStore
     private let runtimeProvider: @Sendable () async -> (any BackupRuntime)?
+    /// The audit hooks of the active runtime (phase 1e); `nil` restores without them.
+    private let auditProvider: @Sendable () async -> (any AuditRestoreGuard)?
     private let passphraseStoreFactory: @Sendable (String) -> (any PassphraseStore)?
     private let logger: any RuntimeLogging
     private let now: @Sendable () -> Date
@@ -86,11 +88,13 @@ public actor BackupService {
             KeychainPassphraseStore(account: $0)
         },
         logger: any RuntimeLogging,
-        now: @escaping @Sendable () -> Date = { Date() }
+        now: @escaping @Sendable () -> Date = { Date() },
+        auditProvider: @escaping @Sendable () async -> (any AuditRestoreGuard)? = { nil }
     ) {
         self.context = context
         self.settings = settings
         self.runtimeProvider = runtimeProvider
+        self.auditProvider = auditProvider
         self.passphraseStoreFactory = passphraseStoreFactory
         self.logger = logger
         self.now = now
@@ -258,8 +262,15 @@ public actor BackupService {
     }
 
     /// `backup:restore` for a picked path: the confirmation, then the bundle or legacy
-    /// restore. Errors resolve as `{ success: false, error: String(err) }`.
-    public func restore(path: String, passphrase: String?, confirm: @Sendable () async -> Bool) async -> JSONValue {
+    /// restore through `restoreWithAuditRecovery`. Errors resolve as
+    /// `{ success: false, error: String(err) }`. A restore whose audit history does not
+    /// verify is offered once more, with `confirmAuditRecovery` (the second warning, given
+    /// the error's `auditStatus`); accepted, it restores without the audit check, ends
+    /// the audit session and answers `auditStatus: "unavailable"`.
+    public func restore(
+        path: String, passphrase: String?, confirm: @Sendable () async -> Bool,
+        confirmAuditRecovery: @Sendable (_ auditStatus: String?) async -> Bool = { _ in false }
+    ) async -> JSONValue {
         guard BackupFiles.exists(path) else {
             return .object(["success": .bool(false), "error": .string("Backup file not found")])
         }
@@ -272,11 +283,29 @@ public actor BackupService {
         restoreInFlight = true
         defer { restoreInFlight = false }
         let lower = path.lowercased()
-        do {
-            if lower.hasSuffix(".visionbak") || lower.hasSuffix(".visionbak.enc") {
-                return try await runBundleRestore(path, passphrase: passphrase)
+        let isBundle = lower.hasSuffix(".visionbak") || lower.hasSuffix(".visionbak.enc")
+        func restoreSelected(_ allowUnverifiedAudit: Bool) async throws -> JSONValue {
+            if isBundle {
+                return try await runBundleRestore(
+                    path, passphrase: passphrase, allowUnverifiedAudit: allowUnverifiedAudit)
             }
-            return try await runRestore(path, passphrase: passphrase)
+            return try await runRestore(path, passphrase: passphrase, allowUnverifiedAudit: allowUnverifiedAudit)
+        }
+        do {
+            do {
+                return try await restoreSelected(false)
+            } catch let error as AuditRestoreError
+                where AuditRestoreError.recoveryCodes.contains(error.code) && !error.recoveryUnsafe
+            {
+                logger.log("warn", "[backup] restore audit check failed: \(error.code)")
+                guard await confirmAuditRecovery(error.auditStatus) else {
+                    return .object(["success": .bool(false), "error": .string("Restore cancelled by user")])
+                }
+                var result = try await restoreSelected(true).objectValue ?? [:]
+                await auditProvider()?.endAuditSession()
+                result["auditStatus"] = .string("unavailable")
+                return .object(result)
+            }
         } catch {
             logger.log("error", "[backup] restore failed: \(backupErrorMessage(error))")
             return .object(["success": .bool(false), "error": .string(backupErrorString(error))])
@@ -307,7 +336,9 @@ public actor BackupService {
     }
 
     /// `runBundleRestore`.
-    public func runBundleRestore(_ bundlePath: String, passphrase requested: String?) async throws -> JSONValue {
+    public func runBundleRestore(
+        _ bundlePath: String, passphrase requested: String?, allowUnverifiedAudit: Bool = false
+    ) async throws -> JSONValue {
         guard !bundlePath.isEmpty else { throw BackupFailure("No backup file specified") }
         guard BackupFiles.exists(bundlePath) else { throw BackupFailure("File not found: \(bundlePath)") }
         let encrypted = BackupBundle.isEncrypted(bundlePath)
@@ -342,7 +373,8 @@ public actor BackupService {
         let logger = self.logger
         let warning = try await BackupRestore.restoreBundle(
             runtime, dbSqlPath: opened.dbSqlPath, attachmentsDirectory: opened.attachmentsDirectory,
-            expectedSchemaHead: schemaHead, log: { logger.log("error", "[backup] \($0)") })
+            expectedSchemaHead: schemaHead, audit: await auditProvider(), allowUnverifiedAudit: allowUnverifiedAudit,
+            log: { logger.log("error", "[backup] \($0)") })
         var result: [String: JSONValue] = [
             "success": .bool(true), "file": .string(bundlePath), "frontendState": opened.frontendState ?? .null,
         ]
@@ -351,7 +383,9 @@ public actor BackupService {
     }
 
     /// `runRestore`: a legacy `.sql` or `.sql.enc` dump.
-    public func runRestore(_ sqlPath: String, passphrase requested: String?) async throws -> JSONValue {
+    public func runRestore(
+        _ sqlPath: String, passphrase requested: String?, allowUnverifiedAudit: Bool = false
+    ) async throws -> JSONValue {
         guard !sqlPath.isEmpty else { throw BackupFailure("No backup file specified") }
         guard BackupFiles.exists(sqlPath) else { throw BackupFailure("File not found: \(sqlPath)") }
         var source = sqlPath
@@ -381,6 +415,7 @@ public actor BackupService {
         let logger = self.logger
         try await BackupRestore.restoreDatabase(
             runtime, source: source, format: .plain, expectedSchemaHead: dumpHead.isEmpty ? nil : dumpHead,
+            audit: await auditProvider(), allowUnverifiedAudit: allowUnverifiedAudit,
             log: { logger.log("error", "[backup] \($0)") })
         return .object(["success": .bool(true), "file": .string(sqlPath)])
     }

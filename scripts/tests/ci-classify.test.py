@@ -46,10 +46,22 @@ class ClassificationTests(unittest.TestCase):
             self.assertFalse(classifier.classify_range('base', 'head'))
 
     def test_native_paths(self) -> None:
-        for paths in (['apps/native/Package.swift'], ['docs/a.md', 'install-native.sh'], ['.github/workflows/ci.yml'], []):
+        for paths in (
+            ['apps/native/Package.swift'],
+            ['docs/a.md', 'install-native.sh'],
+            ['.github/workflows/ci.yml'],
+            ['packaging/electron/backup/bundle.ts'],
+            ['packaging/electron/audit-anchor.ts'],
+            [],
+        ):
             with self.subTest(paths=paths):
                 self.assertTrue(classifier.classify_native(paths))
-        for paths in (['apps/frontend/src/App.tsx', 'docs/a.md'], ['apps/nativeish/x.swift'], ['install.sh']):
+        for paths in (
+            ['apps/frontend/src/App.tsx', 'docs/a.md'],
+            ['apps/nativeish/x.swift'],
+            ['install.sh'],
+            ['packaging/electron/main.ts'],
+        ):
             with self.subTest(paths=paths):
                 self.assertFalse(classifier.classify_native(paths))
 
@@ -71,10 +83,15 @@ class ClassificationTests(unittest.TestCase):
         native = workflow.split('  native-macos:', 1)[1].split('\n  # ', 1)[0]
         self.assertIn("if: needs.changes.outputs.native == 'true'", native)
         self.assertIn('runs-on: macos-26', native)
+        interop = workflow.split('  native-interop:', 1)[1].split('\n  # ', 1)[0]
+        self.assertIn('needs: [changes, native-macos]', interop)
+        self.assertIn("if: needs.changes.outputs.native == 'true'", interop)
         quality = workflow.split('  quality-gate:', 1)[1].split('    if:', 1)[0]
         self.assertIn('      - native-macos', quality)
+        self.assertIn('      - native-interop', quality)
         complete = workflow.split('  ci-complete:', 1)[1].split('    if:', 1)[0]
         self.assertNotIn('native-macos', complete)
+        self.assertNotIn('native-interop', complete)
 
 
 if __name__ == '__main__':

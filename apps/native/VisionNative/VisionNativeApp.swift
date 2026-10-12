@@ -11,8 +11,13 @@ enum AppRuntime {
     #else
         static let isDebugBuild = false
     #endif
+    /// Vision Native or Vision Native Demo, from the `VisionNativeVariant` Info.plist key
+    /// the `VISION_NATIVE_VARIANT` build setting writes.
+    static let variant = NativeVariant.fromInfoPlist(
+        Bundle.main.object(forInfoDictionaryKey: NativeVariant.infoPlistKey))
     /// Starts and stops Vision Native's own PostgreSQL 18 cluster and backend.
-    static let supervisor = RuntimeSupervisor.live(allowPayloadOverride: AppRuntime.isDebugBuild)
+    static let supervisor = RuntimeSupervisor.live(
+        allowPayloadOverride: AppRuntime.isDebugBuild, variant: AppRuntime.variant)
     static let logger = Logger(subsystem: "com.vaultvoyager.vision-native", category: "runtime")
     static let shellLogger = Logger(subsystem: "com.vaultvoyager.vision-native", category: "shell")
     /// The `will-quit` hard timeout in `packaging/electron/main.ts`.

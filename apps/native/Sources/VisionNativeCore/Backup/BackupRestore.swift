@@ -151,24 +151,39 @@ public enum BackupRestore {
         (error as? NativeRuntimeError)?.code != "DATABASE_SWITCH_RECOVERY_FAILED"
     }
 
-    /// `restoreNativeDatabase`: a database-only restore (legacy SQL files).
+    /// `markRollbackErrors`: a failed rollback makes the audit recovery unsafe, so
+    /// `restoreWithAuditRecovery` does not offer it.
+    private static func marked(_ error: Error, rollbackFailures: [Error]) -> Error {
+        guard !rollbackFailures.isEmpty, var audit = error as? AuditRestoreError else { return error }
+        audit.recoveryUnsafe = true
+        return audit
+    }
+
+    /// `restoreNativeDatabase`: a database-only restore (legacy SQL files). With `audit`,
+    /// the live closure pauses for the switch and the restored history must verify
+    /// (`assertRestoredAuditHistory`) before the switch is finalized.
     public static func restoreDatabase(
         _ runtime: any BackupRuntime, source: String, format: RestoreFormat, expectedSchemaHead: String?,
+        audit: (any AuditRestoreGuard)? = nil, allowUnverifiedAudit: Bool = false,
         log: @Sendable (String) -> Void = { _ in }
     ) async throws {
         var databaseSwitch: DatabaseSwitchToken?
+        await audit?.pauseAuditClosure()
         do {
             let token = try await runtime.activateRestoredDatabase(
                 source, format: format, expectedSchemaHead: expectedSchemaHead ?? "")
             databaseSwitch = token
             try await runtime.startBackendAndWait()
+            if let audit { _ = try await audit.assertRestoredAuditHistory(allowUnverifiedAudit: allowUnverifiedAudit) }
             try await runtime.finalizeDatabaseSwitch(token)
         } catch {
             let failures = await rollback(
                 runtime, databaseSwitch: databaseSwitch, attachmentSwitch: nil, restart: restartsAfter(error))
             for failure in failures { log("restore rollback failed: \(backupErrorMessage(failure))") }
-            throw error
+            await audit?.resumeAuditClosure()
+            throw marked(error, rollbackFailures: failures)
         }
+        await audit?.resumeAuditClosure()
     }
 
     /// `restoreNativeBundle`: database, then attachments, restart and readiness, then the
@@ -176,10 +191,12 @@ public enum BackupRestore {
     /// afterwards is cleanup only; its failure is returned as a warning.
     public static func restoreBundle(
         _ runtime: any BackupRuntime, dbSqlPath: String, attachmentsDirectory: String?, expectedSchemaHead: String?,
+        audit: (any AuditRestoreGuard)? = nil, allowUnverifiedAudit: Bool = false,
         log: @Sendable (String) -> Void = { _ in }
     ) async throws -> String? {
         var databaseSwitch: DatabaseSwitchToken?
         var attachmentSwitch: DirectorySwitchToken?
+        await audit?.pauseAuditClosure()
         do {
             let token = try await runtime.activateRestoredDatabase(
                 dbSqlPath, format: .plain, expectedSchemaHead: expectedSchemaHead ?? "")
@@ -188,14 +205,17 @@ public enum BackupRestore {
                 attachmentSwitch = try await runtime.replaceAttachments(from: attachmentsDirectory)
             }
             try await runtime.startBackendAndWait()
+            if let audit { _ = try await audit.assertRestoredAuditHistory(allowUnverifiedAudit: allowUnverifiedAudit) }
             try await runtime.finalizeDatabaseSwitch(token)
         } catch {
             let failures = await rollback(
                 runtime, databaseSwitch: databaseSwitch, attachmentSwitch: attachmentSwitch,
                 restart: restartsAfter(error))
             for failure in failures { log("restore rollback failed: \(backupErrorMessage(failure))") }
-            throw error
+            await audit?.resumeAuditClosure()
+            throw marked(error, rollbackFailures: failures)
         }
+        await audit?.resumeAuditClosure()
         guard let attachmentSwitch else { return nil }
         do {
             try await runtime.finalizeAttachmentSwitch(attachmentSwitch)

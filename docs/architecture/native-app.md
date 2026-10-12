@@ -20,20 +20,28 @@ tags:
     menus,
     preload-bridge,
     backup,
+    audit-log,
+    keychain,
+    demo,
     adr-204,
+    adr-205,
   ]
-description: "Vision Native is the Swift macOS app under apps/native/ that replaces the Electron shell in phases (ADR-204). Covers the directory layout, the runtime supervisor that starts its own PostgreSQL 18 cluster and backend on synthetic Demo data, payload discovery, the phase 1c shell (window, launch state, preload bridge, web view navigation and download policy, menus, dock and vibrancy), phase 1d backup and restore (bundle format compatibility, Keychain passphrase, restore allow-list, quit-time backup), the Debug-only backend override, the Native (macOS) CI job and install-native.sh."
+description: "Vision Native is the Swift macOS app under apps/native/ that replaces the Electron shell in phases (ADR-204). Covers the directory layout, the runtime supervisor that starts its own PostgreSQL 18 cluster and backend on synthetic Demo data, payload discovery, the phase 1c shell (window, launch state, preload bridge, web view navigation and download policy, menus, dock and vibrancy), phase 1d backup and restore (bundle format compatibility, Keychain passphrase, restore allow-list, quit-time backup), the phase 1e audit anchor and Keychain witness with restore continuity, the standard and Demo variants of one build, the Debug-only backend override, the Native (macOS) CI job with the backup and audit interop job, and install-native.sh."
 aliases: [vision native, native app, swift app]
 ---
 
 # Vision Native App Architecture
 
 > [!abstract] Overview
-> Vision Native is a separate Swift app, bundle identifier `com.vaultvoyager.vision-native`, that
-> replaces the [[docs/architecture/electron|Electron shell]] in phases
+> Vision Native is a separate Swift app, bundle identifier `com.vaultvoyager.vision-native` (and
+> `com.vaultvoyager.vision-native-demo` for the Demo variant), that replaces the
+> [[docs/architecture/electron|Electron shell]] in phases
 > ([[docs/adr/204-vision-native-swift-app-target|ADR-204]]). In phase 1 it hosts the existing
 > React frontend in a `WKWebView` and runs its own runtime on synthetic Demo data only. The Electron
-> "Vision" app stays the daily app until the phase 4 switch-over.
+> "Vision" app stays the daily app until the phase 4 switch-over. The phase 1 hand-over is
+> proposed in [[docs/adr/205-vision-native-hand-over|ADR-205]], and
+> [[docs/reference/native-parity/phase-1-exit|the phase 1 exit checklist]] maps every shell and
+> settings action to its Swift code.
 
 ## Layout
 
@@ -46,8 +54,10 @@ aliases: [vision native, native app, swift app]
 | `apps/native/Sources/VisionNativeCore/`         | `BackendLocator` and `BackendHealth`: non-UI logic, testable without the Xcode UI     |
 | `apps/native/Sources/VisionNativeCore/Runtime/` | Runtime supervisor, PostgreSQL and backend lifecycle, Demo seeding, system seams      |
 | `apps/native/Sources/VisionNativeCore/Shell/`   | Shell logic without AppKit: bridge contract, codec, policy, menu model, window frame  |
-| `apps/native/Tests/VisionNativeCoreTests/`      | Swift Testing tests                                                                   |
-| `install-native.sh`                             | Local Release build and install to `/Applications/Vision Native.app`                  |
+| `apps/native/Sources/VisionNativeCore/Backup/`  | Backup bundles, encryption, restore and the `electronBackup` service (phase 1d)       |
+| `apps/native/Sources/VisionNativeCore/Audit/`   | Audit anchor, Keychain witness, backend audit bridge and `electronAudit` (phase 1e)   |
+| `apps/native/Tests/VisionNativeCoreTests/`      | Swift Testing tests and fixtures (Electron backup bundle, Electron audit anchor)      |
+| `install-native.sh`                             | Local Release build and install, by default to `/Applications/Vision Native Demo.app` |
 
 The generated `apps/native/VisionNative.xcodeproj`, its `Info.plist`, `apps/native/build/` and
 the SwiftPM state are gitignored. The app target uses Swift 6 with complete strict concurrency,
@@ -79,9 +89,10 @@ running.
 
 ### Data directory
 
-Everything lives below `~/Library/Application Support/Vision Native/`. Vision Native refuses any
-other application-data directory and never reads, locks or changes the `Vision` or `Vision Demo`
-directories. Below `native/<runtimeId>/` the layout is the Electron native runtime's, so a later
+Everything lives below `~/Library/Application Support/Vision Native/` (the Demo variant:
+`Vision Native Demo/`, see [[docs/architecture/native-app#Variants (phase 1e)|Variants]]). Vision
+Native refuses any other application-data directory, and a directory that belongs to the other
+variant, and never reads, locks or changes the `Vision` or `Vision Demo` directories. Below `native/<runtimeId>/` the layout is the Electron native runtime's, so a later
 phase can switch directories without converting files.
 
 ```text
@@ -89,7 +100,8 @@ Vision Native/
   settings.json             appPort (persisted random backend port), keepServicesOnQuit
   vision-native.lock        single-instance lock (flock)
   demo-reset-request.json   optional request to restore the canonical seed on next launch
-  logs/main.log             lifecycle log, rotated once at 2 MB
+    logs/main.log             lifecycle log, rotated once at 2 MB
+  audit-anchor/             key.enc, checkpoint.json (phase 1e, same files as Electron)
   native/vision_native/
     runtime.env             generated credentials (0600)
     runtime-state.json      runtime marker (activeRuntime, demoSeed, pendingDatabaseSwitch)
@@ -102,8 +114,9 @@ Vision Native/
 
 The runtime id is `vision_native`, so the database is `vision_native` and the roles are
 `vision_native_admin`, `vision_native_owner` and `vision_native_app`, plus
-`vision_analysis_executor`. PostgreSQL listens on `127.0.0.1:54331`, next to Vision (54329) and
-Vision Demo (54330), so all three can run at once.
+`vision_analysis_executor`. PostgreSQL listens on `127.0.0.1:54331`, next to Vision (54329),
+Vision Demo (54330) and Vision Native Demo (54332, runtime id `vision_native_demo`), so all four
+can run at once.
 
 ### Payload discovery
 
@@ -164,13 +177,14 @@ seconds, and their output is read for at most 2 more seconds after exit. When `k
 `settings.json` mirror), both processes keep running. Otherwise the backend gets `SIGTERM` and,
 after 10 seconds, `SIGKILL`, and PostgreSQL stops with `pg_ctl stop -m fast`. Vision Native
 signals a recorded PID only when `ps -o command=` shows its own `vision-backend`, removes stale
-records, and treats PIDs of 1 or less as untrusted. On the next launch a healthy backend from an
-earlier run is reused, and an unhealthy one is replaced.
+records, and treats PIDs of 1 or less as untrusted. On the next launch a backend from an earlier run is
+replaced, healthy or not, because the audit bridge token is new on every launch (Electron does the
+same when it has an audit token).
 
 Before the shutdown the shell runs the quit-time backup (see
-[[docs/architecture/native-app#Backup and restore (phase 1d)|Backup and restore]]); the 45-second limit covers both. Phase 1b leaves out the
-audit anchor and Keychain witness (phase 1e), external PostgreSQL clusters, the Bun source mode and the health
-watchdog that restarts a crashed backend.
+[[docs/architecture/native-app#Backup and restore (phase 1d)|Backup and restore]]) and then ends the
+audit session; the 45-second limit covers all of it. Not ported: external PostgreSQL clusters, the Bun source mode and the health watchdog that
+restarts a crashed backend.
 
 ### Developer override
 
@@ -197,7 +211,7 @@ WebKit live in `Sources/VisionNativeCore/Shell/` and have Swift Testing tests; t
 ### Window and launch state
 
 The app no longer uses a SwiftUI `App` scene, so SwiftUI does not replace the menu bar. One window
-opens at Electron's 1280 x 800 with a minimum of 800 x 600, titled "Vision Native". It matches
+opens at Electron's 1280 x 800 with a minimum of 800 x 600, titled with the app name ("Vision Native" or "Vision Native Demo"). It matches
 Electron's `titleBarStyle: "hiddenInset"`: full-size content view, transparent title bar and a
 hidden title, so the frontend draws its topbar under the traffic lights (the `electron-mac` CSS in
 `apps/frontend/src/index.css`). The traffic lights keep AppKit's default position; Electron moves
@@ -249,7 +263,7 @@ JavaScriptCore with a stub message handler.
 | `electronUpdater`  | `update:check-github`, `update:install-shell`, `update:pre-update-backup`                                                     | Empty object: no updater (ADR-204 decision 5); direct calls reject      |
 | `electronBackup`   | `backup:run`, `select-dir`, `select-file`, `restore`, `is-encrypted`, `get-encryption-status`, `set-passphrase`               | `BackupService` and AppKit panels (phase 1d)                            |
 | `electronBackup`   | `backup:save-settings`, `backup:load-settings`                                                                                | `backup_settings` database setting, mirrored to `settings.json`         |
-| `electronAudit`    | `audit:enroll`, `read`, `export`, `transfer-export`, `transfer-import`, `rotate-key`                                          | Stubs that reject "not available in Vision Native yet" (phase 1e)       |
+| `electronAudit`    | `audit:enroll`, `read`, `export`, `transfer-export`, `transfer-import`, `rotate-key`                                          | `AuditChannels` over the audit anchor and backend bridge (phase 1e)     |
 | `electronServices` | `services:save-settings`, `services:load-settings`                                                                            | Database setting with baseline writes, mirrored to `settings.json`      |
 | `electronRecovery` | `recovery:retry`, `recovery:open-logs`                                                                                        | Relaunch through the supervisor; open `native/vision_native/logs`       |
 | `electronAPI`      | `app:renderer-ready`, `app:set-badge`, `app:set-language`, `app:set-vibrancy`, `app:get-accent-color`, `theme:persist-splash` | Implemented (queue flush, dock badge, menus, material, accent, palette) |
@@ -322,8 +336,7 @@ run:
 
 ### Left for later phases
 
-Phase 1e ports the audit anchor and Keychain witness (`electronAudit`). The pre-update backup has
-no counterpart because there is no updater. Still missing as well: the health
+The pre-update backup has no counterpart because there is no updater. Still missing: the health
 watchdog and `backend:lost`/`backend:restored`, the renderer-ready watchdog that reloads and shows
 the error page, the production security headers of `registerSecurityHeaders`, the text context
 menu with spelling suggestions, Electron's traffic-light position, zoom persistence and JavaScript
@@ -364,8 +377,8 @@ or 100,000 entries. The v1 salt is Electron Vision's (`vision-backup-v1`, from t
 ### Passphrase
 
 `VISION_BACKUP_PASSPHRASE` wins, as in Electron. Otherwise the passphrase is a generic password in
-the login Keychain with the service `com.vaultvoyager.vision-native.backup-passphrase` and the
-backup device id as the account (`KeychainPassphraseStore` behind the `PassphraseStore` protocol).
+the login Keychain with the service `com.vaultvoyager.vision-native.backup-passphrase` (Demo:
+`com.vaultvoyager.vision-native-demo.backup-passphrase`) and the backup device id as the account (`KeychainPassphraseStore` behind the `PassphraseStore` protocol).
 Vision Native never writes Electron's `backupPassphraseEncrypted` field. An empty passphrase
 removes the item. Without a passphrase a backup is written unencrypted with Electron's warning.
 A failed Keychain write answers `available: true` with the error, like a failed `safeStorage`
@@ -376,9 +389,10 @@ rebuild, macOS can ask for the login password before the new build may read it.
 
 The device id is Electron's (the first 8 hex digits of SHA-1 over `darwin|arch|hostname|userData`),
 persisted once as `backupDeviceId` in `settings.json`. Without a configured directory the default
-is `~/Library/Mobile Documents/com~apple~CloudDocs/Vision Native/Backups` when iCloud Drive exists,
-and the quit-time backup is then on. The folder is deliberately `Vision Native`, not Electron's
-`Vision`, so the two apps' backups and retention never mix. Retention keeps the newest seven backups of this device and
+is `~/Library/Mobile Documents/com~apple~CloudDocs/Vision Native/Backups` (Demo: `Vision Native
+Demo/Backups`) when iCloud Drive exists, and the quit-time backup is then on. The folder is
+deliberately `Vision Native`, not Electron's `Vision`, so the two apps' backups and retention never
+mix. Retention keeps the newest seven backups of this device and
 removes older ones, and `.partial` leftovers, only when they are more than 10 minutes old.
 
 ### Restore
@@ -411,11 +425,15 @@ backend starts. If `pendingDatabaseSwitch` is still persisted, the previous atta
 back and the database switch then rolls back. Otherwise the restore had committed: the restored
 tree stays and the previous one is removed.
 
-> [!warning] Audit continuity is phase 1e work
-> Electron's restore also pauses and resumes the audit closure (`pauseAuditClosure`,
-> `resumeAuditClosure`), checks the restored audit history (`assertRestoredAuditHistory`), offers
-> `restoreWithAuditRecovery` with a second confirmation and returns `auditStatus`. Vision Native
-> has no audit anchor yet, so none of this is ported; phase 1e adds it.
+Audit continuity (phase 1e) follows `restoreWithAuditRecovery` in `runtime/native.ts`: the restore
+pauses the audit closure before it stops the backend and resumes it afterwards, also after a
+failure. Once the restored backend is healthy, `assertRestoredAuditHistory` must accept the
+restored history before the database switch is finalized; otherwise the restore rolls back. When
+the audit check fails with a recoverable code and the rollback succeeded, a second `NSAlert` asks
+whether to restore without audit verification. Accepting restores again, ends the audit session
+and adds `auditStatus: "unavailable"` to the result; declining fails with "Restore cancelled by
+user". See [[docs/architecture/native-app#Audit anchor and Keychain witness (phase 1e)|Audit
+anchor]].
 
 ### Quit-time backup
 
@@ -425,6 +443,110 @@ A backup already in progress is awaited instead of starting a second one. The ap
 45-second hard limit, Electron's will-quit timeout, covers the backup and the shutdown together.
 Failures are logged to the unified log; there are no OS notifications yet.
 
+## Audit anchor and Keychain witness (phase 1e)
+
+Phase 1e answers the `electronAudit` channels. `Sources/VisionNativeCore/Audit/` ports
+`packaging/electron/audit-anchor.ts`, the audit half of `runtime/native.ts` and `audit-viewer.ts`
+([[docs/adr/156-forward-only-audit-chain-foundation|ADR-156]] to
+[[docs/adr/162-one-year-audit-retention|ADR-162]]). It has no AppKit dependency; the app
+target adds only the confirmations (`NSAlert`), the save and open panels and the notice sheet.
+
+| Type                      | Role                                                                                                   |
+| ------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `AuditAnchor`             | Actor. Receipt, HMAC, enrol, rotate, retention boundary, legacy cutover, transfer export and import    |
+| `AuditReceipt`            | Receipt fields, the signed bytes, `receiptHash` and `receiptId`, parsed and checked as Electron does   |
+| `KeychainAuditWitness`    | The witness item through the Security framework; no helper process                                     |
+| `NativeAuditKeyProtector` | Protects the 32-byte HMAC key (`vn1`) under a Keychain wrapping key; reads Electron's `v10` on request |
+| `AuditRuntime`            | Actor. Verification, enrolment, verified reads, live closure, retention, transfer, restore checks      |
+| `URLSessionAuditBridge`   | `POST /api/internal/audit/<endpoint>` with the bridge token                                            |
+| `AuditChannels`           | The six channels with Electron's result shapes, the 30-second closure timer and the audit notices      |
+| `AuditViewer`             | The read range and the snapshot export of `audit-viewer.ts`                                            |
+
+### Format compatibility
+
+The files are Electron's, in the same place: `<userData>/audit-anchor/checkpoint.json` and
+`key.enc`, written atomically with mode 0600. The receipt (`macos_keychain_witness_hmac_v3`,
+version 3) is signed with HMAC-SHA256 over the same JSON array of version, key id, sequence, hash,
+legacy cutover, creation time and the optional enrolment sequence and retention boundary; the
+receipt hash is SHA-256 of those bytes and the MAC, and the receipt id is
+`<keyId>:<sequence>[:<retention through>]`. The transfer file (`.vat`) is Electron's envelope:
+scrypt (N = 32768, r = 8, p = 1), AES-256-GCM with the additional data `vision-audit-transfer-v1`,
+and a password of 16 to 1,024 characters. An interrupted transfer import is recovered from
+`checkpoint.before-transfer.json` and `key.before-transfer.enc` at the next start, as in Electron.
+
+The tests read a receipt, key, witness value and transfer that `audit-anchor.ts` wrote with a fake
+`safeStorage` and witness (`Tests/VisionNativeCoreTests/Fixtures/audit/`, made by
+`packaging/electron/scripts/native-audit-fixture.ts`; its README says how), and CI checks the
+other direction (see [[docs/architecture/native-app#CI|CI]]).
+
+### Key protection and witness
+
+Electron protects the HMAC key with `safeStorage` (`v10`, AES-128-CBC under the "Vision Safe
+Storage" password). Vision Native cannot use that item, which belongs to Electron's signature, so
+it writes `key.enc` as `vn1` + 12-byte nonce + AES-256-GCM ciphertext + 16-byte tag, under a random
+256-bit wrapping key in the login Keychain (service `com.vaultvoyager.vision-native.audit-key`,
+account `audit-anchor-key`). The prefix tells the two encodings apart, and
+`ElectronSafeStorage` reads a `v10` value when it is given the Safe Storage password, which only a
+phase 4 migration would do. Trade-off: the key file and the wrapping key are separate secrets, as
+with `safeStorage`; the receipt format does not change.
+
+The witness is a generic password with the service `com.vaultvoyager.vision-native.audit-witness`
+(Demo: `com.vaultvoyager.vision-native-demo.audit-witness`) and the account `latest-checkpoint`,
+holding the same JSON value as Electron's (version, key id, sequence, hash, receipt hash), at most
+8 KiB. Errors keep Electron's vocabulary: `audit_witness_unavailable`, `audit_witness_invalid` and
+`audit_witness_already_exists`; a missing item reads as no witness. Electron Vision's witness is
+`com.vaultvoyager.vision.audit-witness`; [[docs/adr/205-vision-native-hand-over|ADR-205]] lists
+the phase 4 migration.
+
+### Backend bridge and lifecycle
+
+Each launch draws a 32-byte random token, passes it to the backend as `VISION_AUDIT_BRIDGE_TOKEN`
+(64 lowercase hex characters, checked by `NativeRuntime`) and sends it as a bearer token to
+`/api/internal/audit/*`. A backend left running from an earlier launch has the old token, so it is
+replaced (see [[docs/architecture/native-app#Stop sequence|Stop sequence]]). When the runtime is
+ready, the shell verifies the history before the page loads, closes the checkpoint every 30 seconds
+while the window lives, runs retention at most once a day and ends the session at quit. A status
+other than verified is logged and shown once as a sheet on the window; Electron posts an OS
+notification instead.
+
+### Differences from Electron
+
+- `key.enc` is `vn1` under a Keychain wrapping key, not `safeStorage` (`v10`).
+- An imported transfer's receipt is rewritten in canonical field order, and transferred receipts
+  are checked in that order, which is stricter than Electron's check of the raw object.
+- The snapshot export sorts nested object keys.
+- No update decision is recorded, because there is no updater.
+- A Demo reset on an enrolled Demo cluster replaces the history under the anchor, so the next
+  verification fails, as in Electron Vision Demo.
+
+## Variants (phase 1e)
+
+One app target builds two variants. The build setting `VISION_NATIVE_VARIANT` (`standard` or
+`demo`) picks the product name and bundle identifier in `project.yml` and is copied into
+`Info.plist` as `VisionNativeVariant`; `NativeVariant.fromInfoPlist` reads it at launch, and a
+missing or unknown value is the standard variant. A second XcodeGen target was rejected: one target
+keeps one CI build, and Electron's `resources/DEMO` marker would need a copy step for the same
+result.
+
+| Variant    | App                      | Bundle id                             | Data directory                           | Runtime id           | PostgreSQL |
+| ---------- | ------------------------ | ------------------------------------- | ---------------------------------------- | -------------------- | ---------- |
+| `standard` | `Vision Native.app`      | `com.vaultvoyager.vision-native`      | `Application Support/Vision Native`      | `vision_native`      | 54331      |
+| `demo`     | `Vision Native Demo.app` | `com.vaultvoyager.vision-native-demo` | `Application Support/Vision Native Demo` | `vision_native_demo` | 54332      |
+
+The Keychain services (backup passphrase, audit witness, audit key) use the runtime id with
+hyphens, for example `com.vaultvoyager.vision-native-demo.backup-passphrase`. The iCloud backup
+folder follows the app name (`Vision Native Demo/Backups`). Both variants seed the synthetic Demo
+dataset on first launch and when the seed changes, and neither has an updater, so the standard
+variant holds no real data until the phase 4 switch-over (ADR-204 decision 1).
+`install-native.sh` builds the Demo variant unless `VISION_NATIVE_VARIANT=standard`; a plain Xcode
+or CI build is the standard variant.
+
+The Demo reset follows `native-demo.ts`: `bun run demo:reset-vision-native` writes
+`demo-reset-request.json` into `Vision Native Demo/`, and the next launch restores the canonical
+seed. `native-demo-cli.js reset --execute --target vision-native` targets the standard variant;
+`bun run demo:reset-native` still targets Electron's Vision Demo. Electron Vision Demo has no reset
+action in the app, so Vision Native has none either.
+
 ## CI
 
 Linux cannot build macOS apps, so the `native-macos` job ("Native (macOS)") in
@@ -433,9 +555,20 @@ generates the project, builds the Debug app with `CODE_SIGNING_ALLOWED=NO` and r
 `swift test --package-path apps/native`. It selects Xcode 26.6 with `xcode-select` and prints
 `xcodebuild -version`, and installs XcodeGen 2.46.0 from its release zip after checking a pinned
 SHA-256. CI builds without a runtime payload. The `changes` job sets `native` to true when a pull request
-touches `apps/native/`, `install-native.sh` or `ci.yml`, on every push to `main` and whenever the diff cannot
-be classified (`scripts/ci-classify.py`). Quality Gate needs the job and tolerates `skipped`, so a
-failed native build or test blocks "CI Complete" through Quality Gate.
+touches `apps/native/`, `packaging/electron/backup/`, `install-native.sh`, `ci.yml`,
+`packaging/electron/audit-anchor.ts` or `packaging/electron/scripts/native-audit-fixture.ts`, on
+every push to `main` and whenever the diff cannot be classified (`scripts/ci-classify.py`).
+
+The test step sets `VISION_NATIVE_INTEROP_DIR`, so `NativeInteropExportTests` writes a plain
+bundle, a v2-encrypted bundle and an audit transfer from synthetic data with fixed test
+passwords, plus `expected.json`; the job uploads them as the `native-interop` artifact. The
+`native-interop` job ("Native Interop (Electron reader)") runs on `ubuntu-24.04` after
+`native-macos`, only when `native` is true. It downloads the artifact, builds the Electron code and
+runs `packaging/electron/backup/native-interop.test.ts` with `node --test`: the Electron readers
+must open both bundles (metadata, `db.sql`, attachments and frontend state) and refuse a wrong
+passphrase, and `createAuditAnchor` must import the audit transfer. A skipped test fails the job.
+Quality Gate needs both jobs and tolerates `skipped`, so a failed native build, test or interop
+check blocks "CI Complete" through Quality Gate.
 
 ## Install
 
@@ -445,7 +578,8 @@ scripts as `install-demo.sh` (`prepare_native_macos_build`, then `prepare-native
 generates the project and builds Release into `apps/native/build/`. A "Stage runtime payload"
 build phase copies the payload to `Contents/Resources/runtime/` and `Contents/Resources/demo-seed/`
 before code signing. The script checks the staged files and `codesign --verify --strict`, then
-replaces `/Applications/Vision Native.app`. `VISION_NATIVE_SKIP_PAYLOAD=1` builds without a payload.
+replaces `/Applications/Vision Native Demo.app` (with `VISION_NATIVE_VARIANT=standard`,
+`/Applications/Vision Native.app`). `VISION_NATIVE_SKIP_PAYLOAD=1` builds without a payload.
 
 It signs automatically with the free personal team from `VISION_NATIVE_TEAM_ID`, or from
 `VISION_NATIVE_TEAM_ID = <id>` in `apps/native/Config/Local.xcconfig`, so the signature stays
@@ -457,6 +591,8 @@ signature changes on every build. There is no updater: rerunning the script is t
 - [[docs/adr/204-vision-native-swift-app-target|ADR-204]]
 - [[docs/reference/native-parity/index|Native parity inventory]]
 - [[docs/reference/native-parity/shell-and-settings|Native parity: shell, menus, dock and bridge]]
+- [[docs/reference/native-parity/phase-1-exit|Native parity: phase 1 exit checklist]]
+- [[docs/adr/205-vision-native-hand-over|ADR-205 (proposed)]]
 - [[docs/architecture/electron|Electron Desktop Architecture]]
 - [[docs/reference/scripts|Scripts Reference]]
 - [[docs/guides/native-macos-runtime|Native macOS Runtime Guide]]

@@ -71,6 +71,7 @@
     "native:db-smoke": "bun packaging/electron/build.ts && node packaging/electron/out/scripts/native-db-smoke.js",
     "native:isolated-smoke": "bun packaging/electron/build.ts && node packaging/electron/out/scripts/native-isolated-smoke.js",
     "demo:reset-native": "bun packaging/electron/build.ts && node packaging/electron/out/scripts/native-demo-cli.js reset --execute",
+    "demo:reset-vision-native": "bun packaging/electron/build.ts && node packaging/electron/out/scripts/native-demo-cli.js reset --execute --target vision-native-demo",
     "update": "bun update",
     "version:bump": "bun scripts/version-bump.ts",
     "generate:types": "openapi-typescript openapi.yaml -o apps/frontend/src/types/generated.ts",

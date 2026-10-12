@@ -14,6 +14,34 @@ public enum RuntimePhase: Sendable, Equatable {
     case failed(String)
 }
 
+/// What the audit anchor needs from the system (phase 1e). `nil` in
+/// `SupervisorConfiguration` leaves audit protection unavailable and the backend without
+/// a bridge token, as Electron does without `safeStorage` and a witness.
+public struct AuditDependencies: Sendable {
+    public var witness: any AuditWitness
+    public var keyProtector: (any AuditKeyProtector)?
+    /// Builds the bridge client for this launch's token and the backend's current port.
+    public var transport: @Sendable (_ token: String, _ port: @escaping @Sendable () async -> Int) -> any AuditBridgeTransport
+
+    public init(
+        witness: any AuditWitness, keyProtector: (any AuditKeyProtector)?,
+        transport: @escaping @Sendable (_ token: String, _ port: @escaping @Sendable () async -> Int) ->
+            any AuditBridgeTransport
+    ) {
+        self.witness = witness
+        self.keyProtector = keyProtector
+        self.transport = transport
+    }
+
+    /// The Keychain witness and wrapping key of a variant, and the URLSession bridge.
+    public static func live(variant: NativeVariant) -> AuditDependencies {
+        AuditDependencies(
+            witness: KeychainAuditWitness(service: variant.auditWitnessService),
+            keyProtector: NativeAuditKeyProtector(store: KeychainAuditWrappingKeyStore(service: variant.auditKeyService)),
+            transport: { token, port in URLSessionAuditBridge(token: token, port: port) })
+    }
+}
+
 public struct SupervisorConfiguration: Sendable {
     /// The app's environment (`ProcessInfo.processInfo.environment`). Children only get
     /// the allowlisted keys.
@@ -22,6 +50,10 @@ public struct SupervisorConfiguration: Sendable {
     /// `Bundle.main.resourcePath`.
     public var resourcesDirectory: String?
     public var postgresPort: Int
+    /// Vision Native or Vision Native Demo: the data directory and runtime id.
+    public var variant: NativeVariant
+    /// `nil` runs without audit protection (tests).
+    public var audit: AuditDependencies?
     /// `HEALTH_POLL_BUILD_ATTEMPTS`: a cold start may initialize PostgreSQL, seed the
     /// Demo and run migrations, so the first navigation waits up to about 3 minutes.
     public var readinessAttempts: Int
@@ -33,14 +65,18 @@ public struct SupervisorConfiguration: Sendable {
         environment: [String: String],
         homeDirectory: String,
         resourcesDirectory: String?,
-        postgresPort: Int = VisionNativeIdentity.postgresPort,
+        postgresPort: Int? = nil,
         readinessAttempts: Int = 600,
-        allowPayloadOverride: Bool = false
+        allowPayloadOverride: Bool = false,
+        variant: NativeVariant = .standard,
+        audit: AuditDependencies? = nil
     ) {
         self.environment = environment
         self.homeDirectory = homeDirectory
         self.resourcesDirectory = resourcesDirectory
-        self.postgresPort = postgresPort
+        self.postgresPort = postgresPort ?? variant.postgresPort
+        self.variant = variant
+        self.audit = audit
         self.readinessAttempts = readinessAttempts
         self.allowPayloadOverride = allowPayloadOverride
     }
@@ -62,6 +98,7 @@ public actor RuntimeSupervisor: BackupSettingsStore {
     private let logger: any RuntimeLogging
     public private(set) var phase: RuntimePhase = .idle
     private var runtime: NativeRuntime?
+    private var audit: AuditRuntime?
     private var launchTask: Task<URL, Error>?
     private var shutdownRequested = false
     private var shutdownInProgress = false
@@ -86,13 +123,14 @@ public actor RuntimeSupervisor: BackupSettingsStore {
         environment: [String: String] = ProcessInfo.processInfo.environment,
         homeDirectory: String = FileManager.default.homeDirectoryForCurrentUser.path,
         resourcesDirectory: String? = Bundle.main.resourcePath,
-        allowPayloadOverride: Bool
+        allowPayloadOverride: Bool,
+        variant: NativeVariant = .standard
     ) -> RuntimeSupervisor {
-        let userData = VisionNativeIdentity.userDataDirectory(homeDirectory: homeDirectory)
+        let userData = variant.userDataDirectory(homeDirectory: homeDirectory)
         return RuntimeSupervisor(
             configuration: SupervisorConfiguration(
                 environment: environment, homeDirectory: homeDirectory, resourcesDirectory: resourcesDirectory,
-                allowPayloadOverride: allowPayloadOverride),
+                allowPayloadOverride: allowPayloadOverride, variant: variant, audit: .live(variant: variant)),
             dependencies: .live(),
             instanceLock: FileInstanceLock(),
             logger: FileRuntimeLog(path: PathUtilities.join(userData, "logs", "main.log"), rotate: false)
@@ -162,8 +200,7 @@ public actor RuntimeSupervisor: BackupSettingsStore {
     }
 
     private func launchSteps() async throws -> URL {
-        let layout = try RuntimeLayout(
-            userDataDirectory: VisionNativeIdentity.userDataDirectory(homeDirectory: configuration.homeDirectory))
+        let layout = try RuntimeLayout(variant: configuration.variant, homeDirectory: configuration.homeDirectory)
         try fileSystem.createDirectory(layout.userDataDirectory, mode: 0o700)
         guard try instanceLock.acquire(layout.instanceLock) else {
             throw NativeRuntimeError(
@@ -187,14 +224,18 @@ public actor RuntimeSupervisor: BackupSettingsStore {
         logger.log("log", "[runtime] payload \(payload.runtimeDirectory) (\(payload.source))")
         let appPort = await resolveAppPort(layout)
         try checkShutdown()
+        // `crypto.randomBytes(32)`: a new private bridge token every launch.
+        let auditToken = configuration.audit.map { _ in dependencies.random.hex(byteCount: 32) }
         let runtime = try NativeRuntime(
             layout: layout,
             postgresPort: configuration.postgresPort,
             runtimeRoot: payload.runtimeDirectory,
             appPort: appPort,
             inheritedEnvironment: configuration.environment,
-            dependencies: dependencies)
+            dependencies: dependencies,
+            auditBridgeToken: auditToken)
         self.runtime = runtime
+        audit = try makeAuditRuntime(runtime: runtime, layout: layout, token: auditToken)
 
         try enterLaunchPhase(.preparingDatabase)
         try await runtime.ensureLayout()
@@ -265,6 +306,22 @@ public actor RuntimeSupervisor: BackupSettingsStore {
         return url
     }
 
+    /// The audit half of the native runtime for this launch, or `nil` without audit
+    /// dependencies. A missing key protector leaves the anchor unavailable, like Electron
+    /// without `safeStorage`.
+    private func makeAuditRuntime(runtime: NativeRuntime, layout: RuntimeLayout, token: String?) throws -> AuditRuntime? {
+        guard let dependencies = configuration.audit, let token else { return nil }
+        let clock = self.dependencies.clock
+        let anchor = try AuditAnchor(
+            userDataDirectory: layout.userDataDirectory, keyProtector: dependencies.keyProtector,
+            witness: dependencies.witness, now: { clock.now() })
+        return AuditRuntime(
+            anchor: dependencies.keyProtector == nil ? nil : anchor,
+            transport: dependencies.transport(token, { await runtime.currentAppPort }),
+            newClusterCreatedThisLaunch: { await runtime.newClusterCreatedThisLaunch },
+            now: { clock.now() })
+    }
+
     /// `pollReady`: `/health/detailed` until the dashboard data is ready; 20 fast probes
     /// at 100 ms, then every 300 ms.
     private func pollReady(_ baseURL: URL) async throws {
@@ -280,7 +337,7 @@ public actor RuntimeSupervisor: BackupSettingsStore {
         }
         throw NativeRuntimeError(
             "BACKEND_NOT_READY",
-            "The Vision backend did not become ready. Its log is in ~/Library/Application Support/Vision Native/native/\(VisionNativeIdentity.runtimeId)/logs/backend.log."
+            "The Vision backend did not become ready. Its log is in ~/Library/Application Support/\(configuration.variant.userDataName)/native/\(configuration.variant.runtimeId)/logs/backend.log."
         )
     }
 
@@ -327,8 +384,7 @@ public actor RuntimeSupervisor: BackupSettingsStore {
     // MARK: - Shell settings
 
     private func settingsLayout() throws -> RuntimeLayout {
-        try RuntimeLayout(
-            userDataDirectory: VisionNativeIdentity.userDataDirectory(homeDirectory: configuration.homeDirectory))
+        try RuntimeLayout(variant: configuration.variant, homeDirectory: configuration.homeDirectory)
     }
 
     /// `settings.json` for the shell (window frame, language, splash theme, services mirror).
@@ -350,14 +406,14 @@ public actor RuntimeSupervisor: BackupSettingsStore {
     /// The runtime's log folder (`activeRuntime.paths.logs`), which `recovery:open-logs` opens.
     public nonisolated var logsDirectory: String {
         PathUtilities.join(
-            VisionNativeIdentity.userDataDirectory(homeDirectory: configuration.homeDirectory), "native",
-            VisionNativeIdentity.runtimeId, "logs")
+            configuration.variant.userDataDirectory(homeDirectory: configuration.homeDirectory), "native",
+            configuration.variant.runtimeId, "logs")
     }
 
     /// `settings.json`, read synchronously before the window exists (`readSavedWindowBounds`).
     /// Unlike `currentSettings()` it never renames a corrupt file.
     public nonisolated var settingsPath: String {
-        PathUtilities.join(VisionNativeIdentity.userDataDirectory(homeDirectory: configuration.homeDirectory), "settings.json")
+        PathUtilities.join(configuration.variant.userDataDirectory(homeDirectory: configuration.homeDirectory), "settings.json")
     }
 
     // MARK: - Backup
@@ -368,6 +424,15 @@ public actor RuntimeSupervisor: BackupSettingsStore {
         guard case .running = phase, !shutdownRequested else { return nil }
         return runtime
     }
+
+    /// The audit runtime of this launch, under the same conditions as `backupRuntime()`.
+    public func auditRuntime() -> AuditRuntime? {
+        guard case .running = phase, !shutdownRequested else { return nil }
+        return audit
+    }
+
+    /// The variant this supervisor runs.
+    public nonisolated var variant: NativeVariant { configuration.variant }
 
     // MARK: - Quit
 

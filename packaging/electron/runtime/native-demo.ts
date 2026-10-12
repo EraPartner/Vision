@@ -192,11 +192,20 @@ async function hasDemoResetRequest(
   }
 }
 
+// Data directories whose app honours demo-reset-request.json at launch: the
+// Electron Demo and both Vision Native variants, which run only on synthetic
+// Demo data until the phase-4 switch-over (ADR-204).
+export const DEMO_RESET_USER_DATA_NAMES: ReadonlySet<string> = new Set([
+  DEMO_USER_DATA_NAME,
+  "Vision Native Demo",
+  "Vision Native",
+]);
+
 export async function requestNativeDemoReset(
   userDataDir: string,
 ): Promise<{ status: "requested"; path: string }> {
   const root = path.resolve(userDataDir);
-  if (path.basename(root) !== DEMO_USER_DATA_NAME) {
+  if (!DEMO_RESET_USER_DATA_NAMES.has(path.basename(root))) {
     throw demoError(
       "Native Demo reset is restricted to the Vision Demo data directory",
       "DEMO_RUNTIME_UNSAFE",

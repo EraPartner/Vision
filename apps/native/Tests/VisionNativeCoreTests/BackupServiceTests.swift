@@ -33,6 +33,7 @@ actor FakeBackupRuntime: BackupRuntime {
     private let chainHead: String
     private var dumpGate: (entered: Latch, release: Latch)?
     private var restoreGate: (entered: Latch, release: Latch)?
+    private var startsBeforeFailing: Int?
 
     init(head: String = "0130_head", startFailures: Int = 0, schemaHeadFails: Bool = false, chainHead: String = "") {
         self.head = head
@@ -47,6 +48,11 @@ actor FakeBackupRuntime: BackupRuntime {
 
     func holdRestore(entered: Latch, release: Latch) {
         restoreGate = (entered, release)
+    }
+
+    /// Lets `count` backend starts succeed, then fails every later one.
+    func failStarts(after count: Int) {
+        startsBeforeFailing = count
     }
 
     func dumpDatabase(to destination: String) async throws {
@@ -96,6 +102,10 @@ actor FakeBackupRuntime: BackupRuntime {
 
     func startBackendAndWait() async throws {
         calls.append("start")
+        if let remaining = startsBeforeFailing {
+            if remaining == 0 { throw FakeRuntimeFailure(message: "backend did not become ready") }
+            startsBeforeFailing = remaining - 1
+        }
         if startFailures > 0 {
             startFailures -= 1
             throw FakeRuntimeFailure(message: "backend did not become ready")
@@ -129,7 +139,7 @@ private struct ServiceFixture {
 
     init(
         environment: [String: String] = [:], runtime: FakeBackupRuntime = FakeBackupRuntime(),
-        storedPassphrase: String? = nil, runtimeAvailable: Bool = true
+        storedPassphrase: String? = nil, runtimeAvailable: Bool = true, audit: (any AuditRestoreGuard)? = nil
     ) throws {
         let directory = try makeBackupScratchDirectory()
         try BackupFiles.createDirectory(directory + "/tmp")
@@ -150,7 +160,8 @@ private struct ServiceFixture {
             runtimeProvider: { provided },
             passphraseStoreFactory: { _ in store },
             logger: log,
-            now: { Date(timeIntervalSince1970: 1_760_000_000.125) })
+            now: { Date(timeIntervalSince1970: 1_760_000_000.125) },
+            auditProvider: { audit })
     }
 
     var backups: String { directory + "/Backups" }
@@ -446,5 +457,122 @@ private struct ServiceFixture {
         #expect(calls.filter { $0 == "dump" }.count == 1)
         let after = await service.runBackup(destination: fixture.backups, frontendStateJson: nil)
         #expect(after["success"] == .bool(true))
+    }
+}
+
+/// The audit hooks a restore drives, with a scripted verdict per attempt.
+actor FakeAuditGuard: AuditRestoreGuard {
+    private(set) var calls: [String] = []
+    private var verdicts: [AuditRestoreError?]
+
+    init(_ verdicts: [AuditRestoreError?]) {
+        self.verdicts = verdicts
+    }
+
+    func pauseAuditClosure() async { calls.append("pause") }
+    func resumeAuditClosure() async { calls.append("resume") }
+    func endAuditSession() async { calls.append("end") }
+
+    func assertRestoredAuditHistory(allowUnverifiedAudit: Bool) async throws -> JSONValue {
+        calls.append("assert:\(allowUnverifiedAudit)")
+        let verdict = verdicts.isEmpty ? nil : verdicts.removeFirst()
+        if let verdict { throw verdict }
+        return .object(["status": .string("verified")])
+    }
+}
+
+private let auditFailure = AuditRestoreError(
+    code: "RESTORED_AUDIT_INTEGRITY_FAILED", message: "Restored database failed the trusted audit integrity check",
+    auditStatus: "failed", auditReason: "hash_mismatch")
+
+@Suite struct BackupAuditContinuityTests {
+    @Test func aVerifiedRestoreRunsBetweenPauseAndResume() async throws {
+        let audit = FakeAuditGuard([nil])
+        let fixture = try ServiceFixture(audit: audit)
+        defer { fixture.remove() }
+        let path = fixture.directory + "/legacy.sql"
+        try writeBytes(path, Array("SELECT 1;\n".utf8))
+        let result = await fixture.service.restore(path: path, passphrase: nil, confirm: { true })
+        #expect(result == .object(["success": .bool(true), "file": .string(path)]))
+        let calls = await audit.calls
+        #expect(calls == ["pause", "assert:false", "resume"])
+        let runtimeCalls = await fixture.runtime.calls
+        #expect(runtimeCalls == ["activate:plain:", "start", "finalizeDatabase"])
+    }
+
+    @Test func aFailedAuditCheckRollsBackAndOffersTheRecovery() async throws {
+        let audit = FakeAuditGuard([auditFailure, nil])
+        let fixture = try ServiceFixture(audit: audit)
+        defer { fixture.remove() }
+        let backup = await fixture.service.runBackup(destination: fixture.backups, frontendStateJson: nil)
+        let file = try #require(backup["file"]?.stringValue)
+        let offered = StringBox()
+        let result = await fixture.service.restore(
+            path: file, passphrase: nil, confirm: { true },
+            confirmAuditRecovery: { status in
+                offered.append(status ?? "nil")
+                return true
+            })
+        #expect(offered.values == ["failed"])
+        #expect(result["success"] == .bool(true))
+        #expect(result["auditStatus"] == .string("unavailable"))
+        let calls = await audit.calls
+        #expect(calls == ["pause", "assert:false", "resume", "pause", "assert:true", "resume", "end"])
+        let runtimeCalls = await fixture.runtime.calls
+        #expect(
+            Array(runtimeCalls.dropFirst(2)) == [
+                "activate:plain:0130_head", "replaceAttachments", "start", "rollbackAttachments",
+                "rollbackDatabase:vision_previous", "start",
+                "activate:plain:0130_head", "replaceAttachments", "start", "finalizeDatabase", "finalizeAttachments",
+            ])
+    }
+
+    @Test func aDeclinedRecoveryIsACancelledRestore() async throws {
+        let audit = FakeAuditGuard([auditFailure])
+        let fixture = try ServiceFixture(audit: audit)
+        defer { fixture.remove() }
+        let path = fixture.directory + "/legacy.sql"
+        try writeBytes(path, Array("SELECT 1;\n".utf8))
+        let result = await fixture.service.restore(
+            path: path, passphrase: nil, confirm: { true }, confirmAuditRecovery: { _ in false })
+        #expect(result == .object(["success": .bool(false), "error": .string("Restore cancelled by user")]))
+        let calls = await audit.calls
+        #expect(calls == ["pause", "assert:false", "resume"])
+    }
+
+    @Test func aFailedRollbackSuppressesTheRecovery() async throws {
+        let audit = FakeAuditGuard([auditFailure])
+        // The rollback's backend restart fails too.
+        let fixture = try ServiceFixture(runtime: FakeBackupRuntime(startFailures: 0), audit: audit)
+        defer { fixture.remove() }
+        let path = fixture.directory + "/legacy.sql"
+        try writeBytes(path, Array("SELECT 1;\n".utf8))
+        await fixture.runtime.failStarts(after: 1)
+        let offered = StringBox()
+        let result = await fixture.service.restore(
+            path: path, passphrase: nil, confirm: { true },
+            confirmAuditRecovery: { _ in
+                offered.append("offered")
+                return true
+            })
+        #expect(offered.values.isEmpty)
+        #expect(
+            result
+                == .object([
+                    "success": .bool(false),
+                    "error": .string("Error: Restored database failed the trusted audit integrity check"),
+                ]))
+    }
+
+    @Test func otherFailuresAreNotRecoverable() async throws {
+        let unrelated = AuditRestoreError(code: "RESTORED_AUDIT_RECOVERY_INVALID", message: "Restored database audit chain is invalid")
+        let audit = FakeAuditGuard([unrelated])
+        let fixture = try ServiceFixture(audit: audit)
+        defer { fixture.remove() }
+        let path = fixture.directory + "/legacy.sql"
+        try writeBytes(path, Array("SELECT 1;\n".utf8))
+        let result = await fixture.service.restore(
+            path: path, passphrase: nil, confirm: { true }, confirmAuditRecovery: { _ in true })
+        #expect(result == .object(["success": .bool(false), "error": .string("Error: Restored database audit chain is invalid")]))
     }
 }

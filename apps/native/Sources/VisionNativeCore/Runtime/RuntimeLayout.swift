@@ -62,11 +62,12 @@ public struct RuntimeLayout: Sendable, Equatable {
         demoResetRequest = PathUtilities.join(root, NativeDemo.resetRequestName)
     }
 
-    /// ADR-204: Vision Native's data directory is named "Vision Native" and is never
-    /// one of the Electron apps' directories.
+    /// ADR-204: Vision Native's data directory is named "Vision Native" (or, for the
+    /// Demo variant, "Vision Native Demo") and is never one of the Electron apps'
+    /// directories.
     public static func assertVisionNativeDirectory(_ userDataDirectory: String) throws {
         let name = PathUtilities.basename(userDataDirectory)
-        guard userDataDirectory.hasPrefix("/"), name == VisionNativeIdentity.userDataName,
+        guard userDataDirectory.hasPrefix("/"), NativeVariant.owning(userDataDirectory: userDataDirectory) != nil,
             !VisionNativeIdentity.foreignUserDataNames.contains(name)
         else {
             throw NativeRuntimeError(

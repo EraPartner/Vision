@@ -157,10 +157,47 @@ import Testing
                 == .call(.rendererFailure(RendererFailure(kind: "error", name: "UnknownError", source: "unknown", line: 0))))
     }
 
-    @Test func pendingAndRemovedChannelsSkipValidation() {
-        #expect(BridgeCodec.validate(request(.auditEnroll, [.int(1)])) == .call(.unavailable(.auditEnroll)))
-        #expect(BridgeCodec.validate(request(.auditRead)) == .call(.unavailable(.auditRead)))
+    @Test func removedChannelsSkipValidation() {
+        #expect(BridgeCodec.validate(request(.updateCheckGithub, [.int(1)])) == .call(.unavailable(.updateCheckGithub)))
         #expect(BridgeCodec.validate(request(.updateCheckGithub)) == .call(.unavailable(.updateCheckGithub)))
+    }
+
+    @Test func auditArgumentsFollowIpcSchemas() {
+        #expect(BridgeCodec.validate(request(.auditEnroll)) == .call(.auditEnroll))
+        #expect(BridgeCodec.validate(request(.auditEnroll, [.int(1)])) == .invalid(.failed("Unexpected IPC arguments")))
+        #expect(
+            BridgeCodec.validate(request(.auditRead))
+                == .call(.auditRead(AuditViewer.ReadRange(afterSequence: 0, limit: 100))))
+        #expect(
+            BridgeCodec.validate(request(.auditRead, [.object(["afterSequence": .int(7), "limit": .int(500)])]))
+                == .call(.auditRead(AuditViewer.ReadRange(afterSequence: 7, limit: 500))))
+        let badRead = BridgeCodec.validate(request(.auditRead, [.object(["other": .int(1)])]))
+        #expect(
+            badRead
+                == .invalid(
+                    .resolve(.object([
+                        "success": .bool(false), "status": .string("failed"),
+                        "error": .string("Invalid audit read options"),
+                    ]))))
+        let password = String(repeating: "é", count: 16)
+        #expect(
+            BridgeCodec.validate(request(.auditTransferImport, [.string(password)]))
+                == .call(.auditTransferImport(password: password)))
+        let invalidTransfer = BridgeReply.resolve(
+            .object([
+                "success": .bool(false), "status": .string("failed"), "reason": .string("transfer_password_invalid"),
+            ]))
+        #expect(BridgeCodec.validate(request(.auditTransferExport, [.string("x")])) == .invalid(invalidTransfer))
+        #expect(
+            BridgeCodec.validate(request(.auditTransferExport, [.string(String(repeating: "x", count: 1025))]))
+                == .invalid(invalidTransfer))
+        #expect(BridgeCodec.validate(request(.auditTransferImport, [.int(16)])) == .invalid(invalidTransfer))
+        let extra = BridgeReply.resolve(
+            .object(["success": .bool(false), "status": .string("failed"), "reason": .string("transfer_failed")]))
+        #expect(
+            BridgeCodec.validate(request(.auditTransferExport, [.string(password), .int(1)])) == .invalid(extra))
+        #expect(BridgeCodec.validate(request(.auditRotateKey)) == .call(.auditRotateKey))
+        #expect(BridgeCodec.validate(request(.auditExport)) == .call(.auditExport))
     }
 
     @Test func backupRunFollowsBackupRunArguments() {
