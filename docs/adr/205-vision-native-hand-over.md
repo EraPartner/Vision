@@ -1,7 +1,7 @@
 ---
 title: "ADR-205: Vision Native phase 1 hand-over"
 type: adr
-status: proposed
+status: accepted
 date: 2026-10-12
 tags:
   [
@@ -20,7 +20,7 @@ tags:
     adr-158,
     adr-204,
   ]
-description: "Proposed, not accepted. Records what phase 1 of Vision Native delivered (target and CI, runtime, shell, backup and restore, audit anchor, Demo variant, parity exit checklist, backup interop in CI), what the Demo-only rule of ADR-204 means until phase 4, the switch-over steps deferred to phase 4 (data directory, Keychain service names, iCloud backup folder, audit key and witness migration) and the product questions Tor must answer before the hand-over."
+description: "Accepted on 2026-10-12. Records what phase 1 of Vision Native delivered (target and CI, runtime, shell, backup and restore, audit anchor, Demo variant, parity exit checklist, backup interop in CI), what the Demo-only rule of ADR-204 means until phase 4, the switch-over steps deferred to phase 4 (data directory, Keychain service names, iCloud backup folder, audit key and witness migration) and the product questions Tor must answer before the hand-over."
 aliases: [adr-205, vision native hand-over, phase 1 hand-over]
 ---
 
@@ -28,7 +28,7 @@ aliases: [adr-205, vision native hand-over, phase 1 hand-over]
 
 ## Status
 
-Proposed on 2026-10-12. It is a draft for Tor's review and is not accepted. Until it is,
+Accepted on 2026-10-12 (proposed the same day). As before acceptance,
 [[docs/adr/072-electron-native-desktop-integration|ADR-072]],
 [[docs/adr/113-native-macos-runtime|ADR-113]] and
 [[docs/adr/196-electron-shell-typescript|ADR-196]] stay in force for the Electron app, as

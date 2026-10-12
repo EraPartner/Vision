@@ -43,9 +43,8 @@ Bun runs directly, for example `bun scripts/validate-locales.ts`. Run them with 
 
 The Electron shell in `packaging/electron/` is strict TypeScript compiled into
 `packaging/electron/out/` ([[docs/adr/196-electron-shell-typescript|ADR-196]]). The `dev`,
-`electron:dev`, `electron:prod`, `native:*`, `demo:reset-native`, `demo:reset-vision-native` and
-`test:electron` scripts run
-`bun packaging/electron/build.ts` first and then run the compiled JavaScript, for example
+`electron:dev`, `electron:prod`, `native:prepare`, `native:*smoke`, `demo:reset-native`,
+`demo:reset-vision-native` and `test:electron` scripts run `bun packaging/electron/build.ts` first and then run the compiled JavaScript, for example
 `node packaging/electron/out/scripts/native-development.js`. The Electron package's own `start`,
 `prepare:*` and `dist*` scripts run `bun build.ts` first in the same way.
 
@@ -91,27 +90,42 @@ Electron readers ([[docs/architecture/native-app|Vision Native App Architecture]
 
 ## Static and generated checks
 
-| Script                    | Purpose                                            |
-| ------------------------- | -------------------------------------------------- |
-| `lint`                    | Lint the frontend                                  |
-| `lint:backend`            | Lint the backend                                   |
-| `typecheck`               | Type-check the frontend                            |
-| `typecheck:backend`       | Type-check backend source, tests and scripts       |
-| `typecheck:scripts`       | Type-check repository scripts and their tests      |
-| `typecheck:electron`      | Type-check the Electron shell and its preload      |
-| `typecheck:packages`      | Type-check the shared packages (strict)            |
-| `typecheck:python`        | Run `mypy --strict` over Alembic and scripts       |
-| `validate-locales`        | Validate source/generated locale parity            |
-| `generate-locales`        | Generate frontend and Electron locale outputs      |
-| `generate:types`          | Generate frontend OpenAPI types                    |
-| `check-endpoint-matrix`   | Verify the documented operation count              |
-| `check-legacy-inventory`  | Validate legacy dispositions and TODO ownership    |
-| `check-test-only-exports` | Reject production imports of test-only helpers     |
-| `todo:list`               | Print the current TODO ledger                      |
-| `todo:check`              | Verify TODO counts and ledger integrity            |
-| `db:check-destructive`    | Reject unmarked destructive migration operations   |
-| `db:check-heads`          | Require one Alembic head                           |
-| `check`                   | Run the repository aggregate static and test gates |
+| Script                       | Purpose                                            |
+| ---------------------------- | -------------------------------------------------- |
+| `lint`                       | Lint the frontend                                  |
+| `lint:backend`               | Lint the backend                                   |
+| `typecheck`                  | Type-check the frontend                            |
+| `typecheck:backend`          | Type-check backend source, tests and scripts       |
+| `typecheck:scripts`          | Type-check repository scripts and their tests      |
+| `typecheck:electron`         | Type-check the Electron shell and its preload      |
+| `typecheck:packages`         | Type-check the shared packages (strict)            |
+| `typecheck:python`           | Run `mypy --strict` over Alembic and scripts       |
+| `validate-locales`           | Validate source/generated locale parity            |
+| `generate-locales`           | Generate frontend and Electron locale outputs      |
+| `generate:types`             | Generate frontend OpenAPI types                    |
+| `native:generate`            | Run the four Vision Native generators below        |
+| `native:generate-api`        | Generate the Swift OpenAPI client                  |
+| `native:generate-tokens`     | Generate the Swift design tokens                   |
+| `native:generate-strings`    | Generate the Vision Native String Catalog          |
+| `native:generate-navigation` | Generate the Swift sidebar registry                |
+| `check-endpoint-matrix`      | Verify the documented operation count              |
+| `check-legacy-inventory`     | Validate legacy dispositions and TODO ownership    |
+| `check-test-only-exports`    | Reject production imports of test-only helpers     |
+| `todo:list`                  | Print the current TODO ledger                      |
+| `todo:check`                 | Verify TODO counts and ledger integrity            |
+| `db:check-destructive`       | Reject unmarked destructive migration operations   |
+| `db:check-heads`             | Require one Alembic head                           |
+| `check`                      | Run the repository aggregate static and test gates |
+
+The `native:generate*` scripts run Bun directly (no Electron build) and write the committed Swift
+sources of Vision Native phase 2 ([[docs/architecture/native-app|Vision Native]]):
+`scripts/native-openapi.ts` reads `openapi.yaml` and the operationIds in
+`apps/native/openapi-operations.txt`; `scripts/native-design-tokens.ts` reads
+`apps/frontend/src/styles/tokens.css`, `skin-v2.css` and `themes.ts`; `scripts/native-strings.ts`
+copies the keys in `apps/native/i18n-keys.txt` from `i18n/source/{en,nl}.json` into
+`apps/native/Sources/VisionNativeUI/Resources/Localizable.xcstrings`; and
+`scripts/native-navigation.ts` reads `apps/frontend/src/lib/navigation.ts`. CI's Verify Generated
+Artifacts job runs `native:generate` and fails when anything below `apps/native/` changes.
 
 ## Tests
 

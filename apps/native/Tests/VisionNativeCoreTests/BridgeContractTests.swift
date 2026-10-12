@@ -58,11 +58,15 @@ import Testing
 
     @Test func tableMatchesThePreloadMethodNames() {
         var table: [String: [String: String]] = [:]
-        for entry in BridgeContract.entries {
+        for entry in BridgeContract.entries where entry.availability != .nativeOnly {
             guard let method = entry.method else { continue }
             table[entry.bridge, default: [:]][method] = entry.channel.rawValue
         }
         #expect(table == Self.preloadMethods)
+        // The one method Vision Native adds to a preload bridge (native navigation, phase 2).
+        let nativeMethods = BridgeContract.entries.filter { $0.availability == .nativeOnly && $0.method != nil }
+        #expect(nativeMethods.map(\.channel) == [.routeChanged])
+        #expect(nativeMethods.first?.bridge == "electronAPI" && nativeMethods.first?.method == "routeChanged")
         #expect(Set(BridgeContract.bridges) == Set(Self.preloadMethods.keys))
     }
 
@@ -76,6 +80,7 @@ import Testing
             case "electronAudit":
                 // Phase 1e answers every audit channel.
                 #expect(entry.availability == .implemented)
+            case "electronAPI" where entry.channel == .routeChanged: #expect(entry.availability == .nativeOnly)
             case "electronServices", "electronAPI", "electronRecovery": #expect(entry.availability == .implemented)
             default: #expect(entry.method == nil)
             }
@@ -118,6 +123,8 @@ import Testing
             #expect(source.contains("    \(subscription): "), "\(subscription)")
         }
         #expect(source.contains("platform: \"darwin\""))
+        #expect(source.contains("    nativeNavigation: true,"))
+        #expect(source.contains("    routeChanged: (route) => invoke(\"shell:route-changed\", [route]),"))
         #expect(source.contains("handlers.\(BridgeContract.messageHandlerName)"))
         #expect(source.contains("\"app:renderer-failure\""))
     }

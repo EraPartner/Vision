@@ -3,10 +3,12 @@ import OSLog
 import SwiftUI
 import UniformTypeIdentifiers
 import VisionNativeCore
+import VisionNativeUI
 import WebKit
 
 /// Owns the window, menus, dock and web shell, and answers the page's bridge calls
-/// (the main-process side of packaging/electron/main.ts for phases 1c, 1d and 1e).
+/// (the main-process side of packaging/electron/main.ts for phases 1c, 1d and 1e). From
+/// phase 2 the window shows the native navigation shell (`ShellRootView`) around the web view.
 @MainActor
 final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell {
     /// "Vision Native" or "Vision Native Demo" (`APP_NAME`).
@@ -27,6 +29,10 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     private let backupService: BackupService
     /// The six `electronAudit` channels, the closure timer and the audit notices.
     private lazy var auditChannels = makeAuditChannels()
+    /// The typed API client of native screens (`client.ts`).
+    private lazy var apiClient = makeAPIClient()
+    /// The sidebar, route and settings state of the native navigation shell.
+    private lazy var shellModel = makeShellModel()
     /// `ALLOWED_RESTORE_PATHS`: only paths the restore picker returned may be restored.
     private(set) var restorePathAllowList = RestorePathAllowList()
     private(set) var window: NSWindow?
@@ -34,6 +40,8 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     private var effectView: NSVisualEffectView?
     private var launchView: NSHostingView<LaunchStateView>?
     private var webShell: WebShell?
+    /// The SwiftUI shell (sidebar and detail) that hosts the web view.
+    private var shellHost: NSView?
     /// The backend base URL the web view may show; `nil` until the runtime is ready.
     private(set) var appURL: URL?
     private var queue = RendererMessageQueue()
@@ -49,6 +57,70 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             runtimeProvider: { await AppRuntime.supervisor.auditRuntime() }, shell: self,
             log: { message in AppRuntime.shellLogger.warning("\(message, privacy: .public)") })
     }
+
+    private func makeAPIClient() -> APIClient {
+        APIClient(
+            baseURL: { [weak self] in await self?.appURL },
+            adminToken: { [weak self] in await self?.adminToken() })
+    }
+
+    private func makeShellModel() -> NativeShellModel {
+        let client = apiClient
+        let systemIsDark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        return NativeShellModel(
+            strings: CatalogStrings(language: strings.language),
+            theme: ThemeSelection.resolve(
+                splashTheme: LaunchAppearance.theme(fromSettings: initialSettings), systemIsDark: systemIsDark),
+            exchangeRates: ExchangeRatesModel(service: client),
+            hiddenSections: Self.loadHiddenSections(),
+            loadSettings: { try await client.appSettings() },
+            saveHiddenSections: { Self.saveHiddenSections($0) },
+            onNavigate: { [weak self] action in
+                self?.sendToApp(.menuAction, BridgeDispatcher.menuActionPayload(action))
+            },
+            onSidebarVisibilityChange: { [weak self] visible in
+                self?.deliver(.menuAction, BridgeDispatcher.menuActionPayload(.nativeSidebar(visible: visible)))
+            })
+    }
+
+    /// The sections the user hid (`SIDEBAR_HIDDEN_SECTIONS` of the web sidebar), per Mac.
+    private static let hiddenSectionsKey = "nativeSidebarHiddenSections"
+
+    private static func loadHiddenSections() -> [NavSectionID: Bool]? {
+        guard let stored = UserDefaults.standard.dictionary(forKey: hiddenSectionsKey) as? [String: Bool] else {
+            return nil
+        }
+        var hidden: [NavSectionID: Bool] = [:]
+        for (key, value) in stored {
+            if let id = NavSectionID(rawValue: key) { hidden[id] = value }
+        }
+        return hidden
+    }
+
+    private static func saveHiddenSections(_ hidden: [NavSectionID: Bool]) {
+        UserDefaults.standard.set(
+            Dictionary(uniqueKeysWithValues: hidden.map { ($0.key.rawValue, $0.value) }), forKey: hiddenSectionsKey)
+    }
+
+    /// The admin Bearer token of the page's session. The web app keeps it only in
+    /// `sessionStorage` (`vision.adminToken`, never in settings.json), so native requests
+    /// read it from the page; without one the backend's loopback allowlist applies.
+    private func adminToken() async -> String? {
+        guard queue.isReady, let webView = webShell?.webView else { return nil }
+        return await withCheckedContinuation { (continuation: CheckedContinuation<String?, Never>) in
+            // Always a string: a `null` result is where WebKit's Swift bridging is fragile.
+            webView.callAsyncJavaScript(
+                Self.adminTokenScript, arguments: [:], in: nil, in: .page
+            ) { result in
+                let token = (try? result.get()) as? String
+                continuation.resume(returning: token.flatMap { $0.isEmpty ? nil : $0 })
+            }
+        }
+    }
+
+    private static let adminTokenScript = """
+        try { return String(window.sessionStorage.getItem("vision.adminToken") || ""); } catch { return ""; }
+        """
 
     private static var localeDirectory: String? {
         Bundle.main.resourceURL?.appendingPathComponent("i18n", isDirectory: true).path
@@ -139,7 +211,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         case .ready(let url):
             appURL = url
             let shell = webShell ?? makeWebShell()
-            shell.webView.isHidden = true
+            shellHost?.isHidden = true
             queue.documentChanged()
             // `loadApplicationPage`: the audit session is established before the page
             // loads; the closure timer then runs while the page is up.
@@ -154,16 +226,17 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
 
     private func showLaunchView() {
         revealTask?.cancel()
-        webShell?.webView.isHidden = true
+        shellHost?.isHidden = true
         launchView?.isHidden = false
     }
 
     private func revealWebView() {
         revealTask?.cancel()
-        guard let webView = webShell?.webView, webView.isHidden, case .ready = launchModel.state else { return }
-        webView.isHidden = false
+        guard let host = shellHost, host.isHidden, let webView = webShell?.webView, case .ready = launchModel.state
+        else { return }
+        host.isHidden = false
         launchView?.isHidden = true
-        window?.makeFirstResponder(webView)
+        if shellModel.detail == .web { window?.makeFirstResponder(webView) }
     }
 
     /// Stops the debounced frame save and writes the current frame, then runs the
@@ -242,14 +315,22 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         NSApp.activate()
     }
 
+    /// The web view inside the native navigation shell; the launch view covers both until
+    /// the page is ready.
     private func makeWebShell() -> WebShell {
         let shell = WebShell(controller: self)
         let webView = shell.webView
-        webView.frame = container?.bounds ?? .zero
-        webView.autoresizingMask = [.width, .height]
-        webView.isHidden = true
         webView.underPageBackgroundColor = .hsl(palette.base)
-        container?.addSubview(webView, positioned: .below, relativeTo: launchView)
+        let host = NSHostingView(
+            rootView: ShellRootView(model: shellModel) { hidden in WebViewHost(webView: webView, hidden: hidden) })
+        host.sizingOptions = []
+        // The window keeps its own title and has no toolbar; SwiftUI must not add either.
+        host.sceneBridgingOptions = []
+        host.frame = container?.bounds ?? .zero
+        host.autoresizingMask = [.width, .height]
+        host.isHidden = true
+        container?.addSubview(host, positioned: .below, relativeTo: launchView)
+        shellHost = host
         webShell = shell
         return shell
     }
@@ -383,7 +464,11 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
 
     func run(_ command: MenuCommand) {
         switch command {
+        case .renderer(let action) where action == .toggleSidebar:
+            // The sidebar is native from phase 2.
+            shellModel.toggleSidebar()
         case .renderer(let action):
+            shellModel.willPresent(action)
             sendToApp(.menuAction, BridgeDispatcher.menuActionPayload(action))
         case .openExternal(let link):
             if let url = ShellLinks.trustedExternalURL(URL(string: link)) { NSWorkspace.shared.open(url) }
@@ -444,6 +529,8 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
 
     func rendererDidBecomeReady() {
         for message in queue.markReady() { evaluate(message.event, message.payload) }
+        deliver(.menuAction, BridgeDispatcher.menuActionPayload(.nativeSidebar(visible: shellModel.isSidebarVisible)))
+        shellModel.reloadSettings()
         revealWebView()
     }
 
@@ -462,6 +549,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         guard request == languageRequest else { return .superseded }
         strings = loaded
         launchModel.strings = loaded
+        shellModel.strings = CatalogStrings(language: language)
         do {
             try await supervisor.updateSettings { $0["nativeLanguage"] = .string(language.rawValue) }
         } catch {
@@ -496,6 +584,10 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         }
         palette = LaunchAppearance.palette(theme: theme)
         applyPalette()
+        let systemIsDark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        var selection = ThemeSelection.resolve(splashTheme: theme, systemIsDark: systemIsDark)
+        selection.colorblindGainLoss = shellModel.theme.colorblindGainLoss
+        shellModel.theme = selection
         return true
     }
 
@@ -752,6 +844,10 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             return
         }
         window.performDrag(with: event)
+    }
+
+    func routeDidChange(_ route: NativeRoute) {
+        shellModel.routeDidChange(route)
     }
 
     func titlebarDoubleClicked() {

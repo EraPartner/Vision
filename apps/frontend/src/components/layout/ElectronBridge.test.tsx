@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => {
     const unsubscribe = vi.fn();
     return {
         tier: { value: "enhanced" as "reduced" | "standard" | "enhanced" },
+        nativeNavigation: { value: false },
         navigate: vi.fn(),
         toggleSidebar: vi.fn(),
         setThemeMode: vi.fn(),
@@ -47,6 +48,7 @@ vi.mock("@/hooks/useVisualEffectsTier", () => ({
 vi.mock("@/lib/api/electron", () => ({
     getElectronAPI: () => mocks.api,
     isElectronMac: () => true,
+    isNativeNavigation: () => mocks.nativeNavigation.value,
     setNativeVibrancy: mocks.setNativeVibrancy,
 }));
 vi.mock("@/lib/importHandoff", () => ({
@@ -55,6 +57,7 @@ vi.mock("@/lib/importHandoff", () => ({
 
 afterEach(() => {
     mocks.tier.value = "enhanced";
+    mocks.nativeNavigation.value = false;
     mocks.navigate.mockClear();
     mocks.toggleSidebar.mockClear();
     mocks.setThemeMode.mockClear();
@@ -65,7 +68,11 @@ afterEach(() => {
 
 describe("ElectronBridge vibrancy", () => {
     it("keeps the native material aligned with the effective visual-effects tier", () => {
-        const props = { onOpenSettings: vi.fn(), onOpenShortcuts: vi.fn() };
+        const props = {
+            onOpenSettings: vi.fn(),
+            onOpenShortcuts: vi.fn(),
+            onOpenPalette: vi.fn(),
+        };
         const view = render(<ElectronBridge {...props} />);
 
         expect(document.documentElement).toHaveClass("vibrancy");
@@ -88,6 +95,7 @@ describe("ElectronBridge menu routes", () => {
             <ElectronBridge
                 onOpenSettings={vi.fn()}
                 onOpenShortcuts={vi.fn()}
+                onOpenPalette={vi.fn()}
             />,
         );
 
@@ -107,6 +115,7 @@ describe("ElectronBridge menu routes", () => {
             <ElectronBridge
                 onOpenSettings={onOpenSettings}
                 onOpenShortcuts={vi.fn()}
+                onOpenPalette={vi.fn()}
             />,
         );
 
@@ -122,6 +131,7 @@ describe("ElectronBridge menu routes", () => {
             <ElectronBridge
                 onOpenSettings={vi.fn()}
                 onOpenShortcuts={vi.fn()}
+                onOpenPalette={vi.fn()}
             />,
         );
 
@@ -132,5 +142,65 @@ describe("ElectronBridge menu routes", () => {
 
         expect(mocks.setThemeMode).toHaveBeenCalledTimes(1);
         expect(mocks.setThemeMode).toHaveBeenCalledWith("dark");
+    });
+});
+
+describe("ElectronBridge native navigation (Vision Native)", () => {
+    it("tags the document and handles the native-only actions", () => {
+        mocks.nativeNavigation.value = true;
+        const onOpenPalette = vi.fn();
+        render(
+            <ElectronBridge
+                onOpenSettings={vi.fn()}
+                onOpenShortcuts={vi.fn()}
+                onOpenPalette={onOpenPalette}
+            />,
+        );
+
+        expect(document.documentElement).toHaveClass("native-navigation");
+
+        act(() => {
+            mocks.menuAction?.({
+                action: "replace-route",
+                payload: "/admin/exchange-rates?tab=fallback",
+            });
+            mocks.menuAction?.({
+                action: "replace-route",
+                payload: "https://example.com/",
+            });
+            mocks.menuAction?.({ action: "open-palette" });
+            mocks.menuAction?.({ action: "native-sidebar", payload: "hidden" });
+        });
+
+        expect(mocks.navigate).toHaveBeenCalledTimes(1);
+        expect(mocks.navigate).toHaveBeenCalledWith(
+            "/admin/exchange-rates?tab=fallback",
+            { replace: true },
+        );
+        expect(onOpenPalette).toHaveBeenCalledTimes(1);
+        expect(document.documentElement).toHaveClass("native-sidebar-hidden");
+
+        act(() => {
+            mocks.menuAction?.({
+                action: "native-sidebar",
+                payload: "visible",
+            });
+        });
+        expect(document.documentElement).not.toHaveClass(
+            "native-sidebar-hidden",
+        );
+    });
+
+    it("leaves the document untagged in Electron", () => {
+        render(
+            <ElectronBridge
+                onOpenSettings={vi.fn()}
+                onOpenShortcuts={vi.fn()}
+                onOpenPalette={vi.fn()}
+            />,
+        );
+
+        expect(document.documentElement).toHaveClass("electron-mac");
+        expect(document.documentElement).not.toHaveClass("native-navigation");
     });
 });

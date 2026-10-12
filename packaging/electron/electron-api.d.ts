@@ -49,7 +49,11 @@ export interface ElectronMenuAction {
     | "open-shortcuts"
     | "new-transaction"
     | "toggle-sidebar"
-    | "set-theme";
+    | "set-theme"
+    // Sent only by Vision Native's native navigation shell (ADR-204 phase 2).
+    | "replace-route"
+    | "open-palette"
+    | "native-sidebar";
   payload?: unknown;
 }
 
@@ -291,6 +295,13 @@ export interface ElectronApiBridge {
   onMenuAction: ElectronSubscription<"menu:action">;
   onCsvOpen: ElectronSubscription<"app:csv-opened">;
   onFullScreenChange: ElectronSubscription<"window:fullscreen">;
+  /**
+   * Vision Native only (ADR-204 phase 2): the shell draws the sidebar natively, so the
+   * page leaves out its own. Electron never defines it.
+   */
+  nativeNavigation?: boolean;
+  /** Vision Native only: reports `pathname + search` to the native sidebar. */
+  routeChanged?: (route: string) => Promise<ElectronSuccessResult>;
 }
 
 export interface ElectronRecoveryBridge {

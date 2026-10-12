@@ -12,9 +12,9 @@ public enum BridgeScript {
         BridgeContract.entries.compactMap { entry -> String? in
             guard entry.bridge == bridge, let method = entry.method else { return nil }
             switch entry.availability {
-            case .removed, .nativeOnly:
+            case .removed:
                 return nil
-            case .implemented, .pending:
+            case .implemented, .pending, .nativeOnly:
                 let parameters = entry.parameters.joined(separator: ", ")
                 return "    \(method): (\(parameters)) => invoke(\"\(entry.channel.rawValue)\", [\(parameters)]),"
             }
@@ -29,6 +29,8 @@ public enum BridgeScript {
     public static var source: String {
         let electronAPIExtras = [
             "    platform: \"\(BridgeContract.platform)\",",
+            // AppLayout leaves the sidebar to the native NavigationSplitView (phase 2).
+            "    nativeNavigation: true,",
             "    onAccentColorChanged: subscribe(\"\(BridgeEvent.accentColorChanged.rawValue)\"),",
             "    onMenuAction: subscribe(\"\(BridgeEvent.menuAction.rawValue)\"),",
             "    onCsvOpen: subscribe(\"\(BridgeEvent.csvOpened.rawValue)\"),",

@@ -417,6 +417,21 @@ jobs:
       - name: Verify endpoint matrix count matches openapi.yaml
         run: bun run check-endpoint-matrix
 
+      # Vision Native (ADR-204 phase 2): the OpenAPI client, design tokens, String Catalog and
+      # sidebar registry are generated from openapi.yaml, the frontend tokens, i18n/source and
+      # navigation.ts. `git status` also catches a generated file that was never committed.
+      - name: Regenerate Vision Native sources and check for drift
+        run: |
+          bun run native:generate
+          if [ -n "$(git status --porcelain -- apps/native)" ]; then
+            git status --short -- apps/native
+            git diff -- apps/native
+            echo "ERROR: the generated Vision Native sources are out of sync with their inputs."
+            echo "Run 'bun run native:generate' locally and commit the regenerated files."
+            exit 1
+          fi
+          echo "Vision Native generated sources in sync."
+
       - name: Test repository scripts
         run: bun run test:scripts
 

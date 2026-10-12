@@ -40,6 +40,23 @@ export function isElectronMac(): boolean {
     return getElectronAPI()?.platform === "darwin";
 }
 
+/**
+ * True inside Vision Native, whose sidebar is native (ADR-204 phase 2): the page
+ * then leaves out its own sidebar and reports its route with `reportNativeRoute`.
+ */
+export function isNativeNavigation(): boolean {
+    return getElectronAPI()?.nativeNavigation === true;
+}
+
+/** Tell the native sidebar where the router is (`pathname + search`). */
+export function reportNativeRoute(route: string): void {
+    getElectronAPI()
+        ?.routeChanged?.(route)
+        .catch(() => {
+            /* best-effort: the sidebar keeps its last route */
+        });
+}
+
 /** Set the native taskbar/dock badge (0 clears). No-op outside Electron. */
 export function setDockBadge(count: number): void {
     getElectronAPI()

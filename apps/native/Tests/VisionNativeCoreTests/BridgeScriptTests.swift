@@ -50,7 +50,7 @@
                 #expect(
                     bool(
                         context,
-                        "Object.entries(window.\(bridge)).every(([key, value]) => key === 'platform' || typeof value === 'function')"
+                        "Object.entries(window.\(bridge)).every(([key, value]) => key === 'platform' || key === 'nativeNavigation' || typeof value === 'function')"
                     ), "\(bridge)")
                 #expect(bool(context, "Object.isFrozen(window.\(bridge))"), "\(bridge)")
             }
@@ -60,6 +60,7 @@
                 #expect(exposed == (entry.availability != .removed), "\(entry.bridge).\(method)")
             }
             #expect(bool(context, "window.electronAPI.platform === 'darwin'"))
+            #expect(bool(context, "window.electronAPI.nativeNavigation === true"))
         }
 
         @Test func theDispatcherIsNotWritable() throws {

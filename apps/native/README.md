@@ -5,10 +5,11 @@ Vision Native is the Swift macOS app that replaces the Electron shell in phases
 React frontend in a `WKWebView` and runs its own PostgreSQL 18 cluster and backend on synthetic
 Demo data in `~/Library/Application Support/Vision Native Demo/` (or `Vision Native/` for the
 standard variant). It never reads or changes the Vision or Vision Demo data directories. The
-phase 1 hand-over is proposed in
-[ADR-205](../../docs/adr/205-vision-native-hand-over.md), and
+phase 1 hand-over is recorded in
+[ADR-205](../../docs/adr/205-vision-native-hand-over.md) (accepted), and
 [the phase 1 exit checklist](../../docs/reference/native-parity/phase-1-exit.md) maps every shell
-and settings action to its Swift code.
+and settings action to its Swift code. Phase 2 puts a native sidebar around the web view and draws
+the first screen, Exchange rates, in SwiftUI.
 
 Requirements: an Apple-silicon Mac, Xcode 26 (macOS 26 deployment target) and XcodeGen. XcodeGen
 stays the project-file tool (ADR-204 decision 3). The deployment target and the CI runner label
@@ -16,17 +17,25 @@ stays the project-file tool (ADR-204 decision 3). The deployment target and the 
 
 ## Layout
 
-| Path                               | Purpose                                             |
-| ---------------------------------- | --------------------------------------------------- |
-| `project.yml`                      | XcodeGen spec for the "Vision Native" app target    |
-| `Config/Signing.xcconfig`          | Signing team from `VISION_NATIVE_TEAM_ID`           |
-| `VisionNative/`                    | AppKit app, window, menus and the `WKWebView` shell |
-| `Package.swift`                    | SwiftPM package with the `VisionNativeCore` library |
-| `Sources/VisionNativeCore/`        | Non-UI logic: runtime supervision, health, override |
-| `Sources/VisionNativeCore/Shell/`  | Bridge contract and codec, web view policy, menus   |
-| `Sources/VisionNativeCore/Backup/` | Backup bundles, encryption and restore (phase 1d)   |
-| `Sources/VisionNativeCore/Audit/`  | Audit anchor, Keychain witness, audit bridge (1e)   |
-| `Tests/VisionNativeCoreTests/`     | Swift Testing tests and `Fixtures/` from Electron   |
+| Path                                   | Purpose                                               |
+| -------------------------------------- | ----------------------------------------------------- |
+| `project.yml`                          | XcodeGen spec for the "Vision Native" app target      |
+| `Config/Signing.xcconfig`              | Signing team from `VISION_NATIVE_TEAM_ID`             |
+| `VisionNative/`                        | AppKit app, window, menus and the `WKWebView` shell   |
+| `Package.swift`                        | SwiftPM package: `VisionNativeCore`, `VisionNativeUI` |
+| `Sources/VisionNativeCore/`            | Non-UI logic: runtime supervision, health, override   |
+| `Sources/VisionNativeCore/Shell/`      | Bridge contract and codec, web view policy, menus     |
+| `Sources/VisionNativeCore/Backup/`     | Backup bundles, encryption and restore (phase 1d)     |
+| `Sources/VisionNativeCore/Audit/`      | Audit anchor, Keychain witness, audit bridge (1e)     |
+| `Sources/VisionNativeCore/API/`        | `APIClient` and the generated OpenAPI client (2)      |
+| `Sources/VisionNativeCore/Design/`     | Generated design tokens, `ThemeSelection` (2)         |
+| `Sources/VisionNativeCore/Navigation/` | Generated sidebar registry, routes, shell model (2)   |
+| `Sources/VisionNativeCore/Screens/`    | Native screen view models (Exchange rates)            |
+| `Sources/VisionNativeUI/`              | SwiftUI shell and screens, `Localizable.xcstrings`    |
+| `openapi-operations.txt`               | operationIds the Swift client is generated for        |
+| `i18n-keys.txt`                        | `i18n/source` keys copied into the String Catalog     |
+| `Tests/VisionNativeCoreTests/`         | Swift Testing tests and `Fixtures/` from Electron     |
+| `Tests/VisionNativeUITests/`           | String Catalog (EN and NL) and SwiftUI layout tests   |
 
 `VisionNative.xcodeproj`, `VisionNative/Info.plist`, `build/`, `.build/` and
 `Config/Local.xcconfig` are generated or local and are gitignored.
@@ -36,6 +45,7 @@ stays the project-file tool (ADR-204 decision 3). The deployment target and the 
 Run from the repository root:
 
 ```bash
+bun run native:generate   # only after changing openapi.yaml, tokens, i18n/source or navigation.ts
 brew install xcodegen
 xcodegen generate --spec apps/native/project.yml
 xcodebuild -project apps/native/VisionNative.xcodeproj -scheme "Vision Native" -configuration Debug CODE_SIGNING_ALLOWED=NO build
@@ -117,6 +127,23 @@ The window hosts the unchanged React frontend and behaves like the Electron shel
   `i18n/source/{en,nl}.json`, copied to `Contents/Resources/i18n/` by a build phase.
 - The launch screen uses the splash palette and shows the runtime status, or the error with Open
   logs and Try again.
+
+## Native navigation and screens (phase 2)
+
+See [the architecture page](../../docs/architecture/native-app.md#native-navigation-and-screens-phase-2).
+
+- `bun run native:generate` regenerates the OpenAPI client (operations listed in
+  `openapi-operations.txt`), the design tokens, the String Catalog (keys listed in
+  `i18n-keys.txt`) and the sidebar registry. CI fails when the committed files differ.
+- The window is a `NavigationSplitView`: a native sidebar from `apps/frontend/src/lib/navigation.ts`
+  and a detail column with the web view or a native screen. The page reports its route through
+  `electronAPI.routeChanged` (`shell:route-changed`) and hides its own sidebar when
+  `electronAPI.nativeNavigation` is set.
+- `/admin/exchange-rates` is native, in admin mode only. Native requests carry the page's admin
+  token from `sessionStorage`, read from the web view, and nothing else stores it.
+- To add a screen: list its operations and keys, run `bun run native:generate`, add a model in
+  `Sources/VisionNativeCore/Screens/`, a view in `Sources/VisionNativeUI/`, and a `NativeScreen`
+  case for its route.
 
 ## Backup and restore
 
@@ -253,6 +280,15 @@ these steps touches Electron Vision or its data.
 15. **Demo reset.** Run `bun run demo:reset-vision-native`, then reopen the app. Expected: the
     canonical Demo data is back (the audit card may then report that the history changed, as in
     Electron Vision Demo; see ADR-205 question 7).
+16. **Native sidebar (phase 2).** Expected: the native sidebar lists the web sections with SF
+    Symbols and the page shows no sidebar of its own. Clicking an entry opens that page; Back in
+    the page moves the highlight with it. View > Toggle Sidebar (`⌃⌘S`) hides the sidebar and the
+    page's topbar moves clear of the traffic lights. Switch the app language to Nederlands: the
+    sidebar labels change at once.
+17. **Exchange rates (phase 2).** Turn on admin mode in Settings, open Admin > Exchange rates.
+    Expected: the native screen with three summary cards, Live/Fallback (the URL keeps `?tab`, and
+    the tab survives a reload), the rates table and the Refresh button, which spins and shows a
+    toast. `⌘K` opens the command palette over the page. Turn admin mode off: the app goes to Home.
 
 ## Developer backend override
 

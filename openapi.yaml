@@ -216,6 +216,38 @@ components:
         status:
           type: integer
 
+    # GET /api/info/exchange-rates (routes/info/rates.ts)
+    ExchangeRate:
+      type: object
+      required: [currency, rate_to_eur, rate_date, fetched_at]
+      properties:
+        currency: { type: string, description: ISO 4217 currency code }
+        rate_to_eur: { type: number, description: The value of one unit in EUR }
+        rate_date: { type: string, format: date }
+        fetched_at: { type: string, format: date-time }
+    ExchangeRates:
+      type: object
+      required:
+        [total_rates, rates, fallback_rates, source, is_stale, last_fetched_at]
+      properties:
+        total_rates: { type: integer, minimum: 0 }
+        rates:
+          type: array
+          items: { $ref: "#/components/schemas/ExchangeRate" }
+        fallback_rates:
+          type: object
+          description: Built-in rates to EUR by currency code, used when no stored rate exists
+          additionalProperties: { type: number }
+        source: { type: string, enum: [database, fallback] }
+        is_stale:
+          { type: boolean, description: The stored rate date is before today }
+        last_fetched_at: { type: string, format: date-time, nullable: true }
+    InfoMessage:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string }
+
     ResearchDossierSource:
       type: object
       additionalProperties: false
@@ -9226,21 +9258,25 @@ paths:
       tags: [Info]
       parameters:
         - in: query
-          name: base
+          name: db_only
+          description: >-
+            Serve the stored rates without starting a background refresh when they are stale
+            (default false). Accepts true/false/1/0.
           schema:
-            type: string
-        - in: query
-          name: month
-          schema:
-            type: string
-            description: "YYYY-MM"
+            type: boolean
+            default: false
       responses:
         "200":
-          description: Exchange rate map
+          description: The latest stored rate per currency and the built-in fallback rates
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/ExchangeRates"
 
   /api/info/exchange-rates/refresh:
     post:
@@ -9253,7 +9289,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/InfoMessage"
 
   /api/info/inflation-rates:
     get:

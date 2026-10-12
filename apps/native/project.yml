@@ -35,6 +35,10 @@ targets:
     dependencies:
       - package: VisionNativeCore
         product: VisionNativeCore
+      # The SwiftUI screens and the generated String Catalog (Sources/VisionNativeUI/Resources/
+      # Localizable.xcstrings), which Xcode compiles into the package's resource bundle.
+      - package: VisionNativeCore
+        product: VisionNativeUI
     configFiles:
       Debug: Config/Signing.xcconfig
       Release: Config/Signing.xcconfig
@@ -104,6 +108,8 @@ targets:
         VisionNativeVariant: $(VISION_NATIVE_VARIANT)
         CFBundleIdentifier: $(PRODUCT_BUNDLE_IDENTIFIER)
         CFBundleExecutable: $(EXECUTABLE_NAME)
+        # The languages of the String Catalog and the shell locales.
+        CFBundleLocalizations: [en, nl]
         CFBundlePackageType: APPL
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)

@@ -7,6 +7,7 @@ import { useVisualEffectsTier } from "@/hooks/useVisualEffectsTier";
 import {
     getElectronAPI,
     isElectronMac,
+    isNativeNavigation,
     setNativeVibrancy,
     type ElectronMenuAction,
 } from "@/lib/api/electron";
@@ -28,6 +29,7 @@ function isThemeMode(value: unknown): value is ThemeMode {
 interface ElectronBridgeProps {
     onOpenSettings: (tab: string) => void;
     onOpenShortcuts: () => void;
+    onOpenPalette: () => void;
 }
 
 /**
@@ -38,7 +40,8 @@ interface ElectronBridgeProps {
  *   the topbar around the hiddenInset traffic lights and mark a drag region.
  * - Tags <html> with `vibrancy` (effective tier 'enhanced' only) to let the
  *   under-window material show through translucent backgrounds.
- * - Routes native menu / dock menu actions.
+ * - Routes native menu / dock menu actions, plus the actions only Vision
+ *   Native's sidebar sends (`replace-route`, `open-palette`, `native-sidebar`).
  * - Accepts a CSV dropped anywhere on the window (and Finder "open with")
  *   and hands it to the import page. Also stops Chromium's default
  *   navigate-to-dropped-file behavior inside the shell.
@@ -46,6 +49,7 @@ interface ElectronBridgeProps {
 export function ElectronBridge({
     onOpenSettings,
     onOpenShortcuts,
+    onOpenPalette,
 }: ElectronBridgeProps) {
     const navigate = useNavigate();
     const { toggleSidebar } = useSidebar();
@@ -60,6 +64,7 @@ export function ElectronBridge({
         setThemeMode,
         onOpenSettings,
         onOpenShortcuts,
+        onOpenPalette,
     });
     handlersRef.current = {
         navigate,
@@ -67,6 +72,7 @@ export function ElectronBridge({
         setThemeMode,
         onOpenSettings,
         onOpenShortcuts,
+        onOpenPalette,
     };
 
     useEffect(() => {
@@ -75,6 +81,9 @@ export function ElectronBridge({
 
         if (isElectronMac()) {
             document.documentElement.classList.add("electron-mac");
+        }
+        if (isNativeNavigation()) {
+            document.documentElement.classList.add("native-navigation");
         }
 
         const unsubFullScreen = api.onFullScreenChange((isFullScreen) => {
@@ -111,6 +120,25 @@ export function ElectronBridge({
                         // View › Appearance (ADR-180): the same modes as
                         // Settings › Appearance.
                         if (isThemeMode(payload)) h.setThemeMode(payload);
+                        break;
+                    case "replace-route":
+                        // A native `?tab` change: useTabParam's `replace`.
+                        if (
+                            typeof payload === "string" &&
+                            payload.startsWith("/")
+                        )
+                            h.navigate(payload, { replace: true });
+                        break;
+                    case "open-palette":
+                        h.onOpenPalette();
+                        break;
+                    case "native-sidebar":
+                        // The traffic lights sit over the native sidebar; the
+                        // topbar insets for them only while it is hidden.
+                        document.documentElement.classList.toggle(
+                            "native-sidebar-hidden",
+                            payload === "hidden",
+                        );
                         break;
                 }
             },
