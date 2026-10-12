@@ -47,7 +47,6 @@ Thumbs.db
 
 # Build
 build/
-apps/native/build/
 
 # Vision Native (XcodeGen output, SwiftPM state, local signing team)
 apps/native/*.xcodeproj

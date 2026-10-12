@@ -100,7 +100,7 @@ jobs:
   #
   # `native` is 'true' when a PR touches apps/native/, install-native.sh or this
   # workflow, on every push, and whenever classification fails; it gates the
-  # macOS Vision Native job (ADR-203).
+  # macOS Vision Native job (ADR-204).
   # ─────────────────────────────────────────────────────────────────────────────
   changes:
     name: Detect Changes
@@ -672,7 +672,7 @@ jobs:
         run: python3 scripts/check-destructive-migrations.py
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # Vision Native — the Swift app under apps/native/ (ADR-203). Linux cannot
+  # Vision Native — the Swift app under apps/native/ (ADR-204). Linux cannot
   # build macOS apps, so this is the only job on a GitHub-hosted macOS runner and
   # the only compiler the Swift code has. It runs only when `changes` says the
   # native tree (or this workflow) changed, and feeds Quality Gate, which
@@ -691,11 +691,34 @@ jobs:
         with:
           persist-credentials: false
 
+      # Pinned Xcode from the macos-26 runner image (Xcode 26.6, build 17F113, is the
+      # image default as of image 20260907); printing the version keeps drift visible.
+      - name: Select Xcode
+        run: |
+          if [ -d /Applications/Xcode_26.6.app ]; then
+            sudo xcode-select -s /Applications/Xcode_26.6.app
+          else
+            echo "::warning title=Xcode pin::/Applications/Xcode_26.6.app is not on this image; using the default Xcode"
+            ls /Applications | grep -i '^Xcode' || true
+          fi
+          xcodebuild -version
+
+      # Pinned XcodeGen release, verified by SHA-256 before use (no Homebrew drift).
       - name: Install XcodeGen
-        run: brew install xcodegen
+        env:
+          XCODEGEN_VERSION: "2.46.0"
+          XCODEGEN_SHA256: "4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806"
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/xcodegen.zip" \
+            "https://github.com/yonaskolb/XcodeGen/releases/download/${XCODEGEN_VERSION}/xcodegen.zip"
+          echo "${XCODEGEN_SHA256}  $RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/xcodegen/bin" >> "$GITHUB_PATH"
 
       - name: Generate the Xcode project
-        run: xcodegen generate --spec apps/native/project.yml
+        run: |
+          xcodegen --version
+          xcodegen generate --spec apps/native/project.yml
 
       - name: Build the app (Debug, unsigned)
         run: xcodebuild -project apps/native/VisionNative.xcodeproj -scheme "Vision Native" -configuration Debug CODE_SIGNING_ALLOWED=NO build

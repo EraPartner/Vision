@@ -1,3 +1,4 @@
+import OSLog
 import SwiftUI
 import VisionNativeCore
 import WebKit
@@ -11,33 +12,42 @@ enum ShellState: Equatable, Sendable {
 }
 
 enum ShellResolver {
-    /// Locates the backend and requires `GET /health` to answer 200 before the web
-    /// shell loads it.
+    /// Debug builds honour a loopback `VISION_NATIVE_BACKEND_URL` and skip supervision;
+    /// otherwise Vision Native starts its own PostgreSQL and backend and waits until the
+    /// backend is ready.
     static func resolve() async -> ShellState {
-        let located: LocatedBackend?
+        #if DEBUG
+            let allowOverride = true
+        #else
+            let allowOverride = false
+        #endif
+        switch BackendLocator.developerOverride(
+            environment: ProcessInfo.processInfo.environment, allowOverride: allowOverride)
+        {
+        case .use(let url):
+            return await checkOverride(url)
+        case .ignored(let reason):
+            AppRuntime.logger.warning("\(reason, privacy: .public)")
+        case .none:
+            break
+        }
         do {
-            located = try BackendLocator.locate(
-                environment: ProcessInfo.processInfo.environment,
-                homeDirectory: FileManager.default.homeDirectoryForCurrentUser,
-                readFile: { url in try Data(contentsOf: url) }
-            )
+            return .ready(try await AppRuntime.supervisor.launch())
         } catch {
-            return .unavailable(
-                "\(BackendLocator.environmentKey) is not an absolute http(s) URL with a host."
-            )
+            let reason = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            return .unavailable(reason)
         }
-        guard let located else {
-            return .unavailable(
-                "No backend found. Set \(BackendLocator.environmentKey), or open Vision Demo once so it records its port."
-            )
-        }
-        let healthURL = BackendHealth.healthURL(baseURL: located.baseURL)
+    }
+
+    /// The developer override must answer `GET /health` with 200.
+    private static func checkOverride(_ baseURL: URL) async -> ShellState {
+        let healthURL = BackendHealth.healthURL(baseURL: baseURL)
         do {
-            let status = try await BackendHealth.status(baseURL: located.baseURL)
+            let status = try await BackendHealth.status(baseURL: baseURL)
             guard status == 200 else {
                 return .unavailable("\(healthURL.absoluteString) answered HTTP \(status).")
             }
-            return .ready(located.baseURL)
+            return .ready(baseURL)
         } catch {
             return .unavailable(
                 "The backend is not running at \(healthURL.absoluteString): \(error.localizedDescription)"
@@ -86,7 +96,7 @@ struct ShellRootView: View {
     }
 }
 
-/// Hosts the React frontend served by the backend in a `WKWebView` (phase 1 of ADR-203).
+/// Hosts the React frontend served by the backend in a `WKWebView` (phase 1 of ADR-204).
 struct WebShellView: NSViewRepresentable {
     let url: URL
 
