@@ -22,7 +22,7 @@ aliases: [native parity analysis]
 # Native parity inventory: Analysis workspace and monitors
 
 > [!abstract] Scope
-> Routes: `/analysis`, `/analysis/monitors`. Source: `apps/frontend/src/pages/AnalysisWorkspacePage.tsx`, `apps/frontend/src/pages/AnalysisMonitorsPage.tsx`, `apps/frontend/src/features/analysis/`. Part of [[docs/reference/native-parity/index|the native parity inventory]] for [[docs/adr/203-vision-native-swift-app-target|ADR-203]].
+> Routes: `/analysis`, `/analysis/monitors`. Source: `apps/frontend/src/pages/AnalysisWorkspacePage.tsx`, `apps/frontend/src/pages/AnalysisMonitorsPage.tsx`, `apps/frontend/src/features/analysis/`. Part of [[docs/reference/native-parity/index|the native parity inventory]] for [[docs/adr/204-vision-native-swift-app-target|ADR-204]].
 
 Both routes are separate pages in the route manifest (`apps/frontend/src/lib/routePreload.ts:35`, `apps/frontend/src/lib/routePreload.ts:40`). Monitors is not a tab or query parameter of `/analysis`: it is its own sidebar entry `nav.analysisMonitors` "Analysis monitors" (`apps/frontend/src/lib/navigation.ts:247`) with an unread badge, next to `nav.analysisWorkspace` "Analysis workspace" (`apps/frontend/src/lib/navigation.ts:241`). The Analysis page has no link to Monitors. The Monitors page links back to `/analysis` only from its empty-target state.
 

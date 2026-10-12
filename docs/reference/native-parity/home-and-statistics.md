@@ -21,7 +21,7 @@ aliases: [native parity home and statistics]
 # Native parity inventory: Home, Statistics and reports
 
 > [!abstract] Scope
-> Routes: `/`, `/statistics`. Source: `apps/frontend/src/pages/DashboardPage.tsx`, `apps/frontend/src/pages/StatisticsPage.tsx`, `apps/frontend/src/features/dashboard/`, `apps/frontend/src/features/statistics/`, `apps/frontend/src/features/reports/`, `apps/frontend/src/components/charts/`. Part of [[docs/reference/native-parity/index|the native parity inventory]] for [[docs/adr/203-vision-native-swift-app-target|ADR-203]].
+> Routes: `/`, `/statistics`. Source: `apps/frontend/src/pages/DashboardPage.tsx`, `apps/frontend/src/pages/StatisticsPage.tsx`, `apps/frontend/src/features/dashboard/`, `apps/frontend/src/features/statistics/`, `apps/frontend/src/features/reports/`, `apps/frontend/src/components/charts/`. Part of [[docs/reference/native-parity/index|the native parity inventory]] for [[docs/adr/204-vision-native-swift-app-target|ADR-204]].
 
 Labels are the English strings from `i18n/source/en.json` for the key the code uses. Plural keys
 (`tc(...)`) are given with their `.one` / `.other` text. Charts shared by both screens are described

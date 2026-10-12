@@ -12,7 +12,7 @@ aliases: [native parity planned payments]
 # Native parity inventory: Planned payments
 
 > [!abstract] Scope
-> Routes: `/planned`. Source: `apps/frontend/src/pages/PlannedPaymentsPage.tsx`, `apps/frontend/src/features/planned/`, plus the shared `VirtualDataTable`, `ColumnFilter`, `RowMenu`, `DatePicker`, combobox and `TagInput` components as they are used here. Part of [[docs/reference/native-parity/index|the native parity inventory]] for [[docs/adr/203-vision-native-swift-app-target|ADR-203]].
+> Routes: `/planned`. Source: `apps/frontend/src/pages/PlannedPaymentsPage.tsx`, `apps/frontend/src/features/planned/`, plus the shared `VirtualDataTable`, `ColumnFilter`, `RowMenu`, `DatePicker`, combobox and `TagInput` components as they are used here. Part of [[docs/reference/native-parity/index|the native parity inventory]] for [[docs/adr/204-vision-native-swift-app-target|ADR-204]].
 
 ## Screens
 

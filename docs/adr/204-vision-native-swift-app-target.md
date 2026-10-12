@@ -1,5 +1,5 @@
 ---
-title: "ADR-203: Vision Native is a Swift app target that replaces the Electron shell in phases"
+title: "ADR-204: Vision Native is a Swift app target that replaces the Electron shell in phases"
 type: adr
 status: accepted
 date: 2026-10-12
@@ -22,7 +22,7 @@ description: "Records the owner's 2026-10-11 decisions for Vision Native, a sepa
 aliases: [adr-203, vision native, swift native app, swift rewrite]
 ---
 
-# ADR-203: Vision Native is a Swift app target that replaces the Electron shell in phases
+# ADR-204: Vision Native is a Swift app target that replaces the Electron shell in phases
 
 ## Status
 

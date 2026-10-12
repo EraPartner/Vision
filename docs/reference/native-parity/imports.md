@@ -12,7 +12,7 @@ aliases: [native parity imports]
 # Native parity inventory: Budgeting CSV import and import review
 
 > [!abstract] Scope
-> Routes: `/import`, `/import/:batchId/review`. Source: `apps/frontend/src/pages/ImportPage.tsx`, `apps/frontend/src/pages/ImportReviewPage.tsx`, `apps/frontend/src/features/imports/`, `apps/frontend/src/lib/importHandoff.ts`, and the CSV handlers in `apps/frontend/src/components/layout/ElectronBridge.tsx`. Part of [[docs/reference/native-parity/index|the native parity inventory]] for [[docs/adr/203-vision-native-swift-app-target|ADR-203]].
+> Routes: `/import`, `/import/:batchId/review`. Source: `apps/frontend/src/pages/ImportPage.tsx`, `apps/frontend/src/pages/ImportReviewPage.tsx`, `apps/frontend/src/features/imports/`, `apps/frontend/src/lib/importHandoff.ts`, and the CSV handlers in `apps/frontend/src/components/layout/ElectronBridge.tsx`. Part of [[docs/reference/native-parity/index|the native parity inventory]] for [[docs/adr/204-vision-native-swift-app-target|ADR-204]].
 >
 > Out of scope: the brokerage import (`/portfolio/import`, `PortfolioCsvColumnMapper`), which another inventory covers. The navigation entry points into `/import` from other screens (Transactions, Insights, Dashboard, Not found, onboarding) belong to those screens' inventories.
 

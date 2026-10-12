@@ -22,7 +22,7 @@ aliases: [native parity admin and developer tools]
 # Native parity inventory: Admin and developer tools
 
 > [!abstract] Scope
-> Routes: `/admin`, `/admin/db`, `/admin/db/:table`, `/admin/providers`, `/admin/endpoints`, `/admin/exchange-rates`. Source: `apps/frontend/src/pages/admin/`, `apps/frontend/src/pages/DbMaintenancePage.tsx`, `apps/frontend/src/features/admin/`, `apps/frontend/src/components/auth/RequireAdmin.tsx`, `apps/frontend/src/components/shared/AdminErrorState.tsx`, `apps/frontend/src/components/devtools/`. Part of [[docs/reference/native-parity/index|the native parity inventory]] for [[docs/adr/203-vision-native-swift-app-target|ADR-203]].
+> Routes: `/admin`, `/admin/db`, `/admin/db/:table`, `/admin/providers`, `/admin/endpoints`, `/admin/exchange-rates`. Source: `apps/frontend/src/pages/admin/`, `apps/frontend/src/pages/DbMaintenancePage.tsx`, `apps/frontend/src/features/admin/`, `apps/frontend/src/components/auth/RequireAdmin.tsx`, `apps/frontend/src/components/shared/AdminErrorState.tsx`, `apps/frontend/src/components/devtools/`. Part of [[docs/reference/native-parity/index|the native parity inventory]] for [[docs/adr/204-vision-native-swift-app-target|ADR-204]].
 
 ## Admin mode gate
 

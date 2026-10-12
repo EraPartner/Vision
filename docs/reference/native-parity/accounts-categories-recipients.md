@@ -21,7 +21,7 @@ aliases: [native parity accounts categories recipients tags]
 # Native parity inventory: Accounts, categories, payees and tags
 
 > [!abstract] Scope
-> Routes: `/accounts`, `/accounts/:id`, `/categories`, `/recipients`. Source: `apps/frontend/src/pages/AccountsPage.tsx`, `apps/frontend/src/pages/AccountDetailPage.tsx`, `apps/frontend/src/pages/CategoriesPage.tsx`, `apps/frontend/src/pages/RecipientsPage.tsx`, `apps/frontend/src/features/accounts/`, `apps/frontend/src/features/categories/`, `apps/frontend/src/features/recipients/`, and the shared tag controls in `apps/frontend/src/components/shared/`. Part of [[docs/reference/native-parity/index|the native parity inventory]] for [[docs/adr/203-vision-native-swift-app-target|ADR-203]].
+> Routes: `/accounts`, `/accounts/:id`, `/categories`, `/recipients`. Source: `apps/frontend/src/pages/AccountsPage.tsx`, `apps/frontend/src/pages/AccountDetailPage.tsx`, `apps/frontend/src/pages/CategoriesPage.tsx`, `apps/frontend/src/pages/RecipientsPage.tsx`, `apps/frontend/src/features/accounts/`, `apps/frontend/src/features/categories/`, `apps/frontend/src/features/recipients/`, and the shared tag controls in `apps/frontend/src/components/shared/`. Part of [[docs/reference/native-parity/index|the native parity inventory]] for [[docs/adr/204-vision-native-swift-app-target|ADR-204]].
 
 > [!note] Terminology
 > The code and routes say "recipient". The English UI says "payee". Both words name the same entity in this page.

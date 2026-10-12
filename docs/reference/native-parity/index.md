@@ -5,14 +5,14 @@ status: active
 date: 2026-10-12
 updated: 2026-10-12
 tags: [reference, swift-rewrite, native-parity, index, adr-203]
-description: "Index of the code-derived inventory of every screen, dialog and user action in the web UI. It is the parity checklist for the Swift rewrite (ADR-203): each row is web today and flips to native when a screen PR ports it."
+description: "Index of the code-derived inventory of every screen, dialog and user action in the web UI. It is the parity checklist for the Swift rewrite (ADR-204): each row is web today and flips to native when a screen PR ports it."
 aliases: [native parity, parity inventory, swift parity checklist]
 ---
 
 # Native parity inventory
 
 > [!abstract] Purpose
-> The Swift rewrite ([[docs/adr/203-vision-native-swift-app-target|ADR-203]]) follows the parity rule: never cut functionality. These pages list every screen, dialog and user action of the React frontend, derived from the code on 2026-10-12 (main `2ba25c9`), each with its source line and English label key. Every screen PR in phase 3 shows where each row lives in SwiftUI and flips its `Status` from `web` to `native`.
+> The Swift rewrite ([[docs/adr/204-vision-native-swift-app-target|ADR-204]]) follows the parity rule: never cut functionality. These pages list every screen, dialog and user action of the React frontend, derived from the code on 2026-10-12 (main `2ba25c9`), each with its source line and English label key. Every screen PR in phase 3 shows where each row lives in SwiftUI and flips its `Status` from `web` to `native`.
 
 ## How to read a page
 
@@ -44,15 +44,15 @@ Counts are the pages' own. The 44 screens are the 40 manifest routes, the `/port
 
 ## Findings that change the plan
 
-- **The Belgian tax engine runs in the frontend**, not the backend: `apps/frontend/src/lib/belgianTax/` (about 9,500 lines), lazy-loaded by `BelgianTaxProfileContext`. The backend stores the profile and renders the PDF. The rewrite plan assumed a backend service; Tor decided on 2026-10-12 that the engine moves behind a backend OpenAPI operation before the Tax screen goes native (ADR-203 §6).
+- **The Belgian tax engine runs in the frontend**, not the backend: `apps/frontend/src/lib/belgianTax/` (about 9,500 lines), lazy-loaded by `BelgianTaxProfileContext`. The backend stores the profile and renders the PDF. The rewrite plan assumed a backend service; Tor decided on 2026-10-12 that the engine moves behind a backend OpenAPI operation before the Tax screen goes native (ADR-204 §6).
 - **Two routes were missing from [[docs/reference/frontend-routes|Frontend Routes]]**: `/analysis/monitors` and `/research/dossiers`. Both are in `appRouteManifest` and the sidebar; the routes page now lists them.
-- **Electron-only surfaces** (application and dock menus, badge, CSV open-with, vibrancy, accent colour, the `electronBackup`, `electronAudit`, `electronUpdater`, `electronServices`, `electronAPI` and `electronRecovery` bridges) are inventoried on the shell page. The updater rows are the one deliberate cut (ADR-203 §5).
+- **Electron-only surfaces** (application and dock menus, badge, CSV open-with, vibrancy, accent colour, the `electronBackup`, `electronAudit`, `electronUpdater`, `electronServices`, `electronAPI` and `electronRecovery` bridges) are inventoried on the shell page. The updater rows are the one deliberate cut (ADR-204 §5).
 
 ## Deliberate cuts
 
 | Rows                                                                                    | Decision                                                                        |
 | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| Shell: Updates section of Settings › About, `electronUpdater` bridge, update menu items | Not ported; the install script is the update path (ADR-203 §5, Tor 2026-10-11). |
+| Shell: Updates section of Settings › About, `electronUpdater` bridge, update menu items | Not ported; the install script is the update path (ADR-204 §5, Tor 2026-10-11). |
 
 ## Doc and code conflicts
 
@@ -60,6 +60,6 @@ Each page's "Gaps and unsure" section lists where a feature doc in `docs/feature
 
 ## Related
 
-- [[docs/adr/203-vision-native-swift-app-target|ADR-203: Vision Native]]
+- [[docs/adr/204-vision-native-swift-app-target|ADR-204: Vision Native]]
 - [[docs/reference/frontend-routes|Frontend Routes]]
 - [[docs/reference/index|Reference index]]

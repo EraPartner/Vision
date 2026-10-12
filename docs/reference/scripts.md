@@ -166,7 +166,7 @@ then reports only aggregate sensitivity and timing counts. It never writes to th
 
 `scripts/native-baseline.ts` has no package script. Run it on the Mac, in your own terminal, with
 `bun scripts/native-baseline.ts`. It records the
-[[docs/adr/203-vision-native-swift-app-target|ADR-203]] phase 0 performance baseline and golden
+[[docs/adr/204-vision-native-swift-app-target|ADR-204]] phase 0 performance baseline and golden
 screenshots of the Vision Demo app; phase 4 reruns it against Vision Native. It needs only Bun, the
 Demo app and macOS built-ins (`open`, `osascript`, `ps`, `du`, `sysctl`, `screencapture`), so a
 sandboxed agent that cannot launch apps or list processes cannot run it. Give the terminal

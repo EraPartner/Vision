@@ -12,7 +12,7 @@ aliases: [native parity tax]
 # Native parity inventory: Belgian tax
 
 > [!abstract] Scope
-> Routes: `/tax`. Source: `apps/frontend/src/pages/TaxOverviewPage.tsx`, `apps/frontend/src/features/tax/`, plus the shared `features/reports/ExportDialog.tsx` and `components/shared/WidgetVisibilityDialog.tsx` as opened from `/tax`. Part of [[docs/reference/native-parity/index|the native parity inventory]] for [[docs/adr/203-vision-native-swift-app-target|ADR-203]].
+> Routes: `/tax`. Source: `apps/frontend/src/pages/TaxOverviewPage.tsx`, `apps/frontend/src/features/tax/`, plus the shared `features/reports/ExportDialog.tsx` and `components/shared/WidgetVisibilityDialog.tsx` as opened from `/tax`. Part of [[docs/reference/native-parity/index|the native parity inventory]] for [[docs/adr/204-vision-native-swift-app-target|ADR-204]].
 
 > [!warning] Where the tax engine runs
 > The Belgian tax engine (PIT, household assessment, quotient, own-home credits) runs in the **frontend**, in `apps/frontend/src/lib/belgianTax/` (lazy-loaded through `loadHouseholdRuntime` in `apps/frontend/src/contexts/BelgianTaxProfileContext.tsx:136`). The backend only stores the profile as settings blobs and serves aggregations, deduction candidates and the PDF report. A native screen must either port the engine or obtain the figures from a new backend endpoint. See [[docs/adr/200-belgian-tax-household-model|ADR-200]] and "Gaps and unsure".

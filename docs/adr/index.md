@@ -251,7 +251,7 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 
 ### 2026-10-12: Vision Native is a Swift app target
 
-[[docs/adr/203-vision-native-swift-app-target|ADR-203]] records a separate Swift app, Vision
+[[docs/adr/204-vision-native-swift-app-target|ADR-204]] records a separate Swift app, Vision
 Native (`apps/native/`, `com.vaultvoyager.vision-native`), with its own data directory. It runs
 only on the Demo dataset until the phase 4 switch-over, targets Apple-silicon Macs on current
 macOS, installs locally with a personal-team signature and has no updater. The backend and data

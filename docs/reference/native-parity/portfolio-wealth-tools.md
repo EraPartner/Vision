@@ -26,7 +26,7 @@ aliases:
 # Native parity inventory: Net worth, brokerage import and portfolio tax
 
 > [!abstract] Scope
-> Routes: `/portfolio/net-worth`, `/portfolio/import`, `/portfolio/import/:batchId/review`, `/portfolio/tax`. Source: `apps/frontend/src/pages/portfolio/net-worth/`, `apps/frontend/src/pages/portfolio/PortfolioImportPage.tsx`, `apps/frontend/src/pages/portfolio/PortfolioImportReviewPage.tsx`, `apps/frontend/src/pages/portfolio/tax/`, plus the parts of `apps/frontend/src/features/portfolio/`, `apps/frontend/src/features/imports/` and `apps/frontend/src/features/tax/` they render. Part of [[docs/reference/native-parity/index|the native parity inventory]] for [[docs/adr/203-vision-native-swift-app-target|ADR-203]].
+> Routes: `/portfolio/net-worth`, `/portfolio/import`, `/portfolio/import/:batchId/review`, `/portfolio/tax`. Source: `apps/frontend/src/pages/portfolio/net-worth/`, `apps/frontend/src/pages/portfolio/PortfolioImportPage.tsx`, `apps/frontend/src/pages/portfolio/PortfolioImportReviewPage.tsx`, `apps/frontend/src/pages/portfolio/tax/`, plus the parts of `apps/frontend/src/features/portfolio/`, `apps/frontend/src/features/imports/` and `apps/frontend/src/features/tax/` they render. Part of [[docs/reference/native-parity/index|the native parity inventory]] for [[docs/adr/204-vision-native-swift-app-target|ADR-204]].
 
 Intent docs: [[docs/features/net-worth|Net Worth]], [[docs/features/portfolio-import|Portfolio Import]], [[docs/features/portfolio-tax|Portfolio Tax]], [[docs/reference/fund-holdings-import-contract|Fund Holdings Import Contract]]. Route table: [[docs/reference/frontend-routes|Frontend Routes]].
 

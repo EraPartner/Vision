@@ -21,7 +21,7 @@ aliases: [native parity transactions and splits]
 # Native parity inventory: Transactions, splits and Who owes you
 
 > [!abstract] Scope
-> Routes: `/transactions`, `/owes`. Source: `apps/frontend/src/pages/TransactionsPage.tsx`, `apps/frontend/src/pages/OwesPage.tsx`, `apps/frontend/src/features/transactions/`, `apps/frontend/src/features/splits/` and the shared components they render. Part of [[docs/reference/native-parity/index|the native parity inventory]] for [[docs/adr/203-vision-native-swift-app-target|ADR-203]].
+> Routes: `/transactions`, `/owes`. Source: `apps/frontend/src/pages/TransactionsPage.tsx`, `apps/frontend/src/pages/OwesPage.tsx`, `apps/frontend/src/features/transactions/`, `apps/frontend/src/features/splits/` and the shared components they render. Part of [[docs/reference/native-parity/index|the native parity inventory]] for [[docs/adr/204-vision-native-swift-app-target|ADR-204]].
 
 Intent docs: [[docs/features/transactions|Transactions]], [[docs/features/splits|Splits & Owes]], [[docs/features/bulk-actions|Bulk actions]], [[docs/features/transfers|Internal transfers]], [[docs/features/tags|Tags]], [[docs/adr/181-home-transactions-redesign|ADR-181]].
 

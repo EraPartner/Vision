@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 /**
  * Phase 0 performance baseline and golden screenshots for the Swift rewrite
- * (docs/adr/203-vision-native-swift-app-target.md). Run it on the Mac, in your
+ * (docs/adr/204-vision-native-swift-app-target.md). Run it on the Mac, in your
  * own terminal, against the synthetic Vision Demo app:
  *
  *   bun scripts/native-baseline.ts [--skip-screenshots] [--skip-launch]
@@ -1749,7 +1749,7 @@ function renderMarkdown(baseline: {
   const lines: string[] = [
     `# ${baseline.app} performance baseline`,
     "",
-    `Generated ${baseline.generatedAt} by \`bun scripts/native-baseline.ts\` (ADR-203 phase 0). Backend port ${baseline.appPort}. Toolchain: [toolchain.md](toolchain.md).`,
+    `Generated ${baseline.generatedAt} by \`bun scripts/native-baseline.ts\` (ADR-204 phase 0). Backend port ${baseline.appPort}. Toolchain: [toolchain.md](toolchain.md).`,
     "",
     "## Bundle size",
     "",
