@@ -16,7 +16,8 @@
  * app started without the switch) it falls back to `screencapture -l` after
  * navigating with the app's `G <key>` shortcuts.
  *
- * Output: <repo>/.vision-cache/swift-baseline/ (gitignored). Phase 4 reruns the
+ * Output: <repo>/.vision-cache/swift-baseline/<app slug>/ (gitignored; vision-demo
+ * or vision-native). Phase 4 reruns the
  * same script against Vision Native with --app.
  */
 import { execFile } from "node:child_process";
@@ -36,7 +37,9 @@ interface CommandResult {
 }
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
-const outDir = path.join(repoRoot, ".vision-cache", "swift-baseline");
+const baselineRoot = path.join(repoRoot, ".vision-cache", "swift-baseline");
+/** Per-app output directory (set in main), so a Vision Native run never overwrites the Electron baseline. */
+let outDir = baselineRoot;
 const warnings: string[] = [];
 
 function sleep(ms: number): Promise<void> {
@@ -1476,6 +1479,12 @@ async function main(): Promise<void> {
   const paths = appPaths(options.app);
   if (!fs.existsSync(paths.bundle))
     throw new Error(`${paths.bundle} not found`);
+  outDir = path.join(
+    baselineRoot,
+    options.app.toLowerCase().replace(/\s+/g, "-"),
+  );
+  // Stale screenshots from an interrupted run must not mix with this run's.
+  fs.rmSync(path.join(outDir, "screenshots"), { recursive: true, force: true });
   fs.mkdirSync(outDir, { recursive: true });
   const startedAt = new Date().toISOString();
 

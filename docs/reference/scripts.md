@@ -173,15 +173,16 @@ sandboxed agent that cannot launch apps or list processes cannot run it. Give th
 Accessibility access (System Events window count and keystrokes) and Screen Recording access
 (fallback captures).
 
-| Flag                 | Purpose                                                                   |
-| -------------------- | ------------------------------------------------------------------------- |
-| `--skip-screenshots` | Measure only; skip the golden screenshots                                 |
-| `--skip-launch`      | Use the running app instead of three quit-and-relaunch cold launches      |
-| `--port <n>`         | Backend port; defaults to `appPort` in the app's userData `settings.json` |
-| `--cdp-port <n>`     | DevTools port passed as `--remote-debugging-port`; defaults to 9222       |
-| `--app <name>`       | Application name; defaults to `Vision Demo`                               |
+| Flag                 | Purpose                                                                     |
+| -------------------- | --------------------------------------------------------------------------- |
+| `--skip-screenshots` | Measure only; skip the golden screenshots                                   |
+| `--skip-launch`      | Use the running app instead of three quit-and-relaunch cold launches        |
+| `--port <n>`         | Backend port; defaults to `appPort` in the app's userData `settings.json`   |
+| `--cdp-port <n>`     | DevTools port passed as `--remote-debugging-port`; defaults to 9222         |
+| `--app <name>`       | `Vision Demo` (default) or `Vision Native`; the real Vision app is rejected |
 
-The script writes to `.vision-cache/swift-baseline/` (gitignored): `toolchain.md`, `baseline.md`
+The script writes to `.vision-cache/swift-baseline/<app slug>/` (gitignored; `vision-demo` or
+`vision-native`, so both baselines can coexist for comparison): `toolchain.md`, `baseline.md`
 and `baseline.json` (each number with its method), and `screenshots/<theme>-<lang>/<route>.png`
 with `screenshots/index.md`. It measures bundle sizes with `du`, three cold launches until
 `/health` returns 200 and a window exists, the summed RSS of every process inside the bundle or
