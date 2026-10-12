@@ -44,7 +44,7 @@ Counts are the pages' own. The 44 screens are the 40 manifest routes, the `/port
 
 ## Findings that change the plan
 
-- **The Belgian tax engine runs in the frontend**, not the backend: `apps/frontend/src/lib/belgianTax/` (about 9,500 lines), lazy-loaded by `BelgianTaxProfileContext`. The backend stores the profile and renders the PDF. The rewrite plan assumed a backend service; ADR-203 §6 records the options (backend endpoint, Swift port, or keep the web Tax screen) as pending Tor's decision.
+- **The Belgian tax engine runs in the frontend**, not the backend: `apps/frontend/src/lib/belgianTax/` (about 9,500 lines), lazy-loaded by `BelgianTaxProfileContext`. The backend stores the profile and renders the PDF. The rewrite plan assumed a backend service; Tor decided on 2026-10-12 that the engine moves behind a backend OpenAPI operation before the Tax screen goes native (ADR-203 §6).
 - **Two routes were missing from [[docs/reference/frontend-routes|Frontend Routes]]**: `/analysis/monitors` and `/research/dossiers`. Both are in `appRouteManifest` and the sidebar; the routes page now lists them.
 - **Electron-only surfaces** (application and dock menus, badge, CSV open-with, vibrancy, accent colour, the `electronBackup`, `electronAudit`, `electronUpdater`, `electronServices`, `electronAPI` and `electronRecovery` bridges) are inventoried on the shell page. The updater rows are the one deliberate cut (ADR-203 §5).
 

@@ -255,7 +255,9 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 Native (`apps/native/`, `com.vaultvoyager.vision-native`), with its own data directory. It runs
 only on the Demo dataset until the phase 4 switch-over, targets Apple-silicon Macs on current
 macOS, installs locally with a personal-team signature and has no updater. The backend and data
-are unchanged. It supersedes nothing yet; the CI choice is pending.
+are unchanged. It supersedes nothing yet. Swift checks run on a GitHub-hosted macOS runner, and
+the Belgian tax engine (which runs in the frontend today) moves behind a backend endpoint before
+the Tax screen goes native.
 
 ### 2026-10-11: The household region decides the own-home regime
 

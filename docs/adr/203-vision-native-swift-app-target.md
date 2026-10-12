@@ -18,7 +18,7 @@ tags:
     adr-113,
     adr-196,
   ]
-description: "Records the owner's 2026-10-11 decisions for Vision Native, a separate Swift app under apps/native/ with its own bundle identifier and isolated data directory that runs only on the synthetic Demo dataset until a verified phase-4 switch-over. Apple-silicon Macs on current macOS, Swift 6 with SwiftPM and Swift Testing, local install with a free personal-team signature, no updater, backend and data unchanged. CI choice pending. Supersedes nothing yet."
+description: "Records the owner's 2026-10-11 decisions for Vision Native, a separate Swift app under apps/native/ with its own bundle identifier and isolated data directory that runs only on the synthetic Demo dataset until a verified phase-4 switch-over. Apple-silicon Macs on current macOS, Swift 6 with SwiftPM and Swift Testing, local install with a free personal-team signature, no updater, backend and data unchanged. CI runs on a GitHub-hosted macOS runner; the tax engine moves behind a backend endpoint before phase 3. Supersedes nothing yet."
 aliases: [adr-203, vision native, swift native app, swift rewrite]
 ---
 
@@ -30,8 +30,7 @@ Accepted on 2026-10-12 (decisions by Tor on 2026-10-11). It supersedes nothing y
 [[docs/adr/072-electron-native-desktop-integration|ADR-072]],
 [[docs/adr/113-native-macos-runtime|ADR-113]] (the Electron host part only; the PostgreSQL runtime
 contract stays) and [[docs/adr/196-electron-shell-typescript|ADR-196]] remain in force for the
-Electron app until phase 1 exits. A follow-up ADR then records the hand-over. Section 10 (CI) is
-pending Tor's decision.
+Electron app until phase 1 exits. A follow-up ADR then records the hand-over.
 
 ## Date
 
@@ -115,10 +114,10 @@ Facts about today's app that this decision builds on:
    and is never recomputed in Swift. Today it runs in the frontend
    (`apps/frontend/src/lib/belgianTax/`, about 9,500 lines, lazy-loaded by
    `apps/frontend/src/contexts/BelgianTaxProfileContext.tsx`); the backend only stores the
-   profile and renders the PDF report. The rewrite plan assumed it was a backend service. Before
-   the Tax screen moves to SwiftUI (phase 3), the engine is exposed by the backend behind an
-   OpenAPI operation, so that SwiftUI only displays its results. Pending Tor's decision
-   (2026-10-12); porting the engine to Swift is the alternative, under differential testing.
+   profile and renders the PDF report. The rewrite plan assumed it was a backend service. Decided
+   by Tor on 2026-10-12: before the Tax screen moves to SwiftUI (phase 3), the engine is exposed
+   by the backend behind an OpenAPI operation, so that SwiftUI only displays its results. Porting
+   the engine to Swift was rejected.
 7. **Look.** Vision Native looks more Apple-native than today, with native macOS controls and
    styling. It is not a pixel recreation. Three things must match today's app: the colours (the
    design tokens of [[docs/adr/180-sidebar-sections-replace-workspaces|ADR-180]] to ADR-190), the
@@ -136,16 +135,13 @@ Facts about today's app that this decision builds on:
    with draft PRs. Remote Control on Tor's Mac, in `/Users/computer/Code/Vision`, only builds, runs
    tests and takes screenshots. It never commits, because commits need Touch ID signing. Linux
    containers cannot build macOS apps.
-10. **CI. Pending Tor's decision (2026-10-12).**
-    - (a) A GitHub-hosted macOS runner job in `ci.yml` builds and tests the Swift package and the
-      app on every PR. The repository is public, so GitHub-hosted runners are free for it. The Mac
-      is used only for screenshots and the Demo app.
-    - (b) No CI gate. Checks run only on Tor's Mac.
-    - (c) A self-hosted runner on Tor's Mac. Rejected by default: on a public repository it
-      exposes the Mac to code from fork PRs.
-
-    Option (a) is the proposed default.
-
+10. **CI.** Decided by Tor on 2026-10-12: a GitHub-hosted macOS runner job in `ci.yml` builds
+    and tests the Swift package and the app on every PR that touches `apps/native/`, and gates
+    auto-merge like the other checks. The repository is public, so GitHub-hosted runners are free
+    for it. Tor's Mac is used only for screenshots and the Demo app. Rejected: no CI gate with
+    checks only on the Mac, and a self-hosted runner on the Mac, which on a public repository
+    would expose it to code from fork PRs. The job is added in phase 1's first PR together with
+    the target.
 11. **Phases** (from the 2026-10-11 rewrite plan):
     - 0: Decide and baseline: this ADR, performance baseline, parity inventory, golden screenshots.
     - 1: A Swift shell hosts the current React build in a `WKWebView`.
@@ -164,7 +160,8 @@ Facts about today's app that this decision builds on:
 - The phases keep a working app at every step. Electron stays shippable until phase 1 exits.
 - A stable personal-team signature avoids per-build identity changes for the Keychain witness
   (inferred).
-- CI on GitHub-hosted macOS runners costs nothing for a public repository.
+- CI on GitHub-hosted macOS runners costs nothing for a public repository, and nothing new runs
+  on the Mac.
 
 ### Negative
 
@@ -172,7 +169,8 @@ Facts about today's app that this decision builds on:
 - In phase 1 the React UI renders in WebKit instead of Chromium. CSS, fonts, charts and PDF
   output can differ, so every screen is checked against the golden screenshots.
 - The updater is cut. Updates need a local rebuild with `install-native.sh`.
-- macOS runners are slower than the Linux runners, so PR checks take longer under option (a).
+- macOS runners are slower than the Linux runners, so PR checks take longer once the Swift job
+  exists.
 - Without notarization or a Developer ID the app runs only on Macs that built it or trust the
   personal team (inferred).
 
@@ -182,7 +180,8 @@ Facts about today's app that this decision builds on:
   phases 0 to 4.
 - ADR-072, ADR-113 and ADR-196 stay in force for the Electron app until a follow-up ADR records
   the hand-over at phase 1's exit.
-- The project-file tool and the CI option are still open and are settled in phase 1.
+- The project-file tool is still open and is settled in phase 1. The tax engine moves behind a
+  backend endpoint before phase 3 reaches the Tax screen.
 
 ## Phase gates
 
