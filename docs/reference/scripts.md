@@ -1,7 +1,7 @@
 ---
 title: Scripts Reference
 type: reference
-date: 2026-10-11
+date: 2026-10-12
 tags:
   [
     reference,
@@ -13,6 +13,7 @@ tags:
     native-runtime,
     ai,
     privacy,
+    swift-baseline,
   ]
 description: Authoritative guide to Vision package scripts and their intended use.
 aliases: [scripts reference, package scripts]
@@ -160,6 +161,40 @@ translations still require review. `sanitize-locales` repairs generated-compatib
 `calibrate:category-outliers` requires `VISION_CALIBRATION_API_BASE_URL` pointing to a loopback-only
 running Vision instance. It discards category labels, recipients, accounts, memos, and comments,
 then reports only aggregate sensitivity and timing counts. It never writes to the database.
+
+## Native rewrite baseline
+
+`scripts/native-baseline.ts` has no package script. Run it on the Mac, in your own terminal, with
+`bun scripts/native-baseline.ts`. It records the
+[[docs/adr/203-vision-native-swift-app-target|ADR-203]] phase 0 performance baseline and golden
+screenshots of the Vision Demo app; phase 4 reruns it against Vision Native. It needs only Bun, the
+Demo app and macOS built-ins (`open`, `osascript`, `ps`, `du`, `sysctl`, `screencapture`), so a
+sandboxed agent that cannot launch apps or list processes cannot run it. Give the terminal
+Accessibility access (System Events window count and keystrokes) and Screen Recording access
+(fallback captures).
+
+| Flag                 | Purpose                                                                   |
+| -------------------- | ------------------------------------------------------------------------- |
+| `--skip-screenshots` | Measure only; skip the golden screenshots                                 |
+| `--skip-launch`      | Use the running app instead of three quit-and-relaunch cold launches      |
+| `--port <n>`         | Backend port; defaults to `appPort` in the app's userData `settings.json` |
+| `--cdp-port <n>`     | DevTools port passed as `--remote-debugging-port`; defaults to 9222       |
+| `--app <name>`       | Application name; defaults to `Vision Demo`                               |
+
+The script writes to `.vision-cache/swift-baseline/` (gitignored): `toolchain.md`, `baseline.md`
+and `baseline.json` (each number with its method), and `screenshots/<theme>-<lang>/<route>.png`
+with `screenshots/index.md`. It measures bundle sizes with `du`, three cold launches until
+`/health` returns 200 and a window exists, the summed RSS of every process inside the bundle or
+`~/Library/Application Support/<app>/` plus its descendants (after 60 s idle on Home and after
+scrolling `/transactions` to the bottom), and the `/transactions` scroll frame rate. It drives the
+renderer at `http://localhost:<appPort>` over the Chromium DevTools Protocol, which the Electron
+shell does not block. Screenshots cover every route in
+[[docs/reference/frontend-routes|Frontend Routes]] and `routePreload.ts` in light and dark, English
+and Dutch, at 1440x900, plus the Settings sections, command palette and shortcuts overlay in light
+English. Theme, language and admin mode are switched through `PUT /api/settings/theme_settings` and
+`app_settings`, and the original values are restored at the end, also on error or Ctrl-C. Without a
+DevTools endpoint the script falls back to `screencapture -l` of the `G <key>` shortcut pages. Never
+point it at the real Vision app.
 
 ## Common sequences
 
