@@ -68,10 +68,13 @@ public enum BackupFiles {
         return Darwin.lstat(path, &status) == 0 && (status.st_mode & S_IFMT) == S_IFDIR
     }
 
-    /// `fs.statSync(path).isFile()`: follows symlinks, like Electron.
+    /// `fs.statSync(path).isFile()`: follows symlinks, like Electron. The path is
+    /// resolved first because `Darwin.stat` resolves to the `struct stat` initializer in
+    /// Swift (the same reason `InstanceLock` binds `flock` by symbol name).
     public static func isRegularFile(_ path: String) -> Bool {
+        let resolved = URL(fileURLWithPath: path).resolvingSymlinksInPath().path
         var status = stat()
-        return Darwin.stat(path, &status) == 0 && (status.st_mode & S_IFMT) == S_IFREG
+        return Darwin.lstat(resolved, &status) == 0 && (status.st_mode & S_IFMT) == S_IFREG
     }
 
     public static func size(_ path: String) -> UInt64? {
