@@ -1685,6 +1685,14 @@ const METHODS = {
     "CDP Page.navigate to http://localhost:<appPort><route>, Emulation 1440x900 @2x, wait for network idle, step-scroll the main scroller to the bottom and back so lazy charts mount, wait for idle again, Page.captureScreenshot captureBeyondViewport. Theme/language/admin switched via PUT /api/settings/theme_settings and app_settings, restored at the end.",
 };
 
+/** Escapes backslashes, pipes and backticks so a value is safe inside a Markdown table cell. */
+function escapeTableCell(value: string): string {
+  return value
+    .replace(/\\/g, "\\\\")
+    .replace(/\|/g, "\\|")
+    .replace(/`/g, "\\`");
+}
+
 function renderMarkdown(baseline: {
   generatedAt: string;
   app: string;
@@ -1748,7 +1756,7 @@ function renderMarkdown(baseline: {
       "| --: | ---: | --------: | ------- |",
       ...sample.processes.map(
         (p) =>
-          `| ${p.pid} | ${p.ppid} | ${p.rssKb} | \`${p.command.replace(/\|/g, "\\|").slice(0, 160)}\` |`,
+          `| ${p.pid} | ${p.ppid} | ${p.rssKb} | \`${escapeTableCell(p.command).slice(0, 160)}\` |`,
       ),
       "",
     );
