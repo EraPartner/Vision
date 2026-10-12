@@ -16,7 +16,7 @@ tags:
     packaging,
     adr-203,
   ]
-description: "Vision Native is the Swift macOS app under apps/native/ that replaces the Electron shell in phases (ADR-203). Covers the directory layout, how the app finds the backend (VISION_NATIVE_BACKEND_URL, then the Vision Demo appPort), the Native (macOS) CI job and install-native.sh."
+description: "Vision Native is the Swift macOS app under apps/native/ that replaces the Electron shell in phases (ADR-204). Covers the directory layout, how the app finds the backend (VISION_NATIVE_BACKEND_URL, then the Vision Demo appPort), the Native (macOS) CI job and install-native.sh."
 aliases: [vision native, native app, swift app]
 ---
 
@@ -25,7 +25,7 @@ aliases: [vision native, native app, swift app]
 > [!abstract] Overview
 > Vision Native is a separate Swift app, bundle identifier `com.vaultvoyager.vision-native`, that
 > replaces the [[docs/architecture/electron|Electron shell]] in phases
-> ([[docs/adr/203-vision-native-swift-app-target|ADR-203]]). In phase 1 it hosts the existing
+> ([[docs/adr/204-vision-native-swift-app-target|ADR-204]]). In phase 1 it hosts the existing
 > React frontend in a `WKWebView`. It runs on the synthetic Vision Demo data only. The Electron
 > "Vision" app stays the daily app until the phase 4 switch-over.
 
@@ -84,7 +84,7 @@ signature changes on every build. There is no updater: rerunning the script is t
 
 ## Related
 
-- [[docs/adr/203-vision-native-swift-app-target|ADR-203]]
+- [[docs/adr/204-vision-native-swift-app-target|ADR-204]]
 - [[docs/reference/native-parity/index|Native parity inventory]]
 - [[docs/architecture/electron|Electron Desktop Architecture]]
 - [[docs/reference/scripts|Scripts Reference]]

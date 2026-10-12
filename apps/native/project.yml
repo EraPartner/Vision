@@ -1,4 +1,4 @@
-# XcodeGen spec for Vision Native (ADR-203). Generate the project with:
+# XcodeGen spec for Vision Native (ADR-204). Generate the project with:
 #   xcodegen generate --spec apps/native/project.yml
 # The generated VisionNative.xcodeproj and VisionNative/Info.plist are gitignored.
 name: VisionNative

@@ -86,7 +86,7 @@ struct ShellRootView: View {
     }
 }
 
-/// Hosts the React frontend served by the backend in a `WKWebView` (phase 1 of ADR-203).
+/// Hosts the React frontend served by the backend in a `WKWebView` (phase 1 of ADR-204).
 struct WebShellView: NSViewRepresentable {
     let url: URL
 

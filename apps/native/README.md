@@ -1,7 +1,7 @@
 # Vision Native
 
 Vision Native is the Swift macOS app that replaces the Electron shell in phases
-([ADR-203](../../docs/adr/203-vision-native-swift-app-target.md)). Phase 1 hosts the existing
+([ADR-204](../../docs/adr/204-vision-native-swift-app-target.md)). Phase 1 hosts the existing
 React frontend in a `WKWebView`. It runs on the synthetic Vision Demo data only, never on the real
 Vision data directory.
 

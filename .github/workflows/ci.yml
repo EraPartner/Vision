@@ -100,7 +100,7 @@ jobs:
   #
   # `native` is 'true' when a PR touches apps/native/, install-native.sh or this
   # workflow, on every push, and whenever classification fails; it gates the
-  # macOS Vision Native job (ADR-203).
+  # macOS Vision Native job (ADR-204).
   # ─────────────────────────────────────────────────────────────────────────────
   changes:
     name: Detect Changes
@@ -672,7 +672,7 @@ jobs:
         run: python3 scripts/check-destructive-migrations.py
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # Vision Native — the Swift app under apps/native/ (ADR-203). Linux cannot
+  # Vision Native — the Swift app under apps/native/ (ADR-204). Linux cannot
   # build macOS apps, so this is the only job on a GitHub-hosted macOS runner and
   # the only compiler the Swift code has. It runs only when `changes` says the
   # native tree (or this workflow) changed, and feeds Quality Gate, which

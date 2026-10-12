@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Build Vision Native (apps/native/, ADR-203) in Release and install it to
+# Build Vision Native (apps/native/, ADR-204) in Release and install it to
 # /Applications. Vision Native runs only against the synthetic Vision Demo data.
 
 REPO_PATH="$(cd "$(dirname "$0")" && pwd)"
@@ -36,7 +36,7 @@ if [ -n "$TEAM_ID" ]; then
 else
   echo "WARNING: VISION_NATIVE_TEAM_ID is not set; signing ad-hoc."
   echo "         Ad-hoc signatures change on every build, so macOS may ask for"
-  echo "         Keychain access again after each install (ADR-203, ADR-158)."
+  echo "         Keychain access again after each install (ADR-204, ADR-158)."
   SIGNING_ARGS=(
     "DEVELOPMENT_TEAM="
     "CODE_SIGN_STYLE=Manual"

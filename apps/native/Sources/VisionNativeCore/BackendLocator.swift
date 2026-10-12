@@ -22,7 +22,7 @@ public enum BackendLocatorError: Error, Equatable, Sendable {
 }
 
 /// Resolves the Vision backend base URL. Vision Native runs on the synthetic Demo
-/// dataset only (ADR-203), so the fallback reads the Vision Demo app's settings.
+/// dataset only (ADR-204), so the fallback reads the Vision Demo app's settings.
 public enum BackendLocator {
     public static let environmentKey = "VISION_NATIVE_BACKEND_URL"
     /// Matches `DEMO_USER_DATA_NAME` in `packaging/electron/runtime/native-demo.ts`.
