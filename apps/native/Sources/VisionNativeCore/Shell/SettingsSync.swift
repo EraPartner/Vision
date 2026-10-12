@@ -167,9 +167,8 @@ public struct BackupSettingsValue: Equatable, Sendable {
     }
 }
 
-/// `backup:load-settings` and `backup:save-settings` until phase 1d: the same database
-/// setting and `settings.json` mirror as Electron, without the iCloud Drive default
-/// directory, which arrives with the backup itself.
+/// `backup:load-settings` and `backup:save-settings`: the same database setting and
+/// `settings.json` mirror as Electron, resolved with the iCloud Drive default directory.
 public enum BackupSettings {
     public static let key = "backup_settings"
 
@@ -203,19 +202,34 @@ public enum BackupSettings {
         return "/" + components.joined(separator: "/")
     }
 
-    /// `resolveBackupSettingsWithDefaults` without the iCloud Drive fallback: the toggle
-    /// counts only with a configured directory.
-    public static func resolved(_ raw: JSONValue?) -> BackupSettingsValue {
-        let directory = raw?["backupDir"]?.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return BackupSettingsValue(
-            backupDir: directory, backupOnQuit: !directory.isEmpty && raw?["backupOnQuit"] == .bool(true))
+    /// `resolveBackupSettingsWithDefaults`: the configured directory, else the iCloud Drive
+    /// default (`defaultDirectory`, empty when iCloud Drive is absent). With a configured
+    /// directory the toggle is the stored one; with only the default it is on.
+    public static func resolved(_ raw: JSONValue?, defaultDirectory: String = "") -> BackupSettingsValue {
+        let configured = raw?["backupDir"]?.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let directory = configured.isEmpty ? defaultDirectory : configured
+        let onQuit = configured.isEmpty ? !defaultDirectory.isEmpty : raw?["backupOnQuit"] == .bool(true)
+        return BackupSettingsValue(backupDir: directory, backupOnQuit: onQuit)
+    }
+
+    /// The `will-quit` handler's `resolveBackupSettings`: the stored database value when the
+    /// backend answers with an object, else the `settings.json` mirror. Unresolved.
+    public static func rawForQuit(
+        baseURL: URL?, transport: any SettingsTransport, fallback: @Sendable () async -> [String: JSONValue]
+    ) async -> JSONValue {
+        if let baseURL, let response = try? await transport.get(SettingsWriter.url(baseURL: baseURL, key: key)) {
+            let body = SettingsResponse(body: try? JSONValue.parse(response.body))
+            if let stored = body.stored, stored.objectValue != nil || stored.arrayValue != nil { return stored }
+        }
+        return .object(await fallback())
     }
 
     /// The stored value when the database answered with an object, else the mirror. The
     /// mirror receives the raw stored value, not the resolved one, like Electron.
     public static func load(
         baseURL: URL?, transport: any SettingsTransport, writer: SettingsWriter,
-        mirror: @Sendable (BackupSettingsValue) async -> Void, fallback: @Sendable () async -> [String: JSONValue]
+        mirror: @Sendable (BackupSettingsValue) async -> Void, fallback: @Sendable () async -> [String: JSONValue],
+        defaultDirectory: String = ""
     ) async -> BackupSettingsValue {
         if let baseURL, let response = try? await transport.get(SettingsWriter.url(baseURL: baseURL, key: key)) {
             let body = SettingsResponse(body: try? JSONValue.parse(response.body))
@@ -225,10 +239,10 @@ public enum BackupSettings {
                     BackupSettingsValue(
                         backupDir: stored["backupDir"]?.stringValue ?? "",
                         backupOnQuit: stored["backupOnQuit"] == .bool(true)))
-                return resolved(stored)
+                return resolved(stored, defaultDirectory: defaultDirectory)
             }
         }
-        return resolved(.object(await fallback()))
+        return resolved(.object(await fallback()), defaultDirectory: defaultDirectory)
     }
 
     public static func save(

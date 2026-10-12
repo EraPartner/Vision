@@ -158,11 +158,85 @@ import Testing
     }
 
     @Test func pendingAndRemovedChannelsSkipValidation() {
-        #expect(BridgeCodec.validate(request(.backupRun, [.string("/etc"), .int(1), .int(2)])) == .call(.unavailable(.backupRun)))
-        #expect(BridgeCodec.validate(request(.backupSelectFile)) == .call(.unavailable(.backupSelectFile)))
-        #expect(BridgeCodec.validate(request(.backupRestore, [.string("/x.visionbak")])) == .call(.unavailable(.backupRestore)))
+        #expect(BridgeCodec.validate(request(.auditEnroll, [.int(1)])) == .call(.unavailable(.auditEnroll)))
         #expect(BridgeCodec.validate(request(.auditRead)) == .call(.unavailable(.auditRead)))
         #expect(BridgeCodec.validate(request(.updateCheckGithub)) == .call(.unavailable(.updateCheckGithub)))
+    }
+
+    @Test func backupRunFollowsBackupRunArguments() {
+        #expect(
+            BridgeCodec.validate(request(.backupRun, [.string("/Users/me/Backups/./x/.."), .string("{}")]))
+                == .call(.runBackup(destination: "/Users/me/Backups", frontendStateJson: "{}")))
+        #expect(
+            BridgeCodec.validate(request(.backupRun, [.string("/Volumes/B")]))
+                == .call(.runBackup(destination: "/Volumes/B", frontendStateJson: nil)))
+        #expect(
+            BridgeCodec.validate(request(.backupRun, [.string("/etc"), .null]))
+                == .invalid(.failed("Backup to system directories is not allowed")))
+        #expect(BridgeCodec.validate(request(.backupRun, [.int(3)])) == .invalid(.failed("Invalid backup directory")))
+        #expect(
+            BridgeCodec.validate(request(.backupRun, [.string("/Volumes/B"), .int(1)]))
+                == .invalid(.failed("Invalid frontend state snapshot")))
+        #expect(
+            BridgeCodec.validate(request(.backupRun, [.string("/Volumes/B"), .null, .int(2)]))
+                == .invalid(.failed("Unexpected IPC arguments")))
+    }
+
+    @Test func restoreChannelsAcceptOnlyPickedPaths() {
+        let picked: (String) -> Bool = { $0 == "/Users/me/b.visionbak.enc" || $0 == "/Users/me/notes.txt" }
+        #expect(
+            BridgeCodec.validate(
+                request(.backupRestore, [.string("/Users/me/./b.visionbak.enc"), .object(["passphrase": .string("p")])]),
+                isAllowedRestorePath: picked)
+                == .call(.restoreBackup(path: "/Users/me/b.visionbak.enc", passphrase: "p")))
+        #expect(
+            BridgeCodec.validate(request(.backupRestore, [.string("/Users/me/b.visionbak.enc")]), isAllowedRestorePath: picked)
+                == .call(.restoreBackup(path: "/Users/me/b.visionbak.enc", passphrase: nil)))
+        #expect(
+            BridgeCodec.validate(request(.backupRestore, [.string("/Users/me/other.sql")]), isAllowedRestorePath: picked)
+                == .invalid(.failed("Restore path was not selected via the file picker")))
+        #expect(
+            BridgeCodec.validate(request(.backupRestore, [.string("/Users/me/notes.txt")]), isAllowedRestorePath: picked)
+                == .invalid(.failed("Unsupported backup file extension")))
+        #expect(
+            BridgeCodec.validate(
+                request(.backupRestore, [.string("/Users/me/b.visionbak.enc"), .object(["passphrase": .int(1)])]),
+                isAllowedRestorePath: picked)
+                == .invalid(.failed("Invalid restore passphrase")))
+        #expect(
+            BridgeCodec.validate(request(.backupRestore, [.string("")]), isAllowedRestorePath: picked)
+                == .invalid(.failed("Invalid restore path")))
+        #expect(
+            BridgeCodec.validate(request(.backupIsEncrypted, [.string("/Users/me/b.visionbak.enc")]), isAllowedRestorePath: picked)
+                == .call(.isBackupEncrypted(path: "/Users/me/b.visionbak.enc")))
+        #expect(
+            BridgeCodec.validate(request(.backupIsEncrypted, [.string("/etc/passwd")]), isAllowedRestorePath: picked)
+                == .invalid(.resolve(.bool(false))))
+        // Without an allow-list nothing is accepted.
+        #expect(
+            BridgeCodec.validate(request(.backupIsEncrypted, [.string("/Users/me/b.visionbak.enc")]))
+                == .invalid(.resolve(.bool(false))))
+        #expect(BridgeCodec.hasAllowedRestoreExtension("/a/B.VISIONBAK"))
+        #expect(BridgeCodec.hasAllowedRestoreExtension("/a/b.sql.enc"))
+        #expect(!BridgeCodec.hasAllowedRestoreExtension("/a/b.zip"))
+    }
+
+    @Test func passphraseAndPickerChannelsHaveTheirInvalidResults() {
+        #expect(BridgeCodec.validate(request(.backupSetPassphrase, [.string(" p ")])) == .call(.setBackupPassphrase(" p ")))
+        #expect(
+            BridgeCodec.validate(request(.backupSetPassphrase, [.int(1)]))
+                == .invalid(
+                    .resolve(.object([
+                        "success": .bool(false), "available": .bool(false), "error": .string("Invalid backup passphrase"),
+                    ]))))
+        #expect(BridgeCodec.validate(request(.backupGetEncryptionStatus)) == .call(.getBackupEncryptionStatus))
+        #expect(
+            BridgeCodec.validate(request(.backupGetEncryptionStatus, [.int(1)]))
+                == .invalid(.reject("Invalid arguments for backup:get-encryption-status")))
+        #expect(BridgeCodec.validate(request(.backupSelectDir)) == .call(.selectBackupDirectory))
+        #expect(BridgeCodec.validate(request(.backupSelectDir, [.int(1)])) == .invalid(.resolve(.null)))
+        #expect(BridgeCodec.validate(request(.backupSelectFile)) == .call(.selectRestoreFile))
+        #expect(BridgeCodec.validate(request(.backupSelectFile, [.int(1)])) == .invalid(.resolve(.null)))
     }
 
     @Test func repliesAreJSONTextOrAnErrorMessage() {

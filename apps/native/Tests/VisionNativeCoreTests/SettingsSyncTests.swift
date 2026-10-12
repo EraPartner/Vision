@@ -147,10 +147,40 @@ actor BackupMirrorRecorder {
             baseURL: base, transport: transport, writer: writer, mirror: { _ in },
             fallback: { ["backupDir": .string("/Volumes/B"), "backupOnQuit": .bool(true)] })
         #expect(settings == BackupSettingsValue(backupDir: "/Volumes/B", backupOnQuit: true))
-        // No stored value and no directory: the toggle is off (no iCloud Drive default yet).
+        // No stored value, no directory and no iCloud Drive: the toggle is off.
         let empty = await BackupSettings.load(
             baseURL: nil, transport: transport, writer: writer, mirror: { _ in }, fallback: { ["backupOnQuit": .bool(true)] })
         #expect(empty == BackupSettingsValue(backupDir: "", backupOnQuit: false))
+    }
+
+    @Test func theICloudDriveDefaultFillsAnUnsetDirectory() async {
+        let iCloud = "/Users/me/Library/Mobile Documents/com~apple~CloudDocs/Vision Native/Backups"
+        // `resolveBackupSettingsWithDefaults`: without a configured directory the default is
+        // used and backing up on quit is on, whatever the stored toggle says.
+        #expect(
+            BackupSettings.resolved(.object(["backupOnQuit": .bool(false)]), defaultDirectory: iCloud)
+                == BackupSettingsValue(backupDir: iCloud, backupOnQuit: true))
+        #expect(
+            BackupSettings.resolved(
+                .object(["backupDir": .string("/Volumes/B"), "backupOnQuit": .bool(false)]), defaultDirectory: iCloud)
+                == BackupSettingsValue(backupDir: "/Volumes/B", backupOnQuit: false))
+        #expect(BackupSettings.resolved(nil, defaultDirectory: "") == BackupSettingsValue(backupDir: "", backupOnQuit: false))
+        let transport = FakeSettingsTransport()
+        let loaded = await BackupSettings.load(
+            baseURL: nil, transport: transport, writer: SettingsWriter(transport: transport), mirror: { _ in },
+            fallback: { [:] }, defaultDirectory: iCloud)
+        #expect(loaded == BackupSettingsValue(backupDir: iCloud, backupOnQuit: true))
+    }
+
+    @Test func theQuitPathReadsTheRawDatabaseValueElseTheMirror() async {
+        let transport = FakeSettingsTransport(get: [
+            json(#"{"ok":true,"data":{"key":"backup_settings","value":{"backupDir":"/Volumes/B","backupOnQuit":true}}}"#)
+        ])
+        let stored = await BackupSettings.rawForQuit(baseURL: base, transport: transport, fallback: { [:] })
+        #expect(stored == .object(["backupDir": .string("/Volumes/B"), "backupOnQuit": .bool(true)]))
+        let mirror = await BackupSettings.rawForQuit(
+            baseURL: nil, transport: transport, fallback: { ["backupDir": .string("/Volumes/C")] })
+        #expect(mirror == .object(["backupDir": .string("/Volumes/C")]))
     }
 
     @Test func savePutsTheValueWithItsBaselineThenMirrors() async throws {

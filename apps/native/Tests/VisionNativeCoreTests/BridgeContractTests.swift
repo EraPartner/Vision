@@ -71,9 +71,8 @@ import Testing
             switch entry.bridge {
             case "electronUpdater": #expect(entry.availability == .removed)
             case "electronBackup":
-                // The settings answer from the backend settings API until phase 1d.
-                let settings: Set<BridgeChannel> = [.backupSaveSettings, .backupLoadSettings]
-                #expect(entry.availability == (settings.contains(entry.channel) ? .implemented : .pending(phase: "1d")))
+                // Phase 1d answers every backup channel.
+                #expect(entry.availability == .implemented)
             case "electronAudit": #expect(entry.availability == .pending(phase: "1e"))
             case "electronServices", "electronAPI", "electronRecovery": #expect(entry.availability == .implemented)
             default: #expect(entry.method == nil)
@@ -82,8 +81,6 @@ import Testing
     }
 
     @Test func unavailableMessagesNameTheMethodAndPhase() {
-        let backup = BridgeContract.unavailableMessage(BridgeContract.entry(for: .backupRun))
-        #expect(backup == "electronBackup.runBackup is not available in Vision Native yet (backup and restore arrive in phase 1d).")
         let audit = BridgeContract.unavailableMessage(BridgeContract.entry(for: .auditRead))
         #expect(audit.contains("not available in Vision Native yet") && audit.contains("phase 1e"))
         let updater = BridgeContract.unavailableMessage(BridgeContract.entry(for: .updateCheckGithub))

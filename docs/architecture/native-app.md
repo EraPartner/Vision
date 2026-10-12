@@ -19,9 +19,10 @@ tags:
     webkit,
     menus,
     preload-bridge,
+    backup,
     adr-204,
   ]
-description: "Vision Native is the Swift macOS app under apps/native/ that replaces the Electron shell in phases (ADR-204). Covers the directory layout, the runtime supervisor that starts its own PostgreSQL 18 cluster and backend on synthetic Demo data, payload discovery, the phase 1c shell (window, launch state, preload bridge, web view navigation and download policy, menus, dock and vibrancy), the Debug-only backend override, the Native (macOS) CI job and install-native.sh."
+description: "Vision Native is the Swift macOS app under apps/native/ that replaces the Electron shell in phases (ADR-204). Covers the directory layout, the runtime supervisor that starts its own PostgreSQL 18 cluster and backend on synthetic Demo data, payload discovery, the phase 1c shell (window, launch state, preload bridge, web view navigation and download policy, menus, dock and vibrancy), phase 1d backup and restore (bundle format compatibility, Keychain passphrase, restore allow-list, quit-time backup), the Debug-only backend override, the Native (macOS) CI job and install-native.sh."
 aliases: [vision native, native app, swift app]
 ---
 
@@ -166,8 +167,9 @@ signals a recorded PID only when `ps -o command=` shows its own `vision-backend`
 records, and treats PIDs of 1 or less as untrusted. On the next launch a healthy backend from an
 earlier run is reused, and an unhealthy one is replaced.
 
-Phase 1b leaves out backup on quit and directory-switch tokens (phase 1d), the audit anchor and
-Keychain witness (phase 1e), external PostgreSQL clusters, the Bun source mode and the health
+Before the shutdown the shell runs the quit-time backup (see
+[[docs/architecture/native-app#Backup and restore (phase 1d)|Backup and restore]]); the 45-second limit covers both. Phase 1b leaves out the
+audit anchor and Keychain witness (phase 1e), external PostgreSQL clusters, the Bun source mode and the health
 watchdog that restarts a crashed backend.
 
 ### Developer override
@@ -245,7 +247,7 @@ JavaScriptCore with a stub message handler.
 | Bridge             | Electron channels                                                                                                             | Vision Native                                                           |
 | ------------------ | ----------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
 | `electronUpdater`  | `update:check-github`, `update:install-shell`, `update:pre-update-backup`                                                     | Empty object: no updater (ADR-204 decision 5); direct calls reject      |
-| `electronBackup`   | `backup:run`, `select-dir`, `select-file`, `restore`, `is-encrypted`, `get-encryption-status`, `set-passphrase`               | Stubs that reject "not available in Vision Native yet" (phase 1d)       |
+| `electronBackup`   | `backup:run`, `select-dir`, `select-file`, `restore`, `is-encrypted`, `get-encryption-status`, `set-passphrase`               | `BackupService` and AppKit panels (phase 1d)                            |
 | `electronBackup`   | `backup:save-settings`, `backup:load-settings`                                                                                | `backup_settings` database setting, mirrored to `settings.json`         |
 | `electronAudit`    | `audit:enroll`, `read`, `export`, `transfer-export`, `transfer-import`, `rotate-key`                                          | Stubs that reject "not available in Vision Native yet" (phase 1e)       |
 | `electronServices` | `services:save-settings`, `services:load-settings`                                                                            | Database setting with baseline writes, mirrored to `settings.json`      |
@@ -256,8 +258,10 @@ JavaScriptCore with a stub message handler.
 
 The backup settings use the same baseline writes and `settings.json` mirror (`backupDir`,
 `backupOnQuit`) as the services settings, and `save-settings` refuses system directories like
-`validateBackupDest`, so Settings > Backup keeps its directory and on-quit toggle. Until phase 1d
-there is no iCloud Drive default directory and nothing reads the mirror at quit.
+`validateBackupDest`, so Settings > Backup keeps its directory and on-quit toggle. Without a
+configured directory, `load-settings` answers the iCloud Drive default like
+`resolveBackupSettingsWithDefaults`, and the quit-time backup reads the database value, else the
+mirror.
 
 Events: `menu:action`, `app:csv-opened` (a CSV opened with the app, at most 25 MiB),
 `window:fullscreen` and `app:accent-color-changed` (on `AppleColorPreferencesChangedNotification`)
@@ -318,12 +322,108 @@ run:
 
 ### Left for later phases
 
-Phase 1d ports backup and restore (`electronBackup`, backup on quit, pre-update backup); phase 1e
-the audit anchor and Keychain witness (`electronAudit`). Still missing as well: the health
+Phase 1e ports the audit anchor and Keychain witness (`electronAudit`). The pre-update backup has
+no counterpart because there is no updater. Still missing as well: the health
 watchdog and `backend:lost`/`backend:restored`, the renderer-ready watchdog that reloads and shows
 the error page, the production security headers of `registerSecurityHeaders`, the text context
 menu with spelling suggestions, Electron's traffic-light position, zoom persistence and JavaScript
 `alert`/`confirm` panels, which the frontend does not use.
+
+## Backup and restore (phase 1d)
+
+Phase 1d answers the `electronBackup` channels with `BackupService` in
+`Sources/VisionNativeCore/Backup/`. It follows `packaging/electron/backup/` (`bundle.ts`,
+`crypto.ts`, `restore.ts`) and the backup handlers of `main.ts`, uses no third-party package and
+has no AppKit dependency. The app target adds only the folder and file pickers (`NSOpenPanel`) and
+the restore confirmation (`NSAlert`, Cancel as the default button).
+
+### Format compatibility
+
+A bundle is a zip archive named `vision_backup_<deviceId>_<YYYY-MM-DD_HH-MM-SS>.visionbak`
+with `metadata.json` (Electron's field order), `db.sql` (`pg_dump --format=plain`), the
+`attachments/` tree and an optional `frontend-state.json`. It is written as `<name>.partial` and
+renamed when complete. Files read and written by Vision Native and Electron Vision are
+interchangeable:
+
+| Piece            | Implementation                                                                                                   |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Zip              | `ZipArchive.swift`: streaming writer and reader, deflate through the Compression framework, zip64, CRC-32 checks |
+| v2 encryption    | `VISIONBAK2`, 16-byte salt, 12-byte nonce, AES-256-GCM, 16-byte tag; key `scrypt(N=2^15, r=8, p=1)`              |
+| v1 decryption    | `VISIONBAK1`, 16-byte IV, AES-256-CBC; key `scrypt(N=2^14, r=8, p=1)` with the salt `vision-backup-v1`           |
+| Legacy SQL files | `.sql` and `.sql.enc` (`VISIONENC1` / `VISIONENC2`) restore as database-only backups                             |
+| Key derivation   | `Scrypt.swift`, checked against the RFC 7914 vectors                                                             |
+
+New bundles are always v2. AES-GCM is streamed (CommonCrypto AES-CTR plus GHASH), so a
+large bundle is never held in memory; tests compare it with CryptoKit and with files written by
+Node. The test resources carry the Electron Vision 1.0.2 fixture
+(`packaging/electron/backup/fixtures/vision-1.0.2-sanitized.visionbak.enc`) byte for byte, and a
+test opens it. Extraction refuses absolute and `..` entry names and stops beyond 10 GiB of output
+or 100,000 entries. The v1 salt is Electron Vision's (`vision-backup-v1`, from the app name
+"Vision"); legacy files written by Vision Demo, whose salt differs, are out of scope.
+
+### Passphrase
+
+`VISION_BACKUP_PASSPHRASE` wins, as in Electron. Otherwise the passphrase is a generic password in
+the login Keychain with the service `com.vaultvoyager.vision-native.backup-passphrase` and the
+backup device id as the account (`KeychainPassphraseStore` behind the `PassphraseStore` protocol).
+Vision Native never writes Electron's `backupPassphraseEncrypted` field. An empty passphrase
+removes the item. Without a passphrase a backup is written unencrypted with Electron's warning.
+A failed Keychain write answers `available: true` with the error, like a failed `safeStorage`
+write. The item belongs to the app's code signature: after an ad-hoc or otherwise unsigned
+rebuild, macOS can ask for the login password before the new build may read it.
+
+### Device id, directory and retention
+
+The device id is Electron's (the first 8 hex digits of SHA-1 over `darwin|arch|hostname|userData`),
+persisted once as `backupDeviceId` in `settings.json`. Without a configured directory the default
+is `~/Library/Mobile Documents/com~apple~CloudDocs/Vision Native/Backups` when iCloud Drive exists,
+and the quit-time backup is then on. The folder is deliberately `Vision Native`, not Electron's
+`Vision`, so the two apps' backups and retention never mix. Retention keeps the newest seven backups of this device and
+removes older ones, and `.partial` leftovers, only when they are more than 10 minutes old.
+
+### Restore
+
+`backup:is-encrypted` and `backup:restore` accept only a path the restore picker returned
+(`RestorePathAllowList`, Electron's `ALLOWED_RESTORE_PATHS`) with a `.visionbak`,
+`.visionbak.enc`, `.enc` or `.sql` extension; the picker offers a "Vision Backup" and an
+"All Files" filter. After the confirmation, the bundle is decrypted and extracted into a private
+temporary directory, and a bundle from a newer schema is refused with `BUNDLE_SCHEMA_NEWER`. The
+current schema is the live database's Alembic head, else the newest revision file in the
+payload's `alembic/versions` (Electron's `getLocalMigrationChainHead`). When neither is known, a
+backup with a numbered revision is refused with `SCHEMA_UNKNOWN` instead of restoring unchecked,
+which is stricter than Electron. Only one restore runs at a time, and `backup:run` and the
+quit-time backup are refused while it runs. Then, as in `restoreNativeBundle`:
+
+1. `psql --single-transaction` restores `db.sql` into a staging database, which is validated and
+   switched in with the persisted `pendingDatabaseSwitch` token (the Demo seeding switch).
+2. The attachment tree is copied next to the live one, verified by fingerprint and swapped in;
+   the previous tree is kept and the token persisted as `pendingAttachmentSwitch`.
+3. The backend starts and must pass `/health/detailed`; then the database switch is finalized.
+4. Removing the previous attachment tree is cleanup; a failure there is a warning.
+
+A failure before step 3 completes rolls back the attachments, then the database, then restarts the
+backend (unless the database switch could not be recovered). Errors keep Electron's
+`"Error: <message>"` form, so the frontend's `PASSPHRASE_REQUIRED` and `INVALID_PASSPHRASE`
+checks reopen the passphrase prompt.
+
+A launch after a quit or crash during a restore settles `pendingAttachmentSwitch` before the
+backend starts. If `pendingDatabaseSwitch` is still persisted, the previous attachment tree goes
+back and the database switch then rolls back. Otherwise the restore had committed: the restored
+tree stays and the previous one is removed.
+
+> [!warning] Audit continuity is phase 1e work
+> Electron's restore also pauses and resumes the audit closure (`pauseAuditClosure`,
+> `resumeAuditClosure`), checks the restored audit history (`assertRestoredAuditHistory`), offers
+> `restoreWithAuditRecovery` with a second confirmation and returns `auditStatus`. Vision Native
+> has no audit anchor yet, so none of this is ported; phase 1e adds it.
+
+### Quit-time backup
+
+`ShellController.prepareForQuit` runs the backup before `RuntimeSupervisor.shutdown()` when the
+effective settings enable it and the runtime is running. It writes a bundle without frontend state.
+A backup already in progress is awaited instead of starting a second one. The app delegate's
+45-second hard limit, Electron's will-quit timeout, covers the backup and the shutdown together.
+Failures are logged to the unified log; there are no OS notifications yet.
 
 ## CI
 

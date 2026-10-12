@@ -1,11 +1,12 @@
 import AppKit
 import OSLog
 import SwiftUI
+import UniformTypeIdentifiers
 import VisionNativeCore
 import WebKit
 
 /// Owns the window, menus, dock and web shell, and answers the page's bridge calls
-/// (the main-process side of packaging/electron/main.ts for phase 1c).
+/// (the main-process side of packaging/electron/main.ts for phases 1c and 1d).
 @MainActor
 final class ShellController: NSObject, NSWindowDelegate, BridgeHost {
     static let appName = "Vision Native"
@@ -22,6 +23,9 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost {
     private let menuController = MenuController()
     private let settingsTransport: URLSessionSettingsTransport
     private let settingsWriter: SettingsWriter
+    private let backupService: BackupService
+    /// `ALLOWED_RESTORE_PATHS`: only paths the restore picker returned may be restored.
+    private(set) var restorePathAllowList = RestorePathAllowList()
     private(set) var window: NSWindow?
     private var container: NSView?
     private var effectView: NSVisualEffectView?
@@ -53,6 +57,18 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost {
         launchModel = LaunchModel(appName: ShellController.appName, strings: strings, palette: palette)
         settingsTransport = transport
         settingsWriter = SettingsWriter(transport: transport)
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        backupService = BackupService(
+            context: BackupContext(
+                environment: ProcessInfo.processInfo.environment,
+                appVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+                    ?? "unknown",
+                userDataDirectory: VisionNativeIdentity.userDataDirectory(homeDirectory: home),
+                homeDirectory: home,
+                appName: ShellController.appName),
+            settings: AppRuntime.supervisor,
+            runtimeProvider: { await AppRuntime.supervisor.backupRuntime() },
+            logger: OSLogRuntimeLog(logger: AppRuntime.shellLogger))
         super.init()
         launchModel.onRetry = { [weak self] in self?.launch() }
         launchModel.onOpenLogs = { [weak self] in _ = try? self?.openLogs() }
@@ -128,11 +144,23 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost {
         window?.makeFirstResponder(webView)
     }
 
-    /// Stops the debounced frame save and writes the current frame; the shutdown task awaits
-    /// it before the runtime stops.
+    /// Stops the debounced frame save and writes the current frame, then runs the
+    /// quit-time backup when it is enabled; the shutdown task awaits both before the
+    /// runtime stops, within the 45-second quit timeout.
     func prepareForQuit() async {
         frameSaveTask?.cancel()
         await saveFrame()
+        await runQuitBackup()
+    }
+
+    /// The `will-quit` backup: the database setting (else the `settings.json` mirror),
+    /// resolved with the iCloud Drive default. Skipped when the runtime never became ready.
+    private func runQuitBackup() async {
+        guard await supervisor.backupRuntime() != nil else { return }
+        let supervisor = self.supervisor
+        let raw = await BackupSettings.rawForQuit(
+            baseURL: appURL, transport: settingsTransport, fallback: { await supervisor.currentSettings() })
+        await backupService.runQuitBackup(rawSettings: raw)
     }
 
     // MARK: - Window
@@ -478,7 +506,117 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost {
                     $0["backupOnQuit"] = .bool(value.backupOnQuit)
                 }
             },
-            fallback: { await supervisor.currentSettings() })
+            fallback: { await supervisor.currentSettings() },
+            defaultDirectory: backupService.defaultICloudBackupDirectory)
+    }
+
+    // MARK: - Backup and restore
+
+    func runBackup(destination: String, frontendStateJson: String?) async -> JSONValue {
+        await backupService.runBackup(destination: destination, frontendStateJson: frontendStateJson)
+    }
+
+    /// `backup:select-dir`: a folder picker starting in iCloud Drive (else Documents).
+    func selectBackupDirectory() async -> String? {
+        let panel = NSOpenPanel()
+        panel.title = "Select Backup Directory"
+        panel.prompt = "Choose"
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.allowsMultipleSelection = false
+        let start = backupService.pickerDefaultDirectory
+        if FileManager.default.fileExists(atPath: start) {
+            panel.directoryURL = URL(fileURLWithPath: start, isDirectory: true)
+        }
+        guard await runPanel(panel) == .OK, let url = panel.url else { return nil }
+        return url.path
+    }
+
+    /// `backup:select-file`: the chosen file joins the restore allow-list.
+    func selectRestoreFile() async -> String? {
+        let panel = NSOpenPanel()
+        panel.title = "Select Backup File to Restore"
+        panel.prompt = "Restore"
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.allowsMultipleSelection = false
+        // Electron's filters, "Vision Backup" (visionbak, enc, sql) and "All Files", as a
+        // pop-up in the accessory view; NSOpenPanel has no filter menu of its own.
+        panel.allowedContentTypes = ["visionbak", "enc", "sql"].compactMap { UTType(filenameExtension: $0) }
+        panel.accessoryView = allFilesAccessory(for: panel)
+        panel.isAccessoryViewDisclosed = true
+        guard await runPanel(panel) == .OK, let url = panel.url else { return nil }
+        return restorePathAllowList.add(url.path)
+    }
+
+    /// A "Show: Vision Backup / All Files" pop-up, Electron's two file filters.
+    private func allFilesAccessory(for panel: NSOpenPanel) -> NSView {
+        let label = NSTextField(labelWithString: "Show:")
+        let popUp = NSPopUpButton(frame: .zero, pullsDown: false)
+        popUp.addItems(withTitles: ["Vision Backup", "All Files"])
+        let types = panel.allowedContentTypes
+        popUp.target = FileTypeFilterTarget.shared
+        popUp.action = #selector(FileTypeFilterTarget.changed(_:))
+        FileTypeFilterTarget.shared.attach(panel: panel, types: types)
+        let stack = NSStackView(views: [label, popUp])
+        stack.orientation = .horizontal
+        stack.spacing = 8
+        stack.edgeInsets = NSEdgeInsets(top: 8, left: 12, bottom: 8, right: 12)
+        return stack
+    }
+
+    /// A sheet on the window when it is visible, else an app-modal panel.
+    private func runPanel(_ panel: NSOpenPanel) async -> NSApplication.ModalResponse {
+        guard let window, window.isVisible else { return panel.runModal() }
+        return await withCheckedContinuation { (continuation: CheckedContinuation<NSApplication.ModalResponse, Never>) in
+            panel.beginSheetModal(for: window) { response in continuation.resume(returning: response) }
+        }
+    }
+
+    func isBackupEncrypted(_ path: String) async -> Bool {
+        await backupService.isEncrypted(path)
+    }
+
+    /// `backup:restore`: the localized confirmation, then the restore, which stops and
+    /// restarts the backend itself.
+    func restoreBackup(_ path: String, passphrase: String?) async -> JSONValue {
+        let fileName = (path as NSString).lastPathComponent
+        return await backupService.restore(
+            path: path, passphrase: passphrase,
+            confirm: { [weak self] in await self?.confirmRestore(fileName: fileName) ?? false })
+    }
+
+    private func confirmRestore(fileName: String) async -> Bool {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = strings.t("settings.restore.title", fallback: "Restore Backup")
+        alert.informativeText =
+            "\(strings.t("settings.restore.warning", fallback: "This will permanently replace all current data and cannot be undone."))\n\n\(fileName)"
+        let restore = alert.addButton(withTitle: strings.t("settings.restore.runNow", fallback: "Restore"))
+        let cancel = alert.addButton(withTitle: strings.t("settings.restore.cancelButton", fallback: "Cancel"))
+        // Cancel is the default, like Electron's `defaultId: 1`.
+        restore.keyEquivalent = ""
+        cancel.keyEquivalent = "\r"
+        showWindow()
+        let response: NSApplication.ModalResponse
+        if let window, window.isVisible {
+            response = await withCheckedContinuation {
+                (continuation: CheckedContinuation<NSApplication.ModalResponse, Never>) in
+                alert.beginSheetModal(for: window) { continuation.resume(returning: $0) }
+            }
+        } else {
+            response = alert.runModal()
+        }
+        return response == .alertFirstButtonReturn
+    }
+
+    func backupEncryptionStatus() async -> PassphraseStatus {
+        await backupService.encryptionStatus()
+    }
+
+    func setBackupPassphrase(_ passphrase: String) async -> PassphraseUpdateResult {
+        await backupService.setPassphrase(passphrase)
     }
 
     func loadServicesSettings() async -> Bool {
@@ -522,6 +660,37 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost {
         case .zoom: window.performZoom(nil)
         case .minimize: window.performMiniaturize(nil)
         case .none: break
+        }
+    }
+}
+
+/// Applies the restore picker's file-type pop-up: index 0 keeps the backup types, index 1
+/// allows every file.
+@MainActor
+final class FileTypeFilterTarget: NSObject {
+    static let shared = FileTypeFilterTarget()
+    private weak var panel: NSOpenPanel?
+    private var types: [UTType] = []
+
+    func attach(panel: NSOpenPanel, types: [UTType]) {
+        self.panel = panel
+        self.types = types
+    }
+
+    @objc func changed(_ sender: NSPopUpButton) {
+        panel?.allowedContentTypes = sender.indexOfSelectedItem == 1 ? [] : types
+    }
+}
+
+/// Backup log lines go to the unified log next to the shell's own.
+struct OSLogRuntimeLog: RuntimeLogging {
+    let logger: Logger
+
+    func log(_ level: String, _ message: String) {
+        switch level {
+        case "error": logger.error("\(message, privacy: .public)")
+        case "warn": logger.warning("\(message, privacy: .public)")
+        default: logger.info("\(message, privacy: .public)")
         }
     }
 }

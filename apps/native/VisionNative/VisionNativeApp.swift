@@ -74,7 +74,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if shutdownStarted { return .terminateLater }
         shutdownStarted = true
         Task {
-            // The frame save writes settings.json through the supervisor, so it finishes first.
+            // The frame save writes settings.json through the supervisor and the quit-time
+            // backup needs the running services, so both finish before the shutdown.
             await shell.prepareForQuit()
             await AppRuntime.supervisor.shutdown()
             self.finishShutdown(sender)

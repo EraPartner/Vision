@@ -12,6 +12,10 @@ final class RecordingBridgeHost: BridgeHost {
     var keepServices = true
     var logsError: Error?
     var backupSettings = BackupSettingsValue(backupDir: "/Users/me/Backups", backupOnQuit: true)
+    var restorePathAllowList = RestorePathAllowList()
+    var pickedDirectory: String? = "/Users/me/Backups"
+    var pickedFile: String? = "/Users/me/b.visionbak.enc"
+    var encrypted = true
 
     func rendererDidFail(_ failure: RendererFailure) { calls.append("fail:\(failure.kind):\(failure.name)") }
     func rendererDidBecomeReady() { calls.append("ready") }
@@ -41,6 +45,34 @@ final class RecordingBridgeHost: BridgeHost {
     func loadBackupSettings() async -> BackupSettingsValue {
         calls.append("loadBackup")
         return backupSettings
+    }
+    func runBackup(destination: String, frontendStateJson: String?) async -> JSONValue {
+        calls.append("runBackup:\(destination):\(frontendStateJson ?? "nil")")
+        return .object(["success": .bool(true), "file": .string("\(destination)/b.visionbak"), "encrypted": .bool(false)])
+    }
+    func selectBackupDirectory() async -> String? {
+        calls.append("selectDir")
+        return pickedDirectory
+    }
+    func selectRestoreFile() async -> String? {
+        calls.append("selectFile")
+        guard let pickedFile else { return nil }
+        return restorePathAllowList.add(pickedFile)
+    }
+    func isBackupEncrypted(_ path: String) async -> Bool {
+        calls.append("isEncrypted:\(path)")
+        return encrypted
+    }
+    func restoreBackup(_ path: String, passphrase: String?) async -> JSONValue {
+        calls.append("restore:\(path):\(passphrase ?? "nil")")
+        return .object(["success": .bool(true), "file": .string(path), "frontendState": .null])
+    }
+    func backupEncryptionStatus() async -> PassphraseStatus {
+        PassphraseStatus(hasEnvPassphrase: false, hasStoredPassphrase: true, secureStorageAvailable: true)
+    }
+    func setBackupPassphrase(_ passphrase: String) async -> PassphraseUpdateResult {
+        calls.append("setPassphrase:\(passphrase)")
+        return PassphraseUpdateResult(success: true, available: true)
     }
     func retryLaunch() { calls.append("retry") }
     func openLogs() throws -> String {
@@ -132,29 +164,72 @@ final class RecordingBridgeHost: BridgeHost {
 
     @Test func stubsRejectWithoutReachingTheHost() async {
         let host = RecordingBridgeHost()
-        for channel in [BridgeChannel.backupSelectFile, .backupRestore, .backupGetEncryptionStatus] {
-            let backup = await reply(#"{"channel":""# + channel.rawValue + #"","args":[]}"#, host: host)
-            #expect(backup == .reject(BridgeContract.unavailableMessage(BridgeContract.entry(for: channel))))
-            guard case .reject(let message) = backup else { continue }
-            #expect(message.contains("phase 1d"))
-        }
         let audit = await reply(#"{"channel":"audit:read","args":[{"afterSequence":0,"limit":50}]}"#, host: host)
         guard case .reject(let message) = audit else {
             Issue.record("audit:read must reject")
             return
         }
         #expect(message.contains("phase 1e"))
+        let updater = await reply(#"{"channel":"update:pre-update-backup","args":[]}"#, host: host)
+        #expect(updater == .reject(BridgeContract.unavailableMessage(BridgeContract.entry(for: .updatePreUpdateBackup))))
         #expect(host.calls.isEmpty)
     }
 
-    @Test func aLargeBackupRunReachesTheStub() async {
+    @Test func aLargeBackupRunReachesTheHost() async {
         let host = RecordingBridgeHost()
         let snapshot = String(repeating: "x", count: 100 * 1024)
         let body = #"{"channel":"backup:run","args":["/Users/me/Backups",""# + snapshot + #""]}"#
+        let result = await reply(body, host: host)
         #expect(
-            await reply(body, host: host)
-                == .reject("electronBackup.runBackup is not available in Vision Native yet (backup and restore arrive in phase 1d)."))
+            result
+                == .resolve(.object([
+                    "success": .bool(true), "file": .string("/Users/me/Backups/b.visionbak"), "encrypted": .bool(false),
+                ])))
+        #expect(host.calls == ["runBackup:/Users/me/Backups:\(snapshot)"])
+    }
+
+    @Test func restoreNeedsAPathFromThePicker() async {
+        let host = RecordingBridgeHost()
+        let restoreBody = #"{"channel":"backup:restore","args":["/Users/me/b.visionbak.enc",{"passphrase":"p"}]}"#
+        let encryptedBody = #"{"channel":"backup:is-encrypted","args":["/Users/me/b.visionbak.enc"]}"#
+        #expect(
+            await reply(restoreBody, host: host)
+                == .failed("Restore path was not selected via the file picker"))
+        #expect(await reply(encryptedBody, host: host) == .resolve(.bool(false)))
         #expect(host.calls.isEmpty)
+
+        #expect(
+            await reply(#"{"channel":"backup:select-file","args":[]}"#, host: host)
+                == .resolve(.string("/Users/me/b.visionbak.enc")))
+        #expect(await reply(encryptedBody, host: host) == .resolve(.bool(true)))
+        #expect(
+            await reply(restoreBody, host: host)
+                == .resolve(.object([
+                    "success": .bool(true), "file": .string("/Users/me/b.visionbak.enc"), "frontendState": .null,
+                ])))
+        #expect(
+            host.calls == [
+                "selectFile", "isEncrypted:/Users/me/b.visionbak.enc", "restore:/Users/me/b.visionbak.enc:p",
+            ])
+        host.pickedFile = nil
+        #expect(await reply(#"{"channel":"backup:select-file","args":[]}"#, host: host) == .resolve(.null))
+    }
+
+    @Test func passphraseChannelsAnswerFromTheHost() async {
+        let host = RecordingBridgeHost()
+        #expect(
+            await reply(#"{"channel":"backup:get-encryption-status","args":[]}"#, host: host)
+                == .resolve(.object([
+                    "success": .bool(true), "hasEnvPassphrase": .bool(false), "hasStoredPassphrase": .bool(true),
+                    "secureStorageAvailable": .bool(true),
+                ])))
+        #expect(
+            await reply(#"{"channel":"backup:set-passphrase","args":[" secret "]}"#, host: host)
+                == .resolve(.object(["success": .bool(true), "available": .bool(true)])))
+        #expect(
+            await reply(#"{"channel":"backup:select-dir","args":[]}"#, host: host)
+                == .resolve(.string("/Users/me/Backups")))
+        #expect(host.calls == ["setPassphrase: secret ", "selectDir"])
     }
 
     @Test func backupSettingsAnswerFromTheHost() async {

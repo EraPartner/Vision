@@ -144,11 +144,21 @@ public enum BridgeCall: Equatable, Sendable {
     case loadServicesSettings
     case saveBackupSettings(BackupSettingsValue)
     case loadBackupSettings
+    /// `backup:run` with the resolved destination and the optional snapshot.
+    case runBackup(destination: String, frontendStateJson: String?)
+    case selectBackupDirectory
+    case selectRestoreFile
+    /// `backup:restore` for a picked, resolved path.
+    case restoreBackup(path: String, passphrase: String?)
+    case isBackupEncrypted(path: String)
+    case getBackupEncryptionStatus
+    /// `backup:set-passphrase` with the untrimmed value (the handler trims it).
+    case setBackupPassphrase(String)
     case recoveryRetry
     case recoveryOpenLogs
     case windowDrag
     case windowTitlebarDoubleClick
-    /// A pending (phase 1d/1e) or removed channel; it rejects without looking at arguments.
+    /// A pending (phase 1e) or removed channel; it rejects without looking at arguments.
     case unavailable(BridgeChannel)
 }
 
@@ -206,7 +216,10 @@ public enum BridgeCodec {
     }
 
     /// Validates the arguments and answers invalid calls with the channel's `invalidResult`.
-    public static func validate(_ request: BridgeRequest) -> BridgeValidation {
+    /// `isAllowedRestorePath` is `ALLOWED_RESTORE_PATHS`: the paths the restore picker returned.
+    public static func validate(
+        _ request: BridgeRequest, isAllowedRestorePath: (String) -> Bool = { _ in false }
+    ) -> BridgeValidation {
         let entry = BridgeContract.entry(for: request.channel)
         switch entry.availability {
         case .pending, .removed:
@@ -216,7 +229,7 @@ public enum BridgeCodec {
         }
         let arguments = request.arguments
         do {
-            return .call(try call(request.channel, arguments))
+            return .call(try call(request.channel, arguments, isAllowedRestorePath: isAllowedRestorePath))
         } catch let error as InvalidArguments {
             return .invalid(invalidResult(request.channel, error.message))
         } catch {
@@ -224,7 +237,9 @@ public enum BridgeCodec {
         }
     }
 
-    private static func call(_ channel: BridgeChannel, _ arguments: [JSONValue]) throws -> BridgeCall {
+    private static func call(
+        _ channel: BridgeChannel, _ arguments: [JSONValue], isAllowedRestorePath: (String) -> Bool
+    ) throws -> BridgeCall {
         switch channel {
         case .rendererFailure:
             return .rendererFailure(rendererFailure(argument(arguments, 0)))
@@ -273,6 +288,39 @@ public enum BridgeCodec {
         case .backupLoadSettings:
             try expectArity(arguments, 0)
             return .loadBackupSettings
+        case .backupRun:
+            try expectArity(arguments, 2)
+            return try backupRun(arguments)
+        case .backupSelectDir:
+            try expectArity(arguments, 0)
+            return .selectBackupDirectory
+        case .backupSelectFile:
+            try expectArity(arguments, 0)
+            return .selectRestoreFile
+        case .backupRestore:
+            try expectArity(arguments, 2)
+            let path = try pickedRestorePath(argument(arguments, 0), isAllowedRestorePath)
+            guard hasAllowedRestoreExtension(path) else { throw InvalidArguments("Unsupported backup file extension") }
+            var passphrase: String?
+            if let options = argument(arguments, 1), options.objectValue != nil,
+                let value = options["passphrase"], value != .null
+            {
+                guard let text = value.stringValue else { throw InvalidArguments("Invalid restore passphrase") }
+                passphrase = text
+            }
+            return .restoreBackup(path: path, passphrase: passphrase)
+        case .backupIsEncrypted:
+            try expectArity(arguments, 1)
+            return .isBackupEncrypted(path: try pickedRestorePath(argument(arguments, 0), isAllowedRestorePath))
+        case .backupGetEncryptionStatus:
+            try expectArity(arguments, 0)
+            return .getBackupEncryptionStatus
+        case .backupSetPassphrase:
+            try expectArity(arguments, 1)
+            guard let passphrase = argument(arguments, 0)?.stringValue else {
+                throw InvalidArguments("Invalid backup passphrase")
+            }
+            return .setBackupPassphrase(passphrase)
         case .recoveryRetry:
             try expectArity(arguments, 0)
             return .recoveryRetry
@@ -295,10 +343,16 @@ public enum BridgeCodec {
         switch channel {
         case .getAccentColor:
             return .resolve(.null)
-        case .servicesLoadSettings, .backupLoadSettings:
+        case .servicesLoadSettings, .backupLoadSettings, .backupGetEncryptionStatus:
             return .reject("Invalid arguments for \(channel.rawValue)")
-        case .servicesSaveSettings, .backupSaveSettings, .recoveryRetry, .recoveryOpenLogs:
+        case .servicesSaveSettings, .backupSaveSettings, .recoveryRetry, .recoveryOpenLogs, .backupRun, .backupRestore:
             return .failed(message)
+        case .backupSelectDir, .backupSelectFile:
+            return .resolve(.null)
+        case .backupIsEncrypted:
+            return .resolve(.bool(false))
+        case .backupSetPassphrase:
+            return .resolve(.object(["success": .bool(false), "available": .bool(false), "error": .string(message)]))
         default:
             return .failure
         }
@@ -317,6 +371,38 @@ public enum BridgeCodec {
             throw InvalidArguments(error)
         }
         return BackupSettingsValue(backupDir: directory, backupOnQuit: onQuit)
+    }
+
+    /// `backupRunArguments`: a destination that passes `validateBackupDest`, resolved, and a
+    /// snapshot that is a string or absent.
+    private static func backupRun(_ arguments: [JSONValue]) throws -> BridgeCall {
+        guard let destination = argument(arguments, 0)?.stringValue else {
+            throw InvalidArguments("Invalid backup directory")
+        }
+        if let error = BackupSettings.destinationError(destination) { throw InvalidArguments(error) }
+        var snapshot: String?
+        if let value = argument(arguments, 1) {
+            guard let text = value.stringValue else { throw InvalidArguments("Invalid frontend state snapshot") }
+            snapshot = text
+        }
+        return .runBackup(destination: BackupSettings.normalizedPath(destination), frontendStateJson: snapshot)
+    }
+
+    /// `pickedRestorePath`: a non-empty string that resolves to a path the picker returned.
+    /// A relative path cannot have come from the picker.
+    private static func pickedRestorePath(_ value: JSONValue?, _ isAllowed: (String) -> Bool) throws -> String {
+        guard let path = value?.stringValue, !path.isEmpty else { throw InvalidArguments("Invalid restore path") }
+        let resolved = PathUtilities.normalize(path)
+        guard path.hasPrefix("/"), isAllowed(resolved) else {
+            throw InvalidArguments("Restore path was not selected via the file picker")
+        }
+        return resolved
+    }
+
+    /// `hasAllowedRestoreExt`: `.visionbak`, `.visionbak.enc`, `.enc` or `.sql`, any case.
+    public static func hasAllowedRestoreExtension(_ path: String) -> Bool {
+        let lower = path.lowercased()
+        return [".visionbak.enc", ".visionbak", ".enc", ".sql"].contains { lower.hasSuffix($0) }
     }
 
     private static let rendererFailureKinds: Set<String> = ["error", "resource", "unhandledrejection"]
