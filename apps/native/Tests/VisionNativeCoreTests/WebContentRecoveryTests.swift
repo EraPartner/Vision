@@ -5,30 +5,43 @@ import Testing
 @Suite struct CrashReloadPolicyTests {
     @Test func reloadsTwiceWithinThirtySecondsThenGivesUp() {
         var policy = CrashReloadPolicy()
-        #expect(policy.shouldReload(at: 100))
-        #expect(policy.shouldReload(at: 110))
-        #expect(!policy.shouldReload(at: 120))
-        #expect(!policy.shouldReload(at: 129.9))
+        let decision1 = policy.shouldReload(at: 100)
+        #expect(decision1)
+        let decision2 = policy.shouldReload(at: 110)
+        #expect(decision2)
+        let decision3 = policy.shouldReload(at: 120)
+        #expect(!decision3)
+        let decision4 = policy.shouldReload(at: 129.9)
+        #expect(!decision4)
     }
 
     @Test func oldCrashesAgeOut() {
         var policy = CrashReloadPolicy()
-        #expect(policy.shouldReload(at: 0))
-        #expect(policy.shouldReload(at: 20))
+        let decision5 = policy.shouldReload(at: 0)
+        #expect(decision5)
+        let decision6 = policy.shouldReload(at: 20)
+        #expect(decision6)
         // The first reload is 30 s old: one slot is free again.
-        #expect(policy.shouldReload(at: 30))
-        #expect(!policy.shouldReload(at: 40))
-        #expect(policy.shouldReload(at: 60))
+        let decision7 = policy.shouldReload(at: 30)
+        #expect(decision7)
+        let decision8 = policy.shouldReload(at: 40)
+        #expect(!decision8)
+        let decision9 = policy.shouldReload(at: 60)
+        #expect(decision9)
     }
 
     @Test func aFreshLoadResetsTheHistory() {
         var policy = CrashReloadPolicy()
-        #expect(policy.shouldReload(at: 1))
-        #expect(policy.shouldReload(at: 2))
-        #expect(!policy.shouldReload(at: 3))
+        let decision10 = policy.shouldReload(at: 1)
+        #expect(decision10)
+        let decision11 = policy.shouldReload(at: 2)
+        #expect(decision11)
+        let decision12 = policy.shouldReload(at: 3)
+        #expect(!decision12)
         policy.reset()
         #expect(policy.reloads.isEmpty)
-        #expect(policy.shouldReload(at: 4))
+        let decision13 = policy.shouldReload(at: 4)
+        #expect(decision13)
     }
 }
 
