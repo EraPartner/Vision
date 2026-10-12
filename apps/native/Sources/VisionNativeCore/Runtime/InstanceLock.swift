@@ -1,6 +1,10 @@
 import Darwin
 import Foundation
 
+/// `Darwin.flock` resolves to the `struct flock` initializer in Swift, so bind the
+/// syscall by symbol name instead.
+@_silgen_name("flock") private func c_flock(_ descriptor: Int32, _ operation: Int32) -> Int32
+
 /// Single-instance semantics: Electron uses `app.requestSingleInstanceLock()` in its
 /// userData directory; Vision Native holds an exclusive `flock` on
 /// `<userData>/vision-native.lock` for the life of the process.
@@ -29,7 +33,7 @@ public final class FileInstanceLock: InstanceLocking, @unchecked Sendable {
         guard descriptor >= 0 else {
             throw FileSystemError.failed(path, String(cString: strerror(errno)))
         }
-        if Darwin.flock(descriptor, LOCK_EX | LOCK_NB) != 0 {
+        if c_flock(descriptor, LOCK_EX | LOCK_NB) != 0 {
             let code = errno
             Darwin.close(descriptor)
             if code == EWOULDBLOCK { return false }
