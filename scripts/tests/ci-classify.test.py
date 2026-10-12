@@ -52,6 +52,12 @@ class ClassificationTests(unittest.TestCase):
             ['.github/workflows/ci.yml'],
             ['packaging/electron/backup/bundle.ts'],
             ['packaging/electron/audit-anchor.ts'],
+            ['packaging/electron/build.ts'],
+            ['packaging/electron/package.json'],
+            ['packaging/electron/bun.lock'],
+            ['packaging/electron/tsconfig.base.json'],
+            ['packaging/electron/tsconfig.json'],
+            ['packaging/electron/tsconfig.preload.json'],
             [],
         ):
             with self.subTest(paths=paths):
@@ -61,6 +67,7 @@ class ClassificationTests(unittest.TestCase):
             ['apps/nativeish/x.swift'],
             ['install.sh'],
             ['packaging/electron/main.ts'],
+            ['packaging/electron/tsconfig.other.json'],
         ):
             with self.subTest(paths=paths):
                 self.assertFalse(classifier.classify_native(paths))

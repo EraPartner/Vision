@@ -102,8 +102,16 @@ public actor AuditAnchor {
 
     private func createdAt() -> String { isoTimestamp(now()) }
 
+    /// A protector failure (a Keychain error or a denied prompt) is
+    /// `secure_storage_unavailable`, as a failing `safeStorage.encryptString` is in Electron.
     private func encryptedKey(_ key: Data) throws -> String {
-        let encrypted = try requireProtector().encrypt(key.base64EncodedString())
+        let protector = try requireProtector()
+        let encrypted: Data
+        do {
+            encrypted = try protector.encrypt(key.base64EncodedString())
+        } catch {
+            throw AuditAnchorError("secure_storage_unavailable")
+        }
         guard !encrypted.isEmpty else { throw AuditAnchorError("secure_storage_unavailable") }
         return encrypted.base64EncodedString()
     }

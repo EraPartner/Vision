@@ -483,9 +483,13 @@ other direction (see [[docs/architecture/native-app#CI|CI]]).
 
 Electron protects the HMAC key with `safeStorage` (`v10`, AES-128-CBC under the "Vision Safe
 Storage" password). Vision Native cannot use that item, which belongs to Electron's signature, so
-it writes `key.enc` as `vn1` + 12-byte nonce + AES-256-GCM ciphertext + 16-byte tag, under a random
+it writes `key.enc` as `vn1` + 12-byte nonce + AES-256-GCM ciphertext + 16-byte tag (additional
+authenticated data `vision-native-audit-key-v1`), under a random
 256-bit wrapping key in the login Keychain (service `com.vaultvoyager.vision-native.audit-key`,
-account `audit-anchor-key`). The prefix tells the two encodings apart, and
+account `audit-anchor-key`). A Keychain error or a denied access prompt on that item is
+`secure_storage_unavailable`, the code Electron gives a failing `safeStorage`; the protector cannot
+probe availability without a Keychain read that may prompt, so it reports itself available and the
+first real use decides. The prefix tells the two encodings apart, and
 `ElectronSafeStorage` reads a `v10` value when it is given the Safe Storage password, which only a
 phase 4 migration would do. Trade-off: the key file and the wrapping key are separate secrets, as
 with `safeStorage`; the receipt format does not change.
@@ -512,6 +516,10 @@ notification instead.
 ### Differences from Electron
 
 - `key.enc` is `vn1` under a Keychain wrapping key, not `safeStorage` (`v10`).
+- A Keychain failure on the wrapping key is `secure_storage_unavailable` everywhere. Electron gives
+  `key_unavailable` when `safeStorage.decryptString` fails while loading the anchor and
+  `transfer_import_incomplete` when `encryptString` fails during a transfer import; a denied
+  Keychain prompt leaves the key intact, so Vision Native does not report it as lost.
 - An imported transfer's receipt is rewritten in canonical field order, and transferred receipts
   are checked in that order, which is stricter than Electron's check of the raw object.
 - The snapshot export sorts nested object keys.

@@ -142,17 +142,21 @@ import Testing
                         return backend
                     })),
             dependencies: harness.dependencies, instanceLock: FakeInstanceLock(), logger: RecordingLog())
+        // `AuditRuntime` is an actor, not Equatable: test for absence without `==`.
         let before = await supervisor.auditRuntime()
-        #expect(before == nil)
+        let hadRuntimeBefore = before.map { _ in true } ?? false
+        #expect(!hadRuntimeBefore)
         _ = try await supervisor.launch()
         let audit = await supervisor.auditRuntime()
-        #expect(audit != nil)
+        let hasRuntime = audit.map { _ in true } ?? false
+        #expect(hasRuntime)
         let token = try #require(tokens.values.first)
         #expect(PathUtilities.fullMatch(token, "[0-9a-f]{64}"))
         let spawned = try #require(harness.spawner.spawns.last { $0.executable.hasSuffix("vision-backend") })
         #expect(spawned.environment["VISION_AUDIT_BRIDGE_TOKEN"] == token)
         await supervisor.shutdown()
         let after = await supervisor.auditRuntime()
-        #expect(after == nil)
+        let hasRuntimeAfter = after.map { _ in true } ?? false
+        #expect(!hasRuntimeAfter)
     }
 }

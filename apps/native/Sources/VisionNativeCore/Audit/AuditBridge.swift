@@ -51,11 +51,28 @@ public struct URLSessionAuditBridge: AuditBridgeTransport {
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = Data(try payload.compactJSONString().utf8)
-        let (data, response) = try await session.data(for: request)
-        guard data.count <= Self.maximumResponseBytes(endpoint) else {
+        let (bytes, response) = try await session.bytes(for: request)
+        let data = try await Self.collect(
+            bytes, limit: Self.maximumResponseBytes(endpoint), declaredLength: response.expectedContentLength)
+        return try Self.unwrap(status: (response as? HTTPURLResponse)?.statusCode ?? 0, body: data)
+    }
+
+    /// Reads the body while counting, so an oversized answer stops the transfer at the cap
+    /// instead of being buffered whole (`request.destroy` in Electron).
+    static func collect(_ bytes: URLSession.AsyncBytes, limit: Int, declaredLength: Int64) async throws -> Data {
+        guard declaredLength <= Int64(limit) else {
+            bytes.task.cancel()
             throw AuditBridgeError("Audit bridge response is too large")
         }
-        return try Self.unwrap(status: (response as? HTTPURLResponse)?.statusCode ?? 0, body: data)
+        var data = Data()
+        for try await byte in bytes {
+            guard data.count < limit else {
+                bytes.task.cancel()
+                throw AuditBridgeError("Audit bridge response is too large")
+            }
+            data.append(byte)
+        }
+        return data
     }
 
     /// The `{ ok: true, data }` envelope of a 200 answer.

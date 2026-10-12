@@ -13,6 +13,13 @@ NATIVE_FILES = frozenset(
         ".github/workflows/ci.yml",
         "packaging/electron/audit-anchor.ts",
         "packaging/electron/scripts/native-audit-fixture.ts",
+        # What the native-interop job installs and compiles the Electron readers with.
+        "packaging/electron/build.ts",
+        "packaging/electron/package.json",
+        "packaging/electron/bun.lock",
+        "packaging/electron/tsconfig.base.json",
+        "packaging/electron/tsconfig.json",
+        "packaging/electron/tsconfig.preload.json",
     }
 )
 

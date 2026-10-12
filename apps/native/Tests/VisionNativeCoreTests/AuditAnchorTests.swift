@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import Testing
 @testable import VisionNativeCore
@@ -510,5 +511,102 @@ enum ElectronAuditFixture {
         #expect(AuditAnchor.isValidTransferPassword(String(repeating: "😀", count: 8)))
         #expect(AuditAnchor.isValidTransferPassword(String(repeating: "a", count: 1024)))
         #expect(!AuditAnchor.isValidTransferPassword(String(repeating: "a", count: 1025)))
+    }
+}
+
+/// A wrapping-key store whose Keychain access can fail, as a Keychain error or a denied
+/// access prompt does.
+final class FailingWrappingKeyStore: AuditWrappingKeyStore, @unchecked Sendable {
+    private let lock = NSLock()
+    private var key: Data?
+    private var failing = false
+
+    func fail(_ value: Bool) { lock.withLock { failing = value } }
+
+    func load() throws -> Data? {
+        try lock.withLock {
+            // errSecAuthFailed: the user denied the access prompt.
+            if failing { throw KeychainError(status: -25293) }
+            return key
+        }
+    }
+
+    func loadOrCreate() throws -> Data {
+        try lock.withLock {
+            if failing { throw KeychainError(status: -25293) }
+            if let key { return key }
+            let created = try AuditKeyMaterial.randomKey()
+            key = created
+            return created
+        }
+    }
+}
+
+@Suite struct AuditKeyProtectionTests {
+    @Test func aFailingKeychainIsSecureStorageUnavailable() async throws {
+        let directory = try makeBackupScratchDirectory()
+        defer { try? FileManager.default.removeItem(atPath: directory) }
+        let store = FailingWrappingKeyStore()
+        let anchor = try AuditAnchor(
+            userDataDirectory: directory, keyProtector: NativeAuditKeyProtector(store: store),
+            witness: MemoryAuditWitness())
+
+        store.fail(true)
+        await expectAnchorError("secure_storage_unavailable") {
+            _ = try await anchor.initializeFirstCheckpoint(head: auditHead(5), legacyCutover: auditCutover)
+        }
+        #expect(!FileManager.default.fileExists(atPath: anchor.keyPath))
+
+        store.fail(false)
+        _ = try await anchor.initializeFirstCheckpoint(head: auditHead(5), legacyCutover: auditCutover)
+        store.fail(true)
+        // A denied read leaves the key in place: the protection is unavailable, not lost.
+        await expectAnchorError("secure_storage_unavailable") { _ = try await anchor.readTrustedCheckpoint() }
+        await expectAnchorError("secure_storage_unavailable") { _ = try await anchor.rotateKey() }
+
+        store.fail(false)
+        let trusted = try await anchor.readTrustedCheckpoint()
+        #expect(trusted.sequence == 5)
+    }
+
+    @Test func aFailingKeychainLeavesANewClusterUnavailable() async throws {
+        let directory = try makeBackupScratchDirectory()
+        defer { try? FileManager.default.removeItem(atPath: directory) }
+        let store = FailingWrappingKeyStore()
+        store.fail(true)
+        let anchor = try AuditAnchor(
+            userDataDirectory: directory, keyProtector: NativeAuditKeyProtector(store: store),
+            witness: MemoryAuditWitness())
+        let backend = FakeAuditBackend()
+        backend.answer(
+            "verify",
+            .object([
+                "status": .string("unavailable"), "sequence": .int(4), "hash": .string(auditHash("head 4")),
+                "legacyCutover": auditCutover,
+                "legacyUnverified": .object([
+                    "db_editor": .string("0"), "split": .string("0"), "retag": .string("0"),
+                ]),
+            ]))
+        let runtime = AuditRuntime(anchor: anchor, transport: backend, newClusterCreatedThisLaunch: { true })
+        let result = try await runtime.verifyAuditHistory(establishSession: true)
+        #expect(result == .object(["status": .string("unavailable"), "reason": .string("secure_storage_unavailable")]))
+    }
+
+    @Test func theVn1KeyIsBoundToItsAuthenticatedData() throws {
+        let store = MemoryWrappingKeyStore()
+        let protector = NativeAuditKeyProtector(store: store)
+        let encrypted = try protector.encrypt("a key")
+        #expect(encrypted.starts(with: NativeAuditKeyProtector.prefix))
+        #expect(try protector.decrypt(encrypted) == "a key")
+
+        // The same wrapping key without the additional data does not open.
+        let sealed = try AES.GCM.seal(
+            Data("a key".utf8), using: SymmetricKey(data: try store.loadOrCreate()), nonce: AES.GCM.Nonce())
+        var unbound = NativeAuditKeyProtector.prefix
+        sealed.nonce.withUnsafeBytes { unbound.append(contentsOf: $0) }
+        unbound.append(sealed.ciphertext)
+        unbound.append(sealed.tag)
+        let withoutAuthenticatedData = unbound
+        #expect(throws: (any Error).self) { try protector.decrypt(withoutAuthenticatedData) }
     }
 }

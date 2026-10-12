@@ -54,10 +54,10 @@ branches:
 
 Facts this decision builds on:
 
-- The exit checklist maps all 205 shell and settings action rows. 158 are hosted unchanged, 40
+- The exit checklist maps all 205 shell and settings action rows. 158 are hosted unchanged, 39
   have native code, 3 are cut by decision (the updater, a dev-only menu item, a non-macOS menu
   item), 3 are gaps (#148, inherited from Electron; #203 and #204, spelling items of the text
-  context menu) and 1 is unsure. Outside the action rows it counts 2 bridge gaps and 6 cross-cutting
+  context menu) and 2 are unsure (#67 and #205). Outside the action rows it counts 2 bridge gaps and 6 cross-cutting
   gaps, among them the backend health watchdog and OS notifications.
 - CI writes a plain and a v2-encrypted bundle and an audit transfer with the Swift code on macOS,
   and a Linux job opens them with the Electron readers (`native-interop` in `ci.yml`). The Swift
@@ -91,7 +91,13 @@ Proposed:
      or iCloud folder, and no tool copies real data into a Vision Native directory.
    - Electron Vision stays Tor's daily app and stays shippable. Shell fixes that matter for daily use
      land in Electron first; Vision Native follows.
-3. **The switch-over is a phase 4 runbook, not code in phase 1.** Its steps, in order, each one
+3. **The switch-over is a phase 4 runbook, not code in phase 1.** It starts with a tripwire,
+   before anything real reaches the standard variant's directory: while
+   `DEMO_RESET_USER_DATA_NAMES` in `packaging/electron/runtime/native-demo.ts` includes
+   `"Vision Native"` and `packaging/electron/scripts/native-demo-cli.ts` accepts
+   `--target vision-native`, a Demo reset can wipe `~/Library/Application Support/Vision Native/`.
+   After phase 4 that directory holds real data, so the switch-over change removes both (and their
+   tests) first, and the runbook stops if either is still present. Its steps, in order, each one
    verified before the next:
    1. Make a verified encrypted backup in Electron Vision and an export of the audit history.
    2. Quit Electron Vision with "Keep services running" off, so its PostgreSQL cluster is stopped.
@@ -110,9 +116,18 @@ Proposed:
       `latest-checkpoint` to `com.vaultvoyager.vision-native.audit-witness` / `latest-checkpoint`
       unchanged. The witness binds the receipt hash, not the service name, so no re-signing is
       needed. Electron's item stays as it is, so a rollback to Electron still verifies.
-      Alternative: a protected audit transfer (`audit:transfer-export` in Electron,
-      `audit:transfer-import` in Vision Native), which needs no Keychain access across apps but
-      writes a new receipt.
+      Alternative to steps 4 and 5: a protected audit transfer (`audit:transfer-export` in
+      Electron, `audit:transfer-import` in Vision Native), which needs no Keychain access across
+      apps. It carries the HMAC key and Electron's `checkpoint.json`; Vision Native writes the
+      receipt byte for byte as Electron serialized it (it re-serializes in canonical field order,
+      which is Electron's order), protects the key as its own `key.enc`
+      (`vn1`) and creates its own witness, so only `key.enc` differs from Electron's files. The
+      import is accepted only on the fresh first checkpoint of a new cluster
+      ([[docs/adr/161-password-protected-audit-device-transfer|ADR-161]]), so in this variant it runs
+      before the restore: export the transfer in step 1 right before the backup, with no change
+      in between; then launch Vision Native (standard) for the first time, import the transfer,
+      and only then restore the backup (step 3). `apps/native/README.md` manual check 12 rehearses
+      this order on Demo data.
    6. Backup passphrase: enter it again in Vision Native (it is stored under
       `com.vaultvoyager.vision-native.backup-passphrase`). Electron's `safeStorage` value is not
       migrated.

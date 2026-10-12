@@ -438,11 +438,30 @@ public final class AuditChannels {
         }
     }
 
-    /// Opens with `O_NOFOLLOW`; `nil` unless it is a regular file of at most 16 KiB.
+    /// The Node `error.code` Electron reports as the reason when opening the picked file
+    /// fails; `nil` leaves the reason `transfer_failed`.
+    static func posixCode(_ number: Int32) -> String? {
+        switch number {
+        case ENOENT: return "ENOENT"
+        case ELOOP: return "ELOOP"
+        case EACCES: return "EACCES"
+        case EPERM: return "EPERM"
+        case EISDIR: return "EISDIR"
+        case ENOTDIR: return "ENOTDIR"
+        case ENAMETOOLONG: return "ENAMETOOLONG"
+        default: return nil
+        }
+    }
+
+    /// Opens with `O_NOFOLLOW`; `nil` unless it is a regular file of at most 16 KiB. An
+    /// open failure carries its errno name as the code (`ELOOP` for a symlink).
     static func readTransferFile(_ path: String) throws -> Data? {
         let descriptor = Darwin.open(path, O_RDONLY | O_NOFOLLOW | O_CLOEXEC)
         guard descriptor >= 0 else {
-            throw AuditBridgeError("Could not open \(PathUtilities.basename(path)): \(String(cString: strerror(errno)))")
+            let number = errno
+            let message = "Could not open \(PathUtilities.basename(path)): \(String(cString: strerror(number)))"
+            if let code = posixCode(number) { throw NativeRuntimeError(code, message) }
+            throw AuditBridgeError(message)
         }
         let handle = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
         defer { try? handle.close() }

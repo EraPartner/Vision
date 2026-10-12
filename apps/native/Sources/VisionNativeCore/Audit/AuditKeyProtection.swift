@@ -65,12 +65,19 @@ public struct KeychainAuditWrappingKeyStore: AuditWrappingKeyStore {
 
 /// Vision Native's replacement for Electron's `safeStorage`: AES-256-GCM under a
 /// Keychain-held wrapping key. The ciphertext is versioned with the prefix `vn1`
-/// (`vn1 || nonce(12) || ciphertext || tag(16)`), next to Electron's `v10`, so a reader
-/// can tell the two encodings apart. A `v10` value (an Electron Vision `key.enc`) is
-/// decrypted only when `electronSafeStoragePassword` supplies the Electron app's
-/// "Safe Storage" password; phase 1 never does.
+/// (`vn1 || nonce(12) || ciphertext || tag(16)`, authenticated with the additional data
+/// `vision-native-audit-key-v1`), next to Electron's `v10`, so a reader can tell the two
+/// encodings apart. A `v10` value (an Electron Vision `key.enc`) is decrypted only when
+/// `electronSafeStoragePassword` supplies the Electron app's "Safe Storage" password;
+/// phase 1 never does.
+///
+/// A wrapping-key store that cannot be read or written (a Keychain error or a denied
+/// prompt) is `secure_storage_unavailable`, as Electron reports a failing `safeStorage`.
+/// `isAvailable()` stays `true`: the only reliable probe is a Keychain read, which can
+/// show the access prompt, so availability is decided by the first real use instead.
 public struct NativeAuditKeyProtector: AuditKeyProtector {
     public static let prefix = Data("vn1".utf8)
+    static let authenticatedData = Data("vision-native-audit-key-v1".utf8)
     private let store: any AuditWrappingKeyStore
     private let electronSafeStoragePassword: (@Sendable () throws -> String?)?
 
@@ -83,9 +90,23 @@ public struct NativeAuditKeyProtector: AuditKeyProtector {
 
     public func isAvailable() -> Bool { true }
 
+    /// The wrapping key; any store failure is `secure_storage_unavailable`.
+    private func wrappingKey(create: Bool) throws -> Data? {
+        do {
+            if create { return try store.loadOrCreate() }
+            return try store.load()
+        } catch let error as AuditAnchorError {
+            throw error
+        } catch {
+            throw AuditAnchorError("secure_storage_unavailable")
+        }
+    }
+
     public func encrypt(_ plaintext: String) throws -> Data {
-        let key = SymmetricKey(data: try store.loadOrCreate())
-        let sealed = try AES.GCM.seal(Data(plaintext.utf8), using: key, nonce: AES.GCM.Nonce())
+        guard let stored = try wrappingKey(create: true) else { throw AuditAnchorError("secure_storage_unavailable") }
+        let sealed = try AES.GCM.seal(
+            Data(plaintext.utf8), using: SymmetricKey(data: stored), nonce: AES.GCM.Nonce(),
+            authenticating: Self.authenticatedData)
         var output = Self.prefix
         sealed.nonce.withUnsafeBytes { output.append(contentsOf: $0) }
         output.append(sealed.ciphertext)
@@ -100,16 +121,15 @@ public struct NativeAuditKeyProtector: AuditKeyProtector {
             }
             return try ElectronSafeStorage.decrypt(encrypted, password: password)
         }
-        guard encrypted.starts(with: Self.prefix), encrypted.count >= Self.prefix.count + 12 + 16,
-            let stored = try store.load()
-        else {
+        guard encrypted.starts(with: Self.prefix), encrypted.count >= Self.prefix.count + 12 + 16 else {
             throw AuditAnchorError("key_unavailable")
         }
+        guard let stored = try wrappingKey(create: false) else { throw AuditAnchorError("key_unavailable") }
         let body = Data(encrypted.dropFirst(Self.prefix.count))
         let box = try AES.GCM.SealedBox(
             nonce: AES.GCM.Nonce(data: body.prefix(12)), ciphertext: body.dropFirst(12).dropLast(16),
             tag: body.suffix(16))
-        let plaintext = try AES.GCM.open(box, using: SymmetricKey(data: stored))
+        let plaintext = try AES.GCM.open(box, using: SymmetricKey(data: stored), authenticating: Self.authenticatedData)
         guard let text = String(data: plaintext, encoding: .utf8) else { throw AuditAnchorError("key_unavailable") }
         return text
     }

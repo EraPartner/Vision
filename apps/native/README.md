@@ -186,9 +186,14 @@ these steps touches Electron Vision or its data.
    restored audit history does not match this app's own audit checkpoint (expected here), a second
    warning, "Restore without verified audit history?", follows with Cancel as the default; click
    Restore now. Then "Restore
-   complete", the reload, and the Audit history card on the Admin overview reports the history as
-   unavailable until you enrol it (step 9). A wrong passphrase reopens
-   the prompt with "Incorrect passphrase. Try again."
+   complete" and the reload. What the Audit history card on the Admin overview shows next depends
+   on whether the first Demo launch anchored itself, which is still to be confirmed on the Mac:
+   a new cluster whose `legacyUnverified` counts are all zero signs its first checkpoint at launch
+   (ADR-161), any other first launch waits for enrolment. Without that first checkpoint, the card
+   reports the history as unavailable and offers "Start audit protection" (step 9). With it, the
+   restored history no longer reaches the trusted checkpoint, so the card reports that the history
+   cannot be verified (failed or unavailable) and offers no enrolment. Note which one you see. A wrong passphrase reopens the prompt
+   with "Incorrect passphrase. Try again."
 6. **CSV handoff.** Drag a `.csv` file onto the window, outside the import dropzone. Expected: the
    Import page opens with the file selected. Then run `open -a "Vision Native Demo" file.csv`.
    Expected: the same.
@@ -197,8 +202,13 @@ these steps touches Electron Vision or its data.
 8. **Text context menu.** In any text field, type a misspelled word and right-click it. Expected:
    Cut, Copy and Paste. Note whether spelling guesses, Learn Spelling and Select All appear; this
    settles rows #203 to #205 of the exit checklist.
-9. **Audit enrolment.** Settings > About & maintenance > Admin mode on. Open the Admin overview and
-   click "Start audit protection" in Audit history. Expected: the card shows "Verified through
+9. **Audit enrolment.** Settings > About & maintenance > Admin mode on. Open the Admin overview.
+   If the card offers "Start audit protection" (no first checkpoint, see step 5), click it and
+   confirm. If it does not, the first launch anchored itself and enrolment is not needed. In that
+   case the recovery restore of step 5 leaves the history unverified (the Demo reset does not
+   clear the anchor), and steps 10, 11 and 13 need a verified history: on a first run, do steps 9
+   to 13 right after step 3 and the backup steps after them. Which case applies is to be confirmed
+   on the Mac. Expected either way, before any recovery restore: the card shows "Verified through
    entry N"; Keychain Access lists `com.vaultvoyager.vision-native-demo.audit-witness` (account
    `latest-checkpoint`) and `com.vaultvoyager.vision-native-demo.audit-key`;
    `Vision Native Demo/audit-anchor/` holds `key.enc` and `checkpoint.json`.
@@ -217,8 +227,24 @@ these steps touches Electron Vision or its data.
     restore the Electron backup in Settings > Backup. Expected: "Restore complete" without the
     audit recovery question, and the Audit history card shows "Verified through entry N". A wrong
     password fails and leaves the anchor unchanged. If the standard variant was opened before,
-    the import is refused with `transfer_target_not_fresh`; starting it fresh means removing
-    `~/Library/Application Support/Vision Native/`, which holds only Demo data, and is your call.
+    the import is refused with `transfer_target_not_fresh`. Starting it fresh is your call: quit
+    the app, remove `~/Library/Application Support/Vision Native/` (it holds only Demo data), and
+    delete its two Keychain items, or the next launch finds a witness without local files
+    (`anchor_invalid`) and the import is refused again:
+
+    ```bash
+    security delete-generic-password -s com.vaultvoyager.vision-native.audit-witness -a latest-checkpoint
+    security delete-generic-password -s com.vaultvoyager.vision-native.audit-key -a audit-anchor-key
+    ```
+
+    The Demo variant's equivalents, for a fresh Demo directory
+    (`~/Library/Application Support/Vision Native Demo/`):
+
+    ```bash
+    security delete-generic-password -s com.vaultvoyager.vision-native-demo.audit-witness -a latest-checkpoint
+    security delete-generic-password -s com.vaultvoyager.vision-native-demo.audit-key -a audit-anchor-key
+    ```
+
 13. **Rotate key.** Click "Rotate audit key" and confirm. Expected: success, and the card still
     shows "Verified through entry N".
 14. **Quit backup.** In Settings > Backup, turn on "Back up when quitting" and keep "Keep services

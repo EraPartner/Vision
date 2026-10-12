@@ -18,7 +18,7 @@ tags:
     adr-204,
     adr-205,
   ]
-description: "Where each of the 205 action rows of the shell and settings parity inventory lives in Vision Native at the end of phase 1 (file and symbol, a gap with its reason, or a recorded decision), plus the keyboard shortcuts, the preload bridge methods, the cross-cutting Electron behaviours and the inventory's Gaps and unsure items. 3 action-row gaps (2 native, 1 inherited from Electron), 1 unsure row and 3 rows by decision."
+description: "Where each of the 205 action rows of the shell and settings parity inventory lives in Vision Native at the end of phase 1 (file and symbol, a gap with its reason, or a recorded decision), plus the keyboard shortcuts, the preload bridge methods, the cross-cutting Electron behaviours and the inventory's Gaps and unsure items. 3 action-row gaps (2 native, 1 inherited from Electron), 2 unsure rows and 3 rows by decision."
 aliases: [phase 1 exit, native parity exit, phase-1 exit checklist]
 ---
 
@@ -29,9 +29,9 @@ aliases: [phase 1 exit, native parity exit, phase-1 exit checklist]
 > feature parity with the Electron shell, backups round-trip both ways and a hand-over ADR exists
 > ([[docs/adr/205-vision-native-hand-over|ADR-205]], proposed). This page checks every action row of
 > [[docs/reference/native-parity/shell-and-settings|the shell and settings inventory]] against the
-> code on the phase 1e branch. Of 205 action rows, 158 run in the hosted frontend unchanged, 40 have
+> code on the phase 1e branch. Of 205 action rows, 158 run in the hosted frontend unchanged, 39 have
 > native code, 3 are cut by decision, 3 are gaps (#203 and #204 in Vision Native, #148 inherited from
-> Electron) and 1 is unsure (#205). The gap count is at the end of the page.
+> Electron) and 2 are unsure (#67 and #205). The gap count is at the end of the page.
 
 Other parity areas (pages, imports, portfolio, tax, admin) are hosted unchanged in phase 1; their
 inventories under [[docs/reference/native-parity/index|the native parity inventory]] become the
@@ -146,7 +146,7 @@ row is only marked unsure when its behaviour depends on WebKit in a way the inve
 
 - #65 (1) ⌘K / Ctrl+K → hosted: `components/shared/CommandPalette.tsx:158`
 - #66 (2) Looking up… → hosted: `components/shared/CommandPalette.tsx:213`
-- #67 (3) ↵ copy → hosted: `components/shared/CommandPalette.tsx:271`; copies with `navigator.clipboard.writeText` in WebKit; unsure, Mac check 7
+- #67 (3) ↵ copy → unsure: hosted `components/shared/CommandPalette.tsx:271`, which copies with `navigator.clipboard.writeText`; whether WebKit allows it on the loopback origin is unverified (Mac check 7)
 - #68 (4) {q} → hosted: `components/shared/CommandPalette.tsx:297`
 - #69 (5) Payee hit rows (up to 5) → hosted: `components/shared/CommandPalette.tsx:319`
 - #70 (6) Up to 5 recently opened pages (localStorage vision.palette.recents)… → hosted: `components/shared/CommandPalette.tsx:337`
@@ -375,7 +375,7 @@ defines the bridges is `apps/native/Sources/VisionNativeCore/Shell/BridgeScript.
   → `ShellController` (`enrollAudit`, `readAudit`, `exportAuditSnapshot`, `exportAuditTransfer`,
   `importAuditTransfer`, `rotateAuditKey`) over
   `apps/native/Sources/VisionNativeCore/Audit/AuditChannels.swift:AuditChannels`, with
-  `AuditRuntime`, `AuditAnchor` and `AuditKeychainWitness` (phase 1e).
+  `AuditRuntime`, `AuditAnchor` and `KeychainAuditWitness` (phase 1e).
 - `electronServices.saveSettings`, `loadSettings` → `ShellController.saveServicesSettings`,
   `loadServicesSettings`.
 - `electronAPI.platform` → `"darwin"` from `BridgeScript`. `ready`, `setDockBadge`, `setLanguage`,
@@ -449,7 +449,7 @@ headers, zoom persistence, OS notifications).
 
 | Area                    | Rows | Hosted | Native code | By decision | Gaps            | Unsure |
 | ----------------------- | ---- | ------ | ----------- | ----------- | --------------- | ------ |
-| Action rows             | 205  | 158    | 40          | 3           | 3 (1 inherited) | 1      |
+| Action rows             | 205  | 158    | 39          | 3           | 3 (1 inherited) | 2      |
 | Keyboard shortcuts      | 26   | 21     | 5           | 0           | 0               | 0      |
 | Preload bridge methods  | 36   | -      | 31          | 3           | 2               | 0      |
 | Cross-cutting behaviour | -    | -      | -           | -           | 6               | -      |
