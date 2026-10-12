@@ -2,8 +2,8 @@
 title: Feature - Belgian Tax
 type: feature
 status: active
-date: 2026-10-11
-updated: 2026-10-11
+date: 2026-10-12
+updated: 2026-10-12
 tags: [feature, tax, belgian, cadastral-income, deductions, phase-8, pdf-export, regional-own-home-credit, exemption-brackets, taxable-income-sources, audit-2026-05-11, disabled-dependents, regional-autonomy-factor, property-tax-centimes, etf-tob, reynders-routing, portfolio-tax-pure-module, decimal-migration, point-in-time-fx, url-state, filing-masthead, computation-flow, adr-105]
 description: "Belgian tax profile management with PIT calculator using exemption-bracket method (CIR-92 art. 134 §3), regional own-home credits (Flemish woonbonus, Walloon chèque habitat), taxable income source filtering, cadastral income tracking, deduction management, PDF tax report export, and May 2026 PwC audit fixes (disabled-dependent doubling, child-under-3 forfeiture, regional autonomy factor, property-tax centimes calibration). May 2026: Portfolio-tax estimators extracted to a pure, tested module with Decimal.js accumulation."
 aliases: [belgian-tax, tax-feature, cadastral, deductions, belgium]
@@ -382,7 +382,28 @@ cohabitation and its end, factual cohabitation, factual separation, divorce, dea
    partner's own pensions and net income, against the partner's taxable income and tax after the
    quotient. The quotient keeps the nature of the income it comes from (Com.IB 87/22-23; FPS
    circular AAFisc 40/2011): the receiving spouse has pensions pro rata and the transferring
-   spouse's pensions are measured after the transfer (scenario JP-02). Gifts are pooled under a joint assessment, capped once at 10% of the spouses'
+   spouse's pensions are measured after the transfer (scenario JP-02). The pension type of each
+   `pension` activity (`pensionKind`, the sub-line of box V, A.1 of the tax return: statutory
+   pension from the legal pension age, codes 1228 and 1314; survivor's pension or transition
+   allowance, 1229 and 1315; other, 1211 and 1316) decides the art. 147 al. 1, 2°, b-c
+   exclusion. Separately taxed arrears (1230, 1231, 1212) are outside the engine's jointly
+   taxable model. Activity income is, per art. 147 al. 2 and AAFisc 40/2011 no. 20, the
+   professional income less pensions, rents and allowances in their place (art. 23 §1 5°) and
+   less compensations for a temporary loss of income; the engine takes the net professional
+   income less the net income of the `pension` activities, so replacement income (sickness,
+   invalidity, unemployment) must be recorded as a `pension` activity. Income recorded as
+   `other_professional` or `net_professional_amount` counts as activity income
+   (`pension_exclusion_other_income_counted_as_activity`, info, when an exclusion applies). The
+   activity income leaves the proportion in full with a survivor's pension or a gross statutory
+   pension up to the lower limit (IY 2025 €19,630), in part ((upper − pension) / €9,160, the al. 3
+   difference as the FPS notice publishes it; upper − lower would be €9,150) up to the upper
+   limit (€28,780), and not above it. The art. 153 limit keeps the total net income. Under the
+   quotient the receiving spouse also leaves out the transferor's activity income contained in
+   the quotient (FPS circular AAFisc 40/2011 no. 19); for a transferor with a partial exclusion
+   the engine carries the fraction over pro rata, an interpretation flagged
+   `pension_quotient_partial_exclusion_unverified` (needs_source; scenarios SC-22, SC-24 to
+   SC-28, JP-03, JP-04;
+   [[docs/adr/203-belgian-tax-pension-type-activity-income|ADR-203]]). Gifts are pooled under a joint assessment, capped once at 10% of the spouses'
    combined net income, and apportioned on each spouse's taxed income (art. 145/33 §1 al. 5;
    `donation_joint_ceiling_unverified` when a per-spouse ceiling would give less). Other
    reductions stay with the payer.
@@ -506,7 +527,9 @@ The tax profile sheet ([[docs/components/form-dialogs#TaxProfileDialog]]) edits 
   electable; who claims the dependants and the own-home credit; with partner B, B's share of
   the home loan (`home.mortgageSharePartnerB`, empty for one borrower).
 - **Income** step, per partner: activities (kind, gross amount or the net amount of a
-  `net_professional_amount`, optional start and end dates), the expense method per forfait
+  `net_professional_amount`, the pension type of a `pension` activity as on box V of the
+  return or "Not entered", optional start and end dates; the pension type is dropped when the
+  kind changes), the expense method per forfait
   category with the actual amount, other taxable income, alimony, union dues, birth year and
   disability. Activity ids follow `act_<partner>_<n>`; an expense choice is dropped when no
   activity uses its category any more. A one-partner household with one activity round-trips
@@ -586,7 +609,7 @@ frontend refetches the aggregations and deduction candidates.
 - Brussels stamp-duty rebate (one-time, not annual).
 - Flemish post-2020 mortgages (no successor regime — capital owners only).
 - Walloon chèque habitat: the halving when the taxpayer acquires a second home. With two borrowers the household engine places the per-child increase where it fits under a joint assessment; with one borrower the whole credit goes to `mortgageCreditPartnerId`.
-- Reduction for pensions: only the pension part of art. 147 (no unemployment, sickness or other replacement income, no art. 154); the art. 147 al. 1, 2°, b-c exclusion of activity income for a statutory pensioner at the legal pension age needs inputs the profile lacks (`pension_reduction_activity_income_not_excluded`, warning, also for a spouse who receives pensions through the quotient).
+- Reduction for pensions: only the pension part of art. 147 (no unemployment, sickness or other replacement income, no art. 154); the art. 147 al. 1, 2°, b-c exclusion of activity income is applied only in the household engine and only when the pension type is entered; without it (and without a survivor's pension, which decides the exclusion in full) the plain proportion applies and the engine raises `pension_reduction_activity_income_not_excluded` (warning, also for a spouse who receives pensions through the quotient). Other replacement income recorded as a `pension` activity is treated as pensions for the reduction (its own reductions, art. 147 al. 1, 3°-10°, are not modelled) and stays out of the activity income. Separately taxed pension arrears are not modelled. The v1 profile has no pension type. Bridging-pension supplements (AAFisc 40/2011 nos 17 c-d, 19 b-d) are not modelled.
 - Co-parenting (art. 132bis): the household has one claimant for all dependants.
 - The "fiscal widow(er)" treatment in the year after a partner's death (unsourced; the survivor is assessed alone).
 - Foreign tax credit on foreign dividends (DBI-RDT regime).
@@ -777,6 +800,7 @@ fees remain recorded facts. See [[docs/adr/188-proved-in-kind-income-recognition
 - [[docs/adr/199-belgian-tax-source-verification|ADR-199]] — Source-verified rule matrix; self-employed forfait, art. 88 quotient cap, CSSS scale and household base, frozen IY 2025 amounts, post-reform IY 2026 table (October 2026)
 - [[docs/adr/200-belgian-tax-household-model|ADR-200]] — Household of one or two partners with income activities, date-derived assessment, v2 setting keys (October 2026)
 - [[docs/adr/202-belgian-tax-region-and-own-home-baskets|ADR-202]] — The household region decides the own-home regime (`mortgageRegion` deprecated); an own-home basket per borrower (October 2026)
+- [[docs/adr/203-belgian-tax-pension-type-activity-income|ADR-203]] — The pension type follows box V of the return and decides the art. 147 exclusion of activity income (October 2026)
 - [[docs/reference/belgian-tax-rule-matrix|Belgian tax rule coverage matrix]] — per-rule sources, code and test locations
 - [[docs/reference/belgian-tax-scenario-matrix|Belgian tax scenario matrix]] — law-derived household scenarios per rule-matrix row
 - [[docs/features/portfolio#belgian-tax-features]] — Tax fields in portfolio

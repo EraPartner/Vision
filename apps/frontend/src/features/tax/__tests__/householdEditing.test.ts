@@ -56,6 +56,19 @@ describe("householdEditing", () => {
         valid(h);
     });
 
+    test("changing the kind away from a pension drops the pension type", () => {
+        let h = updateActivity(base(), "A", "act_A_1", { kind: "pension" });
+        h = updateActivity(h, "A", "act_A_1", { pensionKind: "statutory_from_legal_age" });
+        expect(h.partners[0]!.activities[0]!.pensionKind).toBe("statutory_from_legal_age");
+        valid(h);
+        // Re-selecting the same kind keeps it.
+        h = updateActivity(h, "A", "act_A_1", { kind: "pension" });
+        expect(h.partners[0]!.activities[0]!.pensionKind).toBe("statutory_from_legal_age");
+        h = updateActivity(h, "A", "act_A_1", { kind: "employee" });
+        expect(h.partners[0]!.activities[0]).toEqual({ id: "act_A_1", kind: "employee", grossIncome: 40_000 });
+        valid(h);
+    });
+
     test("an undefined patch value clears an optional field", () => {
         let h = updateActivity(base(), "A", "act_A_1", { startDate: "2025-03-01" });
         expect(h.partners[0]!.activities[0]!.startDate).toBe("2025-03-01");

@@ -9,6 +9,7 @@ import { z } from "zod";
 import {
     ACTIVITY_KINDS,
     FORFAIT_CATEGORIES,
+    PENSION_KINDS,
     RELATIONSHIP_EVENT_KINDS,
     type BelgianTaxHouseholdSnapshotsV2,
     type BelgianTaxHouseholdV2,
@@ -29,6 +30,7 @@ const activitySchema = z.looseObject({
     label: z.string().max(200).optional(),
     grossIncome: money,
     netProfessionalIncome: money.optional(),
+    pensionKind: z.enum(PENSION_KINDS as [string, ...string[]]).optional(),
     startDate: isoDate.optional(),
     endDate: isoDate.optional(),
     selfEmployedOccupation: z.enum(["main", "secondary"]).optional(),
@@ -179,6 +181,13 @@ export const belgianTaxHouseholdV2Schema = z
                         code: "custom",
                         path: ["partners", pi, "activities", ai, "netProfessionalIncome"],
                         message: "netProfessionalIncome is only allowed on net_professional_amount",
+                    });
+                }
+                if (activity.pensionKind !== undefined && activity.kind !== "pension") {
+                    ctx.addIssue({
+                        code: "custom",
+                        path: ["partners", pi, "activities", ai, "pensionKind"],
+                        message: "pensionKind is only allowed on pension",
                     });
                 }
             });

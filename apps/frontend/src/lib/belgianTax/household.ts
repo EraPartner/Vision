@@ -47,6 +47,7 @@ import {
     computeMarginalRate,
     computePensionReduction,
     computeProfessionalExpenseClaim,
+    pensionActivityExclusionFraction,
     computeProgressiveTax,
     computeTaxReductions,
     qualifyingDonations,
@@ -133,6 +134,15 @@ interface PartnerIncome {
     taxableIncomeBeforeQuotient: number;
     /** Net pensions (art. 34 income of `pension` activities). */
     pensionIncome: number;
+    /**
+     * Activity income (art. 147 al. 2): the net professional income less the net pensions
+     * (FPS circular AAFisc 40/2011 no. 20), i.e. the net income of the non-pension activities.
+     */
+    activityIncome: number;
+    /** Share of `activityIncome` left out of the art. 147 proportion (art. 147 al. 1, 2°, b-c). */
+    exclusionFraction: number;
+    /** A `pension` activity with income has no `pensionKind`: the exclusion cannot be decided. */
+    pensionKindMissing: boolean;
     /**
      * Total net income before the deductible spending of arts 104-116 (alimony): the base of the
      * art. 145/33 donation ceiling and of the art. 147 pension proportion (Com.IB 146/15).
@@ -300,15 +310,53 @@ function computePartnerIncome(
         activities.filter((a) => a.kind === "pension"),
         (a) => a.netProfessionalIncome,
     );
-    // Art. 147 al. 1, 2°, b-c exclude some activity income from the proportion only for a
-    // statutory pensioner at the legal pension age, which the model does not record.
-    if (
-        pensionIncome > 0 &&
-        activities.some((a) => a.kind !== "pension" && a.netProfessionalIncome > 0)
-    ) {
+    // Art. 147 al. 1, 2°, b-c: the return's Vak V line of each pension (`pensionKind`) decides
+    // whether the activity income leaves the proportion. The statutory-pension limit is tested
+    // on the gross amount as declared (AAFisc 40/2011 no. 22).
+    const pensionActivities = partner.activities.filter((a) => a.kind === "pension");
+    const grossStatutoryPension = sum(
+        pensionActivities.filter((a) => a.pensionKind === "statutory_from_legal_age"),
+        (a) => Math.max(a.grossIncome || 0, 0),
+    );
+    const hasSurvivorPension = pensionActivities.some(
+        (a) => a.pensionKind === "survivor_or_transition" && (a.grossIncome || 0) > 0,
+    );
+    // A survivor's pension excludes the activity income in full whatever the other pensions
+    // (AAFisc 40/2011 no. 18), so an untyped pension next to it changes nothing. Without one, an
+    // untyped pension leaves the outcome open: the plain proportion applies (fraction 0).
+    const pensionKindMissing =
+        !hasSurvivorPension &&
+        pensionActivities.some((a) => a.pensionKind === undefined && (a.grossIncome || 0) > 0);
+    // Activity income (art. 147 al. 2; AAFisc 40/2011 no. 20): professional income less pensions
+    // and other replacement income, which the model records under `pension` (art. 34).
+    const activityIncome = clampAtZero(netProfessionalIncome - pensionIncome);
+    const exclusionFraction = pensionKindMissing
+        ? 0
+        : pensionActivityExclusionFraction(
+              grossStatutoryPension,
+              hasSurvivorPension,
+              table.pensionReduction,
+          );
+    if (pensionKindMissing && pensionIncome > 0 && activityIncome > 0) {
         issues.push({
             code: "pension_reduction_activity_income_not_excluded",
             severity: "warning",
+            partnerId: partner.id,
+        });
+    }
+    // Replacement income entered under `other_professional` or `net_professional_amount` counts
+    // as activity income here, although art. 147 al. 2 excludes it.
+    if (
+        exclusionFraction > 0 &&
+        activities.some(
+            (a) =>
+                (a.kind === "other_professional" || a.kind === "net_professional_amount") &&
+                a.netProfessionalIncome > 0,
+        )
+    ) {
+        issues.push({
+            code: "pension_exclusion_other_income_counted_as_activity",
+            severity: "info",
             partnerId: partner.id,
         });
     }
@@ -332,6 +380,9 @@ function computePartnerIncome(
             netProfessionalIncome + otherTaxableIncome - alimonyDeduction,
         ),
         pensionIncome,
+        activityIncome,
+        exclusionFraction,
+        pensionKindMissing,
         netIncome: netProfessionalIncome + otherTaxableIncome,
     };
 }
@@ -436,18 +487,36 @@ function donationReductions(
  * de toekennende echtgenoot voorkomen" (Com.IB 87/22-23); since the repeal of art. 149 from
  * AY 2010 the pension reduction reads each spouse's income after the transfer (FPS circular
  * AAFisc 40/2011, nos 19 and 36, example 4).
+ *
+ * Activity income left out of the proportion (art. 147 al. 1, 2°, b-c; AAFisc 40/2011 no. 19):
+ *  - each partner: own exclusion fraction × own activity income; the transferor's activity
+ *    income is measured after the transfer, activity income × (1 − transfer / net professional
+ *    income), as in the worked example of AAFisc 40/2011 (22,014.47 − 3,131.12);
+ *  - the receiver also removes the transferor's activity income contained in the quotient when
+ *    the transferor meets the conditions (no. 19, a): transfer × activity income / net
+ *    professional income of the transferor (example: 3,050.53 × 3,565.00 / 25,065.00 = 433.88),
+ *    times the transferor's exclusion fraction; plus the receiver's own excluded activity income
+ *    when the receiver meets the conditions (no. 19, c).
  */
 function pensionFigures(
     incomes: readonly PartnerIncome[],
     transfer: QuotientTransfer | undefined,
-): { pensionIncome: number[]; netIncome: number[] } {
+): { pensionIncome: number[]; netIncome: number[]; excludedActivityIncome: number[] } {
     const from = transfer && incomes.find((inc) => inc.partner.id === transfer.from);
     const fraction =
         transfer && from && from.netProfessionalIncome > 0
             ? Math.min(transfer.transfer / from.netProfessionalIncome, 1)
             : 0;
     const moved = from ? from.pensionIncome * fraction : 0;
+    const movedExcluded = from ? from.exclusionFraction * from.activityIncome * fraction : 0;
     return {
+        excludedActivityIncome: incomes.map((inc) => {
+            const own = inc.exclusionFraction * inc.activityIncome;
+            if (transfer === undefined) return own;
+            if (inc.partner.id === transfer.from) return own * (1 - fraction);
+            if (inc.partner.id === transfer.to) return own + movedExcluded;
+            return own;
+        }),
         pensionIncome: incomes.map((inc) =>
             transfer === undefined
                 ? inc.pensionIncome
@@ -513,8 +582,9 @@ function computeTaxStep(
         allocations.push(allocation);
         exemptionBenefits.push(benefit);
         pitAfterExemption.push(pit);
-        // Per spouse (art. 150) on the income after the quotient transfer: the proportion,
-        // the art. 151/1-152 limits (taxable income of this step) and the art. 153 limit.
+        // Per spouse (art. 150) on the income after the quotient transfer: the proportion
+        // (without the excluded activity income), the art. 151/1-152 limits (taxable income of
+        // this step) and the art. 153 limit (plain total net income).
         pensionReductions.push(
             computePensionReduction(
                 {
@@ -522,6 +592,7 @@ function computeTaxStep(
                     netIncome: pension.netIncome[i] as number,
                     taxableIncome: taxable,
                     taxAfterExemption: pit,
+                    excludedActivityIncome: pension.excludedActivityIncome[i] as number,
                 },
                 table,
             ).total,
@@ -678,18 +749,34 @@ export function computeHouseholdTax(
     if (step.donationCeilingReadingsDiffer) {
         issues.push({ code: "donation_joint_ceiling_unverified", severity: "needs_source" });
     }
-    // A spouse who receives pensions through the quotient and has other professional income in
-    // their own total net income: the art. 147 al. 1, 2°, b-c exclusion is not modelled for them
-    // either (AAFisc 40/2011 no. 19).
+    // The receiving spouse's proportion also removes the transferor's activity income contained
+    // in the quotient when the transferor meets the art. 147 al. 1, 2°, b-c conditions (AAFisc
+    // 40/2011 no. 19, a); without the transferor's pension type that cannot be decided.
     if (appliedTransfer !== undefined) {
         const from = incomes.find((inc) => inc.partner.id === appliedTransfer.from);
         const to = incomes.find((inc) => inc.partner.id === appliedTransfer.to);
+        // AAFisc 40/2011 no. 19 a names only a transferor who meets no. 17 a or b (full
+        // exclusion); the partial exclusion of art. 147 al. 3 (from AY 2020) has no rule for the
+        // quotient. The engine carries the transferor's fraction over pro rata.
+        if (
+            from &&
+            from.exclusionFraction > 0 &&
+            from.exclusionFraction < 1 &&
+            from.activityIncome > 0 &&
+            from.pensionIncome > 0
+        ) {
+            issues.push({
+                code: "pension_quotient_partial_exclusion_unverified",
+                severity: "needs_source",
+                partnerId: appliedTransfer.to,
+            });
+        }
         if (
             from &&
             to &&
+            from.pensionKindMissing &&
             from.pensionIncome > 0 &&
-            (to.netProfessionalIncome > to.pensionIncome ||
-                from.netProfessionalIncome > from.pensionIncome) &&
+            from.activityIncome > 0 &&
             !issues.some(
                 (x) =>
                     x.code === "pension_reduction_activity_income_not_excluded" &&

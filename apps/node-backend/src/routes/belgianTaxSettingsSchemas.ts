@@ -41,6 +41,12 @@ const FORFAIT_CATEGORIES = [
   "none",
 ] as const;
 
+const PENSION_KINDS = [
+  "statutory_from_legal_age",
+  "survivor_or_transition",
+  "other",
+] as const;
+
 const RELATIONSHIP_EVENT_KINDS = [
   "marriage",
   "legal_cohabitation",
@@ -57,6 +63,7 @@ const activitySchema = z.looseObject({
   label: z.string().max(200).optional(),
   grossIncome: money,
   netProfessionalIncome: money.optional(),
+  pensionKind: z.enum(PENSION_KINDS).optional(),
   startDate: isoDate.optional(),
   endDate: isoDate.optional(),
   selfEmployedOccupation: z.enum(["main", "secondary"]).optional(),
@@ -221,6 +228,13 @@ export const belgianTaxHouseholdV2Schema = z
             path: ["partners", pi, "activities", ai, "netProfessionalIncome"],
             message:
               "netProfessionalIncome is only allowed on net_professional_amount",
+          });
+        }
+        if (activity.pensionKind !== undefined && activity.kind !== "pension") {
+          ctx.addIssue({
+            code: "custom",
+            path: ["partners", pi, "activities", ai, "pensionKind"],
+            message: "pensionKind is only allowed on pension",
           });
         }
       });

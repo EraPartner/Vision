@@ -133,6 +133,28 @@ describe("Belgian tax household v2 settings validation", () => {
     expect(validate(value)).toEqual(value);
   });
 
+  it("accepts a pension type on a pension activity", () => {
+    const base = validHousehold();
+    const value = {
+      ...base,
+      partners: [
+        {
+          ...base.partners[0],
+          activities: [
+            {
+              id: "act_A_9",
+              kind: "pension",
+              grossIncome: 18000,
+              pensionKind: "statutory_from_legal_age",
+            },
+          ],
+        },
+        base.partners[1],
+      ],
+    };
+    expect(validate(value)).toEqual(value);
+  });
+
   it.each<[string, (h: Household) => unknown]>([
     ["version 1", (h) => ({ ...h, version: 1 })],
     ["a missing taxYear", ({ taxYear: _taxYear, ...rest }) => rest],
@@ -187,6 +209,46 @@ describe("Belgian tax household v2 settings validation", () => {
                 kind: "employee",
                 grossIncome: 1,
                 netProfessionalIncome: 1,
+              },
+            ],
+          },
+          h.partners[1],
+        ],
+      }),
+    ],
+    [
+      "a pension type on an employee activity",
+      (h) => ({
+        ...h,
+        partners: [
+          {
+            ...h.partners[0],
+            activities: [
+              {
+                id: "act_A_1",
+                kind: "employee",
+                grossIncome: 1,
+                pensionKind: "other",
+              },
+            ],
+          },
+          h.partners[1],
+        ],
+      }),
+    ],
+    [
+      "an unknown pension type",
+      (h) => ({
+        ...h,
+        partners: [
+          {
+            ...h.partners[0],
+            activities: [
+              {
+                id: "act_A_1",
+                kind: "pension",
+                grossIncome: 1,
+                pensionKind: "early",
               },
             ],
           },
