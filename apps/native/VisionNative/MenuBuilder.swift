@@ -32,6 +32,10 @@ final class MenuController: NSObject {
             case .item(let model):
                 let item = NSMenuItem(title: model.title, action: nil, keyEquivalent: model.keyEquivalent?.key ?? "")
                 if let key = model.keyEquivalent { item.keyEquivalentModifierMask = Self.flags(key.modifiers) }
+                if model.isHidden {
+                    item.isHidden = true
+                    item.allowsKeyEquivalentWhenHidden = true
+                }
                 configure(item, model.command)
                 menu.addItem(item)
             case .submenu(let submenuTitle, let role, let children):

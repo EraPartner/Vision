@@ -32,22 +32,50 @@ public enum NavigationPolicy {
     /// without credentials.
     public static func isAppURL(_ url: URL, appURL: URL) -> Bool {
         guard let candidate = URLComponents(url: url, resolvingAgainstBaseURL: false),
-            let app = URLComponents(url: appURL, resolvingAgainstBaseURL: false),
-            let scheme = candidate.scheme?.lowercased(),
-            scheme == "http" || scheme == "https",
-            scheme == app.scheme?.lowercased(),
-            candidate.user == nil, candidate.password == nil,
-            let host = candidate.host?.lowercased(), !host.isEmpty,
-            host == app.host?.lowercased()
+            candidate.user == nil, candidate.password == nil, !hasUserInfo(url.absoluteString),
+            let scheme = candidate.scheme, let host = candidate.host
         else {
             return false
         }
-        return effectivePort(candidate) == effectivePort(app)
+        return isAppOrigin(scheme: scheme, host: host, port: candidate.port, appURL: appURL)
     }
 
-    private static func effectivePort(_ components: URLComponents) -> Int {
-        if let port = components.port { return port }
-        return components.scheme?.lowercased() == "https" ? 443 : 80
+    /// The origin part of `isAppURL`: an http(s) scheme, host and port equal to the app's.
+    /// A `nil` port is the scheme's default.
+    public static func isAppOrigin(scheme: String, host: String, port: Int?, appURL: URL) -> Bool {
+        guard let app = URLComponents(url: appURL, resolvingAgainstBaseURL: false),
+            let appScheme = app.scheme?.lowercased(), let appHost = app.host
+        else {
+            return false
+        }
+        let scheme = scheme.lowercased()
+        let host = normalizedHost(host)
+        guard scheme == "http" || scheme == "https", scheme == appScheme, !host.isEmpty,
+            host == normalizedHost(appHost)
+        else {
+            return false
+        }
+        return (port ?? defaultPort(scheme)) == (app.port ?? defaultPort(appScheme))
+    }
+
+    private static func defaultPort(_ scheme: String) -> Int {
+        scheme == "https" ? 443 : 80
+    }
+
+    /// Lowercase, without the brackets of an IPv6 literal, so `[::1]` and `::1` compare equal.
+    private static func normalizedHost(_ host: String) -> String {
+        var host = host.lowercased()
+        if host.hasPrefix("["), host.hasSuffix("]") { host = String(host.dropFirst().dropLast()) }
+        return host
+    }
+
+    /// Any `@` in the authority, including an empty user (`http://@localhost/`), which
+    /// `URLComponents` may report as no user at all.
+    private static func hasUserInfo(_ absoluteString: String) -> Bool {
+        guard let separator = absoluteString.range(of: "://") else { return false }
+        let rest = absoluteString[separator.upperBound...]
+        let authority = rest.prefix { $0 != "/" && $0 != "?" && $0 != "#" }
+        return authority.contains("@")
     }
 
     /// A `data:` URL, or a `blob:` URL created by the app's own origin.
@@ -92,12 +120,18 @@ public enum NavigationPolicy {
 
     /// A response the web view cannot show, or one sent as an attachment, is saved as a
     /// download when it comes from the app origin or the page itself; otherwise it is cancelled.
+    /// A main-frame response that would be shown must come from the app origin (defence in
+    /// depth behind `decideNavigation`, for example after a redirect).
     public static func decideResponse(
-        url: URL?, canShowMIMEType: Bool, contentDisposition: String?, appURL: URL
+        url: URL?, isMainFrame: Bool, canShowMIMEType: Bool, contentDisposition: String?, appURL: URL
     ) -> NavigationDecision {
         let isAttachment =
             contentDisposition?.trimmingCharacters(in: .whitespaces).lowercased().hasPrefix("attachment") ?? false
-        guard isAttachment || !canShowMIMEType else { return .allow }
+        guard isAttachment || !canShowMIMEType else {
+            guard isMainFrame else { return .allow }
+            if let url, isAppURL(url, appURL: appURL) { return .allow }
+            return .cancel("main-frame response from an untrusted origin")
+        }
         guard let url, isAppURL(url, appURL: appURL) || isInPageResource(url, appURL: appURL) else {
             return .cancel("download from an untrusted origin")
         }

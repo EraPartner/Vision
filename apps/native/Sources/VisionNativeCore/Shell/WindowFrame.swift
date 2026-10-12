@@ -57,10 +57,11 @@ public enum WindowFrame {
     }
 
     /// `clampBoundsToWorkArea`: at least the minimum size, at most the work area, and moved
-    /// inside it, so an unplugged display cannot strand the window off screen.
+    /// inside it, so an unplugged display cannot strand the window off screen. A work area
+    /// smaller than the minimum size wins: the window shrinks to it and sits at its origin.
     public static func clamp(_ frame: CGRect, to workArea: CGRect) -> CGRect {
-        let width = max(minimumSize.width, min(frame.size.width, workArea.size.width))
-        let height = max(minimumSize.height, min(frame.size.height, workArea.size.height))
+        let width = min(max(minimumSize.width, frame.size.width), workArea.size.width)
+        let height = min(max(minimumSize.height, frame.size.height), workArea.size.height)
         func clamp(_ value: CGFloat, _ low: CGFloat, _ high: CGFloat) -> CGFloat { min(max(value, low), high) }
         return CGRect(
             x: clamp(frame.origin.x, workArea.minX, workArea.maxX - width),

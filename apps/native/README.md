@@ -83,11 +83,11 @@ The window hosts the unchanged React frontend and behaves like the Electron shel
 - A user script defines the `window.electron*` bridges of `packaging/electron/preload.ts`, backed by
   a `WKScriptMessageHandlerWithReply` named `visionNative`. `Shell/BridgeContract.swift` maps every
   Electron channel to its Swift handler. Backup (`electronBackup`) and audit (`electronAudit`) calls
-  reject with "not available in Vision Native yet" until phases 1d and 1e; the updater is not
-  ported.
+  reject with "not available in Vision Native yet" until phases 1d and 1e, except the backup
+  settings, which use the backend settings API; the updater is not ported.
 - The web view loads only the backend origin. The repository and documentation links open in the
   default browser, other navigations and new windows are cancelled, and downloads open a save
-  panel.
+  panel. A replaced file is swapped in only after its download finished.
 - The menu bar, dock menu, dock badge, window frame (`windowBounds` in `settings.json`), hide on
   close, full screen and vibrancy follow `packaging/electron/main.ts`. Menu labels come from
   `i18n/source/{en,nl}.json`, copied to `Contents/Resources/i18n/` by a build phase.

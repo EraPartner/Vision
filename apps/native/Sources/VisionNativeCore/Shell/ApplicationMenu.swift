@@ -72,11 +72,16 @@ public struct MenuItemModel: Hashable, Sendable {
     public let title: String
     public let command: MenuCommand
     public let keyEquivalent: KeyEquivalent?
+    /// A hidden item that only adds a second key equivalent for a visible one.
+    public let isHidden: Bool
 
-    public init(_ title: String, _ command: MenuCommand, _ keyEquivalent: KeyEquivalent? = nil) {
+    public init(
+        _ title: String, _ command: MenuCommand, _ keyEquivalent: KeyEquivalent? = nil, isHidden: Bool = false
+    ) {
         self.title = title
         self.command = command
         self.keyEquivalent = keyEquivalent
+        self.isHidden = isHidden
     }
 }
 
@@ -165,6 +170,8 @@ public enum ApplicationMenu {
             .separator,
             .item(MenuItemModel("Actual Size", .resetZoom, KeyEquivalent("0"))),
             .item(MenuItemModel("Zoom In", .zoomIn, KeyEquivalent("+"))),
+            // Plain ⌘= on layouts where + needs Shift (Electron's zoomIn accepts both).
+            .item(MenuItemModel("Zoom In", .zoomIn, KeyEquivalent("="), isHidden: true)),
             .item(MenuItemModel("Zoom Out", .zoomOut, KeyEquivalent("-"))),
             .separator,
             .item(MenuItemModel("Toggle Full Screen", .toggleFullScreen, KeyEquivalent("f", [.command, .control]))),

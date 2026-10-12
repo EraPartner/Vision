@@ -111,6 +111,21 @@ import Testing
                 == CGRect(x: 40, y: 60, width: 1280, height: 800))
     }
 
+    @Test func aWorkAreaBelowTheMinimumSizeWins() {
+        let small = CGRect(x: 1512, y: 25, width: 700, height: 500)
+        let clamped = WindowFrame.clamp(CGRect(x: 1600, y: 100, width: 1280, height: 800), to: small)
+        #expect(clamped == small)
+        #expect(small.contains(clamped))
+        // Only one dimension below the minimum.
+        #expect(
+            WindowFrame.clamp(CGRect(x: -400, y: 900, width: 900, height: 900), to: CGRect(x: 0, y: 0, width: 1512, height: 500))
+                == CGRect(x: 0, y: 0, width: 900, height: 500))
+        // A window smaller than the minimum still grows to it when the work area allows.
+        #expect(
+            WindowFrame.clamp(CGRect(x: 10, y: 10, width: 300, height: 200), to: CGRect(x: 0, y: 0, width: 1512, height: 944))
+                == CGRect(x: 10, y: 10, width: 800, height: 600))
+    }
+
     @Test func workAreaIsTheMostOverlappingScreen() {
         let main = (frame: CGRect(x: 0, y: 0, width: 1512, height: 982), visibleFrame: CGRect(x: 0, y: 0, width: 1512, height: 944))
         let side = (frame: CGRect(x: 1512, y: 0, width: 2560, height: 1440), visibleFrame: CGRect(x: 1512, y: 0, width: 2560, height: 1415))

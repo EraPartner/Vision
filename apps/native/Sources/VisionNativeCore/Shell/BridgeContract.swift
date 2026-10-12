@@ -81,8 +81,17 @@ public enum BridgeContract {
     public static let messageHandlerName = "visionNative"
     /// `electronAPI.platform`; the frontend keys the macOS chrome CSS on it.
     public static let platform = "darwin"
-    /// The largest message the shell parses. Renderer messages are small JSON.
+    /// The default message limit. Renderer messages are small JSON.
     public static let maximumMessageBytes = 64 * 1024
+    /// The limit of channels that carry a payload: `backup:run` sends the localStorage
+    /// snapshot (`frontendStateJson`), which can exceed 64 KiB. No message is parsed above it.
+    public static let maximumPayloadMessageBytes = 8 * 1024 * 1024
+    public static let payloadChannels: Set<BridgeChannel> = [.backupRun]
+
+    /// The largest message the shell accepts on a channel.
+    public static func maximumMessageBytes(for channel: BridgeChannel) -> Int {
+        payloadChannels.contains(channel) ? maximumPayloadMessageBytes : maximumMessageBytes
+    }
 
     private static func entry(
         _ channel: BridgeChannel, _ bridge: String, _ method: String?, _ parameters: [String] = [],
@@ -105,8 +114,12 @@ public enum BridgeContract {
         entry(.backupSelectFile, "electronBackup", "selectFile", [], "stub", backup),
         entry(.backupRestore, "electronBackup", "restoreBackup", ["filePath", "opts"], "stub", backup),
         entry(.backupIsEncrypted, "electronBackup", "isEncrypted", ["filePath"], "stub", backup),
-        entry(.backupSaveSettings, "electronBackup", "saveSettings", ["settings"], "stub", backup),
-        entry(.backupLoadSettings, "electronBackup", "loadSettings", [], "stub", backup),
+        // Answered from the backend settings API like the services settings, so Settings >
+        // Backup keeps the directory and the on-quit toggle until phase 1d ports the rest.
+        entry(
+            .backupSaveSettings, "electronBackup", "saveSettings", ["settings"], "saveBackupSettings",
+            .implemented),
+        entry(.backupLoadSettings, "electronBackup", "loadSettings", [], "loadBackupSettings", .implemented),
         entry(.backupGetEncryptionStatus, "electronBackup", "getEncryptionStatus", [], "stub", backup),
         entry(.backupSetPassphrase, "electronBackup", "setPassphrase", ["passphrase"], "stub", backup),
         entry(

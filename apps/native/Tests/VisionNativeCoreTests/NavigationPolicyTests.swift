@@ -89,18 +89,71 @@ import Testing
         let export = url("http://localhost:36962/api/reports/tax.pdf")
         #expect(
             NavigationPolicy.decideResponse(
-                url: export, canShowMIMEType: true, contentDisposition: "attachment; filename=\"tax.pdf\"",
+                url: export, isMainFrame: true, canShowMIMEType: true, contentDisposition: "attachment; filename=\"tax.pdf\"",
                 appURL: app) == .download)
         #expect(
-            NavigationPolicy.decideResponse(url: export, canShowMIMEType: false, contentDisposition: nil, appURL: app)
+            NavigationPolicy.decideResponse(url: export, isMainFrame: true, canShowMIMEType: false, contentDisposition: nil, appURL: app)
                 == .download)
         #expect(
-            NavigationPolicy.decideResponse(url: export, canShowMIMEType: true, contentDisposition: "inline", appURL: app)
+            NavigationPolicy.decideResponse(url: export, isMainFrame: true, canShowMIMEType: true, contentDisposition: "inline", appURL: app)
                 == .allow)
         #expect(
             NavigationPolicy.decideResponse(
-                url: url("https://example.com/x.zip"), canShowMIMEType: false, contentDisposition: nil, appURL: app)
+                url: url("https://example.com/x.zip"), isMainFrame: true, canShowMIMEType: false, contentDisposition: nil, appURL: app)
                 == .cancel("download from an untrusted origin"))
+    }
+
+    @Test func mainFrameResponsesMustComeFromTheApp() {
+        #expect(
+            NavigationPolicy.decideResponse(
+                url: url("https://example.com/"), isMainFrame: true, canShowMIMEType: true, contentDisposition: nil,
+                appURL: app) == .cancel("main-frame response from an untrusted origin"))
+        #expect(
+            NavigationPolicy.decideResponse(
+                url: nil, isMainFrame: true, canShowMIMEType: true, contentDisposition: nil, appURL: app)
+                == .cancel("main-frame response from an untrusted origin"))
+        #expect(
+            NavigationPolicy.decideResponse(
+                url: url("http://localhost:36962/"), isMainFrame: true, canShowMIMEType: true, contentDisposition: nil,
+                appURL: app) == .allow)
+        // Subframes are governed by decideNavigation.
+        #expect(
+            NavigationPolicy.decideResponse(
+                url: url("https://example.com/"), isMainFrame: false, canShowMIMEType: true, contentDisposition: nil,
+                appURL: app) == .allow)
+    }
+
+    @Test func mainFrameDataAndJavaScriptURLsAreCancelled() {
+        for candidate in ["data:text/html;base64,PGgxPmhpPC9oMT4=", "javascript:alert(1)"] {
+            #expect(
+                NavigationPolicy.decideNavigation(
+                    url: url(candidate), isMainFrame: true, shouldPerformDownload: false, appURL: app)
+                    == .cancel("navigation to an untrusted URL"), "\(candidate)")
+        }
+        #expect(
+            NavigationPolicy.decideNavigation(
+                url: url("javascript:alert(1)"), isMainFrame: true, shouldPerformDownload: true, appURL: app)
+                == .cancel("download from an untrusted origin"))
+    }
+
+    @Test func originEdgeCases() {
+        #expect(NavigationPolicy.isAppURL(url("HTTP://localhost:36962/"), appURL: app))
+        #expect(!NavigationPolicy.isAppURL(url("http://@localhost:36962/"), appURL: app))
+        #expect(!NavigationPolicy.isAppURL(url("http://:@localhost:36962/"), appURL: app))
+        #expect(!NavigationPolicy.isAppURL(url("http://[::1]:36962/"), appURL: app))
+        let ipv6 = url("http://[::1]:36962")
+        #expect(NavigationPolicy.isAppURL(url("http://[::1]:36962/transactions"), appURL: ipv6))
+        #expect(!NavigationPolicy.isAppURL(url("http://localhost:36962/"), appURL: ipv6))
+        for candidate in [
+            "blob:http://user:pass@localhost:36962/4f6c2b1e-1111-2222-3333-444455556666",
+            "blob:http://@localhost:36962/4f6c2b1e-1111-2222-3333-444455556666",
+        ] {
+            #expect(!NavigationPolicy.isInPageResource(url(candidate), appURL: app), "\(candidate)")
+            #expect(
+                NavigationPolicy.decideNavigation(
+                    url: url(candidate), isMainFrame: true, shouldPerformDownload: true, appURL: app)
+                    == .cancel("download from an untrusted origin"), "\(candidate)")
+        }
     }
 
     @Test func downloadFilenamesAreSingleComponents() {

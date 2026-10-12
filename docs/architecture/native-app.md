@@ -229,25 +229,35 @@ frontend detects a desktop shell (`isElectron()` checks `window.electronUpdater`
 `electronAPI.platform` is `"darwin"`). Methods call
 `window.webkit.messageHandlers.visionNative.postMessage(JSON.stringify({ channel, args }))`, a
 `WKScriptMessageHandlerWithReply`. The reply is JSON text, or an error message the promise rejects
-with. Like `registerHandler`, the shell first checks the sender (the main frame at the backend
-origin), then refuses malformed messages and unknown channels, validates the arguments with the
-rules of `runtime/ipc-schemas.ts` and answers invalid calls with each channel's `invalidResult`.
-Events reach the page through `window.__visionNativeDispatch`; renderer-bound events wait until the
-page calls `ready()`, and a new document clears that state. The script also reports structural
-`error` and `unhandledrejection` metadata, like the preload.
+with. Like `registerHandler`, the shell first checks the sender (the main frame whose security
+origin, protocol, host and port, is the backend origin), then refuses malformed messages and
+unknown channels, validates the arguments with the rules of `runtime/ipc-schemas.ts` and answers
+invalid calls with each channel's `invalidResult`. Messages are limited to 64 KiB once the channel
+is known; `backup:run`, which carries the localStorage snapshot, accepts up to 8 MiB, and nothing
+larger is parsed. Events reach the page through `window.__visionNativeDispatch`; renderer-bound
+events wait until the page calls `ready()`, and a newly committed document clears that state (a
+load that turns into a download does not). The script also reports structural `error` and
+`unhandledrejection` metadata, like the preload. A Swift Testing test runs the generated script in
+JavaScriptCore with a stub message handler.
 
 `BridgeContract.entries` in `Shell/BridgeContract.swift` is the channel to handler table:
 
-| Bridge             | Electron channels                                                                                                                                 | Vision Native                                                           |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `electronUpdater`  | `update:check-github`, `update:install-shell`, `update:pre-update-backup`                                                                         | Empty object: no updater (ADR-204 decision 5); direct calls reject      |
-| `electronBackup`   | `backup:run`, `select-dir`, `select-file`, `restore`, `is-encrypted`, `save-settings`, `load-settings`, `get-encryption-status`, `set-passphrase` | Stubs that reject "not available in Vision Native yet" (phase 1d)       |
-| `electronAudit`    | `audit:enroll`, `read`, `export`, `transfer-export`, `transfer-import`, `rotate-key`                                                              | Stubs that reject "not available in Vision Native yet" (phase 1e)       |
-| `electronServices` | `services:save-settings`, `services:load-settings`                                                                                                | Database setting with baseline writes, mirrored to `settings.json`      |
-| `electronRecovery` | `recovery:retry`, `recovery:open-logs`                                                                                                            | Relaunch through the supervisor; open `native/vision_native/logs`       |
-| `electronAPI`      | `app:renderer-ready`, `app:set-badge`, `app:set-language`, `app:set-vibrancy`, `app:get-accent-color`, `theme:persist-splash`                     | Implemented (queue flush, dock badge, menus, material, accent, palette) |
-| (user script)      | `app:renderer-failure`                                                                                                                            | Logged as kind, name, source file and line only                         |
-| (Vision Native)    | `native:window-drag`, `native:window-titlebar-double-click`                                                                                       | Topbar drag region                                                      |
+| Bridge             | Electron channels                                                                                                             | Vision Native                                                           |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `electronUpdater`  | `update:check-github`, `update:install-shell`, `update:pre-update-backup`                                                     | Empty object: no updater (ADR-204 decision 5); direct calls reject      |
+| `electronBackup`   | `backup:run`, `select-dir`, `select-file`, `restore`, `is-encrypted`, `get-encryption-status`, `set-passphrase`               | Stubs that reject "not available in Vision Native yet" (phase 1d)       |
+| `electronBackup`   | `backup:save-settings`, `backup:load-settings`                                                                                | `backup_settings` database setting, mirrored to `settings.json`         |
+| `electronAudit`    | `audit:enroll`, `read`, `export`, `transfer-export`, `transfer-import`, `rotate-key`                                          | Stubs that reject "not available in Vision Native yet" (phase 1e)       |
+| `electronServices` | `services:save-settings`, `services:load-settings`                                                                            | Database setting with baseline writes, mirrored to `settings.json`      |
+| `electronRecovery` | `recovery:retry`, `recovery:open-logs`                                                                                        | Relaunch through the supervisor; open `native/vision_native/logs`       |
+| `electronAPI`      | `app:renderer-ready`, `app:set-badge`, `app:set-language`, `app:set-vibrancy`, `app:get-accent-color`, `theme:persist-splash` | Implemented (queue flush, dock badge, menus, material, accent, palette) |
+| (user script)      | `app:renderer-failure`                                                                                                        | Logged as kind, name, source file and line only                         |
+| (Vision Native)    | `native:window-drag`, `native:window-titlebar-double-click`                                                                   | Topbar drag region                                                      |
+
+The backup settings use the same baseline writes and `settings.json` mirror (`backupDir`,
+`backupOnQuit`) as the services settings, and `save-settings` refuses system directories like
+`validateBackupDest`, so Settings > Backup keeps its directory and on-quit toggle. Until phase 1d
+there is no iCloud Drive default directory and nothing reads the mirror at quit.
 
 Events: `menu:action`, `app:csv-opened` (a CSV opened with the app, at most 25 MiB),
 `window:fullscreen` and `app:accent-color-changed` (on `AppleColorPreferencesChangedNotification`)
@@ -267,15 +277,21 @@ health watchdog is not ported yet.
   everything else is denied.
 - `<a download>` of a `blob:` URL from the app origin, a `data:` URL or an app URL, and app
   responses sent as attachments or of a type WebKit cannot show, become a `WKDownload`. A save
-  panel opens in Downloads with the suggested name, Electron's default download behaviour.
+  panel opens in Downloads with the suggested name, Electron's default download behaviour. When
+  the chosen file exists, the download writes a hidden temporary file next to it and replaces the
+  file only when it finished; a failed download leaves the old file. A folder is never replaced.
+- A main-frame response that WebKit would show must come from the backend origin.
 - `<input type="file">` opens an `NSOpenPanel`. Camera and microphone requests are denied.
+- When the web content process terminates, the shell reloads the page, at most twice within 30
+  seconds (`CrashReloadPolicy`); after that it shows the launch error page, whose Try again starts
+  afresh.
 
 ### Menus and dock
 
 `ApplicationMenu` builds Electron's macOS menu: the app menu (About, Settings… `⌘,`, Services, Hide,
 Hide Others, Show All, Quit; no update check), File (New transaction `⌘N`, Import CSV… `⇧⌘I`, Close
 Window), Edit, View (Toggle Sidebar `⌃⌘S`, Appearance with the four theme modes, Reload, Actual
-Size, Zoom In, Zoom Out, Toggle Full Screen `⌃⌘F`), Go (`⌘1` to `⌘9` from `GO_MENU_ROUTES`),
+Size, Zoom In `⌘+` with a hidden `⌘=` alternate, Zoom Out, Toggle Full Screen `⌃⌘F`), Go (`⌘1` to `⌘9` from `GO_MENU_ROUTES`),
 Window and Help (Keyboard Shortcuts, Source Code, Documentation). Labels that Electron passes to
 `t()` use the same keys from `i18n/source/en.json` and `nl.json`, which a build phase copies to
 `Contents/Resources/i18n/`; role items keep Electron's English labels. `app:set-language` reloads
@@ -286,6 +302,19 @@ left out: Debug builds are inspectable from Safari's Develop menu.
 The dock menu has New transaction and Home. `app:set-badge` sets the dock badge to the planned-
 payment count (0 clears it), like `app.dock.setBadge`. Electron shows no dock progress, so neither
 does Vision Native. The PNG of `badge-image.ts` is the Windows overlay icon and is not needed.
+
+### Runtime checks on a Mac
+
+CI builds and unit-tests the shell but cannot drive WebKit. Check these by hand on the first Mac
+run:
+
+- Blob exports: `apps/frontend/src/lib/downloadBlob.ts` revokes the object URL immediately after
+  the click. WebKit may need a delayed `revokeObjectURL`; that frontend change waits for this test.
+- Topbar drag: `performDrag(with:)` from the bridge message still moves the window, and the
+  mouse-up reaches the page afterwards (no stuck pressed state).
+- Clicks under the transparent title bar reach the page's topbar controls.
+- The web view's context menu: its Download Image and Download Linked File items go through the
+  download policy and save panel. Trimming that menu is not planned for phase 1c.
 
 ### Left for later phases
 

@@ -29,6 +29,9 @@ final class WebShell: NSObject {
     let webView: ShellWebView
     private(set) weak var controller: ShellController?
     private let logger = AppRuntime.shellLogger
+    private var crashPolicy = CrashReloadPolicy()
+    /// Downloads that replace an existing file, by download, until they finish or fail.
+    private var replacements: [ObjectIdentifier: (temporary: URL, destination: URL)] = [:]
 
     init(controller: ShellController) {
         let contentController = WKUserContentController()
@@ -52,6 +55,7 @@ final class WebShell: NSObject {
     }
 
     func load(_ url: URL) {
+        crashPolicy.reset()
         webView.load(URLRequest(url: url))
     }
 
@@ -85,7 +89,7 @@ final class WebShell: NSObject {
     }
 }
 
-extension WebShell: @preconcurrency WKNavigationDelegate {
+extension WebShell: WKNavigationDelegate {
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction) async
         -> WKNavigationActionPolicy
     {
@@ -105,8 +109,8 @@ extension WebShell: @preconcurrency WKNavigationDelegate {
         let response = navigationResponse.response
         let disposition = (response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Disposition")
         switch NavigationPolicy.decideResponse(
-            url: response.url, canShowMIMEType: navigationResponse.canShowMIMEType, contentDisposition: disposition,
-            appURL: appURL)
+            url: response.url, isMainFrame: navigationResponse.isForMainFrame,
+            canShowMIMEType: navigationResponse.canShowMIMEType, contentDisposition: disposition, appURL: appURL)
         {
         case .allow:
             return .allow
@@ -126,8 +130,10 @@ extension WebShell: @preconcurrency WKNavigationDelegate {
         download.delegate = self
     }
 
-    func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
-        controller?.documentDidStart()
+    /// A new document replaced the old one. A provisional load that becomes a download never
+    /// commits, so the page that is still showing keeps its readiness and queued events.
+    func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        controller?.documentDidCommit()
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
@@ -143,13 +149,19 @@ extension WebShell: @preconcurrency WKNavigationDelegate {
     }
 
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
-        // Electron logs `render-process-gone`; WebKit leaves a blank view, so reload as well.
+        // Electron logs `render-process-gone`; WebKit leaves a blank view, so reload as well,
+        // but not in a loop.
+        guard crashPolicy.shouldReload(at: ProcessInfo.processInfo.systemUptime) else {
+            logger.error("[renderer] web content process terminated repeatedly; showing the error page")
+            controller?.webContentKeepsTerminating()
+            return
+        }
         logger.error("[renderer] web content process terminated; reloading")
         webView.reload()
     }
 }
 
-extension WebShell: @preconcurrency WKUIDelegate {
+extension WebShell: WKUIDelegate {
     func webView(
         _ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
         for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures
@@ -172,14 +184,14 @@ extension WebShell: @preconcurrency WKUIDelegate {
 
     /// Electron's permission handler grants no camera or microphone.
     func webView(
-        _ webView: WKWebView, requestMediaCapturePermissionFor origin: WKSecurityOrigin,
-        initiatedByFrame frame: WKFrameInfo, type: WKMediaCaptureType
+        _ webView: WKWebView, decideMediaCapturePermissionsFor origin: WKSecurityOrigin,
+        initiatedBy frame: WKFrameInfo, type: WKMediaCaptureType
     ) async -> WKPermissionDecision {
         .deny
     }
 }
 
-extension WebShell: @preconcurrency WKDownloadDelegate {
+extension WebShell: WKDownloadDelegate {
     /// Electron's default download behaviour: a save panel in Downloads with the suggested name.
     func download(_ download: WKDownload, decideDestinationUsing response: URLResponse, suggestedFilename: String) async
         -> URL?
@@ -189,23 +201,37 @@ extension WebShell: @preconcurrency WKDownloadDelegate {
         panel.canCreateDirectories = true
         panel.directoryURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
         guard await run(panel) == .OK, let url = panel.url else { return nil }
-        // The panel already confirmed the replacement, and WKDownload refuses an existing file.
-        if FileManager.default.fileExists(atPath: url.path) {
-            do {
-                try FileManager.default.removeItem(at: url)
-            } catch {
-                logger.error("download: could not replace the existing file: \(error.localizedDescription, privacy: .public)")
-                return nil
-            }
+        // The panel already confirmed the replacement, but WKDownload refuses an existing file:
+        // download next to it and replace it only once the download finished.
+        switch DownloadDestination.plan(for: url, id: UUID()) {
+        case .direct(let destination):
+            return destination
+        case .replace(let temporary, let destination):
+            replacements[ObjectIdentifier(download)] = (temporary, destination)
+            return temporary
+        case .refuse(let reason):
+            logger.error("download refused: \(reason, privacy: .public)")
+            return nil
         }
-        return url
     }
 
     func downloadDidFinish(_ download: WKDownload) {
-        logger.log("download finished")
+        guard let replacement = replacements.removeValue(forKey: ObjectIdentifier(download)) else {
+            logger.log("download finished")
+            return
+        }
+        do {
+            try DownloadDestination.finish(temporary: replacement.temporary, destination: replacement.destination)
+            logger.log("download finished")
+        } catch {
+            logger.error("download: could not replace the existing file: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     func download(_ download: WKDownload, didFailWithError error: any Error, resumeData: Data?) {
+        if let replacement = replacements.removeValue(forKey: ObjectIdentifier(download)) {
+            DownloadDestination.discard(temporary: replacement.temporary)
+        }
         logger.error("download failed: \(error.localizedDescription, privacy: .public)")
     }
 }
@@ -213,7 +239,7 @@ extension WebShell: @preconcurrency WKDownloadDelegate {
 /// Answers `window.webkit.messageHandlers.visionNative.postMessage(...)`; the promise
 /// resolves with the reply's JSON text or rejects with its error message.
 @MainActor
-final class BridgeMessageHandler: NSObject, @preconcurrency WKScriptMessageHandlerWithReply {
+final class BridgeMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
     private weak var shell: WebShell?
 
     init(shell: WebShell) {
@@ -225,7 +251,10 @@ final class BridgeMessageHandler: NSObject, @preconcurrency WKScriptMessageHandl
         async -> (Any?, String?)
     {
         guard let controller = shell?.controller else { return (nil, BridgeDispatcher.unauthorizedSenderMessage) }
-        let sender = BridgeSender(isMainFrame: message.frameInfo.isMainFrame, url: message.frameInfo.request.url)
+        let origin = message.frameInfo.securityOrigin
+        let sender = BridgeSender(
+            isMainFrame: message.frameInfo.isMainFrame,
+            origin: BridgeOrigin(scheme: origin.`protocol`, host: origin.host, port: origin.port))
         let reply = await BridgeDispatcher.reply(
             to: message.body as? String, sender: sender, appURL: controller.appURL, host: controller)
         let encoded = reply.scriptReply

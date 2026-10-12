@@ -150,3 +150,93 @@ public enum ServicesSettings {
         try await mirror(keepServicesOnQuit)
     }
 }
+
+/// `{ backupDir, backupOnQuit }`, the value of `backup:load-settings` and
+/// `backup:save-settings`.
+public struct BackupSettingsValue: Equatable, Sendable {
+    public var backupDir: String
+    public var backupOnQuit: Bool
+
+    public init(backupDir: String, backupOnQuit: Bool) {
+        self.backupDir = backupDir
+        self.backupOnQuit = backupOnQuit
+    }
+
+    public var jsonValue: JSONValue {
+        .object(["backupDir": .string(backupDir), "backupOnQuit": .bool(backupOnQuit)])
+    }
+}
+
+/// `backup:load-settings` and `backup:save-settings` until phase 1d: the same database
+/// setting and `settings.json` mirror as Electron, without the iCloud Drive default
+/// directory, which arrives with the backup itself.
+public enum BackupSettings {
+    public static let key = "backup_settings"
+
+    /// `BLOCKED_BACKUP_PREFIXES` in packaging/electron/runtime/ipc-schemas.ts.
+    public static let blockedPrefixes = [
+        "/System", "/usr", "/bin", "/sbin", "/etc", "/private/etc", "/private/var/db", "/Library",
+    ]
+
+    /// `validateBackupDest`: an error message, or `nil` when the directory is acceptable.
+    /// Relative paths are refused instead of being resolved against the working directory.
+    public static func destinationError(_ directory: String) -> String? {
+        guard !directory.isEmpty else { return "Invalid backup directory" }
+        guard directory.hasPrefix("/") else { return "Backup directory must be an absolute path" }
+        let resolved = normalizedPath(directory)
+        if blockedPrefixes.contains(where: { resolved == $0 || resolved.hasPrefix($0 + "/") }) {
+            return "Backup to system directories is not allowed"
+        }
+        return nil
+    }
+
+    /// `path.resolve` for an absolute path: removes empty and `.` components and applies `..`.
+    static func normalizedPath(_ path: String) -> String {
+        var components: [Substring] = []
+        for component in path.split(separator: "/", omittingEmptySubsequences: true) {
+            switch component {
+            case ".": continue
+            case "..": _ = components.popLast()
+            default: components.append(component)
+            }
+        }
+        return "/" + components.joined(separator: "/")
+    }
+
+    /// `resolveBackupSettingsWithDefaults` without the iCloud Drive fallback: the toggle
+    /// counts only with a configured directory.
+    public static func resolved(_ raw: JSONValue?) -> BackupSettingsValue {
+        let directory = raw?["backupDir"]?.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return BackupSettingsValue(
+            backupDir: directory, backupOnQuit: !directory.isEmpty && raw?["backupOnQuit"] == .bool(true))
+    }
+
+    /// The stored value when the database answered with an object, else the mirror. The
+    /// mirror receives the raw stored value, not the resolved one, like Electron.
+    public static func load(
+        baseURL: URL?, transport: any SettingsTransport, writer: SettingsWriter,
+        mirror: @Sendable (BackupSettingsValue) async -> Void, fallback: @Sendable () async -> [String: JSONValue]
+    ) async -> BackupSettingsValue {
+        if let baseURL, let response = try? await transport.get(SettingsWriter.url(baseURL: baseURL, key: key)) {
+            let body = SettingsResponse(body: try? JSONValue.parse(response.body))
+            if body.ok { await writer.loaded(key, data: body.data) }
+            if let stored = body.stored, stored.objectValue != nil || stored.arrayValue != nil {
+                await mirror(
+                    BackupSettingsValue(
+                        backupDir: stored["backupDir"]?.stringValue ?? "",
+                        backupOnQuit: stored["backupOnQuit"] == .bool(true)))
+                return resolved(stored)
+            }
+        }
+        return resolved(.object(await fallback()))
+    }
+
+    public static func save(
+        _ settings: BackupSettingsValue, baseURL: URL?, writer: SettingsWriter,
+        mirror: @Sendable (BackupSettingsValue) async throws -> Void
+    ) async throws {
+        guard let baseURL else { throw SettingsWriteError("The Vision backend is not running.") }
+        _ = try await writer.save(key, value: settings.jsonValue, baseURL: baseURL)
+        try await mirror(settings)
+    }
+}

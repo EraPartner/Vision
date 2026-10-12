@@ -128,10 +128,11 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost {
         window?.makeFirstResponder(webView)
     }
 
-    /// Stops the debounced frame save and writes the current frame before the runtime stops.
-    func prepareForQuit() {
+    /// Stops the debounced frame save and writes the current frame; the shutdown task awaits
+    /// it before the runtime stops.
+    func prepareForQuit() async {
         frameSaveTask?.cancel()
-        Task { await saveFrame() }
+        await saveFrame()
     }
 
     // MARK: - Window
@@ -255,7 +256,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost {
 
     // MARK: - Web shell callbacks
 
-    func documentDidStart() {
+    func documentDidCommit() {
         queue.documentChanged()
     }
 
@@ -271,6 +272,11 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost {
     func documentDidFail(_ error: Error) {
         logger.error("main-frame load failed: \(error.localizedDescription, privacy: .public)")
         apply(.unavailable("\(strings.t("app.errorPageMessage"))\n\n\(error.localizedDescription)"))
+    }
+
+    /// `CrashReloadPolicy` gave up reloading; Try again loads the page afresh.
+    func webContentKeepsTerminating() {
+        apply(.unavailable(strings.t("app.errorPageMessage")))
     }
 
     // MARK: - Renderer messages
@@ -448,6 +454,31 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost {
             mirror: { keep in
                 try await supervisor.updateSettings { $0["keepServicesOnQuit"] = .bool(keep) }
             })
+    }
+
+    func saveBackupSettings(_ settings: BackupSettingsValue) async throws {
+        let supervisor = self.supervisor
+        try await BackupSettings.save(
+            settings, baseURL: appURL, writer: settingsWriter,
+            mirror: { value in
+                try await supervisor.updateSettings {
+                    $0["backupDir"] = .string(value.backupDir)
+                    $0["backupOnQuit"] = .bool(value.backupOnQuit)
+                }
+            })
+    }
+
+    func loadBackupSettings() async -> BackupSettingsValue {
+        let supervisor = self.supervisor
+        return await BackupSettings.load(
+            baseURL: appURL, transport: settingsTransport, writer: settingsWriter,
+            mirror: { value in
+                _ = try? await supervisor.updateSettings {
+                    $0["backupDir"] = .string(value.backupDir)
+                    $0["backupOnQuit"] = .bool(value.backupOnQuit)
+                }
+            },
+            fallback: { await supervisor.currentSettings() })
     }
 
     func loadServicesSettings() async -> Bool {

@@ -70,7 +70,10 @@ import Testing
         for entry in BridgeContract.entries {
             switch entry.bridge {
             case "electronUpdater": #expect(entry.availability == .removed)
-            case "electronBackup": #expect(entry.availability == .pending(phase: "1d"))
+            case "electronBackup":
+                // The settings answer from the backend settings API until phase 1d.
+                let settings: Set<BridgeChannel> = [.backupSaveSettings, .backupLoadSettings]
+                #expect(entry.availability == (settings.contains(entry.channel) ? .implemented : .pending(phase: "1d")))
             case "electronAudit": #expect(entry.availability == .pending(phase: "1e"))
             case "electronServices", "electronAPI", "electronRecovery": #expect(entry.availability == .implemented)
             default: #expect(entry.method == nil)

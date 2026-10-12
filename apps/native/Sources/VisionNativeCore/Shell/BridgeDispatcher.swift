@@ -21,6 +21,8 @@ public protocol BridgeHost: AnyObject {
     func persistSplashTheme(_ theme: SplashTheme) async -> Bool
     func saveServicesSettings(keepServicesOnQuit: Bool) async throws
     func loadServicesSettings() async -> Bool
+    func saveBackupSettings(_ settings: BackupSettingsValue) async throws
+    func loadBackupSettings() async -> BackupSettingsValue
     func retryLaunch()
     /// Opens the log folder and returns its path.
     func openLogs() throws -> String
@@ -28,20 +30,37 @@ public protocol BridgeHost: AnyObject {
     func titlebarDoubleClicked()
 }
 
+/// A frame's security origin (`WKSecurityOrigin`): protocol, host and port, where port 0
+/// means the protocol's default.
+public struct BridgeOrigin: Equatable, Sendable {
+    public var scheme: String
+    public var host: String
+    public var port: Int
+
+    public init(scheme: String, host: String, port: Int) {
+        self.scheme = scheme
+        self.host = host
+        self.port = port
+    }
+}
+
 /// Who sent a message: Electron's `trustedSender` check accepts only the main frame of the
-/// app origin.
+/// app origin. The origin comes from the frame's security origin, not from its request URL,
+/// which can differ from the document that is actually running (for example after a
+/// same-document navigation or for an `about:blank` frame).
 public struct BridgeSender: Equatable, Sendable {
     public var isMainFrame: Bool
-    public var url: URL?
+    public var origin: BridgeOrigin?
 
-    public init(isMainFrame: Bool, url: URL?) {
+    public init(isMainFrame: Bool, origin: BridgeOrigin?) {
         self.isMainFrame = isMainFrame
-        self.url = url
+        self.origin = origin
     }
 
     public func isTrusted(appURL: URL?) -> Bool {
-        guard isMainFrame, let url, let appURL else { return false }
-        return NavigationPolicy.isAppURL(url, appURL: appURL)
+        guard isMainFrame, let origin, let appURL else { return false }
+        return NavigationPolicy.isAppOrigin(
+            scheme: origin.scheme, host: origin.host, port: origin.port == 0 ? nil : origin.port, appURL: appURL)
     }
 }
 
@@ -100,6 +119,15 @@ public enum BridgeDispatcher {
             }
         case .loadServicesSettings:
             return .resolve(.object(["keepServicesOnQuit": .bool(await host.loadServicesSettings())]))
+        case .saveBackupSettings(let settings):
+            do {
+                try await host.saveBackupSettings(settings)
+                return .success
+            } catch {
+                return .failed((error as? LocalizedError)?.errorDescription ?? String(describing: error))
+            }
+        case .loadBackupSettings:
+            return .resolve(await host.loadBackupSettings().jsonValue)
         case .recoveryRetry:
             host.retryLaunch()
             return .success
@@ -138,7 +166,8 @@ public enum BridgeDispatcher {
 
 /// `sendToApp`: renderer-bound events wait until the page has called `ready()`, so actions
 /// fired before React mounts (a dock menu click, an opened CSV) are not lost. A new document
-/// clears readiness; same-document navigations (pushState) do not.
+/// clears readiness when it commits (`didCommit`); same-document navigations (pushState) and
+/// provisional loads that end as downloads do not.
 public struct RendererMessageQueue: Sendable {
     public struct Message: Equatable, Sendable {
         public let event: BridgeEvent

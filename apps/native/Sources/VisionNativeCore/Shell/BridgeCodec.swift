@@ -142,6 +142,8 @@ public enum BridgeCall: Equatable, Sendable {
     case persistSplashTheme(SplashTheme)
     case saveServicesSettings(keepServicesOnQuit: Bool)
     case loadServicesSettings
+    case saveBackupSettings(BackupSettingsValue)
+    case loadBackupSettings
     case recoveryRetry
     case recoveryOpenLogs
     case windowDrag
@@ -161,9 +163,12 @@ public enum BridgeCodec {
     public static let unknownChannelMessage = "Unknown Vision Native bridge channel"
 
     /// Parses `{ "channel": string, "args"?: array }`. Unknown channels and anything else
-    /// are refused, like a channel with no `registerHandler`.
+    /// are refused, like a channel with no `registerHandler`. Nothing above the payload limit
+    /// is parsed; after parsing, the channel's own limit applies.
     public static func decode(_ body: String?) -> BridgeDecodeResult {
-        guard let body, body.utf8.count <= BridgeContract.maximumMessageBytes,
+        guard let body else { return .invalid(malformedMessage) }
+        let size = body.utf8.count
+        guard size <= BridgeContract.maximumPayloadMessageBytes,
             let parsed = try? JSONValue.parse(Data(body.utf8)),
             parsed.objectValue != nil,
             let channelName = parsed["channel"]?.stringValue
@@ -171,6 +176,7 @@ public enum BridgeCodec {
             return .invalid(malformedMessage)
         }
         guard let channel = BridgeChannel(rawValue: channelName) else { return .invalid(unknownChannelMessage) }
+        guard size <= BridgeContract.maximumMessageBytes(for: channel) else { return .invalid(malformedMessage) }
         let arguments: [JSONValue]
         switch parsed["args"] {
         case .none, .some(.null):
@@ -227,8 +233,9 @@ public enum BridgeCodec {
             return .rendererReady
         case .setBadge:
             try expectArity(arguments, 1)
-            // `Number(args[0])`; JSON cannot carry `undefined`, so a missing count is 0.
-            guard let number = (argument(arguments, 0) ?? .null).numberCoercion, number.isFinite else {
+            // `Number(args[0])`. `JSON.stringify` turns `undefined` into `null`, so a missing
+            // count arrives as `null` and gets the invalid result, like `Number(undefined)`.
+            guard let number = argument(arguments, 0)?.numberCoercion, number.isFinite else {
                 throw InvalidArguments("Invalid badge count")
             }
             return .setBadge(Int(max(0, min(999, number.rounded(.down)))))
@@ -260,6 +267,12 @@ public enum BridgeCodec {
         case .servicesLoadSettings:
             try expectArity(arguments, 0)
             return .loadServicesSettings
+        case .backupSaveSettings:
+            try expectArity(arguments, 1)
+            return .saveBackupSettings(try backupSettings(argument(arguments, 0)))
+        case .backupLoadSettings:
+            try expectArity(arguments, 0)
+            return .loadBackupSettings
         case .recoveryRetry:
             try expectArity(arguments, 0)
             return .recoveryRetry
@@ -282,13 +295,28 @@ public enum BridgeCodec {
         switch channel {
         case .getAccentColor:
             return .resolve(.null)
-        case .servicesLoadSettings:
+        case .servicesLoadSettings, .backupLoadSettings:
             return .reject("Invalid arguments for \(channel.rawValue)")
-        case .servicesSaveSettings, .recoveryRetry, .recoveryOpenLogs:
+        case .servicesSaveSettings, .backupSaveSettings, .recoveryRetry, .recoveryOpenLogs:
             return .failed(message)
         default:
             return .failure
         }
+    }
+
+    /// `backupSettingsArguments`: a string directory and a boolean toggle. An empty directory
+    /// clears the setting; any other must pass `validateBackupDest`, because the quit-time
+    /// backup writes wherever it points.
+    private static func backupSettings(_ value: JSONValue?) throws -> BackupSettingsValue {
+        guard let value, value.objectValue != nil, let directory = value["backupDir"]?.stringValue,
+            let onQuit = value["backupOnQuit"]?.boolValue
+        else {
+            throw InvalidArguments("Invalid backup settings")
+        }
+        if !directory.isEmpty, let error = BackupSettings.destinationError(directory) {
+            throw InvalidArguments(error)
+        }
+        return BackupSettingsValue(backupDir: directory, backupOnQuit: onQuit)
     }
 
     private static let rendererFailureKinds: Set<String> = ["error", "resource", "unhandledrejection"]

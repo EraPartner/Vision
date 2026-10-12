@@ -116,3 +116,66 @@ actor MirrorRecorder {
         #expect(await writer.baseline("other") == nil)
     }
 }
+
+actor BackupMirrorRecorder {
+    var values: [BackupSettingsValue] = []
+    func record(_ value: BackupSettingsValue) { values.append(value) }
+}
+
+@Suite struct BackupSettingsTests {
+    let base = URL(string: "http://localhost:41000")!
+
+    private func json(_ text: String) -> HTTPResponse { HTTPResponse(status: 200, body: Data(text.utf8)) }
+
+    @Test func loadReadsTheDatabaseMirrorsTheRawValueAndRecordsTheBaseline() async {
+        let transport = FakeSettingsTransport(get: [
+            json(#"{"ok":true,"data":{"key":"backup_settings","value":{"backupDir":"  /Volumes/B  ","backupOnQuit":true},"expected":{"exists":true,"value":{"backupDir":"  /Volumes/B  ","backupOnQuit":true}}}}"#)
+        ])
+        let writer = SettingsWriter(transport: transport)
+        let mirror = BackupMirrorRecorder()
+        let settings = await BackupSettings.load(
+            baseURL: base, transport: transport, writer: writer, mirror: { await mirror.record($0) }, fallback: { [:] })
+        #expect(settings == BackupSettingsValue(backupDir: "/Volumes/B", backupOnQuit: true))
+        #expect(await mirror.values == [BackupSettingsValue(backupDir: "  /Volumes/B  ", backupOnQuit: true)])
+        #expect(await writer.baseline("backup_settings") != nil)
+    }
+
+    @Test func loadFallsBackToTheSettingsFileWhenTheBackendIsDown() async {
+        let transport = FakeSettingsTransport()
+        let writer = SettingsWriter(transport: transport)
+        let settings = await BackupSettings.load(
+            baseURL: base, transport: transport, writer: writer, mirror: { _ in },
+            fallback: { ["backupDir": .string("/Volumes/B"), "backupOnQuit": .bool(true)] })
+        #expect(settings == BackupSettingsValue(backupDir: "/Volumes/B", backupOnQuit: true))
+        // No stored value and no directory: the toggle is off (no iCloud Drive default yet).
+        let empty = await BackupSettings.load(
+            baseURL: nil, transport: transport, writer: writer, mirror: { _ in }, fallback: { ["backupOnQuit": .bool(true)] })
+        #expect(empty == BackupSettingsValue(backupDir: "", backupOnQuit: false))
+    }
+
+    @Test func savePutsTheValueWithItsBaselineThenMirrors() async throws {
+        let transport = FakeSettingsTransport(put: [
+            json(#"{"ok":true,"data":{"key":"backup_settings","value":{"backupDir":"/Volumes/B","backupOnQuit":false}}}"#)
+        ])
+        let writer = SettingsWriter(transport: transport)
+        await writer.loaded("backup_settings", data: .object(["expected": .object(["exists": .bool(false)])]))
+        let mirror = BackupMirrorRecorder()
+        let value = BackupSettingsValue(backupDir: "/Volumes/B", backupOnQuit: false)
+        try await BackupSettings.save(value, baseURL: base, writer: writer, mirror: { await mirror.record($0) })
+        let put = try #require(transport.puts.first)
+        #expect(put.0.absoluteString == "http://localhost:41000/api/settings/backup_settings")
+        #expect(put.1 == .object(["value": value.jsonValue, "expected": .object(["exists": .bool(false)])]))
+        #expect(await mirror.values == [value])
+    }
+
+    @Test func saveNeedsTheBackendAndABaseline() async {
+        let writer = SettingsWriter(transport: FakeSettingsTransport())
+        let value = BackupSettingsValue(backupDir: "", backupOnQuit: false)
+        await #expect(throws: SettingsWriteError("The Vision backend is not running.")) {
+            try await BackupSettings.save(value, baseURL: nil, writer: writer, mirror: { _ in })
+        }
+        await #expect(throws: SettingsWriteError("Settings were not loaded. Reopen Vision before saving.")) {
+            try await BackupSettings.save(value, baseURL: self.base, writer: writer, mirror: { _ in })
+        }
+    }
+}

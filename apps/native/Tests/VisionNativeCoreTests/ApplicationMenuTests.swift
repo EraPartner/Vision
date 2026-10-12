@@ -74,6 +74,14 @@ import Testing
         #expect(go[1].title == "nav.transactions")
     }
 
+    @Test func zoomInAlsoAnswersPlainCommandEquals() {
+        let view = items(submenu(ApplicationMenu.build(appName: "Vision Native", strings: Self.english), "View"))
+        let zoomIn = view.filter { $0.command == .zoomIn }
+        #expect(zoomIn.map(\.keyEquivalent) == [KeyEquivalent("+"), KeyEquivalent("=")])
+        #expect(zoomIn.map(\.isHidden) == [false, true])
+        #expect(view.filter(\.isHidden).count == 1)
+    }
+
     @Test func keyEquivalentsAreUnique() {
         let keys = ApplicationMenu.keyEquivalents(ApplicationMenu.build(appName: "Vision Native", strings: Self.english))
         #expect(Set(keys.map(\.key)).count == keys.count)
