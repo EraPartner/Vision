@@ -632,7 +632,10 @@ native screens take the page's appearance; the web view keeps following the syst
 
 `CatalogStrings` is the native `t()`: it reads the compiled String Catalog of `VisionNativeUI`
 for the page's language (`app:set-language`), fills every `{name}` placeholder and falls back to
-the key. A test checks every listed key in both languages against `i18n/source`.
+the key. `tc(key, count)` is the web's plural `tc`: it reads the flat `key.one` and `key.other`
+entries of `i18n/source` (listed in `i18n-keys.txt` like any other key) for the CLDR category of
+the count in English or Dutch, then falls back to `key.other` and `key`. A test checks every listed
+key in both languages against `i18n/source`.
 
 ### Navigation shell
 
@@ -658,7 +661,13 @@ The web router stays the source of truth. `AppLayout` reports `pathname + search
 2 KiB, with the query read like `URLSearchParams`, so a malformed percent-escape stays as written).
 A sidebar click or a native shortcut only sends the `navigate` menu action; the route, the detail
 column and the sidebar selection change when the page reports the new route, so an unsaved-changes
-prompt opens on the visible page and a blocked move keeps the route. A native `?tab` change sends
+prompt opens on the visible page and a blocked move keeps the route. A native screen with unsaved
+work registers a `NativeLeaveGuard` instead (phase 3b): while it reports changes, `navigate` holds
+a move to another path behind the Leave this page? alert (`unsavedChanges.*`), whose Stay on page
+cancels it and Leave and discard drops the work and sends it. Sidebar clicks, native links and
+shortcuts, and the menu bar's Go items all pass through `navigate`. Quit asks too: while the guard
+reports changes, `applicationShouldTerminate` shows the same alert as an `NSAlert` and quits only on
+Leave and discard. A move the page makes on its own (the command palette) is not held. A native `?tab` change sends
 `replace-route`, which the page applies with `replace`, like `useTabParam`; the page accepts
 `navigate` and `replace-route` payloads that start with one `/` only.
 
@@ -680,8 +689,8 @@ page reports its unchanged route again.
 ### Admin screens (phase 3a)
 
 `/admin`, `/admin/providers` and `/admin/endpoints` are native in admin mode
-([[docs/reference/native-parity/admin|admin parity]]); `/admin/db` and `/admin/db/:table` stay in
-the web view. `AdminScreens` holds their models over one `AdminService` (the five admin operations
+([[docs/reference/native-parity/admin|admin parity]]); phase 3b adds the database pages (below).
+`AdminScreens` holds their models over one `AdminService` (the five admin operations
 of the generated client); `ScreenQuery` mirrors one React Query query (data and error kept side by
 side, stale time, one request at a time) and `AdminErrorState` the page's auth alert, whose link
 navigates to `/admin`. The overview's tiles keep the web thresholds and link to their pages. Its
@@ -693,6 +702,29 @@ transfer password are cleared when the overview disappears. The audit history ca
 `AuditChannels` directly, so its confirmations, save and open panels and notices are the phase 1e
 ones. A probe on Data sources cancels a provider fetch in flight and fetches again, and marks the
 overview's provider query stale.
+
+### Database screens (phase 3b)
+
+`/admin/db` and `/admin/db/:table` are native in admin mode
+([[docs/reference/native-parity/admin|admin parity]],
+[[docs/adr/101-db-data-editor|ADR-101]]). `NativeScreen.tableEditor` carries the decoded table
+name of the route. `DatabaseScreens` holds their models over one `DatabaseAdminService` (the
+stats, vacuum, schema, rows and mutate operations of the generated client).
+`DatabaseMaintenanceModel` keeps the 30-second stats query, runs one vacuum at a time without a
+confirmation and refetches after it; a vacuum or a refresh marks the overview's database tile
+stale. `TableDataEditorModel` loads the schema once and pages the rows by cursor (100 per page,
+the previous page stays on screen while the next loads), sorts and filters with `contains`
+filters, and stages edits, deletions and new rows; Preview SQL runs the dry run (an answer without
+`dryRun: true` counts as a failed preview) and the Review pending changes sheet commits exactly the
+previewed change list in one transaction, then reloads the page. While the dry run or the sheet is
+open, cell edits, Add row, Discard, the row menus and Refresh are disabled; a list that no longer
+matches the preview closes the sheet and asks for a new one. Refresh also waits while changes are
+pending, since a reload could move the staged rows' `__xmin`. The
+editor registers the shell's leave guard while it has pending changes. When the page itself moves
+away (the command palette), pending changes stay with that table's editor until they are
+discarded; without pending changes the editor is dropped with the route, so a table opens fresh.
+Unlike the web page, cells of a table without a primary key are not editable, since such edits
+never produce a change.
 
 ### Exchange rates
 

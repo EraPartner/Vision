@@ -8,6 +8,24 @@ public enum NativeShellDetail: Equatable, Sendable {
     case native(NativeScreen)
 }
 
+/// A native screen's unsaved-changes hook (`useUnsavedChanges`): while it reports unsaved
+/// changes, the shell asks before a navigation leaves the current path.
+public struct NativeLeaveGuard {
+    /// Identifies the registration (the screen's route), so a screen removes only its own.
+    public let id: String
+    public let hasUnsavedChanges: @MainActor () -> Bool
+    /// Leave and discard: drops the unsaved work before the navigation continues.
+    public let discard: @MainActor () -> Void
+
+    public init(
+        id: String, hasUnsavedChanges: @escaping @MainActor () -> Bool, discard: @escaping @MainActor () -> Void
+    ) {
+        self.id = id
+        self.hasUnsavedChanges = hasUnsavedChanges
+        self.discard = discard
+    }
+}
+
 /// The state behind the native navigation shell (ADR-204 phase 2): the web router's
 /// route, the `app_settings` native screens read, the theme and the sidebar.
 ///
@@ -33,8 +51,10 @@ public final class NativeShellModel {
     /// The route a sidebar click or shortcut asked the page for, until the page reports one.
     public private(set) var pendingRoute: NativeRoute?
     public let exchangeRates: ExchangeRatesModel
-    /// `/admin`, `/admin/providers` and `/admin/endpoints`.
+    /// `/admin`, `/admin/db`, `/admin/db/:table`, `/admin/providers` and `/admin/endpoints`.
     public let admin: AdminScreens
+    /// The navigation the Leave this page? alert holds while it asks (`blocker.location`).
+    public private(set) var leaveConfirmation: NativeRoute?
 
     @ObservationIgnored private let loadSettings: @Sendable () async throws -> NativeAppSettings
     @ObservationIgnored private let saveHiddenSections: @MainActor ([NavSectionID: Bool]) -> Void
@@ -44,6 +64,7 @@ public final class NativeShellModel {
     @ObservationIgnored private var delayedSettingsTask: Task<Void, Never>?
     @ObservationIgnored private let settingsReloadDelay: Duration
     @ObservationIgnored private var shortcuts = NativeShortcuts()
+    @ObservationIgnored private var leaveGuard: NativeLeaveGuard?
 
     /// - Parameters:
     ///   - hiddenSections: the stored section choices; `nil` uses the `defaultHidden` flags.
@@ -113,6 +134,8 @@ public final class NativeShellModel {
         if pathChanged || settingsClosed || next == route { isPresentingWeb = false }
         pendingRoute = nil
         route = next
+        if pathChanged { leaveConfirmation = nil }
+        admin.database.routeDidChange(path: next.path)
         if let section = NavigationRegistry.matchSection(path: next.path), hiddenSections[section] == true {
             // Landing inside a hidden section shows it for good, like the web sidebar.
             setSection(section, expanded: true)
@@ -125,12 +148,49 @@ public final class NativeShellModel {
         if settingsClosed { reloadSettingsLater() }
     }
 
-    /// A sidebar click or another native link. The page moves (or keeps its route behind an
-    /// unsaved-changes prompt) and reports the result; until then the route stays.
+    /// A sidebar click, a menu or shortcut navigation, or another native link. The page moves
+    /// (or keeps its route behind its own unsaved-changes prompt) and reports the result; until
+    /// then the route stays. While a native screen has unsaved changes, a navigation to another
+    /// path waits on the Leave this page? alert instead (`useBlocker`).
     public func navigate(to url: String) {
         guard let next = NativeRoute(url) else { return }
+        if next.path != route.path, let leaveGuard, leaveGuard.hasUnsavedChanges() {
+            leaveConfirmation = next
+            return
+        }
+        send(next)
+    }
+
+    private func send(_ next: NativeRoute) {
         pendingRoute = next
         onNavigate(.navigate(next.string))
+    }
+
+    /// A native screen with unsaved work registers its hook while it is shown.
+    public func setLeaveGuard(_ hook: NativeLeaveGuard) {
+        leaveGuard = hook
+    }
+
+    /// Quit asks first while the registered screen reports unsaved changes.
+    public var hasGuardedUnsavedChanges: Bool { leaveGuard?.hasUnsavedChanges() ?? false }
+
+    /// The screen went away; a newer registration stays.
+    public func removeLeaveGuard(id: String) {
+        if leaveGuard?.id == id { leaveGuard = nil }
+    }
+
+    /// Stay on page (`blocker.reset`): the navigation is cancelled.
+    public func stayOnPage() {
+        leaveConfirmation = nil
+    }
+
+    /// Leave and discard (`blocker.proceed`): the unsaved work is dropped and the navigation
+    /// continues.
+    public func leavePage() {
+        guard let next = leaveConfirmation else { return }
+        leaveConfirmation = nil
+        leaveGuard?.discard()
+        send(next)
     }
 
     /// `setSearchParams(..., { replace: true })` for the current route.

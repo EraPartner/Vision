@@ -200,8 +200,11 @@ enum AdminFixture {
     ]
 
     @MainActor
-    static func screens(service: FakeAdminService = FakeAdminService()) -> AdminScreens {
-        AdminScreens.make(service: service, token: FakeTokenStorage().access, audit: FakeAuditHistory())
+    static func screens(
+        service: FakeAdminService = FakeAdminService(), database: FakeDatabaseService = FakeDatabaseService()
+    ) -> AdminScreens {
+        AdminScreens.make(
+            service: service, database: database, token: FakeTokenStorage().access, audit: FakeAuditHistory())
     }
 
     static let auth = APIError.client(APIClientError(status: 401, code: .unauthorized, message: "Admin token required"))
@@ -827,7 +830,7 @@ enum AuditCardFixture {
 
 @MainActor
 @Suite struct AdminRoutesTests {
-    @Test func theAdminPagesAreNativeInAdminModeAndTheDatabasePagesStayWeb() async throws {
+    @Test func theAdminPagesAreNativeInAdminMode() async throws {
         let recorder = ShellRecorder()
         let model = NativeShellModel(
             strings: DictionaryStrings(language: .en, table: [:]), theme: ThemeSelection(appearance: .light),
@@ -842,9 +845,10 @@ enum AuditCardFixture {
         model.routeDidChange(try #require(NativeRoute("/admin/endpoints")))
         #expect(model.detail == .native(.endpointLiveness))
         model.routeDidChange(try #require(NativeRoute("/admin/db")))
-        #expect(model.detail == .web)
+        #expect(model.detail == .native(.databaseMaintenance))
         model.routeDidChange(try #require(NativeRoute("/admin/db/transactions")))
-        #expect(model.detail == .web)
+        #expect(model.detail == .native(.tableEditor(table: "transactions")))
+        #expect(model.admin.database.editor?.table == "transactions")
         // A tile or the auth error link asks the page to move.
         model.navigate(to: AdminErrorState.tokenRoute)
         #expect(recorder.actions.last == .navigate("/admin"))

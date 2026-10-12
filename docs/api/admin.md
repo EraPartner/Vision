@@ -429,6 +429,14 @@ The service fetches `limit + 1` rows to derive `hasMore`. It does not run `COUNT
 
 The raw `where` parameter was removed. Use only the structured, parameterized `filters` array. A malformed cursor or one reused with different sort or filter state returns `400 Bad Request`.
 
+- Contract change (October 2026, non-breaking): `openapi.yaml` now types the responses of
+  `POST /api/admin/database/vacuum` (`DbVacuumResult`),
+  `GET /api/admin/database/tables/{table}/schema` (`DbEditorTableSchema`),
+  `GET /api/admin/database/tables/{table}/rows` (`DbEditorRows`) and
+  `POST /api/admin/database/tables/{table}/mutate` (`DbEditorMutationResult`) with the shapes the
+  routes already returned. `columns` in the rows response carries the same column objects as the
+  schema response; the example above abbreviates them as names.
+
 `filters` must be valid JSON for an array of objects. Each object needs a string `column`; `op`, if
 present, must be a string. Invalid JSON, a non-array, or an entry such as `null` returns
 `400 VALIDATION_ERROR` with an `Invalid filters parameter:` message. Any query parameter sent more

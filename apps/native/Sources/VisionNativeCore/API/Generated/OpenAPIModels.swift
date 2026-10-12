@@ -8,6 +8,159 @@ import Foundation
 public enum OpenAPI {}
 
 extension OpenAPI {
+    public struct DbEditorColumn: Codable, Equatable, Sendable {
+        public let name: String
+        /// information_schema data_type
+        public let dataType: String
+        /// information_schema udt_name
+        public let udtName: String
+        public let nullable: Bool
+        public let hasDefault: Bool
+        public let generated: Bool
+        /// False for generated and identity-always columns
+        public let writable: Bool
+
+        public init(name: String, dataType: String, udtName: String, nullable: Bool, hasDefault: Bool, generated: Bool, writable: Bool) {
+            self.name = name
+            self.dataType = dataType
+            self.udtName = udtName
+            self.nullable = nullable
+            self.hasDefault = hasDefault
+            self.generated = generated
+            self.writable = writable
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case name = "name"
+            case dataType = "dataType"
+            case udtName = "udtName"
+            case nullable = "nullable"
+            case hasDefault = "hasDefault"
+            case generated = "generated"
+            case writable = "writable"
+        }
+    }
+
+    /// A dry run returns `count` and `statements`; a commit returns `applied`, `results` and
+    /// `refreshScheduled`.
+    public struct DbEditorMutationResult: Codable, Equatable, Sendable {
+        public let dryRun: Bool
+        /// Dry run only
+        public let count: Int?
+        /// Dry run only
+        public let statements: [OpenAPI.DbEditorStatement]?
+        /// Commit only
+        public let applied: Int?
+        /// Commit only
+        public let results: [ResultsItem]?
+        /// Commit only; true when the dashboard materialized views refresh
+        public let refreshScheduled: Bool?
+
+        public init(dryRun: Bool, count: Int? = nil, statements: [OpenAPI.DbEditorStatement]? = nil, applied: Int? = nil, results: [ResultsItem]? = nil, refreshScheduled: Bool? = nil) {
+            self.dryRun = dryRun
+            self.count = count
+            self.statements = statements
+            self.applied = applied
+            self.results = results
+            self.refreshScheduled = refreshScheduled
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case dryRun = "dryRun"
+            case count = "count"
+            case statements = "statements"
+            case applied = "applied"
+            case results = "results"
+            case refreshScheduled = "refreshScheduled"
+        }
+
+        public struct ResultsItem: Codable, Equatable, Sendable {
+            public let op: String
+            /// The written row; absent for a delete
+            public let after: [String: JSONValue]?
+
+            public init(op: String, after: [String: JSONValue]? = nil) {
+                self.op = op
+                self.after = after
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case op = "op"
+                case after = "after"
+            }
+        }
+    }
+
+    public struct DbEditorRows: Codable, Equatable, Sendable {
+        public let table: String
+        public let columns: [OpenAPI.DbEditorColumn]
+        public let primaryKey: [String]
+        /// The page's rows by column name; each row also carries its `__xmin` row version as text.
+        public let rows: [[String: JSONValue]]
+        /// Exact total only when the first page is shorter than the requested limit.
+        public let total: Int?
+        public let limit: Int
+        public let hasMore: Bool
+        /// Opaque cursor of the next page, null on the last page
+        public let nextCursor: String?
+
+        public init(table: String, columns: [OpenAPI.DbEditorColumn], primaryKey: [String], rows: [[String: JSONValue]], total: Int? = nil, limit: Int, hasMore: Bool, nextCursor: String? = nil) {
+            self.table = table
+            self.columns = columns
+            self.primaryKey = primaryKey
+            self.rows = rows
+            self.total = total
+            self.limit = limit
+            self.hasMore = hasMore
+            self.nextCursor = nextCursor
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case table = "table"
+            case columns = "columns"
+            case primaryKey = "primaryKey"
+            case rows = "rows"
+            case total = "total"
+            case limit = "limit"
+            case hasMore = "hasMore"
+            case nextCursor = "nextCursor"
+        }
+    }
+
+    public struct DbEditorStatement: Codable, Equatable, Sendable {
+        public let op: String
+        /// The SQL statement with its parameters rendered as literals
+        public let preview: String
+
+        public init(op: String, preview: String) {
+            self.op = op
+            self.preview = preview
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case op = "op"
+            case preview = "preview"
+        }
+    }
+
+    public struct DbEditorTableSchema: Codable, Equatable, Sendable {
+        public let table: String
+        public let columns: [OpenAPI.DbEditorColumn]
+        public let primaryKey: [String]
+
+        public init(table: String, columns: [OpenAPI.DbEditorColumn], primaryKey: [String]) {
+            self.table = table
+            self.columns = columns
+            self.primaryKey = primaryKey
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case table = "table"
+            case columns = "columns"
+            case primaryKey = "primaryKey"
+        }
+    }
+
     public struct DbStats: Codable, Equatable, Sendable {
         public let tables: [OpenAPI.DbTableStat]
         /// pg_size_pretty of the database size
@@ -58,6 +211,19 @@ extension OpenAPI {
             case lastAutoanalyze = "last_autoanalyze"
             case size = "size"
             case sizeBytes = "size_bytes"
+        }
+    }
+
+    public struct DbVacuumResult: Codable, Equatable, Sendable {
+        /// The vacuumed table, or `all` for every table
+        public let vacuumed: String
+
+        public init(vacuumed: String) {
+            self.vacuumed = vacuumed
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case vacuumed = "vacuumed"
         }
     }
 

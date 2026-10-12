@@ -109,10 +109,10 @@ import Testing
         #expect(NativeScreen.screen(forPath: "/admin") == .adminOverview)
         #expect(NativeScreen.screen(forPath: "/admin/providers") == .providerHealth)
         #expect(NativeScreen.screen(forPath: "/admin/endpoints") == .endpointLiveness)
-        // Database maintenance and the table editor stay in the web app.
-        #expect(NativeScreen.screen(forPath: "/admin/db") == nil)
-        #expect(NativeScreen.screen(forPath: "/admin/db/transactions") == nil)
-        #expect(NativeScreen.allCases.allSatisfy { $0.requiresAdmin })
+        #expect(NativeScreen.screen(forPath: "/admin/db") == .databaseMaintenance)
+        #expect(NativeScreen.screen(forPath: "/admin/db/transactions") == NativeScreen.tableEditor(table: "transactions"))
+        #expect(NativeScreen.fixedScreens.allSatisfy { $0.requiresAdmin })
+        #expect(NativeScreen.tableEditor(table: "x").requiresAdmin)
     }
 }
 

@@ -282,6 +282,85 @@ components:
           items: { $ref: "#/components/schemas/DbTableStat" }
         db_size:
           { type: string, nullable: true, description: pg_size_pretty of the database size }
+    # POST /api/admin/database/vacuum (routes/admin.ts)
+    DbVacuumResult:
+      type: object
+      required: [vacuumed]
+      properties:
+        vacuumed: { type: string, description: "The vacuumed table, or `all` for every table" }
+    # /api/admin/database/tables/* (services/dbEditor.ts, packages/types/src/contracts/admin.ts, ADR-101)
+    DbEditorColumn:
+      type: object
+      required: [name, dataType, udtName, nullable, hasDefault, generated, writable]
+      properties:
+        name: { type: string }
+        dataType: { type: string, description: information_schema data_type }
+        udtName: { type: string, description: information_schema udt_name }
+        nullable: { type: boolean }
+        hasDefault: { type: boolean }
+        generated: { type: boolean }
+        writable:
+          { type: boolean, description: "False for generated and identity-always columns" }
+    DbEditorTableSchema:
+      type: object
+      required: [table, columns, primaryKey]
+      properties:
+        table: { type: string }
+        columns:
+          type: array
+          items: { $ref: "#/components/schemas/DbEditorColumn" }
+        primaryKey:
+          type: array
+          items: { type: string }
+    DbEditorRows:
+      allOf:
+        - $ref: "#/components/schemas/DbEditorTableSchema"
+        - type: object
+          required: [rows, limit, hasMore, nextCursor]
+          properties:
+            rows:
+              type: array
+              description: The page's rows by column name; each row also carries its `__xmin` row version as text.
+              items: { type: object, additionalProperties: {} }
+            total:
+              type: integer
+              description: Exact total only when the first page is shorter than the requested limit.
+            limit: { type: integer }
+            hasMore: { type: boolean }
+            nextCursor:
+              { type: string, nullable: true, description: "Opaque cursor of the next page, null on the last page" }
+    DbEditorStatement:
+      type: object
+      required: [op, preview]
+      properties:
+        op: { type: string }
+        preview: { type: string, description: The SQL statement with its parameters rendered as literals }
+    DbEditorMutationResult:
+      type: object
+      description: "A dry run returns `count` and `statements`; a commit returns `applied`, `results` and `refreshScheduled`."
+      required: [dryRun]
+      properties:
+        dryRun: { type: boolean }
+        count: { type: integer, description: Dry run only }
+        statements:
+          type: array
+          description: Dry run only
+          items: { $ref: "#/components/schemas/DbEditorStatement" }
+        applied: { type: integer, description: Commit only }
+        results:
+          type: array
+          description: Commit only
+          items:
+            type: object
+            required: [op]
+            properties:
+              op: { type: string }
+              after:
+                type: object
+                additionalProperties: {}
+                description: The written row; absent for a delete
+        refreshScheduled:
+          { type: boolean, description: "Commit only; true when the dashboard materialized views refresh" }
     # /api/admin/providers/* (services/providerHealthService.ts, ProviderHealthSchema)
     ProviderHealth:
       type: object
@@ -13687,7 +13766,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/DbVacuumResult"
         "400":
           description: VALIDATION_ERROR — `table` is not a non-empty string, or names an unknown table
         "403":
@@ -13717,26 +13801,7 @@ paths:
                   - type: object
                     properties:
                       data:
-                        type: object
-                        properties:
-                          table:
-                            type: string
-                          primaryKey:
-                            type: array
-                            items:
-                              type: string
-                          columns:
-                            type: array
-                            items:
-                              type: object
-                              properties:
-                                name: { type: string }
-                                dataType: { type: string }
-                                udtName: { type: string }
-                                nullable: { type: boolean }
-                                hasDefault: { type: boolean }
-                                generated: { type: boolean }
-                                writable: { type: boolean }
+                        $ref: "#/components/schemas/DbEditorTableSchema"
         "403":
           description: Protected audit table cannot be opened in the generic data editor
         "404":
@@ -13785,19 +13850,7 @@ paths:
                   - type: object
                     properties:
                       data:
-                        type: object
-                        properties:
-                          table: { type: string }
-                          columns: { type: array, items: { type: object } }
-                          primaryKey: { type: array, items: { type: string } }
-                          rows: { type: array, items: { type: object } }
-                          total:
-                            type: integer
-                            description: Exact total only when the first page is shorter than the requested limit.
-                          limit: { type: integer }
-                          hasMore: { type: boolean }
-                          nextCursor:
-                            type: [string, "null"]
+                        $ref: "#/components/schemas/DbEditorRows"
         "400":
           description: Invalid filters or query parameter
         "403":
@@ -13857,7 +13910,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/DbEditorMutationResult"
         "400":
           description: Malformed change set or non-boolean dryRun
         "403":

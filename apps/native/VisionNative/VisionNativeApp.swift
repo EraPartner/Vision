@@ -73,10 +73,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         true
     }
 
-    /// Stops the supervised runtime before the app terminates.
+    /// Asks first while a native screen has unsaved changes, then stops the supervised
+    /// runtime before the app terminates.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         if shutdownFinished { return .terminateNow }
         if shutdownStarted { return .terminateLater }
+        guard shell.confirmQuitWithUnsavedChanges() else { return .terminateCancel }
         shutdownStarted = true
         Task {
             // The frame save writes settings.json through the supervisor and the quit-time

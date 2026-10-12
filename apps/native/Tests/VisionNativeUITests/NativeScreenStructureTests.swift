@@ -63,6 +63,78 @@ actor StaticAdminService: AdminService {
     }
 }
 
+/// The database pages' service: two tables, a three-column table with a primary key (or
+/// without one for `readOnly`), and a dry run of one statement.
+actor StaticDatabaseService: DatabaseAdminService {
+    let readOnly: Bool
+    let emptyStats: Bool
+
+    init(readOnly: Bool = false, emptyStats: Bool = false) {
+        self.readOnly = readOnly
+        self.emptyStats = emptyStats
+    }
+
+    static let columns = [
+        OpenAPI.DbEditorColumn(
+            name: "id", dataType: "integer", udtName: "int4", nullable: false, hasDefault: true, generated: false,
+            writable: true),
+        OpenAPI.DbEditorColumn(
+            name: "name", dataType: "text", udtName: "text", nullable: true, hasDefault: false, generated: false,
+            writable: true),
+        OpenAPI.DbEditorColumn(
+            name: "active", dataType: "boolean", udtName: "bool", nullable: false, hasDefault: false, generated: false,
+            writable: true),
+        OpenAPI.DbEditorColumn(
+            name: "meta", dataType: "jsonb", udtName: "jsonb", nullable: true, hasDefault: false, generated: false,
+            writable: true),
+    ]
+
+    func databaseStats() async throws -> OpenAPI.DbStats {
+        guard !emptyStats else { return OpenAPI.DbStats(tables: [], dbSize: "8 MB") }
+        return OpenAPI.DbStats(
+            tables: [
+                OpenAPI.DbTableStat(
+                    schemaname: "public", tableName: "transactions", liveRows: "2453", deadRows: "1500",
+                    lastAutovacuum: "2026-04-24 10:15:32.123456+00", lastAutoanalyze: nil, size: "3200 kB",
+                    sizeBytes: "3276800"),
+                OpenAPI.DbTableStat(
+                    schemaname: "public", tableName: "categories", liveRows: "45", deadRows: "2", lastAutovacuum: nil,
+                    lastAutoanalyze: nil, size: "64 kB", sizeBytes: "65536"),
+            ],
+            dbSize: "12 MB")
+    }
+
+    func vacuum(table: String?) async throws -> OpenAPI.DbVacuumResult {
+        OpenAPI.DbVacuumResult(vacuumed: table ?? "all")
+    }
+
+    func tableSchema(_ table: String) async throws -> OpenAPI.DbEditorTableSchema {
+        OpenAPI.DbEditorTableSchema(table: table, columns: Self.columns, primaryKey: readOnly ? [] : ["id"])
+    }
+
+    func tableRows(_ table: String, _ query: TableRowsQuery) async throws -> OpenAPI.DbEditorRows {
+        OpenAPI.DbEditorRows(
+            table: table, columns: Self.columns, primaryKey: readOnly ? [] : ["id"],
+            rows: [
+                [
+                    "id": .int(1), "name": .string("Food"), "active": .bool(true), "meta": .object(["a": .int(1)]),
+                    "__xmin": .string("100"),
+                ],
+                ["id": .int(2), "name": .null, "active": .bool(false), "meta": .null, "__xmin": .string("101")],
+            ],
+            limit: 100, hasMore: true, nextCursor: "c1")
+    }
+
+    func mutateTable(_ table: String, changes: [TableChange], dryRun: Bool) async throws
+        -> OpenAPI.DbEditorMutationResult
+    {
+        OpenAPI.DbEditorMutationResult(
+            dryRun: dryRun, count: changes.count,
+            statements: changes.map { OpenAPI.DbEditorStatement(op: $0.op, preview: "\($0.op.uppercased()) …") },
+            applied: dryRun ? nil : changes.count)
+    }
+}
+
 /// An audit history with one verified, partly anchored page.
 @MainActor
 final class StaticAuditHistory: AuditHistoryService {
@@ -108,13 +180,16 @@ final class StaticAuditHistory: AuditHistoryService {
         fallbackRates: ["EUR": 1, "USD": Decimal(string: "0.92")!], source: "database", isStale: false,
         lastFetchedAt: nil)
 
-    func makeShell(language: NativeLanguage, appearance: ThemeAppearance, failing: Bool = false) -> NativeShellModel {
+    func makeShell(
+        language: NativeLanguage, appearance: ThemeAppearance, failing: Bool = false,
+        database: StaticDatabaseService = StaticDatabaseService()
+    ) -> NativeShellModel {
         NativeShellModel(
             strings: CatalogStrings(language: language),
             theme: ThemeSelection(appearance: appearance),
             exchangeRates: ExchangeRatesModel(service: StaticRatesService(Self.rates)),
             admin: AdminScreens.make(
-                service: StaticAdminService(failing: failing),
+                service: StaticAdminService(failing: failing), database: database,
                 token: AdminTokenAccess(read: { "token" }, write: { _ in true }), audit: StaticAuditHistory()),
             loadSettings: { NativeAppSettings(adminMode: true) },
             onNavigate: { _ in })
@@ -163,6 +238,73 @@ final class StaticAuditHistory: AuditHistoryService {
         // The empty state.
         admin.endpoints.filter = "nothing matches"
         #expect(layOut(EndpointLivenessView(model: admin.endpoints, shell: shell).environment(\.visionTheme, theme)).fittingSize.height > 0)
+    }
+
+    @Test(arguments: [NativeLanguage.en, .nl], [ThemeAppearance.light, .dark])
+    func theDatabaseMaintenanceScreenLaysOutInEveryState(_ language: NativeLanguage, _ appearance: ThemeAppearance)
+        async
+    {
+        let shell = makeShell(language: language, appearance: appearance)
+        let theme = VisionTheme(selection: shell.theme)
+        let model = shell.admin.database.maintenance
+        // Loading, then loaded.
+        #expect(layOut(DatabaseMaintenanceView(model: model, shell: shell).environment(\.visionTheme, theme)).fittingSize.width > 0)
+        await model.appear()
+        #expect(model.tableCount == 2)
+        #expect(layOut(DatabaseMaintenanceView(model: model, shell: shell).environment(\.visionTheme, theme)).fittingSize.height > 0)
+        // A finished vacuum with its toast.
+        await model.vacuum(table: "categories", strings: shell.strings)
+        #expect(model.notice?.key == "dbMaintenance.vacuumSuccess")
+        #expect(layOut(DatabaseMaintenanceView(model: model, shell: shell).environment(\.visionTheme, theme)).fittingSize.height > 0)
+        // The empty state.
+        let empty = makeShell(language: language, appearance: appearance, database: StaticDatabaseService(emptyStats: true))
+        await empty.admin.database.maintenance.appear()
+        #expect(empty.admin.database.maintenance.showsEmptyState)
+        #expect(layOut(DatabaseMaintenanceView(model: empty.admin.database.maintenance, shell: empty).environment(\.visionTheme, theme)).fittingSize.height > 0)
+    }
+
+    @Test(arguments: [NativeLanguage.en, .nl], [ThemeAppearance.light, .dark])
+    func theTableEditorLaysOutInEveryState(_ language: NativeLanguage, _ appearance: ThemeAppearance) async {
+        let shell = makeShell(language: language, appearance: appearance)
+        let theme = VisionTheme(selection: shell.theme)
+        let model = TableDataEditorModel(table: "categories", service: StaticDatabaseService())
+        // Loading, then loaded.
+        #expect(layOut(TableDataEditorView(model: model, shell: shell).environment(\.visionTheme, theme)).fittingSize.width > 0)
+        await model.appear()
+        #expect(model.rows.count == 2)
+        #expect(layOut(TableDataEditorView(model: model, shell: shell).environment(\.visionTheme, theme)).fittingSize.height > 0)
+        // Pending: a new row, an edited and a deleted row, an open editor and a sort.
+        model.addRow()
+        model.setValue(.string("New"), for: TableDataEditorModel.Cell(row: "new-0", column: "name", isNew: true))
+        model.setValue(.bool(false), for: TableDataEditorModel.Cell(row: "1", column: "active"))
+        model.toggleDelete(model.rows[1])
+        model.beginEditing(TableDataEditorModel.Cell(row: "1", column: "name"))
+        #expect(model.hasPending)
+        #expect(layOut(TableDataEditorView(model: model, shell: shell).environment(\.visionTheme, theme)).fittingSize.height > 0)
+        // The Review pending changes sheet, with the delete warning.
+        await model.preview(strings: shell.strings)
+        #expect(model.isReviewPresented)
+        #expect(model.previewStatements.count == 3)
+        #expect(layOut(ReviewChangesSheet(model: model, strings: shell.strings).environment(\.visionTheme, theme)).fittingSize.height > 0)
+        // Read-only: a table without a primary key.
+        let readOnly = TableDataEditorModel(table: "audit_view", service: StaticDatabaseService(readOnly: true))
+        await readOnly.appear()
+        #expect(readOnly.isReadOnly)
+        #expect(layOut(TableDataEditorView(model: readOnly, shell: shell).environment(\.visionTheme, theme)).fittingSize.height > 0)
+    }
+
+    @Test func theShellShowsTheDatabaseScreensForTheirRoutes() async throws {
+        let shell = makeShell(language: .nl, appearance: .dark)
+        let host = layOut(ShellRootView(model: shell) { hidden in Color.clear.accessibilityHidden(hidden) })
+        shell.routeDidChange(try #require(NativeRoute("/admin/db")))
+        await shell.settingsSettled()
+        #expect(shell.detail == .native(.databaseMaintenance))
+        host.layoutSubtreeIfNeeded()
+        shell.routeDidChange(try #require(NativeRoute("/admin/db/categories")))
+        #expect(shell.detail == .native(.tableEditor(table: "categories")))
+        #expect(shell.admin.database.editor?.table == "categories")
+        host.layoutSubtreeIfNeeded()
+        #expect(!host.subviews.isEmpty)
     }
 
     @Test func theAdminErrorStatesLayOut() async {
