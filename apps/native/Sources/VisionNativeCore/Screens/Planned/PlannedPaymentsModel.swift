@@ -443,6 +443,9 @@ public final class PlannedHistoryModel {
 
     @ObservationIgnored private let service: any PlannedPaymentsService
     @ObservationIgnored private var version = 0
+    /// The load in progress and the payment ids it covers, so the sheet's `.task` and a caller
+    /// asking for the same payments share one request instead of racing (like ExchangeRatesModel).
+    @ObservationIgnored private var inFlight: (ids: [Int], task: Task<Void, Never>)?
 
     init(service: any PlannedPaymentsService) {
         self.service = service
@@ -474,6 +477,18 @@ public final class PlannedHistoryModel {
     /// `loadExecutionHistory`: every lookup in parallel; a missing transaction is skipped and
     /// a failed one marks the history partial. Newest execution first.
     public func load(payments: [PlannedPayment]) async {
+        let ids = payments.map { $0.id }
+        if let inFlight, inFlight.ids == ids {
+            await inFlight.task.value
+            return
+        }
+        let request = Task { await run(payments: payments) }
+        inFlight = (ids, request)
+        await request.value
+        if inFlight?.task == request { inFlight = nil }
+    }
+
+    private func run(payments: [PlannedPayment]) async {
         version += 1
         let mine = version
         failed = false
@@ -535,6 +550,7 @@ public final class PlannedHistoryModel {
     /// The dialog closed: an answer still in flight is dropped.
     public func cancel() {
         version += 1
+        inFlight = nil
         isLoading = false
     }
 }
