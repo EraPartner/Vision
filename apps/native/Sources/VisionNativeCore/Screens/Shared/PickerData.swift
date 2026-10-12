@@ -51,15 +51,15 @@ extension APIClient: PickerDataService {
 @Observable
 public final class PickerDataModel {
     /// `BASE_PAGE.limit`: the unsearched recipient page.
-    public static let baseRecipientLimit = 100
+    public nonisolated static let baseRecipientLimit = 100
     /// `SEARCH_PAGE_LIMIT`: a searched recipient page.
-    public static let searchRecipientLimit = 1000
+    public nonisolated static let searchRecipientLimit = 1000
     /// `SEARCH_DEBOUNCE_MS`.
-    public static let searchDebounce: Duration = .milliseconds(300)
+    public nonisolated static let searchDebounce: Duration = .milliseconds(300)
     /// `TagInput`'s `maxTags`.
-    public static let maxTags = 20
+    public nonisolated static let maxTags = 20
     /// The jewel-tone `PALETTE` of `TagInput` and the `tags.color.*` name of each swatch.
-    public static let tagPalette: [TagSwatch] = [
+    public nonisolated static let tagPalette: [TagSwatch] = [
         TagSwatch(color: "hsl(355, 60%, 52%)", nameKey: "tags.color.crimson"),
         TagSwatch(color: "hsl(20, 68%, 52%)", nameKey: "tags.color.coral"),
         TagSwatch(color: "hsl(40, 64%, 50%)", nameKey: "tags.color.amber"),
