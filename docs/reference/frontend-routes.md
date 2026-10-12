@@ -2,8 +2,8 @@
 title: Frontend Routes Reference
 type: reference
 status: active
-date: 2026-10-08
-updated: 2026-10-08
+date: 2026-10-12
+updated: 2026-10-12
 tags: [reference, frontend, routing, pages, react-router, admin, sidebar-sections]
 description: Complete reference of all frontend routes and their page components, including admin routes and the sidebar sections that offer them
 aliases: [routes, pages, navigation, url paths, frontend routes, admin routes]
@@ -70,6 +70,7 @@ Settings remain a dialog rather than a page route, but its section is deep-linka
 | `/research/compare`   | `ResearchComparePage`   | AppLayout | Instrument comparison      |
 | `/research/forecast`  | `PortfolioForecastPage` | AppLayout | Portfolio forecast         |
 | `/research/charts`    | `ChartBuilderPage`      | AppLayout | Configurable market charts |
+| `/research/dossiers`  | `ResearchDossiersPage`  | AppLayout | Research dossiers          |
 
 ## Admin Routes
 
@@ -90,6 +91,7 @@ Admin routes appear in the sidebar's Admin section, shown only when admin mode i
 | ----------- | ----------------------- | --------- | --------------------------------------------------------- | -------------------------------------------------------------------------------- |
 | `/analysis` | `AnalysisWorkspacePage` | AppLayout | Manual visual, SQL, spreadsheet, and saved-analysis tools | [[apps/frontend/src/pages/AnalysisWorkspacePage.tsx\|AnalysisWorkspacePage.tsx]] |
 | `/ai-chat`  | `AIChatPage`            | AppLayout | Local AI chat for natural-language queries                | [[apps/frontend/src/pages/AIChatPage.tsx\|AIChatPage.tsx]]                       |
+| `/analysis/monitors` | `AnalysisMonitorsPage` | AppLayout | Saved-analysis monitors with an unread badge | [[apps/frontend/src/pages/AnalysisMonitorsPage.tsx\|AnalysisMonitorsPage.tsx]] |
 
 > Settings is no longer a route — it is rendered as `DashboardSettingsDialog` opened from the layout. See [[apps/frontend/src/features/settings/DashboardSettingsDialog.tsx\|DashboardSettingsDialog.tsx]] and [[docs/features/settings|Settings Feature]].
 
