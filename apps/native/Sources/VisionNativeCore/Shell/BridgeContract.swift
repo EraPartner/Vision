@@ -49,7 +49,7 @@ public enum BridgeEvent: String, CaseIterable, Sendable {
 }
 
 public enum BridgeAvailability: Equatable, Sendable {
-    /// Answered by Vision Native in phase 1c.
+    /// Answered by Vision Native (phase 1c, backup and restore since phase 1d).
     case implemented
     /// Rejects with `BridgeContract.unavailableMessage` until the named phase ports it.
     case pending(phase: String)
@@ -102,26 +102,27 @@ public enum BridgeContract {
             availability: availability)
     }
 
-    private static let backup = BridgeAvailability.pending(phase: "1d")
     private static let audit = BridgeAvailability.pending(phase: "1e")
 
     public static let entries: [BridgeEntry] = [
         entry(.updateCheckGithub, "electronUpdater", "checkRelease", [], "none (updater cut)", .removed),
         entry(.updateInstallShell, "electronUpdater", "installShellUpdate", [], "none (updater cut)", .removed),
         entry(.updatePreUpdateBackup, "electronUpdater", "preUpdateBackup", [], "none (updater cut)", .removed),
-        entry(.backupRun, "electronBackup", "runBackup", ["destDir", "frontendStateJson"], "stub", backup),
-        entry(.backupSelectDir, "electronBackup", "selectDir", [], "stub", backup),
-        entry(.backupSelectFile, "electronBackup", "selectFile", [], "stub", backup),
-        entry(.backupRestore, "electronBackup", "restoreBackup", ["filePath", "opts"], "stub", backup),
-        entry(.backupIsEncrypted, "electronBackup", "isEncrypted", ["filePath"], "stub", backup),
-        // Answered from the backend settings API like the services settings, so Settings >
-        // Backup keeps the directory and the on-quit toggle until phase 1d ports the rest.
+        entry(.backupRun, "electronBackup", "runBackup", ["destDir", "frontendStateJson"], "runBackup", .implemented),
+        entry(.backupSelectDir, "electronBackup", "selectDir", [], "selectBackupDirectory", .implemented),
+        entry(.backupSelectFile, "electronBackup", "selectFile", [], "selectRestoreFile", .implemented),
+        entry(.backupRestore, "electronBackup", "restoreBackup", ["filePath", "opts"], "restoreBackup", .implemented),
+        entry(.backupIsEncrypted, "electronBackup", "isEncrypted", ["filePath"], "isBackupEncrypted", .implemented),
         entry(
             .backupSaveSettings, "electronBackup", "saveSettings", ["settings"], "saveBackupSettings",
             .implemented),
         entry(.backupLoadSettings, "electronBackup", "loadSettings", [], "loadBackupSettings", .implemented),
-        entry(.backupGetEncryptionStatus, "electronBackup", "getEncryptionStatus", [], "stub", backup),
-        entry(.backupSetPassphrase, "electronBackup", "setPassphrase", ["passphrase"], "stub", backup),
+        entry(
+            .backupGetEncryptionStatus, "electronBackup", "getEncryptionStatus", [], "backupEncryptionStatus",
+            .implemented),
+        entry(
+            .backupSetPassphrase, "electronBackup", "setPassphrase", ["passphrase"], "setBackupPassphrase",
+            .implemented),
         entry(
             .servicesSaveSettings, "electronServices", "saveSettings", ["settings"], "saveServicesSettings",
             .implemented),
@@ -161,8 +162,6 @@ public enum BridgeContract {
     public static func unavailableMessage(_ entry: BridgeEntry) -> String {
         let name = entry.method.map { "\(entry.bridge).\($0)" } ?? entry.channel.rawValue
         switch entry.availability {
-        case .pending(let phase) where phase == "1d":
-            return "\(name) is not available in Vision Native yet (backup and restore arrive in phase 1d)."
         case .pending(let phase) where phase == "1e":
             return "\(name) is not available in Vision Native yet (the audit anchor arrives in phase 1e)."
         case .pending(let phase):

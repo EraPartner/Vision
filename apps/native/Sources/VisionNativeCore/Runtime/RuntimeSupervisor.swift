@@ -55,7 +55,7 @@ public struct SupervisorConfiguration: Sendable {
 /// Any step can end in `failed(reason)`; the backend it started is then stopped and
 /// PostgreSQL keeps running, and `launch()` may be called again (Retry). A quit during a
 /// launch does not wait for it: the launch is cancelled and stops at its next phase.
-public actor RuntimeSupervisor {
+public actor RuntimeSupervisor: BackupSettingsStore {
     private let configuration: SupervisorConfiguration
     private let dependencies: RuntimeDependencies
     private let instanceLock: any InstanceLocking
@@ -349,9 +349,19 @@ public actor RuntimeSupervisor {
         PathUtilities.join(VisionNativeIdentity.userDataDirectory(homeDirectory: configuration.homeDirectory), "settings.json")
     }
 
+    // MARK: - Backup
+
+    /// The runtime backup and restore use (`activeRuntime` of mode "native"): only once the
+    /// launch has finished and while no quit is in progress.
+    public func backupRuntime() -> NativeRuntime? {
+        guard case .running = phase, !shutdownRequested else { return nil }
+        return runtime
+    }
+
     // MARK: - Quit
 
-    /// The `will-quit` path without backup-on-quit (phase 1d): stops the backend and
+    /// The `will-quit` service shutdown; the quit-time backup runs before it
+    /// (`ShellController.prepareForQuit`). It stops the backend and
     /// PostgreSQL unless "keep services running on quit" is enabled. Like Electron it
     /// does not wait for a launch in progress: the launch is cancelled (which ends its
     /// running tool), the runtime refuses to spawn anything further, and a Demo staging

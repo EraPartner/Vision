@@ -39,9 +39,10 @@ public enum DatabaseSwitchState: Sendable, Equatable {
 /// backend. A port of the lifecycle half of `createNativeRuntime` in
 /// `packaging/electron/runtime/native.ts`: layout, generated credentials, payload
 /// discovery, `initdb`, role and extension bootstrap, PostgreSQL start and stop, the
-/// backend child, PID ownership, health, and the database switch used by Demo seeding.
-/// Backup, attachment switching and the audit bridge are later phases.
-public actor NativeRuntime: DemoSeedingRuntime {
+/// backend child, PID ownership, health, the database switch used by Demo seeding and
+/// restore, the plain dump and the attachment switch used by backup and restore (phase
+/// 1d). The audit bridge is a later phase.
+public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
     public nonisolated let layout: RuntimeLayout
     public nonisolated let names: RuntimeNames
     public nonisolated let postgresPort: Int
@@ -777,24 +778,36 @@ public actor NativeRuntime: DemoSeedingRuntime {
             timeout: 30)
     }
 
-    /// `restoreIntoDatabase` for a custom-format dump: extensions as the administrator,
-    /// objects as the restricted owner in one transaction, then the two runtime-managed
-    /// materialized views handed to the application role.
-    private func restoreIntoDatabase(_ source: String, _ database: String, _ config: DatabaseConfig) async throws {
+    /// `restoreIntoDatabase`: extensions as the administrator, objects as the restricted
+    /// owner in one transaction (`pg_restore` for a custom dump, `psql --file` for plain
+    /// SQL), then the two runtime-managed materialized views handed to the application role.
+    private func restoreIntoDatabase(
+        _ source: String, _ database: String, _ config: DatabaseConfig, format: RestoreFormat
+    ) async throws {
         guard let info = fileSystem.info(source), info.kind == .file, info.size > 0 else {
             throw NativeRuntimeError(
                 "INVALID_POSTGRES_DUMP", "PostgreSQL restore source is empty or not a file")
         }
         let target = try validateIdentifier(database, "database name")
         try await installRequiredExtensions(target, config)
-        let pgRestore = try tool("pg_restore")
-        _ = try await runAsOwner(
-            config, pgRestore,
-            [
-                "--exit-on-error", "--single-transaction", "--no-owner", "--no-acl", "--no-comments", "-h", host,
-                "-p", String(config.port), "-U", config.ownerRole, "-d", target, source,
-            ],
-            timeout: 30 * 60)
+        switch format {
+        case .custom:
+            _ = try await runAsOwner(
+                config, try tool("pg_restore"),
+                [
+                    "--exit-on-error", "--single-transaction", "--no-owner", "--no-acl", "--no-comments", "-h", host,
+                    "-p", String(config.port), "-U", config.ownerRole, "-d", target, source,
+                ],
+                timeout: 30 * 60)
+        case .plain:
+            _ = try await runAsOwner(
+                config, try tool("psql"),
+                [
+                    "-h", host, "-p", String(config.port), "-U", config.ownerRole, "-d", target, "--set",
+                    "ON_ERROR_STOP=1", "--no-psqlrc", "--single-transaction", "--file", source,
+                ],
+                timeout: 30 * 60)
+        }
         _ = try await adminDatabasePsql(target, try PostgresSQL.materializedViewOwnership(appRole: config.appRole))
     }
 
@@ -848,6 +861,12 @@ public actor NativeRuntime: DemoSeedingRuntime {
     public func activateRestoredDatabase(_ path: String, expectedSchemaHead: String) async throws
         -> DatabaseSwitchToken
     {
+        try await activateRestoredDatabase(path, format: .custom, expectedSchemaHead: expectedSchemaHead)
+    }
+
+    public func activateRestoredDatabase(_ path: String, format: RestoreFormat, expectedSchemaHead: String)
+        async throws -> DatabaseSwitchToken
+    {
         try await assertNativeActive()
         let config = try await bootstrapDatabase()
         let staging = try temporaryDatabaseName(config.database, "restore")
@@ -861,7 +880,7 @@ public actor NativeRuntime: DemoSeedingRuntime {
             throw error
         }
         do {
-            try await restoreIntoDatabase(path, staging, config)
+            try await restoreIntoDatabase(path, staging, config, format: format)
             try await validateRestoredDatabase(staging, config, expectedSchemaHead: expectedSchemaHead)
             try ensureNotShuttingDown()
             let plan = DatabaseSwitchToken(
@@ -982,5 +1001,100 @@ public actor NativeRuntime: DemoSeedingRuntime {
             ],
             timeout: 60)
         return try DatabaseStatistics.parse(result.stdout)
+    }
+
+    // MARK: - Backup and restore (phase 1d)
+
+    /// `getSchemaHead`: the highest `alembic_version` row of the live database.
+    public func schemaHead() async throws -> String {
+        let config = try prepareLayout()
+        try await ensureDiscovered()
+        let result = try await runAsOwner(
+            config, try tool("psql"),
+            [
+                "-h", host, "-p", String(config.port), "-U", config.ownerRole, "-d", config.database,
+                "--tuples-only", "--no-align", "--no-psqlrc", "--command",
+                "SELECT version_num FROM alembic_version ORDER BY version_num;",
+            ],
+            timeout: 10)
+        return BackupRestore.pickHighestRevision(result.stdout.components(separatedBy: "\n"))
+    }
+
+    /// `dumpDatabase(destination, { format: "plain" })`: `pg_dump` as the migration owner
+    /// without owners, ACLs, comments or the cluster-installed extensions, into
+    /// `<destination>.partial`, renamed and made 0600 once it is non-empty.
+    public func dumpDatabase(to destination: String) async throws {
+        let config = try prepareLayout()
+        try await ensureDiscovered()
+        let finalPath = PathUtilities.normalize(destination)
+        let partialPath = "\(finalPath).partial"
+        try fileSystem.createDirectory(PathUtilities.dirname(finalPath), mode: 0o700)
+        try? fileSystem.remove(partialPath)
+        do {
+            var arguments = [
+                "-h", host, "-p", String(config.port), "-U", config.ownerRole, "-d", config.database, "--no-owner",
+                "--no-acl", "--no-comments",
+            ]
+            for extensionName in RuntimeConstants.requiredPostgresExtensions {
+                arguments += ["--exclude-extension", extensionName]
+            }
+            arguments += ["--format=plain", "--file", partialPath]
+            _ = try await runAsOwner(config, try tool("pg_dump"), arguments, timeout: 30 * 60)
+            guard let info = fileSystem.info(partialPath), info.kind == .file, info.size > 0 else {
+                throw NativeRuntimeError("POSTGRES_DUMP_EMPTY", "PostgreSQL dump is empty")
+            }
+            try fileSystem.move(partialPath, finalPath)
+            try fileSystem.setMode(finalPath, 0o600)
+        } catch {
+            try? fileSystem.remove(partialPath)
+            throw error
+        }
+    }
+
+    /// `exportAttachments`: a private copy of the attachments tree.
+    public func exportAttachments(to destination: String) async throws {
+        try DirectorySwitch.export(layout.attachments, to: destination)
+    }
+
+    private func switchNonce() -> String {
+        "\(nowMilliseconds())-\(ProcessInfo.processInfo.processIdentifier)"
+    }
+
+    /// `replaceAttachments(source, { preservePrevious: true })`: the switch token is
+    /// persisted as `pendingAttachmentSwitch` before it is returned.
+    public func replaceAttachments(from source: String) async throws -> DirectorySwitchToken {
+        let token = try DirectorySwitch.replace(
+            source: source, destination: layout.attachments, preservePrevious: true, nonce: switchNonce())
+        try await writeState(set: ["pendingAttachmentSwitch": try JSONValue(encoding: token)], remove: [])
+        return token
+    }
+
+    /// `rollbackAttachmentSwitch`: the given token, else the persisted one.
+    public func rollbackAttachmentSwitch(_ token: DirectorySwitchToken) async throws {
+        try await rollbackPendingAttachmentSwitch(token)
+    }
+
+    public func rollbackPendingAttachmentSwitch(_ token: DirectorySwitchToken? = nil) async throws {
+        var resolved = token
+        if resolved == nil { resolved = try await persistedAttachmentSwitch() }
+        _ = try DirectorySwitch.rollback(resolved, nonce: switchNonce())
+        try await writeState(set: [:], remove: ["pendingAttachmentSwitch"])
+    }
+
+    /// `finalizeAttachmentSwitch`: removes the previous tree.
+    public func finalizeAttachmentSwitch(_ token: DirectorySwitchToken) async throws {
+        try DirectorySwitch.finalize(token)
+        try await writeState(set: [:], remove: ["pendingAttachmentSwitch"])
+    }
+
+    private func persistedAttachmentSwitch() async throws -> DirectorySwitchToken? {
+        guard let stored = try await readState()?["pendingAttachmentSwitch"], stored.isTruthy else { return nil }
+        return try stored.decode(DirectorySwitchToken.self)
+    }
+
+    /// `start()` then `waitUntilReady({ detailed: true })`, as a restore does after the switch.
+    public func startBackendAndWait() async throws {
+        _ = try await start()
+        try await waitUntilReady(detailed: true)
     }
 }

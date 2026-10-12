@@ -82,9 +82,8 @@ The window hosts the unchanged React frontend and behaves like the Electron shel
 
 - A user script defines the `window.electron*` bridges of `packaging/electron/preload.ts`, backed by
   a `WKScriptMessageHandlerWithReply` named `visionNative`. `Shell/BridgeContract.swift` maps every
-  Electron channel to its Swift handler. Backup (`electronBackup`) and audit (`electronAudit`) calls
-  reject with "not available in Vision Native yet" until phases 1d and 1e, except the backup
-  settings, which use the backend settings API; the updater is not ported.
+  Electron channel to its Swift handler. Audit (`electronAudit`) calls reject with "not available
+  in Vision Native yet" until phase 1e; the updater is not ported.
 - The web view loads only the backend origin. The repository and documentation links open in the
   default browser, other navigations and new windows are cancelled, and downloads open a save
   panel. A replaced file is swapped in only after its download finished.
@@ -93,6 +92,25 @@ The window hosts the unchanged React frontend and behaves like the Electron shel
   `i18n/source/{en,nl}.json`, copied to `Contents/Resources/i18n/` by a build phase.
 - The launch screen uses the splash palette and shows the runtime status, or the error with Open
   logs and Try again.
+
+## Backup and restore
+
+Settings > Backup works as in Electron Vision (see
+[the architecture page](../../docs/architecture/native-app.md#backup-and-restore-phase-1d)).
+`Sources/VisionNativeCore/Backup/` writes and reads the same `.visionbak` and `.visionbak.enc`
+bundles, so a backup made by either app restores in the other, and restores the legacy `.sql` and
+`.sql.enc` dumps.
+
+- The backup passphrase is `VISION_BACKUP_PASSPHRASE`, else a login Keychain item with the service
+  `com.vaultvoyager.vision-native.backup-passphrase`. It is never written to `settings.json`.
+- Without a configured directory, backups go to `Vision Native/Backups` in iCloud Drive, and the
+  backup on quit is on.
+- Restores accept only files chosen in the restore file picker and ask for confirmation first.
+- The quit-time backup runs before the services stop, within the 45-second quit limit.
+
+The Swift tests open the Electron Vision 1.0.2 fixture in
+`Tests/VisionNativeCoreTests/Fixtures/`, a byte-for-byte copy of
+`packaging/electron/backup/fixtures/vision-1.0.2-sanitized.visionbak.enc`.
 
 ## Developer backend override
 

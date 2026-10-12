@@ -23,6 +23,19 @@ public protocol BridgeHost: AnyObject {
     func loadServicesSettings() async -> Bool
     func saveBackupSettings(_ settings: BackupSettingsValue) async throws
     func loadBackupSettings() async -> BackupSettingsValue
+    /// `backup:run`: the `BackupResult`, or `{ success: false, error }`.
+    func runBackup(destination: String, frontendStateJson: String?) async -> JSONValue
+    /// The folder picker; `nil` when cancelled.
+    func selectBackupDirectory() async -> String?
+    /// The restore file picker; the chosen path joins the allow-list. `nil` when cancelled.
+    func selectRestoreFile() async -> String?
+    /// The paths the restore picker returned (`ALLOWED_RESTORE_PATHS`).
+    var restorePathAllowList: RestorePathAllowList { get }
+    func isBackupEncrypted(_ path: String) async -> Bool
+    /// `backup:restore`: confirms, restores and answers the `RestoreResult`.
+    func restoreBackup(_ path: String, passphrase: String?) async -> JSONValue
+    func backupEncryptionStatus() async -> PassphraseStatus
+    func setBackupPassphrase(_ passphrase: String) async -> PassphraseUpdateResult
     func retryLaunch()
     /// Opens the log folder and returns its path.
     func openLogs() throws -> String
@@ -77,7 +90,8 @@ public enum BridgeDispatcher {
         case .invalid(let message):
             return .reject(message)
         case .request(let request):
-            switch BridgeCodec.validate(request) {
+            let allowList = host.restorePathAllowList
+            switch BridgeCodec.validate(request, isAllowedRestorePath: { allowList.contains($0) }) {
             case .invalid(let reply):
                 return reply
             case .call(let call):
@@ -128,6 +142,20 @@ public enum BridgeDispatcher {
             }
         case .loadBackupSettings:
             return .resolve(await host.loadBackupSettings().jsonValue)
+        case .runBackup(let destination, let snapshot):
+            return .resolve(await host.runBackup(destination: destination, frontendStateJson: snapshot))
+        case .selectBackupDirectory:
+            return .resolve(await host.selectBackupDirectory().map(JSONValue.string) ?? .null)
+        case .selectRestoreFile:
+            return .resolve(await host.selectRestoreFile().map(JSONValue.string) ?? .null)
+        case .restoreBackup(let path, let passphrase):
+            return .resolve(await host.restoreBackup(path, passphrase: passphrase))
+        case .isBackupEncrypted(let path):
+            return .resolve(.bool(await host.isBackupEncrypted(path)))
+        case .getBackupEncryptionStatus:
+            return .resolve(await host.backupEncryptionStatus().jsonValue)
+        case .setBackupPassphrase(let passphrase):
+            return .resolve(await host.setBackupPassphrase(passphrase).jsonValue)
         case .recoveryRetry:
             host.retryLaunch()
             return .success

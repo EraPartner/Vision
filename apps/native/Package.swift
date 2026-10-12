@@ -11,6 +11,11 @@ let package = Package(
     ],
     targets: [
         .target(name: "VisionNativeCore"),
-        .testTarget(name: "VisionNativeCoreTests", dependencies: ["VisionNativeCore"]),
+        .testTarget(
+            name: "VisionNativeCoreTests",
+            dependencies: ["VisionNativeCore"],
+            // The Vision 1.0.2 backup fixture (packaging/electron/backup/fixtures), byte for byte.
+            resources: [.copy("Fixtures/vision-1.0.2-sanitized.visionbak.enc")]
+        ),
     ]
 )
