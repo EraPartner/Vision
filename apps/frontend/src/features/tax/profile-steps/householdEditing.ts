@@ -100,7 +100,10 @@ export type ActivityPatch = {
     [K in Exclude<keyof IncomeActivity, "id">]?: IncomeActivity[K] | undefined;
 };
 
-/** Patch one activity. A kind change keeps the amount the user sees in the amount field. */
+/**
+ * Patch one activity. A kind change keeps the amount the user sees in the amount field and drops
+ * the pension type when the activity is no longer a pension.
+ */
 export function updateActivity(
     household: BelgianTaxHouseholdV2,
     partnerId: PartnerId,
@@ -127,6 +130,8 @@ export function updateActivity(
                         next.grossIncome = a.netProfessionalIncome ?? 0;
                         delete next.netProfessionalIncome;
                     }
+                    // The return line (Vak V) only exists for pensions.
+                    if (patch.kind !== "pension") delete next.pensionKind;
                 }
                 return next as unknown as IncomeActivity;
             }),
