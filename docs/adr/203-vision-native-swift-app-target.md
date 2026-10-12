@@ -81,10 +81,12 @@ Facts about today's app that this decision builds on:
    synthetic Demo dataset, never Tor's real data directory, because no runtime check stops two
    apps from writing one data directory (see Context). The Electron app stays Tor's daily app
    until the verified switch-over in phase 4.
-2. **Platform.** Apple-silicon Macs on current macOS only. The deployment target is the macOS
-   major release installed on the development Mac when phase 1 starts. It is recorded in the
-   Xcode project and may be raised at any time. There is no Intel, Windows, Linux or browser
-   build.
+2. **Platform.** Apple-silicon Macs on current macOS only. The deployment target is the newest
+   macOS major that GitHub's `macos-latest` runner image can build, because that runner is the
+   only compiler the hybrid execution model has (decision 10): macOS 26 with Xcode 26 at phase 1
+   start (Tor's Mac runs macOS 27, which runs a macOS 26 target). It is recorded in the Xcode
+   project and raised as soon as the runner image moves. There is no Intel, Windows, Linux or
+   browser build.
 3. **Toolchain.** Xcode on the Mac, Swift 6 language mode with strict concurrency, and Swift
    Testing for tests. All non-UI logic lives in SwiftPM packages, so `swift build` and
    `swift test` work without the Xcode UI. Phase 1's first PR decides how the app project file is
