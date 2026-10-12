@@ -6017,7 +6017,7 @@ export interface components {
             planned_date: string;
             /** @description Canonical account identity */
             account_id: number;
-            recipient_id: number;
+            recipient_id?: number;
             memo?: string;
             amount: number;
             currency?: string;

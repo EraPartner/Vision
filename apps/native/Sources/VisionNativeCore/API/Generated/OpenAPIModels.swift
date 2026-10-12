@@ -804,7 +804,7 @@ extension OpenAPI {
         public let plannedDate: String
         /// Canonical account identity
         public let accountId: Int
-        public let recipientId: Int
+        public let recipientId: Int?
         public let memo: String?
         public let amount: Decimal
         public let currency: String?
@@ -827,7 +827,7 @@ extension OpenAPI {
         /// Tag slugs to assign
         public let tags: [String]?
 
-        public init(plannedDate: String, accountId: Int, recipientId: Int, memo: String? = nil, amount: Decimal, currency: String? = nil, categoryId: Int? = nil, comment: String? = nil, url: String? = nil, isRecurring: Bool? = nil, recurrencePattern: String? = nil, recurrenceEndDate: String? = nil, maxOccurrences: Int? = nil, isLoan: Bool? = nil, loanType: OpenAPI.PlannedLoanType? = nil, loanPrincipal: Decimal? = nil, loanAnnualInterestRate: Decimal? = nil, loanTermMonths: Int? = nil, loanStartDate: String? = nil, loanPaymentDay: Int? = nil, tags: [String]? = nil) {
+        public init(plannedDate: String, accountId: Int, recipientId: Int? = nil, memo: String? = nil, amount: Decimal, currency: String? = nil, categoryId: Int? = nil, comment: String? = nil, url: String? = nil, isRecurring: Bool? = nil, recurrencePattern: String? = nil, recurrenceEndDate: String? = nil, maxOccurrences: Int? = nil, isLoan: Bool? = nil, loanType: OpenAPI.PlannedLoanType? = nil, loanPrincipal: Decimal? = nil, loanAnnualInterestRate: Decimal? = nil, loanTermMonths: Int? = nil, loanStartDate: String? = nil, loanPaymentDay: Int? = nil, tags: [String]? = nil) {
             self.plannedDate = plannedDate
             self.accountId = accountId
             self.recipientId = recipientId

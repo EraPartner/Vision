@@ -753,9 +753,24 @@ rates share one rates cache; a payment without a rate is counted, not summed. Mo
 row fields like `VirtualDataTable`. Pause and Resume write the server's row into the cached list
 and offer Undo for 8 seconds (⌘Z while the toast shows); Delete asks in an alert first. Payment
 history looks up every execution's transaction in parallel and offers Retry after a partial
-failure. View › Include paused writes `?show_all=true` with `replace-route`. The planned-payment
-sheet, Mark as paid, the match suggestions banner and recurring detection are phase 3c part B; their
-entry points are hooks on the model (`openEditor(for:)`, `openLinkDialog(for:)`).
+failure. View › Include paused writes `?show_all=true` with `replace-route`.
+
+Phase 3c part B adds the rest of the page. Add payment, a strip item and the row menu's Edit open the
+planned-payment sheet (`PlannedPaymentFormModel`, `PlannedPaymentFormSheet`). It has every field of
+the web form, `parseLocaleNumber` amounts in the app number format and the web's validation:
+errors show after a blocked submit, which scrolls to and focuses the first invalid field. Create
+sends `POST`; an edit sends a `PATCH` body (`PlannedPaymentPatch`) that can carry the explicit
+`null` the web sends for a cleared End date or Max occurrences. While the sheet holds edits, the
+model's leave guard makes the shell ask before leaving `/planned`. Mark as paid and the match
+suggestions' Review open `PlannedLinkModel`: debounced candidate fetches (the payee's merge-cluster
+root when known), the local search and amount match, and `POST …/execute` with the chosen
+transaction's date. `PlannedRecurringModel` drives the recurring panel. It keeps the 5-minute
+pattern cache and merges the dismissed payees of the `dismissed_recurring_patterns` setting with a
+per-device copy in user defaults. A dismissal saves both; the setting is written against the
+baseline of its last read. Track creates the planned payment directly. The shared pickers live in
+`VisionNativeUI/Components` over `PickerDataModel`: `VisionDateField` (typed date, calendar, Clear),
+`RecipientPicker`, `CategoryPicker`, `AccountPicker` and `TagField`. Every model that a view's
+`.task` loads shares one request in flight, so a second caller waits for the first.
 
 ## CI
 

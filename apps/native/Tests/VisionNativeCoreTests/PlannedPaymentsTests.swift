@@ -161,11 +161,14 @@ enum PlannedFixture {
     @MainActor
     static func model(
         _ service: FakePlannedService, clock: TestClock? = nil,
-        rates: [Result<OpenAPI.ExchangeRates, APIError>] = []
+        rates: [Result<OpenAPI.ExchangeRates, APIError>] = [],
+        editing: FakePlannedEditingService = FakePlannedEditingService(),
+        pickers: FakePickerService = FakePickerService(), dismissals: PlannedDismissalStore = .memory()
     ) -> PlannedPaymentsModel {
         let time = clock ?? TestClock()
         return PlannedPaymentsModel(
-            service: service, rates: ExchangeRatesModel(service: FakeExchangeRatesService(rates: rates)),
+            service: service, editing: editing, pickers: pickers,
+            rates: ExchangeRatesModel(service: FakeExchangeRatesService(rates: rates)), dismissals: dismissals,
             calendar: calendar, now: { time.now })
     }
 
@@ -581,9 +584,9 @@ enum PlannedFixture {
             PlannedFixture.row(id: 2, date: "2026-10-13", amount: -5, currency: "XYZ"),
         ])
         let model = PlannedPaymentsModel(
-            service: service,
+            service: service, editing: FakePlannedEditingService(), pickers: FakePickerService(),
             rates: ExchangeRatesModel(service: FakeExchangeRatesService(rates: [.success(PlannedFixture.rates())])),
-            calendar: PlannedFixture.calendar, now: { PlannedFixture.today })
+            dismissals: .memory(), calendar: PlannedFixture.calendar, now: { PlannedFixture.today })
         await model.appear(showAll: false, defaultCurrency: "EUR")
         #expect(!model.isRatesLoading)
         let usd = Decimal(-100) * Decimal(string: "1.0842")!

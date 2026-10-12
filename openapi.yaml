@@ -2997,7 +2997,7 @@ components:
 
     PlannedTransactionCreate:
       type: object
-      required: [planned_date, account_id, recipient_id, amount]
+      required: [planned_date, account_id, amount]
       properties:
         planned_date:
           type: string

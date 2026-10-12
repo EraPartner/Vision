@@ -33,7 +33,15 @@ public struct PlannedPaymentsView: View {
         .task(id: LoadKey(showAll: showAll, currency: settings.defaultCurrency)) {
             await model.appear(showAll: showAll, defaultCurrency: settings.defaultCurrency)
         }
-        .onDisappear { model.disappear() }
+        .task { await model.loadSuggestions() }
+        .task { await model.recurring.load() }
+        // The recurring panel names categories from the category tree.
+        .task { await model.pickers.load() }
+        .onAppear { shell.setLeaveGuard(model.leaveGuard) }
+        .onDisappear {
+            shell.removeLeaveGuard(id: PlannedPaymentsRoute.path)
+            model.disappear()
+        }
         .overlay(alignment: .bottom) {
             ActionToast(
                 notice: model.notice, strings: strings,
@@ -62,6 +70,29 @@ public struct PlannedPaymentsView: View {
                 })
         ) {
             PlannedHistorySheet(model: model, shell: shell)
+                .environment(\.visionTheme, theme)
+                .environment(\.colorScheme, theme.colorScheme)
+        }
+        // The planned-payment sheet: Escape and the close button leave without saving.
+        .sheet(
+            item: Binding(
+                get: { model.editor },
+                set: { form in
+                    if form == nil { model.dismissEditor() }
+                })
+        ) { form in
+            PlannedPaymentFormSheet(model: model, form: form, shell: shell)
+                .environment(\.visionTheme, theme)
+                .environment(\.colorScheme, theme.colorScheme)
+        }
+        .sheet(
+            item: Binding(
+                get: { model.link },
+                set: { link in
+                    if link == nil { model.dismissLinkDialog() }
+                })
+        ) { link in
+            PlannedLinkSheet(model: model, link: link, shell: shell)
                 .environment(\.visionTheme, theme)
                 .environment(\.colorScheme, theme.colorScheme)
         }
@@ -136,7 +167,7 @@ public struct PlannedPaymentsView: View {
 
     private var addButton: some View {
         Button {
-            model.openEditor(for: nil)
+            model.openEditor(for: nil, settings: settings)
         } label: {
             Label(strings.t("plannedPage.newPayment"), systemImage: "plus")
         }
@@ -356,7 +387,7 @@ public struct PlannedPaymentsView: View {
     /// A strip item: opens the sheet for the payment (`plannedPage.next7.itemTitle`).
     private func dayItem(_ payment: PlannedPayment) -> some View {
         Button {
-            model.openEditor(for: payment)
+            model.openEditor(for: payment, settings: settings)
         } label: {
             VStack(alignment: .leading, spacing: 1) {
                 HStack(alignment: .top, spacing: 3) {
@@ -385,15 +416,15 @@ public struct PlannedPaymentsView: View {
         .accessibilityLabel(strings.t("plannedPage.next7.itemTitle", ["name": payment.name]))
     }
 
-    // MARK: Part B surfaces
+    // MARK: Suggestions
 
-    // TODO(3c part B): `MatchSuggestionsBanner` (`plannedPage.suggestions.*`); Review calls
-    // `model.openLinkDialog(for:)` with the first suggestion's loaded payment.
-    private var matchSuggestions: some View { EmptyView() }
+    private var matchSuggestions: some View {
+        PlannedMatchSuggestionsBanner(model: model, strings: strings)
+    }
 
-    // TODO(3c part B): `RecurringDetectionPanel` (`recurring.*`): amount changes, detected
-    // patterns, Track and Dismiss.
-    private var recurringDetection: some View { EmptyView() }
+    private var recurringDetection: some View {
+        PlannedRecurringPanel(model: model, strings: strings, settings: settings)
+    }
 
     // MARK: Table
 
@@ -574,7 +605,7 @@ public struct PlannedPaymentsView: View {
         let label = strings.t("plannedPage.rowMenu", ["name": payment.name])
         return Menu {
             Button {
-                model.openEditor(for: payment)
+                model.openEditor(for: payment, settings: settings)
             } label: {
                 Label(strings.t("common.edit"), systemImage: "pencil")
             }

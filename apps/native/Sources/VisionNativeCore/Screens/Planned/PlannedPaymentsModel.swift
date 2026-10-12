@@ -98,12 +98,26 @@ public final class PlannedPaymentsModel {
     public let history: PlannedHistoryModel
     /// `ExchangeRatesModel` is the web app's shared exchange-rate query.
     public let rates: ExchangeRatesModel
-    // TODO(3c part B): present `PlannedPaymentForm` as a sheet for this request.
+    /// The open planned-payment sheet's request.
     public private(set) var editorRequest: PlannedEditorRequest?
-    // TODO(3c part B): present `LinkTransactionDialog` for this payment.
+    /// The planned-payment sheet (`PlannedPaymentForm`) while it is open.
+    public private(set) var editor: PlannedPaymentFormModel?
+    /// The payment the Mark as paid dialog is for.
     public private(set) var linkRequest: PlannedPayment?
+    /// The Mark as paid dialog (`LinkTransactionDialog`) while it is open.
+    public private(set) var link: PlannedLinkModel?
+    /// `usePlannedMatchSuggestions`: planned payments with likely unlinked matches.
+    public private(set) var suggestions: [PlannedMatchSuggestion] = []
+    /// `RecurringDetectionPanel`.
+    public let recurring: PlannedRecurringModel
+    /// The shared picker lists of the sheet.
+    public let pickers: PickerDataModel
 
     @ObservationIgnored private let service: any PlannedPaymentsService
+    @ObservationIgnored private let editing: any PlannedEditingService
+    @ObservationIgnored private let pickerService: any PickerDataService
+    @ObservationIgnored private var suggestionsFetchedAt: Date?
+    @ObservationIgnored private var suggestionsInFlight: Task<Void, Never>?
     @ObservationIgnored private let now: @Sendable () -> Date
     @ObservationIgnored public let calendar: Calendar
     @ObservationIgnored private var defaultCurrency = NativeAppSettings.defaults.defaultCurrency
@@ -112,14 +126,19 @@ public final class PlannedPaymentsModel {
     @ObservationIgnored private var editorCount = 0
 
     public init(
-        service: any PlannedPaymentsService, rates: ExchangeRatesModel, calendar: Calendar = PlannedDates.local,
-        now: @escaping @Sendable () -> Date = { Date() }
+        service: any PlannedPaymentsService, editing: any PlannedEditingService, pickers: any PickerDataService,
+        rates: ExchangeRatesModel, dismissals: PlannedDismissalStore = .userDefaults,
+        calendar: Calendar = PlannedDates.local, now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.service = service
+        self.editing = editing
+        pickerService = pickers
         self.rates = rates
         self.calendar = calendar
         self.now = now
         history = PlannedHistoryModel(service: service)
+        recurring = PlannedRecurringModel(service: editing, store: dismissals, now: now)
+        self.pickers = PickerDataModel(service: pickers)
     }
 
     // MARK: List
@@ -210,6 +229,18 @@ public final class PlannedPaymentsModel {
         lists[showAll]?.payments?.removeAll { $0.id == id }
     }
 
+    /// `setList((prev) => [...prev, created])` on the current view.
+    private func append(_ wire: OpenAPI.PlannedTransaction) {
+        guard lists[showAll]?.payments != nil else { return }
+        lists[showAll]?.payments?.append(PlannedPayment(wire, defaultCurrency: defaultCurrency))
+    }
+
+    /// Track invalidated every planned list: both views go stale and the shown one refetches.
+    private func invalidateLists() async {
+        for key in Array(lists.keys) { lists[key]?.fetchedAt = nil }
+        await fetch(showAll)
+    }
+
     // MARK: Figures
 
     /// `useCurrencyConverter(defaultCurrency)` over the shared exchange-rate query.
@@ -262,23 +293,140 @@ public final class PlannedPaymentsModel {
 
     // MARK: Row actions
 
-    /// Add payment, a strip item or Edit.
-    public func openEditor(for payment: PlannedPayment?) {
+    /// Add payment, a strip item or Edit: the sheet opens fresh for a new payment and with
+    /// the row's values for an edit.
+    public func openEditor(for payment: PlannedPayment?, settings: NativeAppSettings = .defaults) {
         editorCount += 1
         editorRequest = PlannedEditorRequest(id: editorCount, payment: payment)
+        editor = PlannedPaymentFormModel(
+            id: editorCount, initial: payment, settings: settings, today: PlannedDay(now(), calendar: calendar),
+            calendar: calendar)
     }
 
+    /// Cancel, the close button, Escape, or Leave and discard: the sheet closes unsaved.
     public func dismissEditor() {
+        editor?.resetErrors()
         editorRequest = nil
+        editor = nil
+    }
+
+    /// The sheet's Add payment or Save changes (and Enter): validates, then creates or
+    /// updates. Success writes the server's row into the list, toasts and closes the sheet;
+    /// a failure toasts `plannedPage.saveFailed` and keeps it open.
+    public func saveEditor(strings: any Localizing) async {
+        guard let form = editor, !actionLoading, let submission = form.submit() else { return }
+        form.resetErrors()
+        actionLoading = true
+        defer { actionLoading = false }
+        do {
+            if let initial = form.initial {
+                let updated = try await editing.updatePlannedPayment(id: initial.id, patch: submission.patch)
+                replace(updated)
+                post(.success, "plannedPage.toast.updated", ["name": submission.name])
+            } else {
+                let created = try await editing.createPlannedPayment(submission.create)
+                append(created)
+                post(.success, "plannedPage.toast.created", ["name": submission.name])
+            }
+            if editor === form { dismissEditor() }
+        } catch {
+            post(
+                .error, "plannedPage.saveFailed",
+                ["msg": APIErrorMessage.text(APIError.wrapping(error), strings: strings)])
+        }
+    }
+
+    /// `useUnsavedChanges(open && dirty)`: while the sheet holds edits, the shell asks before
+    /// leaving `/planned`; Leave and discard closes the sheet.
+    public var leaveGuard: NativeLeaveGuard {
+        NativeLeaveGuard(
+            id: PlannedPaymentsRoute.path,
+            hasUnsavedChanges: { [weak self] in self?.editor?.isDirty ?? false },
+            discard: { [weak self] in self?.dismissEditor() })
     }
 
     /// Mark as paid (and the match suggestions' Review).
     public func openLinkDialog(for payment: PlannedPayment) {
         linkRequest = payment
+        link = PlannedLinkModel(payment: payment, service: editing, pickers: pickerService, calendar: calendar)
     }
 
+    /// Cancel, the close button or Escape: selection and search go with the dialog.
     public func dismissLinkDialog() {
         linkRequest = nil
+        link = nil
+    }
+
+    /// Link and mark as paid: `POST …/execute` with the chosen transaction and its date. On
+    /// success the row updates in place, the suggestions refetch, a toast confirms and the
+    /// dialog closes; a failure toasts `plannedPage.link.executeFailed` and keeps it open.
+    public func executeLink(strings: any Localizing) async {
+        guard let dialog = link, let transactionId = dialog.selectedTransactionId, !dialog.isExecuting else { return }
+        dialog.isExecuting = true
+        defer { dialog.isExecuting = false }
+        do {
+            let updated = try await editing.executePlannedPayment(
+                id: dialog.payment.id, transactionId: transactionId, executionDate: dialog.executionDate)
+            replace(updated)
+            await loadSuggestions(force: true)
+            post(.success, "plannedPage.toast.executed", ["name": dialog.payment.name])
+            if link === dialog { dismissLinkDialog() }
+        } catch {
+            post(
+                .error, "plannedPage.link.executeFailed",
+                ["msg": APIErrorMessage.text(APIError.wrapping(error), strings: strings)])
+        }
+    }
+
+    // MARK: Match suggestions
+
+    /// The suggestions query (5 minute stale time); `force` refetches after a confirm. A
+    /// failed fetch keeps the last answer.
+    public func loadSuggestions(force: Bool = false) async {
+        if let suggestionsInFlight {
+            await suggestionsInFlight.value
+            if !force { return }
+        }
+        if !force, let fetched = suggestionsFetchedAt,
+            now().timeIntervalSince(fetched) < PlannedRecurringModel.staleAfter
+        {
+            return
+        }
+        let editing = editing
+        let task = Task { [weak self] in
+            guard let answer = try? await editing.matchSuggestions() else { return }
+            guard let self else { return }
+            self.suggestions = answer
+            self.suggestionsFetchedAt = self.now()
+        }
+        suggestionsInFlight = task
+        await task.value
+        suggestionsInFlight = nil
+    }
+
+    /// The banner's Review: the Mark as paid dialog for the first suggestion's payment, only
+    /// when that payment is in the loaded list.
+    public func reviewSuggestion() {
+        guard let plannedId = suggestions.first?.planned?.id,
+            let payment = payments.first(where: { $0.id == plannedId })
+        else { return }
+        openLinkDialog(for: payment)
+    }
+
+    // MARK: Recurring detection
+
+    /// Track: creates a recurring planned payment from the pattern (no sheet), then refreshes
+    /// the patterns and the planned list.
+    public func track(_ pattern: PlannedRecurringPattern, strings: any Localizing) async {
+        let memo = strings.t("recurring.autoDetectedMemo", ["name": pattern.recipientName])
+        do {
+            _ = try await editing.createPlannedPayment(pattern.trackBody(memo: memo))
+            post(.success, "recurring.toast.created", ["name": pattern.recipientName])
+            await recurring.reloadPatterns()
+            await invalidateLists()
+        } catch {
+            post(.error, "recurring.toast.failed", ["msg": APIErrorMessage.text(APIError.wrapping(error), strings: strings)])
+        }
     }
 
     /// Mark as paid is disabled while an action runs and on a paused row.
@@ -384,8 +532,11 @@ public final class PlannedPaymentsModel {
     public func disappear() {
         closeHistory()
         pendingDelete = nil
-        editorRequest = nil
-        linkRequest = nil
+        dismissEditor()
+        dismissLinkDialog()
+        recurring.patternsExpanded = false
+        recurring.alertsExpanded = false
+        pickers.reset()
         table = LocalTableQuery()
     }
 }

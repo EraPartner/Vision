@@ -234,6 +234,111 @@ actor StaticPlannedService: PlannedPaymentsService {
     }
 }
 
+/// The planned-payment sheet, Mark as paid, suggestions and recurring detection over fixed
+/// answers.
+extension StaticPlannedService: PlannedEditingService {
+    func createPlannedPayment(_ body: OpenAPI.PlannedTransactionCreate) async throws -> OpenAPI.PlannedTransaction {
+        OpenAPI.PlannedTransaction(
+            id: 50, plannedDate: body.plannedDate, memo: body.memo, amount: body.amount, currency: body.currency,
+            isRecurring: body.isRecurring ?? false, isExecuted: false, executionCount: 0, isActive: true, links: [])
+    }
+
+    func updatePlannedPayment(id: Int, patch: PlannedPaymentPatch) async throws -> OpenAPI.PlannedTransaction {
+        guard let row = rows.first(where: { candidate in candidate.id == id }) else { throw APIError.network("missing") }
+        return row
+    }
+
+    func executePlannedPayment(id: Int, transactionId: Int, executionDate: String?) async throws
+        -> OpenAPI.PlannedTransaction
+    {
+        guard let row = rows.first(where: { candidate in candidate.id == id }) else { throw APIError.network("missing") }
+        return row
+    }
+
+    func matchSuggestions() async throws -> [PlannedMatchSuggestion] {
+        [PlannedMatchSuggestion(planned: .init(id: 2, recipientName: "Streaming"), candidates: [])]
+    }
+
+    func recurringPatterns() async throws -> [PlannedRecurringPattern] {
+        [
+            PlannedRecurringPattern(
+                recipientId: 11, recipientName: "Energy supplier with a long name", latestAmount: 96,
+                categoryId: 7, categoryName: "Utilities", predictedNext: Self.day(20),
+                amountChanges: [
+                    PlannedRecurringPattern.AmountChange(
+                        date: Self.day(-10), previousAmount: 84, newAmount: 96, percentChange: Decimal(string: "14.29")!,
+                        direction: "increased")
+                ], confidence: 92),
+            PlannedRecurringPattern(
+                recipientId: 12, recipientName: "Gym", direction: "expense", detectedPattern: "custom", intervalDays: 10,
+                latestAmount: 25, predictedNext: "", confidence: 64),
+            PlannedRecurringPattern(
+                recipientId: 13, recipientName: "Salary", direction: "income", latestAmount: 3200,
+                predictedNext: Self.day(18),
+                amountChanges: [
+                    PlannedRecurringPattern.AmountChange(
+                        date: Self.day(-12), previousAmount: 3300, newAmount: 3200, percentChange: Decimal(string: "-3.03")!,
+                        direction: "decreased")
+                ], confidence: 45),
+        ]
+    }
+
+    func linkCandidates(_ query: PlannedLinkQuery) async throws -> [OpenAPI.Transaction] {
+        [
+            OpenAPI.Transaction(
+                id: 31, transactionDate: Self.day(-1), recipientName: "Streaming service", memo: "STREAMING 4411",
+                amount: Decimal(string: "-12.99")!, currency: "USD", links: []),
+            OpenAPI.Transaction(id: 32, transactionDate: Self.day(-2), amount: Decimal(string: "-13.10")!, links: []),
+        ]
+    }
+
+    func setting(key: String) async throws -> OpenAPI.Setting {
+        throw APIError.client(APIClientError(status: 404, code: .notFound, message: "Setting not found"))
+    }
+
+    func saveSetting(key: String, value: JSONValue, expected: JSONValue) async throws -> OpenAPI.Setting {
+        OpenAPI.Setting(key: key, value: value, expected: .object(["exists": .bool(true), "value": value]))
+    }
+}
+
+extension StaticPlannedService: PickerDataService {
+    func recipients(search: String?, limit: Int) async throws -> [OpenAPI.Recipient] {
+        [
+            OpenAPI.Recipient(id: 1, name: "Landlord", isActive: true, createdAt: "2026-01-01", links: []),
+            OpenAPI.Recipient(id: 2, name: "Streaming service", isActive: true, createdAt: "2026-01-01", links: []),
+        ]
+    }
+
+    func recipient(id: Int) async throws -> OpenAPI.Recipient {
+        OpenAPI.Recipient(
+            id: id, name: "Landlord", primaryRecipientId: 1, isActive: true, createdAt: "2026-01-01", links: [])
+    }
+
+    func accounts() async throws -> [OpenAPI.Account] {
+        [
+            OpenAPI.Account(
+                id: 7, name: "BE00 1234", displayName: "Everyday account", currency: "EUR", type: "checking",
+                liquidityClass: "cash", spendable: true, inNetWorth: true, taxWrapper: "none", owner: "self",
+                multiCurrencyCash: false, hasCashSleeve: false, isActive: true, createdAt: "2026-01-01",
+                updatedAt: "2026-01-01")
+        ]
+    }
+
+    func categories() async throws -> [OpenAPI.CategoryNode] {
+        [
+            OpenAPI.CategoryNode(
+                id: 7, name: "Energy", pathIds: [6, 7], path: ["Housing", "Energy"], categoryName: "Energy", depth: 1,
+                isActive: true, hierarchyOnly: false, legacyCompatible: true)
+        ]
+    }
+
+    func tags() async throws -> [OpenAPI.Tag] {
+        [OpenAPI.Tag(id: 1, slug: "fixed-costs", color: "hsl(210, 62%, 50%)", isActive: true, createdAt: "", updatedAt: "")]
+    }
+
+    func createTag(slug: String, color: String?) async throws {}
+}
+
 /// The SwiftUI screens build and lay out in both languages and appearances.
 @MainActor
 @Suite struct NativeScreenStructureTests {
@@ -260,7 +365,8 @@ actor StaticPlannedService: PlannedPaymentsService {
             admin: AdminScreens.make(
                 service: StaticAdminService(failing: failing), database: database,
                 token: AdminTokenAccess(read: { "token" }, write: { _ in true }), audit: StaticAuditHistory()),
-            planned: PlannedPaymentsModel(service: planned, rates: rates),
+            planned: PlannedPaymentsModel(
+                service: planned, editing: planned, pickers: planned, rates: rates, dismissals: .memory()),
             loadSettings: { NativeAppSettings(adminMode: adminMode) },
             onNavigate: { _ in })
     }
@@ -426,6 +532,80 @@ actor StaticPlannedService: PlannedPaymentsService {
         await failing.planned.appear(showAll: false, defaultCurrency: "EUR")
         #expect(failing.planned.error != nil)
         #expect(layOutPlanned(failing).fittingSize.height > 0)
+    }
+
+    @Test(arguments: [NativeLanguage.en, .nl], [ThemeAppearance.light, .dark])
+    func thePlannedSheetsAndSuggestionsLayOutInEveryState(_ language: NativeLanguage, _ appearance: ThemeAppearance)
+        async throws
+    {
+        let shell = makeShell(
+            language: language, appearance: appearance, planned: StaticPlannedService(rows: StaticPlannedService.sample))
+        let model = shell.planned
+        let theme = VisionTheme(selection: shell.theme)
+        shell.routeDidChange(try #require(NativeRoute("/planned")))
+        await model.appear(showAll: false, defaultCurrency: "EUR")
+        // The recurring panel before its answer.
+        #expect(layOut(PlannedRecurringPanel(model: model, strings: shell.strings, settings: shell.settings).environment(\.visionTheme, theme)).fittingSize.width > 0)
+        await model.loadSuggestions()
+        await model.recurring.load()
+        await model.pickers.load()
+        #expect(model.suggestions.count == 1)
+        #expect(model.recurring.display == .cards)
+        #expect(layOutPlanned(shell).fittingSize.height > 0)
+        // Both cards open, then the banner on its own.
+        model.recurring.alertsExpanded = true
+        model.recurring.patternsExpanded = true
+        #expect(layOut(PlannedRecurringPanel(model: model, strings: shell.strings, settings: shell.settings).environment(\.visionTheme, theme)).fittingSize.height > 0)
+        #expect(layOut(PlannedMatchSuggestionsBanner(model: model, strings: shell.strings).environment(\.visionTheme, theme)).fittingSize.height > 0)
+        #expect(layOutPlanned(shell).fittingSize.height > 0)
+        // Review opens Mark as paid for the suggestion's payment.
+        model.reviewSuggestion()
+        let link = try #require(model.link)
+        #expect(link.payment.id == 2)
+        #expect(layOut(PlannedLinkSheet(model: model, link: link, shell: shell).environment(\.visionTheme, theme)).fittingSize.height > 0)
+        await link.resolveCluster()
+        await link.load()
+        #expect(link.candidates.count == 2)
+        link.select(31)
+        #expect(link.canExecute)
+        #expect(layOut(PlannedLinkSheet(model: model, link: link, shell: shell).environment(\.visionTheme, theme)).fittingSize.height > 0)
+        link.search = "nothing matches"
+        #expect(link.visibleCandidates.isEmpty)
+        #expect(layOut(PlannedLinkSheet(model: model, link: link, shell: shell).environment(\.visionTheme, theme)).fittingSize.height > 0)
+        model.dismissLinkDialog()
+        // Add payment: blank, after a blocked submit, as a loan and with a custom interval.
+        model.openEditor(for: nil, settings: shell.settings)
+        let form = try #require(model.editor)
+        #expect(layOut(PlannedPaymentFormSheet(model: model, form: form, shell: shell).environment(\.visionTheme, theme)).fittingSize.height > 0)
+        await model.saveEditor(strings: shell.strings)
+        #expect(form.errorsRevealed)
+        #expect(form.focusField == .name)
+        #expect(layOut(PlannedPaymentFormSheet(model: model, form: form, shell: shell).environment(\.visionTheme, theme)).fittingSize.height > 0)
+        form.isLoan = true
+        #expect(layOut(PlannedPaymentFormSheet(model: model, form: form, shell: shell).environment(\.visionTheme, theme)).fittingSize.height > 0)
+        form.isLoan = false
+        form.isRecurring = true
+        form.frequency = .custom
+        form.tags = ["fixed-costs", "new-tag"]
+        form.recipientId = 1
+        form.categoryId = 7
+        form.pickAccount(name: "BE00 1234", id: 7)
+        #expect(layOut(PlannedPaymentFormSheet(model: model, form: form, shell: shell).environment(\.visionTheme, theme)).fittingSize.height > 0)
+        model.dismissEditor()
+        // Edit payment for a row in another currency.
+        model.openEditor(for: model.payments[1], settings: shell.settings)
+        let edit = try #require(model.editor)
+        #expect(edit.isEditing)
+        #expect(layOut(PlannedPaymentFormSheet(model: model, form: edit, shell: shell).environment(\.visionTheme, theme)).fittingSize.height > 0)
+        model.dismissEditor()
+        // Every payee dismissed: all caught up.
+        for pattern in model.recurring.allPatterns {
+            model.recurring.dismiss(pattern.recipientId)
+        }
+        await model.recurring.settle()
+        #expect(model.recurring.display == .caughtUp)
+        #expect(layOut(PlannedRecurringPanel(model: model, strings: shell.strings, settings: shell.settings).environment(\.visionTheme, theme)).fittingSize.height > 0)
+        #expect(layOutPlanned(shell).fittingSize.height > 0)
     }
 
     @Test func theShellShowsThePlannedScreenWithoutAdminMode() async throws {

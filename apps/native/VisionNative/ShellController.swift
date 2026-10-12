@@ -78,7 +78,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             exchangeRates: rates,
             admin: AdminScreens.make(
                 service: client, database: client, token: makeAdminTokenAccess(), audit: auditChannels),
-            planned: PlannedPaymentsModel(service: client, rates: rates),
+            planned: PlannedPaymentsModel(service: client, editing: client, pickers: client, rates: rates),
             hiddenSections: Self.loadHiddenSections(),
             loadSettings: { try await client.appSettings() },
             saveHiddenSections: { Self.saveHiddenSections($0) },
