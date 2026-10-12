@@ -9,6 +9,9 @@ public protocol BackupRuntime: Sendable {
     func exportAttachments(to destination: String) async throws
     /// `getSchemaHead()`: the highest Alembic revision of the live database.
     func schemaHead() async throws -> String
+    /// `getLocalMigrationChainHead()`: the newest revision the installed payload carries;
+    /// empty when it has no migration files.
+    func migrationChainHead() async -> String
     /// `activateRestoredDatabase(source, { format, expectedSchemaHead })`: restores into a
     /// staging database, stops the backend and switches it in, keeping the previous one.
     func activateRestoredDatabase(_ path: String, format: RestoreFormat, expectedSchemaHead: String) async throws

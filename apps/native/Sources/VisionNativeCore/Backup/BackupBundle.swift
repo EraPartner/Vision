@@ -229,7 +229,7 @@ public enum BackupBundle {
                 try BackupFiles.createDirectory(target)
                 continue
             }
-            guard total.value + entry.uncompressedSize <= maximumRestoreBytes else {
+            guard entry.uncompressedSize <= maximumRestoreBytes - total.value else {
                 throw BackupFailure(bombMessage)
             }
             try BackupFiles.createDirectory(PathUtilities.dirname(target))

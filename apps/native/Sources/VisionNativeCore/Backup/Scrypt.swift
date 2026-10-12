@@ -36,8 +36,11 @@ public enum Scrypt {
         let v = UnsafeMutablePointer<UInt32>.allocate(capacity: wordsPerBlock * n)
         let scratch = UnsafeMutablePointer<UInt32>.allocate(capacity: 16)
         defer {
+            scratch.update(repeating: 0, count: 16)
             scratch.deallocate()
+            x.update(repeating: 0, count: wordsPerBlock)
             x.deallocate()
+            y.update(repeating: 0, count: wordsPerBlock)
             y.deallocate()
             v.update(repeating: 0, count: wordsPerBlock * n)
             v.deallocate()
@@ -58,10 +61,9 @@ public enum Scrypt {
                 b[at + 3] = UInt8(truncatingIfNeeded: value >> 24)
             }
         }
-        x.update(repeating: 0, count: wordsPerBlock)
-        y.update(repeating: 0, count: wordsPerBlock)
-        scratch.update(repeating: 0, count: 16)
-        return pbkdf2SHA256(password: password, salt: b, iterations: 1, length: length)
+        let derived = pbkdf2SHA256(password: password, salt: b, iterations: 1, length: length)
+        b.withUnsafeMutableBufferPointer { $0.update(repeating: 0) }
+        return derived
     }
 
     /// PBKDF2-HMAC-SHA256 (RFC 8018).
@@ -87,6 +89,9 @@ public enum Scrypt {
                 }
             }
             output.append(contentsOf: t.prefix(length - output.count))
+            u.withUnsafeMutableBufferPointer { $0.update(repeating: 0) }
+            t.withUnsafeMutableBufferPointer { $0.update(repeating: 0) }
+            message.withUnsafeMutableBufferPointer { $0.update(repeating: 0) }
             blockIndex += 1
         }
         return output

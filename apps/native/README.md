@@ -102,10 +102,14 @@ bundles, so a backup made by either app restores in the other, and restores the 
 `.sql.enc` dumps.
 
 - The backup passphrase is `VISION_BACKUP_PASSPHRASE`, else a login Keychain item with the service
-  `com.vaultvoyager.vision-native.backup-passphrase`. It is never written to `settings.json`.
-- Without a configured directory, backups go to `Vision Native/Backups` in iCloud Drive, and the
-  backup on quit is on.
+  `com.vaultvoyager.vision-native.backup-passphrase`. It is never written to `settings.json`. An
+  unsigned rebuild can make macOS ask for the login password before reading it.
+- Without a configured directory, backups go to `Vision Native/Backups` in iCloud Drive (not
+  Electron's `Vision/Backups`), and the backup on quit is on.
 - Restores accept only files chosen in the restore file picker and ask for confirmation first.
+  A restore refuses a backup from a newer schema, and one with a numbered schema when this
+  install's schema cannot be determined. Audit continuity across a restore (pausing the audit
+  closure, checking the restored audit history) arrives with the audit anchor in phase 1e.
 - The quit-time backup runs before the services stop, within the 45-second quit limit.
 
 The Swift tests open the Electron Vision 1.0.2 fixture in

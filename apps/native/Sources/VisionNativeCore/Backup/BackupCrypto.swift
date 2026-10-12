@@ -151,8 +151,8 @@ public enum BackupPassphrase {
 
     /// `setBackupPassphrase` with the already-trimmed value: empty removes it.
     public static func set(_ passphrase: String, store: (any PassphraseStore)?) -> PassphraseUpdateResult {
-        guard let store else { return PassphraseUpdateResult(success: false, available: false, error: unavailableMessage) }
         if passphrase.isEmpty {
+            guard let store else { return PassphraseUpdateResult(success: true, available: true) }
             do {
                 try store.delete()
                 return PassphraseUpdateResult(success: true, available: true)
@@ -160,11 +160,13 @@ public enum BackupPassphrase {
                 return PassphraseUpdateResult(success: false, available: true, error: backupErrorString(error))
             }
         }
+        guard let store else { return PassphraseUpdateResult(success: false, available: false, error: unavailableMessage) }
         do {
             try store.write(passphrase)
             return PassphraseUpdateResult(success: true, available: true)
         } catch {
-            return PassphraseUpdateResult(success: false, available: false, error: unavailableMessage)
+            // Electron: the store exists but the write failed, `String(err)`.
+            return PassphraseUpdateResult(success: false, available: true, error: backupErrorString(error))
         }
     }
 }
@@ -225,7 +227,8 @@ public enum BackupRetention {
     /// beyond the grace window; removes `*.partial` leftovers beyond the window too.
     @discardableResult
     public static func cleanup(
-        directory: String, deviceId: String, now: Date, keep: Int = keep, graceMilliseconds: Int = graceMilliseconds
+        directory: String, deviceId: String, now: Date, keep: Int = BackupRetention.keep,
+        graceMilliseconds: Int = BackupRetention.graceMilliseconds
     ) -> Int {
         let prefix = "vision_backup_\(deviceId)_"
         guard let names = try? FileManager.default.contentsOfDirectory(atPath: directory) else { return 0 }

@@ -215,6 +215,126 @@ private func run(_ executable: String, _ arguments: [String], in directory: Stri
     }
 }
 
+private func patchUInt64(_ bytes: inout [UInt8], at offset: Int, _ value: UInt64) {
+    for index in 0..<8 { bytes[offset + index] = UInt8(truncatingIfNeeded: value >> UInt64(8 * index)) }
+}
+
+/// The zip64 extra field of the first central directory record: (uncompressed, compressed,
+/// offset) positions.
+private func zip64ExtraFields(_ raw: [UInt8]) throws -> (uncompressed: Int, compressed: Int, offset: Int) {
+    guard let central = firstIndex(of: [0x50, 0x4b, 0x01, 0x02], in: raw) else {
+        throw BackupFailure("no central directory record")
+    }
+    let nameLength = Int(raw[central + 28]) | Int(raw[central + 29]) << 8
+    let extra = central + 46 + nameLength
+    guard raw[extra] == 0x01, raw[extra + 1] == 0x00 else { throw BackupFailure("no zip64 extra field") }
+    return (extra + 4, extra + 12, extra + 20)
+}
+
+@Suite struct ZipArchiveHostileOffsetTests {
+    private let modified = Date(timeIntervalSince1970: 1_760_000_000)
+
+    private func forcedZip64(_ path: String) throws {
+        let writer = try ZipWriter(path: path, forceZip64: true)
+        try writer.addData(name: "data.txt", data: Data(repeating: 0x41, count: 1000), modified: modified)
+        try writer.finish()
+    }
+
+    @Test func aLocalHeaderOffsetNearTheTopFailsInsteadOfTrapping() throws {
+        let directory = try makeBackupScratchDirectory()
+        defer { try? FileManager.default.removeItem(atPath: directory) }
+        try forcedZip64(directory + "/a.zip")
+        var raw = try readBytes(directory + "/a.zip")
+        let fields = try zip64ExtraFields(raw)
+        patchUInt64(&raw, at: fields.offset, UInt64.max - 15)
+        try writeBytes(directory + "/hostile.zip", raw)
+        let reader = try ZipReader(path: directory + "/hostile.zip")
+        defer { reader.close() }
+        let entry = try #require(reader.entries.first)
+        #expect(entry.localHeaderOffset == UInt64.max - 15)
+        #expect(throws: ZipError("local file header is beyond the end of the file")) {
+            try reader.extract(entry, to: directory + "/out") { _ in }
+        }
+    }
+
+    @Test func aZip64RecordOffsetNearTheTopFailsInsteadOfTrapping() throws {
+        let directory = try makeBackupScratchDirectory()
+        defer { try? FileManager.default.removeItem(atPath: directory) }
+        try forcedZip64(directory + "/a.zip")
+        var raw = try readBytes(directory + "/a.zip")
+        let locator = try #require(firstIndex(of: [0x50, 0x4b, 0x06, 0x07], in: raw))
+        patchUInt64(&raw, at: locator + 8, UInt64.max - 15)
+        try writeBytes(directory + "/hostile.zip", raw)
+        #expect(throws: ZipError("invalid zip64 end of central directory record")) {
+            _ = try ZipReader(path: directory + "/hostile.zip")
+        }
+    }
+
+    @Test func anUncompressedSizeNearTheTopIsAZipBombNotATrap() throws {
+        let directory = try makeBackupScratchDirectory()
+        defer { try? FileManager.default.removeItem(atPath: directory) }
+        try forcedZip64(directory + "/a.zip")
+        var raw = try readBytes(directory + "/a.zip")
+        let fields = try zip64ExtraFields(raw)
+        patchUInt64(&raw, at: fields.uncompressed, UInt64.max - 15)
+        try writeBytes(directory + "/hostile.zip", raw)
+        try BackupFiles.createDirectory(directory + "/contents")
+        do {
+            try BackupBundle.extract(directory + "/hostile.zip", into: directory + "/contents")
+            Issue.record("a hostile size was extracted")
+        } catch {
+            #expect(backupErrorMessage(error).contains("possible zip bomb"))
+        }
+    }
+}
+
+@Suite struct ZipPythonInteropTests {
+    private static let python = "/usr/bin/python3"
+    private static let script = """
+        import sys, zipfile
+        with zipfile.ZipFile(sys.argv[1]) as archive:
+            bad = archive.testzip()
+            if bad is not None:
+                sys.exit("corrupt entry: " + bad)
+            archive.extractall(sys.argv[2])
+        """
+
+    @Test(arguments: [false, true])
+    func pythonsZipfileReadsABundle(forceZip64: Bool) throws {
+        guard FileManager.default.isExecutableFile(atPath: Self.python) else {
+            withKnownIssue("/usr/bin/python3 is not installed; the zipfile interop check did not run") {
+                Issue.record("python3 missing")
+            }
+            return
+        }
+        let directory = try makeBackupScratchDirectory()
+        defer { try? FileManager.default.removeItem(atPath: directory) }
+        let dump = (0..<300_000).map { UInt8(truncatingIfNeeded: ($0 / 5) &* 7) }
+        try writeBytes(directory + "/db.sql", dump)
+        try BackupFiles.createDirectory(directory + "/attachments/tx-1")
+        try writeBytes(directory + "/attachments/tx-1/caf\u{e9}.pdf", Array("pdf".utf8))
+        let zipPath: String
+        if forceZip64 {
+            zipPath = directory + "/forced.zip"
+            let writer = try ZipWriter(path: zipPath, forceZip64: true)
+            try writer.addFile(name: "db.sql", path: directory + "/db.sql")
+            try BackupBundle.addTree(writer, root: directory + "/attachments", prefix: "attachments")
+            try writer.finish()
+        } else {
+            zipPath = try BackupBundle.create(
+                destinationDirectory: directory + "/out", deviceId: "dev", schemaHead: "0130_head", appVersion: "1",
+                dbSqlPath: directory + "/db.sql", attachmentsDirectory: directory + "/attachments",
+                frontendState: .object(["keys": .object([:])]), now: Date(timeIntervalSince1970: 1_760_000_000))
+        }
+        let status = try run(Self.python, ["-I", "-c", Self.script, zipPath, directory + "/py"])
+        #expect(status == 0)
+        let extracted = try readBytes(directory + "/py/db.sql")
+        #expect(extracted == dump)
+        let attachment = try readBytes(directory + "/py/attachments/tx-1/caf\u{e9}.pdf")
+        #expect(attachment == Array("pdf".utf8))
+    }
+}
+
 final class TotalCounter: @unchecked Sendable {
     private(set) var value: UInt64 = 0
 

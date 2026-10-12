@@ -68,9 +68,10 @@ public enum BackupFiles {
         return Darwin.lstat(path, &status) == 0 && (status.st_mode & S_IFMT) == S_IFDIR
     }
 
+    /// `fs.statSync(path).isFile()`: follows symlinks, like Electron.
     public static func isRegularFile(_ path: String) -> Bool {
         var status = stat()
-        return Darwin.lstat(path, &status) == 0 && (status.st_mode & S_IFMT) == S_IFREG
+        return Darwin.stat(path, &status) == 0 && (status.st_mode & S_IFMT) == S_IFREG
     }
 
     public static func size(_ path: String) -> UInt64? {

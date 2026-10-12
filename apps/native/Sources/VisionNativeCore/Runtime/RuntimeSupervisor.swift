@@ -198,6 +198,17 @@ public actor RuntimeSupervisor: BackupSettingsStore {
 
         try enterLaunchPhase(.preparingDatabase)
         try await runtime.ensureLayout()
+        // A restore interrupted mid-switch: settle the attachment tree before the Demo
+        // preparation rolls back a pending database switch.
+        // A failure is logged and the launch goes on; the Demo preparation reports an
+        // unreadable runtime marker itself.
+        do {
+            if let recovery = try await runtime.recoverPendingAttachmentSwitch() {
+                logger.log("warn", "[backup] interrupted attachment switch recovered: \(recovery)")
+            }
+        } catch {
+            logger.log("error", "[backup] could not recover an interrupted attachment switch: \(error)")
+        }
         try enterLaunchPhase(.seedingDemo)
         let clock = dependencies.clock
         let now: @Sendable () -> Date = { clock.now() }

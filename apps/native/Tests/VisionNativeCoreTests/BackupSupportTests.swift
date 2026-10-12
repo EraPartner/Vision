@@ -68,16 +68,21 @@ final class StringBox: @unchecked Sendable {
         #expect(BackupPassphrase.set("", store: store) == PassphraseUpdateResult(success: true, available: true))
         #expect(store.stored == nil)
 
+        // Electron: a store that exists but fails reports `available: true` and `String(err)`.
         let failing = BackupPassphrase.set("phrase", store: InMemoryPassphraseStore(failsWrites: true))
-        #expect(failing == PassphraseUpdateResult(success: false, available: false, error: BackupPassphrase.unavailableMessage))
+        #expect(!failing.success)
+        #expect(failing.available)
+        #expect(failing.error?.hasPrefix("Error: Keychain: ") == true)
+        let missing = BackupPassphrase.set("phrase", store: nil)
+        #expect(missing == PassphraseUpdateResult(success: false, available: false, error: BackupPassphrase.unavailableMessage))
         #expect(
-            failing.jsonValue
+            missing.jsonValue
                 == .object([
                     "success": .bool(false), "available": .bool(false),
                     "error": .string("OS secure storage is not available on this device."),
                 ]))
-        let missing = BackupPassphrase.set("phrase", store: nil)
-        #expect(!missing.success)
+        let clearedWithoutStore = BackupPassphrase.set("", store: nil)
+        #expect(clearedWithoutStore == PassphraseUpdateResult(success: true, available: true))
     }
 }
 
@@ -292,9 +297,27 @@ final class StringBox: @unchecked Sendable {
         try makeTree(directory + "/live", ["x/y.txt": "y"])
         try DirectorySwitch.export(directory + "/live", to: directory + "/copy")
         #expect(BackupFiles.exists(directory + "/copy/x/y.txt"))
+        try writeBytes(directory + "/file", Array("x".utf8))
+        #expect(throws: BackupFailure("Attachment directory is not a directory: \(directory)/file")) {
+            try DirectorySwitch.export(directory + "/file", to: directory + "/refused")
+        }
         try DirectorySwitch.export(directory + "/none", to: directory + "/empty")
         #expect(BackupFiles.isDirectory(directory + "/empty"))
         let names = try FileManager.default.contentsOfDirectory(atPath: directory + "/empty")
         #expect(names.isEmpty)
+    }
+}
+
+@Suite struct BackupFilesTests {
+    @Test func regularFileChecksFollowSymlinksLikeElectron() throws {
+        let directory = try makeBackupScratchDirectory()
+        defer { try? FileManager.default.removeItem(atPath: directory) }
+        try writeBytes(directory + "/target.visionbak", Array("x".utf8))
+        try FileManager.default.createSymbolicLink(
+            atPath: directory + "/link.visionbak", withDestinationPath: directory + "/target.visionbak")
+        try BackupFiles.createDirectory(directory + "/folder")
+        #expect(BackupFiles.isRegularFile(directory + "/link.visionbak"))
+        #expect(!BackupFiles.isRegularFile(directory + "/folder"))
+        #expect(!BackupFiles.isRegularFile(directory + "/missing"))
     }
 }

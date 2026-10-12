@@ -483,7 +483,7 @@ public final class ZipReader {
             }
             _ = try locator.u32()
             let zip64Offset = try locator.u64()
-            guard zip64Offset + 56 <= fileSize else { throw ZipError("invalid zip64 end of central directory record") }
+            guard fileSize >= 56, zip64Offset <= fileSize - 56 else { throw ZipError("invalid zip64 end of central directory record") }
             var record = ByteReader(
                 try BackupFiles.read(
                     handle, at: zip64Offset, count: 56, message: "invalid zip64 end of central directory record"))
@@ -599,7 +599,9 @@ public final class ZipReader {
     /// of output and may throw to stop (the zip-bomb guard).
     public func extract(_ entry: ZipEntry, to destination: String, onBytes: @escaping (Int) throws -> Void) throws {
         guard !entry.isDirectory else { throw ZipError("Cannot extract a directory entry as a file") }
-        guard entry.localHeaderOffset + 30 <= fileSize else {
+        // Offsets come from the archive, so compare by subtraction: a crafted value near
+        // UInt64.max must fail, not trap.
+        guard fileSize >= 30, entry.localHeaderOffset <= fileSize - 30 else {
             throw ZipError("local file header is beyond the end of the file")
         }
         var local = ByteReader(
@@ -611,6 +613,7 @@ public final class ZipReader {
         local.offset = 26
         let nameLength = UInt64(try local.u16())
         let extraLength = UInt64(try local.u16())
+        // Cannot overflow: the offset is at most fileSize - 30 and both lengths are 16-bit.
         let dataStart = entry.localHeaderOffset + 30 + nameLength + extraLength
         guard dataStart <= fileSize, entry.compressedSize <= fileSize - dataStart else {
             throw ZipError("file data overflows file bounds: \(entry.name)")

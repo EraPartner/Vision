@@ -75,6 +75,8 @@ public actor BackupService {
     private let now: @Sendable () -> Date
     /// `backupInFlight`: the running backup, which a quit-time backup waits for.
     private var backupTask: Task<JSONValue, Never>?
+    /// A restore is switching the database and attachments; backups wait until it ends.
+    private var restoreInFlight = false
 
     public init(
         context: BackupContext,
@@ -146,10 +148,13 @@ public actor BackupService {
         return runtime
     }
 
-    /// `backup:run`: one backup at a time.
+    /// `backup:run`: one backup at a time, and none while a restore runs.
     public func runBackup(destination: String, frontendStateJson: String?) async -> JSONValue {
         if backupTask != nil {
             return .object(["success": .bool(false), "error": .string("A backup is already in progress")])
+        }
+        if restoreInFlight {
+            return .object(["success": .bool(false), "error": .string("A restore is in progress")])
         }
         let task = Task { await self.backupResult(destination: destination, frontendStateJson: frontendStateJson) }
         backupTask = task
@@ -201,7 +206,10 @@ public actor BackupService {
         } else {
             warning = "Backup encryption skipped: no passphrase configured."
         }
-        let removed = BackupRetention.cleanup(directory: destination, deviceId: deviceId, now: now())
+        let cleanupDate = now()
+        let removed = try await runBlocking {
+            BackupRetention.cleanup(directory: destination, deviceId: deviceId, now: cleanupDate)
+        }
         var result: [String: JSONValue] = [
             "success": .bool(true), "file": .string(finalPath), "encrypted": .bool(encrypted),
             "cleanupRemoved": .int(removed),
@@ -215,6 +223,10 @@ public actor BackupService {
     /// instead of starting a second one. Failures are logged; the caller's quit timeout
     /// bounds the whole step.
     public func runQuitBackup(rawSettings: JSONValue?) async {
+        if restoreInFlight {
+            logger.log("warn", "[backup] quit: a restore is in progress; skipping the quit backup")
+            return
+        }
         if let running = backupTask {
             logger.log("log", "[backup] quit: waiting for the backup already in progress")
             _ = await running.value
@@ -234,10 +246,15 @@ public actor BackupService {
     // MARK: - Restore
 
     /// `backup:is-encrypted` for a picked path.
-    public nonisolated func isEncrypted(_ path: String) -> Bool {
-        guard BackupFiles.exists(path) else { return false }
-        if path.hasSuffix(".visionbak") || path.hasSuffix(".visionbak.enc") { return BackupBundle.isEncrypted(path) }
-        return LegacySQLBackup.isEncrypted(path)
+    public nonisolated func isEncrypted(_ path: String) async -> Bool {
+        let encrypted = try? await runBlocking { () -> Bool in
+            guard BackupFiles.exists(path) else { return false }
+            if path.hasSuffix(".visionbak") || path.hasSuffix(".visionbak.enc") {
+                return BackupBundle.isEncrypted(path)
+            }
+            return LegacySQLBackup.isEncrypted(path)
+        }
+        return encrypted ?? false
     }
 
     /// `backup:restore` for a picked path: the confirmation, then the bundle or legacy
@@ -249,6 +266,11 @@ public actor BackupService {
         guard await confirm() else {
             return .object(["success": .bool(false), "error": .string("Restore cancelled by user")])
         }
+        guard !restoreInFlight else {
+            return .object(["success": .bool(false), "error": .string("A restore is already in progress")])
+        }
+        restoreInFlight = true
+        defer { restoreInFlight = false }
         let lower = path.lowercased()
         do {
             if lower.hasSuffix(".visionbak") || lower.hasSuffix(".visionbak.enc") {
@@ -264,9 +286,24 @@ public actor BackupService {
     private static let invalidPassphrasePattern =
         #"bad decrypt|wrong final block|unable to authenticate|missing metadata\.json|missing db\.sql|end of central directory|not a zip file"#
 
+    /// The live database's revision, else the payload's migration chain head
+    /// (`getLocalMigrationChainHead`), else empty.
     private func currentSchemaHead(_ runtime: any BackupRuntime) async -> String {
-        // Electron falls back to the repository's migration chain; Vision Native has none.
-        (try? await runtime.schemaHead()) ?? ""
+        if let live = try? await runtime.schemaHead(), !live.isEmpty { return live }
+        return await runtime.migrationChainHead()
+    }
+
+    /// `assertBackupSchemaCompatible`, except that a numbered backup revision is refused
+    /// when this install's revision cannot be determined, instead of restoring unchecked.
+    private func checkSchema(_ candidate: String, runtime: any BackupRuntime, noun: String) async throws {
+        guard BackupRestore.revisionNumericPrefix(candidate) != nil else { return }
+        let current = await currentSchemaHead(runtime)
+        guard BackupRestore.revisionNumericPrefix(current) != nil else {
+            throw BackupFailure(
+                "SCHEMA_UNKNOWN: This \(noun) was created on schema revision \"\(candidate)\" but this Vision "
+                    + "install's schema revision could not be determined, so it was not restored.")
+        }
+        try BackupRestore.assertSchemaCompatible(candidate, current: current, noun: noun)
     }
 
     /// `runBundleRestore`.
@@ -300,8 +337,7 @@ public actor BackupService {
         if let raw = opened.metadata["schemaHead"], raw.isTruthy {
             let head = BackupRestore.javaScriptString(raw)
             schemaHead = head
-            let current = await currentSchemaHead(runtime)
-            try BackupRestore.assertSchemaCompatible(head, current: current, noun: "bundle")
+            try await checkSchema(head, runtime: runtime, noun: "bundle")
         }
         let logger = self.logger
         let warning = try await BackupRestore.restoreBundle(
@@ -340,8 +376,7 @@ public actor BackupService {
         let restoreSource = source
         let dumpHead = try await runBlocking { BackupRestore.readDumpSchemaHead(restoreSource) }
         if !dumpHead.isEmpty {
-            let current = await currentSchemaHead(runtime)
-            try BackupRestore.assertSchemaCompatible(dumpHead, current: current)
+            try await checkSchema(dumpHead, runtime: runtime, noun: "backup")
         }
         let logger = self.logger
         try await BackupRestore.restoreDatabase(

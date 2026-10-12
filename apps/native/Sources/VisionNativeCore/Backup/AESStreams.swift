@@ -28,6 +28,27 @@ final class AESCryptor {
         reference = created
     }
 
+    /// AES-CTR (`kCCModeCTR`) from `initialCounter`, incrementing the whole 128-bit block
+    /// big-endian. For GCM's `inc32` the two agree until the low 32 bits wrap, which
+    /// `AESGCMStream` never reaches (it stops at GCM's message limit).
+    init(counterModeKey key: [UInt8], initialCounter: [UInt8]) throws {
+        guard key.count == kCCKeySizeAES256 else { throw BackupFailure("AES-256 requires a 32-byte key") }
+        guard initialCounter.count == kCCBlockSizeAES128 else { throw BackupFailure("AES-CTR requires a 16-byte counter") }
+        var created: CCCryptorRef?
+        let status: CCCryptorStatus = key.withUnsafeBytes { keyBytes in
+            initialCounter.withUnsafeBytes { counterBytes in
+                CCCryptorCreateWithMode(
+                    CCOperation(kCCEncrypt), CCMode(kCCModeCTR), CCAlgorithm(kCCAlgorithmAES), CCPadding(ccNoPadding),
+                    counterBytes.baseAddress, keyBytes.baseAddress, key.count, nil, 0, 0,
+                    CCModeOptions(kCCModeOptionCTR_BE), &created)
+            }
+        }
+        guard status == CCCryptorStatus(kCCSuccess), let created else {
+            throw BackupFailure("AES-CTR is unavailable (CommonCrypto status \(status))")
+        }
+        reference = created
+    }
+
     deinit {
         if let reference { CCCryptorRelease(reference) }
     }
@@ -183,57 +204,38 @@ struct GHash {
 
 /// AES-256-GCM with a 96-bit nonce and no additional data, as a stream: Node's
 /// `createCipheriv("aes-256-gcm")` / `createDecipheriv` output, without holding the whole
-/// message in memory (CryptoKit's `AES.GCM` is one-shot). The keystream is AES-ECB over
-/// the counter blocks `nonce || inc32(1 + i)`; the tag is `E(K, nonce || 1) ^ GHASH`.
+/// message in memory (CryptoKit's `AES.GCM` is one-shot). The keystream is CommonCrypto's
+/// AES-CTR from the counter block `nonce || 2`; the tag is `E(K, nonce || 1) ^ GHASH`.
 final class AESGCMStream {
-    private let cipher: AESCryptor
-    private let nonce: [UInt8]
+    /// GCM's limit, 2^32 - 2 blocks; it also keeps the 128-bit CTR counter from carrying
+    /// out of its low 32 bits, where it would differ from `inc32`.
+    static let maximumMessageBytes: UInt64 = ((1 << 32) - 2) * 16
+
+    private let counterMode: AESCryptor
     private let encrypting: Bool
     private var ghash: GHash
-    private var counter: UInt32 = 2
-    private var keystream: [UInt8] = []
-    private var keystreamOffset = 0
+    private var processed: UInt64 = 0
     private let tagMask: [UInt8]
 
     init(key: [UInt8], nonce: [UInt8], encrypting: Bool) throws {
         guard nonce.count == 12 else { throw BackupFailure("AES-GCM requires a 12-byte nonce") }
-        cipher = try AESCryptor(operation: kCCEncrypt, key: key, iv: nil, options: kCCOptionECBMode)
-        self.nonce = nonce
-        self.encrypting = encrypting
-        let h = try cipher.update([UInt8](repeating: 0, count: 16))
+        let block = try AESCryptor(operation: kCCEncrypt, key: key, iv: nil, options: kCCOptionECBMode)
+        let h = try block.update([UInt8](repeating: 0, count: 16))
         ghash = GHash(h: h)
-        tagMask = try cipher.update(nonce + [0, 0, 0, 1])
-    }
-
-    private func refill(blocks: Int) throws {
-        var counters: [UInt8] = []
-        counters.reserveCapacity(blocks * 16)
-        for _ in 0..<blocks {
-            guard counter != 0 else { throw BackupFailure("AES-GCM message is too long") }
-            counters.append(contentsOf: nonce)
-            counters.append(contentsOf: [
-                UInt8(truncatingIfNeeded: counter >> 24), UInt8(truncatingIfNeeded: counter >> 16),
-                UInt8(truncatingIfNeeded: counter >> 8), UInt8(truncatingIfNeeded: counter),
-            ])
-            counter &+= 1
-        }
-        keystream = try cipher.update(counters)
-        keystreamOffset = 0
+        tagMask = try block.update(nonce + [0, 0, 0, 1])
+        counterMode = try AESCryptor(counterModeKey: key, initialCounter: nonce + [0, 0, 0, 2])
+        self.encrypting = encrypting
     }
 
     /// Encrypts or decrypts the next bytes of the message.
     func process(_ input: [UInt8]) throws -> [UInt8] {
-        var output = [UInt8](repeating: 0, count: input.count)
-        var index = 0
-        while index < input.count {
-            if keystreamOffset == keystream.count {
-                try refill(blocks: min(4096, (input.count - index + 15) / 16))
-            }
-            let count = min(keystream.count - keystreamOffset, input.count - index)
-            for k in 0..<count { output[index + k] = input[index + k] ^ keystream[keystreamOffset + k] }
-            keystreamOffset += count
-            index += count
+        guard !input.isEmpty else { return [] }
+        guard UInt64(input.count) <= AESGCMStream.maximumMessageBytes - processed else {
+            throw BackupFailure("AES-GCM message is too long")
         }
+        let output = try counterMode.update(input)
+        guard output.count == input.count else { throw BackupFailure("AES-CTR returned a short block") }
+        processed += UInt64(input.count)
         ghash.update(encrypting ? output : input)
         return output
     }

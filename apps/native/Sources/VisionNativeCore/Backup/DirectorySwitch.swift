@@ -96,6 +96,8 @@ public enum DirectorySwitch {
         if BackupFiles.isDirectory(source) {
             try copyTree(source, to: destination)
             _ = chmod(destination, 0o700)
+        } else if BackupFiles.exists(source) {
+            throw BackupFailure("Attachment directory is not a directory: \(source)")
         } else {
             try BackupFiles.createDirectory(destination)
         }

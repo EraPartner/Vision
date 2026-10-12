@@ -29,15 +29,24 @@ actor FakeBackupRuntime: BackupRuntime {
     private(set) var restoredAttachments: [String] = []
     private var head: String
     private var startFailures: Int
+    private let schemaHeadFails: Bool
+    private let chainHead: String
     private var dumpGate: (entered: Latch, release: Latch)?
+    private var restoreGate: (entered: Latch, release: Latch)?
 
-    init(head: String = "0130_head", startFailures: Int = 0) {
+    init(head: String = "0130_head", startFailures: Int = 0, schemaHeadFails: Bool = false, chainHead: String = "") {
         self.head = head
         self.startFailures = startFailures
+        self.schemaHeadFails = schemaHeadFails
+        self.chainHead = chainHead
     }
 
     func holdDump(entered: Latch, release: Latch) {
         dumpGate = (entered, release)
+    }
+
+    func holdRestore(entered: Latch, release: Latch) {
+        restoreGate = (entered, release)
     }
 
     func dumpDatabase(to destination: String) async throws {
@@ -55,16 +64,25 @@ actor FakeBackupRuntime: BackupRuntime {
         try writeBytes(destination + "/tx-1/receipt.txt", Array("receipt".utf8))
     }
 
-    func schemaHead() async throws -> String { head }
+    func schemaHead() async throws -> String {
+        if schemaHeadFails { throw FakeRuntimeFailure(message: "relation alembic_version does not exist") }
+        return head
+    }
+
+    func migrationChainHead() async -> String { chainHead }
 
     func activateRestoredDatabase(_ path: String, format: RestoreFormat, expectedSchemaHead: String) async throws
         -> DatabaseSwitchToken
     {
         calls.append("activate:\(format.rawValue):\(expectedSchemaHead)")
+        if let gate = restoreGate {
+            gate.entered.open()
+            await gate.release.wait()
+        }
         restoredDump = try String(contentsOfFile: path, encoding: .utf8)
         return DatabaseSwitchToken(
             version: 1, liveDatabase: "vision", previousDatabase: "vision_previous", activatedDatabase: "vision",
-            activatedAt: "2025-10-09T08:53:20.123Z")
+            activatedAt: "2025-10-09T08:53:20.125Z")
     }
 
     func replaceAttachments(from source: String) async throws -> DirectorySwitchToken {
@@ -132,7 +150,7 @@ private struct ServiceFixture {
             runtimeProvider: { provided },
             passphraseStoreFactory: { _ in store },
             logger: log,
-            now: { Date(timeIntervalSince1970: 1_760_000_000.123) })
+            now: { Date(timeIntervalSince1970: 1_760_000_000.125) })
     }
 
     var backups: String { directory + "/Backups" }
@@ -178,7 +196,8 @@ private struct ServiceFixture {
         #expect(result["warning"] == nil)
         let file = try #require(result["file"]?.stringValue)
         #expect(file.hasSuffix(".visionbak.enc"))
-        #expect(fixture.service.isEncrypted(file))
+        let encrypted = await fixture.service.isEncrypted(file)
+        #expect(encrypted)
 
         let restored = await fixture.service.restore(path: file, passphrase: nil, confirm: { true })
         #expect(
@@ -260,7 +279,8 @@ private struct ServiceFixture {
         defer { fixture.remove() }
         let path = fixture.directory + "/legacy.sql"
         try writeBytes(path, Array("INSERT INTO public.alembic_version (version_num) VALUES ('0042_x');\n".utf8))
-        #expect(!fixture.service.isEncrypted(path))
+        let encrypted = await fixture.service.isEncrypted(path)
+        #expect(!encrypted)
         let result = await fixture.service.restore(path: path, passphrase: nil, confirm: { true })
         #expect(result == .object(["success": .bool(true), "file": .string(path)]))
         let calls = await fixture.runtime.calls
@@ -356,5 +376,75 @@ private struct ServiceFixture {
         let cleared = await fixture.service.setPassphrase("   ")
         #expect(cleared.success)
         #expect(fixture.store.stored == nil)
+    }
+
+    @Test func theSchemaCheckFallsBackToThePayloadsMigrationChain() async throws {
+        let source = try ServiceFixture(runtime: FakeBackupRuntime(head: "0130_head"))
+        defer { source.remove() }
+        let backup = await source.service.runBackup(destination: source.backups, frontendStateJson: nil)
+        let file = try #require(backup["file"]?.stringValue)
+
+        let current = try ServiceFixture(runtime: FakeBackupRuntime(schemaHeadFails: true, chainHead: "0130_head"))
+        defer { current.remove() }
+        let restored = await current.service.restore(path: file, passphrase: nil, confirm: { true })
+        #expect(restored["success"] == .bool(true))
+
+        let older = try ServiceFixture(runtime: FakeBackupRuntime(schemaHeadFails: true, chainHead: "0129_prev"))
+        defer { older.remove() }
+        let refused = await older.service.restore(path: file, passphrase: nil, confirm: { true })
+        let error = try #require(refused["error"]?.stringValue)
+        #expect(error.hasPrefix("Error: BUNDLE_SCHEMA_NEWER:"))
+    }
+
+    @Test func anUnknownCurrentSchemaRefusesANumberedBackup() async throws {
+        let source = try ServiceFixture()
+        defer { source.remove() }
+        let backup = await source.service.runBackup(destination: source.backups, frontendStateJson: nil)
+        let file = try #require(backup["file"]?.stringValue)
+
+        let unknown = try ServiceFixture(runtime: FakeBackupRuntime(schemaHeadFails: true))
+        defer { unknown.remove() }
+        let result = await unknown.service.restore(path: file, passphrase: nil, confirm: { true })
+        let error = try #require(result["error"]?.stringValue)
+        #expect(error.hasPrefix("Error: SCHEMA_UNKNOWN: This bundle was created on schema revision \"0130_head\""))
+        let calls = await unknown.runtime.calls
+        #expect(calls.isEmpty)
+
+        let legacy = unknown.directory + "/legacy.sql"
+        try writeBytes(legacy, Array("INSERT INTO alembic_version (version_num) VALUES ('0042_x');\n".utf8))
+        let legacyResult = await unknown.service.restore(path: legacy, passphrase: nil, confirm: { true })
+        let legacyError = try #require(legacyResult["error"]?.stringValue)
+        #expect(legacyError.hasPrefix("Error: SCHEMA_UNKNOWN: This backup was created"))
+    }
+
+    @Test func backupsWaitForARunningRestore() async throws {
+        let runtime = FakeBackupRuntime()
+        let fixture = try ServiceFixture(runtime: runtime)
+        defer { fixture.remove() }
+        let backup = await fixture.service.runBackup(destination: fixture.backups, frontendStateJson: nil)
+        let file = try #require(backup["file"]?.stringValue)
+
+        let entered = Latch()
+        let release = Latch()
+        await runtime.holdRestore(entered: entered, release: release)
+        let service = fixture.service
+        let restore = Task { await service.restore(path: file, passphrase: nil, confirm: { true }) }
+        await entered.wait()
+
+        let refused = await service.runBackup(destination: fixture.backups, frontendStateJson: nil)
+        #expect(refused == .object(["success": .bool(false), "error": .string("A restore is in progress")]))
+        let second = await service.restore(path: file, passphrase: nil, confirm: { true })
+        #expect(second == .object(["success": .bool(false), "error": .string("A restore is already in progress")]))
+        await service.runQuitBackup(
+            rawSettings: .object(["backupDir": .string(fixture.backups), "backupOnQuit": .bool(true)]))
+        #expect(fixture.log.lines.contains { $0.contains("a restore is in progress; skipping the quit backup") })
+
+        release.open()
+        let restored = await restore.value
+        #expect(restored["success"] == .bool(true))
+        let calls = await runtime.calls
+        #expect(calls.filter { $0 == "dump" }.count == 1)
+        let after = await service.runBackup(destination: fixture.backups, frontendStateJson: nil)
+        #expect(after["success"] == .bool(true))
     }
 }

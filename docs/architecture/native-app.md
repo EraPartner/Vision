@@ -353,12 +353,13 @@ interchangeable:
 | Legacy SQL files | `.sql` and `.sql.enc` (`VISIONENC1` / `VISIONENC2`) restore as database-only backups                             |
 | Key derivation   | `Scrypt.swift`, checked against the RFC 7914 vectors                                                             |
 
-New bundles are always v2. AES-GCM is streamed (CommonCrypto AES counter blocks plus GHASH), so a
+New bundles are always v2. AES-GCM is streamed (CommonCrypto AES-CTR plus GHASH), so a
 large bundle is never held in memory; tests compare it with CryptoKit and with files written by
 Node. The test resources carry the Electron Vision 1.0.2 fixture
 (`packaging/electron/backup/fixtures/vision-1.0.2-sanitized.visionbak.enc`) byte for byte, and a
 test opens it. Extraction refuses absolute and `..` entry names and stops beyond 10 GiB of output
-or 100,000 entries.
+or 100,000 entries. The v1 salt is Electron Vision's (`vision-backup-v1`, from the app name
+"Vision"); legacy files written by Vision Demo, whose salt differs, are out of scope.
 
 ### Passphrase
 
@@ -367,22 +368,31 @@ the login Keychain with the service `com.vaultvoyager.vision-native.backup-passp
 backup device id as the account (`KeychainPassphraseStore` behind the `PassphraseStore` protocol).
 Vision Native never writes Electron's `backupPassphraseEncrypted` field. An empty passphrase
 removes the item. Without a passphrase a backup is written unencrypted with Electron's warning.
+A failed Keychain write answers `available: true` with the error, like a failed `safeStorage`
+write. The item belongs to the app's code signature: after an ad-hoc or otherwise unsigned
+rebuild, macOS can ask for the login password before the new build may read it.
 
 ### Device id, directory and retention
 
 The device id is Electron's (the first 8 hex digits of SHA-1 over `darwin|arch|hostname|userData`),
 persisted once as `backupDeviceId` in `settings.json`. Without a configured directory the default
 is `~/Library/Mobile Documents/com~apple~CloudDocs/Vision Native/Backups` when iCloud Drive exists,
-and the quit-time backup is then on. Retention keeps the newest seven backups of this device and
+and the quit-time backup is then on. The folder is deliberately `Vision Native`, not Electron's
+`Vision`, so the two apps' backups and retention never mix. Retention keeps the newest seven backups of this device and
 removes older ones, and `.partial` leftovers, only when they are more than 10 minutes old.
 
 ### Restore
 
 `backup:is-encrypted` and `backup:restore` accept only a path the restore picker returned
 (`RestorePathAllowList`, Electron's `ALLOWED_RESTORE_PATHS`) with a `.visionbak`,
-`.visionbak.enc`, `.enc` or `.sql` extension. After the confirmation, the bundle is decrypted
-and extracted into a private temporary directory, and a bundle from a newer schema is refused with
-`BUNDLE_SCHEMA_NEWER`. Then, as in `restoreNativeBundle`:
+`.visionbak.enc`, `.enc` or `.sql` extension; the picker offers a "Vision Backup" and an
+"All Files" filter. After the confirmation, the bundle is decrypted and extracted into a private
+temporary directory, and a bundle from a newer schema is refused with `BUNDLE_SCHEMA_NEWER`. The
+current schema is the live database's Alembic head, else the newest revision file in the
+payload's `alembic/versions` (Electron's `getLocalMigrationChainHead`). When neither is known, a
+backup with a numbered revision is refused with `SCHEMA_UNKNOWN` instead of restoring unchecked,
+which is stricter than Electron. Only one restore runs at a time, and `backup:run` and the
+quit-time backup are refused while it runs. Then, as in `restoreNativeBundle`:
 
 1. `psql --single-transaction` restores `db.sql` into a staging database, which is validated and
    switched in with the persisted `pendingDatabaseSwitch` token (the Demo seeding switch).
@@ -395,6 +405,17 @@ A failure before step 3 completes rolls back the attachments, then the database,
 backend (unless the database switch could not be recovered). Errors keep Electron's
 `"Error: <message>"` form, so the frontend's `PASSPHRASE_REQUIRED` and `INVALID_PASSPHRASE`
 checks reopen the passphrase prompt.
+
+A launch after a quit or crash during a restore settles `pendingAttachmentSwitch` before the
+backend starts. If `pendingDatabaseSwitch` is still persisted, the previous attachment tree goes
+back and the database switch then rolls back. Otherwise the restore had committed: the restored
+tree stays and the previous one is removed.
+
+> [!warning] Audit continuity is phase 1e work
+> Electron's restore also pauses and resumes the audit closure (`pauseAuditClosure`,
+> `resumeAuditClosure`), checks the restored audit history (`assertRestoredAuditHistory`), offers
+> `restoreWithAuditRecovery` with a second confirmation and returns `auditStatus`. Vision Native
+> has no audit anchor yet, so none of this is ported; phase 1e adds it.
 
 ### Quit-time backup
 

@@ -541,9 +541,29 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost {
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
         panel.allowsMultipleSelection = false
+        // Electron's filters, "Vision Backup" (visionbak, enc, sql) and "All Files", as a
+        // pop-up in the accessory view; NSOpenPanel has no filter menu of its own.
         panel.allowedContentTypes = ["visionbak", "enc", "sql"].compactMap { UTType(filenameExtension: $0) }
+        panel.accessoryView = allFilesAccessory(for: panel)
+        panel.isAccessoryViewDisclosed = true
         guard await runPanel(panel) == .OK, let url = panel.url else { return nil }
         return restorePathAllowList.add(url.path)
+    }
+
+    /// A "Show: Vision Backup / All Files" pop-up, Electron's two file filters.
+    private func allFilesAccessory(for panel: NSOpenPanel) -> NSView {
+        let label = NSTextField(labelWithString: "Show:")
+        let popUp = NSPopUpButton(frame: .zero, pullsDown: false)
+        popUp.addItems(withTitles: ["Vision Backup", "All Files"])
+        let types = panel.allowedContentTypes
+        popUp.target = FileTypeFilterTarget.shared
+        popUp.action = #selector(FileTypeFilterTarget.changed(_:))
+        FileTypeFilterTarget.shared.attach(panel: panel, types: types)
+        let stack = NSStackView(views: [label, popUp])
+        stack.orientation = .horizontal
+        stack.spacing = 8
+        stack.edgeInsets = NSEdgeInsets(top: 8, left: 12, bottom: 8, right: 12)
+        return stack
     }
 
     /// A sheet on the window when it is visible, else an app-modal panel.
@@ -555,8 +575,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost {
     }
 
     func isBackupEncrypted(_ path: String) async -> Bool {
-        let service = backupService
-        return await Task.detached { service.isEncrypted(path) }.value
+        await backupService.isEncrypted(path)
     }
 
     /// `backup:restore`: the localized confirmation, then the restore, which stops and
@@ -642,6 +661,24 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost {
         case .minimize: window.performMiniaturize(nil)
         case .none: break
         }
+    }
+}
+
+/// Applies the restore picker's file-type pop-up: index 0 keeps the backup types, index 1
+/// allows every file.
+@MainActor
+final class FileTypeFilterTarget: NSObject {
+    static let shared = FileTypeFilterTarget()
+    private weak var panel: NSOpenPanel?
+    private var types: [UTType] = []
+
+    func attach(panel: NSOpenPanel, types: [UTType]) {
+        self.panel = panel
+        self.types = types
+    }
+
+    @objc func changed(_ sender: NSPopUpButton) {
+        panel?.allowedContentTypes = sender.indexOfSelectedItem == 1 ? [] : types
     }
 }
 

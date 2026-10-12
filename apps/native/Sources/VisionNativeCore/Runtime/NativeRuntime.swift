@@ -1051,9 +1051,25 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
         }
     }
 
+    /// `getLocalMigrationChainHead`: the highest numbered revision file in the payload's
+    /// `alembic/versions`, by file name; empty when the payload has none.
+    public func migrationChainHead() async -> String {
+        let versions = PathUtilities.join(runtimeRoot, "alembic", "versions")
+        guard let names = try? fileSystem.contentsOfDirectory(versions) else { return "" }
+        var best = ""
+        for name in names.sorted() where name.hasSuffix(".py") && !name.hasPrefix("_") {
+            let revision = String(name.dropLast(3))
+            guard let candidate = BackupRestore.revisionNumericPrefix(revision) else { continue }
+            if let current = BackupRestore.revisionNumericPrefix(best), candidate <= current { continue }
+            best = revision
+        }
+        return best
+    }
+
     /// `exportAttachments`: a private copy of the attachments tree.
     public func exportAttachments(to destination: String) async throws {
-        try DirectorySwitch.export(layout.attachments, to: destination)
+        let source = layout.attachments
+        try await runBlocking { try DirectorySwitch.export(source, to: destination) }
     }
 
     private func switchNonce() -> String {
@@ -1063,8 +1079,11 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
     /// `replaceAttachments(source, { preservePrevious: true })`: the switch token is
     /// persisted as `pendingAttachmentSwitch` before it is returned.
     public func replaceAttachments(from source: String) async throws -> DirectorySwitchToken {
-        let token = try DirectorySwitch.replace(
-            source: source, destination: layout.attachments, preservePrevious: true, nonce: switchNonce())
+        let destination = layout.attachments
+        let nonce = switchNonce()
+        let token = try await runBlocking {
+            try DirectorySwitch.replace(source: source, destination: destination, preservePrevious: true, nonce: nonce)
+        }
         try await writeState(set: ["pendingAttachmentSwitch": try JSONValue(encoding: token)], remove: [])
         return token
     }
@@ -1077,19 +1096,46 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
     public func rollbackPendingAttachmentSwitch(_ token: DirectorySwitchToken? = nil) async throws {
         var resolved = token
         if resolved == nil { resolved = try await persistedAttachmentSwitch() }
-        _ = try DirectorySwitch.rollback(resolved, nonce: switchNonce())
+        let pending = resolved
+        let nonce = switchNonce()
+        _ = try await runBlocking { try DirectorySwitch.rollback(pending, nonce: nonce) }
         try await writeState(set: [:], remove: ["pendingAttachmentSwitch"])
     }
 
     /// `finalizeAttachmentSwitch`: removes the previous tree.
     public func finalizeAttachmentSwitch(_ token: DirectorySwitchToken) async throws {
-        try DirectorySwitch.finalize(token)
+        _ = try await runBlocking { try DirectorySwitch.finalize(token) }
         try await writeState(set: [:], remove: ["pendingAttachmentSwitch"])
     }
 
-    private func persistedAttachmentSwitch() async throws -> DirectorySwitchToken? {
+    public func persistedAttachmentSwitch() async throws -> DirectorySwitchToken? {
         guard let stored = try await readState()?["pendingAttachmentSwitch"], stored.isTruthy else { return nil }
         return try stored.decode(DirectorySwitchToken.self)
+    }
+
+    /// What launch recovery did with an attachment switch a quit or crash interrupted.
+    public enum AttachmentSwitchRecovery: Equatable, Sendable {
+        /// The database switch was still pending, so the attachments were rolled back with it.
+        case rolledBack
+        /// The database switch had been finalized, so the restored attachments were kept.
+        case finalized
+    }
+
+    /// Launch recovery for `pendingAttachmentSwitch`, before the database switch recovery
+    /// and before the backend starts. While `pendingDatabaseSwitch` is still persisted the
+    /// restore never reached its commit point, so the previous attachment tree goes back
+    /// (the database rolls back next); once the database switch was finalized the restored
+    /// tree is kept and only the previous one is removed.
+    @discardableResult
+    public func recoverPendingAttachmentSwitch() async throws -> AttachmentSwitchRecovery? {
+        guard let token = try await persistedAttachmentSwitch() else { return nil }
+        let state = try await readState() ?? [:]
+        if let pending = state["pendingDatabaseSwitch"], pending.isTruthy {
+            try await rollbackPendingAttachmentSwitch(token)
+            return .rolledBack
+        }
+        try await finalizeAttachmentSwitch(token)
+        return .finalized
     }
 
     /// `start()` then `waitUntilReady({ detailed: true })`, as a restore does after the switch.

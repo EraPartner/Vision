@@ -103,7 +103,7 @@ enum BackupFixture {
 }
 
 @Suite struct BackupBundleTests {
-    private let now = Date(timeIntervalSince1970: 1_760_000_000.123)
+    private let now = Date(timeIntervalSince1970: 1_760_000_000.125)
 
     @Test func namesFollowElectron() {
         #expect(BackupBundle.fileTimestamp(now) == "2025-10-09_08-53-20")
@@ -112,11 +112,11 @@ enum BackupFixture {
 
     @Test func metadataIsPrettyPrintedInElectronsOrder() {
         let json = BackupBundle.metadataJSON(
-            schemaHead: "0130_head", appVersion: "1.2.3", deviceId: "dev", createdAt: "2025-10-09T08:53:20.123Z")
+            schemaHead: "0130_head", appVersion: "1.2.3", deviceId: "dev", createdAt: "2025-10-09T08:53:20.125Z")
         #expect(
             json
                 == "{\n  \"bundleVersion\": 1,\n  \"schemaHead\": \"0130_head\",\n  \"appVersion\": \"1.2.3\",\n"
-                + "  \"deviceId\": \"dev\",\n  \"createdAt\": \"2025-10-09T08:53:20.123Z\",\n  \"encrypted\": false\n}")
+                + "  \"deviceId\": \"dev\",\n  \"createdAt\": \"2025-10-09T08:53:20.125Z\",\n  \"encrypted\": false\n}")
     }
 
     private func makeSources(_ directory: String) throws -> (dump: String, attachments: String) {
@@ -155,7 +155,7 @@ enum BackupFixture {
         defer { opened.cleanup() }
         #expect(opened.metadata["schemaHead"]?.stringValue == "0130_head")
         #expect(opened.metadata["deviceId"]?.stringValue == "dev12345")
-        #expect(opened.metadata["createdAt"]?.stringValue == "2025-10-09T08:53:20.123Z")
+        #expect(opened.metadata["createdAt"]?.stringValue == "2025-10-09T08:53:20.125Z")
         #expect(opened.frontendState == state)
         let dump = try readBytes(opened.dbSqlPath)
         #expect(dump == Array("SELECT 1;\n".utf8))
