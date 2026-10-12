@@ -25,7 +25,7 @@ def classify(paths: Sequence[str], special_paths: Collection[str] = ()) -> bool:
 
 
 def classify_native(paths: Sequence[str]) -> bool:
-    """Decide whether the macOS Vision Native job must run (ADR-203)."""
+    """Decide whether the macOS Vision Native job must run (ADR-204)."""
     if not paths:
         return True
     return any(path.startswith(NATIVE_PREFIX) or path in NATIVE_FILES for path in paths)

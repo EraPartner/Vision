@@ -390,6 +390,14 @@ export interface PensionReductionInput {
     taxableIncome: number;
     /** Tax after the tax-free sum ("om te slane belasting", Com.IB 146/20). */
     taxAfterExemption: number;
+    /**
+     * Activity income left out of the denominator of the art. 147 al. 1, 2° proportion (art. 147
+     * al. 1, 2°, b-c and al. 3; under a joint assessment also FPS circular AAFisc 40/2011
+     * no. 19). Not removed from the art. 153 limit, which keeps the total net income (AAFisc
+     * 40/2011, worked example: tax × pensions / 22,014.47 next to 1,861.42 × pensions /
+     * (22,014.47 − 3,131.12)). Undefined or 0: the plain total net income.
+     */
+    excludedActivityIncome?: number;
 }
 
 export interface PensionReductionResult {
@@ -436,6 +444,32 @@ export function pensionAdditionalReductionFactor(t: number, p: PensionReductionP
 }
 
 /**
+ * Part of a taxpayer's activity income left out of the denominator of the art. 147 al. 1, 2°
+ * proportion (WIB 92 art. 147 al. 1, 2°, b-c and al. 3; FPS circular AAFisc 40/2011 nos 17-22):
+ *  - 1 with a survivor's pension or transition allowance (b, second case; AAFisc 40/2011 no. 18:
+ *    of several applicable denominators the lowest wins);
+ *  - 1 with a statutory pension received from the legal pension age of at most `lower` (b);
+ *  - (upper − pension) / difference above `lower` up to `upper`, capped to [0, 1] (c and al. 3;
+ *    `difference` is the al. 3 amount the FPS indexation notice publishes, which can differ from
+ *    upper − lower after indexation);
+ *  - 0 otherwise.
+ * `grossStatutoryPension` is the gross amount as declared, before any deduction (AAFisc 40/2011
+ * no. 22).
+ */
+export function pensionActivityExclusionFraction(
+    grossStatutoryPension: number,
+    hasSurvivorPension: boolean,
+    p: Pick<PensionReductionParams, "statutoryPensionLimits">,
+): number {
+    if (hasSurvivorPension) return 1;
+    const { lower, upper, difference } = p.statutoryPensionLimits;
+    if (grossStatutoryPension <= 0 || grossStatutoryPension > upper) return 0;
+    if (grossStatutoryPension <= lower) return 1;
+    if (difference <= 0) return 0;
+    return Math.min(Math.max((upper - grossStatutoryPension) / difference, 0), 1);
+}
+
+/**
  * Reduction for pensions of one taxpayer (WIB 92 art. 147 al. 1, 1°-2°; arts 151/1, 151/2, 152,
  * 153; computed per spouse under a joint assessment, art. 150):
  *  - base and additional amounts in full when the net income consists only of pensions, else
@@ -445,9 +479,9 @@ export function pensionAdditionalReductionFactor(t: number, p: PensionReductionP
  *    which also tapers the last third to nothing);
  *  - art. 153: never more than the part of the tax after the tax-free sum that relates to the
  *    pensions, in proportion to the net income (Com.IB 146/20 and the example of 146/24).
- * The exclusion of activity income from the proportion (art. 147 al. 1, 2°, b-c) needs the
- * statutory pension and the pension age, which the model does not carry: the household engine
- * raises `pension_reduction_activity_income_not_excluded` instead.
+ * The proportion leaves `excludedActivityIncome` out of its denominator (art. 147 al. 1, 2°, b-c;
+ * see `pensionActivityExclusionFraction`) and is capped at 1; the art. 153 limit keeps the total
+ * net income.
  */
 export function computePensionReduction(
     input: PensionReductionInput,
@@ -457,11 +491,14 @@ export function computePensionReduction(
     const netIncome = Math.max(input.netIncome, 0);
     if (pension <= 0 || netIncome <= 0) return NO_PENSION_REDUCTION;
     const p = table.pensionReduction;
-    const share = Math.min(pension / netIncome, 1);
+    const excluded = Math.min(Math.max(input.excludedActivityIncome ?? 0, 0), netIncome);
+    const denominator = netIncome - excluded;
+    const share = denominator > 0 ? Math.min(pension / denominator, 1) : 1;
     const taxable = Math.max(input.taxableIncome, 0);
     const base = p.base * share * pensionBaseReductionFactor(taxable, p);
     const additional = p.additional * share * pensionAdditionalReductionFactor(taxable, p);
-    const taxShareLimit = Math.max(input.taxAfterExemption, 0) * share;
+    const taxShareLimit =
+        Math.max(input.taxAfterExemption, 0) * Math.min(pension / netIncome, 1);
     return { base, additional, taxShareLimit, total: Math.min(base + additional, taxShareLimit) };
 }
 

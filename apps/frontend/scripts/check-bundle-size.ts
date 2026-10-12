@@ -98,7 +98,11 @@ const BUDGETS_KB = {
     // measured.
     // Raised from 1362 for the reduction for pensions, joint gifts, the per-borrower
     // own-home baskets and their EN/NL strings: 1364.10 measured.
-    total: 1365,
+    // Raised from 1365 for the pension type of box V, the art. 147 exclusion of activity
+    // income and their EN/NL strings (ADR-204): 1365.61 measured.
+    // Raised from 1366 for the pension-exclusion issues, the published al. 3 difference and
+    // the "Not entered" pension type (ADR-204 review): 1366.19 measured.
+    total: 1367,
 };
 
 /** Parses dist/index.html for the entry module script and its modulepreload set. */

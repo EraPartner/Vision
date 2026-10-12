@@ -514,6 +514,7 @@ export function applyProfileV1PatchToHousehold(
         if (primary.kind !== kind) {
             const oldCategory = forfaitCategoryOf(primary.kind);
             delete primary.netProfessionalIncome;
+            if (kind !== "pension") delete primary.pensionKind;
             primary.kind = kind;
             // Drop the expense choice of a category no activity uses any more.
             if (!partnerA.activities.some((x) => forfaitCategoryOf(x.kind) === oldCategory))

@@ -12,13 +12,16 @@ import {
 } from "@/components/ui/select";
 import { DatePicker } from "@/components/shared/DatePicker";
 import { parseLocalDateFromYmd, toYmd } from "@/lib/dateUtils";
+import { SELECT_NONE, fromSelectValue, toSelectValue } from "@/lib/selectValue";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import {
     ACTIVITY_KINDS,
+    PENSION_KINDS,
     type ActivityKind,
     type ForfaitCategory,
     type HouseholdPartner,
     type IncomeActivity,
+    type PensionKind,
 } from "@/lib/belgianTax/householdTypes";
 import type { ProfessionalExpenseMethod } from "@/lib/belgianTax";
 import type { PartnerStepProps } from "./types";
@@ -123,6 +126,42 @@ function ActivityEditor({
                 )}
             </div>
             <FieldHint>{t(`tax.household.activity.kind.${activity.kind}.desc`)}</FieldHint>
+
+            {activity.kind === "pension" && (
+                <div className="space-y-2">
+                    <Label htmlFor={`${id}-pension-kind`}>
+                        {t("tax.household.activity.pensionKind")}
+                    </Label>
+                    <Select
+                        value={toSelectValue(activity.pensionKind)}
+                        onValueChange={(value) => {
+                            const pensionKind = fromSelectValue(value);
+                            onChange({
+                                pensionKind: pensionKind ? (pensionKind as PensionKind) : undefined,
+                            });
+                        }}
+                    >
+                        <SelectTrigger id={`${id}-pension-kind`} className="w-full">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value={SELECT_NONE}>
+                                {t("tax.household.activity.pensionKind.none")}
+                            </SelectItem>
+                            {PENSION_KINDS.map((kind) => (
+                                <SelectItem key={kind} value={kind}>
+                                    {t(`tax.household.activity.pensionKind.${kind}`)}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <FieldHint>
+                        {t("tax.household.activity.pensionKind.desc")}
+                        {activity.pensionKind &&
+                            ` ${t(`tax.household.activity.pensionKind.${activity.pensionKind}.desc`)}`}
+                    </FieldHint>
+                </div>
+            )}
 
             {isNet ? (
                 <ProfileNumberField
