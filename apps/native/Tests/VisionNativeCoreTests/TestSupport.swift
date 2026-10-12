@@ -229,9 +229,7 @@ final class FakeRunner: ProcessRunning, @unchecked Sendable {
 
     func run(_ executable: String, _ arguments: [String], options: RunOptions) async throws -> RunResult {
         let call = Call(executable: executable, arguments: arguments, options: options)
-        lock.lock()
-        recorded.append(call)
-        lock.unlock()
+        lock.withLock { recorded.append(call) }
         return try handler(call)
     }
 }
@@ -324,10 +322,10 @@ final class FakePorts: PortProbing, @unchecked Sendable {
     }
 
     func isPortFree(_ port: Int) async -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        probed.append(port)
-        return !busy.contains(port)
+        lock.withLock {
+            probed.append(port)
+            return !busy.contains(port)
+        }
     }
 }
 
@@ -349,9 +347,7 @@ final class FakeHTTP: HTTPGetting, @unchecked Sendable {
     }
 
     func get(_ url: URL, timeout: TimeInterval) async throws -> HTTPResponse {
-        lock.lock()
-        recorded.append(url)
-        lock.unlock()
+        lock.withLock { recorded.append(url) }
         return try handler(url)
     }
 }
@@ -369,10 +365,10 @@ final class FakeClock: RuntimeClock, @unchecked Sendable {
     }
 
     func sleep(milliseconds: Int) async {
-        lock.lock()
-        current = current.addingTimeInterval(Double(milliseconds) / 1000)
-        slept += milliseconds
-        lock.unlock()
+        lock.withLock {
+            current = current.addingTimeInterval(Double(milliseconds) / 1000)
+            slept += milliseconds
+        }
     }
 }
 

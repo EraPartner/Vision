@@ -44,11 +44,11 @@ final class FakeDemoRuntime: DemoSeedingRuntime, @unchecked Sendable {
     func readState() async throws -> [String: JSONValue]? { state }
 
     func writeState(set: [String: JSONValue], remove: [String]) async throws {
-        lock.lock()
-        stateValue = RuntimeMarker.merged(
-            current: stateValue, runtimeId: "vision_native", set: set, remove: remove,
-            now: Date(timeIntervalSince1970: 0))
-        lock.unlock()
+        lock.withLock {
+            stateValue = RuntimeMarker.merged(
+                current: stateValue, runtimeId: "vision_native", set: set, remove: remove,
+                now: Date(timeIntervalSince1970: 0))
+        }
         record("writeState")
     }
 
@@ -56,9 +56,7 @@ final class FakeDemoRuntime: DemoSeedingRuntime, @unchecked Sendable {
 
     func rollbackDatabaseSwitch(_ token: JSONValue?) async throws {
         record("rollback:\(token?["activatedDatabase"]?.stringValue ?? "-")")
-        lock.lock()
-        stateValue?.removeValue(forKey: "pendingDatabaseSwitch")
-        lock.unlock()
+        lock.withLock { _ = stateValue?.removeValue(forKey: "pendingDatabaseSwitch") }
     }
 
     func validateCustomDump(_ path: String) async throws { record("validate:\(PathUtilities.basename(path))") }
@@ -69,10 +67,10 @@ final class FakeDemoRuntime: DemoSeedingRuntime, @unchecked Sendable {
     }
 
     func getDatabaseStats() async throws -> DatabaseStats {
-        lock.lock()
-        statsReads += 1
-        let result = statsReads > 1 ? (statsAfterStart ?? stats) : stats
-        lock.unlock()
+        let result: DatabaseStats = lock.withLock {
+            statsReads += 1
+            return statsReads > 1 ? (statsAfterStart ?? stats) : stats
+        }
         record("stats")
         return result
     }
