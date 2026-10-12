@@ -342,7 +342,7 @@ public actor AuditAnchor {
     /// `deriveTransferKey`: scrypt N=32768, r=8, p=1 to 32 bytes.
     static func transferKey(password: String, salt: Data) throws -> SymmetricKey {
         SymmetricKey(
-            data: try Scrypt.derive(password: Array(password.utf8), salt: Array(salt), parameters: .v2, length: 32))
+            data: try Scrypt.derive(password: Array(password.utf8), salt: Array(salt), parameters: Scrypt.v2, length: 32))
     }
 
     /// `exportProtectedTransfer`: the key and receipt, AES-256-GCM encrypted under a
