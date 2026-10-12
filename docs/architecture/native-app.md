@@ -16,9 +16,12 @@ tags:
     packaging,
     postgresql,
     runtime,
+    webkit,
+    menus,
+    preload-bridge,
     adr-204,
   ]
-description: "Vision Native is the Swift macOS app under apps/native/ that replaces the Electron shell in phases (ADR-204). Covers the directory layout, the runtime supervisor that starts its own PostgreSQL 18 cluster and backend on synthetic Demo data, payload discovery, the Debug-only backend override, the Native (macOS) CI job and install-native.sh."
+description: "Vision Native is the Swift macOS app under apps/native/ that replaces the Electron shell in phases (ADR-204). Covers the directory layout, the runtime supervisor that starts its own PostgreSQL 18 cluster and backend on synthetic Demo data, payload discovery, the phase 1c shell (window, launch state, preload bridge, web view navigation and download policy, menus, dock and vibrancy), the Debug-only backend override, the Native (macOS) CI job and install-native.sh."
 aliases: [vision native, native app, swift app]
 ---
 
@@ -37,10 +40,11 @@ aliases: [vision native, native app, swift app]
 | ----------------------------------------------- | ------------------------------------------------------------------------------------- |
 | `apps/native/project.yml`                       | XcodeGen spec: project `VisionNative`, macOS app target "Vision Native", macOS 26.0   |
 | `apps/native/Config/Signing.xcconfig`           | `DEVELOPMENT_TEAM` from `VISION_NATIVE_TEAM_ID`, optional gitignored `Local.xcconfig` |
-| `apps/native/VisionNative/`                     | SwiftUI `App`, the `WKWebView` shell and the "backend not running" placeholder        |
+| `apps/native/VisionNative/`                     | AppKit entry point, window, menus, `WKWebView` shell and the SwiftUI launch state     |
 | `apps/native/Package.swift`                     | SwiftPM package (Swift 6 language mode) with the `VisionNativeCore` library, no deps  |
 | `apps/native/Sources/VisionNativeCore/`         | `BackendLocator` and `BackendHealth`: non-UI logic, testable without the Xcode UI     |
 | `apps/native/Sources/VisionNativeCore/Runtime/` | Runtime supervisor, PostgreSQL and backend lifecycle, Demo seeding, system seams      |
+| `apps/native/Sources/VisionNativeCore/Shell/`   | Shell logic without AppKit: bridge contract, codec, policy, menu model, window frame  |
 | `apps/native/Tests/VisionNativeCoreTests/`      | Swift Testing tests                                                                   |
 | `install-native.sh`                             | Local Release build and install to `/Applications/Vision Native.app`                  |
 
@@ -49,6 +53,10 @@ the SwiftPM state are gitignored. The app target uses Swift 6 with complete stri
 automatic signing, no hardened runtime and no App Sandbox, because the app supervises the bundled
 PostgreSQL runtime as child processes. App Transport Security allows only local networking
 (`NSAllowsLocalNetworking`).
+
+XcodeGen stays the project-file tool: ADR-204 decision 3 made it the default and the owner has not
+objected. The macOS deployment target (`project.yml` and `Package.swift`) and the CI runner label
+(`macos-26`) are pinned together and are raised together when GitHub's runner image moves.
 
 ## Runtime supervision
 
@@ -170,6 +178,153 @@ backend. The URL must be absolute `http` or `https` with a loopback host (`local
 logged reason. `BackendHealth.status` then checks `GET <base>/health` before loading. Debug builds
 make the web view inspectable with the Safari Web Inspector.
 
+## Shell (phase 1c)
+
+Phase 1c gives the native shell Electron's behaviour. The decisions that do not depend on AppKit or
+WebKit live in `Sources/VisionNativeCore/Shell/` and have Swift Testing tests; the files in
+`VisionNative/` only apply them.
+
+| File (`VisionNative/`)  | Role                                                                                |
+| ----------------------- | ----------------------------------------------------------------------------------- |
+| `VisionNativeApp.swift` | `@main` AppKit entry point and `AppDelegate`: reopen, dock menu, CSV open, quit     |
+| `ShellController.swift` | Window, frame persistence, launch flow, menus, dock badge, vibrancy, `BridgeHost`   |
+| `WebShell.swift`        | `WKWebView` subclass, navigation, UI and download delegates, script message handler |
+| `LaunchStateView.swift` | SwiftUI launch state (splash and error page) and `ShellResolver`                    |
+| `MenuBuilder.swift`     | Turns the `ApplicationMenu` model into `NSMenu`s; role items use AppKit's actions   |
+
+### Window and launch state
+
+The app no longer uses a SwiftUI `App` scene, so SwiftUI does not replace the menu bar. One window
+opens at Electron's 1280 x 800 with a minimum of 800 x 600, titled "Vision Native". It matches
+Electron's `titleBarStyle: "hiddenInset"`: full-size content view, transparent title bar and a
+hidden title, so the frontend draws its topbar under the traffic lights (the `electron-mac` CSS in
+`apps/frontend/src/index.css`). The traffic lights keep AppKit's default position; Electron moves
+them to `{ x: 20, y: 20 }`. WebKit has no `-webkit-app-region`, so the user script reports a
+mouse-down on `.app-topbar` (outside buttons, links, inputs and combo boxes) and the shell calls
+`NSWindow.performDrag(with:)`. A double-click follows the system "double-click a window's title
+bar" setting. Native full screen sends `window:fullscreen`.
+
+The frame is saved 500 ms after a move or resize to `windowBounds` in `settings.json`, the key and
+top-left screen coordinates Electron uses, and restored clamped to the most overlapping screen's
+work area. Closing the window hides it; a dock click shows it again, and only Quit ends the app.
+
+The launch state replaces Electron's data-URL splash and `assets/error.html`. It paints the splash
+palette (`deriveSplashPalette`: the persisted `splashTheme`, else a near-black base with the brand
+hue) with the Vision mark, a spinner and the localized `splash.*` status for the supervisor phase.
+On failure it shows `app.errorPageTitle`, the reason, Open logs and Try again. The window
+background and the web view's `underPageBackgroundColor` use the same base colour, and the web view
+stays hidden until the page calls `ready()` (or 3 seconds after the document finishes loading), so
+there is no white flash on launch. `theme:persist-splash` updates these colours at once.
+
+The native chrome follows the system appearance, like Electron, which never sets
+`nativeTheme.themeSource`. The page applies its own theme. `app:set-vibrancy` shows an
+`NSVisualEffectView` (`underWindowBackground`, behind window, following the window's active state)
+behind a transparent page, which is Electron's `setVibrancy("under-window")`.
+
+### Preload bridge
+
+A user script injected at document start in the main frame defines the six `window.*` bridges of
+`packaging/electron/preload.ts` with the same method names and promise semantics, so the unchanged
+frontend detects a desktop shell (`isElectron()` checks `window.electronUpdater`, and
+`electronAPI.platform` is `"darwin"`). Methods call
+`window.webkit.messageHandlers.visionNative.postMessage(JSON.stringify({ channel, args }))`, a
+`WKScriptMessageHandlerWithReply`. The reply is JSON text, or an error message the promise rejects
+with. Like `registerHandler`, the shell first checks the sender (the main frame whose security
+origin, protocol, host and port, is the backend origin), then refuses malformed messages and
+unknown channels, validates the arguments with the rules of `runtime/ipc-schemas.ts` and answers
+invalid calls with each channel's `invalidResult`. Messages are limited to 64 KiB once the channel
+is known; `backup:run`, which carries the localStorage snapshot, accepts up to 8 MiB, and nothing
+larger is parsed. Events reach the page through `window.__visionNativeDispatch`; renderer-bound
+events wait until the page calls `ready()`, and a newly committed document clears that state (a
+load that turns into a download does not). The script also reports structural `error` and
+`unhandledrejection` metadata, like the preload. A Swift Testing test runs the generated script in
+JavaScriptCore with a stub message handler.
+
+`BridgeContract.entries` in `Shell/BridgeContract.swift` is the channel to handler table:
+
+| Bridge             | Electron channels                                                                                                             | Vision Native                                                           |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `electronUpdater`  | `update:check-github`, `update:install-shell`, `update:pre-update-backup`                                                     | Empty object: no updater (ADR-204 decision 5); direct calls reject      |
+| `electronBackup`   | `backup:run`, `select-dir`, `select-file`, `restore`, `is-encrypted`, `get-encryption-status`, `set-passphrase`               | Stubs that reject "not available in Vision Native yet" (phase 1d)       |
+| `electronBackup`   | `backup:save-settings`, `backup:load-settings`                                                                                | `backup_settings` database setting, mirrored to `settings.json`         |
+| `electronAudit`    | `audit:enroll`, `read`, `export`, `transfer-export`, `transfer-import`, `rotate-key`                                          | Stubs that reject "not available in Vision Native yet" (phase 1e)       |
+| `electronServices` | `services:save-settings`, `services:load-settings`                                                                            | Database setting with baseline writes, mirrored to `settings.json`      |
+| `electronRecovery` | `recovery:retry`, `recovery:open-logs`                                                                                        | Relaunch through the supervisor; open `native/vision_native/logs`       |
+| `electronAPI`      | `app:renderer-ready`, `app:set-badge`, `app:set-language`, `app:set-vibrancy`, `app:get-accent-color`, `theme:persist-splash` | Implemented (queue flush, dock badge, menus, material, accent, palette) |
+| (user script)      | `app:renderer-failure`                                                                                                        | Logged as kind, name, source file and line only                         |
+| (Vision Native)    | `native:window-drag`, `native:window-titlebar-double-click`                                                                   | Topbar drag region                                                      |
+
+The backup settings use the same baseline writes and `settings.json` mirror (`backupDir`,
+`backupOnQuit`) as the services settings, and `save-settings` refuses system directories like
+`validateBackupDest`, so Settings > Backup keeps its directory and on-quit toggle. Until phase 1d
+there is no iCloud Drive default directory and nothing reads the mirror at quit.
+
+Events: `menu:action`, `app:csv-opened` (a CSV opened with the app, at most 25 MiB),
+`window:fullscreen` and `app:accent-color-changed` (on `AppleColorPreferencesChangedNotification`)
+are sent. `backend:lost` and `backend:restored` can be subscribed to but never fire, because the
+health watchdog is not ported yet.
+
+### Navigation, new windows and downloads
+
+`NavigationPolicy` mirrors `will-frame-navigate`, `will-redirect` and `setWindowOpenHandler`:
+
+- A frame may load only the backend origin (scheme, host and port, no credentials). Subframes may
+  also load `about:blank` and `about:srcdoc`.
+- The two trusted links (`ShellLinks.repository` and `documentation`, Electron's
+  `TRUSTED_EXTERNAL_URLS`) open in the default browser through `NSWorkspace`, compared as exact
+  strings. Everything else is cancelled and logged with its scheme and host only.
+- `window.open` and `target="_blank"` never create a web view: trusted links open in the browser,
+  everything else is denied.
+- `<a download>` of a `blob:` URL from the app origin, a `data:` URL or an app URL, and app
+  responses sent as attachments or of a type WebKit cannot show, become a `WKDownload`. A save
+  panel opens in Downloads with the suggested name, Electron's default download behaviour. When
+  the chosen file exists, the download writes a hidden temporary file next to it and replaces the
+  file only when it finished; a failed download leaves the old file. A folder is never replaced.
+- A main-frame response that WebKit would show must come from the backend origin.
+- `<input type="file">` opens an `NSOpenPanel`. Camera and microphone requests are denied.
+- When the web content process terminates, the shell reloads the page, at most twice within 30
+  seconds (`CrashReloadPolicy`); after that it shows the launch error page, whose Try again starts
+  afresh.
+
+### Menus and dock
+
+`ApplicationMenu` builds Electron's macOS menu: the app menu (About, Settings… `⌘,`, Services, Hide,
+Hide Others, Show All, Quit; no update check), File (New transaction `⌘N`, Import CSV… `⇧⌘I`, Close
+Window), Edit, View (Toggle Sidebar `⌃⌘S`, Appearance with the four theme modes, Reload, Actual
+Size, Zoom In `⌘+` with a hidden `⌘=` alternate, Zoom Out, Toggle Full Screen `⌃⌘F`), Go (`⌘1` to `⌘9` from `GO_MENU_ROUTES`),
+Window and Help (Keyboard Shortcuts, Source Code, Documentation). Labels that Electron passes to
+`t()` use the same keys from `i18n/source/en.json` and `nl.json`, which a build phase copies to
+`Contents/Resources/i18n/`; role items keep Electron's English labels. `app:set-language` reloads
+the strings, persists `nativeLanguage` and rebuilds the menus. Items that act in the page send
+`menu:action` through the bridge, showing the window first. The Toggle Developer Tools item is
+left out: Debug builds are inspectable from Safari's Develop menu.
+
+The dock menu has New transaction and Home. `app:set-badge` sets the dock badge to the planned-
+payment count (0 clears it), like `app.dock.setBadge`. Electron shows no dock progress, so neither
+does Vision Native. The PNG of `badge-image.ts` is the Windows overlay icon and is not needed.
+
+### Runtime checks on a Mac
+
+CI builds and unit-tests the shell but cannot drive WebKit. Check these by hand on the first Mac
+run:
+
+- Blob exports: `apps/frontend/src/lib/downloadBlob.ts` revokes the object URL immediately after
+  the click. WebKit may need a delayed `revokeObjectURL`; that frontend change waits for this test.
+- Topbar drag: `performDrag(with:)` from the bridge message still moves the window, and the
+  mouse-up reaches the page afterwards (no stuck pressed state).
+- Clicks under the transparent title bar reach the page's topbar controls.
+- The web view's context menu: its Download Image and Download Linked File items go through the
+  download policy and save panel. Trimming that menu is not planned for phase 1c.
+
+### Left for later phases
+
+Phase 1d ports backup and restore (`electronBackup`, backup on quit, pre-update backup); phase 1e
+the audit anchor and Keychain witness (`electronAudit`). Still missing as well: the health
+watchdog and `backend:lost`/`backend:restored`, the renderer-ready watchdog that reloads and shows
+the error page, the production security headers of `registerSecurityHeaders`, the text context
+menu with spelling suggestions, Electron's traffic-light position, zoom persistence and JavaScript
+`alert`/`confirm` panels, which the frontend does not use.
+
 ## CI
 
 Linux cannot build macOS apps, so the `native-macos` job ("Native (macOS)") in
@@ -201,6 +356,7 @@ signature changes on every build. There is no updater: rerunning the script is t
 
 - [[docs/adr/204-vision-native-swift-app-target|ADR-204]]
 - [[docs/reference/native-parity/index|Native parity inventory]]
+- [[docs/reference/native-parity/shell-and-settings|Native parity: shell, menus, dock and bridge]]
 - [[docs/architecture/electron|Electron Desktop Architecture]]
 - [[docs/reference/scripts|Scripts Reference]]
 - [[docs/guides/native-macos-runtime|Native macOS Runtime Guide]]

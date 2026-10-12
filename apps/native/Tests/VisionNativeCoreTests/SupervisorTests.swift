@@ -354,3 +354,22 @@ private func makeSupervisor(
         #expect((attributes[.posixPermissions] as? NSNumber)?.intValue == 0o600)
     }
 }
+
+@Suite struct SupervisorShellSettingsTests {
+    @Test func updateSettingsKeepsOtherKeysAndCurrentSettingsReadsThem() async throws {
+        let harness = try Harness()
+        harness.fileSystem.addFile(harness.layout.settings, #"{"appPort":41000,"keepServicesOnQuit":true}"#)
+        let supervisor = makeSupervisor(harness)
+        try await supervisor.updateSettings { settings in
+            settings["windowBounds"] = .object(["x": .int(1), "y": .int(2), "width": .int(800), "height": .int(600)])
+            settings["nativeLanguage"] = .string("nl")
+        }
+        let settings = await supervisor.currentSettings()
+        #expect(settings["appPort"] == .int(41000))
+        #expect(settings["keepServicesOnQuit"] == .bool(true))
+        #expect(settings["nativeLanguage"] == .string("nl"))
+        #expect(WindowFrame.savedBounds(settings) == CGRect(x: 1, y: 2, width: 800, height: 600))
+        #expect(supervisor.settingsPath == harness.layout.settings)
+        #expect(supervisor.logsDirectory == harness.layout.logs)
+    }
+}
