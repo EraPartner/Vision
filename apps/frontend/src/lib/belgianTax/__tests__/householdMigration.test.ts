@@ -231,6 +231,27 @@ describe("parseHouseholdV2", () => {
         ).toBe(3);
     });
 
+    test("accepts pensionKind on a pension only; the upgrade leaves it undefined and a v1 kind edit drops it", () => {
+        const h = upgradeProfileV1ToHousehold({ ...employee, employmentType: "retired" });
+        const act = h.partners[0]!.activities[0]!;
+        expect(act.kind).toBe("pension");
+        expect(act).not.toHaveProperty("pensionKind");
+        const typed = structuredClone(h);
+        typed.partners[0]!.activities[0]!.pensionKind = "survivor_or_transition";
+        expect(parseHouseholdV2(typed).ok).toBe(true);
+        const wrong = structuredClone(typed);
+        wrong.partners[0]!.activities[0]!.kind = "employee";
+        const result = parseHouseholdV2(wrong);
+        expect(result.ok).toBe(false);
+        if (!result.ok) expect(result.issues.some((i) => i.includes("pensionKind"))).toBe(true);
+        const edited = applyProfileV1PatchToHousehold(typed, { employmentType: "employee" });
+        expect(edited.partners[0]!.activities[0]).not.toHaveProperty("pensionKind");
+        expect(parseHouseholdV2(edited).ok).toBe(true);
+        expect(
+            applyProfileV1PatchToHousehold(typed, { grossAnnualIncome: 30_000 }).partners[0]!.activities[0]!.pensionKind,
+        ).toBe("survivor_or_transition");
+    });
+
     test("rejects dangling partner references", () => {
         const h = upgradeProfileV1ToHousehold(employee);
         const bad = { ...h, home: { ...h.home, mortgageCreditPartnerId: "B" } };

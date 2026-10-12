@@ -464,6 +464,100 @@ export const JOINT_SCENARIOS: readonly Scenario[] = [
         },
     },
     {
+        id: "JP-03",
+        description: "statutory pensioner 15,000 with employee income and a quotient towards a spouse without income: the activity income in the quotient leaves the receiver's proportion",
+        rows: ["hh-pension-quotient", "hh-quotient", "pension-activity-income", "pension-reduction-share", "pension-reduction-taper", "pension-reduction-limit"],
+        articles: "WIB 92 arts 87, 147 al. 1, 2°, b (N26: 19,630), 150, 152, 153; FPS circular AAFisc 40/2011 nos 19 a, 20, 22 and worked example",
+        status: "verified",
+        household: {
+            ...married([], []),
+            partners: [
+                partner("A", [
+                    activity("pension", 15_000, { pensionKind: "statutory_from_legal_age" }),
+                    activity("employee", 40_000),
+                ]),
+                partner("B", []),
+            ],
+        },
+        verify: (r) => {
+            // A employee: SS 5,228; base 34,772 → forfait cap 5,930; activity income 28,842
+            // A net professional income 43,842; art. 87: 30% = 13,152.60 (< cap 13,460)
+            // A after the transfer (× 0.7): 30,689.40, pensions 10,500, activity income
+            //   20,189.40, all excluded (15,000 ≤ 19,630) → share 10,500 / 10,500 = 1
+            //   tax 4,080 + 4,992 + 1,889.40 × 45% (850.23) = 9,922.23 − 2,727.50 = 7,194.73
+            //   art. 152: 1/3 + 2/3 × (57,560 − 30,689.40) / 28,780 = 0.955770210795
+            //   → 2,121.112155710 < art. 153 limit 7,194.73 × 10,500 / 30,689.40 = 2,461.59
+            // B 13,152.60: pensions 4,500; activity income in the quotient (no. 19 a)
+            //   13,152.60 × 28,842 / 43,842 = 8,652.60 → share 4,500 / 4,500 = 1 → 2,676.50
+            //   tax 3,288.15 − 2,727.50 = 560.65; art. 153 on the total net income:
+            //   560.65 × 4,500 / 13,152.60 = 191.819488162 → limited
+            // A (7,194.73 − 2,121.112155710) × 1.07 = 5,428.771093390
+            // B (560.65 − 191.819488162) × 1.07 = 394.648647667
+            // Without the quotient: A 43,842 with B's 10,910 (art. 134) → 15,840.90 − 6,523
+            //   = 9,317.90; share 1; 2,219.27 × (1/3 + 2/3 × 13,718 / 28,780) = 1,444.967365300
+            //   → 8,424.037919129 > 5,823.419741057 → the quotient applies
+            expect(r.quotient.applied).toBe(true);
+            eur(r.quotient.transfer, 13_152.6);
+            eur(r.partners[0]?.pensionReduction, 2_121.11215571);
+            eur(r.partners[1]?.pensionReduction, 191.819488162);
+            eur(r.totals.totalPIT, 5_823.419741057);
+            expect(r.issues.map((i) => i.code)).not.toContain("pension_reduction_activity_income_not_excluded");
+        },
+    },
+    {
+        id: "JP-04",
+        description: "statutory pensioner 24,000 with employee income and a survivor's pensioner with income of their own: both exclusions in the receiver's proportion",
+        rows: ["hh-pension-quotient", "hh-quotient", "pension-activity-income", "pension-reduction-share", "pension-reduction-taper"],
+        articles: "WIB 92 arts 88, 147 al. 1, 2°, b-c and al. 3 (N26: 19,630 / 28,780), 150, 151/1, 152, 153; FPS circular AAFisc 40/2011 nos 18, 19 a and c, 20",
+        status: "verified",
+        household: {
+            ...married([], []),
+            partners: [
+                partner("A", [
+                    activity("pension", 24_000, { pensionKind: "statutory_from_legal_age" }),
+                    activity("employee", 40_000),
+                ]),
+                partner(
+                    "B",
+                    [
+                        activity("pension", 2_000, { pensionKind: "survivor_or_transition" }),
+                        activity("employee", 3_000),
+                    ],
+                    { otherTaxableIncome: 8_000 },
+                ),
+            ],
+        },
+        verify: (r) => {
+            // A: activity income 28,842 (JP-03); net professional income 52,842
+            // B employee: SS 392.10; base 2,607.90; forfait 782.37 → 1,825.53; B 3,825.53
+            // art. 88: 30% × 56,667.53 > cap → transfer 13,460 − 3,825.53 = 9,634.47
+            // A excluded fraction (art. 147 al. 3): (28,780 − 24,000) / 9,150 = 478 / 915
+            // A after: 43,207.53; pensions 24,000 × (1 − 9,634.47 / 52,842) = 19,624.176223459
+            //   excluded 28,842 × 478 / 915 × (1 − 9,634.47 / 52,842) = 12,320.047109494
+            //   share 19,624.176223459 / 30,887.482890506 = 0.635343977139
+            //   tax 4,080 + 4,992 + 14,407.53 × 45% = 15,555.3885 − 2,727.50 = 12,827.8885
+            //   art. 152: 1/3 + 2/3 × 14,352.47 / 28,780 = 0.665797312949
+            //   → 938.774096837 (no additional); (12,827.8885 − 938.774096837) × 1.07
+            //   = 12,721.352411384
+            // B after: 13,460 + 8,000 other income = 21,460; pensions 2,000
+            //   + 24,000 × 9,634.47 / 52,842 = 6,375.823776541
+            //   excluded: own 1,825.53 (survivor's pension, no. 19 c) + 9,634.47 × 28,842 / 52,842
+            //   × 478 / 915 (no. 19 a) = 4,572.669775752 → share 6,375.823776541 / 16,887.330224248
+            //   = 0.377550725418
+            //   tax 4,080 + 5,140 × 40% = 6,136 − 2,727.50 = 3,408.50
+            //   base 2,219.27 × share = 837.886998399; art. 151/1: 457.23 × 7,320 / 9,150 × share
+            //   = 138.102014546 → 975.989012945 < art. 153 limit 3,408.50 × 6,375.82 / 21,460
+            //   = 1,012.67; (3,408.50 − 975.989012945) × 1.07 = 2,602.786756149
+            // Without the quotient the household owes 18,061.145670900 → the quotient applies
+            expect(r.quotient.applied).toBe(true);
+            eur(r.quotient.transfer, 9_634.47);
+            eur(r.partners[0]?.pensionReduction, 938.774096837);
+            eur(r.partners[1]?.pensionReduction, 975.989012945);
+            eur(r.totals.totalPIT, 15_324.139167533);
+            expect(r.issues.map((i) => i.code)).not.toContain("pension_reduction_activity_income_not_excluded");
+        },
+    },
+    {
         id: "JG-01",
         description: "gifts 1,000 paid by A under a joint assessment: the reduction is apportioned on each spouse's taxed income",
         rows: ["hh-donations-joint", "donations", "donations-cap"],

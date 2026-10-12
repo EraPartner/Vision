@@ -71,6 +71,25 @@ export const FORFAIT_CATEGORIES: readonly ForfaitCategory[] = [
     "none",
 ];
 
+/**
+ * Type of a `pension` activity, split as in Part 1, Vak V of the tax return (AY 2026 return,
+ * Fisconetplus 3fa39f11-7b2d-4d86-9dcb-b77f1904de7f):
+ *  - `statutory_from_legal_age`: "Wettelijke pensioenen verkregen vanaf de wettelijke
+ *    pensioenleeftijd" (codes 1228/2228);
+ *  - `survivor_or_transition`: "Overlevingspensioenen en overgangsuitkeringen" (codes 1229/2229);
+ *  - `other`: the other jointly taxable pensions (codes 1211/2211).
+ * The first two decide the art. 147 al. 1, 2°, b-c exclusion of activity income from the pension
+ * proportion; the user classifies the pension exactly as on the return, so the engine never needs
+ * a birth date or the legal pension age.
+ */
+export type PensionKind = "statutory_from_legal_age" | "survivor_or_transition" | "other";
+
+export const PENSION_KINDS: readonly PensionKind[] = [
+    "statutory_from_legal_age",
+    "survivor_or_transition",
+    "other",
+];
+
 /** Self-employed occupation level (RSVZ: main or secondary occupation). Stored, not used yet. */
 export type SelfEmployedOccupation = "main" | "secondary";
 
@@ -83,6 +102,12 @@ export interface IncomeActivity {
     grossIncome: number;
     /** Net professional income; only for `net_professional_amount`. */
     netProfessionalIncome?: number;
+    /**
+     * Return line of a `pension` activity (Vak V codes 1228 / 1229 / 1211); only for `pension`.
+     * Undefined: the art. 147 al. 1, 2°, b-c exclusion is not applied and the engine raises
+     * `pension_reduction_activity_income_not_excluded` when activity income is in the proportion.
+     */
+    pensionKind?: PensionKind;
     /** ISO date (YYYY-MM-DD) the activity started in the income year, informational. */
     startDate?: string;
     /** ISO date (YYYY-MM-DD) the activity ended in the income year, informational. */

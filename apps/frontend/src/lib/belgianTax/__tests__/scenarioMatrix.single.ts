@@ -412,21 +412,131 @@ export const SINGLE_SCENARIOS: readonly Scenario[] = [
     },
     {
         id: "SC-22",
-        description: "pension with employee income: the art. 147 al. 1, 2°, b-c exclusions cannot be applied",
-        rows: ["pension-reduction-share", "pension-activity-income"],
-        articles: "WIB 92 art. 147 al. 1, 2°, a-c",
-        status: "needs_source",
-        missing:
-            "The statutory pension amount and the legal pension age that art. 147 al. 1, 2°, b-c use to leave activity income out of the proportion are not inputs (pension_reduction_activity_income_not_excluded)",
+        description: "statutory pension 20,000 from the legal pension age and employee income: part of the activity income leaves the proportion",
+        rows: ["pension-reduction-share", "pension-activity-income", "pension-reduction-taper", "pension-reduction-limit"],
+        articles: "WIB 92 art. 147 al. 1, 2°, c and al. 2-3 (N26 limits 19,630 / 28,780), arts 151/1, 152, 153; FPS circular AAFisc 40/2011 nos 20, 22",
+        status: "verified",
+        household: single(
+            activity("pension", 20_000, { pensionKind: "statutory_from_legal_age" }),
+            activity("employee", 10_000),
+        ),
+        verify: (r) => {
+            // employee: SS 1,307; base 8,693; forfait 30% 2,607.90 → activity income 6,085.10
+            // net income 26,085.10: 4,080 + 9,765.10 × 40% (3,906.04) = 7,986.04 − 2,727.50
+            //   = 5,258.54
+            // art. 147 al. 3: gross statutory pension 20,000 in (19,630, 28,780] → excluded part
+            //   6,085.10 × (28,780 − 20,000) / (28,780 − 19,630) = 6,085.10 × 8,780 / 9,150
+            //   = 5,839.035846995; share 20,000 / (26,085.10 − 5,839.035846995) = 0.987846321579
+            // art. 152: 26,085.10 ≤ 28,780 → base 2,219.27 × share = 2,192.297706091
+            // art. 151/1: 457.23 × (28,780 − 26,085.10) / 9,150 × share = 133.028797442
+            // total 2,325.326503533 < art. 153 limit 5,258.54 × 20,000 / 26,085.10 = 4,031.83
+            // (5,258.54 − 2,325.326503533) × 1.07 = 3,138.538441220
+            eur(r.partners[0]?.pensionReduction, 2_325.326503533);
+            eur(r.totals.totalPIT, 3_138.53844122);
+            expect(r.issues.map((i) => i.code)).not.toContain("pension_reduction_activity_income_not_excluded");
+        },
+    },
+    {
+        id: "SC-24",
+        description: "statutory pension 15,000 from the legal pension age and employee income: the activity income leaves the proportion in full, art. 153 keeps the total net income",
+        rows: ["pension-reduction-share", "pension-activity-income", "pension-reduction-taper", "pension-reduction-limit"],
+        articles: "WIB 92 art. 147 al. 1, 2°, b (N26: 19,630), arts 151/1, 153; FPS circular AAFisc 40/2011 nos 17 b, 20, 22 and worked example",
+        status: "verified",
+        household: single(
+            activity("pension", 15_000, { pensionKind: "statutory_from_legal_age" }),
+            activity("employee", 10_000),
+        ),
+        verify: (r) => {
+            // net income 21,085.10 (activity income 6,085.10, SC-22): 4,080 + 4,765.10 × 40%
+            //   (1,906.04) = 5,986.04 − 2,727.50 = 3,258.54
+            // art. 147 al. 1, 2°, b: 15,000 ≤ 19,630 → share 15,000 / (21,085.10 − 6,085.10) = 1
+            // base 2,219.27; art. 151/1: 457.23 × (28,780 − 21,085.10) / 9,150 = 384.517937377
+            // art. 153 on the total net income: 3,258.54 × 15,000 / 21,085.10 = 2,318.134606903
+            //   < 2,603.787937377 → limited
+            // (3,258.54 − 2,318.134606903) × 1.07 = 1,006.233770614
+            eur(r.partners[0]?.pensionReduction, 2_318.134606903);
+            eur(r.totals.totalPIT, 1_006.233770614);
+            expect(r.issues.map((i) => i.code)).not.toContain("pension_reduction_activity_income_not_excluded");
+        },
+    },
+    {
+        id: "SC-25",
+        description: "statutory pension 30,000 above the upper limit and employee income: nothing leaves the proportion",
+        rows: ["pension-reduction-share", "pension-activity-income", "pension-reduction-taper"],
+        articles: "WIB 92 art. 147 al. 1, 2°, c (N26: 28,780), arts 151/1, 152",
+        status: "verified",
+        household: single(
+            activity("pension", 30_000, { pensionKind: "statutory_from_legal_age" }),
+            activity("employee", 10_000),
+        ),
+        verify: (r) => {
+            // net income 36,085.10: 4,080 + 4,992 + 7,285.10 × 45% (3,278.295) = 12,350.295
+            //   − 2,727.50 = 9,622.795
+            // 30,000 > 28,780 → no exclusion; share 30,000 / 36,085.10 = 0.831368071586
+            // art. 152: 1/3 + 2/3 × (57,560 − 36,085.10) / 28,780 = 0.830782951123
+            // 2,219.27 × share × 0.830782951123 = 1,532.819651274; art. 151/1: none (≥ 28,780)
+            // (9,622.795 − 1,532.819651274) × 1.07 = 8,656.273623137
+            eur(r.partners[0]?.pensionReduction, 1_532.819651274);
+            eur(r.totals.totalPIT, 8_656.273623137);
+            expect(r.issues.map((i) => i.code)).not.toContain("pension_reduction_activity_income_not_excluded");
+        },
+    },
+    {
+        id: "SC-26",
+        description: "survivor's pension 30,000 and employee income: the activity income leaves the proportion whatever the amount",
+        rows: ["pension-reduction-share", "pension-activity-income", "pension-reduction-taper"],
+        articles: "WIB 92 art. 147 al. 1, 2°, b (\"of in geval van het verkrijgen van een overlevingspensioen\"), art. 152; FPS circular AAFisc 40/2011 no. 17 a",
+        status: "verified",
+        household: single(
+            activity("pension", 30_000, { pensionKind: "survivor_or_transition" }),
+            activity("employee", 10_000),
+        ),
+        verify: (r) => {
+            // as SC-25 but the share is 30,000 / (36,085.10 − 6,085.10) = 1
+            // 2,219.27 × 0.830782951123 = 1,843.731679940
+            // (9,622.795 − 1,843.731679940) × 1.07 = 8,323.597752464
+            eur(r.partners[0]?.pensionReduction, 1_843.73167994);
+            eur(r.totals.totalPIT, 8_323.597752464);
+            expect(r.issues.map((i) => i.code)).not.toContain("pension_reduction_activity_income_not_excluded");
+        },
+    },
+    {
+        id: "SC-27",
+        description: "pension without a pension type and employee income: plain proportion and a warning",
+        rows: ["pension-reduction-share", "pension-activity-income", "pension-reduction-taper"],
+        articles: "WIB 92 art. 147 al. 1, 2°; arts 151/1, 152",
+        status: "verified",
         household: single(activity("pension", 20_000), activity("employee", 10_000)),
         verify: (r) => {
-            // Sourced part: the issue; the reduction then uses the plain art. 147 al. 1, 2° share.
+            // net income 26,085.10, tax 5,258.54 (SC-22); no exclusion without the return line:
+            //   share 20,000 / 26,085.10 = 0.766721231661
+            // base 2,219.27 × share = 1,701.561427788; art. 151/1: 457.23 × 2,694.90 / 9,150
+            //   × share = 103.250881431 → 1,804.812309219
+            // (5,258.54 − 1,804.812309219) × 1.07 = 3,695.488629136
+            eur(r.partners[0]?.pensionReduction, 1_804.812309219);
+            eur(r.totals.totalPIT, 3_695.488629136);
             expect(r.issues).toContainEqual({
                 code: "pension_reduction_activity_income_not_excluded",
                 severity: "warning",
                 partnerId: "A",
             });
-            expect(r.partners[0]?.pensionReduction).toBeGreaterThan(0);
+        },
+    },
+    {
+        id: "SC-28",
+        description: "other pension (return code 1211) and employee income: plain proportion without a warning",
+        rows: ["pension-reduction-share", "pension-activity-income"],
+        articles: "WIB 92 art. 147 al. 1, 2° (b-c need a statutory or survivor's pension)",
+        status: "verified",
+        household: single(
+            activity("pension", 20_000, { pensionKind: "other" }),
+            activity("employee", 10_000),
+        ),
+        verify: (r) => {
+            // Same figures as SC-27: the pension type is entered and excludes nothing.
+            eur(r.partners[0]?.pensionReduction, 1_804.812309219);
+            eur(r.totals.totalPIT, 3_695.488629136);
+            expect(r.issues.map((i) => i.code)).not.toContain("pension_reduction_activity_income_not_excluded");
         },
     },
     {

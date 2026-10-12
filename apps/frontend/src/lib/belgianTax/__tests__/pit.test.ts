@@ -3,7 +3,12 @@ import { getTaxTable, isApproximatedTaxYear } from "..";
 import { computeWithParity } from "./householdParity";
 import { computeSpecialSocialSecurityContribution } from "../socialSecurity";
 import { computePropertyTaxEstimate } from "../propertyTax";
-import { computeOwnHomeCredit, type OwnHomeCreditInputs } from "../personPit";
+import {
+    computeOwnHomeCredit,
+    computePensionReduction,
+    pensionActivityExclusionFraction,
+    type OwnHomeCreditInputs,
+} from "../personPit";
 import type { BelgianTaxProfile } from "../types";
 
 const baseProfile: BelgianTaxProfile = {
@@ -1776,5 +1781,64 @@ describe("reduction for pensions under married_joint (arts 147-153, per spouse b
         expect(row?.amount).toBeCloseTo(-272.5, 9);
         expect(result.federalTaxCredits).toBeCloseTo(272.5, 9);
         expect(result.totalPIT).toBe(0);
+    });
+});
+
+describe("art. 147 al. 1, 2°, b-c: activity income left out of the pension proportion", () => {
+    const t25 = getTaxTable(2025);
+
+    test("the indexed statutory-pension limits per year (N25-N27)", () => {
+        expect(getTaxTable(2024).pensionReduction.statutoryPensionLimits).toEqual({ lower: 19_030, upper: 27_900 });
+        expect(t25.pensionReduction.statutoryPensionLimits).toEqual({ lower: 19_630, upper: 28_780 });
+        expect(getTaxTable(2026).pensionReduction.statutoryPensionLimits).toEqual({ lower: 20_110, upper: 29_490 });
+    });
+
+    test("exclusion fraction: full, partial, above the upper limit, survivor, none", () => {
+        const p = t25.pensionReduction;
+        expect(pensionActivityExclusionFraction(15_000, false, p)).toBe(1);
+        expect(pensionActivityExclusionFraction(19_630, false, p)).toBe(1);
+        // al. 3: (28,780 − 20,000) / (28,780 − 19,630)
+        expect(pensionActivityExclusionFraction(20_000, false, p)).toBeCloseTo(8_780 / 9_150, 12);
+        expect(pensionActivityExclusionFraction(28_780, false, p)).toBe(0);
+        expect(pensionActivityExclusionFraction(28_781, false, p)).toBe(0);
+        expect(pensionActivityExclusionFraction(40_000, true, p)).toBe(1);
+        expect(pensionActivityExclusionFraction(0, false, p)).toBe(0);
+    });
+
+    test("the proportion leaves the excluded income out; art. 153 keeps the total net income", () => {
+        // Pensions 15,000, net income 21,085.10, tax 3,258.54, activity income 6,085.10 excluded:
+        // share 1 → 2,219.27 + 457.23 × 7,694.90 / 9,150 = 2,603.787937377; art. 153 limit
+        // 3,258.54 × 15,000 / 21,085.10 = 2,318.134606903.
+        const input = {
+            pensionIncome: 15_000,
+            netIncome: 21_085.1,
+            taxableIncome: 21_085.1,
+            taxAfterExemption: 3_258.54,
+        };
+        const full = computePensionReduction({ ...input, excludedActivityIncome: 6_085.1 }, t25);
+        expect(full.base + full.additional).toBeCloseTo(2_603.787937377, 9);
+        expect(full.taxShareLimit).toBeCloseTo(2_318.134606903, 9);
+        expect(full.total).toBeCloseTo(2_318.134606903, 9);
+        // Partial: 6,085.10 × 8,780 / 9,150 left out → share 15,000 / 15,246.06…
+        const part = computePensionReduction(
+            { ...input, excludedActivityIncome: (6_085.1 * 8_780) / 9_150 },
+            t25,
+        );
+        const share = 15_000 / (21_085.1 - (6_085.1 * 8_780) / 9_150);
+        expect(part.base).toBeCloseTo(2_219.27 * share, 9);
+        expect(part.taxShareLimit).toBeCloseTo(2_318.134606903, 9);
+        // Nothing excluded (above the upper limit, `other` or kind unset): the plain proportion.
+        const plain = computePensionReduction(input, t25);
+        expect(plain.base).toBeCloseTo((2_219.27 * 15_000) / 21_085.1, 9);
+        expect(computePensionReduction({ ...input, excludedActivityIncome: 0 }, t25)).toEqual(plain);
+    });
+
+    test("the share is capped at 1 when more than the activity income is excluded", () => {
+        const r = computePensionReduction(
+            { pensionIncome: 10_000, netIncome: 12_000, taxableIncome: 12_000, taxAfterExemption: 1_000, excludedActivityIncome: 12_000 },
+            t25,
+        );
+        expect(r.base).toBeCloseTo(2_219.27, 9);
+        expect(r.taxShareLimit).toBeCloseTo((1_000 * 10_000) / 12_000, 9);
     });
 });
