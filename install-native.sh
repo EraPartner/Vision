@@ -1,13 +1,24 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Build Vision Native (apps/native/, ADR-204) in Release and install it to
-# /Applications. Vision Native runs only against the synthetic Vision Demo data.
+# Build Vision Native (apps/native/, ADR-204) in Release, stage its runtime payload
+# (PostgreSQL 18, the compiled backend, Alembic, Chrome Headless Shell and the
+# synthetic Demo seed) into the app, and install it to /Applications. Vision Native
+# runs only on synthetic Demo data in its own application-data directory.
+#
+# VISION_NATIVE_SKIP_PAYLOAD=1 builds without a payload (the app then explains how to
+# provide one). The payload uses the same prepare scripts as install-demo.sh.
 
 REPO_PATH="$(cd "$(dirname "$0")" && pwd)"
 NATIVE_PATH="$REPO_PATH/apps/native"
+ELECTRON_DIR="$REPO_PATH/packaging/electron"
 APP_DEST="/Applications/Vision Native.app"
 DERIVED_DATA="$NATIVE_PATH/build"
+PAYLOAD_DIR="$NATIVE_PATH/build/payload"
+LOCAL_XCCONFIG="$NATIVE_PATH/Config/Local.xcconfig"
+CHROMIUM_VERSION="150.0.7871.24"
+VISION_INSTALLER_COMMAND="./install-native.sh"
+export VISION_INSTALLER_COMMAND
 TEAM_ID="${VISION_NATIVE_TEAM_ID:-}"
 
 # shellcheck source=scripts/lib/mac-install.sh
@@ -16,12 +27,52 @@ source "$REPO_PATH/scripts/lib/mac-install.sh"
 echo "==> Vision Native builder"
 echo "    Repo: $REPO_PATH"
 
+# The documented Local.xcconfig line `VISION_NATIVE_TEAM_ID = <id>` must win over the
+# ad-hoc fallback below, which would otherwise override it on the command line.
+if [ -z "$TEAM_ID" ] && [ -f "$LOCAL_XCCONFIG" ]; then
+  TEAM_ID="$(sed -n 's/^[[:space:]]*VISION_NATIVE_TEAM_ID[[:space:]]*=[[:space:]]*\([A-Za-z0-9]*\)[[:space:]]*$/\1/p' "$LOCAL_XCCONFIG" | head -n 1)"
+  if [ -n "$TEAM_ID" ]; then
+    echo "==> Using VISION_NATIVE_TEAM_ID from $LOCAL_XCCONFIG"
+  fi
+fi
+
 for tool in xcodegen xcodebuild; do
   if ! command -v "$tool" >/dev/null 2>&1; then
     echo "ERROR: $tool is required (xcodegen: brew install xcodegen; xcodebuild: install Xcode)."
     exit 1
   fi
 done
+
+STAGE_PAYLOAD=0
+PAYLOAD_ARGS=()
+if [ "${VISION_NATIVE_SKIP_PAYLOAD:-}" = "1" ]; then
+  echo "WARNING: VISION_NATIVE_SKIP_PAYLOAD=1; building without the runtime payload."
+else
+  # shellcheck source=scripts/lib/native-mac-build.sh
+  source "$REPO_PATH/scripts/lib/native-mac-build.sh"
+  trap cleanup_native_macos_build EXIT
+
+  # Dependencies, the pinned Chrome Headless Shell and the frontend build, exactly as
+  # install-demo.sh prepares them.
+  prepare_native_macos_build
+
+  echo "==> Preparing the native runtime payload..."
+  mkdir -p "$PAYLOAD_DIR"
+  cd "$ELECTRON_DIR"
+  bun build.ts
+  VISION_NATIVE_RUNTIME_DESTINATION="$PAYLOAD_DIR/native-runtime" \
+    node out/scripts/prepare-native-runtime.js
+
+  echo "==> Building the synthetic Demo seed..."
+  VISION_NATIVE_PAYLOAD_ROOT="$PAYLOAD_DIR/native-runtime" \
+    node out/scripts/build-demo-seed.js
+  rm -rf "$PAYLOAD_DIR/demo-seed"
+  ditto "$ELECTRON_DIR/demo-seed" "$PAYLOAD_DIR/demo-seed"
+  cd "$REPO_PATH"
+
+  STAGE_PAYLOAD=1
+  PAYLOAD_ARGS=("VISION_NATIVE_PAYLOAD_DIR=$PAYLOAD_DIR")
+fi
 
 echo "==> Generating the Xcode project..."
 xcodegen generate --spec "$NATIVE_PATH/project.yml"
@@ -52,6 +103,7 @@ xcodebuild \
   -configuration Release \
   -derivedDataPath "$DERIVED_DATA" \
   "${SIGNING_ARGS[@]}" \
+  ${PAYLOAD_ARGS[@]+"${PAYLOAD_ARGS[@]}"} \
   build
 
 APP_SRC="$(find_built_app \
@@ -59,6 +111,19 @@ APP_SRC="$(find_built_app \
   echo "ERROR: could not find the completed Vision Native.app."
   exit 1
 }
+
+if [ "$STAGE_PAYLOAD" = "1" ]; then
+  for staged in runtime/manifest.json demo-seed/manifest.json demo-seed/demo-seed.dump; do
+    if [ ! -f "$APP_SRC/Contents/Resources/$staged" ]; then
+      echo "ERROR: the built app is missing Contents/Resources/$staged."
+      exit 1
+    fi
+  done
+  if ! codesign --verify --strict "$APP_SRC"; then
+    echo "ERROR: the built app's signature does not verify after staging the payload."
+    exit 1
+  fi
+fi
 
 # install_app_bundle quits a running copy, removes only "$APP_DEST" and copies
 # the new bundle with ditto.
@@ -69,4 +134,5 @@ echo "  Vision Native installed successfully."
 echo "  Open it with:"
 echo "    open \"$APP_DEST\""
 echo ""
-echo "  It connects to VISION_NATIVE_BACKEND_URL or to the running Vision Demo app."
+echo "  It starts its own PostgreSQL 18 cluster and backend on synthetic Demo data in"
+echo "  ~/Library/Application Support/Vision Native/. Your Vision and Vision Demo data are untouched."

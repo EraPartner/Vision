@@ -56,11 +56,18 @@ The Electron shell in `packaging/electron/` is strict TypeScript compiled into
 | `install-demo.sh`   | Build the Electron Vision Demo app with synthetic data                            |
 | `install-native.sh` | Build Vision Native (Release) and install it to `/Applications/Vision Native.app` |
 
-`install-native.sh` needs `xcodegen` and `xcodebuild`. It signs with the free personal team from
-`VISION_NATIVE_TEAM_ID`, or ad-hoc with a warning when that is unset. The Swift package and the
-Debug app are built and tested in CI by the `native-macos` job ("Native (macOS)") on a
-GitHub-hosted `macos-26` runner whenever `apps/native/`, `install-native.sh` or `ci.yml` changes
-([[docs/architecture/native-app|Vision Native App Architecture]]).
+`install-native.sh` needs `xcodegen` and `xcodebuild`. It prepares the runtime payload with the
+same steps as `install-demo.sh` (`prepare_native_macos_build`, then `prepare-native-runtime` and
+`build-demo-seed` from `packaging/electron/scripts/`) into `apps/native/build/payload/`, and the
+Xcode build stages it into `Contents/Resources/runtime/` and `Contents/Resources/demo-seed/` before
+signing. The script then checks the staged files and the signature. Set
+`VISION_NATIVE_SKIP_PAYLOAD=1` to build without a payload. It signs with the free personal team from
+`VISION_NATIVE_TEAM_ID`, or from `VISION_NATIVE_TEAM_ID = <id>` in
+`apps/native/Config/Local.xcconfig`, or ad-hoc with a warning when neither is set. The Swift package
+and the Debug app are built and tested in CI, without a payload, by the `native-macos` job
+("Native (macOS)") on a GitHub-hosted `macos-26` runner. The job runs when `apps/native/`,
+`install-native.sh` or `ci.yml` changes, on every push to `main`, and when the diff cannot be
+classified ([[docs/architecture/native-app|Vision Native App Architecture]]).
 
 ## Build and release inputs
 

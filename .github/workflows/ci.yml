@@ -691,11 +691,36 @@ jobs:
         with:
           persist-credentials: false
 
+      # Pin the Xcode this job expects on the macos-26 image when it is present (not
+      # verified against the image manifest); printing the version keeps drift visible.
+      - name: Select Xcode
+        run: |
+          if [ -d /Applications/Xcode_26.6.app ]; then
+            sudo xcode-select -s /Applications/Xcode_26.6.app
+          else
+            echo "::warning title=Xcode pin::/Applications/Xcode_26.6.app is not on this image; using the default Xcode"
+            ls /Applications | grep -i '^Xcode' || true
+          fi
+          xcodebuild -version
+
+      # Pinned XcodeGen release, verified by SHA-256 before use (no Homebrew drift).
+      # The hash is of the 2.46.0 release zip as downloaded from GitHub on 2026-10-12;
+      # the project publishes no digest to compare against.
       - name: Install XcodeGen
-        run: brew install xcodegen
+        env:
+          XCODEGEN_VERSION: "2.46.0"
+          XCODEGEN_SHA256: "4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806"
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/xcodegen.zip" \
+            "https://github.com/yonaskolb/XcodeGen/releases/download/${XCODEGEN_VERSION}/xcodegen.zip"
+          echo "${XCODEGEN_SHA256}  $RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/xcodegen/bin" >> "$GITHUB_PATH"
 
       - name: Generate the Xcode project
-        run: xcodegen generate --spec apps/native/project.yml
+        run: |
+          xcodegen --version
+          xcodegen generate --spec apps/native/project.yml
 
       - name: Build the app (Debug, unsigned)
         run: xcodebuild -project apps/native/VisionNative.xcodeproj -scheme "Vision Native" -configuration Debug CODE_SIGNING_ALLOWED=NO build
