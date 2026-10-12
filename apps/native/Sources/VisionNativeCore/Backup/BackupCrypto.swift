@@ -194,7 +194,8 @@ public enum BackupDevice {
     public static var hostname: String {
         var buffer = [CChar](repeating: 0, count: 256)
         guard gethostname(&buffer, buffer.count) == 0 else { return "" }
-        return String(cString: buffer)
+        let bytes = buffer.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }
+        return String(decoding: bytes, as: UTF8.self)
     }
 
     /// The persisted `backupDeviceId`, else a new one written to `settings.json`.
