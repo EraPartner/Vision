@@ -544,8 +544,9 @@ extension StaticPlannedService: PickerDataService {
         let theme = VisionTheme(selection: shell.theme)
         shell.routeDidChange(try #require(NativeRoute("/planned")))
         await model.appear(showAll: false, defaultCurrency: "EUR")
-        // The recurring panel before its answer.
-        #expect(layOut(PlannedRecurringPanel(model: model, strings: shell.strings, settings: shell.settings).environment(\.visionTheme, theme)).fittingSize.width > 0)
+        // The recurring panel before its answer: hidden until the dismissals are known, like the web.
+        #expect(model.recurring.display == .hidden)
+        #expect(layOut(PlannedRecurringPanel(model: model, strings: shell.strings, settings: shell.settings).environment(\.visionTheme, theme)).fittingSize.width == 0)
         await model.loadSuggestions()
         await model.recurring.load()
         await model.pickers.load()
