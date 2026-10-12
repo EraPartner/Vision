@@ -237,7 +237,7 @@ aliases: [belgian tax scenarios, tax scenario matrix]
   survivor's pension; the engine used the plain proportion (SC-22 was `needs_source`). The
   pension type of box V of the return (`pensionKind`) now decides it, per FPS circular AAFisc
   40/2011 nos 17-22, with no. 19 under the quotient; the art. 153 limit keeps the total net
-  income ([[docs/adr/203-belgian-tax-pension-type-activity-income|ADR-204]]). The partial
+  income ([[docs/adr/203-belgian-tax-pension-type-activity-income|ADR-203]]). The partial
   fraction divides by the al. 3 difference the FPS notices publish (IY 2025: 9,160, not
   upper − lower = 9,150; SC-22, JP-04). JP-04 stays `needs_source` for the quotient of a
   partially excluding transferor.
@@ -356,6 +356,6 @@ aliases: [belgian tax scenarios, tax scenario matrix]
 - [[docs/features/belgian-tax]]
 - [[docs/adr/199-belgian-tax-source-verification|ADR-199]]
 - [[docs/adr/202-belgian-tax-region-and-own-home-baskets|ADR-202]]
-- [[docs/adr/203-belgian-tax-pension-type-activity-income|ADR-204]]
+- [[docs/adr/203-belgian-tax-pension-type-activity-income|ADR-203]]
 - [[docs/adr/200-belgian-tax-household-model|ADR-200]]
 - [[docs/reference/index|Reference index]]

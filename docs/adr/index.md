@@ -251,7 +251,7 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 
 ### 2026-10-12: The pension type follows the tax return
 
-[[docs/adr/203-belgian-tax-pension-type-activity-income|ADR-204]] adds the optional
+[[docs/adr/203-belgian-tax-pension-type-activity-income|ADR-203]] adds the optional
 `pensionKind` to a household pension activity, split as in box V of the return (codes 1228 /
 1229 / 1211). The engine then leaves a pensioner's activity income out of the art. 147 al. 1, 2°
 proportion (art. 147 al. 1, 2°, b-c), tests the statutory-pension limit on the gross amount, keeps

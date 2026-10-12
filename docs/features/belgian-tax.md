@@ -403,7 +403,7 @@ cohabitation and its end, factual cohabitation, factual separation, divorce, dea
    the engine carries the fraction over pro rata, an interpretation flagged
    `pension_quotient_partial_exclusion_unverified` (needs_source; scenarios SC-22, SC-24 to
    SC-28, JP-03, JP-04;
-   [[docs/adr/203-belgian-tax-pension-type-activity-income|ADR-204]]). Gifts are pooled under a joint assessment, capped once at 10% of the spouses'
+   [[docs/adr/203-belgian-tax-pension-type-activity-income|ADR-203]]). Gifts are pooled under a joint assessment, capped once at 10% of the spouses'
    combined net income, and apportioned on each spouse's taxed income (art. 145/33 §1 al. 5;
    `donation_joint_ceiling_unverified` when a per-spouse ceiling would give less). Other
    reductions stay with the payer.
@@ -800,7 +800,7 @@ fees remain recorded facts. See [[docs/adr/188-proved-in-kind-income-recognition
 - [[docs/adr/199-belgian-tax-source-verification|ADR-199]] — Source-verified rule matrix; self-employed forfait, art. 88 quotient cap, CSSS scale and household base, frozen IY 2025 amounts, post-reform IY 2026 table (October 2026)
 - [[docs/adr/200-belgian-tax-household-model|ADR-200]] — Household of one or two partners with income activities, date-derived assessment, v2 setting keys (October 2026)
 - [[docs/adr/202-belgian-tax-region-and-own-home-baskets|ADR-202]] — The household region decides the own-home regime (`mortgageRegion` deprecated); an own-home basket per borrower (October 2026)
-- [[docs/adr/203-belgian-tax-pension-type-activity-income|ADR-204]] — The pension type follows box V of the return and decides the art. 147 exclusion of activity income (October 2026)
+- [[docs/adr/203-belgian-tax-pension-type-activity-income|ADR-203]] — The pension type follows box V of the return and decides the art. 147 exclusion of activity income (October 2026)
 - [[docs/reference/belgian-tax-rule-matrix|Belgian tax rule coverage matrix]] — per-rule sources, code and test locations
 - [[docs/reference/belgian-tax-scenario-matrix|Belgian tax scenario matrix]] — law-derived household scenarios per rule-matrix row
 - [[docs/features/portfolio#belgian-tax-features]] — Tax fields in portfolio

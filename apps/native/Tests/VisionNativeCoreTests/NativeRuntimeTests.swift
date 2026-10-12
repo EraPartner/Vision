@@ -41,7 +41,8 @@ import Testing
             $0.arguments.contains(PostgresSQL.createExtensions)
         }
         #expect(extensionCall != nil)
-        for call in harness.runner.calls(named: "psql") {
+        // Tool discovery runs `psql --version` without a role; every query runs with a pgpass file.
+        for call in harness.runner.calls(named: "psql") where !call.arguments.contains("--version") {
             #expect(call.options.environment["PGPASSFILE"] != nil)
             #expect(!call.arguments.joined(separator: " ").contains("PASSWORD"))
         }

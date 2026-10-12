@@ -118,7 +118,7 @@ import Testing
         let good = RuntimeEnvFile.render(names: names, postgresPort: 54331, random: FakeRandom())
         let variants = [
             good.replacingOccurrences(of: "@127.0.0.1:54331/vision_native\nDATABASE_URL_MIGRATIONS", with: "@10.0.0.1:54331/vision_native\nDATABASE_URL_MIGRATIONS"),
-            good.replacingOccurrences(of: "54331/vision_native\n", with: "54332/vision_native\n"),
+            good.replacingOccurrences(of: "54331/vision_native\nDATABASE_URL_MIGRATIONS", with: "54332/vision_native\nDATABASE_URL_MIGRATIONS"),
             good + "DATABASE_URL_ANALYSIS=postgresql://other:x@127.0.0.1:54331/vision_native\n",
             good.replacingOccurrences(of: "VISION_POSTGRES_ADMIN_ROLE=vision_native_admin", with: "VISION_POSTGRES_ADMIN_ROLE=vision_native_app"),
             good.replacingOccurrences(of: "VISION_POSTGRES_ADMIN_PASSWORD=", with: "VISION_POSTGRES_ADMIN_PASSWORD=short"),

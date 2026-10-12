@@ -353,5 +353,5 @@ severity; each one is listed in [[#Open items]]. Amounts are those of the tables
 - [[docs/features/belgian-tax]]
 - [[docs/adr/199-belgian-tax-source-verification|ADR-199]]
 - [[docs/adr/202-belgian-tax-region-and-own-home-baskets|ADR-202]]
-- [[docs/adr/203-belgian-tax-pension-type-activity-income|ADR-204]]
+- [[docs/adr/203-belgian-tax-pension-type-activity-income|ADR-203]]
 - [[docs/reference/index|Reference index]]

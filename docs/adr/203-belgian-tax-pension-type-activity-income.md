@@ -1,5 +1,5 @@
 ---
-title: "ADR-204: The pension type follows the tax return and decides the art. 147 exclusion of activity income"
+title: "ADR-203: The pension type follows the tax return and decides the art. 147 exclusion of activity income"
 type: adr
 status: accepted
 date: 2026-10-12
@@ -8,7 +8,7 @@ description: "Adds the optional `pensionKind` to a household pension activity, s
 aliases: [adr-203, pension type, art. 147 activity income exclusion]
 ---
 
-# ADR-204: The pension type follows the tax return and decides the art. 147 exclusion of activity income
+# ADR-203: The pension type follows the tax return and decides the art. 147 exclusion of activity income
 
 ## Status
 
