@@ -11,7 +11,7 @@ public final class PlannedLinkModel: Identifiable {
     public static let debounce: Duration = .milliseconds(250)
 
     public let payment: PlannedPayment
-    public var id: Int { payment.id }
+    public nonisolated var id: Int { payment.id }
 
     /// The local search (`txSearchQuery`): memo, payee or amount.
     public var search = ""
