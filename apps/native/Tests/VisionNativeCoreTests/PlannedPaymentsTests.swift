@@ -441,7 +441,7 @@ enum PlannedFixture {
     @Test func sortCyclesAscendingDescendingAndOffWithNumericText() {
         var query = LocalTableQuery()
         query.toggleSort("name")
-        #expect(query.sort == TableSort(key: "name", ascending: true))
+        #expect(query.sort == LocalTableSort(key: "name", ascending: true))
         #expect(names(query) == ["gym", "Insurance 9", "Insurance 10", "Rent"])
         query.toggleSort("name")
         #expect(names(query) == ["Rent", "Insurance 10", "Insurance 9", "gym"])
@@ -451,7 +451,7 @@ enum PlannedFixture {
         query.toggleSort("amount")
         #expect(names(query) == ["Rent", "Insurance 10", "Insurance 9", "gym"])
         query.toggleSort("category")
-        #expect(query.sort == TableSort(key: "category", ascending: true))
+        #expect(query.sort == LocalTableSort(key: "category", ascending: true))
         // No category sorts as "", first; equal values keep their order.
         #expect(names(query) == ["Insurance 10", "Rent", "Insurance 9", "gym"])
         query.toggleSort("flag")

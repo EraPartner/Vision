@@ -44,7 +44,7 @@ public enum TableRawValue: Equatable, Sendable {
 }
 
 /// The active sort of a table: a column key and its direction.
-public struct TableSort: Equatable, Sendable {
+public struct LocalTableSort: Equatable, Sendable {
     public let key: String
     public let ascending: Bool
 
@@ -69,7 +69,7 @@ public struct LocalTableQuery: Equatable, Sendable {
     public var search = ""
     /// The column filters in the order they were first set (the chips' order).
     public private(set) var filters: [TableColumnFilter] = []
-    public private(set) var sort: TableSort?
+    public private(set) var sort: LocalTableSort?
 
     public init() {}
 
@@ -102,10 +102,10 @@ public struct LocalTableQuery: Equatable, Sendable {
     /// `handleSort`: a new column sorts ascending, then descending, then not at all.
     public mutating func toggleSort(_ key: String) {
         guard let sort, sort.key == key else {
-            self.sort = TableSort(key: key, ascending: true)
+            self.sort = LocalTableSort(key: key, ascending: true)
             return
         }
-        self.sort = sort.ascending ? TableSort(key: key, ascending: false) : nil
+        self.sort = sort.ascending ? LocalTableSort(key: key, ascending: false) : nil
     }
 
     /// `clearAllFilters`: search, column filters and sort.
