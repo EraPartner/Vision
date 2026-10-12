@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { apiClient } from "@/lib/api";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { electronErrorToMessage } from "@/lib/api/electronErrorMessage";
+import { schemaNewerDescription } from "@/lib/restoreErrors";
 
 const ERR_PASSPHRASE_REQUIRED = "PASSPHRASE_REQUIRED";
 const ERR_INVALID_PASSPHRASE = "INVALID_PASSPHRASE";
@@ -100,9 +101,10 @@ export function useRestoreBackup({ onSuccess }: RestoreOptions = {}) {
             if (errMsg.includes(ERR_PASSPHRASE_REQUIRED))
                 return "needPassphrase";
 
-            if (errMsg.startsWith("BUNDLE_SCHEMA_NEWER:")) {
+            const schemaNewer = schemaNewerDescription(errMsg);
+            if (schemaNewer !== undefined) {
                 toast.error(t("settings.restore.schemaMismatch"), {
-                    description: errMsg.replace("BUNDLE_SCHEMA_NEWER: ", ""),
+                    description: schemaNewer,
                     duration: 12000,
                 });
             } else {
