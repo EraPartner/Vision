@@ -45,6 +45,37 @@ class ClassificationTests(unittest.TestCase):
         with patch.object(classifier, 'git', side_effect=outputs):
             self.assertFalse(classifier.classify_range('base', 'head'))
 
+    def test_native_paths(self) -> None:
+        for paths in (['apps/native/Package.swift'], ['docs/a.md', 'install-native.sh'], ['.github/workflows/ci.yml'], []):
+            with self.subTest(paths=paths):
+                self.assertTrue(classifier.classify_native(paths))
+        for paths in (['apps/frontend/src/App.tsx', 'docs/a.md'], ['apps/nativeish/x.swift'], ['install.sh']):
+            with self.subTest(paths=paths):
+                self.assertFalse(classifier.classify_native(paths))
+
+    def test_native_range_fails_closed_and_runs_on_push(self) -> None:
+        self.assertTrue(classifier.classify_native_range('', 'head'))
+        self.assertTrue(classifier.classify_native_range('0' * 40, 'head'))
+        with patch.object(classifier, 'git', side_effect=subprocess.CalledProcessError(1, 'git')):
+            self.assertTrue(classifier.classify_native_range('base', 'head'))
+        with patch.object(classifier, 'git', side_effect=[b'', b'', b'apps/frontend/x.ts\0']):
+            self.assertFalse(classifier.classify_native_range('base', 'head'))
+        with patch.object(classifier, 'classify_range', return_value=True), patch.object(classifier, 'classify_native_range', return_value=False):
+            self.assertEqual(classifier.classify_event('push', 'base', 'head'), (True, True))
+            self.assertEqual(classifier.classify_event('pull_request', 'base', 'head'), (True, False))
+
+    def test_native_job_gates_quality_without_joining_ci_complete(self) -> None:
+        workflow = (Path(__file__).parents[2] / '.github/workflows/ci.yml').read_text()
+        changes = workflow.split('  changes:', 1)[1].split('  commitlint:', 1)[0]
+        self.assertIn('native: ${{ steps.classify.outputs.native }}', changes)
+        native = workflow.split('  native-macos:', 1)[1].split('\n  # ', 1)[0]
+        self.assertIn("if: needs.changes.outputs.native == 'true'", native)
+        self.assertIn('runs-on: macos-26', native)
+        quality = workflow.split('  quality-gate:', 1)[1].split('    if:', 1)[0]
+        self.assertIn('      - native-macos', quality)
+        complete = workflow.split('  ci-complete:', 1)[1].split('    if:', 1)[0]
+        self.assertNotIn('native-macos', complete)
+
 
 if __name__ == '__main__':
     unittest.main()

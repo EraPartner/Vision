@@ -5,6 +5,9 @@ import os
 import subprocess
 from collections.abc import Collection, Sequence
 
+NATIVE_PREFIX = "apps/native/"
+NATIVE_FILES = frozenset({"install-native.sh", ".github/workflows/ci.yml"})
+
 
 def classify(paths: Sequence[str], special_paths: Collection[str] = ()) -> bool:
     if not paths:
@@ -21,22 +24,33 @@ def classify(paths: Sequence[str], special_paths: Collection[str] = ()) -> bool:
     return False
 
 
+def classify_native(paths: Sequence[str]) -> bool:
+    """Decide whether the macOS Vision Native job must run (ADR-204)."""
+    if not paths:
+        return True
+    return any(path.startswith(NATIVE_PREFIX) or path in NATIVE_FILES for path in paths)
+
+
 def git(*args: str) -> bytes:
     return subprocess.check_output(["git", *args], stderr=subprocess.DEVNULL)
 
 
+def changed_paths(base: str, head: str) -> list[str]:
+    if not base or not head or base == "0" * 40:
+        raise ValueError("commit range is not resolvable")
+    git("cat-file", "-e", base + "^{commit}")
+    git("cat-file", "-e", head + "^{commit}")
+    # Disable rename detection so both sides of a move are classified.
+    return (
+        git("diff", "--name-only", "--no-renames", "-z", base, head)
+        .decode()
+        .split("\0")[:-1]
+    )
+
+
 def classify_range(base: str, head: str) -> bool:
     try:
-        if not base or not head or base == "0" * 40:
-            return True
-        git("cat-file", "-e", base + "^{commit}")
-        git("cat-file", "-e", head + "^{commit}")
-        # Disable rename detection so both sides of a move are classified.
-        paths = (
-            git("diff", "--name-only", "--no-renames", "-z", base, head)
-            .decode()
-            .split("\0")[:-1]
-        )
+        paths = changed_paths(base, head)
         special: set[str] = set()
         for ref in (base, head):
             for entry in git("ls-tree", "-rz", ref).decode().split("\0"):
@@ -49,15 +63,32 @@ def classify_range(base: str, head: str) -> bool:
         return True
 
 
+def classify_native_range(base: str, head: str) -> bool:
+    try:
+        return classify_native(changed_paths(base, head))
+    except (subprocess.CalledProcessError, UnicodeError, ValueError):
+        return True
+
+
+def classify_event(event_name: str, base: str, head: str) -> tuple[bool, bool]:
+    """Return (code, native). Pushes always run the native job."""
+    code = classify_range(base, head)
+    native = classify_native_range(base, head) if event_name == "pull_request" else True
+    return code, native
+
+
 if __name__ == "__main__":
-    is_pr = os.environ.get("EVENT_NAME") == "pull_request"
+    event_name = os.environ.get("EVENT_NAME", "")
+    is_pr = event_name == "pull_request"
     base = os.environ.get("PR_BASE_SHA" if is_pr else "PUSH_BEFORE", "")
     head = os.environ.get("PR_HEAD_SHA" if is_pr else "PUSH_SHA", "")
-    code = classify_range(base, head)
+    code, native = classify_event(event_name, base, head)
     print(
         "Full application pipeline."
         if code
         else "Documentation/instruction diff; focused checks remain required."
     )
+    print("Vision Native job required." if native else "Vision Native unchanged.")
     with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
         output.write("code=" + str(code).lower() + "\n")
+        output.write("native=" + str(native).lower() + "\n")

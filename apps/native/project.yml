@@ -1,0 +1,63 @@
+# XcodeGen spec for Vision Native (ADR-204). Generate the project with:
+#   xcodegen generate --spec apps/native/project.yml
+# The generated VisionNative.xcodeproj and VisionNative/Info.plist are gitignored.
+name: VisionNative
+options:
+  bundleIdPrefix: com.vaultvoyager
+  deploymentTarget:
+    macOS: "26.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    MACOSX_DEPLOYMENT_TARGET: "26.0"
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    ARCHS: arm64
+packages:
+  VisionNativeCore:
+    path: .
+targets:
+  Vision Native:
+    type: application
+    platform: macOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: VisionNative
+    dependencies:
+      - package: VisionNativeCore
+        product: VisionNativeCore
+    configFiles:
+      Debug: Config/Signing.xcconfig
+      Release: Config/Signing.xcconfig
+    scheme: {}
+    settings:
+      base:
+        PRODUCT_NAME: Vision Native
+        PRODUCT_MODULE_NAME: VisionNative
+        PRODUCT_BUNDLE_IDENTIFIER: com.vaultvoyager.vision-native
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        CODE_SIGN_STYLE: Automatic
+        ENABLE_HARDENED_RUNTIME: "NO"
+        # No sandbox: a later phase supervises the bundled PostgreSQL runtime.
+        ENABLE_APP_SANDBOX: "NO"
+        GENERATE_INFOPLIST_FILE: "NO"
+      configs:
+        Debug:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
+    info:
+      path: VisionNative/Info.plist
+      properties:
+        CFBundleName: Vision Native
+        CFBundleDisplayName: Vision Native
+        CFBundleIdentifier: $(PRODUCT_BUNDLE_IDENTIFIER)
+        CFBundleExecutable: $(EXECUTABLE_NAME)
+        CFBundlePackageType: APPL
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+        LSApplicationCategoryType: public.app-category.finance
+        NSHumanReadableCopyright: AGPL-3.0-only
+        NSPrincipalClass: NSApplication
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true

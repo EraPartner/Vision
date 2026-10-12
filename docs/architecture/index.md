@@ -2,8 +2,8 @@
 title: Architecture Diagrams
 type: architecture-index
 status: active
-date: 2026-10-11
-updated: 2026-10-11
+date: 2026-10-12
+updated: 2026-10-12
 tags: [architecture, index, uml, plantuml, diagrams, phase-1, phase-2, phase-3, phase-e, frontend, api-client, openapi, domain-split, repository-split, statistics-refactoring, component-decomposition, refactoring, bug-fixes, csv, formula-injection, parallelization, deployment, container-hardening, backup, restore, bundle, electron, tags, tagging, orthogonal-dimension, may-2026, june-2026, route-service-boundary, thin-seams, global-rate-limiter, shared-utils, mv-recipient-monthly-drop, skin-v2, dense-fintech, css-scoping, inline-token-constraint, feature-flag, apple-refined, jewel-emerald, glass-differentiation, refined-geometry, hairlines, motion-spring]
 description: "Index of all UML diagrams for the Vision project - backend, frontend, system, and sequence diagrams. June 2026 updates: ADR-105 Apple-refined visual pass baked into base design (--radius 0.625rem; Card rounded-[0.75rem]; differentiated glass-regular/glass-elevated shadows; jewel emerald primary 164 78% 26% light / 160 74% 52% dark; ease-out-quint/expo → cubic-bezier(0.32,0.72,0,1); press-feedback:active scale 0.97; tabular-nums letter-spacing -0.006em; 0.5px hairlines on hi-dpi; aurora/glass/hover retained). VITE_SKIN_V2 (ADR-104) now gates only colorblind-safe gain/loss recoloring; flatten direction abandoned. backend-service-layer.puml adds 14 thin route-seam services (ADR-067); backend-api-layer.puml adds globalRateLimiter on /api + TRUSTED_PROXIES XFF handling + VISION_DEV dev-bypass flag."
 aliases: [architecture, diagrams, UML, system design, backup architecture, electron IPC]
@@ -105,6 +105,7 @@ Detailed architectural analysis:
 - [[docs/architecture/frontend-architecture|Frontend Architecture]] - Frontend-specific diagrams
 - [[docs/architecture/deep-dive|Architecture Deep Dive]] - Design patterns, data flow, system organization
 - [[docs/architecture/electron|Electron Desktop Architecture]] - Electron packaging, IPC, security
+- [[docs/architecture/native-app|Vision Native App Architecture]] - Swift macOS app, backend location, macOS CI job
 - [[docs/guides/native-macos-runtime|Native macOS Runtime Guide]] - PostgreSQL 18 lifecycle, cutover, backup, and rollback
 - [[docs/architecture/trade-offs|System Design Trade-offs]] - Analysis of key architectural trade-offs and alternatives
 
