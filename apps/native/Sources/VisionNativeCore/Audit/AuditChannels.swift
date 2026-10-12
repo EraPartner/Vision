@@ -8,6 +8,14 @@ public struct AuditConfirmation: Equatable, Sendable {
     public var detail: String?
     public var confirmLabel: String
     public var cancelLabel: String
+
+    public init(title: String, message: String, detail: String? = nil, confirmLabel: String, cancelLabel: String) {
+        self.title = title
+        self.message = message
+        self.detail = detail
+        self.confirmLabel = confirmLabel
+        self.cancelLabel = cancelLabel
+    }
 }
 
 /// A save or open panel for the audit channels.
