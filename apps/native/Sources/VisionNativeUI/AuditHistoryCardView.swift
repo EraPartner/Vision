@@ -14,8 +14,11 @@ struct AuditHistoryCardView: View {
                 header
                 if model.showsLoading { loading }
                 if let key = model.statusKey {
-                    Text(strings.t(key))
+                    let text = strings.t(key)
+                    Text(text)
                         .foregroundStyle(model.status == .failed ? theme.destructive : theme.secondaryLabel)
+                        // `role="alert"` / `role="status"`: announced when it appears or changes.
+                        .task(id: key) { AccessibilityNotification.Announcement(text).post() }
                 }
                 if model.showsEnroll { enrollBlock }
                 if model.changed {
@@ -33,6 +36,7 @@ struct AuditHistoryCardView: View {
                 }
             }
         }
+        .onDisappear { model.disappear() }
     }
 
     private var header: some View {

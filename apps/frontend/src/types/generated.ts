@@ -4519,15 +4519,15 @@ export interface components {
         DbTableStat: {
             schemaname: string;
             table_name: string;
-            /** @description BIGINT estimate from pg_stat_user_tables */
+            /** @description BIGINT estimate from pg_stat_user_tables, as decimal text */
             live_rows: string;
-            /** @description BIGINT estimate from pg_stat_user_tables */
+            /** @description BIGINT estimate from pg_stat_user_tables, as decimal text */
             dead_rows: string;
             last_autovacuum: string | null;
             last_autoanalyze: string | null;
             /** @description pg_size_pretty of the total relation size */
             size: string;
-            /** @description BIGINT byte count */
+            /** @description BIGINT byte count, as decimal text */
             size_bytes: string;
         };
         DbStats: {
@@ -4556,7 +4556,7 @@ export interface components {
         ProbeResult: {
             ok: boolean;
             provider: components["schemas"]["ProviderHealth"];
-            /** @description The probe error */
+            /** @description The probe error, only when ok is false */
             error?: string;
         };
         RouteMetric: {
@@ -4566,7 +4566,7 @@ export interface components {
             path: string;
             count: number;
             errors: number;
-            /** @description errors / count */
+            /** @description errors / count, from 0 to 1 */
             error_rate: number;
             p50_ms: number | null;
             p95_ms: number | null;

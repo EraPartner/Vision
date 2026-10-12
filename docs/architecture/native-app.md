@@ -247,10 +247,11 @@ background and the web view's `underPageBackgroundColor` use the same base colou
 stays hidden until the page calls `ready()` (or 3 seconds after the document finishes loading), so
 there is no white flash on launch. `theme:persist-splash` updates these colours at once.
 
-The native chrome follows the system appearance, like Electron, which never sets
+The native menus and dialogs follow the system appearance, like Electron, which never sets
 `nativeTheme.themeSource`. The page applies its own theme. `app:set-vibrancy` shows an
 `NSVisualEffectView` (`underWindowBackground`, behind window, following the window's active state)
-behind a transparent page, which is Electron's `setVibrancy("under-window")`.
+behind a transparent page, which is Electron's `setVibrancy("under-window")`; from phase 3a its
+appearance follows the page palette from `theme:persist-splash` (light or dark), not macOS.
 
 ### Preload bridge
 
@@ -646,8 +647,11 @@ The shell looks like the web sidebar (`ShellGlass`, phase 3a): the sidebar colum
 behind-window sidebar material under the `.glass-chrome` gradient of `--sidebar-background`
 (0.55 to 0.72, dark 0.74), with the `--glass-highlight` top line and the `--sidebar-border` rail
 edge, and the active row gets the emerald `--primary` pill (0.12, dark 0.16) and primary icons
-instead of the system selection. Native screens sit on a behind-window material tinted with the
-page's `--background`, with opaque cards on top, in every theme variant.
+instead of the system selection highlight. The sidebar stays a `List(selection:)`, so the arrow
+keys move through it; the clear selection tint hides the system highlight and selecting a row goes
+through `navigate`, like a click. Native screens sit on a behind-window material tinted with the
+page's `--background`, with opaque cards on top, in every theme variant. Every material takes the
+page theme's light or dark appearance, not the macOS one.
 
 The web router stays the source of truth. `AppLayout` reports `pathname + search` through
 `electronAPI.routeChanged` (`shell:route-changed`, validated as an app-relative route of at most
@@ -683,9 +687,12 @@ side, stale time, one request at a time) and `AdminErrorState` the page's auth a
 navigates to `/admin`. The overview's tiles keep the web thresholds and link to their pages. Its
 admin token card writes the page's own `sessionStorage` (`vision.adminToken`) through
 `callAsyncJavaScript` with the token as an argument, so the web admin pages and the native client
-share one token and nothing else stores it. The audit history card calls `AuditChannels` directly,
-so its confirmations, save and open panels and notices are the phase 1e ones. A probe on Data
-sources marks the overview's provider query stale.
+share one token and nothing else stores it; a write the page does not confirm within 5 seconds
+toasts `apiError.unknown` instead of the saved or cleared notice. The typed token and the audit
+transfer password are cleared when the overview disappears. The audit history card calls
+`AuditChannels` directly, so its confirmations, save and open panels and notices are the phase 1e
+ones. A probe on Data sources cancels a provider fetch in flight and fetches again, and marks the
+overview's provider query stale.
 
 ### Exchange rates
 

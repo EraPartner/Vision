@@ -7,10 +7,11 @@ import Observation
 public struct AdminTokenAccess: Sendable {
     /// `getAdminToken()` before trimming; `nil` when unset or the page cannot answer.
     public let read: @Sendable () async -> String?
-    /// `setAdminToken(value)`: stores the trimmed value; a blank value removes it.
-    public let write: @Sendable (String) async -> Void
+    /// `setAdminToken(value)`: stores the trimmed value; a blank value removes it. `false` when
+    /// the page is not ready or did not answer, so the storage is unchanged.
+    public let write: @Sendable (String) async -> Bool
 
-    public init(read: @escaping @Sendable () async -> String?, write: @escaping @Sendable (String) async -> Void) {
+    public init(read: @escaping @Sendable () async -> String?, write: @escaping @Sendable (String) async -> Bool) {
         self.read = read
         self.write = write
     }
@@ -160,6 +161,12 @@ public final class AdminOverviewModel {
             metrics: metrics.data, metricsLoading: metrics.isLoading, settings: settings, strings: strings)
     }
 
+    /// The page went away: the typed token and the audit transfer password do not outlive it.
+    public func disappear() {
+        tokenDraft = ""
+        audit.disappear()
+    }
+
     /// The page mounted: the queries (unless fresh), the token state and the audit history.
     public func appear() async {
         let dbStats = dbStats
@@ -185,22 +192,28 @@ public final class AdminOverviewModel {
         hasToken = Self.isSet(await token.read())
     }
 
-    /// `save()`: store the trimmed token, clear the input, toast `admin.token.saved`.
+    /// `save()`: store the trimmed token, clear the input, toast `admin.token.saved`, or
+    /// `apiError.unknown` when the page could not store it.
     public func saveToken() async {
         guard canSaveToken else { return }
         let value = tokenDraft
         tokenDraft = ""
-        await token.write(value)
+        let stored = await token.write(value)
         hasToken = Self.isSet(await token.read())
-        notice = notices.make(.success, "admin.token.saved")
+        notice = notices.make(stored ? .success : .error, stored ? "admin.token.saved" : "apiError.unknown")
     }
 
-    /// `clear()`: remove the token, toast `admin.token.cleared`.
+    /// `clear()`: remove the token, toast `admin.token.cleared`, or `apiError.unknown` when the
+    /// page could not remove it.
     public func clearToken() async {
         guard canClearToken else { return }
-        await token.write("")
-        hasToken = false
-        notice = notices.make(.success, "admin.token.cleared")
+        if await token.write("") {
+            hasToken = false
+            notice = notices.make(.success, "admin.token.cleared")
+        } else {
+            hasToken = Self.isSet(await token.read())
+            notice = notices.make(.error, "apiError.unknown")
+        }
     }
 
     /// The toast was shown.

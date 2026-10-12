@@ -15,6 +15,9 @@ actor FakeAdminService: AdminService {
     /// Probes wait here until `release` when set.
     private var gate: CheckedContinuation<Void, Never>?
     private var holdProbes: Bool
+    /// The next provider health call waits here until `releaseHealth` when set.
+    private var healthGate: CheckedContinuation<Void, Never>?
+    private var holdHealth: Bool
 
     init(
         stats: [Result<OpenAPI.DbStats, APIError>] = [.success(AdminFixture.stats)],
@@ -22,7 +25,8 @@ actor FakeAdminService: AdminService {
         probes: [String: Result<OpenAPI.ProbeResult, APIError>] = [:],
         metrics: [Result<[OpenAPI.RouteMetric], APIError>] = [.success(AdminFixture.metrics)],
         manifest: [Result<[OpenAPI.EndpointEntry], APIError>] = [.success(AdminFixture.manifest)],
-        holdProbes: Bool = false
+        holdProbes: Bool = false,
+        holdHealth: Bool = false
     ) {
         self.stats = stats
         self.health = health
@@ -30,6 +34,7 @@ actor FakeAdminService: AdminService {
         self.metrics = metrics
         self.manifest = manifest
         self.holdProbes = holdProbes
+        self.holdHealth = holdHealth
     }
 
     private static func next<Value>(_ script: inout [Result<Value, APIError>]) throws -> Value {
@@ -44,7 +49,12 @@ actor FakeAdminService: AdminService {
 
     func providerHealth() async throws -> [OpenAPI.ProviderHealth] {
         healthCalls += 1
-        return try Self.next(&health)
+        let result = try Self.next(&health)
+        if holdHealth {
+            holdHealth = false
+            await withCheckedContinuation { healthGate = $0 }
+        }
+        return result
     }
 
     func probeProvider(_ provider: String) async throws -> OpenAPI.ProbeResult {
@@ -67,21 +77,34 @@ actor FakeAdminService: AdminService {
     }
 
     var isHoldingProbe: Bool { gate != nil }
+
+    /// Lets a held provider health call answer.
+    func releaseHealth() {
+        healthGate?.resume()
+        healthGate = nil
+    }
+
+    var isHoldingHealth: Bool { healthGate != nil }
 }
 
 /// The page's `sessionStorage` token.
 actor FakeTokenStorage {
     private(set) var value: String?
     private(set) var writes: [String] = []
+    /// A page that is not ready or does not answer: writes change nothing.
+    private let failWrites: Bool
 
-    init(_ value: String? = nil) {
+    init(_ value: String? = nil, failWrites: Bool = false) {
         self.value = value
+        self.failWrites = failWrites
     }
 
-    func write(_ token: String) {
+    func write(_ token: String) -> Bool {
         writes.append(token)
+        guard !failWrites else { return false }
         let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
         value = trimmed.isEmpty ? nil : trimmed
+        return true
     }
 
     nonisolated var access: AdminTokenAccess {
@@ -272,6 +295,35 @@ enum AdminFixture {
         #expect(model.notice == nil)
     }
 
+    @Test func aWriteThePageDidNotTakeToastsAnError() async {
+        let storage = FakeTokenStorage("abc", failWrites: true)
+        let model = AdminOverviewModel(
+            service: FakeAdminService(), token: storage.access, audit: AuditHistoryModel(service: FakeAuditHistory()))
+        await model.refreshTokenState()
+        model.tokenDraft = "new-token"
+        await model.saveToken()
+        #expect(await storage.value == "abc")
+        #expect(model.notice?.kind == .error)
+        #expect(model.notice?.key == "apiError.unknown")
+        #expect(model.tokenDraft.isEmpty)
+        #expect(model.hasToken)
+        await model.clearToken()
+        #expect(await storage.writes == ["new-token", ""])
+        #expect(model.notice?.kind == .error)
+        #expect(model.notice?.key == "apiError.unknown")
+        #expect(model.hasToken)
+    }
+
+    @Test func leavingThePageForgetsTheTypedSecrets() {
+        let audit = AuditHistoryModel(service: FakeAuditHistory())
+        let model = AdminOverviewModel(service: FakeAdminService(), token: FakeTokenStorage().access, audit: audit)
+        model.tokenDraft = "half-typed-token"
+        audit.setTransferPassword("sixteen chars ok")
+        model.disappear()
+        #expect(model.tokenDraft.isEmpty)
+        #expect(audit.transferPassword.isEmpty)
+    }
+
     @Test func anExistingTokenEnablesClear() async {
         let model = AdminOverviewModel(
             service: FakeAdminService(), token: FakeTokenStorage("abc").access,
@@ -422,6 +474,24 @@ enum AdminFixture {
         await service.release()
         await first.value
         #expect(!model.isProbing("ecb"))
+    }
+
+    @Test func aProbeDuringARunningFetchShowsThePostProbeRows() async {
+        let fixed = AdminFixture.provider("ecb")
+        let service = FakeAdminService(
+            health: [.success(AdminFixture.providers), .success([AdminFixture.providers[0], fixed])],
+            probes: ["ecb": .success(OpenAPI.ProbeResult(ok: true, provider: fixed))], holdHealth: true)
+        let model = ProviderHealthModel(service: service)
+        let loading = Task { await model.appear() }
+        while !(await service.isHoldingHealth) { await Task.yield() }
+        await model.probe("ecb")
+        #expect(model.providers.data?.last == fixed)
+        // The pre-probe answer of the cancelled fetch arrives late and is dropped.
+        await service.releaseHealth()
+        await loading.value
+        #expect(model.providers.data?.last == fixed)
+        #expect(!model.providers.isFetching)
+        #expect(await service.healthCalls == 2)
     }
 
     @Test func theErrorLinkTogglesTheFullRow() {
@@ -705,6 +775,14 @@ enum AuditCardFixture {
         await model.transfer(.exportTransfer)
         #expect(model.transferMessage == nil)
         #expect(model.transferPassword.isEmpty)
+    }
+
+    @Test func leavingTheCardClearsThePassword() {
+        let model = AuditHistoryModel(service: FakeAuditHistory())
+        model.setTransferPassword("sixteen chars ok")
+        model.disappear()
+        #expect(model.transferPassword.isEmpty)
+        #expect(model.isTransferImportDisabled)
     }
 
     @Test func thePasswordIsCutAt1024UTF16Units() {

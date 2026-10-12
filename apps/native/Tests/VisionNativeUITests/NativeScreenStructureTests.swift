@@ -115,7 +115,7 @@ final class StaticAuditHistory: AuditHistoryService {
             exchangeRates: ExchangeRatesModel(service: StaticRatesService(Self.rates)),
             admin: AdminScreens.make(
                 service: StaticAdminService(failing: failing),
-                token: AdminTokenAccess(read: { "token" }, write: { _ in }), audit: StaticAuditHistory()),
+                token: AdminTokenAccess(read: { "token" }, write: { _ in true }), audit: StaticAuditHistory()),
             loadSettings: { NativeAppSettings(adminMode: true) },
             onNavigate: { _ in })
     }

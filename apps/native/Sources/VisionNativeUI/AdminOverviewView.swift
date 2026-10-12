@@ -24,6 +24,7 @@ public struct AdminOverviewView: View {
             AuditHistoryCardView(model: model.audit, strings: strings)
         }
         .task { await model.appear() }
+        .onDisappear { model.disappear() }
         .overlay(alignment: .bottom) {
             NoticeToast(notice: model.notice, strings: strings) { model.clearNotice($0) }
         }

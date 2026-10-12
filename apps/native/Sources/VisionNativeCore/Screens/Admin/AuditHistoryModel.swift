@@ -265,6 +265,11 @@ public final class AuditHistoryModel {
         transferPassword = kept
     }
 
+    /// The card went away: the typed transfer password does not outlive it.
+    public func disappear() {
+        transferPassword = ""
+    }
+
     /// `load(previous)`: the first page (Refresh), or the page after `previous` (Load more).
     public func load(after previous: AuditPage? = nil) async {
         requestId += 1

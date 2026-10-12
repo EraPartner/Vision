@@ -266,13 +266,13 @@ components:
         schemaname: { type: string }
         table_name: { type: string }
         live_rows:
-          { type: string, description: BIGINT estimate from pg_stat_user_tables, as decimal text }
+          { type: string, description: "BIGINT estimate from pg_stat_user_tables, as decimal text" }
         dead_rows:
-          { type: string, description: BIGINT estimate from pg_stat_user_tables, as decimal text }
+          { type: string, description: "BIGINT estimate from pg_stat_user_tables, as decimal text" }
         last_autovacuum: { type: string, nullable: true }
         last_autoanalyze: { type: string, nullable: true }
         size: { type: string, description: pg_size_pretty of the total relation size }
-        size_bytes: { type: string, description: BIGINT byte count, as decimal text }
+        size_bytes: { type: string, description: "BIGINT byte count, as decimal text" }
     DbStats:
       type: object
       required: [tables, db_size]
@@ -320,7 +320,7 @@ components:
       properties:
         ok: { type: boolean }
         provider: { $ref: "#/components/schemas/ProviderHealth" }
-        error: { type: string, description: The probe error, only when ok is false }
+        error: { type: string, description: "The probe error, only when ok is false" }
     # GET /api/admin/metrics/requests (middleware/requestMetrics.ts, RouteMetricSchema)
     RouteMetric:
       type: object
@@ -342,7 +342,7 @@ components:
         path: { type: string }
         count: { type: integer, minimum: 0 }
         errors: { type: integer, minimum: 0 }
-        error_rate: { type: number, description: errors / count, from 0 to 1 }
+        error_rate: { type: number, description: "errors / count, from 0 to 1" }
         p50_ms: { type: number, nullable: true }
         p95_ms: { type: number, nullable: true }
         window_minutes: { type: number }

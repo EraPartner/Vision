@@ -124,7 +124,9 @@ public struct ProviderHealthView: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(theme.destructive)
-                .accessibilityValue(Text(verbatim: model.isExpanded(row.provider) ? "expanded" : "collapsed"))
+                // `aria-expanded` without an English-only value: VoiceOver reads the toggle
+                // state in the system language.
+                .accessibilityAddTraits(model.isExpanded(row.provider) ? [.isToggle, .isSelected] : [.isToggle])
             } else {
                 Text(verbatim: "—")
                     .font(.footnote)

@@ -27,15 +27,15 @@ extension OpenAPI {
     public struct DbTableStat: Codable, Equatable, Sendable {
         public let schemaname: String
         public let tableName: String
-        /// BIGINT estimate from pg_stat_user_tables
+        /// BIGINT estimate from pg_stat_user_tables, as decimal text
         public let liveRows: String
-        /// BIGINT estimate from pg_stat_user_tables
+        /// BIGINT estimate from pg_stat_user_tables, as decimal text
         public let deadRows: String
         public let lastAutovacuum: String?
         public let lastAutoanalyze: String?
         /// pg_size_pretty of the total relation size
         public let size: String
-        /// BIGINT byte count
+        /// BIGINT byte count, as decimal text
         public let sizeBytes: String
 
         public init(schemaname: String, tableName: String, liveRows: String, deadRows: String, lastAutovacuum: String? = nil, lastAutoanalyze: String? = nil, size: String, sizeBytes: String) {
@@ -195,7 +195,7 @@ extension OpenAPI {
     public struct ProbeResult: Codable, Equatable, Sendable {
         public let ok: Bool
         public let provider: OpenAPI.ProviderHealth
-        /// The probe error
+        /// The probe error, only when ok is false
         public let error: String?
 
         public init(ok: Bool, provider: OpenAPI.ProviderHealth, error: String? = nil) {
@@ -267,7 +267,7 @@ extension OpenAPI {
         public let path: String
         public let count: Int
         public let errors: Int
-        /// errors / count
+        /// errors / count, from 0 to 1
         public let errorRate: Decimal
         public let p50Ms: Decimal?
         public let p95Ms: Decimal?

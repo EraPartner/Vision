@@ -90,6 +90,7 @@ struct AdminErrorBanner: View {
     @Environment(\.visionTheme) var theme
 
     var body: some View {
+        let spoken = announcement
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: state == .authentication ? "key" : "exclamationmark.triangle")
                 .foregroundStyle(theme.destructive)
@@ -121,6 +122,17 @@ struct AdminErrorBanner: View {
                 .strokeBorder(theme.destructive.opacity(0.4), lineWidth: 1))
         .accessibilityElement(children: .contain)
         .accessibilityAddTraits(.isStaticText)
+        // `role="alert"`: the failure is announced when it appears or changes.
+        .task(id: state) { AccessibilityNotification.Announcement(spoken).post() }
+    }
+
+    private var announcement: String {
+        switch state {
+        case .authentication:
+            return "\(strings.t("admin.authError.title")). \(strings.t("admin.authError.description"))"
+        case .message(let title, let message):
+            return "\(title). \(message)"
+        }
     }
 }
 

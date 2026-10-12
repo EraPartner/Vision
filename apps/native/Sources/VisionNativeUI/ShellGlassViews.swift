@@ -3,7 +3,8 @@ import SwiftUI
 import VisionNativeCore
 
 /// A behind-window `NSVisualEffectView`: the desktop glows through, like Electron's
-/// vibrancy under the web page.
+/// vibrancy under the web page. The material follows the page theme's color scheme, not the
+/// macOS appearance.
 struct VibrancyBackground: NSViewRepresentable {
     var material: NSVisualEffectView.Material
 
@@ -12,11 +13,17 @@ struct VibrancyBackground: NSViewRepresentable {
         view.material = material
         view.blendingMode = .behindWindow
         view.state = .followsWindowActiveState
+        view.appearance = Self.appearance(context.environment.colorScheme)
         return view
     }
 
     func updateNSView(_ view: NSVisualEffectView, context: Context) {
         view.material = material
+        view.appearance = Self.appearance(context.environment.colorScheme)
+    }
+
+    static func appearance(_ scheme: ColorScheme) -> NSAppearance? {
+        NSAppearance(named: scheme == .dark ? .darkAqua : .aqua)
     }
 }
 

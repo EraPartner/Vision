@@ -130,9 +130,8 @@ public final class ProviderHealthModel {
                 notice = notices.make(.error, "admin.providers.probeFail", ["provider": label], detail: result.error)
             }
             probing.remove(provider)
-            providers.invalidate()
             onProvidersChanged?()
-            await providers.refetch()
+            await providers.invalidateAndRefetch()
         } catch {
             notice = notices.make(.error, "admin.providers.probeError", ["provider": provider])
             probing.remove(provider)

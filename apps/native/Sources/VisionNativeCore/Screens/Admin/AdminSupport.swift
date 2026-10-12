@@ -83,26 +83,46 @@ public final class ScreenQuery<Value: Sendable & Equatable> {
             await inFlight.value
             return
         }
+        await start()
+    }
+
+    /// `invalidateQueries` on a mounted query: cancel the request in flight, whose answer may
+    /// predate a change, and fetch again.
+    public func invalidateAndRefetch() async {
+        fetchedAt = nil
+        inFlight?.cancel()
+        await start()
+    }
+
+    private func start() async {
         let request = Task { await run() }
         inFlight = request
         await request.value
-        inFlight = nil
+        if inFlight == request { inFlight = nil }
     }
 
+    /// A cancelled request leaves the state to the request that replaced it.
     private func run() async {
         isFetching = true
-        defer { isFetching = false }
+        let result: Result<Value, any Error>
         do {
-            let value = try await load()
+            result = .success(try await load())
+        } catch {
+            result = .failure(error)
+        }
+        guard !Task.isCancelled else { return }
+        isFetching = false
+        switch result {
+        case .success(let value):
             data = value
             error = nil
             fetchedAt = now()
-        } catch is CancellationError {
+        case .failure(is CancellationError):
             return
-        } catch let failure as APIError {
+        case .failure(let failure as APIError):
             error = failure
             fetchedAt = nil
-        } catch let failure {
+        case .failure(let failure):
             error = .network(failure.localizedDescription)
             fetchedAt = nil
         }

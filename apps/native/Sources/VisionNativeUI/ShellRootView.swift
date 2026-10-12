@@ -50,25 +50,38 @@ public struct ShellRootView<WebContent: View>: View {
 }
 
 /// `AppSidebar`: the sections (admin in admin mode), collapsible section headers, and the
-/// footer entries with Settings, on the web sidebar's glass chrome with its emerald pill for
-/// the active page instead of the system selection.
+/// footer entries with Settings, as a source list on the web sidebar's glass chrome with its
+/// emerald pill for the active page instead of the system selection highlight.
 struct NativeSidebar: View {
     let model: NativeShellModel
     @Environment(\.visionTheme) private var theme
 
     var body: some View {
-        List {
+        List(selection: selection) {
             ForEach(model.sections) { section in
                 sectionView(section)
             }
         }
         .listStyle(.sidebar)
         .scrollContentBackground(.hidden)
+        // The pill marks the active row; a clear tint hides the system selection highlight
+        // while keeping the list's selection and arrow-key movement.
+        .tint(Color.clear)
         .accessibilityLabel(model.strings.t("nav.primary"))
         .safeAreaInset(edge: .bottom, spacing: 0) {
             footer
         }
         .background(SidebarGlassBackground())
+    }
+
+    /// Selecting a row (click or arrow keys) navigates; the selection follows the reported
+    /// route, so a navigation the page has not confirmed yet does not move it.
+    private var selection: Binding<String?> {
+        Binding(
+            get: { model.selectedItemURL },
+            set: { url in
+                if let url, url != model.route.path { model.navigate(to: url) }
+            })
     }
 
     @ViewBuilder
@@ -98,27 +111,20 @@ struct NativeSidebar: View {
             set: { model.setSection(section.id, expanded: $0) })
     }
 
-    /// A click navigates; the pill follows the route the page reports.
+    /// The pill follows the route the page reports.
     private func rows(_ items: [NavItem]) -> some View {
         ForEach(items) { item in
             let isActive = model.selectedItemURL == item.url
-            Button {
-                if item.url != model.route.path { model.navigate(to: item.url) }
-            } label: {
-                Label {
-                    Text(model.strings.t(item.titleKey))
-                        .fontWeight(isActive ? .semibold : .regular)
-                        .foregroundStyle(Color(token: theme.glass.foreground))
-                } icon: {
-                    Image(systemName: item.symbol)
-                        .foregroundStyle(Color(token: theme.glass.icon))
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
+            Label {
+                Text(model.strings.t(item.titleKey))
+                    .fontWeight(isActive ? .semibold : .regular)
+                    .foregroundStyle(Color(token: theme.glass.foreground))
+            } icon: {
+                Image(systemName: item.symbol)
+                    .foregroundStyle(Color(token: theme.glass.icon))
             }
-            .buttonStyle(.plain)
+            .tag(item.url as String?)
             .listRowBackground(SidebarSelectionPill(isActive: isActive))
-            .accessibilityAddTraits(isActive ? .isSelected : [])
         }
     }
 
