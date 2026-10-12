@@ -37,7 +37,7 @@ public struct TableDataEditorView: View {
                         Label(strings.t("dbEditor.addRow"), systemImage: "plus")
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(model.isReadOnly)
+                    .disabled(model.isReadOnly || model.isReviewLocked)
                 }
             }
             warning
@@ -97,7 +97,8 @@ public struct TableDataEditorView: View {
         .accessibilityAddTraits(.isLink)
     }
 
-    /// `admin.moreActions`: Refresh, disabled while fetching.
+    /// `admin.moreActions`: Refresh, disabled while fetching, while changes are pending and
+    /// while reviewing.
     private var moreActions: some View {
         Menu {
             Button {
@@ -105,7 +106,7 @@ public struct TableDataEditorView: View {
             } label: {
                 Label(strings.t("dbEditor.refresh"), systemImage: "arrow.clockwise")
             }
-            .disabled(model.isFetching)
+            .disabled(!model.canRefresh)
         } label: {
             Image(systemName: model.isFetching ? "arrow.clockwise" : "ellipsis")
                 .symbolEffect(.rotate, options: .repeat(.continuous), isActive: model.isFetching)
@@ -140,7 +141,8 @@ public struct TableDataEditorView: View {
 
     /// Apply filters, the background-fetch cue and the pending bar.
     private func toolbar(pending: Bool) -> some View {
-        HStack(spacing: 8) {
+        let locked = model.isReviewLocked
+        return HStack(spacing: 8) {
             Button {
                 Task { await model.applyFilters() }
             } label: {
@@ -157,22 +159,26 @@ public struct TableDataEditorView: View {
                 let count = strings.tc("dbEditor.pendingCount", model.pendingCount)
                 Text(count)
                     .font(.callout.weight(.medium))
-                    // `role="status"`: the count is announced as it changes.
-                    .task(id: count) { AccessibilityNotification.Announcement(count).post() }
                 Button {
                     model.discardAll()
                 } label: {
                     Label(strings.t("dbEditor.discard"), systemImage: "arrow.uturn.backward")
                 }
                 .buttonStyle(.borderless)
+                .disabled(locked)
                 Button {
                     Task { await model.preview(strings: strings) }
                 } label: {
                     Label(strings.t("dbEditor.preview"), systemImage: "eye")
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(model.isPreviewing)
+                .disabled(locked)
             }
+        }
+        // `role="status"`: the count is announced when it changes, not when the page appears.
+        .onChange(of: model.pendingCount) { _, newCount in
+            guard newCount > 0 else { return }
+            AccessibilityNotification.Announcement(strings.tc("dbEditor.pendingCount", newCount)).post()
         }
     }
 
@@ -295,7 +301,7 @@ public struct TableDataEditorView: View {
                         .textFieldStyle(.plain)
                         .font(.footnote.monospaced())
                         .onSubmit { Task { await model.applyFilters() } }
-                        .accessibilityLabel("\(strings.t("dbEditor.filterPlaceholder")) \(column.name)")
+                        .accessibilityLabel(Text(verbatim: "\(strings.t("dbEditor.filterPlaceholder")) \(column.name)"))
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 5)
@@ -329,6 +335,7 @@ public struct TableDataEditorView: View {
             } label: {
                 Image(systemName: "ellipsis")
             }
+            .disabled(model.isReviewLocked)
             .modifier(RowMenuStyle(label: strings.t("dbEditor.rowMenu")))
             ForEach(model.columns, id: \.name) { column in
                 cellView(
@@ -360,18 +367,19 @@ public struct TableDataEditorView: View {
                     } label: {
                         Label(strings.t("dbEditor.undoDelete"), systemImage: "arrow.uturn.backward")
                     }
-                    .disabled(model.isReadOnly)
+                    .disabled(!model.canToggleDelete)
                 } else {
                     Button(role: .destructive) {
                         model.toggleDelete(row)
                     } label: {
                         Label(strings.t("dbEditor.deleteRow"), systemImage: "trash")
                     }
-                    .disabled(model.isReadOnly)
+                    .disabled(!model.canToggleDelete)
                 }
             } label: {
                 Image(systemName: "ellipsis")
             }
+            .disabled(model.isReviewLocked)
             .modifier(RowMenuStyle(label: strings.t("dbEditor.rowMenu")))
             ForEach(model.columns, id: \.name) { column in
                 cellView(
@@ -640,7 +648,6 @@ struct ReviewChangesSheet: View {
                 .buttonStyle(.borderedProminent)
                 .tint(model.hasDeletes ? theme.destructive : theme.primary)
                 .disabled(!model.canCommit)
-                .keyboardShortcut(.defaultAction)
             }
         }
         .padding(24)

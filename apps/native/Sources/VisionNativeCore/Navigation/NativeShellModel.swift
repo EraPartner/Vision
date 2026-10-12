@@ -171,6 +171,9 @@ public final class NativeShellModel {
         leaveGuard = hook
     }
 
+    /// Quit asks first while the registered screen reports unsaved changes.
+    public var hasGuardedUnsavedChanges: Bool { leaveGuard?.hasUnsavedChanges() ?? false }
+
     /// The screen went away; a newer registration stays.
     public func removeLeaveGuard(id: String) {
         if leaveGuard?.id == id { leaveGuard = nil }

@@ -306,6 +306,25 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         await auditChannels.endSession()
     }
 
+    /// Quit while a native screen holds unsaved changes shows the Leave this page? alert
+    /// (`unsavedChanges.*`); `true` (Leave and discard) lets the app quit, Stay on page
+    /// (the default button) cancels it.
+    func confirmQuitWithUnsavedChanges() -> Bool {
+        guard shellHost != nil, shellModel.hasGuardedUnsavedChanges else { return true }
+        let strings = shellModel.strings
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = strings.t("unsavedChanges.title")
+        alert.informativeText = strings.t("unsavedChanges.description")
+        let stay = alert.addButton(withTitle: strings.t("unsavedChanges.stay"))
+        let leave = alert.addButton(withTitle: strings.t("unsavedChanges.leave"))
+        stay.keyEquivalent = "\r"
+        leave.keyEquivalent = ""
+        leave.hasDestructiveAction = true
+        showWindow()
+        return alert.runModal() == .alertSecondButtonReturn
+    }
+
     /// The `will-quit` backup: the database setting (else the `settings.json` mirror),
     /// resolved with the iCloud Drive default. Skipped when the runtime never became ready.
     private func runQuitBackup() async {

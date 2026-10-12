@@ -46,7 +46,10 @@ public enum TableCellValue {
         column.udtName == "bool" || column.dataType == "boolean"
     }
 
-    /// `JSON.stringify(value)`, with object keys sorted (Foundation keeps no key order).
+    /// `JSON.stringify(value)`, with object keys sorted. `JSONValue.object` is a dictionary, so
+    /// the decoded key order is already lost; sorting keeps the text stable for `equal` and the
+    /// row keys. Known limitation: an object cell's editor prefill, and so an edited value sent
+    /// back, lists its keys sorted, not in the order the server returned them.
     public static func json(_ value: JSONValue) -> String {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]

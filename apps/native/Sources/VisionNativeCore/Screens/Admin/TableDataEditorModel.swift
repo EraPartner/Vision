@@ -80,6 +80,8 @@ public final class TableDataEditorModel {
     public var isReviewPresented = false
     /// The dry run's statements.
     public private(set) var previewStatements: [OpenAPI.DbEditorStatement] = []
+    /// The change list the dry run was sent with; Commit sends exactly this list.
+    public private(set) var previewedChanges: [TableChange]?
     public private(set) var notice: ScreenNotice?
 
     @ObservationIgnored private let service: any DatabaseAdminService
@@ -87,7 +89,7 @@ public final class TableDataEditorModel {
     @ObservationIgnored private var tempSequence = 0
     /// The query `page` answers.
     @ObservationIgnored private var loadedQuery: TableRowsQuery?
-    /// `rowsByKey`: the loaded rows by key; the first row wins a repeated key.
+    /// `rowsByKey`: the loaded rows by key; the last row wins a repeated key, like the web's `Map`.
     @ObservationIgnored private var rowsByKey: [String: Row] = [:]
     @ObservationIgnored private var generation = 0
 
@@ -156,9 +158,14 @@ public final class TableDataEditorModel {
         isFetching = false
     }
 
-    /// The header menu's Refresh (disabled while fetching): fetch the current page again.
+    /// The header menu's Refresh: disabled while fetching, while changes are pending (a
+    /// reload could change the staged rows' `__xmin` under the change list) and while a
+    /// preview or the Review dialog is open.
+    public var canRefresh: Bool { !isFetching && !hasPending && !isReviewLocked }
+
+    /// Fetch the current page again.
     public func refresh() async {
-        guard !isFetching else { return }
+        guard canRefresh else { return }
         await load(force: true)
     }
 
@@ -188,7 +195,7 @@ public final class TableDataEditorModel {
         rows = (next?.rows ?? []).enumerated().map { index, values in
             Row(id: Self.rowKey(values, primaryKey: keys, index: index), index: index, values: values)
         }
-        rowsByKey = Dictionary(rows.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        rowsByKey = Dictionary(rows.map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
     }
 
     /// `rowsOnPage`.
@@ -280,7 +287,8 @@ public final class TableDataEditorModel {
         let keys = primaryKey
         guard !(page?.primaryKey ?? []).isEmpty else { return out }
         var seen = Set<String>()
-        for row in rows where seen.insert(row.id).inserted {
+        for first in rows where seen.insert(first.id).inserted {
+            let row = rowsByKey[first.id] ?? first
             var pk: [String: JSONValue] = [:]
             for name in keys { pk[name] = row.values[name] }
             let xmin = row.values["__xmin"]
@@ -317,33 +325,53 @@ public final class TableDataEditorModel {
     /// Deletes make the commit button destructive and show `dbEditor.deleteWarning`.
     public var hasDeletes: Bool { operationCounts.deletes > 0 }
 
+    /// A dry run is in flight or the Review dialog is open (or committing): the change list
+    /// is frozen, so cell edits, Add row, Discard, the row menus and Refresh are disabled.
+    public var isReviewLocked: Bool { isPreviewing || isReviewPresented || isCommitting }
+
     /// Add row (disabled when read-only): a blank insert row.
     public func addRow() {
-        guard !isReadOnly else { return }
+        guard !isReadOnly, !isReviewLocked else { return }
         newRows.append(NewRow(id: "new-\(tempSequence)", values: [:]))
         tempSequence += 1
     }
 
     /// Discard new row.
     public func discardNewRow(_ id: String) {
+        guard !isReviewLocked else { return }
         newRows.removeAll { $0.id == id }
         if editingCell?.isNew == true, editingCell?.row == id { editingCell = nil }
     }
 
     /// Discard changes: every edit, deletion and new row, without confirmation.
     public func discardAll() {
+        guard !isReviewLocked else { return }
+        resetPending()
+    }
+
+    /// Drops the staged state and the preview (Discard, a successful commit, Leave and discard).
+    private func resetPending() {
         edits = [:]
         deletes = []
         newRows = []
         editingCell = nil
+        clearPreview()
+    }
+
+    private func clearPreview() {
+        previewStatements = []
+        previewedChanges = nil
     }
 
     public func isDeleted(_ row: Row) -> Bool { deletes.contains(row.id) }
     public func hasEdits(_ row: Row) -> Bool { !(edits[row.id] ?? [:]).isEmpty }
 
     public func canRevertRow(_ row: Row) -> Bool {
-        !isReadOnly && hasEdits(row) && !isDeleted(row)
+        !isReadOnly && !isReviewLocked && hasEdits(row) && !isDeleted(row)
     }
+
+    /// Mark row for deletion / Undo delete: disabled when read-only or while reviewing.
+    public var canToggleDelete: Bool { !isReadOnly && !isReviewLocked }
 
     /// Revert changes to this row (disabled when read-only, without edits or deleted).
     public func revertRow(_ row: Row) {
@@ -353,7 +381,7 @@ public final class TableDataEditorModel {
 
     /// Mark row for deletion / Undo delete (disabled when read-only).
     public func toggleDelete(_ row: Row) {
-        guard !isReadOnly else { return }
+        guard canToggleDelete else { return }
         if deletes.contains(row.id) {
             deletes.remove(row.id)
         } else {
@@ -391,9 +419,10 @@ public final class TableDataEditorModel {
         !cell.isNew && primaryKey.contains(cell.column)
     }
 
-    /// Writable, not a locked key, not on a deleted row, and not on a read-only table.
+    /// Writable, not a locked key, not on a deleted row, not on a read-only table, and not
+    /// while a preview or the Review dialog is open.
     public func canEdit(_ cell: Cell) -> Bool {
-        guard let column = column(cell.column), column.writable else { return false }
+        guard !isReviewLocked, let column = column(cell.column), column.writable else { return false }
         if cell.isNew { return newRows.contains { $0.id == cell.row } }
         return !isReadOnly && !isLocked(cell) && !deletes.contains(cell.row)
     }
@@ -423,6 +452,7 @@ public final class TableDataEditorModel {
 
     /// Revert cell change: drops the staged value (and an emptied row's entry).
     public func revertCell(_ cell: Cell) {
+        guard !isReviewLocked else { return }
         if cell.isNew {
             guard let index = newRows.firstIndex(where: { $0.id == cell.row }) else { return }
             newRows[index].values[cell.column] = nil
@@ -459,15 +489,23 @@ public final class TableDataEditorModel {
     // MARK: Preview and commit
 
     /// Preview SQL (disabled while previewing): the dry run, then the Review dialog, or the
-    /// `dbEditor.previewFailed` toast.
+    /// `dbEditor.previewFailed` toast. The sent list is kept for Commit; an answer that is
+    /// not a dry run counts as a failed preview.
     public func preview(strings: any Localizing) async {
-        guard !isPreviewing, hasPending else { return }
+        guard !isReviewLocked, hasPending else { return }
         if editingCell != nil { commitEditing() }
+        let sent = changes
+        clearPreview()
         isPreviewing = true
         do {
-            let result = try await service.mutateTable(table, changes: changes, dryRun: true)
-            previewStatements = result.statements ?? []
-            isReviewPresented = true
+            let result = try await service.mutateTable(table, changes: sent, dryRun: true)
+            if result.dryRun {
+                previewStatements = result.statements ?? []
+                previewedChanges = sent
+                isReviewPresented = true
+            } else {
+                notice = notices.make(.error, "dbEditor.previewFailed")
+            }
         } catch {
             notice = notices.make(
                 .error, "dbEditor.previewFailed", detail: APIErrorMessage.text(APIError.wrapping(error), strings: strings))
@@ -475,23 +513,32 @@ public final class TableDataEditorModel {
         isPreviewing = false
     }
 
-    /// Commit is disabled while committing and when the preview has no statements.
-    public var canCommit: Bool { !isCommitting && !previewStatements.isEmpty }
+    /// Commit is disabled while committing and without a previewed change list or statements.
+    public var canCommit: Bool { !isCommitting && previewedChanges != nil && !previewStatements.isEmpty }
 
-    /// Commit to database: one transaction; on success the `dbEditor.commitSuccess` toast
-    /// with the applied count, the dialog closes, the staged state is discarded and the
-    /// rows load again; on failure the `dbEditor.commitFailed` toast and the dialog stays.
+    /// Commit to database: one transaction with exactly the previewed change list; on
+    /// success the `dbEditor.commitSuccess` toast with the applied count, the dialog closes,
+    /// the staged state is discarded and the rows load again; on failure the
+    /// `dbEditor.commitFailed` toast and the dialog stays. When the change list no longer
+    /// matches the preview, the dialog closes and the `dbEditor.previewFailed` toast asks
+    /// for a new preview; nothing is sent.
     public func commit(strings: any Localizing) async {
-        guard canCommit else { return }
+        guard canCommit, let sent = previewedChanges else { return }
+        guard sent == changes else {
+            isReviewPresented = false
+            clearPreview()
+            notice = notices.make(.error, "dbEditor.previewFailed")
+            return
+        }
         isCommitting = true
         do {
-            let result = try await service.mutateTable(table, changes: changes, dryRun: false)
+            let result = try await service.mutateTable(table, changes: sent, dryRun: false)
             notice = notices.make(
                 .success, "dbEditor.commitSuccess",
                 detail: "\(result.applied ?? 0) \(strings.t("dbEditor.statementsApplied"))")
             isCommitting = false
             isReviewPresented = false
-            discardAll()
+            resetPending()
             await load(force: true)
         } catch {
             notice = notices.make(
@@ -512,6 +559,6 @@ public final class TableDataEditorModel {
         NativeLeaveGuard(
             id: TableEditorRoute.path(for: table),
             hasUnsavedChanges: { [weak self] in self?.hasPending ?? false },
-            discard: { [weak self] in self?.discardAll() })
+            discard: { [weak self] in self?.resetPending() })
     }
 }

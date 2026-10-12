@@ -693,6 +693,8 @@ enum DatabaseFixture {
         #expect(!model.hasPending)
         #expect(model.newRows.isEmpty)
         #expect(!model.isCommitting)
+        #expect(model.previewStatements.isEmpty)
+        #expect(model.previewedChanges == nil)
         // The table loads again.
         #expect(await service.queries.count == 2)
     }
@@ -740,6 +742,120 @@ enum DatabaseFixture {
         #expect(!model.canCommit)
         await model.commit(strings: strings)
         #expect(await service.mutationCalls.count == 2)
+    }
+
+    @Test func commitSendsThePreviewedListAndTheReviewFreezesIt() async {
+        let preview = OpenAPI.DbEditorMutationResult(
+            dryRun: true, count: 1, statements: [OpenAPI.DbEditorStatement(op: "delete", preview: "DELETE")])
+        let service = FakeDatabaseService(
+            mutations: [
+                .success(preview),
+                .success(OpenAPI.DbEditorMutationResult(dryRun: false, applied: 1, results: [], refreshScheduled: false)),
+            ])
+        let model = await loaded(service)
+        let first = model.rows[0]
+        model.toggleDelete(first)
+        let previewed = model.changes
+        await model.preview(strings: strings)
+        #expect(model.previewedChanges == previewed)
+        #expect(model.isReviewLocked)
+        // While the dialog is open the change list cannot move.
+        #expect(!model.canEdit(DatabaseFixture.cell(2, "name")))
+        model.setValue(.string("x"), for: DatabaseFixture.cell(2, "name"))
+        model.toggleDelete(first)
+        model.addRow()
+        model.discardAll()
+        #expect(!model.canToggleDelete)
+        #expect(!model.canRevertRow(model.rows[1]))
+        #expect(!model.canRefresh)
+        #expect(model.changes == previewed)
+        await model.commit(strings: strings)
+        let calls = await service.mutationCalls
+        #expect(calls == [
+            FakeDatabaseService.Mutation(table: "categories", changes: previewed, dryRun: true),
+            FakeDatabaseService.Mutation(table: "categories", changes: previewed, dryRun: false),
+        ])
+    }
+
+    @Test func aChangeAfterThePreviewInvalidatesTheReview() async {
+        let preview = OpenAPI.DbEditorMutationResult(
+            dryRun: true, count: 1, statements: [OpenAPI.DbEditorStatement(op: "delete", preview: "DELETE")])
+        let service = FakeDatabaseService(mutations: [.success(preview)])
+        let model = await loaded(service)
+        model.toggleDelete(model.rows[0])
+        await model.preview(strings: strings)
+        // Cancel, change the list, and the dialog shows again with the old statements.
+        model.isReviewPresented = false
+        model.setValue(.string("x"), for: DatabaseFixture.cell(2, "name"))
+        model.isReviewPresented = true
+        #expect(model.canCommit)
+        await model.commit(strings: strings)
+        #expect(!model.isReviewPresented)
+        #expect(model.previewStatements.isEmpty)
+        #expect(model.previewedChanges == nil)
+        #expect(!model.canCommit)
+        #expect(model.notice?.key == "dbEditor.previewFailed")
+        #expect(model.hasPending)
+        let calls = await service.mutationCalls
+        #expect(calls.count == 1)
+        #expect(calls.first?.dryRun == true)
+    }
+
+    @Test func discardClearsThePreview() async {
+        let preview = OpenAPI.DbEditorMutationResult(
+            dryRun: true, count: 1, statements: [OpenAPI.DbEditorStatement(op: "delete", preview: "DELETE")])
+        let model = await loaded(FakeDatabaseService(mutations: [.success(preview)]))
+        model.toggleDelete(model.rows[0])
+        await model.preview(strings: strings)
+        #expect(model.previewedChanges != nil)
+        model.isReviewPresented = false
+        model.discardAll()
+        #expect(!model.hasPending)
+        #expect(model.previewStatements.isEmpty)
+        #expect(model.previewedChanges == nil)
+    }
+
+    @Test func aPreviewAnswerThatIsNotADryRunFails() async {
+        let service = FakeDatabaseService(
+            mutations: [
+                .success(
+                    OpenAPI.DbEditorMutationResult(
+                        dryRun: false, count: 1, statements: [OpenAPI.DbEditorStatement(op: "delete", preview: "DELETE")]))
+            ])
+        let model = await loaded(service)
+        model.toggleDelete(model.rows[0])
+        await model.preview(strings: strings)
+        #expect(!model.isReviewPresented)
+        #expect(model.previewStatements.isEmpty)
+        #expect(model.previewedChanges == nil)
+        #expect(model.notice?.kind == .error)
+        #expect(model.notice?.key == "dbEditor.previewFailed")
+        #expect(!model.canCommit)
+    }
+
+    @Test func refreshIsDisabledWhileChangesArePending() async {
+        let service = FakeDatabaseService()
+        let model = await loaded(service)
+        #expect(model.canRefresh)
+        model.toggleDelete(model.rows[0])
+        #expect(!model.canRefresh)
+        await model.refresh()
+        #expect(await service.queries.count == 1)
+        model.discardAll()
+        #expect(model.canRefresh)
+        await model.refresh()
+        #expect(await service.queries.count == 2)
+    }
+
+    @Test func aRepeatedKeyKeepsTheLastRow() async {
+        let rows: [[String: JSONValue]] = [
+            ["id": .int(1), "name": .string("Old"), "__xmin": .string("100")],
+            ["id": .int(1), "name": .string("New"), "__xmin": .string("200")],
+        ]
+        let model = await loaded(FakeDatabaseService(pages: [.success(DatabaseFixture.page(rows: rows))]))
+        #expect(model.value(DatabaseFixture.cell(1, "name")) == .string("New"))
+        model.toggleDelete(model.rows[0])
+        #expect(model.changes == [TableChange.delete(pk: ["id": .int(1)], xmin: .string("200"))])
     }
 
     @Test func loadErrorsUseTheAdminErrorState() async {
@@ -824,6 +940,19 @@ enum DatabaseFixture {
         // Leaving without a held navigation does nothing.
         shell.leavePage()
         #expect(recorder.actions.count == 3)
+    }
+
+    @Test func quitAsksWhileTheGuardReportsChanges() async {
+        let shell = makeShell(database: FakeDatabaseService(), recorder: ShellRecorder())
+        #expect(!shell.hasGuardedUnsavedChanges)
+        let editor = TableDataEditorModel(table: "categories", service: FakeDatabaseService())
+        await editor.appear()
+        shell.setLeaveGuard(editor.leaveGuard)
+        #expect(!shell.hasGuardedUnsavedChanges)
+        editor.addRow()
+        #expect(shell.hasGuardedUnsavedChanges)
+        shell.removeLeaveGuard(id: editor.leaveGuard.id)
+        #expect(!shell.hasGuardedUnsavedChanges)
     }
 
     @Test func onlyTheRegisteringScreenRemovesItsGuard() async throws {

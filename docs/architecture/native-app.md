@@ -665,7 +665,9 @@ prompt opens on the visible page and a blocked move keeps the route. A native sc
 work registers a `NativeLeaveGuard` instead (phase 3b): while it reports changes, `navigate` holds
 a move to another path behind the Leave this page? alert (`unsavedChanges.*`), whose Stay on page
 cancels it and Leave and discard drops the work and sends it. Sidebar clicks, native links and
-shortcuts, and the menu bar's Go items all pass through `navigate`. A native `?tab` change sends
+shortcuts, and the menu bar's Go items all pass through `navigate`. Quit asks too: while the guard
+reports changes, `applicationShouldTerminate` shows the same alert as an `NSAlert` and quits only on
+Leave and discard. A move the page makes on its own (the command palette) is not held. A native `?tab` change sends
 `replace-route`, which the page applies with `replace`, like `useTabParam`; the page accepts
 `navigate` and `replace-route` payloads that start with one `/` only.
 
@@ -712,8 +714,12 @@ stats, vacuum, schema, rows and mutate operations of the generated client).
 confirmation and refetches after it; a vacuum or a refresh marks the overview's database tile
 stale. `TableDataEditorModel` loads the schema once and pages the rows by cursor (100 per page,
 the previous page stays on screen while the next loads), sorts and filters with `contains`
-filters, and stages edits, deletions and new rows; Preview SQL runs the dry run and the Review
-pending changes sheet commits the same change list in one transaction, then reloads the page. The
+filters, and stages edits, deletions and new rows; Preview SQL runs the dry run (an answer without
+`dryRun: true` counts as a failed preview) and the Review pending changes sheet commits exactly the
+previewed change list in one transaction, then reloads the page. While the dry run or the sheet is
+open, cell edits, Add row, Discard, the row menus and Refresh are disabled; a list that no longer
+matches the preview closes the sheet and asks for a new one. Refresh also waits while changes are
+pending, since a reload could move the staged rows' `__xmin`. The
 editor registers the shell's leave guard while it has pending changes. When the page itself moves
 away (the command palette), pending changes stay with that table's editor until they are
 discarded; without pending changes the editor is dropped with the route, so a table opens fresh.
