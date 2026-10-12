@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/select";
 import { DatePicker } from "@/components/shared/DatePicker";
 import { parseLocalDateFromYmd, toYmd } from "@/lib/dateUtils";
+import { SELECT_NONE, fromSelectValue, toSelectValue } from "@/lib/selectValue";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import {
     ACTIVITY_KINDS,
@@ -132,17 +133,21 @@ function ActivityEditor({
                         {t("tax.household.activity.pensionKind")}
                     </Label>
                     <Select
-                        value={activity.pensionKind ?? ""}
-                        onValueChange={(pensionKind) =>
-                            onChange({ pensionKind: pensionKind as PensionKind })
-                        }
+                        value={toSelectValue(activity.pensionKind)}
+                        onValueChange={(value) => {
+                            const pensionKind = fromSelectValue(value);
+                            onChange({
+                                pensionKind: pensionKind ? (pensionKind as PensionKind) : undefined,
+                            });
+                        }}
                     >
                         <SelectTrigger id={`${id}-pension-kind`} className="w-full">
-                            <SelectValue
-                                placeholder={t("tax.household.activity.pensionKind.placeholder")}
-                            />
+                            <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
+                            <SelectItem value={SELECT_NONE}>
+                                {t("tax.household.activity.pensionKind.none")}
+                            </SelectItem>
                             {PENSION_KINDS.map((kind) => (
                                 <SelectItem key={kind} value={kind}>
                                     {t(`tax.household.activity.pensionKind.${kind}`)}

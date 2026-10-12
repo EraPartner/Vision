@@ -449,7 +449,9 @@ export function pensionAdditionalReductionFactor(t: number, p: PensionReductionP
  *  - 1 with a survivor's pension or transition allowance (b, second case; AAFisc 40/2011 no. 18:
  *    of several applicable denominators the lowest wins);
  *  - 1 with a statutory pension received from the legal pension age of at most `lower` (b);
- *  - (upper − pension) / (upper − lower) above `lower` up to `upper` (c and al. 3);
+ *  - (upper − pension) / difference above `lower` up to `upper`, capped to [0, 1] (c and al. 3;
+ *    `difference` is the al. 3 amount the FPS indexation notice publishes, which can differ from
+ *    upper − lower after indexation);
  *  - 0 otherwise.
  * `grossStatutoryPension` is the gross amount as declared, before any deduction (AAFisc 40/2011
  * no. 22).
@@ -460,10 +462,11 @@ export function pensionActivityExclusionFraction(
     p: Pick<PensionReductionParams, "statutoryPensionLimits">,
 ): number {
     if (hasSurvivorPension) return 1;
-    const { lower, upper } = p.statutoryPensionLimits;
+    const { lower, upper, difference } = p.statutoryPensionLimits;
     if (grossStatutoryPension <= 0 || grossStatutoryPension > upper) return 0;
     if (grossStatutoryPension <= lower) return 1;
-    return (upper - grossStatutoryPension) / (upper - lower);
+    if (difference <= 0) return 0;
+    return Math.min(Math.max((upper - grossStatutoryPension) / difference, 0), 1);
 }
 
 /**

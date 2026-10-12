@@ -508,8 +508,10 @@ export const JOINT_SCENARIOS: readonly Scenario[] = [
         id: "JP-04",
         description: "statutory pensioner 24,000 with employee income and a survivor's pensioner with income of their own: both exclusions in the receiver's proportion",
         rows: ["hh-pension-quotient", "hh-quotient", "pension-activity-income", "pension-reduction-share", "pension-reduction-taper"],
-        articles: "WIB 92 arts 88, 147 al. 1, 2°, b-c and al. 3 (N26: 19,630 / 28,780), 150, 151/1, 152, 153; FPS circular AAFisc 40/2011 nos 18, 19 a and c, 20",
-        status: "verified",
+        articles: "WIB 92 arts 88, 147 al. 1, 2°, b-c and al. 3 (N26: 19,630 / 28,780, al. 3 difference 9,160), 150, 151/1, 152, 153; FPS circular AAFisc 40/2011 nos 18, 19 a and c, 20",
+        status: "needs_source",
+        missing:
+            "How a transferor's partial exclusion (art. 147 al. 3, since AY 2020) carries over to the receiving spouse under the marital quotient (pension_quotient_partial_exclusion_unverified). AAFisc 40/2011 no. 19 a names only a transferor who meets no. 17 a or b, and circular 2020/C/82 does not address the quotient. Three readings: strict no. 19 a, nothing of a partially excluded transferor's activity income leaves the receiver's proportion (B's reduction 839.43); pro rata by the transferor's fraction, as the engine does (975.82); all the activity income in the quotient, because the receiver meets no. 19 c (1,012.67, the art. 153 limit)",
         household: {
             ...married([], []),
             partners: [
@@ -531,29 +533,35 @@ export const JOINT_SCENARIOS: readonly Scenario[] = [
             // A: activity income 28,842 (JP-03); net professional income 52,842
             // B employee: SS 392.10; base 2,607.90; forfait 782.37 → 1,825.53; B 3,825.53
             // art. 88: 30% × 56,667.53 > cap → transfer 13,460 − 3,825.53 = 9,634.47
-            // A excluded fraction (art. 147 al. 3): (28,780 − 24,000) / 9,150 = 478 / 915
+            // A excluded fraction (art. 147 al. 3): (28,780 − 24,000) / 9,160 = 239 / 458 (the
+            //   N26 difference; the literal 28,780 − 19,630 is 9,150)
             // A after: 43,207.53; pensions 24,000 × (1 − 9,634.47 / 52,842) = 19,624.176223459
-            //   excluded 28,842 × 478 / 915 × (1 − 9,634.47 / 52,842) = 12,320.047109494
-            //   share 19,624.176223459 / 30,887.482890506 = 0.635343977139
+            //   excluded 28,842 × 239 / 458 × (1 − 9,634.47 / 52,842) = 12,306.597276405
+            //   share 19,624.176223459 / 30,900.932723595 = 0.635067439517
             //   tax 4,080 + 4,992 + 14,407.53 × 45% = 15,555.3885 − 2,727.50 = 12,827.8885
             //   art. 152: 1/3 + 2/3 × 14,352.47 / 28,780 = 0.665797312949
-            //   → 938.774096837 (no additional); (12,827.8885 − 938.774096837) × 1.07
-            //   = 12,721.352411384
+            //   → 938.365489271 (no additional); (12,827.8885 − 938.365489271) × 1.07
+            //   = 12,721.789621480
             // B after: 13,460 + 8,000 other income = 21,460; pensions 2,000
             //   + 24,000 × 9,634.47 / 52,842 = 6,375.823776541
             //   excluded: own 1,825.53 (survivor's pension, no. 19 c) + 9,634.47 × 28,842 / 52,842
-            //   × 478 / 915 (no. 19 a) = 4,572.669775752 → share 6,375.823776541 / 16,887.330224248
-            //   = 0.377550725418
+            //   × 239 / 458 (no. 19 a, pro rata: the reading that needs a source)
+            //   = 4,569.670714862 → share 6,375.823776541 / 16,890.329285138 = 0.377483687198
             //   tax 4,080 + 5,140 × 40% = 6,136 − 2,727.50 = 3,408.50
-            //   base 2,219.27 × share = 837.886998399; art. 151/1: 457.23 × 7,320 / 9,150 × share
-            //   = 138.102014546 → 975.989012945 < art. 153 limit 3,408.50 × 6,375.82 / 21,460
-            //   = 1,012.67; (3,408.50 − 975.989012945) × 1.07 = 2,602.786756149
-            // Without the quotient the household owes 18,061.145670900 → the quotient applies
+            //   base 2,219.27 × share = 837.738222488; art. 151/1: 457.23 × 7,320 / 9,150 × share
+            //   = 138.077493038 → 975.815715526 < art. 153 limit 3,408.50 × 6,375.82 / 21,460
+            //   = 1,012.67; (3,408.50 − 975.815715526) × 1.07 = 2,602.972184387
+            // Without the quotient the household owes 18,061.436328262 → the quotient applies
             expect(r.quotient.applied).toBe(true);
             eur(r.quotient.transfer, 9_634.47);
-            eur(r.partners[0]?.pensionReduction, 938.774096837);
-            eur(r.partners[1]?.pensionReduction, 975.989012945);
-            eur(r.totals.totalPIT, 15_324.139167533);
+            eur(r.partners[0]?.pensionReduction, 938.365489271);
+            eur(r.partners[1]?.pensionReduction, 975.815715526);
+            eur(r.totals.totalPIT, 15_324.761805868);
+            expect(r.issues).toContainEqual({
+                code: "pension_quotient_partial_exclusion_unverified",
+                severity: "needs_source",
+                partnerId: "B",
+            });
             expect(r.issues.map((i) => i.code)).not.toContain("pension_reduction_activity_income_not_excluded");
         },
     },

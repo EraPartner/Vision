@@ -321,19 +321,42 @@ function computePartnerIncome(
     const hasSurvivorPension = pensionActivities.some(
         (a) => a.pensionKind === "survivor_or_transition" && (a.grossIncome || 0) > 0,
     );
-    const pensionKindMissing = pensionActivities.some(
-        (a) => a.pensionKind === undefined && (a.grossIncome || 0) > 0,
-    );
+    // A survivor's pension excludes the activity income in full whatever the other pensions
+    // (AAFisc 40/2011 no. 18), so an untyped pension next to it changes nothing. Without one, an
+    // untyped pension leaves the outcome open: the plain proportion applies (fraction 0).
+    const pensionKindMissing =
+        !hasSurvivorPension &&
+        pensionActivities.some((a) => a.pensionKind === undefined && (a.grossIncome || 0) > 0);
+    // Activity income (art. 147 al. 2; AAFisc 40/2011 no. 20): professional income less pensions
+    // and other replacement income, which the model records under `pension` (art. 34).
     const activityIncome = clampAtZero(netProfessionalIncome - pensionIncome);
-    const exclusionFraction = pensionActivityExclusionFraction(
-        grossStatutoryPension,
-        hasSurvivorPension,
-        table.pensionReduction,
-    );
+    const exclusionFraction = pensionKindMissing
+        ? 0
+        : pensionActivityExclusionFraction(
+              grossStatutoryPension,
+              hasSurvivorPension,
+              table.pensionReduction,
+          );
     if (pensionKindMissing && pensionIncome > 0 && activityIncome > 0) {
         issues.push({
             code: "pension_reduction_activity_income_not_excluded",
             severity: "warning",
+            partnerId: partner.id,
+        });
+    }
+    // Replacement income entered under `other_professional` or `net_professional_amount` counts
+    // as activity income here, although art. 147 al. 2 excludes it.
+    if (
+        exclusionFraction > 0 &&
+        activities.some(
+            (a) =>
+                (a.kind === "other_professional" || a.kind === "net_professional_amount") &&
+                a.netProfessionalIncome > 0,
+        )
+    ) {
+        issues.push({
+            code: "pension_exclusion_other_income_counted_as_activity",
+            severity: "info",
             partnerId: partner.id,
         });
     }
@@ -732,6 +755,22 @@ export function computeHouseholdTax(
     if (appliedTransfer !== undefined) {
         const from = incomes.find((inc) => inc.partner.id === appliedTransfer.from);
         const to = incomes.find((inc) => inc.partner.id === appliedTransfer.to);
+        // AAFisc 40/2011 no. 19 a names only a transferor who meets no. 17 a or b (full
+        // exclusion); the partial exclusion of art. 147 al. 3 (from AY 2020) has no rule for the
+        // quotient. The engine carries the transferor's fraction over pro rata.
+        if (
+            from &&
+            from.exclusionFraction > 0 &&
+            from.exclusionFraction < 1 &&
+            from.activityIncome > 0 &&
+            from.pensionIncome > 0
+        ) {
+            issues.push({
+                code: "pension_quotient_partial_exclusion_unverified",
+                severity: "needs_source",
+                partnerId: appliedTransfer.to,
+            });
+        }
         if (
             from &&
             to &&

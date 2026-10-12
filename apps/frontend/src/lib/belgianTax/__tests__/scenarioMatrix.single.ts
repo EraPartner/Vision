@@ -414,7 +414,7 @@ export const SINGLE_SCENARIOS: readonly Scenario[] = [
         id: "SC-22",
         description: "statutory pension 20,000 from the legal pension age and employee income: part of the activity income leaves the proportion",
         rows: ["pension-reduction-share", "pension-activity-income", "pension-reduction-taper", "pension-reduction-limit"],
-        articles: "WIB 92 art. 147 al. 1, 2°, c and al. 2-3 (N26 limits 19,630 / 28,780), arts 151/1, 152, 153; FPS circular AAFisc 40/2011 nos 20, 22",
+        articles: "WIB 92 art. 147 al. 1, 2°, c and al. 2-3 (N26 limits 19,630 / 28,780, al. 3 difference 9,160), arts 151/1, 152, 153; FPS circular AAFisc 40/2011 nos 20, 22",
         status: "verified",
         household: single(
             activity("pension", 20_000, { pensionKind: "statutory_from_legal_age" }),
@@ -425,14 +425,15 @@ export const SINGLE_SCENARIOS: readonly Scenario[] = [
             // net income 26,085.10: 4,080 + 9,765.10 × 40% (3,906.04) = 7,986.04 − 2,727.50
             //   = 5,258.54
             // art. 147 al. 3: gross statutory pension 20,000 in (19,630, 28,780] → excluded part
-            //   6,085.10 × (28,780 − 20,000) / (28,780 − 19,630) = 6,085.10 × 8,780 / 9,150
-            //   = 5,839.035846995; share 20,000 / (26,085.10 − 5,839.035846995) = 0.987846321579
-            // art. 152: 26,085.10 ≤ 28,780 → base 2,219.27 × share = 2,192.297706091
-            // art. 151/1: 457.23 × (28,780 − 26,085.10) / 9,150 × share = 133.028797442
-            // total 2,325.326503533 < art. 153 limit 5,258.54 × 20,000 / 26,085.10 = 4,031.83
-            // (5,258.54 − 2,325.326503533) × 1.07 = 3,138.538441220
-            eur(r.partners[0]?.pensionReduction, 2_325.326503533);
-            eur(r.totals.totalPIT, 3_138.53844122);
+            //   6,085.10 × (28,780 − 20,000) / 9,160 (the al. 3 difference published in N26; the
+            //   literal 28,780 − 19,630 is 9,150) = 6,085.10 × 439 / 458 = 5,832.661353712;
+            //   share 20,000 / (26,085.10 − 5,832.661353712) = 0.987535395085
+            // art. 152: 26,085.10 ≤ 28,780 → base 2,219.27 × share = 2,191.607676251
+            // art. 151/1: 457.23 × (28,780 − 26,085.10) / 9,150 × share = 132.986926377
+            // total 2,324.594602628 < art. 153 limit 5,258.54 × 20,000 / 26,085.10 = 4,031.83
+            // (5,258.54 − 2,324.594602628) × 1.07 = 3,139.321575188
+            eur(r.partners[0]?.pensionReduction, 2_324.594602628);
+            eur(r.totals.totalPIT, 3_139.321575188);
             expect(r.issues.map((i) => i.code)).not.toContain("pension_reduction_activity_income_not_excluded");
         },
     },

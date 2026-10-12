@@ -107,10 +107,12 @@ export interface PensionReductionParams {
      * Art. 147 al. 1, 2°, b-c and al. 3: limits of the gross statutory pension (FPS circular
      * AAFisc 40/2011 no. 22) received from the legal pension age. Up to `lower` the activity
      * income is left out of the pension proportion in full; between `lower` and `upper` in part,
-     * (upper − pension) / (upper − lower); above `upper` not at all. Same base amounts
+     * (upper − pension) / difference; above `upper` not at all. Same base amounts
      * (10,160 / 14,900) and indexed values as `additionalLimits`, but a different rule.
+     * `difference` is the al. 3 "Différence" that the FPS indexation notice publishes as an
+     * amount of its own (base 4,740, indexed separately); it can differ from `upper − lower`.
      */
-    statutoryPensionLimits: { lower: number; upper: number };
+    statutoryPensionLimits: { lower: number; upper: number; difference: number };
     /**
      * Art. 152 (to AY 2026) / art. 151/2 al. 4 (from AY 2027): the base reduction is granted in
      * full up to `lower` and tapers to one third at `upper`.
@@ -495,8 +497,9 @@ const TABLE_2024: BelgianTaxYearTable = {
         additional: 444.78,
         additionalLimits: { lower: 19_030, upper: 27_900 },
         // Art. 147 al. 1, 2°, b-c (FPS indexation notice AY 2025, Fisconetplus 15618a3b): base
-        // 10,160 / 14,900 → 19,030 / 27,900.
-        statutoryPensionLimits: { lower: 19_030, upper: 27_900 },
+        // 10,160 / 14,900 → 19,030 / 27,900. Al. 3 "Différence" 4,740 → 8,880 as published (notice
+        // line "Différence: | 4.740,00 | 8.880,00"); the literal 27,900 − 19,030 is 8,870.
+        statutoryPensionLimits: { lower: 19_030, upper: 27_900, difference: 8_880 },
         baseLimits: { lower: 27_900, upper: 55_810 },
     },
 
@@ -697,8 +700,9 @@ const TABLE_2025: BelgianTaxYearTable = {
         additional: 457.23,
         additionalLimits: { lower: 19_630, upper: 28_780 },
         // Art. 147 al. 1, 2°, b-c (FPS indexation notice AY 2026, Fisconetplus 934106e5): base
-        // 10,160 / 14,900 → 19,630 / 28,780.
-        statutoryPensionLimits: { lower: 19_630, upper: 28_780 },
+        // 10,160 / 14,900 → 19,630 / 28,780. Al. 3 "Différence" 4,740 → 9,160 as published (notice
+        // line "Différence: | 4.740 | 9.160"); the literal 28,780 − 19,630 is 9,150.
+        statutoryPensionLimits: { lower: 19_630, upper: 28_780, difference: 9_160 },
         baseLimits: { lower: 28_780, upper: 57_560 },
     },
 
@@ -829,8 +833,9 @@ const TABLE_2026: BelgianTaxYearTable = {
         additional: 467.87,
         additionalLimits: { lower: 20_110, upper: 29_490 },
         // Art. 147 al. 1, 2°, b-c (FPS indexation notice AY 2027, Fisconetplus 042cb526): base
-        // 10,160 / 14,900 → 20,110 / 29,490.
-        statutoryPensionLimits: { lower: 20_110, upper: 29_490 },
+        // 10,160 / 14,900 → 20,110 / 29,490. Al. 3 "Différence" 4,740 → 9,380 as published (notice
+        // line "Différence: | 4.740 | 9.380"), equal to the literal 29,490 − 20,110.
+        statutoryPensionLimits: { lower: 20_110, upper: 29_490, difference: 9_380 },
         baseLimits: { lower: 29_490, upper: 58_980 },
         baseZeroLimits: { from: 60_260, to: 72_310 },
     },

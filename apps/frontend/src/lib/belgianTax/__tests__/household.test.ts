@@ -341,7 +341,7 @@ describe("art. 147 al. 1, 2°, b-c in the household engine (pension type of Vak 
             household([partner("A", [activity("pension", 20_000, { pensionKind: "statutory_from_legal_age" }), emp10()])]),
         );
         expect(split.partners[0]!.pensionReduction).toBeCloseTo(one.partners[0]!.pensionReduction, 9);
-        expect(one.partners[0]!.pensionReduction).toBeCloseTo(2_325.326503533, 9);
+        expect(one.partners[0]!.pensionReduction).toBeCloseTo(2_324.594602628, 9);
     });
 
     test("an unset pension type keeps the plain proportion and warns; `other` does not warn", () => {
@@ -357,6 +357,103 @@ describe("art. 147 al. 1, 2°, b-c in the household engine (pension type of Vak 
             partnerId: "A",
         });
         expect(other.issues.map((i) => i.code)).not.toContain("pension_reduction_activity_income_not_excluded");
+    });
+
+    test("mixed typed and untyped pensions without a survivor's pension: plain proportion and a warning", () => {
+        // An untyped pension may be statutory: the limit cannot be tested, so nothing leaves the
+        // proportion (fraction 0), as the warning says.
+        const mixed = computeHouseholdTax(
+            household([
+                partner("A", [
+                    activity("pension", 15_000, { pensionKind: "statutory_from_legal_age" }),
+                    activity("pension", 5_000),
+                    emp10(),
+                ]),
+            ]),
+        );
+        expect(mixed.partners[0]!.pensionReduction).toBeCloseTo(1_804.812309219, 9);
+        expect(mixed.issues).toContainEqual({
+            code: "pension_reduction_activity_income_not_excluded",
+            severity: "warning",
+            partnerId: "A",
+        });
+    });
+
+    test("mixed typed and untyped pensions with a survivor's pension: full exclusion, no warning", () => {
+        // A survivor's pension decides the exclusion in full whatever the other pensions
+        // (AAFisc 40/2011 no. 18).
+        const mixed = computeHouseholdTax(
+            household([
+                partner("A", [
+                    activity("pension", 15_000, { pensionKind: "survivor_or_transition" }),
+                    activity("pension", 5_000),
+                    emp10(),
+                ]),
+            ]),
+        );
+        const typed = computeHouseholdTax(
+            household([partner("A", [activity("pension", 20_000, { pensionKind: "survivor_or_transition" }), emp10()])]),
+        );
+        expect(mixed.partners[0]!.pensionReduction).toBeCloseTo(typed.partners[0]!.pensionReduction, 9);
+        expect(mixed.partners[0]!.pensionReduction).toBeGreaterThan(1_804.812309219);
+        expect(mixed.issues.map((i) => i.code)).not.toContain("pension_reduction_activity_income_not_excluded");
+    });
+
+    test("other professional income next to an excluding pension raises an info issue", () => {
+        const withOther = computeHouseholdTax(
+            household([
+                partner("A", [
+                    activity("pension", 15_000, { pensionKind: "statutory_from_legal_age" }),
+                    activity("other_professional", 5_000),
+                ]),
+            ]),
+        );
+        expect(withOther.issues).toContainEqual({
+            code: "pension_exclusion_other_income_counted_as_activity",
+            severity: "info",
+            partnerId: "A",
+        });
+        const netAmount = computeHouseholdTax(
+            household([
+                partner("A", [
+                    activity("pension", 15_000, { pensionKind: "survivor_or_transition" }),
+                    activity("net_professional_amount", 5_000),
+                ]),
+            ]),
+        );
+        expect(netAmount.issues.map((i) => i.code)).toContain("pension_exclusion_other_income_counted_as_activity");
+        // Nothing excluded (above the upper limit) or no such income: no issue.
+        const above = computeHouseholdTax(
+            household([
+                partner("A", [
+                    activity("pension", 30_000, { pensionKind: "statutory_from_legal_age" }),
+                    activity("other_professional", 5_000),
+                ]),
+            ]),
+        );
+        const employee = computeHouseholdTax(
+            household([partner("A", [activity("pension", 15_000, { pensionKind: "statutory_from_legal_age" }), emp10()])]),
+        );
+        expect(above.issues.map((i) => i.code)).not.toContain("pension_exclusion_other_income_counted_as_activity");
+        expect(employee.issues.map((i) => i.code)).not.toContain("pension_exclusion_other_income_counted_as_activity");
+    });
+
+    test("quotient from a partially excluding transferor: needs_source issue for the receiver", () => {
+        const partial = computeHouseholdTax(
+            married([activity("pension", 24_000, { pensionKind: "statutory_from_legal_age" }), activity("employee", 40_000)], []),
+        );
+        expect(partial.quotient.applied).toBe(true);
+        expect(partial.issues).toContainEqual({
+            code: "pension_quotient_partial_exclusion_unverified",
+            severity: "needs_source",
+            partnerId: "B",
+        });
+        // Full exclusion (JP-03) follows AAFisc 40/2011 no. 19 a: no issue.
+        const full = computeHouseholdTax(
+            married([activity("pension", 15_000, { pensionKind: "statutory_from_legal_age" }), activity("employee", 40_000)], []),
+        );
+        expect(full.quotient.applied).toBe(true);
+        expect(full.issues.map((i) => i.code)).not.toContain("pension_quotient_partial_exclusion_unverified");
     });
 
     test("quotient, AAFisc 40/2011 no. 19 a: the receiver leaves out the transferor's activity income in the quotient", () => {

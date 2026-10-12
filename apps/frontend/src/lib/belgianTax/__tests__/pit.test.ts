@@ -1787,18 +1787,26 @@ describe("reduction for pensions under married_joint (arts 147-153, per spouse b
 describe("art. 147 al. 1, 2°, b-c: activity income left out of the pension proportion", () => {
     const t25 = getTaxTable(2025);
 
-    test("the indexed statutory-pension limits per year (N25-N27)", () => {
-        expect(getTaxTable(2024).pensionReduction.statutoryPensionLimits).toEqual({ lower: 19_030, upper: 27_900 });
-        expect(t25.pensionReduction.statutoryPensionLimits).toEqual({ lower: 19_630, upper: 28_780 });
-        expect(getTaxTable(2026).pensionReduction.statutoryPensionLimits).toEqual({ lower: 20_110, upper: 29_490 });
+    test("the indexed statutory-pension limits and the al. 3 difference per year (N25-N27)", () => {
+        // The notices index the al. 3 "Différence" (base 4,740) separately: 8,880 and 9,160
+        // against the literal 8,870 and 9,150; 9,380 for income 2026.
+        expect(getTaxTable(2024).pensionReduction.statutoryPensionLimits).toEqual({ lower: 19_030, upper: 27_900, difference: 8_880 });
+        expect(t25.pensionReduction.statutoryPensionLimits).toEqual({ lower: 19_630, upper: 28_780, difference: 9_160 });
+        expect(getTaxTable(2026).pensionReduction.statutoryPensionLimits).toEqual({ lower: 20_110, upper: 29_490, difference: 9_380 });
     });
 
     test("exclusion fraction: full, partial, above the upper limit, survivor, none", () => {
         const p = t25.pensionReduction;
         expect(pensionActivityExclusionFraction(15_000, false, p)).toBe(1);
         expect(pensionActivityExclusionFraction(19_630, false, p)).toBe(1);
-        // al. 3: (28,780 − 20,000) / (28,780 − 19,630)
-        expect(pensionActivityExclusionFraction(20_000, false, p)).toBeCloseTo(8_780 / 9_150, 12);
+        // al. 3: (28,780 − 20,000) / 9,160 (the published difference, not 28,780 − 19,630)
+        expect(pensionActivityExclusionFraction(20_000, false, p)).toBeCloseTo(8_780 / 9_160, 12);
+        // Just above the lower limit: 9,149 / 9,160, so the published difference leaves a small
+        // step at the lower limit.
+        expect(pensionActivityExclusionFraction(19_631, false, p)).toBeCloseTo(9_149 / 9_160, 12);
+        // A difference below upper − lower would give more than 1: capped.
+        const narrow = { statutoryPensionLimits: { lower: 19_630, upper: 28_780, difference: 9_000 } };
+        expect(pensionActivityExclusionFraction(19_631, false, narrow)).toBe(1);
         expect(pensionActivityExclusionFraction(28_780, false, p)).toBe(0);
         expect(pensionActivityExclusionFraction(28_781, false, p)).toBe(0);
         expect(pensionActivityExclusionFraction(40_000, true, p)).toBe(1);
@@ -1819,12 +1827,12 @@ describe("art. 147 al. 1, 2°, b-c: activity income left out of the pension prop
         expect(full.base + full.additional).toBeCloseTo(2_603.787937377, 9);
         expect(full.taxShareLimit).toBeCloseTo(2_318.134606903, 9);
         expect(full.total).toBeCloseTo(2_318.134606903, 9);
-        // Partial: 6,085.10 × 8,780 / 9,150 left out → share 15,000 / 15,246.06…
+        // Partial: 6,085.10 × 8,780 / 9,160 left out → share 15,000 / 15,252.43…
         const part = computePensionReduction(
-            { ...input, excludedActivityIncome: (6_085.1 * 8_780) / 9_150 },
+            { ...input, excludedActivityIncome: (6_085.1 * 8_780) / 9_160 },
             t25,
         );
-        const share = 15_000 / (21_085.1 - (6_085.1 * 8_780) / 9_150);
+        const share = 15_000 / (21_085.1 - (6_085.1 * 8_780) / 9_160);
         expect(part.base).toBeCloseTo(2_219.27 * share, 9);
         expect(part.taxShareLimit).toBeCloseTo(2_318.134606903, 9);
         // Nothing excluded (above the upper limit, `other` or kind unset): the plain proportion.

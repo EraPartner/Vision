@@ -104,7 +104,8 @@ export interface IncomeActivity {
     netProfessionalIncome?: number;
     /**
      * Return line of a `pension` activity (Vak V codes 1228 / 1229 / 1211); only for `pension`.
-     * Undefined: the art. 147 al. 1, 2°, b-c exclusion is not applied and the engine raises
+     * Undefined: unless the partner also has a survivor's pension (which decides the exclusion
+     * in full), the art. 147 al. 1, 2°, b-c exclusion is not applied and the engine raises
      * `pension_reduction_activity_income_not_excluded` when activity income is in the proportion.
      */
     pensionKind?: PensionKind;
@@ -454,6 +455,8 @@ export type HouseholdTaxIssueCode =
     | "senior_quotient_cap_birth_years_missing"
     | "woonbonus_children_at_loan_start_missing"
     | "pension_reduction_activity_income_not_excluded"
+    | "pension_exclusion_other_income_counted_as_activity"
+    | "pension_quotient_partial_exclusion_unverified"
     | "donation_joint_ceiling_unverified"
     | "mortgage_region_not_used";
 
