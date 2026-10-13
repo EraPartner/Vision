@@ -194,6 +194,7 @@ struct AccountFormSheet: View {
     private enum Field: Hashable {
         case name
         case openingBalance
+        case openingDate
     }
 
     private var strings: any Localizing { shell.strings }
@@ -220,7 +221,11 @@ struct AccountFormSheet: View {
             .frame(minHeight: 560)
             .onAppear { focus = .name }
             .onChange(of: model.formFocusRequest) { _, _ in
-                if model.formFocus == .openingBalance { focus = .openingBalance }
+                switch model.formFocus {
+                case .openingBalance?: focus = .openingBalance
+                case .openingDate?: focus = .openingDate
+                case nil: break
+                }
             }
         }
     }
@@ -324,6 +329,7 @@ struct AccountFormSheet: View {
                 ) { day in
                     model.form?.openingDate = day
                 }
+                .focused($focus, equals: .openingDate)
                 if form.showsOpeningDateError {
                     Text(strings.t("validation.required"))
                         .font(.footnote)

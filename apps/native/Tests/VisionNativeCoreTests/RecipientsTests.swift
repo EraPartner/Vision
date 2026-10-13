@@ -18,6 +18,7 @@ actor FakeRecipientsService: RecipientsService {
     var previewCount = 3
     private var previewGate: CallGate?
     private var ruleWriteGate: CallGate?
+    private var rulesGate: CallGate?
     private(set) var queries: [PayeePageQuery] = []
     private(set) var pages: [String] = []
     private(set) var log: [String] = []
@@ -35,6 +36,7 @@ actor FakeRecipientsService: RecipientsService {
     func set(rules: [OpenAPI.RecipientPattern]) { self.rules = rules }
     func holdNextPreview(_ gate: CallGate) { previewGate = gate }
     func holdNextRuleWrite(_ gate: CallGate) { ruleWriteGate = gate }
+    func holdNextRules(_ gate: CallGate) { rulesGate = gate }
 
     func payeePage(_ query: PayeePageQuery, offset: Int, limit: Int) async throws -> PayeePage {
         queries.append(query)
@@ -76,7 +78,12 @@ actor FakeRecipientsService: RecipientsService {
 
     func matchRules(recipientId: Int) async throws -> [OpenAPI.RecipientPattern] {
         log.append("rules \(recipientId)")
-        return rules
+        let answer = rules
+        if let gate = rulesGate {
+            rulesGate = nil
+            await gate.wait()
+        }
+        return answer
     }
 
     func createMatchRule(recipientId: Int, body: MatchRuleBody) async throws {
@@ -654,6 +661,26 @@ enum RecipientsFixture {
         #expect(model.rules?.recipientId == 2)
         #expect(model.rules?.previewCount == nil)
         #expect(model.rules?.isPreviewing == false)
+    }
+
+    @Test func aRuleListFromAClosedDialogDoesNotReplaceTheNewerOne() async throws {
+        let service = FakeRecipientsService(payees: RecipientsFixture.payees())
+        await service.set(rules: [RecipientsFixture.rule(10, "KBC")])
+        let (model, shell) = try await RecipientsFixture.opened(service)
+        defer { withExtendedLifetime(shell) {} }
+        let kbc = try #require(model.rows?.first)
+        let gate = CallGate()
+        await service.holdNextRules(gate)
+        let stale = Task { await model.openRules(kbc) }
+        while !(await service.log.contains("rules 1")) { await Task.yield() }
+
+        await service.set(rules: [RecipientsFixture.rule(10, "KBC"), RecipientsFixture.rule(11, "KBC NV")])
+        model.closeRules()
+        await model.openRules(kbc)
+        #expect(model.rules?.patterns?.map(\.id) == [10, 11])
+        gate.open()
+        await stale.value
+        #expect(model.rules?.patterns?.map(\.id) == [10, 11])
     }
 
     @Test func aSaveFromAClosedDialogLeavesTheNextFormOpen() async throws {

@@ -564,9 +564,9 @@ public final class RecipientsModel {
 
     /// `useRecipientPatterns`: the dialog's list (a failed load shows the empty state).
     func reloadRules() async {
-        guard let id = rules?.recipientId else { return }
-        let loaded = (try? await service.matchRules(recipientId: id)) ?? []
-        guard rules?.recipientId == id else { return }
+        guard let state = rules else { return }
+        let loaded = (try? await service.matchRules(recipientId: state.recipientId)) ?? []
+        guard isCurrent(state) else { return }
         rules?.patterns = loaded
     }
 
