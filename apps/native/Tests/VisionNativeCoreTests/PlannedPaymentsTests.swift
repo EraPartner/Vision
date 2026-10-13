@@ -908,7 +908,8 @@ enum PlannedFixture {
         NativeShellModel(
             strings: DictionaryStrings(language: .en, table: [:]), theme: ThemeSelection(appearance: .light),
             exchangeRates: ExchangeRatesModel(service: FakeExchangeRatesService()), admin: AdminFixture.screens(),
-            planned: PlannedFixture.idleModel(), imports: ImportFixture.idleModel(), loadSettings: { settings },
+            planned: PlannedFixture.idleModel(), imports: ImportFixture.idleModel(),
+            transactions: TransactionsFixture.idleModel(), loadSettings: { settings },
             onNavigate: { recorder.actions.append($0) })
     }
 

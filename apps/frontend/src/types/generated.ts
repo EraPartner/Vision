@@ -5806,6 +5806,8 @@ export interface components {
             category_id?: number;
             /** @description Must be an array of integers, not a comma string. */
             category_ids?: number[];
+            /** @description Defaults to false. When true, selects the uncategorised queue the list endpoint's `uncategorised=true` returns: active rows whose effective category is empty. `active`, `category_id` and `category_ids` are then ignored. */
+            uncategorised?: boolean;
             recipient_id?: number;
             recipient_group_id?: number;
             recipient_name?: string;
@@ -5900,6 +5902,8 @@ export interface components {
             /** @description Format: GENERAL:DETAIL */
             category_name?: string;
             comment?: string;
+            /** @description False when the transaction is excluded from totals and statistics. */
+            is_active?: boolean;
             /** @description Tags attached to this transaction */
             tags?: components["schemas"]["TransactionTagRef"][];
             /** Format: date-time */
@@ -6490,7 +6494,8 @@ export interface components {
             remaining: number;
         };
         Attachment: {
-            id: number;
+            /** @description BIGSERIAL identity, serialized as a decimal string. */
+            id: string;
             transaction_id: number;
             filename: string;
             stored_path: string;
@@ -11099,6 +11104,18 @@ export interface operations {
                 include_balance?: boolean;
                 /** @description Comma-separated tag slugs — OR filter */
                 tags?: string;
+                /** @description Restrict the export to one transaction id (the list filter of the same name). */
+                transaction_id?: number;
+                recipient_id?: number;
+                category_id?: number;
+                /** @description Free-text search, as on the list endpoint (truncated to 200 characters). */
+                search?: string;
+                /** @description income or expense; any other value is ignored. */
+                transaction_type?: string;
+                amount_min?: number;
+                amount_max?: number;
+                /** @description Compare amount_min/amount_max against the signed amount instead of its absolute value. */
+                amount_signed?: boolean;
             };
             header?: never;
             path?: never;
@@ -11133,6 +11150,18 @@ export interface operations {
                 category_ids?: string;
                 /** @description Comma-separated tag slugs — OR filter */
                 tags?: string;
+                /** @description Restrict the export to one transaction id (the list filter of the same name). */
+                transaction_id?: number;
+                recipient_id?: number;
+                category_id?: number;
+                /** @description Free-text search, as on the list endpoint (truncated to 200 characters). */
+                search?: string;
+                /** @description income or expense; any other value is ignored. */
+                transaction_type?: string;
+                amount_min?: number;
+                amount_max?: number;
+                /** @description Compare amount_min/amount_max against the signed amount instead of its absolute value. */
+                amount_signed?: boolean;
             };
             header?: never;
             path?: never;

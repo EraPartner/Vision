@@ -20,10 +20,13 @@ public struct APIRequest: Equatable, Sendable {
 public struct APIResponse: Equatable, Sendable {
     public var status: Int
     public var body: Data
+    /// The response headers, names lowercased (a bulk export's `x-exported-count`).
+    public var headers: [String: String]
 
-    public init(status: Int, body: Data) {
+    public init(status: Int, body: Data, headers: [String: String] = [:]) {
         self.status = status
         self.body = body
+        self.headers = headers
     }
 }
 
@@ -52,7 +55,11 @@ public struct URLSessionAPITransport: APITransport {
         do {
             let (data, response) = try await session.data(for: urlRequest)
             guard let http = response as? HTTPURLResponse else { throw APIError.network("Invalid response") }
-            return APIResponse(status: http.statusCode, body: data)
+            var headers: [String: String] = [:]
+            for (name, value) in http.allHeaderFields {
+                headers[String(describing: name).lowercased()] = String(describing: value)
+            }
+            return APIResponse(status: http.statusCode, body: data, headers: headers)
         } catch let error as URLError {
             switch error.code {
             case .timedOut: throw APIError.timedOut
@@ -281,6 +288,14 @@ public struct APIClient: Sendable {
     public func download<Operation: APIOperation>(_ operation: Operation, fallbackMessage: String = "Export failed")
         async throws -> Data
     {
+        try await downloadResponse(operation, fallbackMessage: fallbackMessage).body
+    }
+
+    /// `requestBlobWithResponse`: `download` with the response headers (a bulk export's
+    /// `X-Exported-Count`).
+    public func downloadResponse<Operation: APIOperation>(
+        _ operation: Operation, fallbackMessage: String = "Export failed"
+    ) async throws -> APIResponse {
         let label = "\(Operation.method.rawValue) \(operation.path)"
         guard let base = await baseURL() else { throw APIError.backendUnavailable }
         guard let url = Self.url(base: base, path: operation.path, queryItems: operation.queryItems) else {
@@ -308,7 +323,7 @@ public struct APIClient: Sendable {
             throw APIError.client(
                 Self.envelopeError(status: response.status, body: response.body, fallbackMessage: fallbackMessage))
         }
-        return response.body
+        return response
     }
 
     /// The idle timeout of an event stream: the web's stream `fetch` has none, and a large

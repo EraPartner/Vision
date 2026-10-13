@@ -239,6 +239,10 @@ struct NativeScreenContainer: View {
             ImportExportView(model: model.imports, shell: model)
         case .importReview(let batchId):
             ImportReviewView(model: model.imports.review, toasts: model.imports.toasts, batchId: batchId, shell: model)
+        case .transactions:
+            TransactionsView(model: model.transactions, shell: model)
+        case .owes:
+            OwesView(model: model.owes, shell: model)
         }
     }
 }

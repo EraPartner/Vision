@@ -64,6 +64,7 @@ final class ShellRecorder {
             exchangeRates: ExchangeRatesModel(service: FakeExchangeRatesService()),
             admin: AdminFixture.screens(),
             planned: PlannedFixture.idleModel(), imports: ImportFixture.idleModel(),
+            transactions: TransactionsFixture.idleModel(),
             hiddenSections: hidden,
             loadSettings: { settings },
             saveHiddenSections: { recorder.saved.append($0) },
@@ -111,6 +112,7 @@ final class ShellRecorder {
             exchangeRates: ExchangeRatesModel(service: FakeExchangeRatesService()),
             admin: AdminFixture.screens(),
             planned: PlannedFixture.idleModel(), imports: ImportFixture.idleModel(),
+            transactions: TransactionsFixture.idleModel(),
             loadSettings: { await script.next() },
             onNavigate: { recorder.actions.append($0) },
             settingsReloadDelay: .milliseconds(100))

@@ -562,6 +562,7 @@ enum EditingFixture {
             strings: EditingFixture.strings, theme: ThemeSelection(appearance: .light),
             exchangeRates: ExchangeRatesModel(service: FakeExchangeRatesService()),
             admin: AdminFixture.screens(), planned: model, imports: ImportFixture.idleModel(),
+            transactions: TransactionsFixture.idleModel(),
             loadSettings: { NativeAppSettings() }, onNavigate: { recorder.actions.append($0) })
         shell.routeDidChange(try #require(NativeRoute("/planned")))
         await shell.settingsSettled()

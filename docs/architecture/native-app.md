@@ -52,27 +52,27 @@ aliases: [vision native, native app, swift app]
 
 ## Layout
 
-| Path                                               | Purpose                                                                               |
-| -------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `apps/native/project.yml`                          | XcodeGen spec: project `VisionNative`, macOS app target "Vision Native", macOS 26.0   |
-| `apps/native/Config/Signing.xcconfig`              | `DEVELOPMENT_TEAM` from `VISION_NATIVE_TEAM_ID`, optional gitignored `Local.xcconfig` |
-| `apps/native/VisionNative/`                        | AppKit entry point, window, menus, `WKWebView` shell and the SwiftUI launch state     |
-| `apps/native/Package.swift`                        | SwiftPM package (Swift 6), libraries `VisionNativeCore` and `VisionNativeUI`, no deps |
-| `apps/native/Sources/VisionNativeCore/`            | `BackendLocator` and `BackendHealth`: non-UI logic, testable without the Xcode UI     |
-| `apps/native/Sources/VisionNativeCore/API/`        | `APIClient` (the Swift `client.ts`) and the generated OpenAPI models and operations   |
-| `apps/native/Sources/VisionNativeCore/Design/`     | Generated design tokens and `ThemeSelection` (variant and appearance of the page)     |
-| `apps/native/Sources/VisionNativeCore/Navigation/` | Generated sidebar registry, routes, shortcuts and the `NativeShellModel` (phase 2)    |
-| `apps/native/Sources/VisionNativeCore/Screens/`    | View models of native screens (Exchange rates, Admin, Planned, Imports)               |
-| `apps/native/Sources/VisionNativeUI/`              | SwiftUI shell, native screens and the generated `Localizable.xcstrings` (phase 2)     |
-| `apps/native/openapi-operations.txt`               | The operationIds the Swift client is generated for                                    |
-| `apps/native/i18n-keys.txt`                        | The `i18n/source` keys copied into the String Catalog                                 |
-| `apps/native/Sources/VisionNativeCore/Runtime/`    | Runtime supervisor, PostgreSQL and backend lifecycle, Demo seeding, system seams      |
-| `apps/native/Sources/VisionNativeCore/Shell/`      | Shell logic without AppKit: bridge contract, codec, policy, menu model, window frame  |
-| `apps/native/Sources/VisionNativeCore/Backup/`     | Backup bundles, encryption, restore and the `electronBackup` service (phase 1d)       |
-| `apps/native/Sources/VisionNativeCore/Audit/`      | Audit anchor, Keychain witness, backend audit bridge and `electronAudit` (phase 1e)   |
-| `apps/native/Tests/VisionNativeCoreTests/`         | Swift Testing tests and fixtures (Electron backup bundle, Electron audit anchor)      |
-| `apps/native/Tests/VisionNativeUITests/`           | String Catalog completeness (EN and NL) and SwiftUI layout tests                      |
-| `install-native.sh`                                | Local Release build and install, by default to `/Applications/Vision Native Demo.app` |
+| Path                                               | Purpose                                                                                     |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `apps/native/project.yml`                          | XcodeGen spec: project `VisionNative`, macOS app target "Vision Native", macOS 26.0         |
+| `apps/native/Config/Signing.xcconfig`              | `DEVELOPMENT_TEAM` from `VISION_NATIVE_TEAM_ID`, optional gitignored `Local.xcconfig`       |
+| `apps/native/VisionNative/`                        | AppKit entry point, window, menus, `WKWebView` shell and the SwiftUI launch state           |
+| `apps/native/Package.swift`                        | SwiftPM package (Swift 6), libraries `VisionNativeCore` and `VisionNativeUI`, no deps       |
+| `apps/native/Sources/VisionNativeCore/`            | `BackendLocator` and `BackendHealth`: non-UI logic, testable without the Xcode UI           |
+| `apps/native/Sources/VisionNativeCore/API/`        | `APIClient` (the Swift `client.ts`) and the generated OpenAPI models and operations         |
+| `apps/native/Sources/VisionNativeCore/Design/`     | Generated design tokens and `ThemeSelection` (variant and appearance of the page)           |
+| `apps/native/Sources/VisionNativeCore/Navigation/` | Generated sidebar registry, routes, shortcuts and the `NativeShellModel` (phase 2)          |
+| `apps/native/Sources/VisionNativeCore/Screens/`    | View models of native screens (Exchange rates, Admin, Planned, Imports, Transactions, Owes) |
+| `apps/native/Sources/VisionNativeUI/`              | SwiftUI shell, native screens and the generated `Localizable.xcstrings` (phase 2)           |
+| `apps/native/openapi-operations.txt`               | The operationIds the Swift client is generated for                                          |
+| `apps/native/i18n-keys.txt`                        | The `i18n/source` keys copied into the String Catalog                                       |
+| `apps/native/Sources/VisionNativeCore/Runtime/`    | Runtime supervisor, PostgreSQL and backend lifecycle, Demo seeding, system seams            |
+| `apps/native/Sources/VisionNativeCore/Shell/`      | Shell logic without AppKit: bridge contract, codec, policy, menu model, window frame        |
+| `apps/native/Sources/VisionNativeCore/Backup/`     | Backup bundles, encryption, restore and the `electronBackup` service (phase 1d)             |
+| `apps/native/Sources/VisionNativeCore/Audit/`      | Audit anchor, Keychain witness, backend audit bridge and `electronAudit` (phase 1e)         |
+| `apps/native/Tests/VisionNativeCoreTests/`         | Swift Testing tests and fixtures (Electron backup bundle, Electron audit anchor)            |
+| `apps/native/Tests/VisionNativeUITests/`           | String Catalog completeness (EN and NL) and SwiftUI layout tests                            |
+| `install-native.sh`                                | Local Release build and install, by default to `/Applications/Vision Native Demo.app`       |
 
 The generated `apps/native/VisionNative.xcodeproj`, its `Info.plist`, `apps/native/build/` and
 the SwiftPM state are gitignored. The app target uses Swift 6 with complete strict concurrency,
@@ -680,7 +680,7 @@ that way. Every native screen waits for the first `app_settings` answer and show
 then. The native shell never redirects: an admin route shows a native screen only while
 `app_settings` says admin mode is on, and otherwise the web view, where `RequireAdmin` redirects and
 reports the new route. Screens outside the admin section (`/planned`, `/import`,
-`/import/:batchId/review`) are native in
+`/import/:batchId/review`, `/transactions`, `/owes`) are native in
 either mode. The page's topbar keeps its traffic-light inset only while the native sidebar is
 hidden (`native-sidebar`).
 
@@ -802,6 +802,45 @@ dropped on a native screen goes to `NativeShellModel.openImportFile`, which pre-
 card within 30 seconds (after a running import ends) and moves to `/import`; before `app_settings`
 is read the web page also gets the file as `app:csv-opened` and does the navigation, so a cold
 launch keeps the file whichever side draws `/import`. The import never starts by itself.
+
+### Transactions (phase 3e)
+
+`/transactions` is native without admin mode
+([[docs/reference/native-parity/transactions-and-splits|transactions parity]],
+[[docs/api/transactions|transactions API]], [[docs/api/attachments|attachments API]]). The URL is
+the source of truth, as on the web: `TransactionFilters` reads the filters from the route, filter
+controls push a new route through the shell, and search and sort replace the query
+(`NativeShellModel.replaceQuery`). `TransactionsModel` loads pages of `defaultPageSize` rows
+(`app_settings`, 50 by default) with one request in flight per query and drops answers for an
+older query; the next page loads when one of the last rows appears. Column filters stay
+client-side over the loaded rows, and column visibility is kept under `transactionsColumns` in the
+`widget_visibility` setting against the baseline of its last read. Row edits,
+category and payee picks and the Status toggle patch the row first and roll back when the `PATCH`
+fails (`TransactionPatch` sends explicit `null`s). Delete asks first, removes the row and offers
+Undo for 8 seconds, which recreates the transaction. The inspector (`TransactionInspectorModel`)
+docks beside the list from a 1024-point page width and is a sheet below it, which then presents
+the Split dialog, the Delete alert and the Add sheet over itself; its tips call the
+bulk update for the payee's uncategorised rows (Use for all) and set the payee's default category
+(Always use). The Attachments panel (`TransactionAttachmentsModel`) uploads one multipart file,
+previews with Quick Look from a temporary file and saves downloads through the export save panel.
+`id` in the URL opens the inspector for that row, and `new=1` opens the Add sheet and is removed
+with replace. `⌘N`, the dock menu and `N` open the sheet in place on `/transactions`, or move there
+without `new=1` and open it on arrival, so the hidden web page does not open its own sheet too.
+
+Phase 3e part B adds the rest. The Add transaction sheet (`AddTransactionModel`) records an
+expense, an income or a transfer; a transfer creates a payee for each account name, the outflow and
+inflow legs, and links them with `markTransfer`. A `409` shows the duplicate prompt with Add
+anyway, and the form persists across Cancel until a create succeeds, guarded by the leave guard
+while dirty. The payee picker offers "Add {name}" (`POST /api/recipients`). The Split dialog
+(`SplitDialogModel`) splits equally, lets others pay all or takes custom amounts, rounding with
+`MoneyMath` (banker's rounding, like `ROUND_HALF_EVEN`); a created split, single or bulk,
+invalidates the `/owes` summary and person detail like `splitKeys.all`. The bulk bar (`TransactionsModel+Actions`)
+acts on the checked ids or, after "Select all {n} matching filter", on the filter with
+`expected_count`; tag and split stay id-only. `/owes` (`OwesModel`, `OwesView`) shows the total
+outstanding and the people, and a person's detail records payments, settles, settles all, deletes
+splits, exports CSV through the save panel and lists Recent transactions in a local table. Scroll
+restore on back and forward stays web-only: the shell gets route reports without a history-entry
+key, so it cannot tell a back navigation from a new one.
 
 ## CI
 

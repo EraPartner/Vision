@@ -154,12 +154,44 @@ public final class PickerDataModel {
     /// The closed combobox's label: the selected recipient, else `nil` for the placeholder.
     public func recipientName(_ id: Int?) -> String? {
         guard let id else { return nil }
-        if let known = recipientsByID[id] { return known.name }
-        if let listed = baseRecipients.first(where: { $0.id == id }) { return listed.name }
+        return knownRecipient(id)?.name
+    }
+
+    /// The recipient with this id from any loaded list.
+    public func knownRecipient(_ id: Int) -> OpenAPI.Recipient? {
+        if let known = recipientsByID[id] { return known }
+        if let listed = baseRecipients.first(where: { $0.id == id }) { return listed }
         for page in searchedRecipients.values {
-            if let listed = page.first(where: { $0.id == id }) { return listed.name }
+            if let listed = page.first(where: { $0.id == id }) { return listed }
         }
         return nil
+    }
+
+    /// `RecipientCombobox active`: the listed recipients that are active.
+    public func activeRecipients(matching search: String) -> [OpenAPI.Recipient] {
+        recipients(matching: search).filter(\.isActive)
+    }
+
+    /// The combobox's create row (`allowCreate`): the trimmed text when no listed recipient
+    /// has that name (any case).
+    public static func creatableName(_ search: String, listed: [OpenAPI.Recipient]) -> String? {
+        let typed = search.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !typed.isEmpty else { return nil }
+        let wanted = typed.lowercased()
+        if listed.contains(where: { $0.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == wanted }) {
+            return nil
+        }
+        return typed
+    }
+
+    /// A payee `POST /api/recipients` created or returned: known for the combobox's label,
+    /// and the cached searches refetch (`invalidateQueries(recipientKeys.all)`).
+    public func remember(_ recipient: OpenAPI.Recipient) {
+        recipientsByID[recipient.id] = recipient
+        searchedRecipients = [:]
+        if !baseRecipients.contains(where: { $0.id == recipient.id }) {
+            baseRecipients.append(recipient)
+        }
     }
 
     // MARK: Categories
@@ -212,6 +244,18 @@ public final class PickerDataModel {
         return tags.filter { tag in
             !selected.contains(tag.slug) && (typed.isEmpty || tag.slug.contains(slug))
         }
+    }
+
+    /// `TagFilterCombobox`'s list: the active tags whose slug contains the search (any case).
+    public func tags(matching search: String) -> [OpenAPI.Tag] {
+        let needle = search.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !needle.isEmpty else { return tags }
+        return tags.filter { $0.slug.lowercased().contains(needle) }
+    }
+
+    /// A tag item of the multi-select: the slug joins or leaves the selection.
+    public nonisolated static func toggling(_ slug: String, in slugs: [String]) -> [String] {
+        slugs.contains(slug) ? slugs.filter { $0 != slug } : slugs + [slug]
     }
 
     /// `createTag`, then the tag list again. A failure (the tag may already exist) is ignored,

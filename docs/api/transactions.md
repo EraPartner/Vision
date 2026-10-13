@@ -183,6 +183,7 @@ Implementation note:
 - Export filters include newly supported params: `transaction_id`, `recipient_id`, `recipient_name`, `search`, `transaction_type` (Phase 13). Existing params (`start_date`, `end_date`, `bank_account`, `bank_accounts`, `category_id`, `category_ids`) continue to work as before.
 - CSV/JSON export request parsing supports both singular (`bank_account`, `category_id`) and plural (`bank_accounts`, `category_ids`) parameters. Plural parameters take precedence when both are provided (Phase 13) ([[apps/node-backend/src/routes/transactions.ts]]).
 - `openapi.yaml` declares `bank_accounts` and `category_ids` on both export operations since 2026-10-13 (a non-breaking spec catch-up: the routes always read them, and the Export card of the web and Vision Native sends them).
+- Since 2026-10-13 `openapi.yaml` also declares `transaction_id`, `recipient_id`, `category_id`, `search`, `transaction_type`, `amount_min`, `amount_max` and `amount_signed` on both export operations, and `is_active` on the `Transaction` schema (non-breaking spec catch-ups: the routes already accept and return them, and the Transactions filter banner of the web and Vision Native sends them).
 - Shared SQL and streaming helpers in `transactionExport.js` ensure existence probes and chunk queries use the same recipient/category joins, preventing `recipient_name` and `search` filters from drifting ([[apps/node-backend/src/services/transactionExport.ts]]).
 - CSV escaping, row assembly, filename creation, and database streaming are owned by `transactionExport.js`; the route validates the request and passes the response stream to that service ([[apps/node-backend/src/services/transactionExport.ts]]).
 - CSV export neutralizes formula-like cell prefixes (`=`, `+`, `-`, `@`) before writing values to reduce spreadsheet formula-injection risk when opening exports in Excel/Sheets ([[apps/node-backend/src/services/transactionExport.ts]]).
@@ -418,7 +419,14 @@ spellings at once:
 
 `transaction_id`, `start_date`, `end_date`, `account_id`, `bank_account`, `bank_accounts`,
 `category_id`, `category_ids`, `recipient_id`, `recipient_group_id`, `recipient_name`, `search`,
-`active`, `transaction_type`, `amount_min`, `amount_max`, `amount_signed`, `tags`.
+`active`, `transaction_type`, `amount_min`, `amount_max`, `amount_signed`, `tags`, `uncategorised`.
+
+`uncategorised: true` selects the same queue as `GET /api/transactions?uncategorised=true`: active
+rows whose transaction, recipient and primary-recipient category are all NULL. `active`,
+`category_id` and `category_ids` are then ignored. Before 2026-10-13 the key was missing from the
+accept-list, so "Select all N matching" in the uncategorised view answered `400` on every bulk
+action (non-breaking fix; regression tests in
+[[apps/node-backend/tests/services/bulkSelectionFilter.test.ts]]).
 
 Field semantics match [[#GET /api/transactions]], with these wire-shape differences: `category_ids`
 and `bank_accounts` must be **arrays** (the list endpoint takes comma strings; here a string is a

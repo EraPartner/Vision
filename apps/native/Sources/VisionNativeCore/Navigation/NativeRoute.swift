@@ -108,11 +108,15 @@ public enum NativeScreen: Equatable, Hashable, Sendable {
     case importExport
     /// `/import/:batchId/review`, Review import (phase 3d part B; `ImportRoutes.reviewIsNative`).
     case importReview(batchId: Int)
+    /// `/transactions` (phase 3e).
+    case transactions
+    /// `/owes`, Who owes you.
+    case owes
 
     /// The screens at a fixed path.
     public static let fixedScreens: [NativeScreen] = [
         .adminOverview, .databaseMaintenance, .providerHealth, .endpointLiveness, .exchangeRates, .plannedPayments,
-        .importExport,
+        .importExport, .transactions,
     ]
 
     /// The route path it replaces.
@@ -127,6 +131,8 @@ public enum NativeScreen: Equatable, Hashable, Sendable {
         case .plannedPayments: return PlannedPaymentsRoute.path
         case .importExport: return ImportRoutes.path
         case .importReview(let batchId): return ImportRoutes.reviewPath(batchId)
+        case .transactions: return TransactionsRoutes.path
+        case .owes: return TransactionsRoutes.owesPath
         }
     }
 
@@ -137,6 +143,7 @@ public enum NativeScreen: Equatable, Hashable, Sendable {
 
     public static func screen(forPath path: String) -> NativeScreen? {
         if let screen = fixedScreens.first(where: { $0.path == path }) { return screen }
+        if TransactionsRoutes.owesIsNative && path == TransactionsRoutes.owesPath { return .owes }
         if ImportRoutes.reviewIsNative, let batchId = ImportRoutes.reviewBatchId(forPath: path) {
             return .importReview(batchId: batchId)
         }

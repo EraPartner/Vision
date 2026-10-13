@@ -2567,6 +2567,13 @@ components:
           description: Must be an array of integers, not a comma string.
           items:
             type: integer
+        uncategorised:
+          type: boolean
+          description: >-
+            Defaults to false. When true, selects the uncategorised queue the
+            list endpoint's `uncategorised=true` returns: active rows whose
+            effective category is empty. `active`, `category_id` and
+            `category_ids` are then ignored.
         recipient_id:
           type: integer
         recipient_group_id:
@@ -2730,6 +2737,9 @@ components:
           description: "Format: GENERAL:DETAIL"
         comment:
           type: string
+        is_active:
+          type: boolean
+          description: False when the transaction is excluded from totals and statistics.
         tags:
           type: array
           items:
@@ -4115,7 +4125,9 @@ components:
         ]
       properties:
         id:
-          type: integer
+          type: string
+          pattern: "^\\d+$"
+          description: BIGSERIAL identity, serialized as a decimal string.
         transaction_id:
           type: integer
         filename:
@@ -8409,6 +8421,48 @@ paths:
           schema:
             type: string
           description: Comma-separated tag slugs — OR filter
+        - in: query
+          name: transaction_id
+          description: Restrict the export to one transaction id (the list filter of the same name).
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+        - in: query
+          name: recipient_id
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+        - in: query
+          name: category_id
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+        - in: query
+          name: search
+          description: Free-text search, as on the list endpoint (truncated to 200 characters).
+          schema:
+            type: string
+        - in: query
+          name: transaction_type
+          description: income or expense; any other value is ignored.
+          schema:
+            type: string
+        - in: query
+          name: amount_min
+          schema:
+            type: number
+        - in: query
+          name: amount_max
+          schema:
+            type: number
+        - in: query
+          name: amount_signed
+          description: Compare amount_min/amount_max against the signed amount instead of its absolute value.
+          schema:
+            type: boolean
       responses:
         "200":
           description: CSV stream
@@ -8474,6 +8528,48 @@ paths:
           schema:
             type: string
           description: Comma-separated tag slugs — OR filter
+        - in: query
+          name: transaction_id
+          description: Restrict the export to one transaction id (the list filter of the same name).
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+        - in: query
+          name: recipient_id
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+        - in: query
+          name: category_id
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+        - in: query
+          name: search
+          description: Free-text search, as on the list endpoint (truncated to 200 characters).
+          schema:
+            type: string
+        - in: query
+          name: transaction_type
+          description: income or expense; any other value is ignored.
+          schema:
+            type: string
+        - in: query
+          name: amount_min
+          schema:
+            type: number
+        - in: query
+          name: amount_max
+          schema:
+            type: number
+        - in: query
+          name: amount_signed
+          description: Compare amount_min/amount_max against the signed amount instead of its absolute value.
+          schema:
+            type: boolean
       responses:
         "200":
           description: Newline-delimited JSON stream

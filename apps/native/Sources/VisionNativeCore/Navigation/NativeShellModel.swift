@@ -57,6 +57,8 @@ public final class NativeShellModel {
     public let planned: PlannedPaymentsModel
     /// `/import`.
     public let imports: ImportsModel
+    /// `/transactions`.
+    public let transactions: TransactionsModel
     /// The navigation the Leave this page? alert holds while it asks (`blocker.location`).
     public private(set) var leaveConfirmation: NativeRoute?
 
@@ -84,6 +86,7 @@ public final class NativeShellModel {
         admin: AdminScreens,
         planned: PlannedPaymentsModel,
         imports: ImportsModel,
+        transactions: TransactionsModel,
         hiddenSections: [NavSectionID: Bool]? = nil,
         loadSettings: @escaping @Sendable () async throws -> NativeAppSettings,
         saveHiddenSections: @escaping @MainActor ([NavSectionID: Bool]) -> Void = { _ in },
@@ -97,12 +100,14 @@ public final class NativeShellModel {
         self.admin = admin
         self.planned = planned
         self.imports = imports
+        self.transactions = transactions
         self.hiddenSections = hiddenSections ?? Self.defaultHiddenSections
         self.loadSettings = loadSettings
         self.saveHiddenSections = saveHiddenSections
         self.onNavigate = onNavigate
         self.onSidebarVisibilityChange = onSidebarVisibilityChange
         self.settingsReloadDelay = settingsReloadDelay
+        transactions.attach(self)
     }
 
     /// `DEFAULT_HIDDEN` of useSidebarPreferences.
@@ -147,6 +152,9 @@ public final class NativeShellModel {
         route = next
         if pathChanged { leaveConfirmation = nil }
         admin.database.routeDidChange(path: next.path)
+        // ⌘N's pending Add sheet belongs to the arrival at `/transactions`; landing elsewhere
+        // (a redirect, the page's own prompt) drops it.
+        if next.path != TransactionsRoutes.path { transactions.cancelAddOnArrival() }
         if let section = NavigationRegistry.matchSection(path: next.path), hiddenSections[section] == true {
             // Landing inside a hidden section shows it for good, like the web sidebar.
             setSection(section, expanded: true)
@@ -200,6 +208,25 @@ public final class NativeShellModel {
         return true
     }
 
+    /// ⌘N, the dock menu's New transaction and the `N` shortcut (`/transactions?new=1`): while
+    /// `/transactions` is native, the Add transaction sheet opens on the native screen, at once
+    /// when it is already shown, otherwise once the shell arrives at `/transactions`. The
+    /// navigation leaves out `new=1`: the page behind the native screen would open its own
+    /// sheet for it too. Returns `false` when the page handles it.
+    public func newTransaction() -> Bool {
+        guard settingsLoaded, NativeScreen.screen(forPath: TransactionsRoutes.path) != nil else { return false }
+        if detail == .native(.transactions) {
+            transactions.requestAdd()
+        } else {
+            transactions.requestAddOnArrival()
+            navigate(to: TransactionsRoutes.path)
+        }
+        return true
+    }
+
+    /// `/owes`.
+    public var owes: OwesModel { transactions.owes }
+
     /// A native screen with unsaved work registers its hook while it is shown.
     public func setLeaveGuard(_ hook: NativeLeaveGuard) {
         leaveGuard = hook
@@ -216,6 +243,7 @@ public final class NativeShellModel {
     /// Stay on page (`blocker.reset`): the navigation is cancelled.
     public func stayOnPage() {
         leaveConfirmation = nil
+        transactions.cancelAddOnArrival()
     }
 
     /// Leave and discard (`blocker.proceed`): the unsaved work is dropped and the navigation
@@ -231,6 +259,14 @@ public final class NativeShellModel {
     /// parameter (`useSearchParamState` writing a default value).
     public func replaceQuery(_ name: String, with value: String?) {
         let next = value.map { route.setting(name, to: $0) } ?? route.removing(name)
+        route = next
+        onNavigate(.replaceRoute(next.string))
+    }
+
+    /// `setSearchParams(next, { replace: true })` with a whole new query for the current path
+    /// (the sort pair, written together).
+    public func replaceQuery(_ query: [URLQueryItem]) {
+        let next = NativeRoute(path: route.path, query: query)
         route = next
         onNavigate(.replaceRoute(next.string))
     }
@@ -264,6 +300,7 @@ public final class NativeShellModel {
         case .consumed:
             return true
         case .navigate(let url):
+            if url == TransactionsRoutes.newTransactionRoute, newTransaction() { return true }
             navigate(to: url)
             return true
         case .openPalette:

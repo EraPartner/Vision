@@ -22,7 +22,9 @@ struct LocalDataColumn<Row>: Identifiable {
 /// The table chrome of `VirtualDataTable` for rows that are all loaded: the title and
 /// subtitle, the search field with its clear button, Clear all with the filter count, the
 /// filter chips, header buttons that cycle the sort, the column filter popovers, resize
-/// handles (drag, or the arrow keys by 10 pt), the rows and the count footer.
+/// handles (drag, or the arrow keys by 10 pt), the rows and the count footer. With a server
+/// total it pages like `VirtualDataTable`'s server mode: drawn rows near the end ask for the
+/// next page, "Loading more…" shows while it loads, and the footer counts the server total.
 struct LocalDataTable<Row: Identifiable, Empty: View>: View {
     let title: String
     let subtitle: String
@@ -34,6 +36,12 @@ struct LocalDataTable<Row: Identifiable, Empty: View>: View {
     let filterValues: (String) -> [String]
     let strings: any Localizing
     let empty: () -> Empty
+    /// The server's total, when rows load page by page.
+    var serverTotal: Int?
+    var isFetchingMore = false
+    var hasMore = false
+    /// A row was drawn (the infinite scroll's trigger).
+    var onRowAppear: ((Row.ID) -> Void)?
     @State private var openFilter: String?
     @State private var widths: [String: CGFloat] = [:]
     @State private var hoveredHeader: String?
@@ -42,8 +50,12 @@ struct LocalDataTable<Row: Identifiable, Empty: View>: View {
     init(
         title: String, subtitle: String, columns: [LocalDataColumn<Row>], rows: [Row], totalCount: Int,
         query: Binding<LocalTableQuery>, filterValues: @escaping (String) -> [String], strings: any Localizing,
+        serverTotal: Int? = nil, isFetchingMore: Bool = false, hasMore: Bool = false,
         @ViewBuilder empty: @escaping () -> Empty
     ) {
+        self.serverTotal = serverTotal
+        self.isFetchingMore = isFetchingMore
+        self.hasMore = hasMore
         self.title = title
         self.subtitle = subtitle
         self.columns = columns
@@ -53,6 +65,13 @@ struct LocalDataTable<Row: Identifiable, Empty: View>: View {
         self.filterValues = filterValues
         self.strings = strings
         self.empty = empty
+    }
+
+    /// The infinite scroll's trigger: called as each row is drawn.
+    func rowAppeared(_ action: @escaping (Row.ID) -> Void) -> Self {
+        var copy = self
+        copy.onRowAppear = action
+        return copy
     }
 
     var body: some View {
@@ -72,8 +91,19 @@ struct LocalDataTable<Row: Identifiable, Empty: View>: View {
                         LazyVStack(alignment: .leading, spacing: 0) {
                             ForEach(rows) { row in
                                 rowView(row)
+                                    .onAppear { onRowAppear?(row.id) }
                                 Divider()
                             }
+                        }
+                        if isFetchingMore {
+                            HStack(spacing: 8) {
+                                ProgressView().controlSize(.small)
+                                Text(strings.t("table.loadingMore"))
+                                    .font(.footnote)
+                                    .foregroundStyle(theme.secondaryLabel)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
                         }
                     }
                 }
@@ -322,10 +352,12 @@ struct LocalDataTable<Row: Identifiable, Empty: View>: View {
 
     /// `table.shownOfFiltered` while search or filters hide rows, else `table.loadedOf`.
     private var footer: some View {
-        let text =
+        let total = serverTotal ?? totalCount
+        var text =
             rows.count != totalCount
-            ? strings.t("table.shownOfFiltered", ["shown": String(rows.count), "total": String(totalCount)])
-            : strings.t("table.loadedOf", ["loaded": String(totalCount), "total": String(totalCount)])
+            ? strings.t("table.shownOfFiltered", ["shown": String(rows.count), "total": String(total)])
+            : strings.t("table.loadedOf", ["loaded": String(totalCount), "total": String(total)])
+        if serverTotal != nil && hasMore { text += " · " + strings.t("table.scrollForMore") }
         return Text(text)
             .font(.footnote)
             .foregroundStyle(theme.secondaryLabel)

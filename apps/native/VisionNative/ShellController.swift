@@ -77,6 +77,19 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             guard let self else { return false }
             return try await self.saveExport(data, suggestedName: name)
         }
+        let transactions = TransactionsModel(
+            service: client, attachments: client, pickers: client, bulk: client, splits: client)
+        // The filter banner's and the bulk bar's exports and the attachment downloads ask
+        // where to save.
+        transactions.save = { [weak self] data, name in
+            guard let self else { return false }
+            return try await self.saveExport(data, suggestedName: name)
+        }
+        // `/owes`' Export CSV.
+        transactions.owes.save = { [weak self] data, name in
+            guard let self else { return false }
+            return try await self.saveExport(data, suggestedName: name)
+        }
         return NativeShellModel(
             strings: CatalogStrings(language: strings.language),
             theme: ThemeSelection.resolve(
@@ -86,6 +99,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
                 service: client, database: client, token: makeAdminTokenAccess(), audit: auditChannels),
             planned: PlannedPaymentsModel(service: client, editing: client, pickers: client, rates: rates),
             imports: imports,
+            transactions: transactions,
             hiddenSections: Self.loadHiddenSections(),
             loadSettings: { try await client.appSettings() },
             saveHiddenSections: { Self.saveHiddenSections($0) },
@@ -561,6 +575,12 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         case .renderer(let action) where action == .toggleSidebar:
             // The sidebar is native from phase 2.
             shellModel.toggleSidebar()
+        case .renderer(let action) where action == .newTransaction:
+            // The native Add transaction sheet while `/transactions` is native; else the page's.
+            if !shellModel.newTransaction() {
+                shellModel.willPresent(action)
+                sendToApp(.menuAction, BridgeDispatcher.menuActionPayload(action))
+            }
         case .renderer(let action) where action.action == "navigate":
             // Through the shell, so a native screen's unsaved-changes guard can hold it.
             if let path = action.payload { shellModel.navigate(to: path) }
