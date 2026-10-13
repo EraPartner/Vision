@@ -101,6 +101,9 @@ public final class ExchangeRatesModel {
         return nil
     }
 
+    /// A shared refresh receipt expires this cache without discarding its known rates or issuing a provider request.
+    public func invalidate() { fetchedAt = nil }
+
     /// The screen appeared: fetch unless a result younger than `staleAfter` is cached.
     public func appear() async {
         if let fetchedAt, phase != .failed, now().timeIntervalSince(fetchedAt) < Self.staleAfter { return }

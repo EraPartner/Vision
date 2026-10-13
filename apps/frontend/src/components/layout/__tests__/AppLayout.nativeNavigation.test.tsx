@@ -20,6 +20,7 @@ import { server } from "@/test/msw/server";
 import { ok } from "@/test/msw/handlers";
 import { AppLayout } from "@/components/layout/AppLayout";
 import type { NativePaletteWindow } from "@/lib/nativePaletteAnswer";
+import { exchangeRateKeys, plannedKeys } from "@/lib/queryKeys";
 
 const API_BASE = "http://localhost:3002";
 
@@ -111,6 +112,11 @@ describe("AppLayout with Vision Native's sidebar", () => {
         Reflect.deleteProperty(window, "electronAPI");
         Reflect.deleteProperty(window, "__VISION_NATIVE_SETTINGS__");
         Reflect.deleteProperty(window, "__VISION_NATIVE_PALETTE__");
+        Reflect.deleteProperty(window, "__VISION_NATIVE_SHORTCUTS__");
+        Reflect.deleteProperty(window, "__VISION_NATIVE_SHELL_NOTIFICATIONS__");
+        Reflect.deleteProperty(window, "__VISION_NATIVE_ONBOARDING__");
+        Reflect.deleteProperty(window, "__VISION_NATIVE_ONBOARDING_STATE__");
+        Reflect.deleteProperty(window, "__visionNativeOpenOverlay");
         document.documentElement.className = "";
     });
 
@@ -315,5 +321,59 @@ describe("AppLayout with Vision Native's sidebar", () => {
             .toMatchObject({ writable: false, configurable: false });
         view.unmount();
         expect(await answer("1,5 + 2", "eu", "EUR", 2)).toBeNull();
+    });
+
+    it("opens native palette/help from menu callbacks and retained-web keys without invisible web overlays", async () => {
+        for (const name of ["__VISION_NATIVE_PALETTE__", "__VISION_NATIVE_SHORTCUTS__"]) {
+            Object.defineProperty(window, name, { value: true, configurable: true });
+        }
+        const open = vi.fn().mockResolvedValue(undefined);
+        Object.defineProperty(window, "__visionNativeOpenOverlay", { value: open, configurable: true });
+        const api = installNativeBridge(true);
+        renderLayout();
+        await screen.findByText("page content");
+        await waitFor(() => expect(api.routeChanged).toHaveBeenLastCalledWith("/?keep=1", false));
+        act(() => {
+            menuAction?.({ action: "open-palette" });
+            menuAction?.({ action: "open-shortcuts" });
+        });
+        expect(open.mock.calls).toEqual([["palette"], ["shortcuts"]]);
+        expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+        fireEvent.keyDown(document.body, { key: "k", metaKey: true });
+        fireEvent.keyDown(document.body, { key: "?", shiftKey: true });
+        expect(open.mock.calls).toEqual([["palette"], ["shortcuts"], ["palette"], ["shortcuts"]]);
+        fireEvent.click(screen.getByRole("button", { name: "Go to rates" }));
+        await waitFor(() => expect(api.routeChanged).toHaveBeenLastCalledWith("/admin/exchange-rates?tab=fallback", false));
+    });
+
+    it("removes native-owned banner queries only with the explicit notifications capability", async () => {
+        Object.defineProperty(window, "__VISION_NATIVE_SHELL_NOTIFICATIONS__", { value: true, configurable: true });
+        installNativeBridge(true);
+        const view = renderLayout();
+        await screen.findByText("page content");
+        expect(view.queryClient.getQueryCache().find({ queryKey: exchangeRateKeys.fxStatus })).toBeUndefined();
+        expect(view.queryClient.getQueryCache().findAll({ queryKey: plannedKeys.upcomingAll })).toHaveLength(0);
+    });
+
+    it("keeps banner queries in an earlier native-sidebar build", async () => {
+        installNativeBridge(true);
+        const view = renderLayout();
+        await screen.findByText("page content");
+        expect(view.queryClient.getQueryCache().find({ queryKey: exchangeRateKeys.fxStatus })).toBeDefined();
+        expect(view.queryClient.getQueryCache().findAll({ queryKey: plannedKeys.upcomingAll })).toHaveLength(1);
+    });
+
+    it("leaves native onboarding coverage to the host while continuing route reports", async () => {
+        Object.defineProperty(window, "__VISION_NATIVE_ONBOARDING__", { value: true, configurable: true });
+        Object.defineProperty(window, "__VISION_NATIVE_ONBOARDING_STATE__", {
+            value: { complete: false, presented: true }, configurable: true,
+        });
+        const api = installNativeBridge(true);
+        renderLayout();
+        await screen.findByText("page content");
+        expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+        await waitFor(() => expect(api.routeChanged).toHaveBeenLastCalledWith("/?keep=1", false));
+        fireEvent.click(screen.getByRole("button", { name: "Go to rates" }));
+        await waitFor(() => expect(api.routeChanged).toHaveBeenLastCalledWith("/admin/exchange-rates?tab=fallback", false));
     });
 });

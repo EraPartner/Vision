@@ -54,12 +54,16 @@ public protocol BridgeHost: AnyObject {
     func routeDidChange(_ route: NativeRoute)
     func routeDidChange(_ route: NativeRoute, onboardingPresented: Bool)
     func changeNativeSettings(_ patch: NativeSettingsPatch) async throws
+    func openNativeOverlay(_ kind: NativeShellOverlayKind) async throws
 }
 
 extension BridgeHost {
     public func routeDidChange(_ route: NativeRoute, onboardingPresented: Bool) { routeDidChange(route) }
     public func changeNativeSettings(_ patch: NativeSettingsPatch) async throws {
         throw APIError.invalidRequest("Native settings are unavailable")
+    }
+    public func openNativeOverlay(_ kind: NativeShellOverlayKind) async throws {
+        throw APIError.invalidRequest("Native overlays are unavailable")
     }
 }
 
@@ -207,6 +211,11 @@ public enum BridgeDispatcher {
         case .routeChanged(let route, let onboarding):
             host.routeDidChange(route, onboardingPresented: onboarding)
             return .success
+        case .openOverlay(let kind):
+            do {
+                try await host.openNativeOverlay(kind)
+                return .success
+            } catch { return .reject(error.localizedDescription) }
         case .settingsChange(let patch):
             do {
                 try await host.changeNativeSettings(patch)

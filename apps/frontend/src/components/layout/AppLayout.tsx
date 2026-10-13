@@ -33,6 +33,8 @@ import { isShortcutSafeTarget, isTypingTarget } from "@/lib/keyboard";
 import { readSidebarCollapsed } from "@/hooks/useSidebarPreferences";
 import { cn } from "@/lib/utils";
 import { BackgroundQueryIndicator } from "@/components/shared/BackgroundQueryIndicator";
+import { hasNativeShellCapability, requestNativeOverlay } from "@/lib/nativeShell";
+import logger from "@/lib/logger";
 import {
     isNativeNavigation,
     isNativeSettings,
@@ -60,6 +62,10 @@ export function AppLayout({ children }: AppLayoutProps) {
     // is fixed for the page's lifetime.
     const [nativeNavigation] = useState(isNativeNavigation);
     const [nativeSettings] = useState(isNativeSettings);
+    const [nativePalette] = useState(() => hasNativeShellCapability("palette"));
+    const [nativeShortcuts] = useState(() => hasNativeShellCapability("shortcuts"));
+    const [nativeNotifications] = useState(() => hasNativeShellCapability("notifications"));
+    const [nativeOnboarding] = useState(() => hasNativeShellCapability("onboarding"));
 
     const writeSettingsSection = useCallback(
         (section: SettingsSectionId, replace: boolean) => {
@@ -115,8 +121,20 @@ export function AppLayout({ children }: AppLayoutProps) {
         writeSettingsSection,
         closeSettings,
     ]);
-    const openShortcuts = useCallback(() => setShortcutsOpen(true), []);
-    const openPalette = useCallback(() => setPaletteOpen(true), []);
+    const openShortcuts = useCallback(() => {
+        if (nativeShortcuts) {
+            void requestNativeOverlay("shortcuts").catch((error) =>
+                logger.warn("Native overlay request failed", error),
+            );
+        } else setShortcutsOpen(true);
+    }, [nativeShortcuts]);
+    const openPalette = useCallback(() => {
+        if (nativePalette) {
+            void requestNativeOverlay("palette").catch((error) =>
+                logger.warn("Native overlay request failed", error),
+            );
+        } else setPaletteOpen(true);
+    }, [nativePalette]);
     const openGeneralSettings = useCallback(
         () => openSettingsOnTab("general"),
         [openSettingsOnTab],
@@ -202,8 +220,8 @@ export function AppLayout({ children }: AppLayoutProps) {
     // Vision Native shows the page over a native screen while the palette or the
     // shortcuts overlay is open; reporting the same route again when it closes
     // tells the shell the page has nothing more to show.
-    const overlayOpen = paletteOpen || shortcutsOpen;
-    const onboardingPresented = !onboardingLoading && !onboardingComplete;
+    const overlayOpen = (!nativePalette && paletteOpen) || (!nativeShortcuts && shortcutsOpen);
+    const onboardingPresented = !nativeOnboarding && !onboardingLoading && !onboardingComplete;
     const lastNativeReportRef = useRef<
         | { route: string; overlayOpen: boolean; onboardingPresented: boolean }
         | undefined
@@ -330,23 +348,31 @@ export function AppLayout({ children }: AppLayoutProps) {
                             className="flex-1 p-4 md:p-6 min-h-[calc(100vh-3.5rem)] outline-none focus:outline-none focus-visible:outline-none"
                         >
                             <div data-print-chrome>
-                                <FxStatusBanner />
-                                <UpcomingPaymentsNotification />
+                                {!nativeNotifications && (
+                                    <>
+                                        <FxStatusBanner />
+                                        <UpcomingPaymentsNotification />
+                                    </>
+                                )}
                             </div>
                             <PageTransition>{children}</PageTransition>
                         </main>
                     </div>
                 </div>
-                <CommandPalette
-                    open={paletteOpen}
-                    onOpenChange={setPaletteOpen}
-                    onOpenSettings={openSettingsOnTab}
-                    onOpenShortcuts={() => setShortcutsOpen(true)}
-                />
-                <ShortcutsOverlay
-                    open={shortcutsOpen}
-                    onOpenChange={setShortcutsOpen}
-                />
+                {!nativePalette && (
+                    <CommandPalette
+                        open={paletteOpen}
+                        onOpenChange={setPaletteOpen}
+                        onOpenSettings={openSettingsOnTab}
+                        onOpenShortcuts={openShortcuts}
+                    />
+                )}
+                {!nativeShortcuts && (
+                    <ShortcutsOverlay
+                        open={shortcutsOpen}
+                        onOpenChange={setShortcutsOpen}
+                    />
+                )}
                 {!nativeSettings && (
                     <DashboardSettingsDialog
                         open={settingsOpen}
@@ -359,7 +385,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                         }
                     />
                 )}
-                {!onboardingLoading && (
+                {!nativeOnboarding && !onboardingLoading && (
                     <OnboardingWizard
                         open={!onboardingComplete}
                         onComplete={completeOnboarding}

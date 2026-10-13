@@ -137,6 +137,103 @@ struct InsightsTests {
 @Suite("Home query and preference behavior")
 @MainActor
 struct HomeModelTests {
+    @Test func sharedUpcomingFeedsHomeAndDockWithoutDuplicateReadsOrPersistence() async {
+        let service = HomeFixtureService()
+        let local = HomeSharedLocalFixture()
+        let home = HomeModel(service: service, readLocal: local.read, writeLocal: local.write)
+        home.useSharedUpcoming()
+        let rows = [Self.sharedPayment(1), Self.sharedPayment(2)]
+        let notifications = ShellUpcomingPaymentsModel(
+            service: HomeUpcomingFixture(rows: rows),
+            storage: .init(
+                read: { _ in nil },
+                write: { _, raw in
+                    await local.write("dismissed_upcoming_planned_payments", .string(raw))
+                }))
+        notifications.didLoadUpcoming = { home.applySharedUpcoming($0) }
+        notifications.didChangeDismissals = { home.applyUpcomingDismissals($0) }
+        var badge = 0
+        notifications.didChangeDockBadge = { badge = $0 }
+        await notifications.load()
+        await home.appear(settings: .defaults, route: .home)
+        #expect(await service.plannedLimits == [200])
+        #expect(!local.reads.contains("dismissed_upcoming_planned_payments"))
+        #expect(home.upcomingRows.map(\.id) == [1, 2] && badge == 2)
+        notifications.dismiss(rows[0])
+        await notifications.flushStorage()
+        #expect(home.upcomingRows.map(\.id) == [2] && badge == 1)
+        #expect(local.writes.count == 1)
+        #expect(local.writes.first?.0 == "dismissed_upcoming_planned_payments")
+        #expect(home.dismissedUpcoming == Set(["1:2026-10-15"]))
+    }
+
+    @Test func lateStandaloneUpcomingResponseCannotReplaceSharedRowsOrDismissals() async {
+        let service = HomeFixtureService()
+        await service.pauseFirstMonthly()
+        let local = HomeSharedLocalFixture()
+        let home = HomeModel(service: service, readLocal: local.read, writeLocal: local.write)
+        let loading = Task { await home.appear(settings: .defaults, route: .home) }
+        await service.waitForPausedMonthly()
+        home.applySharedUpcoming([Self.sharedPayment(1), Self.sharedPayment(2)])
+        home.applyUpcomingDismissals(["1:2026-10-15"])
+        await service.releaseMonthly()
+        await loading.value
+        #expect(home.upcomingRows.map(\.id) == [2])
+        #expect(home.dismissedUpcoming == Set(["1:2026-10-15"]))
+        #expect(!local.reads.contains("dismissed_upcoming_planned_payments"))
+        #expect(local.writes.isEmpty)
+    }
+
+    @Test func inactivityLocalWritesSerializeCapturedValuesAndDrainBeforeRestore() async throws {
+        let local = HomeSharedLocalFixture()
+        local.pauseWrite = true
+        let home = HomeModel(service: HomeFixtureService(), readLocal: local.read, writeLocal: local.write)
+        let account = try Self.inactiveAccount()
+        let dismiss = Task { await home.dismissInactivity(account) }
+        await local.waitForWrite()
+        let restore = Task { await home.restoreInactivity() }
+        while !home.dismissedAccounts.isEmpty { await Task.yield() }
+        var flushed = false
+        let draining = Task {
+            await home.flushLocalStorage()
+            flushed = true
+        }
+        await Task.yield()
+        #expect(local.writes.count == 1 && !flushed)
+        local.releaseWrite()
+        await dismiss.value
+        await restore.value
+        await draining.value
+        #expect(local.writes.map(\.1) == [.object(["1": .string("2026-01-01")]), .object([:])])
+        #expect(flushed && home.dismissedAccounts.isEmpty)
+    }
+
+    @Test func delayedInactivityStorageReadCannotUndoAnAcceptedDismissal() async throws {
+        let local = HomeSharedLocalFixture()
+        local.pauseRead = true
+        let home = HomeModel(service: HomeFixtureService(), readLocal: local.read, writeLocal: local.write)
+        home.useSharedUpcoming()
+        let loading = Task { await home.appear(settings: .defaults, route: .home) }
+        await local.waitForRead()
+        await home.dismissInactivity(try Self.inactiveAccount())
+        local.releaseRead()
+        await loading.value
+        #expect(home.dismissedAccounts == ["1": "2026-01-01"])
+        #expect(local.writes.count == 1)
+    }
+
+    private static func sharedPayment(_ id: Int) -> OpenAPI.PlannedTransaction {
+        .init(
+            id: id, plannedDate: "2026-10-15", amount: -12, isRecurring: true,
+            isExecuted: false, executionCount: 0, isActive: true, links: [])
+    }
+    private static func inactiveAccount() throws -> HomeBankBalances.Account {
+        try insightFixture(
+            HomeBankBalances.Account.self,
+            #"{"account_id":1,"bank_account":"Synthetic","balance":0,"transaction_count":1,"last_transaction":"2026-01-01"}"#
+        )
+    }
+
     @Test func invalidationDuringAnOlderRequestCannotOverwriteFreshFinancialData() async {
         let service = HomeFixtureService()
         await service.pauseFirstMonthly()
@@ -230,9 +327,66 @@ struct HomeModelTests {
     }
 }
 
+private actor HomeUpcomingFixture: ShellNotificationsService {
+    let rows: [OpenAPI.PlannedTransaction]
+    init(rows: [OpenAPI.PlannedTransaction]) { self.rows = rows }
+    func notificationUpcoming(start: String, end: String) async throws -> [OpenAPI.PlannedTransaction] { rows }
+    func notificationExchangeRates() async throws -> OpenAPI.ExchangeRates { throw APIError.backendUnavailable }
+    func notificationRefreshExchangeRates() async throws { throw APIError.backendUnavailable }
+}
+
+@MainActor private final class HomeSharedLocalFixture {
+    var reads: [String] = []
+    var writes: [(String, JSONValue)] = []
+    var pauseRead = false
+    var pauseWrite = false
+    private var readGate: CheckedContinuation<Void, Never>?
+    private var readWaiter: CheckedContinuation<Void, Never>?
+    private var writeGate: CheckedContinuation<Void, Never>?
+    private var writeWaiter: CheckedContinuation<Void, Never>?
+    func read(_ key: String) async -> JSONValue? {
+        reads.append(key)
+        if pauseRead {
+            pauseRead = false
+            await withCheckedContinuation {
+                readGate = $0
+                readWaiter?.resume()
+                readWaiter = nil
+            }
+        }
+        return .object([:])
+    }
+    func write(_ key: String, _ value: JSONValue) async {
+        writes.append((key, value))
+        if pauseWrite {
+            pauseWrite = false
+            await withCheckedContinuation {
+                writeGate = $0
+                writeWaiter?.resume()
+                writeWaiter = nil
+            }
+        }
+    }
+    func waitForRead() async {
+        if readGate == nil { await withCheckedContinuation { readWaiter = $0 } }
+    }
+    func releaseRead() {
+        readGate?.resume()
+        readGate = nil
+    }
+    func waitForWrite() async {
+        if writeGate == nil { await withCheckedContinuation { writeWaiter = $0 } }
+    }
+    func releaseWrite() {
+        writeGate?.resume()
+        writeGate = nil
+    }
+}
+
 private actor HomeFixtureService: StatisticsService {
     var requestedOffsets: [Int] = []
     var monthlyCalls = 0
+    var plannedLimits: [Int] = []
     var lastExpected: JSONValue?
     private var monthlyFails = false
     private var exclusionsFail = false
@@ -312,7 +466,10 @@ private actor HomeFixtureService: StatisticsService {
     func homeAccounts() async throws -> [OpenAPI.Account] { [] }
     func homePlanned(start: String, end: String, limit: Int) async throws -> [OpenAPI
         .PlannedTransaction]
-    { [] }
+    {
+        plannedLimits.append(limit)
+        return []
+    }
     func homeMatchCount() async throws -> Int { 0 }
     func homeExclusions(scope: String) async throws -> InsightExclusions {
         if exclusionsFail { throw APIError.network("synthetic settings failure") }

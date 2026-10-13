@@ -28,12 +28,18 @@ public struct ShellRootView<WebContent: View>: View {
                 // lights); View › Toggle Sidebar and ⌃⌘S toggle the sidebar instead.
                 .toolbar(removing: .sidebarToggle)
         } detail: {
-            ZStack {
-                webContent(model.detail != .web)
-                    .ignoresSafeArea()
-                if case .native(let screen) = model.detail {
-                    NativeScreenContainer(screen: screen, model: model)
-                        .environment(\.colorScheme, theme.colorScheme)
+            VStack(spacing: 0) {
+                shellBanners
+                ZStack {
+                    webContent(model.detail != .web)
+                        .ignoresSafeArea()
+                    if case .native(let screen) = model.detail {
+                        NativeScreenContainer(screen: screen, model: model)
+                            .environment(\.colorScheme, theme.colorScheme)
+                    } else if case .notFound = model.detail {
+                        NativeNotFoundView(shell: model)
+                            .environment(\.colorScheme, theme.colorScheme)
+                    }
                 }
             }
         }
@@ -42,7 +48,7 @@ public struct ShellRootView<WebContent: View>: View {
         .environment(\.locale, Locale(identifier: model.strings.language.rawValue))
         .environment(\.nativeNoticeCenter, model.notices)
         .overlay(alignment: .bottom) {
-            if !model.isPresentingNativeSettings {
+            if !model.isPresentingNativeOverlay {
                 NativeNoticeHost(
                     center: model.notices, strings: model.strings, isWebVisible: model.detail == .web,
                     isEditingWebText: model.isEditingWebText
@@ -52,19 +58,15 @@ public struct ShellRootView<WebContent: View>: View {
         }
         .sheet(
             isPresented: Binding(
-                get: { model.isPresentingNativeSettings },
-                set: { if !$0 { model.closeSettings() } }
+                get: { model.isPresentingNativeOverlay },
+                set: { if !$0 { Task { await model.closeNativeOverlay() } } }
             )
         ) {
-            if let settings = model.nativeSettings, let ai = model.settingsAI,
-                let backup = model.settingsBackup, let about = model.settingsAbout
-            {
-                NativeSettingsScreenView(shell: model, model: settings, ai: ai, backup: backup, about: about)
-                    .environment(\.visionTheme, theme)
-                    .environment(\.visionVisualEffects, settings.effectiveVisualEffects)
-                    .environment(\.colorScheme, theme.colorScheme)
-                    .environment(\.locale, Locale(identifier: model.strings.language.rawValue))
-            }
+            NativeShellOverlayHost(shell: model)
+                .environment(\.visionTheme, theme)
+                .environment(\.visionVisualEffects, model.nativeSettings?.effectiveVisualEffects ?? "standard")
+                .environment(\.colorScheme, theme.colorScheme)
+                .environment(\.locale, Locale(identifier: model.strings.language.rawValue))
         }
         .overlay(alignment: .bottom) {
             if let review = model.portfolioImports?.review {
@@ -96,12 +98,45 @@ public struct ShellRootView<WebContent: View>: View {
         .onAppear {
             model.settingsAI?.isForeground = scenePhase == .active
             connectivity.start { online in
+                let reconnecting = online && model.shellNotifications?.isOnline == false
                 model.nativeSettings?.isOnline = online
                 model.settingsAI?.isOnline = online
+                model.onboarding?.isOnline = online
+                model.shellNotifications?.isOnline = online
+                if reconnecting, model.isRendererReady {
+                    Task {
+                        await model.shellNotifications?.refreshIfStale()
+                        if model.onboarding?.isPresented == true { await model.onboarding?.loadAdapters() }
+                    }
+                }
             }
         }
+        .task(id: "\(ObjectIdentifier(model))|\(model.isRendererReady)") {
+            guard model.isRendererReady else { return }
+            async let notifications: Void = loadNotifications()
+            async let onboarding: Void = loadOnboarding()
+            _ = await (notifications, onboarding)
+        }
+        .onChange(of: model.settings.language) { _, _ in model.onboarding?.strings = model.strings }
         .onChange(of: scenePhase) { _, phase in model.settingsAI?.isForeground = phase == .active }
         .onDisappear { connectivity.stop() }
+    }
+    @ViewBuilder private var shellBanners: some View {
+        if let notifications = model.shellNotifications {
+            if notifications.fx.shouldShow {
+                ShellFXStatusBanner(model: notifications.fx, shell: model)
+                    .padding(.horizontal, 20).padding(.top, 12)
+            }
+            if case .native(.home) = model.detail, notifications.upcoming.shouldShow {
+                ShellUpcomingPaymentsBanner(model: notifications.upcoming, shell: model)
+                    .padding(.horizontal, 20).padding(.top, 12)
+            }
+        }
+    }
+    private func loadNotifications() async { await model.shellNotifications?.load() }
+    private func loadOnboarding() async {
+        model.onboarding?.strings = model.strings
+        await model.onboarding?.load()
     }
 }
 

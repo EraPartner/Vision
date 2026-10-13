@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/segmented-control";
 import { FileDown, Import, LayoutGrid } from "lucide-react";
 import { ExportDialog } from "@/features/reports/ExportDialog";
+import { useReportDialogState } from "@/features/reports/useReportDialogState";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { WidgetVisibilityDialog } from "@/components/shared/WidgetVisibilityDialog";
 import { useWidgetVisibility } from "@/hooks/useWidgetVisibility";
@@ -145,22 +146,7 @@ export default function StatisticsPage() {
     const loadingSurfaceProps = useLoadingSurfaceProps();
     const [activeTab, setActiveTab] = useTabParam(STATISTICS_TABS, "overview");
     const [customizeOpen, setCustomizeOpen] = useState(false);
-    const [localExportOpen, setLocalExportOpen] = useState(false);
-    const nativeReportRequested = searchParams.get("export") === "pdf";
-    const exportOpen = localExportOpen || nativeReportRequested;
-    const setExportOpen = (open: boolean) => {
-        setLocalExportOpen(open);
-        if (!open && nativeReportRequested) {
-            setSearchParams(
-                (previous) => {
-                    const next = new URLSearchParams(previous);
-                    next.delete("export");
-                    return next;
-                },
-                { replace: true },
-            );
-        }
-    };
+    const { exportOpen, setExportOpen, nativeReportRequested } = useReportDialogState();
     const setStatisticsWindow = useCallback(
         (value: StatisticsWindow) => {
             const next = new URLSearchParams(searchParams);

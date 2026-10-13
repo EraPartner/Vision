@@ -187,6 +187,62 @@ phase-3p prep is explicitly excluded. Do not describe this as a completed full r
 The frontend report generation and 137 additional existing EN/NL native catalog keys are
 included in this snapshot. Structural flow docs/tests pass at 101 components/74 flows.
 
+## Full integration checkpoint (2026-10-13 23:07 UTC)
+
+`b0623fef` saved all 44 files from the previous snapshot; `3d7e3997` fixed the Onboarding
+multipart/notice API labels. Both are pushed, with remote `3d7e3997` verified. This next
+safety checkpoint saves every current tracked/new task file, including unfinished SDK
+coordination. Root should continue work after pushing; no owner demo or approval pause.
+
+The immutable Phase-3o Foundation proof now passes **1,173 tests in 153 suites**, retaining
+all predecessor tests: 222 actual production sources and 79 permanent test files, zero hash
+drift. Manifest SHA `fb0ea6f968f6d66be563937c3ab7563c3722af83e76df500720de6494b5a9a70`,
+`/workspace/vision-settings-shell-combined-check/verification.json`. This does not certify
+live SSE, Keychain/crypto, SDK, macOS UI or rendered accessibility.
+
+Phase-3p slices passed focused proofs: Palette 15 cases plus 4,096 cmdk comparisons;
+Onboarding 16 cases including ECMAScript trim/fresh restore authority; banners/Backup 25;
+shared Home/rate-cache 17; Reports/context 30; new local write-session five. All final
+reported slice manifests match their production sources. Frontend takeover passed 152
+regression tests, typecheck, lint and build; fiscal schema/migration/runtime chunks remain
+lazy. The separate initial broadened Swift proof passed 107 tests in eight suites before
+shared graph integration changed; its newer full proof is still pending.
+
+Root now mounts the optional four models through a shared shell: native palette/shortcuts,
+seven-step onboarding, FX/upcoming banners, Not Found and PDF report sheet. One sheet keeps
+lower overlay views mounted and hides their input/accessibility/announcements while a
+higher overlay is active. Startup local reads wait for renderer readiness. The fixed
+TypeScript arithmetic/FX and tax-profile projection handlers retain source calculations;
+strict individual capability flags suppress their matching React surfaces. Trusted
+`shell:open-overlay` accepts only palette/shortcuts. A further 43 existing report locale
+keys have been generated. These mounts are on disk, not yet verified end to end on macOS.
+
+**SDK unfinished and next priority:** `palette_cont` owns `ShellController.swift`. The
+before-restore local write actor is wired to ordinary typed and legacy WK mutation paths,
+with tickets released on actual WK completion, including callbacks after the caller's
+five-second timeout. Failed restore resumes the same local actor; success retires old
+queued writes. Complete early graph-rebuild/restore frontend-state ordering, preserve the
+source delayed retained-page reload, wrap remaining Chart/SQL/Tax/Portfolio/Admin factory
+closures with originating generation/session, and fence remaining session-tier/reminder/
+restart mirror writes. Fresh onboarding completion must use new database authority and
+remove v1 state only after its real ACK; never route it through retired actors. Draining
+only model tasks twice is insufficient: an HTTP ACK can enqueue a local write afterward.
+
+Other remaining integration work: add trusted overlay IPC and shared-shell regression
+tests, complete native Tax print/menu binding, resolve out-of-range custom report years
+using source store resolvers/shared engine (overview restricts 1900–2200 while source custom
+date years are broader), synchronize parity action rows/diagrams after stable mounting, run
+fresh complete exact-scope Swift proof and final generator/locales/types/build checks, and
+follow actual macOS compiler/package results. The current bundle-size guard also needs the
+reviewed minimal 475/1373 KB budgets: b062 was already above the old guard, and takeover adds
+only 1.20 KB boot/1.94 KB total. `palette_ts_cont` owns that measured comment/docs update.
+
+Owners: `palette_cont` SDK; `onboarding_cont` Onboarding/union UI; `banners_cont` shared
+Home/rates/banners; `docs_reports_cont` Reports/context and later diagrams;
+`palette_ts_cont` frontend takeover/size guard/source context fallback;
+`verify_cont` new local actor, read-only integration review and fresh combined proof.
+Root owns Core shell/bridge/notice integration, final tests/catalogs/docs/commits/pushes.
+
 The API data-session actor and wrapper now exist on disk, and the SDK uses one shared
 session for HTTP and streams. Accepted restore confirmation drains Main Settings, the
 legacy host writer, old chat streams and the data session before the existing unfenced

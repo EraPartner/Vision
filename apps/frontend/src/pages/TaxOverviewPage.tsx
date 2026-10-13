@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { useSearchParams } from "react-router";
 import { FileDown, LayoutGrid, SlidersHorizontal } from "lucide-react";
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
@@ -37,6 +36,7 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { PageError } from "@/components/shared/PageError";
 import { SectionLoader } from "@/components/shared/SectionLoader";
 import { ExportDialog } from "@/features/reports/ExportDialog";
+import { useReportDialogState } from "@/features/reports/useReportDialogState";
 import { PageShell } from "@/components/shared/PageShell";
 
 function getBudgetTaxWidgets(t: (key: string) => string): WidgetDefinition[] {
@@ -142,23 +142,7 @@ export default function TaxOverviewPage() {
         resetToDefaults,
         widgets: widgetDefs,
     } = useWidgetVisibility("budgetTax", WIDGETS);
-    const [searchParams, setSearchParams] = useSearchParams();
-    const [localExportOpen, setLocalExportOpen] = useState(false);
-    const nativeReportRequested = searchParams.get("export") === "pdf";
-    const exportOpen = localExportOpen || nativeReportRequested;
-    const setExportOpen = (open: boolean) => {
-        setLocalExportOpen(open);
-        if (!open && nativeReportRequested) {
-            setSearchParams(
-                (previous) => {
-                    const next = new URLSearchParams(previous);
-                    next.delete("export");
-                    return next;
-                },
-                { replace: true },
-            );
-        }
-    };
+    const { exportOpen, setExportOpen } = useReportDialogState();
     const [customizeOpen, setCustomizeOpen] = useState(false);
 
     const exportDialog = (

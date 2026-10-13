@@ -25,6 +25,23 @@ struct NativeOnboardingTests {
         invalid["reviewBatch"] = .object(["batchId": .number(0), "rows": .number(8)])
         #expect(NativeOnboardingDraft.read(try JSONEncoder().encode(TaxValue.object(invalid))) == .init())
     }
+    @Test func draftBankTrimmingUsesECMAScriptBOMAndPreservesNEL() throws {
+        var draft = NativeOnboardingDraft()
+        draft.selectedBank = "\u{FEFF} fixture \u{FEFF}"
+        let encoded = try draft.encoded()
+        #expect(NativeOnboardingDraft.read(encoded).selectedBank == "fixture")
+        let raw = try JSONDecoder().decode(TaxValue.self, from: encoded).objectValue!
+        var incoming = raw
+        incoming["selectedBank"] = .string("\u{FEFF}fixture\u{FEFF}")
+        #expect(
+            NativeOnboardingDraft.read(try JSONEncoder().encode(TaxValue.object(incoming))).selectedBank == "fixture")
+        incoming["selectedBank"] = .string("\u{0085}fixture\u{0085}")
+        #expect(
+            NativeOnboardingDraft.read(try JSONEncoder().encode(TaxValue.object(incoming))).selectedBank
+                == "\u{0085}fixture\u{0085}")
+        incoming["selectedBank"] = .string("\u{0085}" + String(repeating: "a", count: 128))
+        #expect(NativeOnboardingDraft.read(try JSONEncoder().encode(TaxValue.object(incoming))) == .init())
+    }
     @Test func bankMonogramsUseSourceWordsAndAdapterKeyFallback() {
         #expect(NativeOnboardingPreset.bankMonogram(name: "KBC Bank", key: "kbc") == "KB")
         #expect(NativeOnboardingPreset.bankMonogram(name: "A Bank", key: "a") == "AB")
@@ -53,9 +70,10 @@ struct NativeOnboardingTests {
         await fixture.failAdapters(false)
         await model.loadAdapters()
         #expect(model.draft.step == .bank && model.draft.selectedBank.isEmpty)
+        await model.flushDraft()
+        model.didDisappear()
         draft.reviewBatch = .init(batchId: 12, rows: 3)
         store.data = try draft.encoded()
-        model.didDisappear()
         await model.begin()
         #expect(model.draft.step == .importData && model.draft.selectedBank.isEmpty)
         #expect(model.draft.reviewBatch?.batchId == 12 && model.file == nil)
@@ -196,18 +214,39 @@ struct NativeOnboardingTests {
         await model.load()
         await writer.retireForReload()
         var freshAuthority = 0
-        model.completeAfterRestore = { freshAuthority += 1 }
+        model.completeAfterRestore = {
+            freshAuthority += 1
+            try await store.remove()
+        }
         await model.restore.startRestore(file: "/synthetic/restore.visionbak")
         #expect(freshAuthority == 1 && !model.isPresented && store.removals == 1)
+        #expect(await fixture.expectedWrites.isEmpty)
+    }
+    @Test func failedFreshRestoreCompletionCannotClearDraftThroughRetiredStore() async {
+        let fixture = OnboardingFixture()
+        let store = OnboardingDraftFixture()
+        let desktop = OnboardingDesktopFixture()
+        let writer = NativeSettingsPersistence(service: fixture)
+        let model = NativeOnboardingModel(service: fixture, persistence: writer, store: store, desktop: desktop)
+        await model.load()
+        await model.flushDraft()
+        #expect(model.isLoaded)
+        await writer.retireForReload()
+        model.completeAfterRestore = { throw APIError.backendUnavailable }
+        await model.restore.startRestore(file: "/synthetic/restore.visionbak")
+        #expect(model.isPresented && store.removals == 0 && store.data != nil)
+        #expect(model.notice?.key == "onboarding.persist.failed")
         #expect(await fixture.expectedWrites.isEmpty)
     }
     @Test func importRequestsKeepExistingMultipartNamesAndReviewCountContract() throws {
         let request = NativeOnboardingImportRequest(
             file: .init(name: "fixture.csv", data: Data("synthetic".utf8)), bank: "fixture", boundary: "test-boundary")
-        let body = String(data: try #require(request.encodedBody()), encoding: .utf8)!
+        let data = try request.encodedBody()
+        let body = String(data: try #require(data), encoding: .utf8)!
         #expect(body.contains("name=\"file\"; filename=\"fixture.csv\""))
         #expect(body.contains("name=\"bank_name\"\r\n\r\nfixture"))
-        #expect(!body.contains("stream"))
+        #expect(!body.contains("name=\"stream\""))
+        #expect(request.path == "/api/import/csv" && NativeOnboardingImportRequest.method == .post)
         let result = try TaxValue.object([
             "requires_review": .bool(true), "batch_id": .number(23),
             "match_source_counts": .object(["new": .number(4), "matched": .number(3), "missing": .null]),

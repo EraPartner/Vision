@@ -10,8 +10,10 @@ import Observation
     public var customTo = ""
     public var currency = "EUR"
     public private(set) var selectedSections: Set<String> = []
+    private var sectionOrder: [String] = []
     public private(set) var isSubmitting = false
     public private(set) var isPresented = false
+    public private(set) var isRetired = false
     public private(set) var errorDetail: String?
     @ObservationIgnored private let service: any NativeReportService
     @ObservationIgnored private let callbacks: NativeReportCallbacks
@@ -19,7 +21,10 @@ import Observation
     @ObservationIgnored private let calendar: Calendar
     @ObservationIgnored private var generation = UUID()
     @ObservationIgnored private var noticeID = 0
-    public init(service: any NativeReportService, callbacks: NativeReportCallbacks, now: @escaping @MainActor () -> Date = Date.init, calendar: Calendar = .current) {
+    public init(
+        service: any NativeReportService, callbacks: NativeReportCallbacks,
+        now: @escaping @MainActor () -> Date = Date.init, calendar: Calendar = .current
+    ) {
         self.service = service
         self.callbacks = callbacks
         self.now = now
@@ -37,12 +42,16 @@ import Observation
     public var customYearInvalid: Bool {
         periodPreset == .year && !NativeReportForm.isValidYear(customYear, currentYear: currentYear)
     }
-    public var canSubmit: Bool { isPresented && !isSubmitting && !selectedSections.isEmpty && !customRangeInvalid && !customYearInvalid }
+    public var canSubmit: Bool {
+        !isRetired && isPresented && !isSubmitting && !selectedSections.isEmpty && !customRangeInvalid
+            && !customYearInvalid
+    }
     public var exclusions: NativeReportPreferences? {
         let preferences = callbacks.preferences()
         return preferences.exclusionsApply(type: type) ? preferences : nil
     }
     public func configure(type: NativeReportType, origin: String? = nil) {
+        guard !isRetired else { return }
         generation = UUID()
         self.type = type
         self.origin = origin
@@ -52,21 +61,32 @@ import Observation
         customTo = today
         let preferred = callbacks.preferences().currency
         currency = preferred.isEmpty ? "EUR" : preferred
-        selectedSections = Set(type.sections.map(\.id))
+        sectionOrder = type.sections.map(\.id)
+        selectedSections = Set(sectionOrder)
         isSubmitting = false
         isPresented = true
         errorDetail = nil
     }
     public func setType(_ type: NativeReportType) {
         self.type = type
-        selectedSections = Set(type.sections.map(\.id))
+        sectionOrder = type.sections.map(\.id)
+        selectedSections = Set(sectionOrder)
     }
     public func setSection(_ id: String, selected: Bool) {
         guard sections.contains(where: { $0.id == id }) else { return }
-        if selected { selectedSections.insert(id) } else { selectedSections.remove(id) }
+        if selected {
+            if selectedSections.insert(id).inserted { sectionOrder.append(id) }
+        } else {
+            selectedSections.remove(id)
+            sectionOrder.removeAll { $0 == id }
+        }
     }
-    public func setAllSections(_ selected: Bool) { selectedSections = selected ? Set(sections.map(\.id)) : [] }
+    public func setAllSections(_ selected: Bool) {
+        sectionOrder = selected ? sections.map(\.id) : []
+        selectedSections = Set(sectionOrder)
+    }
     public func close() {
+        guard !isRetired else { return }
         didDisappear()
         callbacks.close()
     }
@@ -74,6 +94,10 @@ import Observation
         generation = UUID()
         isPresented = false
         isSubmitting = false
+    }
+    public func retireForReload() {
+        isRetired = true
+        didDisappear()
     }
     public func submit(output: NativeReportOutput = .download) async {
         guard canSubmit else { return }
@@ -88,14 +112,16 @@ import Observation
         case .year: period = .year(Int(customYear) ?? currentYear)
         case .custom: period = .custom(from: customFrom, to: customTo)
         }
-        let selected = allSectionsSelected ? [] : sections.map(\.id).filter { selectedSections.contains($0) }
+        let selected = allSectionsSelected ? [] : sectionOrder
         let preferences = callbacks.preferences()
         let filtered = preferences.exclusionsApply(type: reportType)
         var body: [String: TaxValue] = [
             "currency": .string(currency), "period": period.value,
             "sections": .array(selected.map(TaxValue.string)),
-            "excludedCategoryIds": .array((filtered ? preferences.excludedCategoryIds : []).map { .number(Decimal($0)) }),
-            "excludedRecipientIds": .array((filtered ? preferences.excludedRecipientIds : []).map { .number(Decimal($0)) }),
+            "excludedCategoryIds": .array(
+                (filtered ? preferences.excludedCategoryIds : []).map { .number(Decimal($0)) }),
+            "excludedRecipientIds": .array(
+                (filtered ? preferences.excludedRecipientIds : []).map { .number(Decimal($0)) }),
         ]
         isSubmitting = true
         errorDetail = nil
@@ -122,7 +148,7 @@ import Observation
             case .print: completed = try await callbacks.print?(response.body, name) ?? false
             }
             guard generation == visit, completed else { return }
-            publish("statsPage.report.downloadSuccess")
+            if case .download = output { publish("statsPage.report.downloadSuccess") }
             close()
         } catch is CancellationError {
         } catch {

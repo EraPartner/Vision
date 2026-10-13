@@ -6,6 +6,12 @@ public enum NativeShellDetail: Equatable, Sendable {
     /// The web app, already at the route.
     case web
     case native(NativeScreen)
+    case notFound
+}
+
+public enum NativeShellOverlayKind: String, Identifiable, Sendable {
+    case palette, shortcuts, settings, report, onboarding
+    public var id: String { rawValue }
 }
 
 /// A native screen's unsaved-changes hook (`useUnsavedChanges`): while it reports unsaved
@@ -40,10 +46,11 @@ public final class NativeShellModel {
     public private(set) var settings: NativeAppSettings = .defaults
     /// `false` until `app_settings` has been read once; native screens wait for it.
     public private(set) var settingsLoaded = false
+    public var isRendererReady = false
     /// A completed settings read also refreshes dashboard settings after the web dialog's
     /// 500 ms save debounce, even when the app-format fields themselves did not change.
     public private(set) var settingsRevision = 0
-    public var strings: any Localizing
+    public var strings: any Localizing { didSet { onboarding?.strings = strings } }
     public var theme: ThemeSelection
     public private(set) var isSidebarVisible = true
     public private(set) var hiddenSections: [NavSectionID: Bool]
@@ -87,6 +94,12 @@ public final class NativeShellModel {
     public let settingsAI: NativeSettingsAIModel?
     public let settingsBackup: NativeSettingsBackupModel?
     public let settingsAbout: NativeSettingsAboutModel?
+    public let commandPalette: NativeCommandPaletteModel?
+    public let shellNotifications: NativeShellNotificationsModel?
+    public let onboarding: NativeOnboardingModel?
+    public let reports: NativeReportModel?
+    public let nativeFallback: Bool
+    public private(set) var isPresentingShortcuts = false
     public var isEditingWebText: (@MainActor () async -> Bool)?
     /// The navigation the Leave this page? alert holds while it asks (`blocker.location`).
     public private(set) var leaveConfirmation: NativeRoute?
@@ -94,6 +107,9 @@ public final class NativeShellModel {
     @ObservationIgnored private let loadSettings: @Sendable () async throws -> NativeAppSettings
     @ObservationIgnored private let saveHiddenSections: @MainActor ([NavSectionID: Bool]) -> Void
     @ObservationIgnored private let onNavigate: @MainActor (MenuAction) -> Void
+    @ObservationIgnored private let copyToClipboard: @MainActor (String) -> Bool
+    @ObservationIgnored private let clipboardNoticeSource = UUID()
+    @ObservationIgnored private var clipboardNoticeID = 0
     @ObservationIgnored private let onSidebarVisibilityChange: @MainActor (Bool) -> Void
     @ObservationIgnored private var settingsTask: Task<Void, Never>?
     @ObservationIgnored private var delayedSettingsTask: Task<Void, Never>?
@@ -136,10 +152,16 @@ public final class NativeShellModel {
         settingsAI: NativeSettingsAIModel? = nil,
         settingsBackup: NativeSettingsBackupModel? = nil,
         settingsAbout: NativeSettingsAboutModel? = nil,
+        commandPalette: NativeCommandPaletteModel? = nil,
+        shellNotifications: NativeShellNotificationsModel? = nil,
+        onboarding: NativeOnboardingModel? = nil,
+        reports: NativeReportModel? = nil,
+        nativeFallback: Bool = false,
         hiddenSections: [NavSectionID: Bool]? = nil,
         loadSettings: @escaping @Sendable () async throws -> NativeAppSettings,
         saveHiddenSections: @escaping @MainActor ([NavSectionID: Bool]) -> Void = { _ in },
         onNavigate: @escaping @MainActor (MenuAction) -> Void,
+        copyToClipboard: @escaping @MainActor (String) -> Bool = { _ in false },
         onSidebarVisibilityChange: @escaping @MainActor (Bool) -> Void = { _ in },
         settingsReloadDelay: Duration = .milliseconds(600)
     ) {
@@ -170,12 +192,41 @@ public final class NativeShellModel {
         self.settingsAI = settingsAI
         self.settingsBackup = settingsBackup
         self.settingsAbout = settingsAbout
+        self.commandPalette = commandPalette
+        self.shellNotifications = shellNotifications
+        self.onboarding = onboarding
+        self.reports = reports
+        self.nativeFallback = nativeFallback
         self.hiddenSections = hiddenSections ?? Self.defaultHiddenSections
         self.loadSettings = loadSettings
         self.saveHiddenSections = saveHiddenSections
         self.onNavigate = onNavigate
+        self.copyToClipboard = copyToClipboard
         self.onSidebarVisibilityChange = onSidebarVisibilityChange
         self.settingsReloadDelay = settingsReloadDelay
+        commandPalette?.onAction = { [weak self] action in self?.activatePaletteAction(action) }
+        shellNotifications?.fx.attachNotices(notices)
+        onboarding?.attachNotices(notices)
+        onboarding?.strings = strings
+        onboarding?.navigate = { [weak self] path in self?.navigate(to: path) }
+        onboarding?.openSettings = { [weak self] section in
+            guard let self else { return }
+            self.onNavigate(.navigate(self.route.setting("settings", to: section).string))
+        }
+        onboarding?.didComplete = { [weak self] in self?.isPresentingOnboarding = false }
+        onboarding?.didMutateCategories = { [weak self] in
+            self?.categories.invalidate()
+            self?.home?.invalidate()
+            self?.statistics?.model.invalidate()
+            self?.settingsRevision &+= 1
+        }
+        onboarding?.didMutateImports = { [weak self] in
+            guard let self else { return }
+            self.categories.invalidate()
+            self.recipients.invalidate()
+            self.planned.invalidate()
+            await self.portfolioDataDidMutate()
+        }
         transactions.attach(self)
         accounts.attach(self)
         categories.attach(self)
@@ -220,17 +271,21 @@ public final class NativeShellModel {
     /// while it says admin mode is on, otherwise the page shows the route and its
     /// `RequireAdmin` redirects, which the page then reports.
     public var detail: NativeShellDetail {
-        guard !isPresentingWeb, !isPresentingOnboarding, settingsLoaded,
-            let screen = NativeScreen.screen(forPath: route.path)
-        else {
+        guard !isPresentingWeb, onboarding != nil || !isPresentingOnboarding, settingsLoaded else {
             return .web
+        }
+        guard let screen = NativeScreen.screen(forPath: route.path) else {
+            if route.path == "/portfolio/performance" { return .web }
+            return nativeFallback ? .notFound : .web
         }
         if screen.requiresAdmin && !settings.adminMode { return .web }
         if screen == .home && home == nil { return .web }
-        if screen == .statistics && (statistics == nil || route.value("export") == "pdf") { return .web }
-        if screen == .tax && (tax == nil || route.value("export") == "pdf") { return .web }
+        if screen == .statistics && (statistics == nil || reports == nil && route.value("export") == "pdf") {
+            return .web
+        }
+        if screen == .tax && (tax == nil || reports == nil && route.value("export") == "pdf") { return .web }
         if screen.path == "/portfolio" || screen.path.hasPrefix("/portfolio/") {
-            if portfolio == nil || route.value("export") == "pdf" { return .web }
+            if portfolio == nil || reports == nil && route.value("export") == "pdf" { return .web }
         }
         if screen == .portfolioTax && tax == nil { return .web }
         if screen == .portfolioImport && portfolioImports == nil { return .web }
@@ -261,7 +316,9 @@ public final class NativeShellModel {
 
     /// Settings and global overlays cover the native view while React keeps its page mounted.
     public func isTemporarilyCovered(_ path: String) -> Bool {
-        route.path == path && (isPresentingWeb || isPresentingOnboarding || route.value("settings") != nil)
+        route.path == path
+            && (isPresentingWeb || isPresentingOnboarding || isPresentingNativeOverlay
+                || route.value("settings") != nil)
     }
 
     /// `shell:route-changed`: the page's router moved, or an overlay closed on the same route.
@@ -285,6 +342,13 @@ public final class NativeShellModel {
         if pathChanged || settingsClosed || reportClosed || next == route { isPresentingWeb = false }
         pendingRoute = nil
         route = next
+        if let reports {
+            if next.value("export") == "pdf", let type = Self.reportType(for: next.path) {
+                if !reports.isPresented || reports.type != type { reports.configure(type: type, origin: next.string) }
+            } else if reports.isPresented {
+                reports.didDisappear()
+            }
+        }
         if pathChanged { leaveConfirmation = nil }
         admin.database.routeDidChange(path: next.path)
         // ⌘N's pending Add sheet belongs to the arrival at `/transactions`; landing elsewhere
@@ -527,10 +591,91 @@ public final class NativeShellModel {
     }
     public func closeSettings() { onNavigate(.closeSettings) }
 
+    public var nativeOverlayKind: NativeShellOverlayKind? {
+        if commandPalette?.isOpen == true { return .palette }
+        if isPresentingShortcuts { return .shortcuts }
+        if isPresentingNativeSettings { return .settings }
+        if reports?.isPresented == true { return .report }
+        if onboarding?.isPresented == true { return .onboarding }
+        return nil
+    }
+    public var isPresentingNativeOverlay: Bool { nativeOverlayKind != nil }
+    public func openPalette() {
+        guard nativeSettings?.isSuspendedForRestore != true else { return }
+        guard let commandPalette else {
+            willPresent(.openPalette)
+            onNavigate(.openPalette)
+            return
+        }
+        commandPalette.configure(settings: settings)
+        commandPalette.open()
+    }
+    public func closePalette() { commandPalette?.close() }
+    public func openShortcuts() {
+        guard nativeSettings?.isSuspendedForRestore != true else { return }
+        if commandPalette == nil {
+            willPresent(.openShortcuts)
+            onNavigate(.openShortcuts)
+        } else {
+            isPresentingShortcuts = true
+        }
+    }
+    public func closeShortcuts() { isPresentingShortcuts = false }
+    public func closeReport() {
+        reports?.didDisappear()
+        if route.value("export") == "pdf" { replaceQuery("export", with: nil) }
+    }
+    public func closeNativeOverlay() async {
+        switch nativeOverlayKind {
+        case .palette: closePalette()
+        case .shortcuts: closeShortcuts()
+        case .settings: closeSettings()
+        case .report: reports?.close()
+        case .onboarding: await onboarding?.finish()
+        case nil: break
+        }
+    }
+    public func activatePaletteAction(_ action: NativeCommandPaletteAction) {
+        guard nativeSettings?.isSuspendedForRestore != true else { return }
+        switch action {
+        case .navigate(let route): navigate(to: route.string)
+        case .newTransaction:
+            if !newTransaction() { navigate(to: TransactionsRoutes.newTransactionRoute) }
+        case .theme(let mode): nativeSettings?.updateTheme(["mode": .string(mode)])
+        case .settings: openSettings()
+        case .shortcuts: openShortcuts()
+        case .copy(let value):
+            if copyToClipboard(value) {
+                clipboardNoticeID += 1
+                notices.publish(
+                    .init(id: clipboardNoticeID, kind: .success, key: "commandPalette.copied"),
+                    source: clipboardNoticeSource)
+            }
+        }
+    }
+    private static func reportType(for path: String) -> NativeReportType? {
+        if path == "/statistics" { return .financial }
+        if path == "/tax" { return .tax }
+        if path == "/portfolio" || path == "/portfolio/net-worth"
+            || ["stocks", "crypto", "metals", "real-estate", "savings"].contains(where: { path == "/portfolio/" + $0 })
+        {
+            return .portfolio
+        }
+        return nil
+    }
+
     /// A menu action is about to reach the page. One that opens a page dialog shows the web
     /// view, since the dialog belongs to the page.
     public func willPresent(_ action: MenuAction) {
         if action == .openSettings, nativeSettings != nil { return }
+        if action == .openPalette, commandPalette != nil {
+            openPalette()
+            return
+        }
+        if action == .openShortcuts, commandPalette != nil {
+            openShortcuts()
+            return
+        }
         switch action.action {
         case MenuAction.toggleSidebar.action, "navigate", "replace-route", "set-theme", "native-sidebar":
             return
@@ -556,12 +701,10 @@ public final class NativeShellModel {
             navigate(to: url)
             return true
         case .openPalette:
-            willPresent(.openPalette)
-            onNavigate(.openPalette)
+            openPalette()
             return true
         case .openShortcuts:
-            willPresent(.openShortcuts)
-            onNavigate(.openShortcuts)
+            openShortcuts()
             return true
         }
     }
@@ -610,6 +753,8 @@ public final class NativeShellModel {
         settingsLoaded = true
         settingsRevision &+= 1
         theme.colorblindGainLoss = next.colorblindGainLoss
+        commandPalette?.configure(settings: next)
+        onboarding?.strings = strings
     }
 
     /// Reads `app_settings` again; the page may have changed them. A newer request
@@ -649,6 +794,14 @@ public final class NativeShellModel {
         portfolio?.invalidate()
         analysis?.invalidate()
         analysisMonitors?.invalidate()
+        settingsRevision &+= 1
+    }
+
+    public func exchangeRatesDidRefresh() {
+        exchangeRates.invalidate()
+        home?.invalidate()
+        statistics?.model.invalidate()
+        portfolio?.invalidate()
         settingsRevision &+= 1
     }
 

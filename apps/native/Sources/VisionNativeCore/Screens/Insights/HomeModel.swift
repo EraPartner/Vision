@@ -60,6 +60,10 @@ public final class HomeModel {
     @ObservationIgnored private var forecastTask: Task<Void, Never>?
     @ObservationIgnored private var widgetBaseline: JSONValue = .null
     @ObservationIgnored private var widgetRevision = UUID()
+    @ObservationIgnored private var usesSharedUpcoming = false
+    @ObservationIgnored private var upcomingDismissalRevision = UUID()
+    @ObservationIgnored private var inactivityRevision = UUID()
+    @ObservationIgnored private var localWriteTask: Task<Void, Never>?
 
     public init(
         service: any HomeService, calendar: Calendar = .current,
@@ -128,6 +132,9 @@ public final class HomeModel {
 
     private func fetch(token: UUID) async {
         let widgetToken = widgetRevision
+        let dismissalToken = upcomingDismissalRevision
+        let inactivityToken = inactivityRevision
+        let sharedUpcoming = usesSharedUpcoming
         isFetching = true
         isLoading = monthly == nil
         do {
@@ -177,9 +184,12 @@ public final class HomeModel {
         async let planned = Self.result {
             try await service.homePlanned(start: today, end: monthEnd, limit: 200)
         }
-        async let upcoming = Self.result {
-            try await service.homePlanned(start: today, end: weekEnd, limit: 100)
-        }
+        async let upcoming: HomeResult<[OpenAPI.PlannedTransaction]>? =
+            sharedUpcoming
+            ? nil
+            : await Self.result {
+                try await service.homePlanned(start: today, end: weekEnd, limit: 100)
+            }
         async let count = Self.result { try await service.homeTransactionCount() }
         async let needsCategory = Self.result { try await service.homeNeedsCategory() }
         async let matches = Self.result { try await service.homeMatchCount() }
@@ -205,7 +215,9 @@ public final class HomeModel {
         assignList(answers.6, key: "recentTransactions", to: &filteredRecent)
         assignList(answers.7, key: "accounts", to: &self.accounts)
         assignList(answers.8, key: "planned", to: &self.planned)
-        assignList(answers.9, key: "upcoming", to: &self.upcoming)
+        if !usesSharedUpcoming, let answer = answers.9 {
+            assignList(answer, key: "upcoming", to: &self.upcoming)
+        }
         if case .success(let value) = answers.10 { transactionCount = value }
         if case .success(let value) = answers.11 { self.needsCategory = value }
         if case .success(let value) = answers.12 { matchCount = value }
@@ -218,12 +230,18 @@ public final class HomeModel {
             widgetError = error
         }
         let storedDismissals = await readLocal("vision.home.dismissedAccountInactivity")
-        if let values = storedDismissals?.objectValue {
+        guard token == revision, !Task.isCancelled else { return }
+        if inactivityToken == inactivityRevision, let values = storedDismissals?.objectValue {
             dismissedAccounts = values.compactMapValues(\.stringValue)
         }
-        dismissedUpcoming = Set(
-            (await readLocal("dismissed_upcoming_planned_payments"))?.arrayValue?.compactMap(
-                \.stringValue) ?? [])
+        if !usesSharedUpcoming {
+            let keys =
+                (await readLocal("dismissed_upcoming_planned_payments"))?.arrayValue?.compactMap(\.stringValue) ?? []
+            guard token == revision, !Task.isCancelled else { return }
+            if !usesSharedUpcoming, dismissalToken == upcomingDismissalRevision {
+                dismissedUpcoming = Set(keys)
+            }
+        }
         guard token == revision, !Task.isCancelled else { return }
         isLoading = false
         isFetching = false
@@ -319,6 +337,21 @@ public final class HomeModel {
                     && !dismissedUpcoming.contains("\($0.id):\($0.plannedDate.prefix(10))")
             }.sorted { ($0.plannedDate, $0.id) < ($1.plannedDate, $1.id) }.prefix(5))
     }
+    /// The shell banner owns the source's shared query and occurrence storage in a native graph.
+    public func useSharedUpcoming() {
+        usesSharedUpcoming = true
+        errors.removeValue(forKey: "upcoming")
+    }
+    public func applySharedUpcoming(_ rows: [OpenAPI.PlannedTransaction]) {
+        useSharedUpcoming()
+        upcoming = rows
+    }
+    /// Receipt-free mirror; only the shared banner owner persists occurrence dismissals.
+    public func applyUpcomingDismissals(_ keys: [String]) {
+        useSharedUpcoming()
+        upcomingDismissalRevision = UUID()
+        dismissedUpcoming = Set(keys)
+    }
     public var staleAccounts: [HomeBankBalances.Account] {
         let cutoff = day(now().addingTimeInterval(-30 * 86_400))
         return Array(
@@ -328,15 +361,29 @@ public final class HomeModel {
             }.prefix(3))
     }
     public func dismissInactivity(_ account: HomeBankBalances.Account) async {
+        inactivityRevision = UUID()
         dismissedAccounts[String(account.id)] = String(account.last_transaction.prefix(10))
-        await writeLocal(
+        await persistLocal(
             "vision.home.dismissedAccountInactivity",
             .object(dismissedAccounts.mapValues(JSONValue.string)))
     }
     public func restoreInactivity() async {
+        inactivityRevision = UUID()
         dismissedAccounts = [:]
-        await writeLocal("vision.home.dismissedAccountInactivity", .object([:]))
+        await persistLocal("vision.home.dismissedAccountInactivity", .object([:]))
     }
+    private func persistLocal(_ key: String, _ value: JSONValue) async {
+        let previous = localWriteTask
+        let write = writeLocal
+        let task = Task {
+            await previous?.value
+            await write(key, value)
+        }
+        localWriteTask = task
+        await task.value
+    }
+    /// Drain accepted inactivity writes before a restore replaces frontend storage.
+    public func flushLocalStorage() async { await localWriteTask?.value }
 
     public func setWidget(_ id: String, visible: Bool) async {
         await updateWidgets { $0.set(id, visible: visible, page: "dashboard") }

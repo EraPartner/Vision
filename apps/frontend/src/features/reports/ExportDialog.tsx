@@ -6,6 +6,7 @@
  */
 
 import { useState } from "react";
+import { hasNativeShellCapability } from "@/lib/nativeShell";
 import { FileDown, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -131,7 +132,12 @@ interface ExportDialogProps {
     onOpenChange?: (open: boolean) => void;
 }
 
-export function ExportDialog({
+export function ExportDialog(props: ExportDialogProps) {
+    if (hasNativeShellCapability("reports")) return null;
+    return <WebExportDialog {...props} />;
+}
+
+function WebExportDialog({
     trigger,
     defaultType = "financial",
     open: controlledOpen,

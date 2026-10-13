@@ -21,14 +21,14 @@ import Observation
     public var requestDashboardArrival: (@MainActor () -> Void)?
     public var didMutateCategories: (@MainActor () async -> Void)?
     public var didMutateImports: (@MainActor () async -> Void)?
-    /// Explicit restore intent gets new restored-database authority, never the retired writer.
+    /// Acknowledges completion and clears v1 draft through fresh restored-database/storage authority.
     public var completeAfterRestore: (@MainActor () async throws -> Void)?
     @ObservationIgnored private let service: any NativeOnboardingService
     @ObservationIgnored private let desktop: any NativeSettingsDesktopService
     @ObservationIgnored private let persistence: NativeSettingsPersistence
     @ObservationIgnored private let store: any NativeOnboardingDraftStore
     @ObservationIgnored private var visit = UUID()
-    @ObservationIgnored private var hasLoaded = false
+    public private(set) var isLoaded = false
     @ObservationIgnored private var draftWrite: Task<Void, Never>?
     @ObservationIgnored private var storageFailureShown = false
     @ObservationIgnored private var notices = NoticeCounter()
@@ -49,7 +49,7 @@ import Observation
     }
     public func clearNotice(_ id: Int) { if notice?.id == id { notice = nil } }
     public func load(force: Bool = false) async {
-        guard !isLoading, force || !hasLoaded else { return }
+        guard !isLoading, force || !isLoaded else { return }
         isLoading = true
         let scope = visit
         let completed: Bool
@@ -61,7 +61,7 @@ import Observation
         } catch { completed = false }
         guard scope == visit, !Task.isCancelled else { return }
         isLoading = false
-        hasLoaded = true
+        isLoaded = true
         if !completed { await begin() }
     }
     /// Called on every closed-to-open transition, including Settings restart.
@@ -247,9 +247,6 @@ import Observation
         do {
             guard let completeAfterRestore else { throw APIError.backendUnavailable }
             try await completeAfterRestore()
-            guard scope == visit else { return }
-            await draftWrite?.value
-            try? await store.remove()
             guard scope == visit else { return }
             isPresented = false
             visit = UUID()

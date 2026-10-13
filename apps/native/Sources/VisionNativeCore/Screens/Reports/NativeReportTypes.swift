@@ -8,11 +8,20 @@ public enum NativeReportType: String, CaseIterable, Sendable, Identifiable {
         let ids: [String]
         switch self {
         case .financial:
-            ids = ["executiveSummary", "cashflowTrend", "categoryBreakdown", "topRecipients", "bankBalances", "rollingAverages", "plannedOutlook"]
+            ids = [
+                "executiveSummary", "cashflowTrend", "categoryBreakdown", "topRecipients", "bankBalances",
+                "rollingAverages", "plannedOutlook",
+            ]
         case .portfolio:
-            ids = ["portfolioExecutiveSummary", "portfolioAllocation", "topHoldings", "performanceTrend", "assetClassDetail", "dividendIncome"]
+            ids = [
+                "portfolioExecutiveSummary", "portfolioAllocation", "topHoldings", "performanceTrend",
+                "assetClassDetail", "dividendIncome",
+            ]
         case .tax:
-            ids = ["taxExecutiveSummary", "taxTypeBreakdown", "taxByAssetClass", "taxMonthlyTrend", "topInvestmentsByCost", "feeBreakdown", "belgianRulesSummary"]
+            ids = [
+                "taxExecutiveSummary", "taxTypeBreakdown", "taxByAssetClass", "taxMonthlyTrend", "topInvestmentsByCost",
+                "feeBreakdown", "belgianRulesSummary",
+            ]
         }
         return ids.map { NativeReportSection(id: $0) }
     }
@@ -40,7 +49,8 @@ public enum NativeReportPeriod: Equatable, Sendable {
         case .ytd: return .object(["kind": .string("ytd")])
         case .rolling(let months): return .object(["kind": .string("rolling"), "months": .number(Decimal(months))])
         case .year(let year): return .object(["kind": .string("year"), "year": .number(Decimal(year))])
-        case .custom(let from, let to): return .object(["kind": .string("custom"), "from": .string(from), "to": .string(to)])
+        case .custom(let from, let to):
+            return .object(["kind": .string("custom"), "from": .string(from), "to": .string(to)])
         }
     }
     /// Source taxReportHousehold.ts chooses the matching frozen calculation; no tax is computed here.
@@ -58,7 +68,10 @@ public struct NativeReportPreferences: Equatable, Sendable {
     public var exclusionScope: String
     public var excludedCategoryIds: [Int]
     public var excludedRecipientIds: [Int]
-    public init(currency: String = "EUR", exclusionScope: String = "everywhere", excludedCategoryIds: [Int] = [], excludedRecipientIds: [Int] = []) {
+    public init(
+        currency: String = "EUR", exclusionScope: String = "everywhere", excludedCategoryIds: [Int] = [],
+        excludedRecipientIds: [Int] = []
+    ) {
         self.currency = currency
         self.exclusionScope = exclusionScope
         self.excludedCategoryIds = excludedCategoryIds

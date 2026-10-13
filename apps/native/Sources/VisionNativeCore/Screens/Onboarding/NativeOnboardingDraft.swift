@@ -41,7 +41,7 @@ public struct NativeOnboardingDraft: Equatable, Sendable, Codable {
         guard let data, let raw = try? JSONDecoder().decode(TaxValue.self, from: data), valid(raw),
             var draft = try? JSONDecoder().decode(Self.self, from: data)
         else { return fallback }
-        draft.selectedBank = draft.selectedBank.trimmingCharacters(in: .whitespacesAndNewlines)
+        draft.selectedBank = NativeCommandPaletteQueries.trim(draft.selectedBank)
         var seen: Set<Int> = []
         draft.selectedCategoryIndexes = draft.selectedCategoryIndexes.filter {
             $0 < categoryCount && seen.insert($0).inserted
@@ -50,7 +50,7 @@ public struct NativeOnboardingDraft: Equatable, Sendable, Codable {
     }
     public func encoded() throws -> Data {
         var copy = self
-        copy.selectedBank = copy.selectedBank.trimmingCharacters(in: .whitespacesAndNewlines)
+        copy.selectedBank = NativeCommandPaletteQueries.trim(copy.selectedBank)
         copy.selectedCategoryIndexes.sort()
         // Codable's nil defaults omit keys, while the source v1 schema requires explicit nulls.
         var raw = try JSONDecoder().decode(TaxValue.self, from: JSONEncoder().encode(copy)).objectValue!
@@ -69,7 +69,7 @@ public struct NativeOnboardingDraft: Equatable, Sendable, Codable {
             value["version"] == .number(1), let step = value["step"]?.stringValue,
             NativeOnboardingStep(rawValue: step) != nil,
             let bank = value["selectedBank"]?.stringValue,
-            bank.trimmingCharacters(in: .whitespacesAndNewlines).utf16.count <= 128,
+            NativeCommandPaletteQueries.trim(bank).utf16.count <= 128,
             let indexes = value["selectedCategoryIndexes"]?.arrayValue, indexes.count <= 100,
             indexes.allSatisfy({ safeCount($0) != nil }), value["categoriesCreated"]?.boolValue != nil
         else { return false }

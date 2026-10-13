@@ -18,7 +18,8 @@ public struct NativeReportsAPIService: NativeReportService {
     private let client: APIClient
     public init(client: APIClient) { self.client = client }
     public func generate(_ request: NativeReportRequest) async throws -> APIResponse {
-        try await client.downloadResponse(NativeReportPDFOperation(request: request), fallbackMessage: "Report download failed")
+        try await client.downloadResponse(
+            NativeReportPDFOperation(request: request), fallbackMessage: "Report download failed")
     }
 }
 

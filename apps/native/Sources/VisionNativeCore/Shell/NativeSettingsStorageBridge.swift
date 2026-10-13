@@ -17,6 +17,9 @@ public enum NativeSettingsStorageBridge {
         case reminder = "vision.backup.passphrase.reminder.dismissed"
         case onboardingDraft = "vision.onboarding.draft.v1"
         case recurringDismissals = "dismissed_recurring_patterns"
+        case paletteRecents = "vision.palette.recents"
+        case fxDismissedAt = "fx-status-banner-dismissed-at"
+        case upcomingDismissals = "dismissed_upcoming_planned_payments"
     }
     public enum ReplyError: Error, Equatable, Sendable { case invalidReply }
 

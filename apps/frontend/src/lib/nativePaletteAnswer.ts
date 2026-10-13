@@ -59,7 +59,7 @@ export async function nativePaletteAnswer(
                   }).format(value),
               };
     }
-    const target = fx.to ?? (request.currency || "EUR");
+    const target = fx.to ?? request.currency;
     if (fx.from === target) return null;
     // useCurrencyConverter deliberately keeps the source amount when a rate is absent.
     const data = await readRates().catch(() => undefined);

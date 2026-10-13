@@ -7,6 +7,7 @@ public struct NativeCommandPaletteView: View {
     let model: NativeCommandPaletteModel
     let shell: NativeShellModel
     @State private var selectedID: String?
+    @State private var selectionWasMoved = false
     @FocusState private var searchFocused: Bool
     @Environment(\.visionTheme) private var theme
 
@@ -31,9 +32,11 @@ public struct NativeCommandPaletteView: View {
                         case .downArrow: return move(1, modifiers: press.modifiers)
                         case .upArrow: return move(-1, modifiers: press.modifiers)
                         case .home:
+                            selectionWasMoved = true
                             selectedID = entries.first?.id
                             return .handled
                         case .end:
+                            selectionWasMoved = true
                             selectedID = entries.last?.id
                             return .handled
                         default:
@@ -90,11 +93,15 @@ public struct NativeCommandPaletteView: View {
             .accessibilityLabel(shell.strings.t("commandPalette.openLabel"))
             .task {
                 searchFocused = true
+                selectionWasMoved = false
                 selectedID = entries.first?.id
             }
-            .onChange(of: model.query) { _, _ in selectedID = entries.first?.id }
+            .onChange(of: model.query) { _, _ in
+                selectionWasMoved = false
+                selectedID = entries.first?.id
+            }
             .onChange(of: entries.map(\.id)) { _, ids in
-                if selectedID.map({ !ids.contains($0) }) ?? true { selectedID = ids.first }
+                if !selectionWasMoved || (selectedID.map({ !ids.contains($0) }) ?? true) { selectedID = ids.first }
             }
     }
     private func entryRow(_ entry: NativeCommandPaletteEntry) -> some View {
@@ -120,7 +127,12 @@ public struct NativeCommandPaletteView: View {
                 )
                 .contentShape(Rectangle())
         }.buttonStyle(.plain)
-            .onHover { hover in if hover { selectedID = entry.id } }
+            .onHover { hover in
+                if hover {
+                    selectionWasMoved = true
+                    selectedID = entry.id
+                }
+            }
             .accessibilityAddTraits(selectedID == entry.id ? .isSelected : [])
     }
     private func quoteReadout(_ quote: ResearchQuote) -> some View {
@@ -151,6 +163,7 @@ public struct NativeCommandPaletteView: View {
     private func move(_ delta: Int, modifiers: EventModifiers = []) -> KeyPress.Result {
         let ids = entries.map(\.id)
         guard !ids.isEmpty else { return .ignored }
+        selectionWasMoved = true
         if modifiers.contains(.command) {
             selectedID = delta > 0 ? ids.last : ids.first
             return .handled

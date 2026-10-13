@@ -6,10 +6,18 @@ private struct NativeNoticeCenterKey: EnvironmentKey {
     static let defaultValue: NativeNoticeCenter? = nil
 }
 
+private struct NativeNoticeAnnouncementsKey: EnvironmentKey {
+    static let defaultValue = true
+}
+
 extension EnvironmentValues {
     var nativeNoticeCenter: NativeNoticeCenter? {
         get { self[NativeNoticeCenterKey.self] }
         set { self[NativeNoticeCenterKey.self] = newValue }
+    }
+    var nativeNoticeAnnouncementsEnabled: Bool {
+        get { self[NativeNoticeAnnouncementsKey.self] }
+        set { self[NativeNoticeAnnouncementsKey.self] = newValue }
     }
 }
 
@@ -22,6 +30,8 @@ struct NativeNoticeHost: View {
     @Environment(\.visionTheme) private var theme
     @Environment(\.visionVisualEffects) private var effects
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.nativeNoticeAnnouncementsEnabled) private var announcementsEnabled
+    @FocusState private var focused: Bool
 
     var body: some View {
         VStack(spacing: 8) {
@@ -55,17 +65,26 @@ struct NativeNoticeHost: View {
                 .frame(maxWidth: 560)
                 .accessibilityElement(children: .contain)
                 .task(id: entry.revision) {
+                    guard announcementsEnabled else { return }
                     AccessibilityNotification.Announcement(strings.t(entry.notice.key, displayVariables(entry.notice)))
                         .post()
                 }
             }
         }
         .padding(.bottom, 20)
+        .focusable().focused($focused)
+        .onChange(of: center.focusRevision) { _, _ in
+            if announcementsEnabled, !center.visibleEntries.isEmpty { focused = true }
+        }
         .background {
-            Button("", action: undoShortcut)
-                .keyboardShortcut("z", modifiers: .command)
-                .disabled(!center.hasUndo)
-                .opacity(0).frame(width: 0, height: 0).accessibilityHidden(true)
+            Group {
+                Button("", action: undoShortcut)
+                    .keyboardShortcut("z", modifiers: .command)
+                    .disabled(!announcementsEnabled || !center.hasUndo)
+                Button("", action: center.requestFocus)
+                    .keyboardShortcut("t", modifiers: .option)
+                    .disabled(!announcementsEnabled || center.visibleEntries.isEmpty)
+            }.opacity(0).frame(width: 0, height: 0).accessibilityHidden(true)
         }
     }
 

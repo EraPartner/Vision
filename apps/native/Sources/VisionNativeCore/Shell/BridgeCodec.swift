@@ -168,6 +168,7 @@ public enum BridgeCall: Equatable, Sendable {
     /// `shell:route-changed` with a valid app-relative route.
     case routeChanged(NativeRoute, onboardingPresented: Bool = false)
     case settingsChange(NativeSettingsPatch)
+    case openOverlay(NativeShellOverlayKind)
     /// A pending or removed channel; it rejects without looking at arguments.
     case unavailable(BridgeChannel)
 }
@@ -382,6 +383,12 @@ public enum BridgeCodec {
                 throw InvalidArguments("Invalid onboarding presentation")
             }
             return .routeChanged(route, onboardingPresented: onboarding?.boolValue ?? false)
+        case .openOverlay:
+            try expectArity(arguments, 1)
+            guard let raw = argument(arguments, 0)?.stringValue, let kind = NativeShellOverlayKind(rawValue: raw),
+                kind == .palette || kind == .shortcuts
+            else { throw InvalidArguments("Invalid native overlay") }
+            return .openOverlay(kind)
         case .settingsChange:
             try expectArity(arguments, 3)
             guard let key = argument(arguments, 0)?.stringValue,

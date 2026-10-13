@@ -14,6 +14,8 @@ import Observation
     }
 
     public private(set) var entries: [Entry] = []
+    public private(set) var focusRevision = 0
+    public func requestFocus() { if !visibleEntries.isEmpty { focusRevision &+= 1 } }
     public var visibleEntries: [Entry] { Array(entries.suffix(3)) }
     public var hasUndo: Bool {
         guard let id = latestUndo, let entry = entries.first(where: { $0.id == id }) else { return false }

@@ -87,6 +87,8 @@ describe("native palette shared TypeScript answers", () => {
             .toEqual({ kind: "fx", text: "5.00 bad-code" });
         expect(await nativePaletteAnswer("5 USD", "us", "EUR", 200, async () => undefined))
             .toEqual({ kind: "fx", text: "5.00 EUR" });
+        expect(await nativePaletteAnswer("5 USD", "us", "", 2, async () => undefined))
+            .toEqual({ kind: "fx", text: "5.00 " });
     });
 
     it("does not fetch for identical currencies and hides nonfinite conversions", async () => {
