@@ -187,6 +187,18 @@ parity and performance checks **have not been run in this Linux environment**.
 Do not report them as passed. Previous proof directories for phases 3l and 3m are also
 immutable; don't silently refresh them to match new code.
 
+Automatic macOS verification is now available through branch pushes. The first run,
+`https://github.com/EraPartner/Vision/actions/runs/38461360344`, built `0a9413e3` on
+macOS 26.6.2 and failed on three Home date-formatting overload errors. Package tests were
+skipped after the build failure. The compiler fix adds the existing Date overload's
+missing default time zone; four meaningful date/time-zone/DST tests pass locally.
+This is the first native compiler feedback, not a successful full build. Continue fixing
+actual runner errors and pushing; no manual owner verification is required to proceed.
+The first job's logs are at `/workspace/vision-native-macos-first-build.log` if present.
+CLI Actions API access was denied by the workspace network policy. The permitted public
+GitHub Actions page supplied the run ID; GitHub connector workflow job/log tools then
+provided the actual status and compiler errors.
+
 ## Tooling and safety for continuation
 
 - Workspace: `/workspace/Vision`. Bun: `/tmp/vision-tools/package/bin/bun` (1.4.3).
