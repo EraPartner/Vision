@@ -41,3 +41,22 @@ createTag
 getTransactions
 # The `dismissed_recurring_patterns` setting
 saveSetting
+# Import & export (/import) and Review import (/import/:batchId/review)
+getSupportedAdapters
+getCustomParsers
+createCustomParser
+updateCustomParser
+deleteCustomParser
+getImportBatches
+deleteImportBatch
+previewImportBatch
+overrideImportRow
+overrideImportRowCategory
+commitImportBatch
+updateRecipient
+getInfoBanks
+exportTransactionsCsv
+exportTransactionsJson
+# The multipart and SSE uploads have no generated struct (the generator writes JSON bodies
+# only); hand-written operations in Screens/Imports/ImportRequests.swift call them:
+# importCsvCustom, importCsvStream, importRecipients, importCategories.

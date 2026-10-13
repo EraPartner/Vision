@@ -4,6 +4,75 @@ import Testing
 import VisionNativeCore
 @testable import VisionNativeUI
 
+/// An Import & export service with fixed answers; `hangs` keeps a bank import streaming until
+/// it is cancelled.
+actor StaticImportService: ImportService {
+    let batches: [OpenAPI.ImportBatch]
+    let failing: Bool
+    let hangs: Bool
+
+    init(batches: [OpenAPI.ImportBatch] = StaticImportService.sample, failing: Bool = false, hangs: Bool = false) {
+        self.batches = batches
+        self.failing = failing
+        self.hangs = hangs
+    }
+
+    static let sample = [
+        OpenAPI.ImportBatch(
+            id: "12", adapterName: "kbc", sourceFilename: "kbc-oktober-2026-rekeningafschriften.csv", status: "complete",
+            rowsTotal: 40, rowsImported: 37, rowsDuplicate: 2, rowsError: 1, errorSummary: "1 row has no amount",
+            startedAt: "2026-10-12T08:30:00.000Z", transactionsRemaining: 37),
+        OpenAPI.ImportBatch(
+            id: "13", adapterName: "generic", status: "awaiting_review", rowsTotal: 5, rowsImported: 0,
+            rowsDuplicate: 0, rowsError: 0, startedAt: "2026-10-12T09:00:00.000Z", transactionsRemaining: 0),
+    ]
+
+    static let parser = OpenAPI.CustomParserConfig(
+        id: 7, name: "Spaarbank",
+        config: OpenAPI.TransactionParserConfig(
+            dateColumn: "Datum", recipientColumn: "Naam", amountColumn: "Bedrag", separator: ";"))
+
+    static let csv = Data(
+        "Datum;Naam;Bedrag;Omschrijving\n2026-10-01;Bakkerij;-4,50;Brood\n2026-10-02;Werkgever;2500,00;Loon\n".utf8)
+
+    func supportedAdapters() async throws -> [ImportAdapter] {
+        if failing { throw APIError.network("offline") }
+        return [ImportAdapter(key: "kbc", name: "KBC"), ImportAdapter(key: "belfius", name: "Belfius")]
+    }
+
+    func customParsers() async throws -> [OpenAPI.CustomParserConfig] { [Self.parser] }
+
+    func createCustomParser(name: String, config: CSVParserConfig) async throws -> OpenAPI.CustomParserConfig {
+        OpenAPI.CustomParserConfig(id: 8, name: name, config: config.payload)
+    }
+
+    func updateCustomParser(id: Int, name: String, config: CSVParserConfig) async throws -> OpenAPI.CustomParserConfig {
+        OpenAPI.CustomParserConfig(id: id, name: name, config: config.payload)
+    }
+
+    func deleteCustomParser(id: Int) async throws {}
+
+    func importStream(
+        file: ImportFile, bankName: String, onProgress: @escaping @Sendable (ImportProgress) async -> Void
+    ) async throws -> ImportOutcome {
+        await onProgress(ImportProgress(phase: "importing", current: 12, total: 40, imported: 10, duplicates: 1, errors: 1, percent: 30))
+        if hangs { try await Task.sleep(for: .seconds(60)) }
+        return .completed(ImportCompletion(total: 40, imported: 37, duplicates: 2, errors: 1))
+    }
+
+    func importCustom(file: ImportFile, bankName: String, config: CSVParserConfig) async throws -> ImportOutcome {
+        if failing { throw APIError.network("offline") }
+        return .completed(ImportCompletion(total: 2, imported: 2, duplicates: 0, errors: 0))
+    }
+
+    func importBatches(limit: Int, offset: Int) async throws -> ImportBatchPage {
+        if failing { throw APIError.network("offline") }
+        return ImportBatchPage(total: batches.count + 20, limit: limit, offset: offset, items: batches)
+    }
+
+    func rollbackImportBatch(id: Int) async throws -> Int { 37 }
+}
+
 actor StaticRatesService: ExchangeRatesService {
     let result: OpenAPI.ExchangeRates
 
@@ -361,7 +430,8 @@ extension StaticPlannedService: PickerDataService {
     func makeShell(
         language: NativeLanguage, appearance: ThemeAppearance, failing: Bool = false,
         database: StaticDatabaseService = StaticDatabaseService(),
-        planned: StaticPlannedService = StaticPlannedService(), adminMode: Bool = true
+        planned: StaticPlannedService = StaticPlannedService(), adminMode: Bool = true,
+        imports: StaticImportService = StaticImportService()
     ) -> NativeShellModel {
         let rates = ExchangeRatesModel(service: StaticRatesService(Self.rates))
         return NativeShellModel(
@@ -373,6 +443,7 @@ extension StaticPlannedService: PickerDataService {
                 token: AdminTokenAccess(read: { "token" }, write: { _ in true }), audit: StaticAuditHistory()),
             planned: PlannedPaymentsModel(
                 service: planned, editing: planned, pickers: planned, rates: rates, dismissals: .memory()),
+            imports: ImportsModel(service: imports),
             loadSettings: { NativeAppSettings(adminMode: adminMode) },
             onNavigate: { _ in })
     }
@@ -681,4 +752,109 @@ extension StaticPlannedService: PickerDataService {
         #expect(theme.palette == DesignTokens.palette(.default, .dark))
         #expect(VisionTheme.fallback.colorScheme == .light)
     }
+
+    func layOutImports(_ shell: NativeShellModel) -> NSHostingView<some View> {
+        layOut(
+            ImportExportView(model: shell.imports, shell: shell)
+                .environment(\.visionTheme, VisionTheme(selection: shell.theme)))
+    }
+
+    @Test(arguments: [NativeLanguage.en, .nl], [ThemeAppearance.light, .dark])
+    func theImportScreenLaysOutInEveryState(_ language: NativeLanguage, _ appearance: ThemeAppearance) async throws {
+        let shell = makeShell(language: language, appearance: appearance)
+        let model = shell.imports
+        shell.routeDidChange(try #require(NativeRoute("/import")))
+        // Idle, before the lists answer.
+        #expect(model.isHistoryLoading)
+        #expect(layOutImports(shell).fittingSize.width > 0)
+        // Idle with the adapters, the saved parser and a history page.
+        await model.appear(strings: shell.strings)
+        #expect(model.adapters?.count == 2)
+        #expect(model.historyBatches.count == 2)
+        #expect(model.historyTotalPages == 3)
+        #expect(layOutImports(shell).fittingSize.height > 0)
+        // A file and a built-in bank: the detected columns with sample rows.
+        model.chooseFile(ImportFile(name: "afschrift.csv", data: StaticImportService.csv, mimeType: "text/csv"))
+        model.selectSource(.adapter("kbc"))
+        guard case .loaded(let preview, _) = model.headersPanel else {
+            Issue.record("no preview")
+            return
+        }
+        #expect(preview.headers.count == 4)
+        #expect(model.canImport)
+        #expect(layOutImports(shell).fittingSize.height > 0)
+        // The saved parser's summary, then its editor.
+        model.selectSource(.saved(7))
+        #expect(model.showsSavedSummary)
+        #expect(layOutImports(shell).fittingSize.height > 0)
+        model.startEditing()
+        #expect(model.showsEditor)
+        #expect(model.mapperHeaders.count == 4)
+        #expect(layOutImports(shell).fittingSize.height > 0)
+        // A new custom setup with no file: text fields instead of header selects.
+        model.removeFile()
+        model.selectSource(.custom)
+        #expect(model.showsEditor)
+        #expect(model.mapperHeaders.isEmpty)
+        #expect(layOutImports(shell).fittingSize.height > 0)
+        // A custom import's complete panel, then the commit receipt.
+        model.chooseFile(ImportFile(name: "afschrift.csv", data: StaticImportService.csv, mimeType: "text/csv"))
+        model.selectSource(.custom)
+        model.config.dateColumn = "Datum"
+        model.config.recipientColumn = "Naam"
+        model.config.amountColumn = "Bedrag"
+        model.config.separator = ";"
+        await model.startImport(strings: shell.strings)
+        #expect(model.progress?.phase == "complete")
+        #expect(layOutImports(shell).fittingSize.height > 0)
+        model.showCommitReceipt(try #require(ImportCommitReceipt(imported: 37, duplicates: 2, errors: 1, dateFrom: "2026-10-01", dateTo: "2026-10-09")))
+        #expect(model.commitReceipt != nil)
+        #expect(layOutImports(shell).fittingSize.height > 0)
+    }
+
+    @Test(arguments: [NativeLanguage.en, .nl], [ThemeAppearance.light, .dark])
+    func theImportScreenLaysOutWhileImportingAndOnErrors(_ language: NativeLanguage, _ appearance: ThemeAppearance)
+        async throws
+    {
+        let shell = makeShell(language: language, appearance: appearance, imports: StaticImportService(hangs: true))
+        let model = shell.imports
+        await model.appear(strings: shell.strings)
+        model.chooseFile(ImportFile(name: "afschrift.csv", data: StaticImportService.csv, mimeType: "text/csv"))
+        model.selectSource(.adapter("kbc"))
+        // Importing: the progress panel with its counts, and Cancel.
+        let running = Task { await model.startImport(strings: shell.strings) }
+        while model.progress?.phase != "importing" { await Task.yield() }
+        #expect(model.isImporting)
+        #expect(model.progress?.showsCounts == true)
+        #expect(layOutImports(shell).fittingSize.height > 0)
+        model.cancelImport()
+        await running.value
+        #expect(!model.isImporting)
+        #expect(model.notice?.kind == .info)
+        #expect(layOutImports(shell).fittingSize.height > 0)
+        // An empty history.
+        let empty = makeShell(language: language, appearance: appearance, imports: StaticImportService(batches: []))
+        await empty.imports.appear(strings: empty.strings)
+        #expect(empty.imports.historyBatches.isEmpty)
+        #expect(!empty.imports.isHistoryLoading)
+        #expect(layOutImports(empty).fittingSize.height > 0)
+        // Failing lists and a failed import: the error toast and panel, unreadable columns.
+        let failing = makeShell(language: language, appearance: appearance, imports: StaticImportService(failing: true))
+        await failing.imports.appear(strings: failing.strings)
+        #expect(failing.imports.historyError != nil)
+        #expect(failing.imports.adaptersFailed)
+        #expect(layOutImports(failing).fittingSize.height > 0)
+        failing.imports.chooseFile(ImportFile(name: "afschrift.csv", data: StaticImportService.csv, mimeType: "text/csv"))
+        failing.imports.selectSource(.custom)
+        failing.imports.config.dateColumn = "Datum"
+        failing.imports.config.recipientColumn = "Naam"
+        failing.imports.config.amountColumn = "Bedrag"
+        failing.imports.config.encoding = "utf-16"
+        #expect(failing.imports.headersPanel == .unreadable)
+        await failing.imports.startImport(strings: failing.strings)
+        #expect(failing.imports.progress?.phase == "error")
+        #expect(failing.imports.notice?.key == "importPage.toast.serverError")
+        #expect(layOutImports(failing).fittingSize.height > 0)
+    }
+
 }

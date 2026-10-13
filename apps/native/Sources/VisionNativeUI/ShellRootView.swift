@@ -201,6 +201,17 @@ struct NativeScreenContainer: View {
                 return handled ? .handled : .ignored
             }
             .onAppear { focused = true }
+            // `ElectronBridge`'s window-level drop: a CSV dropped anywhere on a native screen
+            // (outside the import dropzones, which take their own drops) goes to the import
+            // page, pre-filled. Other files are ignored.
+            .dropDestination(for: URL.self) { urls, _ in
+                guard let url = urls.first, url.isFileURL, url.pathExtension.lowercased() == "csv" else { return false }
+                Task {
+                    guard let file = await ImportFile.read(url) else { return }
+                    _ = model.openImportFile(file)
+                }
+                return true
+            }
     }
 
     @ViewBuilder
@@ -224,6 +235,12 @@ struct NativeScreenContainer: View {
             ExchangeRatesView(model: model.exchangeRates, shell: model)
         case .plannedPayments:
             PlannedPaymentsView(model: model.planned, shell: model)
+        case .importExport:
+            ImportExportView(model: model.imports, shell: model)
+        case .importReview:
+            // TODO(3d part B): the native Review import screen. `ImportRoutes.reviewIsNative`
+            // keeps this route on the web app until then.
+            EmptyView()
         }
     }
 }

@@ -5821,14 +5821,27 @@ export interface components {
             /** @description Tag slugs, as an array or a comma-separated string. */
             tags?: string[] | string;
         };
+        TransactionParserConfig: {
+            dateColumn?: string;
+            recipientColumn?: string;
+            amountColumn?: string;
+            memoColumn?: string;
+            /** @description strptime-style date format, default `%Y-%m-%d`. */
+            dateFormat?: string;
+            /** @description CSV delimiter, default ',' */
+            separator?: string;
+            /** @description UTF-8, Latin-1 (latin1, latin-1, iso-8859-1), or windows-1252. */
+            encoding?: string;
+            /** @description Physical leading lines before the CSV header. */
+            skipRows?: number;
+            number_format?: components["schemas"]["CsvNumberFormat"];
+        } & {
+            [key: string]: unknown;
+        };
         CustomParserConfig: {
             id: number;
             name: string;
-            config: {
-                number_format?: components["schemas"]["CsvNumberFormat"];
-            } & {
-                [key: string]: unknown;
-            };
+            config: components["schemas"]["TransactionParserConfig"];
             /** Format: date-time */
             created_at?: string;
             /** Format: date-time */
@@ -14687,11 +14700,7 @@ export interface operations {
             content: {
                 "application/json": {
                     name: string;
-                    config: {
-                        number_format?: components["schemas"]["CsvNumberFormat"];
-                    } & {
-                        [key: string]: unknown;
-                    };
+                    config: components["schemas"]["TransactionParserConfig"];
                 };
             };
         };
@@ -14756,11 +14765,7 @@ export interface operations {
             content: {
                 "application/json": {
                     name?: string;
-                    config?: {
-                        number_format?: components["schemas"]["CsvNumberFormat"];
-                    } & {
-                        [key: string]: unknown;
-                    };
+                    config?: components["schemas"]["TransactionParserConfig"];
                 };
             };
         };
@@ -14861,7 +14866,14 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: {
+                            /** @description Committed transactions removed. */
+                            deleted: number;
+                            /** @description Payees the batch created that no longer have transactions. */
+                            recipientsRemoved: number;
+                        };
+                    };
                 };
             };
         };

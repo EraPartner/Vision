@@ -4,9 +4,9 @@ type: endpoint
 method: POST, GET, PATCH, DELETE
 path: /api/import
 description: CSV import for transactions, recipients, and categories; CRUD for saved named custom CSV parsers
-date: 2026-10-11
-updated: 2026-10-11
-last_modified: 2026-10-11
+date: 2026-10-13
+updated: 2026-10-13
+last_modified: 2026-10-13
 tags:
   [
     api,
@@ -330,6 +330,9 @@ These four endpoints manage persisted named custom CSV parser configurations. Se
 
 ### GET /api/import/parsers
 
+`config` follows the `TransactionParserConfig` schema in `openapi.yaml` (2026-10-13, non-breaking:
+every field optional, extra keys allowed), the setup the import card's Custom CSV setup stores.
+
 List all saved parser configurations. Collection GETs use the canonical
 `{items, total}` body; this list is unpaginated, so `total` is the row count.
 
@@ -395,6 +398,7 @@ Create a new saved parser configuration.
 | `config.separator`       | No       | CSV column delimiter (default `,`)                                         |
 | `config.encoding`        | No       | File encoding (default `utf-8`)                                            |
 | `config.skipRows`        | No       | Header rows to skip (default `0`)                                          |
+| `config.number_format`   | No       | `auto`, `decimal_dot` or `decimal_comma` (default `auto`)                  |
 
 **Responses:**
 
@@ -512,7 +516,8 @@ Returns the repository batch record unchanged, or `404 NOT_FOUND` when absent.
 
 ### DELETE /api/import/batches/:id
 
-Rolls back a batch and returns `{ deleted, recipientsRemoved }`.
+Rolls back a batch and returns `{ deleted, recipientsRemoved }` (both integers; typed in
+`openapi.yaml` since 2026-10-13, which was untyped before and is a non-breaking change).
 The route rejects `staging`, `validating`, `matching`, `committing`, and
 `aborted` batches with `400`; `pending`, `awaiting_review`, `failed`, and
 `complete` batches are accepted and may return zero deletions when nothing was

@@ -104,10 +104,15 @@ public enum NativeScreen: Equatable, Hashable, Sendable {
     case exchangeRates
     /// `/planned`, the first screen outside the admin section (phase 3c).
     case plannedPayments
+    /// `/import`, Import & export (phase 3d).
+    case importExport
+    /// `/import/:batchId/review`, Review import (phase 3d part B; `ImportRoutes.reviewIsNative`).
+    case importReview(batchId: Int)
 
     /// The screens at a fixed path.
     public static let fixedScreens: [NativeScreen] = [
         .adminOverview, .databaseMaintenance, .providerHealth, .endpointLiveness, .exchangeRates, .plannedPayments,
+        .importExport,
     ]
 
     /// The route path it replaces.
@@ -120,6 +125,8 @@ public enum NativeScreen: Equatable, Hashable, Sendable {
         case .endpointLiveness: return "/admin/endpoints"
         case .exchangeRates: return "/admin/exchange-rates"
         case .plannedPayments: return PlannedPaymentsRoute.path
+        case .importExport: return ImportRoutes.path
+        case .importReview(let batchId): return ImportRoutes.reviewPath(batchId)
         }
     }
 
@@ -130,6 +137,9 @@ public enum NativeScreen: Equatable, Hashable, Sendable {
 
     public static func screen(forPath path: String) -> NativeScreen? {
         if let screen = fixedScreens.first(where: { $0.path == path }) { return screen }
+        if ImportRoutes.reviewIsNative, let batchId = ImportRoutes.reviewBatchId(forPath: path) {
+            return .importReview(batchId: batchId)
+        }
         return TableEditorRoute.table(forPath: path).map { NativeScreen.tableEditor(table: $0) }
     }
 }

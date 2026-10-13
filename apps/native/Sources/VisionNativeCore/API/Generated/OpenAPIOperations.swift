@@ -5,7 +5,7 @@ import Foundation
 
 /// One struct per operationId in `apps/native/openapi-operations.txt`, in its order.
 public enum OpenAPIOperations {
-    public static let operationIds = ["getExchangeRates", "refreshExchangeRates", "adminDatabaseStats", "adminProvidersHealth", "adminProviderProbe", "adminMetricsRequests", "adminListEndpoints", "getSetting", "adminDatabaseVacuum", "adminGetTableSchema", "adminGetTableRows", "adminMutateTableRows", "getPlannedTransactions", "createPlannedTransaction", "updatePlannedTransaction", "deletePlannedTransaction", "executePlannedTransaction", "getPlannedMatchSuggestions", "getRecurringPatterns", "getRecipients", "getRecipient", "getAccounts", "getCategoryTree", "getTags", "createTag", "getTransactions", "saveSetting"]
+    public static let operationIds = ["getExchangeRates", "refreshExchangeRates", "adminDatabaseStats", "adminProvidersHealth", "adminProviderProbe", "adminMetricsRequests", "adminListEndpoints", "getSetting", "adminDatabaseVacuum", "adminGetTableSchema", "adminGetTableRows", "adminMutateTableRows", "getPlannedTransactions", "createPlannedTransaction", "updatePlannedTransaction", "deletePlannedTransaction", "executePlannedTransaction", "getPlannedMatchSuggestions", "getRecurringPatterns", "getRecipients", "getRecipient", "getAccounts", "getCategoryTree", "getTags", "createTag", "getTransactions", "saveSetting", "getSupportedAdapters", "getCustomParsers", "createCustomParser", "updateCustomParser", "deleteCustomParser", "getImportBatches", "deleteImportBatch", "previewImportBatch", "overrideImportRow", "overrideImportRowCategory", "commitImportBatch", "updateRecipient", "getInfoBanks", "exportTransactionsCsv", "exportTransactionsJson"]
 }
 
 extension OpenAPIOperations {
@@ -956,6 +956,510 @@ extension OpenAPIOperations {
                 case value = "value"
                 case expected = "expected"
             }
+        }
+    }
+
+    /// GET /api/info/supported-adapters: List supported CSV import adapters
+    public struct GetSupportedAdapters: APIOperation {
+        public typealias Response = ResponseData
+        public static let operationId = "getSupportedAdapters"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/info/supported-adapters"
+
+        public init() {}
+
+        public var path: String { "/api/info/supported-adapters" }
+
+        public struct ResponseData: Codable, Equatable, Sendable {
+            public let items: [ItemsItem]
+            public let total: Int
+
+            public init(items: [ItemsItem], total: Int) {
+                self.items = items
+                self.total = total
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case items = "items"
+                case total = "total"
+            }
+
+            public struct ItemsItem: Codable, Equatable, Sendable {
+                public let key: String
+                public let name: String
+                public let adapterClass: String?
+
+                public init(key: String, name: String, adapterClass: String? = nil) {
+                    self.key = key
+                    self.name = name
+                    self.adapterClass = adapterClass
+                }
+
+                enum CodingKeys: String, CodingKey {
+                    case key = "key"
+                    case name = "name"
+                    case adapterClass = "adapter_class"
+                }
+            }
+        }
+    }
+
+    /// GET /api/import/parsers: List saved custom CSV parser configs
+    public struct GetCustomParsers: APIOperation {
+        public typealias Response = ResponseData
+        public static let operationId = "getCustomParsers"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/import/parsers"
+
+        public init() {}
+
+        public var path: String { "/api/import/parsers" }
+
+        public struct ResponseData: Codable, Equatable, Sendable {
+            public let items: [OpenAPI.CustomParserConfig]
+            public let total: Int
+
+            public init(items: [OpenAPI.CustomParserConfig], total: Int) {
+                self.items = items
+                self.total = total
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case items = "items"
+                case total = "total"
+            }
+        }
+    }
+
+    /// POST /api/import/parsers: Create a saved custom CSV parser config
+    public struct CreateCustomParser: APIOperation {
+        public typealias Response = OpenAPI.CustomParserConfig
+        public static let operationId = "createCustomParser"
+        public static let method = HTTPMethod.post
+        public static let pathTemplate = "/api/import/parsers"
+
+        public var body: Body
+
+        public init(body: Body) {
+            self.body = body
+        }
+
+        public var path: String { "/api/import/parsers" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+
+        public struct Body: Codable, Equatable, Sendable {
+            public let name: String
+            public let config: OpenAPI.TransactionParserConfig
+
+            public init(name: String, config: OpenAPI.TransactionParserConfig) {
+                self.name = name
+                self.config = config
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case name = "name"
+                case config = "config"
+            }
+        }
+    }
+
+    /// PATCH /api/import/parsers/{id}: Update a saved custom CSV parser config
+    public struct UpdateCustomParser: APIOperation {
+        public typealias Response = OpenAPI.CustomParserConfig
+        public static let operationId = "updateCustomParser"
+        public static let method = HTTPMethod.patch
+        public static let pathTemplate = "/api/import/parsers/{id}"
+
+        public var id: Int
+        public var body: Body
+
+        public init(id: Int, body: Body) {
+            self.id = id
+            self.body = body
+        }
+
+        public var path: String { "/api/import/parsers/\(APIPath.segment(APIQuery.value(id)))" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+
+        public struct Body: Codable, Equatable, Sendable {
+            public let name: String?
+            public let config: OpenAPI.TransactionParserConfig?
+
+            public init(name: String? = nil, config: OpenAPI.TransactionParserConfig? = nil) {
+                self.name = name
+                self.config = config
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case name = "name"
+                case config = "config"
+            }
+        }
+    }
+
+    /// DELETE /api/import/parsers/{id}: Delete a saved custom CSV parser config
+    public struct DeleteCustomParser: APIOperation {
+        public typealias Response = APIEmpty
+        public static let operationId = "deleteCustomParser"
+        public static let method = HTTPMethod.delete
+        public static let pathTemplate = "/api/import/parsers/{id}"
+
+        public var id: Int
+
+        public init(id: Int) {
+            self.id = id
+        }
+
+        public var path: String { "/api/import/parsers/\(APIPath.segment(APIQuery.value(id)))" }
+    }
+
+    /// GET /api/import/batches: List import batches
+    public struct GetImportBatches: APIOperation {
+        public typealias Response = ResponseData
+        public static let operationId = "getImportBatches"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/import/batches"
+
+        /// Page size (default 50, clamped to 200)
+        public var limit: Int?
+        public var offset: Int?
+
+        public init(limit: Int? = nil, offset: Int? = nil) {
+            self.limit = limit
+            self.offset = offset
+        }
+
+        public var path: String { "/api/import/batches" }
+
+        public var queryItems: [URLQueryItem] {
+            var items: [URLQueryItem] = []
+            if let limit { items.append(URLQueryItem(name: "limit", value: APIQuery.value(limit))) }
+            if let offset { items.append(URLQueryItem(name: "offset", value: APIQuery.value(offset))) }
+            return items
+        }
+
+        public struct ResponseData: Codable, Equatable, Sendable {
+            public let total: Int
+            public let limit: Int
+            public let offset: Int
+            public let items: [OpenAPI.ImportBatch]
+
+            public init(total: Int, limit: Int, offset: Int, items: [OpenAPI.ImportBatch]) {
+                self.total = total
+                self.limit = limit
+                self.offset = offset
+                self.items = items
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case total = "total"
+                case limit = "limit"
+                case offset = "offset"
+                case items = "items"
+            }
+        }
+    }
+
+    /// DELETE /api/import/batches/{id}: Rollback import batch (deletes committed transactions, marks
+    /// batch aborted)
+    public struct DeleteImportBatch: APIOperation {
+        public typealias Response = ResponseData
+        public static let operationId = "deleteImportBatch"
+        public static let method = HTTPMethod.delete
+        public static let pathTemplate = "/api/import/batches/{id}"
+
+        public var id: Int
+
+        public init(id: Int) {
+            self.id = id
+        }
+
+        public var path: String { "/api/import/batches/\(APIPath.segment(APIQuery.value(id)))" }
+
+        public struct ResponseData: Codable, Equatable, Sendable {
+            /// Committed transactions removed.
+            public let deleted: Int
+            /// Payees the batch created that no longer have transactions.
+            public let recipientsRemoved: Int
+
+            public init(deleted: Int, recipientsRemoved: Int) {
+                self.deleted = deleted
+                self.recipientsRemoved = recipientsRemoved
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case deleted = "deleted"
+                case recipientsRemoved = "recipientsRemoved"
+            }
+        }
+    }
+
+    /// GET /api/import/batches/{id}/preview: Preview import batch rows before commit
+    public struct PreviewImportBatch: APIOperation {
+        public typealias Response = JSONValue
+        public static let operationId = "previewImportBatch"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/import/batches/{id}/preview"
+
+        public var id: Int
+        public var limit: Int?
+        public var offset: Int?
+
+        public init(id: Int, limit: Int? = nil, offset: Int? = nil) {
+            self.id = id
+            self.limit = limit
+            self.offset = offset
+        }
+
+        public var path: String { "/api/import/batches/\(APIPath.segment(APIQuery.value(id)))/preview" }
+
+        public var queryItems: [URLQueryItem] {
+            var items: [URLQueryItem] = []
+            if let limit { items.append(URLQueryItem(name: "limit", value: APIQuery.value(limit))) }
+            if let offset { items.append(URLQueryItem(name: "offset", value: APIQuery.value(offset))) }
+            return items
+        }
+    }
+
+    /// POST /api/import/batches/{id}/rows/{rowId}/override: Override the matched recipient for a staged
+    /// row
+    public struct OverrideImportRow: APIOperation {
+        public typealias Response = JSONValue
+        public static let operationId = "overrideImportRow"
+        public static let method = HTTPMethod.post
+        public static let pathTemplate = "/api/import/batches/{id}/rows/{rowId}/override"
+
+        public var id: Int
+        public var rowId: Int
+        public var body: Body
+
+        public init(id: Int, rowId: Int, body: Body) {
+            self.id = id
+            self.rowId = rowId
+            self.body = body
+        }
+
+        public var path: String { "/api/import/batches/\(APIPath.segment(APIQuery.value(id)))/rows/\(APIPath.segment(APIQuery.value(rowId)))/override" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+
+        public struct Body: Codable, Equatable, Sendable {
+            /// Recipient to attribute the staged row to. `null` — or an absent field — clears the override.
+            /// A present value must be a positive integer; a malformed one is rejected rather than coerced,
+            /// because a coerced id names a different recipient and the batch then commits the transaction
+            /// against it.
+            public let recipientId: Int?
+
+            public init(recipientId: Int? = nil) {
+                self.recipientId = recipientId
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case recipientId = "recipient_id"
+            }
+        }
+    }
+
+    /// POST /api/import/batches/{id}/rows/{rowId}/category-override: Override category for a staged row
+    public struct OverrideImportRowCategory: APIOperation {
+        public typealias Response = JSONValue
+        public static let operationId = "overrideImportRowCategory"
+        public static let method = HTTPMethod.post
+        public static let pathTemplate = "/api/import/batches/{id}/rows/{rowId}/category-override"
+
+        public var id: Int
+        public var rowId: Int
+        public var body: Body
+
+        public init(id: Int, rowId: Int, body: Body) {
+            self.id = id
+            self.rowId = rowId
+            self.body = body
+        }
+
+        public var path: String { "/api/import/batches/\(APIPath.segment(APIQuery.value(id)))/rows/\(APIPath.segment(APIQuery.value(rowId)))/category-override" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+
+        public struct Body: Codable, Equatable, Sendable {
+            /// Category to attribute the staged row to. `null` — or an absent field — clears the override.
+            /// A present value must be a positive integer that exists; a malformed one is rejected rather
+            /// than coerced, since a coerced id names a different category and passes the existence check.
+            public let categoryId: Int?
+
+            public init(categoryId: Int? = nil) {
+                self.categoryId = categoryId
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case categoryId = "category_id"
+            }
+        }
+    }
+
+    /// POST /api/import/batches/{id}/commit: Commit import batch — writes transactions to DB
+    public struct CommitImportBatch: APIOperation {
+        public typealias Response = JSONValue
+        public static let operationId = "commitImportBatch"
+        public static let method = HTTPMethod.post
+        public static let pathTemplate = "/api/import/batches/{id}/commit"
+
+        public var id: Int
+
+        public init(id: Int) {
+            self.id = id
+        }
+
+        public var path: String { "/api/import/batches/\(APIPath.segment(APIQuery.value(id)))/commit" }
+    }
+
+    /// PATCH /api/recipients/{id}: Update recipient
+    public struct UpdateRecipient: APIOperation {
+        public typealias Response = OpenAPI.Recipient
+        public static let operationId = "updateRecipient"
+        public static let method = HTTPMethod.patch
+        public static let pathTemplate = "/api/recipients/{id}"
+
+        public var id: Int
+        public var body: OpenAPI.RecipientUpdate
+
+        public init(id: Int, body: OpenAPI.RecipientUpdate) {
+            self.id = id
+            self.body = body
+        }
+
+        public var path: String { "/api/recipients/\(APIPath.segment(APIQuery.value(id)))" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+    }
+
+    /// GET /api/info/banks: List distinct bank accounts
+    public struct GetInfoBanks: APIOperation {
+        public typealias Response = ResponseData
+        public static let operationId = "getInfoBanks"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/info/banks"
+
+        public init() {}
+
+        public var path: String { "/api/info/banks" }
+
+        public struct ResponseData: Codable, Equatable, Sendable {
+            public let items: [String]
+            public let total: Int
+
+            public init(items: [String], total: Int) {
+                self.items = items
+                self.total = total
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case items = "items"
+                case total = "total"
+            }
+        }
+    }
+
+    /// GET /api/transactions/export/csv: Export transactions as CSV (streaming)
+    public struct ExportTransactionsCsv: APIOperation {
+        public typealias Response = APIEmpty
+        public static let operationId = "exportTransactionsCsv"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/transactions/export/csv"
+
+        public var startDate: String?
+        public var endDate: String?
+        /// Preferred account filter (exact FK match, ADR-088); bank_account remains a substring escape
+        /// hatch
+        public var accountId: Int?
+        /// Comma-separated account ids (exact FK match, ADR-088); preferred over bank_accounts. Every
+        /// element must be a plain base-10 integer in 1..2147483647; a malformed element returns 400
+        /// VALIDATION_ERROR rather than being dropped, which used to widen the export to every account.
+        /// Capped at 50 entries after validation.
+        public var accountIds: String?
+        public var bankAccount: String?
+        public var includeBalance: Bool?
+        /// Comma-separated tag slugs — OR filter
+        public var tags: String?
+
+        public init(startDate: String? = nil, endDate: String? = nil, accountId: Int? = nil, accountIds: String? = nil, bankAccount: String? = nil, includeBalance: Bool? = nil, tags: String? = nil) {
+            self.startDate = startDate
+            self.endDate = endDate
+            self.accountId = accountId
+            self.accountIds = accountIds
+            self.bankAccount = bankAccount
+            self.includeBalance = includeBalance
+            self.tags = tags
+        }
+
+        public var path: String { "/api/transactions/export/csv" }
+
+        public var queryItems: [URLQueryItem] {
+            var items: [URLQueryItem] = []
+            if let startDate { items.append(URLQueryItem(name: "start_date", value: APIQuery.value(startDate))) }
+            if let endDate { items.append(URLQueryItem(name: "end_date", value: APIQuery.value(endDate))) }
+            if let accountId { items.append(URLQueryItem(name: "account_id", value: APIQuery.value(accountId))) }
+            if let accountIds { items.append(URLQueryItem(name: "account_ids", value: APIQuery.value(accountIds))) }
+            if let bankAccount { items.append(URLQueryItem(name: "bank_account", value: APIQuery.value(bankAccount))) }
+            if let includeBalance { items.append(URLQueryItem(name: "include_balance", value: APIQuery.value(includeBalance))) }
+            if let tags { items.append(URLQueryItem(name: "tags", value: APIQuery.value(tags))) }
+            return items
+        }
+    }
+
+    /// GET /api/transactions/export/json: Export transactions as NDJSON (streaming)
+    public struct ExportTransactionsJson: APIOperation {
+        public typealias Response = APIEmpty
+        public static let operationId = "exportTransactionsJson"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/transactions/export/json"
+
+        public var startDate: String?
+        public var endDate: String?
+        /// Preferred account filter (exact FK match, ADR-088); bank_account remains a substring escape
+        /// hatch
+        public var accountId: Int?
+        /// Comma-separated account ids (exact FK match, ADR-088); preferred over bank_accounts. Every
+        /// element must be a plain base-10 integer in 1..2147483647; a malformed element returns 400
+        /// VALIDATION_ERROR rather than being dropped, which used to widen the export to every account.
+        /// Capped at 50 entries after validation.
+        public var accountIds: String?
+        public var bankAccount: String?
+        /// Comma-separated tag slugs — OR filter
+        public var tags: String?
+
+        public init(startDate: String? = nil, endDate: String? = nil, accountId: Int? = nil, accountIds: String? = nil, bankAccount: String? = nil, tags: String? = nil) {
+            self.startDate = startDate
+            self.endDate = endDate
+            self.accountId = accountId
+            self.accountIds = accountIds
+            self.bankAccount = bankAccount
+            self.tags = tags
+        }
+
+        public var path: String { "/api/transactions/export/json" }
+
+        public var queryItems: [URLQueryItem] {
+            var items: [URLQueryItem] = []
+            if let startDate { items.append(URLQueryItem(name: "start_date", value: APIQuery.value(startDate))) }
+            if let endDate { items.append(URLQueryItem(name: "end_date", value: APIQuery.value(endDate))) }
+            if let accountId { items.append(URLQueryItem(name: "account_id", value: APIQuery.value(accountId))) }
+            if let accountIds { items.append(URLQueryItem(name: "account_ids", value: APIQuery.value(accountIds))) }
+            if let bankAccount { items.append(URLQueryItem(name: "bank_account", value: APIQuery.value(bankAccount))) }
+            if let tags { items.append(URLQueryItem(name: "tags", value: APIQuery.value(tags))) }
+            return items
         }
     }
 }

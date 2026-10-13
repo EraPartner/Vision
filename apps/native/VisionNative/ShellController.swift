@@ -79,6 +79,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             admin: AdminScreens.make(
                 service: client, database: client, token: makeAdminTokenAccess(), audit: auditChannels),
             planned: PlannedPaymentsModel(service: client, editing: client, pickers: client, rates: rates),
+            imports: ImportsModel(service: client),
             hiddenSections: Self.loadHiddenSections(),
             loadSettings: { try await client.appSettings() },
             saveHiddenSections: { Self.saveHiddenSections($0) },
@@ -509,16 +510,22 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         webShell?.webView.evaluateJavaScript(BridgeDispatcher.eventScript(event, payload: payload), completionHandler: nil)
     }
 
+    /// Finder "Open With" and dock drops of a CSV. Once `/import` draws natively, the native
+    /// import card takes the file (pre-filled, not started); until `app_settings` is read the
+    /// page gets it as `app:csv-opened`, as before.
     func openFiles(_ urls: [URL]) {
         for url in urls {
             Task { [weak self] in
-                guard let payload = await ShellController.readCSV(url) else { return }
-                self?.sendToApp(.csvOpened, payload)
+                guard let data = await ShellController.readCSV(url), let self else { return }
+                let name = url.lastPathComponent
+                self.showWindow()
+                if self.shellModel.openImportFile(ImportFile(name: name, data: data, mimeType: "text/csv")) { return }
+                self.sendToApp(.csvOpened, CSVHandoff.payload(name: name, data: data))
             }
         }
     }
 
-    private nonisolated static func readCSV(_ url: URL) async -> JSONValue? {
+    private nonisolated static func readCSV(_ url: URL) async -> Data? {
         let values = try? url.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
         guard
             CSVHandoff.accepts(
@@ -527,7 +534,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         else {
             return nil
         }
-        return CSVHandoff.payload(name: url.lastPathComponent, data: data)
+        return data
     }
 
     // MARK: - Menus

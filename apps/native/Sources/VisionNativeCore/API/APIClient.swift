@@ -34,7 +34,7 @@ public protocol APITransport: Sendable {
 }
 
 public struct URLSessionAPITransport: APITransport {
-    private let session: URLSession
+    let session: URLSession
 
     public init(session: URLSession = URLSession(configuration: .ephemeral)) {
         self.session = session
@@ -159,6 +159,7 @@ public struct APIClient: Sendable {
     private let baseURL: @Sendable () async -> URL?
     private let adminToken: @Sendable () async -> String?
     private let transport: any APITransport
+    private let streamTransport: any APIStreamTransport
     private let sleep: @Sendable (Duration) async throws -> Void
     private let jitter: @Sendable () -> Double
     private let makeRequestId: @Sendable () -> String
@@ -177,11 +178,13 @@ public struct APIClient: Sendable {
         jitter: @escaping @Sendable () -> Double = { Double.random(in: 0..<1) },
         requestId: @escaping @Sendable () -> String = { UUID().uuidString.lowercased() },
         maxRetries: Int = APIClient.defaultMaxRetries,
-        timeout: TimeInterval = APIClient.defaultTimeout
+        timeout: TimeInterval = APIClient.defaultTimeout,
+        streamTransport: any APIStreamTransport = URLSessionAPITransport()
     ) {
         self.baseURL = baseURL
         self.adminToken = adminToken
         self.transport = transport
+        self.streamTransport = streamTransport
         self.sleep = sleep
         self.jitter = jitter
         self.makeRequestId = requestId
@@ -237,12 +240,7 @@ public struct APIClient: Sendable {
             throw APIError.invalidRequest(label)
         }
         // One correlation id for every attempt, like `apiRequest`.
-        var headers = ["Content-Type": "application/json", "X-Request-Id": makeRequestId()]
-        // Attached only when the session stored one; without it the backend's loopback
-        // allowlist applies, as in the web app.
-        if let token = await adminToken()?.trimmingCharacters(in: .whitespacesAndNewlines), !token.isEmpty {
-            headers["Authorization"] = "Bearer \(token)"
-        }
+        let headers = await requestHeaders(contentType: operation.contentType)
         let request = APIRequest(method: method, url: url, headers: headers, body: body, timeout: timeout)
         let retries = method.isIdempotent ? max(0, maxRetries) : 0
         var lastError = APIError.network("Request failed")
@@ -275,6 +273,49 @@ public struct APIClient: Sendable {
             }
         }
         throw lastError
+    }
+
+    /// The idle timeout of an event stream: the web's stream `fetch` has none, and a large
+    /// file can stage for a while between progress events.
+    public static let streamTimeout: TimeInterval = 600
+
+    /// A `POST` whose answer is a Server-Sent Events stream (`readSseStream`): each event goes
+    /// to `onEvent` as it arrives. A non-2xx answer throws its failure envelope with
+    /// `fallbackMessage`. Not retried. Cancelling the task closes the connection and throws
+    /// `CancellationError`.
+    public func streamEvents(
+        path: String, body: MultipartFormData, fallbackMessage: String,
+        onEvent: (ServerSentEvent) async throws -> Void
+    ) async throws {
+        let label = "POST \(path)"
+        guard let base = await baseURL() else { throw APIError.backendUnavailable }
+        guard let url = Self.url(base: base, path: path, queryItems: []) else { throw APIError.invalidRequest(label) }
+        var headers = await requestHeaders(contentType: body.contentType)
+        headers["Accept"] = "text/event-stream"
+        let request = APIRequest(
+            method: .post, url: url, headers: headers, body: body.encoded(), timeout: Self.streamTimeout)
+        var parser = ServerSentEventParser()
+        // The transport maps its own failures to `APIError` or `CancellationError`; an error
+        // `onEvent` throws passes through.
+        let response = try await streamTransport.stream(request) { chunk in
+            for event in parser.feed(chunk) { try await onEvent(event) }
+        }
+        guard (200..<300).contains(response.status) else {
+            throw APIError.client(
+                Self.envelopeError(status: response.status, body: response.body, fallbackMessage: fallbackMessage))
+        }
+        for event in parser.finish() { try await onEvent(event) }
+    }
+
+    /// The headers of every request: the body type, one correlation id and, when the session
+    /// stored one, the admin token (without it the backend's loopback allowlist applies, as
+    /// in the web app).
+    func requestHeaders(contentType: String) async -> [String: String] {
+        var headers = ["Content-Type": contentType, "X-Request-Id": makeRequestId()]
+        if let token = await adminToken()?.trimmingCharacters(in: .whitespacesAndNewlines), !token.isEmpty {
+            headers["Authorization"] = "Bearer \(token)"
+        }
+        return headers
     }
 
     /// A finished response: the unwrapped `data` of a 2xx, else the failure envelope.

@@ -25,6 +25,8 @@ public struct ScreenNotice: Equatable, Sendable, Identifiable {
     public enum Kind: Equatable, Sendable {
         case success
         case error
+        /// `toast.info`.
+        case info
     }
 
     public let id: Int

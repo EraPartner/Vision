@@ -32,11 +32,14 @@ public protocol APIOperation: Sendable {
     var queryItems: [URLQueryItem] { get }
     /// The JSON request body, or `nil` for none.
     func encodedBody() throws -> Data?
+    /// The body's `Content-Type`: JSON, or a multipart upload's with its boundary.
+    var contentType: String { get }
 }
 
 extension APIOperation {
     public var queryItems: [URLQueryItem] { [] }
     public func encodedBody() throws -> Data? { nil }
+    public var contentType: String { "application/json" }
 }
 
 /// The response of an operation without a JSON body; it accepts any body.

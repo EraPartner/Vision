@@ -21,9 +21,7 @@ struct ActionToast: View {
             let title = strings.t(notice.key, notice.variables)
             HStack(alignment: .center, spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Label(
-                        title,
-                        systemImage: notice.kind == .success ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                    Label(title, systemImage: Self.symbol(notice.kind))
                     if let detail = notice.detail, !detail.isEmpty {
                         Text(detail)
                             .font(.footnote)
@@ -49,7 +47,7 @@ struct ActionToast: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.card))
-            .foregroundStyle(notice.kind == .success ? theme.foreground : theme.destructive)
+            .foregroundStyle(notice.kind == .error ? theme.destructive : theme.foreground)
             .frame(maxWidth: 560)
             .padding(.bottom, 20)
             .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -60,6 +58,15 @@ struct ActionToast: View {
                 guard !Task.isCancelled else { return }
                 clear(notice.id)
             }
+        }
+    }
+
+    /// The toast's icon: success, error or `toast.info`.
+    static func symbol(_ kind: ScreenNotice.Kind) -> String {
+        switch kind {
+        case .success: return "checkmark.circle.fill"
+        case .error: return "exclamationmark.circle.fill"
+        case .info: return "info.circle.fill"
         }
     }
 

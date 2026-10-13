@@ -271,6 +271,39 @@ extension OpenAPI {
         }
     }
 
+    /// Generic custom numeric grammar, independent of the CSV delimiter. Auto rejects values with
+    /// conflicting valid decimal/grouping interpretations. Choose decimal_dot or decimal_comma to
+    /// disambiguate. Ambiguity rejects the complete import with a row/column diagnostic before staging.
+    public enum CsvNumberFormat: String, Codable, Sendable, CaseIterable {
+        case auto = "auto"
+        case decimalDot = "decimal_dot"
+        case decimalComma = "decimal_comma"
+    }
+
+    public struct CustomParserConfig: Codable, Equatable, Sendable {
+        public let id: Int
+        public let name: String
+        public let config: OpenAPI.TransactionParserConfig
+        public let createdAt: String?
+        public let updatedAt: String?
+
+        public init(id: Int, name: String, config: OpenAPI.TransactionParserConfig, createdAt: String? = nil, updatedAt: String? = nil) {
+            self.id = id
+            self.name = name
+            self.config = config
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case name = "name"
+            case config = "config"
+            case createdAt = "created_at"
+            case updatedAt = "updated_at"
+        }
+    }
+
     public struct DbEditorColumn: Codable, Equatable, Sendable {
         public let name: String
         /// information_schema data_type
@@ -606,6 +639,60 @@ extension OpenAPI {
             case source = "source"
             case isStale = "is_stale"
             case lastFetchedAt = "last_fetched_at"
+        }
+    }
+
+    public struct ImportBatch: Codable, Equatable, Sendable {
+        /// PostgreSQL BIGINT serialized by node-postgres as a string.
+        public let id: String
+        public let adapterName: String
+        public let sourceFilename: String?
+        /// PostgreSQL BIGINT serialized by node-postgres as a string.
+        public let sourceSizeBytes: String?
+        /// Present on batch-detail responses; omitted from batch-list rows.
+        public let customConfig: JSONValue?
+        public let status: String
+        public let rowsTotal: Int
+        public let rowsImported: Int
+        public let rowsDuplicate: Int
+        public let rowsError: Int
+        public let errorSummary: String?
+        public let startedAt: String
+        public let completedAt: String?
+        public let transactionsRemaining: Int
+
+        public init(id: String, adapterName: String, sourceFilename: String? = nil, sourceSizeBytes: String? = nil, customConfig: JSONValue? = nil, status: String, rowsTotal: Int, rowsImported: Int, rowsDuplicate: Int, rowsError: Int, errorSummary: String? = nil, startedAt: String, completedAt: String? = nil, transactionsRemaining: Int) {
+            self.id = id
+            self.adapterName = adapterName
+            self.sourceFilename = sourceFilename
+            self.sourceSizeBytes = sourceSizeBytes
+            self.customConfig = customConfig
+            self.status = status
+            self.rowsTotal = rowsTotal
+            self.rowsImported = rowsImported
+            self.rowsDuplicate = rowsDuplicate
+            self.rowsError = rowsError
+            self.errorSummary = errorSummary
+            self.startedAt = startedAt
+            self.completedAt = completedAt
+            self.transactionsRemaining = transactionsRemaining
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case adapterName = "adapter_name"
+            case sourceFilename = "source_filename"
+            case sourceSizeBytes = "source_size_bytes"
+            case customConfig = "custom_config"
+            case status = "status"
+            case rowsTotal = "rows_total"
+            case rowsImported = "rows_imported"
+            case rowsDuplicate = "rows_duplicate"
+            case rowsError = "rows_error"
+            case errorSummary = "error_summary"
+            case startedAt = "started_at"
+            case completedAt = "completed_at"
+            case transactionsRemaining = "transactions_remaining"
         }
     }
 
@@ -1061,6 +1148,29 @@ extension OpenAPI {
         }
     }
 
+    /// `null` name or is_active leaves that field unchanged. Each field must have the stated JSON type;
+    /// a string such as "false" for is_active returns 400.
+    public struct RecipientUpdate: Codable, Equatable, Sendable {
+        public let name: String?
+        public let defaultCategoryId: Int?
+        public let notes: String?
+        public let isActive: Bool?
+
+        public init(name: String? = nil, defaultCategoryId: Int? = nil, notes: String? = nil, isActive: Bool? = nil) {
+            self.name = name
+            self.defaultCategoryId = defaultCategoryId
+            self.notes = notes
+            self.isActive = isActive
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case name = "name"
+            case defaultCategoryId = "default_category_id"
+            case notes = "notes"
+            case isActive = "is_active"
+        }
+    }
+
     public struct RouteMetric: Codable, Equatable, Sendable {
         /// METHOD:path
         public let route: String
@@ -1309,6 +1419,46 @@ extension OpenAPI {
             case offset = "offset"
             case items = "items"
             case links = "links"
+        }
+    }
+
+    public struct TransactionParserConfig: Codable, Equatable, Sendable {
+        public let dateColumn: String?
+        public let recipientColumn: String?
+        public let amountColumn: String?
+        public let memoColumn: String?
+        /// strptime-style date format, default `%Y-%m-%d`.
+        public let dateFormat: String?
+        /// CSV delimiter, default ','
+        public let separator: String?
+        /// UTF-8, Latin-1 (latin1, latin-1, iso-8859-1), or windows-1252.
+        public let encoding: String?
+        /// Physical leading lines before the CSV header.
+        public let skipRows: Int?
+        public let numberFormat: OpenAPI.CsvNumberFormat?
+
+        public init(dateColumn: String? = nil, recipientColumn: String? = nil, amountColumn: String? = nil, memoColumn: String? = nil, dateFormat: String? = nil, separator: String? = nil, encoding: String? = nil, skipRows: Int? = nil, numberFormat: OpenAPI.CsvNumberFormat? = nil) {
+            self.dateColumn = dateColumn
+            self.recipientColumn = recipientColumn
+            self.amountColumn = amountColumn
+            self.memoColumn = memoColumn
+            self.dateFormat = dateFormat
+            self.separator = separator
+            self.encoding = encoding
+            self.skipRows = skipRows
+            self.numberFormat = numberFormat
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case dateColumn = "dateColumn"
+            case recipientColumn = "recipientColumn"
+            case amountColumn = "amountColumn"
+            case memoColumn = "memoColumn"
+            case dateFormat = "dateFormat"
+            case separator = "separator"
+            case encoding = "encoding"
+            case skipRows = "skipRows"
+            case numberFormat = "number_format"
         }
     }
 

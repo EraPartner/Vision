@@ -30,7 +30,7 @@ stays the project-file tool (ADR-204 decision 3). The deployment target and the 
 | `Sources/VisionNativeCore/API/`        | `APIClient` and the generated OpenAPI client (2)           |
 | `Sources/VisionNativeCore/Design/`     | Generated design tokens, `ThemeSelection` (2)              |
 | `Sources/VisionNativeCore/Navigation/` | Generated sidebar registry, routes, shell model (2)        |
-| `Sources/VisionNativeCore/Screens/`    | Native screen view models (Exchange rates, Admin, Planned) |
+| `Sources/VisionNativeCore/Screens/`    | Screen view models: Exchange rates, Admin, Planned, Import |
 | `Sources/VisionNativeUI/`              | SwiftUI shell and screens, `Localizable.xcstrings`         |
 | `openapi-operations.txt`               | operationIds the Swift client is generated for             |
 | `i18n-keys.txt`                        | `i18n/source` keys copied into the String Catalog          |
@@ -150,6 +150,12 @@ See [the architecture page](../../docs/architecture/native-app.md#native-navigat
   match suggestions banner's Review opens it for the first suggestion, and the recurring detection
   panel tracks a pattern as a planned payment or dismisses it (kept on this Mac and in the
   `dismissed_recurring_patterns` setting).
+- `/import` is native in every mode once `app_settings` has loaded (phase 3d part A): the bank
+  import card (dropzone, bank source, custom CSV setup and saved parsers, detected columns, live
+  progress for built-in banks) and Import history. A CSV opened from Finder or the dock, or dropped
+  on a native screen, pre-fills the card. A chosen file or an unsaved parser edit holds navigation
+  and Quit behind the Leave this page? alert. The export card, Setup and reference and the review
+  page still run in the web view until part B.
 - To add a screen: list its operations and keys, run `bun run native:generate`, add a model in
   `Sources/VisionNativeCore/Screens/`, a view in `Sources/VisionNativeUI/`, and a `NativeScreen`
   case for its route. Pass the model to `NativeShellModel` in `ShellController.makeShellModel` and

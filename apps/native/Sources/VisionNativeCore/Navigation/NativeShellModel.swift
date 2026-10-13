@@ -55,6 +55,8 @@ public final class NativeShellModel {
     public let admin: AdminScreens
     /// `/planned`.
     public let planned: PlannedPaymentsModel
+    /// `/import`.
+    public let imports: ImportsModel
     /// The navigation the Leave this page? alert holds while it asks (`blocker.location`).
     public private(set) var leaveConfirmation: NativeRoute?
 
@@ -81,6 +83,7 @@ public final class NativeShellModel {
         exchangeRates: ExchangeRatesModel,
         admin: AdminScreens,
         planned: PlannedPaymentsModel,
+        imports: ImportsModel,
         hiddenSections: [NavSectionID: Bool]? = nil,
         loadSettings: @escaping @Sendable () async throws -> NativeAppSettings,
         saveHiddenSections: @escaping @MainActor ([NavSectionID: Bool]) -> Void = { _ in },
@@ -93,6 +96,7 @@ public final class NativeShellModel {
         self.exchangeRates = exchangeRates
         self.admin = admin
         self.planned = planned
+        self.imports = imports
         self.hiddenSections = hiddenSections ?? Self.defaultHiddenSections
         self.loadSettings = loadSettings
         self.saveHiddenSections = saveHiddenSections
@@ -171,6 +175,18 @@ public final class NativeShellModel {
     private func send(_ next: NativeRoute) {
         pendingRoute = next
         onNavigate(.navigate(next.string))
+    }
+
+    /// A CSV opened from Finder or the dock, or dropped on a native screen
+    /// (`registerPendingImportFile` and `navigate("/import")` of `ElectronBridge`): once
+    /// `/import` draws natively, the native import card takes the file, pre-filled but not
+    /// started, and the shell moves there. Returns `false` while the web app has to take it
+    /// (`app_settings` not read yet).
+    public func openImportFile(_ file: ImportFile) -> Bool {
+        guard settingsLoaded, NativeScreen.screen(forPath: ImportRoutes.path) != nil else { return false }
+        imports.handoff(file)
+        if detail != .native(.importExport) { navigate(to: ImportRoutes.path) }
+        return true
     }
 
     /// A native screen with unsaved work registers its hook while it is shown.
