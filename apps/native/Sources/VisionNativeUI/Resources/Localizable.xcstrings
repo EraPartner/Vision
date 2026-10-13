@@ -4501,6 +4501,168 @@
         }
       }
     },
+    "addInvFromMarket.notesDefault": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Added from market lookup on {date}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toegevoegd via marktopzoeking op {date}"
+          }
+        }
+      }
+    },
+    "addInvFromMarket.option.addTxnDesc": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Record a buy/sell for existing investment"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Registreer een koop/verkoop voor bestaande belegging"
+          }
+        }
+      }
+    },
+    "addInvFromMarket.option.createDescExisting": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create a separate tracking entry"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Maak een aparte registratie"
+          }
+        }
+      }
+    },
+    "addInvFromMarket.option.createDescNew": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add to your portfolio"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toevoegen aan je portefeuille"
+          }
+        }
+      }
+    },
+    "addInvFromMarket.option.createNew": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create new investment"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nieuwe belegging aanmaken"
+          }
+        }
+      }
+    },
+    "addInvFromMarket.prompt": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What would you like to do with {symbol}?"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wat wil je doen met {symbol}?"
+          }
+        }
+      }
+    },
+    "addInvFromMarket.title.add": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add {symbol}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voeg {symbol} toe"
+          }
+        }
+      }
+    },
+    "addInvFromMarket.title.create": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create investment"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Belegging aanmaken"
+          }
+        }
+      }
+    },
+    "addInvFromMarket.title.transaction": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add transaction"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transactie toevoegen"
+          }
+        }
+      }
+    },
     "addPortTxn.broker": {
       "comment": "Generated from i18n/source by scripts/native-strings.ts.",
       "extractionState": "manual",
@@ -5685,6 +5847,402 @@
           "stringUnit": {
             "state": "translated",
             "value": "Bedrag mag niet nul zijn."
+          }
+        }
+      }
+    },
+    "addWatchlist.aboveCurrent": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{n} above current price"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{n} boven huidige koers"
+          }
+        }
+      }
+    },
+    "addWatchlist.assetClass": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Asset class"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activaklasse"
+          }
+        }
+      }
+    },
+    "addWatchlist.belowCurrent": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{n} below current price"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{n} onder huidige koers"
+          }
+        }
+      }
+    },
+    "addWatchlist.change": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Change"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wijzigen"
+          }
+        }
+      }
+    },
+    "addWatchlist.crypto": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crypto"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crypto"
+          }
+        }
+      }
+    },
+    "addWatchlist.currency": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Currency"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Valuta"
+          }
+        }
+      }
+    },
+    "addWatchlist.currentPrice": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Current price: {price}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Huidige koers: {price}"
+          }
+        }
+      }
+    },
+    "addWatchlist.error": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Error"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fout"
+          }
+        }
+      }
+    },
+    "addWatchlist.etf": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ETF"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ETF"
+          }
+        }
+      }
+    },
+    "addWatchlist.failed": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't add to watchlist"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kon niet toevoegen aan volglijst"
+          }
+        }
+      }
+    },
+    "addWatchlist.invalidTarget": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Target price must be a number greater than 0."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Doelkoers moet een getal groter dan 0 zijn."
+          }
+        }
+      }
+    },
+    "addWatchlist.metals": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Metals"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Metalen"
+          }
+        }
+      }
+    },
+    "addWatchlist.notesOptional": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Notes (optional)"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Notities (optioneel)"
+          }
+        }
+      }
+    },
+    "addWatchlist.notesPlaceholder": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Why are you watching this asset?"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waarom volg je dit actief?"
+          }
+        }
+      }
+    },
+    "addWatchlist.searchLabel": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search for a stock, ETF, or crypto"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zoek een aandeel, ETF of crypto"
+          }
+        }
+      }
+    },
+    "addWatchlist.searchPlaceholder": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search by name or symbol…"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zoek op naam of symbool…"
+          }
+        }
+      }
+    },
+    "addWatchlist.stock": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stock"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aandeel"
+          }
+        }
+      }
+    },
+    "addWatchlist.submit": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add to watchlist"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toevoegen aan volglijst"
+          }
+        }
+      }
+    },
+    "addWatchlist.success": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Added to watchlist"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toegevoegd aan volglijst"
+          }
+        }
+      }
+    },
+    "addWatchlist.targetPlaceholder": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "e.g. 85.00"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bijv. 85,00"
+          }
+        }
+      }
+    },
+    "addWatchlist.targetPrice": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Target buy price"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Doelkoers"
+          }
+        }
+      }
+    },
+    "addWatchlist.title": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add to watchlist"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toevoegen aan volglijst"
           }
         }
       }
@@ -14577,6 +15135,24 @@
           "stringUnit": {
             "state": "translated",
             "value": "Item verwijderen"
+          }
+        }
+      }
+    },
+    "aria.removeFromWatchlist": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove from watchlist"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Van volglijst verwijderen"
           }
         }
       }
@@ -26745,6 +27321,654 @@
           "stringUnit": {
             "state": "translated",
             "value": "Instellingen"
+          }
+        }
+      }
+    },
+    "market.52wRange": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "52-week range"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "52-weeks bereik"
+          }
+        }
+      }
+    },
+    "market.analystCount": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{n} analyst"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{n} analist"
+          }
+        }
+      }
+    },
+    "market.analystCountPlural": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{n} analysts"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{n} analisten"
+          }
+        }
+      }
+    },
+    "market.analystRatings": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Analyst ratings"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Analistenbeoordelingen"
+          }
+        }
+      }
+    },
+    "market.autoRefresh": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto-refreshes every 60s"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatisch vernieuwen elke 60s"
+          }
+        }
+      }
+    },
+    "market.avgVolume": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Average volume (3 months)"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gemiddeld volume (3 maanden)"
+          }
+        }
+      }
+    },
+    "market.beta": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beta"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bèta"
+          }
+        }
+      }
+    },
+    "market.buy": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Buy"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Koop"
+          }
+        }
+      }
+    },
+    "market.dayHigh": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Day high"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dagmaximum"
+          }
+        }
+      }
+    },
+    "market.dayLow": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Day low"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dagminimum"
+          }
+        }
+      }
+    },
+    "market.divYield": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dividend yield"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dividendrendement"
+          }
+        }
+      }
+    },
+    "market.eps": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "EPS (TTM)"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "WPA (TTM)"
+          }
+        }
+      }
+    },
+    "market.forwardPE": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Forward P/E"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Forward K/W"
+          }
+        }
+      }
+    },
+    "market.fundamentals": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fundamentals"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fundamentals"
+          }
+        }
+      }
+    },
+    "market.hold": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hold"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Houd"
+          }
+        }
+      }
+    },
+    "market.latestNews": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Latest news"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Laatste nieuws"
+          }
+        }
+      }
+    },
+    "market.marketCap": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Market cap"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Marktkapitalisatie"
+          }
+        }
+      }
+    },
+    "market.noChartData": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No chart data available"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geen grafiekdata beschikbaar"
+          }
+        }
+      }
+    },
+    "market.noNews": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No recent news for this symbol. Headlines appear when a provider covers it."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geen recent nieuws voor dit symbool. Koppen verschijnen zodra een aanbieder erover bericht."
+          }
+        }
+      }
+    },
+    "market.noQuote": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No quote data available for {symbol}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geen koersdata beschikbaar voor {symbol}"
+          }
+        }
+      }
+    },
+    "market.open": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open"
+          }
+        }
+      }
+    },
+    "market.pe": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "P/E ratio (TTM)"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "K/W-verhouding (TTM)"
+          }
+        }
+      }
+    },
+    "market.prevClose": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Previous close"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vorige slotkoers"
+          }
+        }
+      }
+    },
+    "market.priceBook": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Price to book"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Koers tegenover boekwaarde"
+          }
+        }
+      }
+    },
+    "market.priceChart": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Price chart"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Koersgrafiek"
+          }
+        }
+      }
+    },
+    "market.recentActions": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recent actions"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recente acties"
+          }
+        }
+      }
+    },
+    "market.searchHint": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Look up any stock, ETF, index, or crypto by name or ticker symbol to see live pricing, charts, and key metrics."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zoek een aandeel, ETF, index of crypto op naam of tickersymbool voor live koersen, grafieken en kerngegevens."
+          }
+        }
+      }
+    },
+    "market.searchPlaceholder": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search ticker, company, ETF, index…"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zoek ticker, bedrijf, ETF, index…"
+          }
+        }
+      }
+    },
+    "market.searchTicker": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search for a ticker"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zoek een ticker"
+          }
+        }
+      }
+    },
+    "market.sell": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sell"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verkoop"
+          }
+        }
+      }
+    },
+    "market.strongBuy": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Strong buy"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sterke koop"
+          }
+        }
+      }
+    },
+    "market.strongSell": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Strong sell"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sterke verkoop"
+          }
+        }
+      }
+    },
+    "market.tradingInfo": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trading info"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Handelsinfo"
+          }
+        }
+      }
+    },
+    "market.volume": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volume"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volume"
+          }
+        }
+      }
+    },
+    "marketLookup.menu": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "More actions"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meer acties"
+          }
+        }
+      }
+    },
+    "marketLookup.title": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Market lookup"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Marktopzoeker"
           }
         }
       }
@@ -46837,6 +48061,3642 @@
         }
       }
     },
+    "research.analyst.none": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No analyst coverage available"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geen analistendekking beschikbaar"
+          }
+        }
+      }
+    },
+    "research.analyst.targetHigh": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Target high"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Koersdoel hoog"
+          }
+        }
+      }
+    },
+    "research.analyst.targetLow": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Target low"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Koersdoel laag"
+          }
+        }
+      }
+    },
+    "research.analyst.targetMean": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Target mean"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Koersdoel gemiddeld"
+          }
+        }
+      }
+    },
+    "research.builder.range": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Range"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Periode"
+          }
+        }
+      }
+    },
+    "research.compare.addPlaceholder": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add a symbol to compare…"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voeg een symbool toe om te vergelijken…"
+          }
+        }
+      }
+    },
+    "research.compare.correlation": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Correlation matrix"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Correlatiematrix"
+          }
+        }
+      }
+    },
+    "research.compare.correlationHint": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pearson correlation of daily returns, aligned on shared trading days. 1.00 = move together, -1.00 = move opposite."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pearson-correlatie van dagrendementen, uitgelijnd op gedeelde handelsdagen. 1,00 = bewegen samen, -1,00 = bewegen tegengesteld."
+          }
+        }
+      }
+    },
+    "research.compare.empty": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No symbols added yet"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nog geen symbolen toegevoegd"
+          }
+        }
+      }
+    },
+    "research.compare.fundamentalsHint": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Side-by-side fundamentals for the selected symbols. Click a metric to sort by it."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fundamentals van de geselecteerde symbolen naast elkaar. Klik op een kerncijfer om erop te sorteren."
+          }
+        }
+      }
+    },
+    "research.compare.historyHint": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Metrics use each symbol's available history within the selected range. Different start dates can affect comparisons."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "De kengetallen gebruiken de beschikbare historie per symbool binnen de gekozen periode. Verschillende begindatums kunnen de vergelijking beïnvloeden."
+          }
+        }
+      }
+    },
+    "research.compare.historyRange": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Data: {from} - {to}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gegevens: {from} - {to}"
+          }
+        }
+      }
+    },
+    "research.compare.maxDrawdown": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Max drawdown"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Max. drawdown"
+          }
+        }
+      }
+    },
+    "research.compare.metrics": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Metrics"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Statistieken"
+          }
+        }
+      }
+    },
+    "research.compare.rebased": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rebased to 100"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Herschaald naar 100"
+          }
+        }
+      }
+    },
+    "research.compare.rebasedHint": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Each series starts at 100 at its first available price. A value of 110 means a 10% increase."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elke reeks begint op 100 bij de eerste beschikbare prijs. Een waarde van 110 betekent een stijging van 10%."
+          }
+        }
+      }
+    },
+    "research.compare.removeSymbol": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove {symbol}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{symbol} verwijderen"
+          }
+        }
+      }
+    },
+    "research.compare.return": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Return"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rendement"
+          }
+        }
+      }
+    },
+    "research.compare.selected": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selected symbols"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geselecteerde symbolen"
+          }
+        }
+      }
+    },
+    "research.compare.sortBy": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sort by {metric}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sorteren op {metric}"
+          }
+        }
+      }
+    },
+    "research.compare.startHint": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search for two or more securities to overlay their rebased price and compare performance."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zoek twee of meer effecten om hun herschaalde koers over elkaar te leggen en prestaties te vergelijken."
+          }
+        }
+      }
+    },
+    "research.compare.startTitle": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add symbols to compare"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voeg symbolen toe om te vergelijken"
+          }
+        }
+      }
+    },
+    "research.compare.subtitle": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Overlay symbols rebased to 100 and compare return, volatility and drawdown."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leg symbolen over elkaar, herschaald naar 100, en vergelijk rendement, volatiliteit en drawdown."
+          }
+        }
+      }
+    },
+    "research.compare.symbol": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Symbol"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Symbool"
+          }
+        }
+      }
+    },
+    "research.compare.tabFundamentals": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fundamentals"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fundamentals"
+          }
+        }
+      }
+    },
+    "research.compare.tabPerformance": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Performance"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prestaties"
+          }
+        }
+      }
+    },
+    "research.compare.title": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compare"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vergelijken"
+          }
+        }
+      }
+    },
+    "research.compare.volatility": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volatility (ann.)"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volatiliteit (jaarl.)"
+          }
+        }
+      }
+    },
+    "research.details": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Details"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Details"
+          }
+        }
+      }
+    },
+    "research.fundamentals.groupCashGrowth": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cash flow & growth"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kasstroom & groei"
+          }
+        }
+      }
+    },
+    "research.fundamentals.groupDividendSize": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dividend & size"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dividend & omvang"
+          }
+        }
+      }
+    },
+    "research.fundamentals.groupLeverage": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leverage & liquidity"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hefboom & liquiditeit"
+          }
+        }
+      }
+    },
+    "research.fundamentals.groupProfitability": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Profitability"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Winstgevendheid"
+          }
+        }
+      }
+    },
+    "research.fundamentals.groupValuation": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Valuation"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waardering"
+          }
+        }
+      }
+    },
+    "research.fundamentals.none": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No fundamentals available"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geen fundamentals beschikbaar"
+          }
+        }
+      }
+    },
+    "research.fundamentals.profitMargin": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Profit margin"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Winstmarge"
+          }
+        }
+      }
+    },
+    "research.fundamentals.revenue": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Revenue"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Omzet"
+          }
+        }
+      }
+    },
+    "research.fundamentals.roe": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Return on equity"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rendement op eigen vermogen"
+          }
+        }
+      }
+    },
+    "research.mapping.audit": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Audit"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Controleren"
+          }
+        }
+      }
+    },
+    "research.mapping.auditClean": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No discrepancies. Providers agree."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geen verschillen. Providers komen overeen."
+          }
+        }
+      }
+    },
+    "research.mapping.button": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Provider mapping"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Providerkoppeling"
+          }
+        }
+      }
+    },
+    "research.mapping.confirm": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Confirm {n}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bevestig {n}"
+          }
+        }
+      }
+    },
+    "research.mapping.currencyMismatch": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Currency mismatch across providers"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Valuta verschilt tussen providers"
+          }
+        }
+      }
+    },
+    "research.mapping.desc": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Confirm which symbol on each provider backs {name}. Check the resolved name, exchange and currency to catch ticker collisions."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bevestig welk symbool bij elke provider hoort bij {name}. Controleer de naam, beurs en valuta om verwarring tussen tickers te voorkomen."
+          }
+        }
+      }
+    },
+    "research.mapping.discrepancies": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Discrepancies found"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verschillen gevonden"
+          }
+        }
+      }
+    },
+    "research.mapping.existing": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saved mappings"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opgeslagen koppelingen"
+          }
+        }
+      }
+    },
+    "research.mapping.fromHolding": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "From holding"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uit bezit"
+          }
+        }
+      }
+    },
+    "research.mapping.noExisting": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No saved mappings yet"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nog geen opgeslagen koppelingen"
+          }
+        }
+      }
+    },
+    "research.mapping.noProposals": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No proposals. No keyed provider returned a match."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geen voorstellen. Geen provider met sleutel gaf een match."
+          }
+        }
+      }
+    },
+    "research.mapping.priceOutlier": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Price outlier (>5% from median)"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prijsuitschieter (>5% van mediaan)"
+          }
+        }
+      }
+    },
+    "research.mapping.proposals": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Proposed mappings"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voorgestelde koppelingen"
+          }
+        }
+      }
+    },
+    "research.mapping.remove": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove mapping"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Koppeling verwijderen"
+          }
+        }
+      }
+    },
+    "research.mapping.removeDesc": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove the {provider} mapping to {symbol}? Prices for this asset will stop resolving through {provider} until you map it again."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "De koppeling van {provider} naar {symbol} verwijderen? Prijzen voor dit instrument worden niet meer via {provider} opgehaald totdat je opnieuw koppelt."
+          }
+        }
+      }
+    },
+    "research.mapping.removed": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mapping removed"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Koppeling verwijderd"
+          }
+        }
+      }
+    },
+    "research.mapping.reresolve": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Re-resolve"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opnieuw bepalen"
+          }
+        }
+      }
+    },
+    "research.mapping.resolveError": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not resolve provider symbols. Try again."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Providersymbolen konden niet worden bepaald. Probeer opnieuw."
+          }
+        }
+      }
+    },
+    "research.mapping.rowMenu": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Actions for {provider} mapping"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Acties voor {provider}-koppeling"
+          }
+        }
+      }
+    },
+    "research.mapping.saveError": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't save mappings"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kon toewijzingen niet opslaan"
+          }
+        }
+      }
+    },
+    "research.mapping.saved": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mappings saved"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Koppelingen opgeslagen"
+          }
+        }
+      }
+    },
+    "research.mapping.status.auto": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Proposed"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voorgesteld"
+          }
+        }
+      }
+    },
+    "research.mapping.status.confirmed": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Confirmed"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bevestigd"
+          }
+        }
+      }
+    },
+    "research.mapping.status.error": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Error"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fout"
+          }
+        }
+      }
+    },
+    "research.mapping.status.none": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No match"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geen match"
+          }
+        }
+      }
+    },
+    "research.mapping.status.skipped": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skipped"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Overgeslagen"
+          }
+        }
+      }
+    },
+    "research.mapping.status.unavailable": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unavailable"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Niet beschikbaar"
+          }
+        }
+      }
+    },
+    "research.mapping.title": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Provider symbol mapping"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Symboolkoppeling per provider"
+          }
+        }
+      }
+    },
+    "research.mapping.verified": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verified"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geverifieerd"
+          }
+        }
+      }
+    },
+    "research.marketSnapshot": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Market snapshot"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Marktoverzicht"
+          }
+        }
+      }
+    },
+    "research.markets.empty": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No names tracked for this region in this sector yet"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nog geen namen voor deze regio in deze sector"
+          }
+        }
+      }
+    },
+    "research.markets.held": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In your portfolio"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In je portefeuille"
+          }
+        }
+      }
+    },
+    "research.markets.indices": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Indices"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Indexen"
+          }
+        }
+      }
+    },
+    "research.markets.region.asia": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "China / Asia"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "China / Azië"
+          }
+        }
+      }
+    },
+    "research.markets.region.europe": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Europe"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Europa"
+          }
+        }
+      }
+    },
+    "research.markets.region.japan": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Japan"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Japan"
+          }
+        }
+      }
+    },
+    "research.markets.region.latam": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Latin America"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Latijns-Amerika"
+          }
+        }
+      }
+    },
+    "research.markets.region.usa": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "USA"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "VS"
+          }
+        }
+      }
+    },
+    "research.markets.region.worldwide": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Worldwide"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wereldwijd"
+          }
+        }
+      }
+    },
+    "research.markets.regions": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Regions"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Regio's"
+          }
+        }
+      }
+    },
+    "research.markets.sector.ai": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AI"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AI"
+          }
+        }
+      }
+    },
+    "research.markets.sector.airlines": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Airlines"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Luchtvaart"
+          }
+        }
+      }
+    },
+    "research.markets.sector.automotive": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automotive"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automotive"
+          }
+        }
+      }
+    },
+    "research.markets.sector.consumer": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Consumer"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Consument"
+          }
+        }
+      }
+    },
+    "research.markets.sector.crypto": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crypto"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crypto"
+          }
+        }
+      }
+    },
+    "research.markets.sector.defense": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Defense"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Defensie"
+          }
+        }
+      }
+    },
+    "research.markets.sector.energy": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Energy"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Energie"
+          }
+        }
+      }
+    },
+    "research.markets.sector.financials": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Financials"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Financiële sector"
+          }
+        }
+      }
+    },
+    "research.markets.sector.healthcare": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Healthcare"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gezondheidszorg"
+          }
+        }
+      }
+    },
+    "research.markets.sector.industrials": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Industrials"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Industrie"
+          }
+        }
+      }
+    },
+    "research.markets.sector.overview": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Overview"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Overzicht"
+          }
+        }
+      }
+    },
+    "research.markets.sector.payments": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Payments"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Betalingen"
+          }
+        }
+      }
+    },
+    "research.markets.sector.quantum": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quantum"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quantum"
+          }
+        }
+      }
+    },
+    "research.markets.sector.realEstate": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Real estate"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vastgoed"
+          }
+        }
+      }
+    },
+    "research.markets.sector.semiconductors": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Semiconductors"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Halfgeleiders"
+          }
+        }
+      }
+    },
+    "research.markets.sector.software": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Software"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Software"
+          }
+        }
+      }
+    },
+    "research.markets.sector.space": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Space"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ruimtevaart"
+          }
+        }
+      }
+    },
+    "research.markets.sector.telecom": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Telecom"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Telecom"
+          }
+        }
+      }
+    },
+    "research.markets.sector.utilities": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Utilities"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nutsbedrijven"
+          }
+        }
+      }
+    },
+    "research.markets.sectors": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sectors"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sectoren"
+          }
+        }
+      }
+    },
+    "research.markets.stocks": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Top stocks"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Topaandelen"
+          }
+        }
+      }
+    },
+    "research.markets.subtitle": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "How regions and sectors are moving today."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hoe regio's en sectoren vandaag bewegen."
+          }
+        }
+      }
+    },
+    "research.markets.title": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Markets"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Markten"
+          }
+        }
+      }
+    },
+    "research.metric.currentRatio": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Current ratio"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Current ratio"
+          }
+        }
+      }
+    },
+    "research.metric.debtToEquity": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Debt to equity"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schuld tegenover eigen vermogen"
+          }
+        }
+      }
+    },
+    "research.metric.dividendYield": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dividend yield"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dividendrendement"
+          }
+        }
+      }
+    },
+    "research.metric.earningsGrowth": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Earnings growth"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Winstgroei"
+          }
+        }
+      }
+    },
+    "research.metric.fcfYield": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "FCF yield"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "FCF-rendement"
+          }
+        }
+      }
+    },
+    "research.metric.forwardPE": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Forward P/E"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verwachte K/W"
+          }
+        }
+      }
+    },
+    "research.metric.freeCashFlow": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Free cash flow"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vrije kasstroom"
+          }
+        }
+      }
+    },
+    "research.metric.grossMargin": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gross margin"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Brutomarge"
+          }
+        }
+      }
+    },
+    "research.metric.interestCoverage": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Interest coverage"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rentedekking"
+          }
+        }
+      }
+    },
+    "research.metric.operatingMargin": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Operating margin"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Operationele marge"
+          }
+        }
+      }
+    },
+    "research.metric.payoutRatio": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Payout ratio"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uitkeringsratio"
+          }
+        }
+      }
+    },
+    "research.metric.pe": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "P/E"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "K/W"
+          }
+        }
+      }
+    },
+    "research.metric.pegRatio": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PEG ratio"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PEG-ratio"
+          }
+        }
+      }
+    },
+    "research.metric.priceToBook": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Price to book"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Koers tegenover boekwaarde"
+          }
+        }
+      }
+    },
+    "research.metric.profitMargin": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Net margin"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nettomarge"
+          }
+        }
+      }
+    },
+    "research.metric.quickRatio": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quick ratio"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quick ratio"
+          }
+        }
+      }
+    },
+    "research.metric.returnOnEquity": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Return on equity"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rendement op eigen vermogen"
+          }
+        }
+      }
+    },
+    "research.metric.revenueGrowth": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Revenue growth"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Omzetgroei"
+          }
+        }
+      }
+    },
+    "research.noResults": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No results found"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geen resultaten gevonden"
+          }
+        }
+      }
+    },
+    "research.range.1d": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1d"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 d"
+          }
+        }
+      }
+    },
+    "research.range.1mo": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1m"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 mnd"
+          }
+        }
+      }
+    },
+    "research.range.1y": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1y"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 j"
+          }
+        }
+      }
+    },
+    "research.range.3mo": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "3m"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "3 mnd"
+          }
+        }
+      }
+    },
+    "research.range.5d": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "5d"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "5 d"
+          }
+        }
+      }
+    },
+    "research.range.5y": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "5y"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "5 j"
+          }
+        }
+      }
+    },
+    "research.range.6mo": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "6m"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "6 mnd"
+          }
+        }
+      }
+    },
+    "research.range.max": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Max"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Max"
+          }
+        }
+      }
+    },
+    "research.scorecard.allClear": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No fundamental concerns flagged."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geen fundamentele zorgen gemarkeerd."
+          }
+        }
+      }
+    },
+    "research.scorecard.benchmark": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Target {value}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Doel {value}"
+          }
+        }
+      }
+    },
+    "research.scorecard.evaluated": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count} metrics checked"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count} maatstaven gecontroleerd"
+          }
+        }
+      }
+    },
+    "research.scorecard.grade.healthy": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Healthy"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gezond"
+          }
+        }
+      }
+    },
+    "research.scorecard.grade.mixed": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mixed"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gemengd"
+          }
+        }
+      }
+    },
+    "research.scorecard.grade.poor": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Poor"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slecht"
+          }
+        }
+      }
+    },
+    "research.scorecard.grade.strong": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Strong"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sterk"
+          }
+        }
+      }
+    },
+    "research.scorecard.grade.unknown": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "--"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "--"
+          }
+        }
+      }
+    },
+    "research.scorecard.grade.weak": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Weak"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zwak"
+          }
+        }
+      }
+    },
+    "research.scorecard.health": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Health"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gezondheid"
+          }
+        }
+      }
+    },
+    "research.scorecard.noData": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not enough fundamentals to score."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Onvoldoende fundamentals om te scoren."
+          }
+        }
+      }
+    },
+    "research.scorecard.reason.currentRatio.deficit": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Current liabilities exceed current assets, a short-term liquidity risk"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kortlopende schulden overtreffen vlottende activa, een kortetermijnliquiditeitsrisico"
+          }
+        }
+      }
+    },
+    "research.scorecard.reason.currentRatio.ok": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adequate short-term liquidity"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toereikende kortetermijnliquiditeit"
+          }
+        }
+      }
+    },
+    "research.scorecard.reason.currentRatio.thin": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thin short-term liquidity cushion"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Krappe kortetermijnliquiditeitsbuffer"
+          }
+        }
+      }
+    },
+    "research.scorecard.reason.debtToEquity.elevated": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elevated leverage"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verhoogde schuldgraad"
+          }
+        }
+      }
+    },
+    "research.scorecard.reason.debtToEquity.high": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "High leverage: debt is more than double equity"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hoge schuldgraad: schuld is meer dan het dubbele van het eigen vermogen"
+          }
+        }
+      }
+    },
+    "research.scorecard.reason.debtToEquity.negativeEquity": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Negative shareholder equity"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Negatief eigen vermogen"
+          }
+        }
+      }
+    },
+    "research.scorecard.reason.debtToEquity.ok": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leverage within a conservative range"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schuldgraad binnen een behoudende marge"
+          }
+        }
+      }
+    },
+    "research.scorecard.reason.dividendYield.ok": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dividend yield in a normal range"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dividendrendement in een normaal bereik"
+          }
+        }
+      }
+    },
+    "research.scorecard.reason.dividendYield.yieldTrap": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unusually high yield can signal a yield trap"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ongewoon hoog dividendrendement kan op een yield trap wijzen"
+          }
+        }
+      }
+    },
+    "research.scorecard.reason.earningsGrowth.declining": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Earnings are declining year-over-year"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Winst daalt jaar-op-jaar"
+          }
+        }
+      }
+    },
+    "research.scorecard.reason.earningsGrowth.ok": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Earnings are growing"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Winst groeit"
+          }
+        }
+      }
+    },
+    "research.scorecard.reason.fcfYield.low": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Low free-cash-flow yield relative to price"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Laag rendement op vrije kasstroom ten opzichte van de koers"
+          }
+        }
+      }
+    },
+    "research.scorecard.reason.fcfYield.negative": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Negative free-cash-flow yield"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Negatief rendement op vrije kasstroom"
+          }
+        }
+      }
+    },
+    "research.scorecard.reason.fcfYield.ok": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Attractive free-cash-flow yield"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aantrekkelijk rendement op vrije kasstroom"
+          }
+        }
+      }
+    },
+    "research.scorecard.reason.freeCashFlow.negative": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Negative free cash flow, so the company is burning cash"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Negatieve vrije kasstroom, dus het bedrijf verbrandt cash"
+          }
+        }
+      }
+    },
+    "research.scorecard.reason.freeCashFlow.ok": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Generates positive free cash flow"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Genereert positieve vrije kasstroom"
+          }
+        }
+      }
+    },
+    "research.scorecard.reason.grossMargin.ok": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solid gross margin"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solide brutomarge"
+          }
+        }
+      }
+    },
+    "research.scorecard.reason.grossMargin.thin": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thin gross margin leaves little room for opex"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Krappe brutomarge laat weinig ruimte voor bedrijfskosten"
+          }
+        }
+      }
+    },
+    "research.scorecard.reason.interestCoverage.modest": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modest interest coverage"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bescheiden rentedekking"
+          }
+        }
+      }
+    },
+    "research.scorecard.reason.interestCoverage.ok": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comfortable interest coverage"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comfortabele rentedekking"
+          }
+        }
+      }
+    },
+    "research.scorecard.reason.interestCoverage.thin": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Operating income barely covers interest expense"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bedrijfsresultaat dekt nauwelijks de rentelasten"
+          }
+        }
+      }
+    },
+    "research.scorecard.reason.operatingMargin.lossmaking": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Core operations are loss-making"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kernactiviteiten zijn verlieslatend"
+          }
+        }
+      }
+    },
+    "research.scorecard.reason.operatingMargin.ok": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Operations are profitable"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activiteiten zijn winstgevend"
+          }
+        }
+      }
+    },
+    "research.scorecard.reason.payoutRatio.high": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "High payout ratio leaves little earnings retained"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hoge uitkeringsratio laat weinig winst over om in te houden"
+          }
+        }
+      }
+    },
+    "research.scorecard.reason.payoutRatio.ok": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dividend comfortably covered by earnings"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dividend ruim gedekt door de winst"
+          }
+        }
+      }
+    },
+    "research.scorecard.reason.payoutRatio.unsustainable": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The dividend exceeds earnings, so the payout may be unsustainable"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Het dividend overtreft de winst, dus de uitkering is mogelijk onhoudbaar"
+          }
+        }
+      }
+    },
+    "research.scorecard.reason.pe.noEarnings": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No trailing earnings to value against (negative P/E)"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geen lopende winst om tegen te waarderen (negatieve k/w)"
+          }
+        }
+      }
+    },
+    "research.scorecard.reason.pe.ok": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Earnings multiple in a reasonable range"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Koers-winstverhouding in een redelijk bereik"
+          }
+        }
+      }
+    },
+    "research.scorecard.reason.pe.rich": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rich earnings multiple"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rijke koers-winstverhouding"
+          }
+        }
+      }
+    },
+    "research.scorecard.reason.pe.veryHigh": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Very high earnings multiple"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zeer hoge koers-winstverhouding"
+          }
+        }
+      }
+    },
+    "research.scorecard.reason.pegRatio.expensive": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Price looks expensive relative to growth"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Koers oogt duur ten opzichte van de groei"
+          }
+        }
+      }
+    },
+    "research.scorecard.reason.pegRatio.notMeaningful": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PEG not meaningful (non-positive)"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PEG niet betekenisvol (niet-positief)"
+          }
+        }
+      }
+    },
+    "research.scorecard.reason.pegRatio.ok": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Price reasonable relative to growth"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Koers redelijk ten opzichte van de groei"
+          }
+        }
+      }
+    },
+    "research.scorecard.reason.pegRatio.rich": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Price somewhat rich relative to growth"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Koers enigszins rijk ten opzichte van de groei"
+          }
+        }
+      }
+    },
+    "research.scorecard.reason.priceToBook.ok": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Price-to-book within a normal range"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Koers-boekwaarde binnen een normaal bereik"
+          }
+        }
+      }
+    },
+    "research.scorecard.reason.priceToBook.premium": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trading at a steep premium to book value"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verhandeld tegen een forse premie op de boekwaarde"
+          }
+        }
+      }
+    },
+    "research.scorecard.reason.profitMargin.ok": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Healthy net margin"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gezonde nettomarge"
+          }
+        }
+      }
+    },
+    "research.scorecard.reason.profitMargin.slim": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slim net margin"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Krappe nettomarge"
+          }
+        }
+      }
+    },
+    "research.scorecard.reason.profitMargin.unprofitable": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Company is unprofitable on a net basis"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bedrijf is netto verlieslatend"
+          }
+        }
+      }
+    },
+    "research.scorecard.reason.quickRatio.ok": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Liquid assets cover current liabilities"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Liquide activa dekken de kortlopende schulden"
+          }
+        }
+      }
+    },
+    "research.scorecard.reason.quickRatio.uncovered": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Liquid assets alone do not cover current liabilities"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Liquide activa dekken op zichzelf de kortlopende schulden niet"
+          }
+        }
+      }
+    },
+    "research.scorecard.reason.returnOnEquity.low": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Low return on equity"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Laag rendement op eigen vermogen"
+          }
+        }
+      }
+    },
+    "research.scorecard.reason.returnOnEquity.negative": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Negative return on equity"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Negatief rendement op eigen vermogen"
+          }
+        }
+      }
+    },
+    "research.scorecard.reason.returnOnEquity.ok": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Strong return on equity"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sterk rendement op eigen vermogen"
+          }
+        }
+      }
+    },
+    "research.scorecard.reason.revenueGrowth.ok": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Revenue is growing"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Omzet groeit"
+          }
+        }
+      }
+    },
+    "research.scorecard.reason.revenueGrowth.shrinking": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Revenue is shrinking year-over-year"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Omzet krimpt jaar-op-jaar"
+          }
+        }
+      }
+    },
+    "research.scorecard.reason.revenueGrowth.sluggish": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sluggish revenue growth"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trage omzetgroei"
+          }
+        }
+      }
+    },
+    "research.scorecard.severity.caution": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "caution"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "let op"
+          }
+        }
+      }
+    },
+    "research.scorecard.severity.risk": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "risk"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "risico"
+          }
+        }
+      }
+    },
+    "research.scorecard.severity.warn": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "warning"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "waarschuwing"
+          }
+        }
+      }
+    },
+    "research.scorecard.title": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Health scorecard"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gezondheidsscorekaart"
+          }
+        }
+      }
+    },
+    "research.searchFailed": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search is unavailable. Try again shortly."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zoeken is niet beschikbaar. Probeer het zo opnieuw."
+          }
+        }
+      }
+    },
+    "research.searchPlaceholder": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search any stock, ETF, index or crypto…"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zoek een aandeel, ETF, index of crypto…"
+          }
+        }
+      }
+    },
+    "research.source.cache": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cached"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gecachet"
+          }
+        }
+      }
+    },
+    "research.source.live": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Live"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Live"
+          }
+        }
+      }
+    },
+    "research.subtitle": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Look into any security: quotes, charts, fundamentals, analyst views and news."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Onderzoek elk effect: koersen, grafieken, fundamentals, analistenmeningen en nieuws."
+          }
+        }
+      }
+    },
+    "research.title": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Research"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Onderzoek"
+          }
+        }
+      }
+    },
+    "research.unavailable": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Live data unavailable"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Live gegevens niet beschikbaar"
+          }
+        }
+      }
+    },
+    "research.unavailableProvider": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No provider could serve this request ({provider})."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geen provider kon dit verzoek bedienen ({provider})."
+          }
+        }
+      }
+    },
+    "research.viewAll": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "View all"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alles bekijken"
+          }
+        }
+      }
+    },
+    "research.watchlistEmpty": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your watchlist is empty."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Je volglijst is leeg."
+          }
+        }
+      }
+    },
+    "research.watchlistEmptyCta": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Go to watchlist"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Naar volglijst"
+          }
+        }
+      }
+    },
+    "research.watchlistPreview": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "From your watchlist"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uit je volglijst"
+          }
+        }
+      }
+    },
     "savings.deleteAccount": {
       "comment": "Generated from i18n/source by scripts/native-strings.ts.",
       "extractionState": "manual",
@@ -64653,6 +69513,564 @@
           "stringUnit": {
             "state": "translated",
             "value": "Dit veld is verplicht"
+          }
+        }
+      }
+    },
+    "watchlist.aboveTarget": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "above target"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "boven doel"
+          }
+        }
+      }
+    },
+    "watchlist.addButton": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add to watchlist"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toevoegen aan volglijst"
+          }
+        }
+      }
+    },
+    "watchlist.atTarget": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "At or below your target price"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Op of onder je doelkoers"
+          }
+        }
+      }
+    },
+    "watchlist.atTargetShort": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "At target"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Op doelprijs"
+          }
+        }
+      }
+    },
+    "watchlist.empty": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No prospective investments yet.\nAdd stocks, ETFs, or crypto you're watching."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nog geen potentiële beleggingen.\nVoeg aandelen, ETF's of crypto toe die je volgt."
+          }
+        }
+      }
+    },
+    "watchlist.openChart": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open chart"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Grafiek openen"
+          }
+        }
+      }
+    },
+    "watchlist.openLookup": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open in Market lookup"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Openen in Marktopzoeker"
+          }
+        }
+      }
+    },
+    "watchlist.quoteUnavailable": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quote unavailable"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Koers niet beschikbaar"
+          }
+        }
+      }
+    },
+    "watchlist.quotesOffline": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Live quotes unavailable. Showing target prices only."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Live koersen niet beschikbaar. Alleen doelkoersen worden getoond."
+          }
+        }
+      }
+    },
+    "watchlist.removeConfirm": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verwijderen"
+          }
+        }
+      }
+    },
+    "watchlist.removeDesc": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove {name} from your watchlist? Its notes and target price are deleted with it and cannot be recovered."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{name} uit je volglijst verwijderen? De notities en doelkoers worden mee verwijderd en zijn niet meer terug te halen."
+          }
+        }
+      }
+    },
+    "watchlist.removeTitle": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove from watchlist"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verwijderen uit volglijst"
+          }
+        }
+      }
+    },
+    "watchlist.removedSuccess": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Removed from watchlist"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verwijderd uit volglijst"
+          }
+        }
+      }
+    },
+    "watchlist.rowMenu": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Actions for {name}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Acties voor {name}"
+          }
+        }
+      }
+    },
+    "watchlist.sinceAdded": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Since added {date}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sinds toegevoegd {date}"
+          }
+        }
+      }
+    },
+    "watchlist.subtitle": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Track prospective investments with target buy prices"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volg potentiële beleggingen met doelkoersen"
+          }
+        }
+      }
+    },
+    "watchlist.targetPrice": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Target price"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Doelkoers"
+          }
+        }
+      }
+    },
+    "watchlist.targetUpdated": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Target price updated"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Doelkoers bijgewerkt"
+          }
+        }
+      }
+    },
+    "watchlist.title": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Watchlist"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volglijst"
+          }
+        }
+      }
+    },
+    "watchlist.updateFailed": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't update the target price"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kon de doelkoers niet bijwerken"
+          }
+        }
+      }
+    },
+    "watchlistChart.aboveTarget": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "above target"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "boven doel"
+          }
+        }
+      }
+    },
+    "watchlistChart.atTarget": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "At or below your target price"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Op of onder je doelkoers"
+          }
+        }
+      }
+    },
+    "watchlistChart.belowTarget": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "below target"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "onder doel"
+          }
+        }
+      }
+    },
+    "watchlistChart.cancelEdit": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Annuleren"
+          }
+        }
+      }
+    },
+    "watchlistChart.currentPrice": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Current price"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Huidige koers"
+          }
+        }
+      }
+    },
+    "watchlistChart.invalidTarget": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Target price must be a number greater than 0."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Doelkoers moet een getal groter dan 0 zijn."
+          }
+        }
+      }
+    },
+    "watchlistChart.noData": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No chart data available"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geen grafiekdata beschikbaar"
+          }
+        }
+      }
+    },
+    "watchlistChart.notes": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Notes"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Notities"
+          }
+        }
+      }
+    },
+    "watchlistChart.priceLabel": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Price"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Koers"
+          }
+        }
+      }
+    },
+    "watchlistChart.targetLabel": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Target: {currency}{price}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Doel: {currency}{price}"
+          }
+        }
+      }
+    },
+    "watchlistChart.targetPrice": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Target price"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Doelkoers"
           }
         }
       }

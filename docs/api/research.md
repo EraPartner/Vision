@@ -2,8 +2,8 @@
 title: Research API
 type: endpoint
 status: active
-date: 2026-10-08
-updated: 2026-10-08
+date: 2026-10-13
+updated: 2026-10-13
 tags:
   - api
   - research
@@ -25,7 +25,7 @@ tags:
   - dbnomics
   - eurostat
   - provider-pinned
-description: Provider-agnostic research API surface (ADR-079 + ADR-081 + ADR-082). Eighteen endpoints under /api/research — eight GET/POST data and analytics endpoints (search/quote/chart/fundamentals/analyst/news/scorecard/portfolio-forecast), two macro endpoints (macro/search and macro/series — provider-pinned, ADR-082), five symbol-mapping endpoints, and three provider-key Settings endpoints. All five equity provider adapters (Yahoo + Twelve Data, Finnhub, FMP, Alpha Vantage) plus three macro adapters (FRED keyed, Eurostat and DBnomics keyless) are implemented.
+description: Provider-agnostic research API surface (ADR-079 + ADR-081 + ADR-082). Nineteen endpoints under /api/research — eight GET/POST data and analytics endpoints (search/quote/chart/fundamentals/analyst/news/scorecard/portfolio-forecast), two macro endpoints (macro/search and macro/series — provider-pinned, ADR-082), five symbol-mapping endpoints, and three provider-key Settings endpoints. One stateless presentation endpoint computes submitted Compare/chart/watchlist/quote/analyst/market-add data without another provider request. All five equity provider adapters (Yahoo + Twelve Data, Finnhub, FMP, Alpha Vantage) plus three macro adapters (FRED keyed, Eurostat and DBnomics keyless) are implemented.
 aliases:
   - research-api
   - research-endpoints
@@ -50,7 +50,7 @@ related_code:
 
 # Research API
 
-Provider-agnostic market research surface introduced in [[docs/adr/079-multi-provider-research-aggregation|ADR-079]], deepened in [[docs/adr/081-research-analytics-forecasting|ADR-081]], and extended with a macroeconomic data vertical in [[docs/adr/082-macroeconomic-indicators-data-vertical|ADR-082]]. Eighteen endpoints under `/api/research`: six GET data endpoints delegate to the **research aggregation layer** (capability map → quota governor → cache → race-to-first provider, except `fundamentals` which uses a parallel merge — see below); two analytics endpoints (`scorecard`, `portfolio-forecast`) compute derived outputs from aggregated data; **two macro endpoints** (`macro/search`, `macro/series`) route to provider-pinned macro adapters (never raced — see [Macro Endpoints](#macro-endpoints-adr-082) below); five symbol-mapping endpoints manage cross-provider instrument identity; and three provider-key Settings endpoints manage keyed-provider API keys.
+Provider-agnostic market research surface introduced in [[docs/adr/079-multi-provider-research-aggregation|ADR-079]], deepened in [[docs/adr/081-research-analytics-forecasting|ADR-081]], and extended with a macroeconomic data vertical in [[docs/adr/082-macroeconomic-indicators-data-vertical|ADR-082]]. Nineteen endpoints under `/api/research`: six GET data endpoints delegate to the **research aggregation layer** (capability map → quota governor → cache → race-to-first provider, except `fundamentals` which uses a parallel merge — see below); two analytics endpoints (`scorecard`, `portfolio-forecast`) compute derived outputs from aggregated data; **two macro endpoints** (`macro/search`, `macro/series`) route to provider-pinned macro adapters (never raced — see [Macro Endpoints](#macro-endpoints-adr-082) below); five symbol-mapping endpoints manage cross-provider instrument identity; and three provider-key Settings endpoints manage keyed-provider API keys. The additional stateless presentation endpoint computes display data from submitted source values without fetching or persisting.
 
 ## Base URL
 
@@ -97,6 +97,74 @@ them. Quote, fundamentals, analyst, and scorecard responses use explicit
 the HTTP boundary while proposal fields remain camel-case domain fields.
 
 ## Endpoints
+
+---
+
+### POST /api/research/presentation
+
+Operation `computeResearchPresentation` is an additive read-only bridge for the native Research
+screens. It calls the same pure TypeScript helpers as the web pages, using already-fetched values.
+It does not query providers, the database, settings or FX, spend provider quota, persist history,
+or execute SQL/formula text. The existing `marketRateLimiter` applies through the Research router.
+Source currency and provider metadata stay with the original fetched data; this response does not
+invent `meta.provider`/`meta.source` provenance.
+
+Transport is multipart with **one `file` field** containing UTF-8 JSON. Extra text fields, missing
+or repeated files are rejected. The scoped file limit is **64 MiB (67,108,864 bytes)**, allowing
+complete histories above the global JSON-body limit. Histories are never silently truncated.
+Temporary uploads are cleaned up. Success uses the standard envelope with
+`data: { "kind": "...", "result": ... }`; the echoed kind selects the result schema.
+
+| Kind             | Submitted JSON                                                                                                                                        | Result                                                                                                           |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `compare`        | `series: [{symbol, points}]`, at most 6                                                                                                               | `rows`, `stats[{symbol,totalReturn,volatility,maxDrawdown,firstTime?,lastTime?}]`, `correlation{symbols,matrix}` |
+| `chart`          | At most 5 `series[{id,field,type,points}]`, at most 20 `indicators[{id,type,period,seriesId}]`, `rebase`, `oscillator`, nullable `oscillatorSeriesId` | `rows` and `oscillatorRows`, keyed by series/indicator IDs                                                       |
+| `watchlist`      | Nullable `targetPrice`, `currentPrice`, `addedPrice`; optional `points` (default empty)                                                               | `list`, `chart` and nullable `preview`                                                                           |
+| `watchlistBatch` | At most 5000 `entries[{id,targetPrice,currentPrice,addedPrice}]`                                                                                      | `entries[{id,list}]`, preserving submitted order                                                                 |
+| `providerQuote`  | `points`, `investment{name,currency,symbol?,priceProvider?}`, optional nullable `selectedSymbol`                                                      | Synthesized `{symbol,name,price?,change,changePercent,currency,exchange,type}` or null for empty history         |
+| `analyst`        | Nullable `consensus{strongBuy,buy,hold,sell,strongSell}`                                                                                              | `{total,bullFraction,bearFraction,verdictKey,tone,fractions}` or null for missing/zero-count consensus           |
+| `marketAdd`      | Positive numeric `amount?`, `units?`, `price?`; optional `derive` (default true)                                                                      | Existing two-of-three result: optional derived/effective fields, `providedCount`, `isConsistent`                 |
+
+Every request includes `kind`. A point requires numeric `time`; `close`, `high`, `low` and `volume`
+are optional nullable numbers. Inputs are finite JSON numbers, not localized number strings.
+Series/indicator IDs are 1..128 characters, Compare symbols 1..64 characters; chart IDs are unique,
+indicator sources must exist, and periods are integers 1..500. Chart fields are `price`/`volume`,
+types `line`/`area`/`candlestick`/`bar`, indicators `sma`/`ema`/`bollinger`, and oscillators
+`none`/`rsi`/`macd`. Unknown object fields are ignored rather than used as calculation instructions.
+
+Compare retains provider order for rebasing/total return, population log-return volatility scaled
+by 252 trading days, and peak-relative drawdown. Correlation separately sorts valid positive closes
+by timestamp and intersects later-close return timestamps; duplicate timestamps retain the source
+last-value behavior. Diagonals are 1 even for unavailable history, while insufficient/constant
+paired returns produce null. Empty stats omit first/last times.
+
+Chart rows union timestamps in ascending order. Rebasing uses the first valid positive close;
+volume remains unscaled. Candlestick open carries the prior row close through gaps. Indicator
+warmups, population Bollinger bands and raw-close RSI/MACD outputs retain existing source behavior.
+Missing numeric leaves can remain absent; non-finite arithmetic serializes as null as in browser JSON.
+No financial calculation moves to Swift.
+
+Watchlist `list` exposes signed/absolute current-to-target percentages, `isAtOrBelowTarget` and
+nullable `sinceAddedPercent`. `chart` additionally requires a finite positive target, and returns
+`hasValidTarget` plus `[minimum,maximum]` domain using positive closes/target with the source 2%
+padding, falling back to `[0,1]`. `preview` is null unless current and target are positive; otherwise
+it has `absolutePercent` and `direction` (`below`/`above`, equality is `above`). This distinction
+preserves the existing list, chart and Add-dialog conventions. No currency conversion is added.
+
+Analyst verdict keys use the existing 0.60/0.45 bull/bear thresholds and `success`/`destructive`/
+`warning` tones; `fractions` contains each original count divided by total. Market-add derivation
+keeps 4 amount, 8 unit and 6 price decimal-place rounding and the existing 0.01 consistency tolerance.
+Optional uncomputed fields are absent, matching the existing form helper; overflowed derived/effective values serialize as null.
+
+Invalid JSON/shapes/bounds or multipart failures return `400 VALIDATION_ERROR`; the shared market
+rate limit returns 429; unexpected file/calculation failures return 500. The new operation is additive.
+Existing named OpenAPI response corrections align search optional/nullable provider leaves, chart
+point leaves, market collections, paged watchlist and investment history with unchanged runtime
+contracts; generated clients that previously required guaranteed provider values must accept absence.
+
+The shared helpers live under `packages/shared-utils/src/research/`. Frontend compatibility exports
+retain lazy Research loading, and golden fixtures capture the pre-extraction web outputs for
+unsorted/duplicate/gapped/null series, indicator warmups and fiscal preview boundaries.
 
 ---
 

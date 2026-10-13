@@ -3334,9 +3334,391 @@ components:
           properties:
             data: { $ref: "#/components/schemas/PortfolioSummaryData" }
 
+    MarketSearchData:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/MarketSearchResult" }
+
+    MarketQuoteItem:
+      type: object
+      additionalProperties: true
+      required: [symbol, currency]
+      properties:
+        symbol: { type: string }
+        currency: { type: string }
+        name: { type: string, nullable: true }
+        exchange: { type: string, nullable: true }
+        type: { type: string, nullable: true }
+        price: { type: number, nullable: true }
+        change: { type: number, nullable: true }
+        changePercent: { type: number, nullable: true }
+        open: { type: number, nullable: true }
+        dayHigh: { type: number, nullable: true }
+        dayLow: { type: number, nullable: true }
+        prevClose: { type: number, nullable: true }
+        volume: { type: number, nullable: true }
+        avgVolume: { type: number, nullable: true }
+        high52w: { type: number, nullable: true }
+        low52w: { type: number, nullable: true }
+        analystConsensus:
+          {
+            $ref: "#/components/schemas/ResearchAnalystConsensus",
+            nullable: true,
+          }
+        recentAnalystActions:
+          type: array
+          items: { type: object, additionalProperties: true }
+
+    MarketQuoteData:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/MarketQuoteItem" }
+        total: { type: integer, minimum: 0 }
+
+    MarketNewsItem:
+      type: object
+      required: [publishedAt, thumbnail, relatedSymbols]
+      properties:
+        title: { type: string, nullable: true }
+        link: { type: string, nullable: true }
+        publisher: { type: string, nullable: true }
+        publishedAt: { type: number, nullable: true }
+        thumbnail: { type: string, nullable: true }
+        relatedSymbols:
+          type: array
+          items: { type: string }
+
+    MarketNewsData:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/MarketNewsItem" }
+        total: { type: integer, minimum: 0 }
+
+    WatchlistData:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/WatchlistItem" }
+        total: { type: integer, minimum: 0 }
+        limit: { type: integer, minimum: 1 }
+        offset: { type: integer, minimum: 0 }
+
+    InvestmentPriceHistoryPoint:
+      type: object
+      required: [timestampMs, price]
+      properties:
+        timestampMs: { type: number }
+        price: { type: number }
+
+    InvestmentPriceHistoryData:
+      type: object
+      required: [investment_id, provider, points]
+      properties:
+        investment_id: { type: integer, minimum: 1 }
+        provider: { type: string }
+        points:
+          type: array
+          items: { $ref: "#/components/schemas/InvestmentPriceHistoryPoint" }
+
     # Research wire contracts. These are named even where most provider fields
     # are optional so generated clients and the hand-written UI adapters cannot
     # silently drift apart.
+    ResearchPresentationRow:
+      type: object
+      required: [time]
+      description: Timestamp plus submitted-series/indicator identifiers. Missing provider volume fields may be absent; non-finite derived values serialize as null.
+      properties:
+        time: { type: number }
+      additionalProperties: { type: number, nullable: true }
+
+    ResearchPresentationCompareResult:
+      type: object
+      required: [rows, stats, correlation]
+      properties:
+        rows:
+          type: array
+          items: { $ref: "#/components/schemas/ResearchPresentationRow" }
+        stats:
+          type: array
+          items:
+            type: object
+            required: [symbol, totalReturn, volatility, maxDrawdown]
+            properties:
+              symbol: { type: string }
+              totalReturn: { type: number, nullable: true }
+              volatility: { type: number, nullable: true }
+              maxDrawdown: { type: number, nullable: true }
+              firstTime: { type: number }
+              lastTime: { type: number }
+        correlation:
+          type: object
+          required: [symbols, matrix]
+          properties:
+            symbols: { type: array, items: { type: string } }
+            matrix:
+              type: array
+              items:
+                type: array
+                items: { type: number, nullable: true }
+
+    ResearchPresentationChartResult:
+      type: object
+      required: [rows, oscillatorRows]
+      properties:
+        rows:
+          type: array
+          items: { $ref: "#/components/schemas/ResearchPresentationRow" }
+        oscillatorRows:
+          type: array
+          items: { $ref: "#/components/schemas/ResearchPresentationRow" }
+
+    ResearchPresentationWatchlistList:
+      type: object
+      required:
+        [
+          distancePercent,
+          absoluteDistancePercent,
+          isAtOrBelowTarget,
+          sinceAddedPercent,
+        ]
+      properties:
+        distancePercent: { type: number, nullable: true }
+        absoluteDistancePercent: { type: number, nullable: true }
+        isAtOrBelowTarget: { type: boolean }
+        sinceAddedPercent: { type: number, nullable: true }
+
+    ResearchPresentationWatchlistResult:
+      type: object
+      required: [list, chart, preview]
+      properties:
+        list: { $ref: "#/components/schemas/ResearchPresentationWatchlistList" }
+        chart:
+          type: object
+          required:
+            [
+              distancePercent,
+              absoluteDistancePercent,
+              isAtOrBelowTarget,
+              hasValidTarget,
+              domain,
+            ]
+          properties:
+            distancePercent: { type: number, nullable: true }
+            absoluteDistancePercent: { type: number, nullable: true }
+            isAtOrBelowTarget: { type: boolean }
+            hasValidTarget: { type: boolean }
+            domain:
+              type: array
+              minItems: 2
+              maxItems: 2
+              items: { type: number }
+        preview:
+          type: object
+          nullable: true
+          required: [absolutePercent, direction]
+          properties:
+            absolutePercent: { type: number }
+            direction: { type: string, enum: [below, above] }
+
+    ResearchPresentationWatchlistBatchResult:
+      type: object
+      required: [entries]
+      properties:
+        entries:
+          type: array
+          items:
+            type: object
+            required: [id, list]
+            properties:
+              id: { type: integer, minimum: 1 }
+              list:
+                {
+                  $ref: "#/components/schemas/ResearchPresentationWatchlistList",
+                }
+
+    ResearchPresentationAnalystResult:
+      type: object
+      nullable: true
+      required: [total, bullFraction, bearFraction, verdictKey, tone, fractions]
+      properties:
+        total: { type: number }
+        bullFraction: { type: number }
+        bearFraction: { type: number }
+        verdictKey:
+          {
+            type: string,
+            enum:
+              [
+                market.strongBuy,
+                market.buy,
+                market.hold,
+                market.sell,
+                market.strongSell,
+              ],
+          }
+        tone: { type: string, enum: [success, destructive, warning] }
+        fractions: { $ref: "#/components/schemas/ResearchAnalystConsensus" }
+
+    ResearchPresentationProviderQuoteResult:
+      type: object
+      nullable: true
+      required: [symbol, name, change, changePercent, currency, exchange, type]
+      properties:
+        symbol: { type: string }
+        name: { type: string }
+        price: { type: number, nullable: true }
+        change: { type: number, nullable: true }
+        changePercent: { type: number, nullable: true }
+        currency: { type: string }
+        exchange: { type: string }
+        type: { type: string }
+
+    ResearchPresentationMarketAddResult:
+      type: object
+      required: [providedCount, isConsistent]
+      properties:
+        derivedAmount: { type: number, nullable: true }
+        derivedUnits: { type: number, nullable: true }
+        derivedPrice: { type: number, nullable: true }
+        effectiveAmount: { type: number, nullable: true }
+        effectiveUnits: { type: number, nullable: true }
+        effectivePrice: { type: number, nullable: true }
+        providedCount: { type: integer, minimum: 0, maximum: 3 }
+        isConsistent: { type: boolean }
+
+    ResearchPresentationSnapshot:
+      type: object
+      required: [kind]
+      description: >-
+        Uploaded JSON discriminated by kind. compare requires series[{symbol,points}]
+        (max 6). chart requires series[{id,field,type,points}] (max 5),
+        indicators[{id,type,period,seriesId}] (max 20, period 1..500), rebase,
+        oscillator and nullable oscillatorSeriesId. watchlist requires nullable
+        targetPrice/currentPrice/addedPrice and optional points. watchlistBatch
+        requires entries[{id,targetPrice,currentPrice,addedPrice}] (max 5000).
+        providerQuote requires points and investment{name,currency,symbol?,priceProvider?},
+        with optional selectedSymbol. analyst requires nullable consensus with all five
+        numeric count fields. marketAdd accepts positive amount/units/price and optional
+        derive (default true). Points require time, with optional nullable numeric
+        close/high/low/volume. There is no point-count truncation; transport is bounded.
+      properties:
+        kind:
+          {
+            type: string,
+            enum:
+              [
+                compare,
+                chart,
+                watchlist,
+                watchlistBatch,
+                providerQuote,
+                analyst,
+                marketAdd,
+              ],
+          }
+        series:
+          type: array
+          items:
+            type: object
+            properties:
+              symbol: { type: string, minLength: 1, maxLength: 64 }
+              id: { type: string, minLength: 1, maxLength: 128 }
+              field: { type: string, enum: [price, volume] }
+              type: { type: string, enum: [line, area, candlestick, bar] }
+              points:
+                type: array
+                items: { $ref: "#/components/schemas/ResearchChartPoint" }
+        indicators:
+          type: array
+          maxItems: 20
+          items:
+            type: object
+            required: [id, type, period, seriesId]
+            properties:
+              id: { type: string, minLength: 1, maxLength: 128 }
+              type: { type: string, enum: [sma, ema, bollinger] }
+              period: { type: integer, minimum: 1, maximum: 500 }
+              seriesId: { type: string, minLength: 1, maxLength: 128 }
+        rebase: { type: boolean }
+        oscillator: { type: string, enum: [none, rsi, macd] }
+        oscillatorSeriesId: { type: string, nullable: true }
+        targetPrice: { type: number, nullable: true }
+        currentPrice: { type: number, nullable: true }
+        addedPrice: { type: number, nullable: true }
+        points:
+          type: array
+          items: { $ref: "#/components/schemas/ResearchChartPoint" }
+        entries:
+          type: array
+          maxItems: 5000
+          items:
+            type: object
+            required: [id, targetPrice, currentPrice, addedPrice]
+            properties:
+              id: { type: integer, minimum: 1 }
+              targetPrice: { type: number }
+              currentPrice: { type: number, nullable: true }
+              addedPrice: { type: number, nullable: true }
+        investment:
+          type: object
+          required: [name, currency]
+          properties:
+            symbol: { type: string, nullable: true }
+            name: { type: string }
+            currency: { type: string }
+            priceProvider: { type: string, nullable: true }
+        selectedSymbol: { type: string, nullable: true }
+        consensus:
+          {
+            $ref: "#/components/schemas/ResearchAnalystConsensus",
+            nullable: true,
+          }
+        amount: { type: number, exclusiveMinimum: 0 }
+        units: { type: number, exclusiveMinimum: 0 }
+        price: { type: number, exclusiveMinimum: 0 }
+        derive: { type: boolean, default: true }
+
+    ResearchPresentationData:
+      type: object
+      required: [kind, result]
+      description: result shape is determined by the echoed kind; unavailable analyst/providerQuote results are null.
+      properties:
+        kind:
+          {
+            type: string,
+            enum:
+              [
+                compare,
+                chart,
+                watchlist,
+                watchlistBatch,
+                providerQuote,
+                analyst,
+                marketAdd,
+              ],
+          }
+        result:
+          nullable: true
+          anyOf:
+            - $ref: "#/components/schemas/ResearchPresentationCompareResult"
+            - $ref: "#/components/schemas/ResearchPresentationChartResult"
+            - $ref: "#/components/schemas/ResearchPresentationWatchlistResult"
+            - $ref: "#/components/schemas/ResearchPresentationWatchlistBatchResult"
+            - $ref: "#/components/schemas/ResearchPresentationProviderQuoteResult"
+            - $ref: "#/components/schemas/ResearchPresentationAnalystResult"
+            - $ref: "#/components/schemas/ResearchPresentationMarketAddResult"
+
     ResearchMeta:
       type: object
       required: [provider, source]
@@ -3347,12 +3729,11 @@ components:
 
     ResearchSearchItem:
       type: object
-      required: [symbol]
       properties:
-        symbol: { type: string }
-        name: { type: string }
-        type: { type: string }
-        exchange: { type: string }
+        symbol: { type: string, nullable: true }
+        name: { type: string, nullable: true }
+        type: { type: string, nullable: true }
+        exchange: { type: string, nullable: true }
 
     ResearchSearchData:
       type: object
@@ -3364,41 +3745,41 @@ components:
 
     ResearchQuote:
       type: object
-      required: [symbol, price]
+      required: [symbol]
       properties:
         symbol: { type: string }
-        name: { type: string }
-        price: { type: number }
-        change: { type: number }
-        changePercent: { type: number }
-        currency: { type: string }
-        exchange: { type: string }
-        type: { type: string }
-        open: { type: number }
-        dayHigh: { type: number }
-        dayLow: { type: number }
-        prevClose: { type: number }
-        volume: { type: number }
-        avgVolume: { type: number }
-        high52w: { type: number }
-        low52w: { type: number }
+        name: { type: string, nullable: true }
+        price: { type: number, nullable: true }
+        change: { type: number, nullable: true }
+        changePercent: { type: number, nullable: true }
+        currency: { type: string, nullable: true }
+        exchange: { type: string, nullable: true }
+        type: { type: string, nullable: true }
+        open: { type: number, nullable: true }
+        dayHigh: { type: number, nullable: true }
+        dayLow: { type: number, nullable: true }
+        prevClose: { type: number, nullable: true }
+        volume: { type: number, nullable: true }
+        avgVolume: { type: number, nullable: true }
+        high52w: { type: number, nullable: true }
+        low52w: { type: number, nullable: true }
 
     ResearchChartPoint:
       type: object
-      required: [time, close]
+      required: [time]
       properties:
         time: { type: number }
-        close: { type: number }
-        high: { type: number }
-        low: { type: number }
-        volume: { type: number }
+        close: { type: number, nullable: true }
+        high: { type: number, nullable: true }
+        low: { type: number, nullable: true }
+        volume: { type: number, nullable: true }
 
     ResearchChartData:
       type: object
       required: [points]
       properties:
         symbol: { type: string }
-        currency: { type: string }
+        currency: { type: string, nullable: true }
         points:
           type: array
           items: { $ref: "#/components/schemas/ResearchChartPoint" }
@@ -7192,7 +7573,7 @@ components:
     # ─── Market ───────────────────────────────────────────────────────────────
     MarketSearchResult:
       type: object
-      required: [symbol, name, exchange, currency]
+      required: [symbol, name, exchange, type]
       properties:
         symbol:
           type: string
@@ -13013,21 +13394,44 @@ paths:
       parameters:
         - in: query
           name: start_date
+          deprecated: true
+          description: Accepted but ignored; use from_ms.
           schema:
             type: string
             format: date
         - in: query
           name: end_date
+          deprecated: true
+          description: Accepted but ignored; use to_ms.
           schema:
             type: string
             format: date
+        - in: query
+          name: from_ms
+          description: Inclusive epoch milliseconds. Missing or non-finite parsed values leave this bound absent.
+          schema: { type: number }
+        - in: query
+          name: to_ms
+          description: Inclusive epoch milliseconds. Missing or non-finite parsed values leave this bound absent.
+          schema: { type: number }
+        - in: query
+          name: db_only
+          description: Defaults true; false allows the existing provider fetch/cache behavior. Lenient boolean parsing is retained.
+          schema: { type: boolean, default: true }
       responses:
         "200":
           description: Price history
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        {
+                          $ref: "#/components/schemas/InvestmentPriceHistoryData",
+                        }
 
   /api/investments/{id}/transactions:
     parameters:
@@ -13191,10 +13595,7 @@ paths:
                   - $ref: "#/components/schemas/Envelope"
                   - type: object
                     properties:
-                      data:
-                        type: array
-                        items:
-                          $ref: "#/components/schemas/MarketSearchResult"
+                      data: { $ref: "#/components/schemas/MarketSearchData" }
 
   /api/market/quote:
     get:
@@ -13228,16 +13629,7 @@ paths:
                   - $ref: "#/components/schemas/Envelope"
                   - type: object
                     properties:
-                      data:
-                        type: object
-                        required: [items, total]
-                        properties:
-                          items:
-                            type: array
-                            items:
-                              type: object
-                          total:
-                            type: integer
+                      data: { $ref: "#/components/schemas/MarketQuoteData" }
 
   /api/market/chart:
     get:
@@ -13325,23 +13717,26 @@ paths:
                   - $ref: "#/components/schemas/Envelope"
                   - type: object
                     properties:
-                      data:
-                        type: object
-                        required: [items, total]
-                        properties:
-                          items:
-                            type: array
-                            items:
-                              type: object
-                          total:
-                            type: integer
+                      data: { $ref: "#/components/schemas/MarketNewsData" }
 
-  # ─── Watchlist ────────────────────────────────────────────────────────────────
   /api/watchlist:
     get:
       summary: List watchlist items
       operationId: getWatchlist
       tags: [Watchlist]
+      parameters:
+        - in: query
+          name: asset_class
+          description: Optional exact asset-class filter; repeated keys return 400.
+          schema: { type: string }
+        - in: query
+          name: limit
+          description: Lenient integer parsing; clamped to 1..5000; malformed values use 50.
+          schema: { type: integer, minimum: 1, maximum: 5000, default: 50 }
+        - in: query
+          name: offset
+          description: Lenient integer parsing; negative values clamp to zero.
+          schema: { type: integer, minimum: 0, default: 0 }
       responses:
         "200":
           description: Watchlist
@@ -13352,10 +13747,7 @@ paths:
                   - $ref: "#/components/schemas/Envelope"
                   - type: object
                     properties:
-                      data:
-                        type: array
-                        items:
-                          $ref: "#/components/schemas/WatchlistItem"
+                      data: { $ref: "#/components/schemas/WatchlistData" }
     post:
       summary: Add symbol to watchlist
       operationId: addToWatchlist
@@ -16938,6 +17330,53 @@ paths:
                             type: integer
 
   # ─── Research (ADR-079) ───────────────────────────────────────────────────────
+  /api/research/presentation:
+    post:
+      summary: Compute Research presentation from submitted data without fetching or persisting
+      operationId: computeResearchPresentation
+      tags: [Research]
+      description: >-
+        Stateless shared TypeScript transformations for Compare, Chart Builder,
+        watchlist list/chart/add previews, provider-history quotes, analyst consensus
+        and market-add two-of-three previews. No provider, database, settings or FX
+        lookup. Original source ordering, warmups, thresholds and currency semantics
+        are retained. Submit one UTF-8 JSON snapshot file; the 64 MiB scoped multipart
+        limit bypasses the global JSON-body size limit without silently truncating history.
+        Numeric JSON is validated as finite numbers; non-finite calculation outputs
+        serialize as null as in the web client. Uses the existing Research market rate limiter.
+      requestBody:
+        required: true
+        description: Single file field only; its JSON shape is ResearchPresentationSnapshot. Extra multipart fields and repeated files are rejected.
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              additionalProperties: false
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: UTF-8 JSON ResearchPresentationSnapshot; maximum 67,108,864 bytes.
+      responses:
+        "200":
+          description: Computed kind-specific presentation, standard envelope; no read or write side effects.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        {
+                          $ref: "#/components/schemas/ResearchPresentationData",
+                        }
+        "400":
+          description: VALIDATION_ERROR for missing/repeated/oversize file, extra multipart fields, invalid JSON or invalid/bounded snapshot.
+        "429": { description: Existing Research market rate limit. }
+        "500": { description: File I/O or unexpected calculation failure. }
+
   /api/research/search:
     get:
       summary: Search tickers / securities across research providers

@@ -777,3 +777,13 @@ For real estate investments:
 Metals implementation code links: [[apps/node-backend/src/repositories/investmentRepository.ts]], [[apps/node-backend/src/repositories/infoRepository.ts]], [[apps/node-backend/src/services/priceProviderService.ts]]
 
 Historical quote cache code links: [[apps/node-backend/src/services/priceProviderService.ts]], [[apps/node-backend/src/config/kinesisConfig.ts]], [[apps/node-backend/src/routes/investments.ts]], [[apps/node-backend/src/main.ts]], [[alembic/versions/0019_asset_price_history_cache.py]]
+
+## Research history contract
+
+The named OpenAPI investment history response matches the existing runtime:
+`{investment_id,provider,points:[{timestampMs,price}]}`. `from_ms`/`to_ms` are inclusive epoch
+millisecond bounds; unparseable/non-finite values leave a bound absent. `db_only` defaults true.
+The former documented `start_date`/`end_date` parameters remain accepted but ignored and are
+deprecated in favor of the actual bounds. Native Research maps timestamp/price fields structurally
+to submitted chart points for [[docs/api/research#POST /api/research/presentation|the stateless
+presentation API]], retaining existing historical source/provider behavior.

@@ -8,7 +8,7 @@ last_modified: 2026-10-13
 adr-reference: 026
 # Authoritative HTTP-operation count from openapi.yaml. The CI checker also
 # compares every method/path pair; update concrete resource rows when routes change.
-api_operation_count: 308
+api_operation_count: 309
 tags:
   [
     reference,
@@ -415,12 +415,13 @@ opening anchors without changing request fields, response shape or operation cou
 | GET    | `/api/market/chart`  | Historical chart data                                                                                                                                                                                 | —          | [[docs/api/marketLookup\|Market Lookup]] |
 | GET    | `/api/market/news`   | News articles                                                                                                                                                                                         | —          | [[docs/api/marketLookup\|Market Lookup]] |
 
-## Research (18 endpoints) — ADR-079, ADR-081, ADR-082
+## Research (19 endpoints) — ADR-079, ADR-081, ADR-082
 
 Provider-agnostic research surface mounted at `/api/research` under `marketRateLimiter`. Six data endpoints route through the capability map → quota governor → cache → race-to-first provider, **except `fundamentals`** which fetches FMP + Yahoo in parallel and merges field-by-field (FMP preferred) via `researchAggregator.fetchFundamentals()`. Two analytics endpoints (`scorecard`, `portfolio-forecast`) compute derived outputs from aggregated data; the projection endpoint is non-persisted (ADR-079 / ADR-065 storage boundary). All data-endpoint responses carry `meta.provider` (which provider answered, or `null`; may be `"fmp+yahoo"` composite for fundamentals/scorecard) and `meta.source` (`'cache'` | `'live'` | `'unavailable'`). All five symbol adapters are wired; the keyed four (Twelve Data / Finnhub / FMP / Alpha Vantage) light up when their API key is set via Settings (`/provider-keys`) or the root `.env` (ADR-080). The **macro vertical** (ADR-082) adds three more adapters — FRED (keyed `FRED_API_KEY`), Eurostat and DBnomics (keyless) — behind two **provider-pinned** endpoints (`macro/search` fans out + unions a catalog; `macro/series` fetches one provider's observations); macro data is never raced and never persisted to `asset_price_history`. See [[docs/api/research|Research API]] and [[docs/features/research|Research Feature]].
 
 | Method | Path                                    | Description                                                                                                                                                                                                                                                                                                                                 | Rate Limit | Doc                             |
 | ------ | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------------------------------- |
+| POST | `/api/research/presentation` | Stateless submitted-data Compare/chart/watchlist/provider-quote/analyst/market-add presentation; single multipart JSON file ≤64 MiB; no provider/database/FX access | — | [[docs/api/research\|Research]] |
 | GET    | `/api/research/search`                  | Search tickers / securities by name or symbol; returns `{ items: [] }` when query is blank                                                                                                                                                                                                                                                  | —          | [[docs/api/research\|Research]] |
 | GET    | `/api/research/quote`                   | Current quote for `symbol` (+ optional `asset_class` hint for provider routing)                                                                                                                                                                                                                                                             | —          | [[docs/api/research\|Research]] |
 | GET    | `/api/research/chart`                   | Historical chart points; `range` default `1mo` (1d/5d/1mo/3mo/6mo/1y/2y/5y/max); optional `provider` param pins preferred provider (ADR-081)                                                                                                                                                                                                | —          | [[docs/api/research\|Research]] |
@@ -761,9 +762,9 @@ equal the main senders and preload subscriptions.
 | Info/Statistics (Phase 14)           | 18                            |
 | AI Chat                              | 9                             |
 | Electron IPC invoke channels         | 25                            |
-| **Total**                            | **335**                       |
+| **Total**                            | **336**                       |
 
-> **308** versioned `/api` HTTP operations are declared in `openapi.yaml`. The checker compares their concrete method/path pairs with the resource tables and also checks `api_operation_count`. The 2 health routes and 25 Electron invoke channels are separate contracts; the 6 Electron event channels are not request endpoints. Resource summary counts and rate-limit descriptions are navigation aids and are not independently gate-checked.
+> **309** versioned `/api` HTTP operations are declared in `openapi.yaml`. The checker compares their concrete method/path pairs with the resource tables and also checks `api_operation_count`. The 2 health routes and 25 Electron invoke channels are separate contracts; the 6 Electron event channels are not request endpoints. Resource summary counts and rate-limit descriptions are navigation aids and are not independently gate-checked.
 
 ## Phase G Endpoint Consolidation (April 2026)
 

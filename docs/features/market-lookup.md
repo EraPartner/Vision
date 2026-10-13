@@ -2,8 +2,8 @@
 title: Market Lookup Feature
 type: feature
 status: active
-date: 2026-10-09
-updated: 2026-10-09
+date: 2026-10-13
+updated: 2026-10-13
 tags: [feature, market, lookup, stocks, search, frontend, research, security-detail, url-state]
 description: Market Lookup (/research/market) is the consolidated security-detail surface for the Research workspace. It provides symbol search, a live price chart, a tabbed Details card (Fundamentals / Analyst / News via the multi-provider research aggregator), a Trading info card, and a Map-provider dialog. It is the canonical deep-link target from the Markets Overview heat-map and ResearchHomePage search/watchlist tiles. Aug 2026: the Details card's active tab is mirrored to `?tab=` via useTabParam.
 aliases: [stock lookup, market search, security search, ticker search, market lookup]
@@ -170,3 +170,11 @@ Fundamentals concerns show each measured value beside its benchmark. Percentage 
 percentage units, and free cash flow uses the known instrument currency. Analyst price targets
 include the quote currency when available. News rows reserve thumbnail space even when an image
 is absent or fails, keeping titles aligned. Ratios and compact values use the selected number format.
+
+## Shared Research presentation
+
+Provider-history quote synthesis and analyst consensus verdict/bar fractions reuse shared pure
+TypeScript, also available through [[docs/api/research#POST /api/research/presentation|the stateless
+Research presentation API]]. The same API reuses market-add two-of-three rounding and tolerance;
+it does not convert the quote-native seed to the booking currency or introduce provider calls.
+Original fetched metadata retains provenance.

@@ -1,3 +1,4 @@
+import { providerQuotePresentation } from "@vision/shared-utils/research/presentation";
 import { useState, useCallback, useMemo } from "react";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
@@ -234,23 +235,16 @@ export default function MarketLookupPage() {
     const providerQuote = useMemo<Quote | null>(() => {
         if (!isProviderAsset || !providerInvestment) return null;
         const pts = providerChartData?.points ?? [];
-        const firstPoint = pts[0];
-        const lastPoint = pts.at(-1);
-        if (!firstPoint || !lastPoint) return null;
-        const last = lastPoint.close;
-        const first = firstPoint.close;
-        const change = last - first;
-        const changePercent = first ? (change / first) * 100 : 0;
-        return {
-            symbol: providerInvestment.symbol ?? effectiveSelectedSymbol ?? "",
-            name: providerInvestment.name,
-            price: last,
-            change,
-            changePercent,
-            currency: providerInvestment.currency,
-            exchange: "",
-            type: (providerInvestment.price_provider ?? "").toUpperCase(),
-        } as Quote;
+        return providerQuotePresentation(
+            pts,
+            {
+                symbol: providerInvestment.symbol,
+                name: providerInvestment.name,
+                currency: providerInvestment.currency,
+                priceProvider: providerInvestment.price_provider,
+            },
+            effectiveSelectedSymbol,
+        ) as Quote | null;
     }, [
         isProviderAsset,
         providerInvestment,

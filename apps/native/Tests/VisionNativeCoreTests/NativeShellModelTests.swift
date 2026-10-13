@@ -59,7 +59,8 @@ final class ShellRecorder {
         settings: NativeAppSettings = NativeAppSettings(adminMode: true), recorder: ShellRecorder,
         hidden: [NavSectionID: Bool]? = nil, portfolio: PortfolioScreens? = nil,
         portfolioImports: PortfolioImportScreens? = nil, tax: TaxScreens? = nil,
-        analysis: AnalysisScreens? = nil, analysisMonitors: AnalysisMonitorsModel? = nil
+        analysis: AnalysisScreens? = nil, analysisMonitors: AnalysisMonitorsModel? = nil,
+        research: ResearchScreens? = nil
     ) -> NativeShellModel {
         NativeShellModel(
             strings: DictionaryStrings(language: .en, table: [:]),
@@ -75,6 +76,7 @@ final class ShellRecorder {
             portfolioImports: portfolioImports,
             analysis: analysis,
             analysisMonitors: analysisMonitors,
+            research: research,
             hiddenSections: hidden,
             loadSettings: { settings },
             saveHiddenSections: { recorder.saved.append($0) },
@@ -184,6 +186,71 @@ final class ShellRecorder {
         legacy.routeDidChange(try #require(NativeRoute(path)))
         await legacy.settingsSettled()
         #expect(legacy.detail == .web)
+    }
+
+    @Test(arguments: [
+        "/research", "/research/markets", "/research/market", "/research/watchlist", "/research/compare",
+    ])
+    func researchScreensPreserveDeepLinksWithoutAdminModeAndFallbackWhenOmitted(path: String) async throws {
+        let client = APIClient(baseURL: { nil }, adminToken: { nil })
+        let model = makeModel(
+            settings: NativeAppSettings(adminMode: false), recorder: ShellRecorder(),
+            research: ResearchScreens(client: client))
+        let route = try #require(NativeRoute(path + "?symbol=AAPL&symbol=MSFT&tab=analyst&unrelated=keep"))
+        model.routeDidChange(route)
+        await model.settingsSettled()
+        #expect(model.detail == .native(try #require(NativeScreen.screen(forPath: path))))
+        #expect(model.route == route)
+        #expect(!model.settings.adminMode)
+
+        let legacy = makeModel(settings: NativeAppSettings(adminMode: false), recorder: ShellRecorder())
+        legacy.routeDidChange(route)
+        await legacy.settingsSettled()
+        #expect(legacy.detail == .web)
+    }
+
+    @Test func webSettingsAndPaletteCoveragePreserveAnalysisDraftUntilARealRouteExit() async throws {
+        let screens = AnalysisScreens(client: APIClient(baseURL: { nil }))
+        let model = makeModel(recorder: ShellRecorder(), analysis: screens)
+        let route = try #require(NativeRoute("/analysis"))
+        model.routeDidChange(route)
+        await model.settingsSettled()
+        await screens.didAppear(route: route)
+        screens.workspace.name = "Synthetic unsaved query"
+        model.openSettings()
+        #expect(model.isTemporarilyCovered("/analysis"))
+        #expect(!model.isTemporarilyCovered("/research"))
+        model.routeDidChange(route.setting("settings", to: "general"))
+        #expect(model.isTemporarilyCovered("/analysis"))
+        #expect(screens.workspace.name == "Synthetic unsaved query")
+        model.routeDidChange(route)
+        #expect(!model.isTemporarilyCovered("/analysis"))
+        #expect(model.handleKey("k", command: true))
+        #expect(model.isTemporarilyCovered("/analysis"))
+        model.routeDidChange(try #require(NativeRoute("/research")))
+        #expect(screens.workspace.name.isEmpty)
+    }
+
+    @Test func coveredLookupRetainsItsDirtyGuardAndActualNavigationRetiresTheVisit() async throws {
+        let screens = ResearchScreens(client: APIClient(baseURL: { nil }))
+        let model = makeModel(recorder: ShellRecorder(), research: screens)
+        let route = try #require(NativeRoute("/research/market"))
+        model.routeDidChange(route)
+        await model.settingsSettled()
+        await screens.didAppear(route: route)
+        screens.lookup.action.investment.name = "Synthetic unsaved holding"
+        model.setLeaveGuard(
+            NativeLeaveGuard(
+                id: route.path, hasUnsavedChanges: { screens.lookup.action.isDirty },
+                discard: { screens.lookup.action.discardDrafts() }))
+        model.openSettings()
+        #expect(model.isTemporarilyCovered(route.path))
+        #expect(model.hasGuardedUnsavedChanges)
+        #expect(screens.lookup.action.investment.name == "Synthetic unsaved holding")
+        model.routeDidChange(try #require(NativeRoute("/research/watchlist")))
+        #expect(!model.hasGuardedUnsavedChanges)
+        #expect(!screens.lookup.action.isDirty)
+        #expect(!model.isTemporarilyCovered(route.path))
     }
 
     @Test func theExchangeRatesScreenIsNativeOnlyInAdminMode() async throws {

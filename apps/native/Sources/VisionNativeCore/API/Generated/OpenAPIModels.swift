@@ -3884,6 +3884,51 @@ extension OpenAPI {
         }
     }
 
+    public struct InstrumentProviderMapping: Codable, Equatable, Sendable {
+        public let id: Int
+        public let instrumentKey: String
+        public let keyType: String
+        public let provider: String
+        public let providerSymbol: String?
+        public let resolvedName: String?
+        public let exchange: String?
+        public let currency: String?
+        public let status: String
+        public let verifiedAt: String?
+        public let createdAt: String?
+        public let updatedAt: String?
+
+        public init(id: Int, instrumentKey: String, keyType: String, provider: String, providerSymbol: String? = nil, resolvedName: String? = nil, exchange: String? = nil, currency: String? = nil, status: String, verifiedAt: String? = nil, createdAt: String? = nil, updatedAt: String? = nil) {
+            self.id = id
+            self.instrumentKey = instrumentKey
+            self.keyType = keyType
+            self.provider = provider
+            self.providerSymbol = providerSymbol
+            self.resolvedName = resolvedName
+            self.exchange = exchange
+            self.currency = currency
+            self.status = status
+            self.verifiedAt = verifiedAt
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case instrumentKey = "instrument_key"
+            case keyType = "key_type"
+            case provider = "provider"
+            case providerSymbol = "provider_symbol"
+            case resolvedName = "resolved_name"
+            case exchange = "exchange"
+            case currency = "currency"
+            case status = "status"
+            case verifiedAt = "verified_at"
+            case createdAt = "created_at"
+            case updatedAt = "updated_at"
+        }
+    }
+
     public struct Investment: Codable, Equatable, Sendable {
         public let id: Int
         public let name: String
@@ -4072,6 +4117,39 @@ extension OpenAPI {
         }
     }
 
+    public struct InvestmentPriceHistoryData: Codable, Equatable, Sendable {
+        public let investmentId: Int
+        public let provider: String
+        public let points: [OpenAPI.InvestmentPriceHistoryPoint]
+
+        public init(investmentId: Int, provider: String, points: [OpenAPI.InvestmentPriceHistoryPoint]) {
+            self.investmentId = investmentId
+            self.provider = provider
+            self.points = points
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case investmentId = "investment_id"
+            case provider = "provider"
+            case points = "points"
+        }
+    }
+
+    public struct InvestmentPriceHistoryPoint: Codable, Equatable, Sendable {
+        public let timestampMs: Decimal
+        public let price: Decimal
+
+        public init(timestampMs: Decimal, price: Decimal) {
+            self.timestampMs = timestampMs
+            self.price = price
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case timestampMs = "timestampMs"
+            case price = "price"
+        }
+    }
+
     public struct InvestmentUpdateRequest: Codable, Equatable, Sendable {
         public let name: String?
         public let symbol: String?
@@ -4173,6 +4251,162 @@ extension OpenAPI {
             case href = "href"
             case method = "method"
             case title = "title"
+        }
+    }
+
+    public struct MarketNewsData: Codable, Equatable, Sendable {
+        public let items: [OpenAPI.MarketNewsItem]
+        public let total: Int
+
+        public init(items: [OpenAPI.MarketNewsItem], total: Int) {
+            self.items = items
+            self.total = total
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case items = "items"
+            case total = "total"
+        }
+    }
+
+    public struct MarketNewsItem: Codable, Equatable, Sendable {
+        public let title: String?
+        public let link: String?
+        public let publisher: String?
+        public let publishedAt: Decimal?
+        public let thumbnail: String?
+        public let relatedSymbols: [String]
+
+        public init(title: String? = nil, link: String? = nil, publisher: String? = nil, publishedAt: Decimal? = nil, thumbnail: String? = nil, relatedSymbols: [String]) {
+            self.title = title
+            self.link = link
+            self.publisher = publisher
+            self.publishedAt = publishedAt
+            self.thumbnail = thumbnail
+            self.relatedSymbols = relatedSymbols
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case title = "title"
+            case link = "link"
+            case publisher = "publisher"
+            case publishedAt = "publishedAt"
+            case thumbnail = "thumbnail"
+            case relatedSymbols = "relatedSymbols"
+        }
+    }
+
+    public struct MarketQuoteData: Codable, Equatable, Sendable {
+        public let items: [OpenAPI.MarketQuoteItem]
+        public let total: Int
+
+        public init(items: [OpenAPI.MarketQuoteItem], total: Int) {
+            self.items = items
+            self.total = total
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case items = "items"
+            case total = "total"
+        }
+    }
+
+    public struct MarketQuoteItem: Codable, Equatable, Sendable {
+        public let symbol: String
+        public let currency: String
+        public let name: String?
+        public let exchange: String?
+        public let type: String?
+        public let price: Decimal?
+        public let change: Decimal?
+        public let changePercent: Decimal?
+        public let open: Decimal?
+        public let dayHigh: Decimal?
+        public let dayLow: Decimal?
+        public let prevClose: Decimal?
+        public let volume: Decimal?
+        public let avgVolume: Decimal?
+        public let high52w: Decimal?
+        public let low52w: Decimal?
+        public let analystConsensus: OpenAPI.ResearchAnalystConsensus?
+        public let recentAnalystActions: [JSONValue]?
+
+        public init(symbol: String, currency: String, name: String? = nil, exchange: String? = nil, type: String? = nil, price: Decimal? = nil, change: Decimal? = nil, changePercent: Decimal? = nil, open: Decimal? = nil, dayHigh: Decimal? = nil, dayLow: Decimal? = nil, prevClose: Decimal? = nil, volume: Decimal? = nil, avgVolume: Decimal? = nil, high52w: Decimal? = nil, low52w: Decimal? = nil, analystConsensus: OpenAPI.ResearchAnalystConsensus? = nil, recentAnalystActions: [JSONValue]? = nil) {
+            self.symbol = symbol
+            self.currency = currency
+            self.name = name
+            self.exchange = exchange
+            self.type = type
+            self.price = price
+            self.change = change
+            self.changePercent = changePercent
+            self.open = open
+            self.dayHigh = dayHigh
+            self.dayLow = dayLow
+            self.prevClose = prevClose
+            self.volume = volume
+            self.avgVolume = avgVolume
+            self.high52w = high52w
+            self.low52w = low52w
+            self.analystConsensus = analystConsensus
+            self.recentAnalystActions = recentAnalystActions
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case symbol = "symbol"
+            case currency = "currency"
+            case name = "name"
+            case exchange = "exchange"
+            case type = "type"
+            case price = "price"
+            case change = "change"
+            case changePercent = "changePercent"
+            case open = "open"
+            case dayHigh = "dayHigh"
+            case dayLow = "dayLow"
+            case prevClose = "prevClose"
+            case volume = "volume"
+            case avgVolume = "avgVolume"
+            case high52w = "high52w"
+            case low52w = "low52w"
+            case analystConsensus = "analystConsensus"
+            case recentAnalystActions = "recentAnalystActions"
+        }
+    }
+
+    public struct MarketSearchData: Codable, Equatable, Sendable {
+        public let items: [OpenAPI.MarketSearchResult]
+
+        public init(items: [OpenAPI.MarketSearchResult]) {
+            self.items = items
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case items = "items"
+        }
+    }
+
+    public struct MarketSearchResult: Codable, Equatable, Sendable {
+        public let symbol: String
+        public let name: String
+        public let exchange: String
+        public let currency: String?
+        public let type: String
+
+        public init(symbol: String, name: String, exchange: String, currency: String? = nil, type: String) {
+            self.symbol = symbol
+            self.name = name
+            self.exchange = exchange
+            self.currency = currency
+            self.type = type
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case symbol = "symbol"
+            case name = "name"
+            case exchange = "exchange"
+            case currency = "currency"
+            case type = "type"
         }
     }
 
@@ -6128,6 +6362,168 @@ extension OpenAPI {
         case yearly = "yearly"
     }
 
+    public struct ResearchAnalystAction: Codable, Equatable, Sendable {
+        public let date: JSONValue?
+        public let firm: String?
+        public let toGrade: String?
+        public let fromGrade: String?
+        public let action: String?
+
+        public init(date: JSONValue? = nil, firm: String? = nil, toGrade: String? = nil, fromGrade: String? = nil, action: String? = nil) {
+            self.date = date
+            self.firm = firm
+            self.toGrade = toGrade
+            self.fromGrade = fromGrade
+            self.action = action
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case date = "date"
+            case firm = "firm"
+            case toGrade = "toGrade"
+            case fromGrade = "fromGrade"
+            case action = "action"
+        }
+    }
+
+    public struct ResearchAnalystConsensus: Codable, Equatable, Sendable {
+        public let strongBuy: Decimal
+        public let buy: Decimal
+        public let hold: Decimal
+        public let sell: Decimal
+        public let strongSell: Decimal
+
+        public init(strongBuy: Decimal, buy: Decimal, hold: Decimal, sell: Decimal, strongSell: Decimal) {
+            self.strongBuy = strongBuy
+            self.buy = buy
+            self.hold = hold
+            self.sell = sell
+            self.strongSell = strongSell
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case strongBuy = "strongBuy"
+            case buy = "buy"
+            case hold = "hold"
+            case sell = "sell"
+            case strongSell = "strongSell"
+        }
+    }
+
+    public struct ResearchAnalystData: Codable, Equatable, Sendable {
+        public let symbol: String?
+        public let consensus: OpenAPI.ResearchAnalystConsensus?
+        public let targetMean: Decimal?
+        public let targetHigh: Decimal?
+        public let targetLow: Decimal?
+        public let numberOfAnalysts: Decimal?
+        public let recentActions: [OpenAPI.ResearchAnalystAction]?
+
+        public init(symbol: String? = nil, consensus: OpenAPI.ResearchAnalystConsensus? = nil, targetMean: Decimal? = nil, targetHigh: Decimal? = nil, targetLow: Decimal? = nil, numberOfAnalysts: Decimal? = nil, recentActions: [OpenAPI.ResearchAnalystAction]? = nil) {
+            self.symbol = symbol
+            self.consensus = consensus
+            self.targetMean = targetMean
+            self.targetHigh = targetHigh
+            self.targetLow = targetLow
+            self.numberOfAnalysts = numberOfAnalysts
+            self.recentActions = recentActions
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case symbol = "symbol"
+            case consensus = "consensus"
+            case targetMean = "targetMean"
+            case targetHigh = "targetHigh"
+            case targetLow = "targetLow"
+            case numberOfAnalysts = "numberOfAnalysts"
+            case recentActions = "recentActions"
+        }
+    }
+
+    public struct ResearchAnalystEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let meta: OpenAPI.ResearchMeta?
+        public let error: OpenAPI.ErrorPayload?
+        public let data: OpenAPI.ResearchAnalystData?
+
+        public init(ok: Bool, meta: OpenAPI.ResearchMeta? = nil, error: OpenAPI.ErrorPayload? = nil, data: OpenAPI.ResearchAnalystData? = nil) {
+            self.ok = ok
+            self.meta = meta
+            self.error = error
+            self.data = data
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case meta = "meta"
+            case error = "error"
+            case data = "data"
+        }
+    }
+
+    public struct ResearchChartData: Codable, Equatable, Sendable {
+        public let symbol: String?
+        public let currency: String?
+        public let points: [OpenAPI.ResearchChartPoint]
+
+        public init(symbol: String? = nil, currency: String? = nil, points: [OpenAPI.ResearchChartPoint]) {
+            self.symbol = symbol
+            self.currency = currency
+            self.points = points
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case symbol = "symbol"
+            case currency = "currency"
+            case points = "points"
+        }
+    }
+
+    public struct ResearchChartEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let meta: OpenAPI.ResearchMeta?
+        public let error: OpenAPI.ErrorPayload?
+        public let data: OpenAPI.ResearchChartData?
+
+        public init(ok: Bool, meta: OpenAPI.ResearchMeta? = nil, error: OpenAPI.ErrorPayload? = nil, data: OpenAPI.ResearchChartData? = nil) {
+            self.ok = ok
+            self.meta = meta
+            self.error = error
+            self.data = data
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case meta = "meta"
+            case error = "error"
+            case data = "data"
+        }
+    }
+
+    public struct ResearchChartPoint: Codable, Equatable, Sendable {
+        public let time: Decimal
+        public let close: Decimal?
+        public let high: Decimal?
+        public let low: Decimal?
+        public let volume: Decimal?
+
+        public init(time: Decimal, close: Decimal? = nil, high: Decimal? = nil, low: Decimal? = nil, volume: Decimal? = nil) {
+            self.time = time
+            self.close = close
+            self.high = high
+            self.low = low
+            self.volume = volume
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case time = "time"
+            case close = "close"
+            case high = "high"
+            case low = "low"
+            case volume = "volume"
+        }
+    }
+
     public struct ResearchDossierListEnvelope: Codable, Equatable, Sendable {
         public let ok: Bool
         public let data: Data?
@@ -6197,6 +6593,528 @@ extension OpenAPI {
             case reviewDate = "reviewDate"
             case createdAt = "createdAt"
             case updatedAt = "updatedAt"
+        }
+    }
+
+    public struct ResearchFundamentals: Codable, Equatable, Sendable {
+        public let symbol: String?
+        public let name: String?
+        public let currency: String?
+        public let marketCap: Decimal?
+        public let pe: Decimal?
+        public let forwardPE: Decimal?
+        public let dividendYield: Decimal?
+        public let eps: Decimal?
+        public let beta: Decimal?
+        public let priceToBook: Decimal?
+        public let profitMargin: Decimal?
+        public let revenue: Decimal?
+        public let returnOnEquity: Decimal?
+        public let sector: String?
+        public let pegRatio: Decimal?
+        public let payoutRatio: Decimal?
+        public let grossMargin: Decimal?
+        public let operatingMargin: Decimal?
+        public let revenueGrowth: Decimal?
+        public let earningsGrowth: Decimal?
+        public let debtToEquity: Decimal?
+        public let currentRatio: Decimal?
+        public let quickRatio: Decimal?
+        public let interestCoverage: Decimal?
+        public let freeCashFlow: Decimal?
+        public let fcfYield: Decimal?
+
+        public init(symbol: String? = nil, name: String? = nil, currency: String? = nil, marketCap: Decimal? = nil, pe: Decimal? = nil, forwardPE: Decimal? = nil, dividendYield: Decimal? = nil, eps: Decimal? = nil, beta: Decimal? = nil, priceToBook: Decimal? = nil, profitMargin: Decimal? = nil, revenue: Decimal? = nil, returnOnEquity: Decimal? = nil, sector: String? = nil, pegRatio: Decimal? = nil, payoutRatio: Decimal? = nil, grossMargin: Decimal? = nil, operatingMargin: Decimal? = nil, revenueGrowth: Decimal? = nil, earningsGrowth: Decimal? = nil, debtToEquity: Decimal? = nil, currentRatio: Decimal? = nil, quickRatio: Decimal? = nil, interestCoverage: Decimal? = nil, freeCashFlow: Decimal? = nil, fcfYield: Decimal? = nil) {
+            self.symbol = symbol
+            self.name = name
+            self.currency = currency
+            self.marketCap = marketCap
+            self.pe = pe
+            self.forwardPE = forwardPE
+            self.dividendYield = dividendYield
+            self.eps = eps
+            self.beta = beta
+            self.priceToBook = priceToBook
+            self.profitMargin = profitMargin
+            self.revenue = revenue
+            self.returnOnEquity = returnOnEquity
+            self.sector = sector
+            self.pegRatio = pegRatio
+            self.payoutRatio = payoutRatio
+            self.grossMargin = grossMargin
+            self.operatingMargin = operatingMargin
+            self.revenueGrowth = revenueGrowth
+            self.earningsGrowth = earningsGrowth
+            self.debtToEquity = debtToEquity
+            self.currentRatio = currentRatio
+            self.quickRatio = quickRatio
+            self.interestCoverage = interestCoverage
+            self.freeCashFlow = freeCashFlow
+            self.fcfYield = fcfYield
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case symbol = "symbol"
+            case name = "name"
+            case currency = "currency"
+            case marketCap = "marketCap"
+            case pe = "pe"
+            case forwardPE = "forwardPE"
+            case dividendYield = "dividendYield"
+            case eps = "eps"
+            case beta = "beta"
+            case priceToBook = "priceToBook"
+            case profitMargin = "profitMargin"
+            case revenue = "revenue"
+            case returnOnEquity = "returnOnEquity"
+            case sector = "sector"
+            case pegRatio = "pegRatio"
+            case payoutRatio = "payoutRatio"
+            case grossMargin = "grossMargin"
+            case operatingMargin = "operatingMargin"
+            case revenueGrowth = "revenueGrowth"
+            case earningsGrowth = "earningsGrowth"
+            case debtToEquity = "debtToEquity"
+            case currentRatio = "currentRatio"
+            case quickRatio = "quickRatio"
+            case interestCoverage = "interestCoverage"
+            case freeCashFlow = "freeCashFlow"
+            case fcfYield = "fcfYield"
+        }
+    }
+
+    public struct ResearchMappingAuditData: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let quotes: [QuotesItem]
+        public let discrepancies: [JSONValue]
+
+        public init(ok: Bool, quotes: [QuotesItem], discrepancies: [JSONValue]) {
+            self.ok = ok
+            self.quotes = quotes
+            self.discrepancies = discrepancies
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case quotes = "quotes"
+            case discrepancies = "discrepancies"
+        }
+
+        public struct QuotesItem: Codable, Equatable, Sendable {
+            public let provider: String
+            public let currency: String?
+            public let price: Decimal?
+            public let skipped: String?
+            public let error: String?
+
+            public init(provider: String, currency: String? = nil, price: Decimal? = nil, skipped: String? = nil, error: String? = nil) {
+                self.provider = provider
+                self.currency = currency
+                self.price = price
+                self.skipped = skipped
+                self.error = error
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case provider = "provider"
+                case currency = "currency"
+                case price = "price"
+                case skipped = "skipped"
+                case error = "error"
+            }
+        }
+    }
+
+    public struct ResearchMappingAuditEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let meta: OpenAPI.ResearchMeta?
+        public let error: OpenAPI.ErrorPayload?
+        public let data: OpenAPI.ResearchMappingAuditData?
+
+        public init(ok: Bool, meta: OpenAPI.ResearchMeta? = nil, error: OpenAPI.ErrorPayload? = nil, data: OpenAPI.ResearchMappingAuditData? = nil) {
+            self.ok = ok
+            self.meta = meta
+            self.error = error
+            self.data = data
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case meta = "meta"
+            case error = "error"
+            case data = "data"
+        }
+    }
+
+    public struct ResearchMappingProposal: Codable, Equatable, Sendable {
+        public let provider: String
+        public let status: String
+        public let providerSymbol: String?
+        public let resolvedName: String?
+        public let exchange: String?
+        public let currency: String?
+        public let candidates: [OpenAPI.ResearchSearchItem]?
+        public let fromStore: Bool?
+        public let fromHolding: Bool?
+        public let reason: String?
+        public let error: String?
+
+        public init(provider: String, status: String, providerSymbol: String? = nil, resolvedName: String? = nil, exchange: String? = nil, currency: String? = nil, candidates: [OpenAPI.ResearchSearchItem]? = nil, fromStore: Bool? = nil, fromHolding: Bool? = nil, reason: String? = nil, error: String? = nil) {
+            self.provider = provider
+            self.status = status
+            self.providerSymbol = providerSymbol
+            self.resolvedName = resolvedName
+            self.exchange = exchange
+            self.currency = currency
+            self.candidates = candidates
+            self.fromStore = fromStore
+            self.fromHolding = fromHolding
+            self.reason = reason
+            self.error = error
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case provider = "provider"
+            case status = "status"
+            case providerSymbol = "providerSymbol"
+            case resolvedName = "resolvedName"
+            case exchange = "exchange"
+            case currency = "currency"
+            case candidates = "candidates"
+            case fromStore = "fromStore"
+            case fromHolding = "fromHolding"
+            case reason = "reason"
+            case error = "error"
+        }
+    }
+
+    public struct ResearchMappingResolveData: Codable, Equatable, Sendable {
+        public let instrumentKey: String
+        public let keyType: String
+        public let proposals: [OpenAPI.ResearchMappingProposal]
+        public let existing: [OpenAPI.InstrumentProviderMapping]
+
+        public init(instrumentKey: String, keyType: String, proposals: [OpenAPI.ResearchMappingProposal], existing: [OpenAPI.InstrumentProviderMapping]) {
+            self.instrumentKey = instrumentKey
+            self.keyType = keyType
+            self.proposals = proposals
+            self.existing = existing
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case instrumentKey = "instrument_key"
+            case keyType = "key_type"
+            case proposals = "proposals"
+            case existing = "existing"
+        }
+    }
+
+    public struct ResearchMappingResolveEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let meta: OpenAPI.ResearchMeta?
+        public let error: OpenAPI.ErrorPayload?
+        public let data: OpenAPI.ResearchMappingResolveData?
+
+        public init(ok: Bool, meta: OpenAPI.ResearchMeta? = nil, error: OpenAPI.ErrorPayload? = nil, data: OpenAPI.ResearchMappingResolveData? = nil) {
+            self.ok = ok
+            self.meta = meta
+            self.error = error
+            self.data = data
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case meta = "meta"
+            case error = "error"
+            case data = "data"
+        }
+    }
+
+    public struct ResearchMappingsData: Codable, Equatable, Sendable {
+        public let items: [OpenAPI.InstrumentProviderMapping]
+        public let total: Int
+
+        public init(items: [OpenAPI.InstrumentProviderMapping], total: Int) {
+            self.items = items
+            self.total = total
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case items = "items"
+            case total = "total"
+        }
+    }
+
+    public struct ResearchMappingsEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let meta: OpenAPI.ResearchMeta?
+        public let error: OpenAPI.ErrorPayload?
+        public let data: OpenAPI.ResearchMappingsData?
+
+        public init(ok: Bool, meta: OpenAPI.ResearchMeta? = nil, error: OpenAPI.ErrorPayload? = nil, data: OpenAPI.ResearchMappingsData? = nil) {
+            self.ok = ok
+            self.meta = meta
+            self.error = error
+            self.data = data
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case meta = "meta"
+            case error = "error"
+            case data = "data"
+        }
+    }
+
+    public struct ResearchMeta: Codable, Equatable, Sendable {
+        public let provider: String?
+        public let source: String
+        public let requestId: String?
+
+        public init(provider: String? = nil, source: String, requestId: String? = nil) {
+            self.provider = provider
+            self.source = source
+            self.requestId = requestId
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case provider = "provider"
+            case source = "source"
+            case requestId = "requestId"
+        }
+    }
+
+    public struct ResearchNewsArticle: Codable, Equatable, Sendable {
+        public let title: String?
+        public let link: String?
+        public let publisher: String?
+        public let publishedAt: Decimal?
+        public let thumbnail: String?
+        public let relatedSymbols: [String]?
+
+        public init(title: String? = nil, link: String? = nil, publisher: String? = nil, publishedAt: Decimal? = nil, thumbnail: String? = nil, relatedSymbols: [String]? = nil) {
+            self.title = title
+            self.link = link
+            self.publisher = publisher
+            self.publishedAt = publishedAt
+            self.thumbnail = thumbnail
+            self.relatedSymbols = relatedSymbols
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case title = "title"
+            case link = "link"
+            case publisher = "publisher"
+            case publishedAt = "publishedAt"
+            case thumbnail = "thumbnail"
+            case relatedSymbols = "relatedSymbols"
+        }
+    }
+
+    public struct ResearchNewsData: Codable, Equatable, Sendable {
+        public let articles: [OpenAPI.ResearchNewsArticle]
+
+        public init(articles: [OpenAPI.ResearchNewsArticle]) {
+            self.articles = articles
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case articles = "articles"
+        }
+    }
+
+    public struct ResearchNewsEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let meta: OpenAPI.ResearchMeta?
+        public let error: OpenAPI.ErrorPayload?
+        public let data: OpenAPI.ResearchNewsData?
+
+        public init(ok: Bool, meta: OpenAPI.ResearchMeta? = nil, error: OpenAPI.ErrorPayload? = nil, data: OpenAPI.ResearchNewsData? = nil) {
+            self.ok = ok
+            self.meta = meta
+            self.error = error
+            self.data = data
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case meta = "meta"
+            case error = "error"
+            case data = "data"
+        }
+    }
+
+    public struct ResearchScorecard: Codable, Equatable, Sendable {
+        public let score: Decimal?
+        public let grade: String
+        public let evaluated: Int
+        public let counts: Counts
+        public let flags: [OpenAPI.ResearchScorecardFlag]
+
+        public init(score: Decimal? = nil, grade: String, evaluated: Int, counts: Counts, flags: [OpenAPI.ResearchScorecardFlag]) {
+            self.score = score
+            self.grade = grade
+            self.evaluated = evaluated
+            self.counts = counts
+            self.flags = flags
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case score = "score"
+            case grade = "grade"
+            case evaluated = "evaluated"
+            case counts = "counts"
+            case flags = "flags"
+        }
+
+        public struct Counts: Codable, Equatable, Sendable {
+            public let ok: Int
+            public let caution: Int
+            public let warn: Int
+            public let risk: Int
+
+            public init(ok: Int, caution: Int, warn: Int, risk: Int) {
+                self.ok = ok
+                self.caution = caution
+                self.warn = warn
+                self.risk = risk
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case ok = "ok"
+                case caution = "caution"
+                case warn = "warn"
+                case risk = "risk"
+            }
+        }
+    }
+
+    public struct ResearchScorecardData: Codable, Equatable, Sendable {
+        public let symbol: String
+        public let fundamentals: OpenAPI.ResearchFundamentals
+        public let scorecard: OpenAPI.ResearchScorecard
+
+        public init(symbol: String, fundamentals: OpenAPI.ResearchFundamentals, scorecard: OpenAPI.ResearchScorecard) {
+            self.symbol = symbol
+            self.fundamentals = fundamentals
+            self.scorecard = scorecard
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case symbol = "symbol"
+            case fundamentals = "fundamentals"
+            case scorecard = "scorecard"
+        }
+    }
+
+    public struct ResearchScorecardEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let meta: OpenAPI.ResearchMeta?
+        public let error: OpenAPI.ErrorPayload?
+        public let data: OpenAPI.ResearchScorecardData?
+
+        public init(ok: Bool, meta: OpenAPI.ResearchMeta? = nil, error: OpenAPI.ErrorPayload? = nil, data: OpenAPI.ResearchScorecardData? = nil) {
+            self.ok = ok
+            self.meta = meta
+            self.error = error
+            self.data = data
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case meta = "meta"
+            case error = "error"
+            case data = "data"
+        }
+    }
+
+    public struct ResearchScorecardFlag: Codable, Equatable, Sendable {
+        public let metric: String
+        public let category: String
+        public let better: String
+        public let value: Decimal
+        public let severity: String
+        public let code: String
+        public let reasonKey: String
+        public let reason: String
+        public let benchmark: String
+
+        public init(metric: String, category: String, better: String, value: Decimal, severity: String, code: String, reasonKey: String, reason: String, benchmark: String) {
+            self.metric = metric
+            self.category = category
+            self.better = better
+            self.value = value
+            self.severity = severity
+            self.code = code
+            self.reasonKey = reasonKey
+            self.reason = reason
+            self.benchmark = benchmark
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case metric = "metric"
+            case category = "category"
+            case better = "better"
+            case value = "value"
+            case severity = "severity"
+            case code = "code"
+            case reasonKey = "reasonKey"
+            case reason = "reason"
+            case benchmark = "benchmark"
+        }
+    }
+
+    public struct ResearchSearchData: Codable, Equatable, Sendable {
+        public let items: [OpenAPI.ResearchSearchItem]
+
+        public init(items: [OpenAPI.ResearchSearchItem]) {
+            self.items = items
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case items = "items"
+        }
+    }
+
+    public struct ResearchSearchEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let meta: OpenAPI.ResearchMeta?
+        public let error: OpenAPI.ErrorPayload?
+        public let data: OpenAPI.ResearchSearchData?
+
+        public init(ok: Bool, meta: OpenAPI.ResearchMeta? = nil, error: OpenAPI.ErrorPayload? = nil, data: OpenAPI.ResearchSearchData? = nil) {
+            self.ok = ok
+            self.meta = meta
+            self.error = error
+            self.data = data
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case meta = "meta"
+            case error = "error"
+            case data = "data"
+        }
+    }
+
+    public struct ResearchSearchItem: Codable, Equatable, Sendable {
+        public let symbol: String?
+        public let name: String?
+        public let type: String?
+        public let exchange: String?
+
+        public init(symbol: String? = nil, name: String? = nil, type: String? = nil, exchange: String? = nil) {
+            self.symbol = symbol
+            self.name = name
+            self.type = type
+            self.exchange = exchange
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case symbol = "symbol"
+            case name = "name"
+            case type = "type"
+            case exchange = "exchange"
         }
     }
 
@@ -6844,6 +7762,70 @@ extension OpenAPI {
             case comment = "comment"
             case isActive = "is_active"
             case tags = "tags"
+        }
+    }
+
+    public struct WatchlistData: Codable, Equatable, Sendable {
+        public let items: [OpenAPI.WatchlistItem]
+        public let total: Int
+        public let limit: Int
+        public let offset: Int
+
+        public init(items: [OpenAPI.WatchlistItem], total: Int, limit: Int, offset: Int) {
+            self.items = items
+            self.total = total
+            self.limit = limit
+            self.offset = offset
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case items = "items"
+            case total = "total"
+            case limit = "limit"
+            case offset = "offset"
+        }
+    }
+
+    public struct WatchlistItem: Codable, Equatable, Sendable {
+        public let id: Int
+        public let name: String
+        public let symbol: String?
+        public let assetClass: String
+        public let targetPrice: Decimal
+        public let currency: String
+        public let notes: String?
+        public let priceProviderId: String?
+        /// Live price snapshotted when the item was added (ADR-097 backtest).
+        public let addedPrice: Decimal?
+        public let createdAt: String
+        public let updatedAt: String
+
+        public init(id: Int, name: String, symbol: String? = nil, assetClass: String, targetPrice: Decimal, currency: String, notes: String? = nil, priceProviderId: String? = nil, addedPrice: Decimal? = nil, createdAt: String, updatedAt: String) {
+            self.id = id
+            self.name = name
+            self.symbol = symbol
+            self.assetClass = assetClass
+            self.targetPrice = targetPrice
+            self.currency = currency
+            self.notes = notes
+            self.priceProviderId = priceProviderId
+            self.addedPrice = addedPrice
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case name = "name"
+            case symbol = "symbol"
+            case assetClass = "asset_class"
+            case targetPrice = "target_price"
+            case currency = "currency"
+            case notes = "notes"
+            case priceProviderId = "price_provider_id"
+            case addedPrice = "added_price"
+            case createdAt = "created_at"
+            case updatedAt = "updated_at"
         }
     }
 }

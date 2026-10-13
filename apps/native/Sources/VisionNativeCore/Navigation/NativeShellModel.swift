@@ -76,6 +76,7 @@ public final class NativeShellModel {
     public let portfolioImports: PortfolioImportScreens?
     public let analysis: AnalysisScreens?
     public let analysisMonitors: AnalysisMonitorsModel?
+    public let research: ResearchScreens?
     /// The navigation the Leave this page? alert holds while it asks (`blocker.location`).
     public private(set) var leaveConfirmation: NativeRoute?
 
@@ -114,6 +115,7 @@ public final class NativeShellModel {
         portfolioImports: PortfolioImportScreens? = nil,
         analysis: AnalysisScreens? = nil,
         analysisMonitors: AnalysisMonitorsModel? = nil,
+        research: ResearchScreens? = nil,
         hiddenSections: [NavSectionID: Bool]? = nil,
         loadSettings: @escaping @Sendable () async throws -> NativeAppSettings,
         saveHiddenSections: @escaping @MainActor ([NavSectionID: Bool]) -> Void = { _ in },
@@ -138,6 +140,7 @@ public final class NativeShellModel {
         self.portfolioImports = portfolioImports
         self.analysis = analysis
         self.analysisMonitors = analysisMonitors
+        self.research = research
         self.hiddenSections = hiddenSections ?? Self.defaultHiddenSections
         self.loadSettings = loadSettings
         self.saveHiddenSections = saveHiddenSections
@@ -179,6 +182,12 @@ public final class NativeShellModel {
         if case .portfolioImportReview = screen, portfolioImports == nil { return .web }
         if screen == .analysis && analysis == nil { return .web }
         if screen == .analysisMonitors && analysisMonitors == nil { return .web }
+        if [.researchHome, .researchMarkets, .researchMarketLookup, .researchWatchlist, .researchCompare].contains(
+            screen),
+            research == nil
+        {
+            return .web
+        }
         return .native(screen)
     }
 
@@ -191,9 +200,19 @@ public final class NativeShellModel {
         NavigationRegistry.matchItem(path: route.path)?.url
     }
 
+    /// Settings and global overlays cover the native view while React keeps its page mounted.
+    public func isTemporarilyCovered(_ path: String) -> Bool {
+        route.path == path && (isPresentingWeb || route.value("settings") != nil)
+    }
+
     /// `shell:route-changed`: the page's router moved, or an overlay closed on the same route.
     public func routeDidChange(_ next: NativeRoute) {
         let pathChanged = next.path != route.path
+        if pathChanged {
+            if route.path == "/analysis" { analysis?.didDisappear() }
+            research?.didDisappear(route: route)
+            if route.path == "/research/market" { removeLeaveGuard(id: route.path) }
+        }
         let settingsClosed = route.value("settings") != nil && next.value("settings") == nil
         let reportClosed = route.value("export") == "pdf" && next.value("export") != "pdf"
         // A new page, the settings dialog closing (`?settings` removed), or the same route
@@ -312,7 +331,11 @@ public final class NativeShellModel {
     public var owes: OwesModel { transactions.owes }
 
     /// Import cash and trades can become durable after the user has opened another screen.
-    public func portfolioImportDidMutate() async {
+    public func portfolioImportDidMutate() async { await portfolioDataDidMutate() }
+
+    /// Portfolio/import/research writes retire sibling reads even when their acknowledgement is lost.
+    public func portfolioDataDidMutate() async {
+        research?.portfolioDataDidChange()
         home?.invalidate()
         statistics?.model.invalidate()
         tax?.invalidate()

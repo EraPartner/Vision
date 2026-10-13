@@ -1,3 +1,4 @@
+import { watchlistPresentation } from "@vision/shared-utils/research/presentation";
 import { useEffect, useState } from "react";
 import { MAX_NUMERIC_18_6, parseDecimal } from "@/lib/decimal";
 import { useQueryClient } from "@tanstack/react-query";
@@ -132,6 +133,12 @@ export function AddToWatchlistDialog({
         appSettings.numberFormat,
         NaN,
     );
+    const preview = watchlistPresentation({
+        targetPrice: previewTarget,
+        currentPrice: quoteData?.price ?? null,
+        addedPrice: null,
+        points: [],
+    }).preview;
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!selectedAsset || !targetPrice) return;
@@ -388,39 +395,21 @@ export function AddToWatchlistDialog({
                                         setTargetPrice(e.target.value)
                                     }
                                 />
-                                {quoteData &&
-                                    Number.isFinite(quoteData.price) &&
-                                    quoteData.price > 0 &&
-                                    Number.isFinite(previewTarget) &&
-                                    previewTarget > 0 && (
-                                        <p className="type-caption text-label-secondary">
-                                            {previewTarget < quoteData.price
-                                                ? t(
-                                                      "addWatchlist.belowCurrent",
-                                                      {
-                                                          n: formatPercent(
-                                                              (1 -
-                                                                  previewTarget /
-                                                                      quoteData.price) *
-                                                                  100,
-                                                              { digits: 1 },
-                                                          ),
-                                                      },
-                                                  )
-                                                : t(
-                                                      "addWatchlist.aboveCurrent",
-                                                      {
-                                                          n: formatPercent(
-                                                              (previewTarget /
-                                                                  quoteData.price -
-                                                                  1) *
-                                                                  100,
-                                                              { digits: 1 },
-                                                          ),
-                                                      },
-                                                  )}
-                                        </p>
-                                    )}
+                                {preview && (
+                                    <p className="type-caption text-label-secondary">
+                                        {t(
+                                            preview.direction === "below"
+                                                ? "addWatchlist.belowCurrent"
+                                                : "addWatchlist.aboveCurrent",
+                                            {
+                                                n: formatPercent(
+                                                    preview.absolutePercent,
+                                                    { digits: 1 },
+                                                ),
+                                            },
+                                        )}
+                                    </p>
+                                )}
                             </div>
 
                             <div className="space-y-2">

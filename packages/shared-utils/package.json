@@ -16,7 +16,8 @@
     "./portfolio-import-detection": "./src/portfolioImportDetection.ts",
     "./csv-preview": "./src/csvPreview.ts",
     "./csv-separator": "./src/csvSeparator.ts",
-    "./analysis/*": "./src/analysis/*.ts"
+    "./analysis/*": "./src/analysis/*.ts",
+    "./research/*": "./src/research/*.ts"
   },
   "files": [
     "src"

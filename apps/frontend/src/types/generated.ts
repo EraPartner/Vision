@@ -4256,6 +4256,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/research/presentation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Compute Research presentation from submitted data without fetching or persisting
+         * @description Stateless shared TypeScript transformations for Compare, Chart Builder, watchlist list/chart/add previews, provider-history quotes, analyst consensus and market-add two-of-three previews. No provider, database, settings or FX lookup. Original source ordering, warmups, thresholds and currency semantics are retained. Submit one UTF-8 JSON snapshot file; the 64 MiB scoped multipart limit bypasses the global JSON-body size limit without silently truncating history. Numeric JSON is validated as finite numbers; non-finite calculation outputs serialize as null as in the web client. Uses the existing Research market rate limiter.
+         */
+        post: operations["computeResearchPresentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/research/search": {
         parameters: {
             query?: never;
@@ -6249,6 +6269,200 @@ export interface components {
         PortfolioSummaryEnvelope: components["schemas"]["Envelope"] & {
             data?: components["schemas"]["PortfolioSummaryData"];
         };
+        MarketSearchData: {
+            items: components["schemas"]["MarketSearchResult"][];
+        };
+        MarketQuoteItem: {
+            symbol: string;
+            currency: string;
+            name?: string | null;
+            exchange?: string | null;
+            type?: string | null;
+            price?: number | null;
+            change?: number | null;
+            changePercent?: number | null;
+            open?: number | null;
+            dayHigh?: number | null;
+            dayLow?: number | null;
+            prevClose?: number | null;
+            volume?: number | null;
+            avgVolume?: number | null;
+            high52w?: number | null;
+            low52w?: number | null;
+            analystConsensus?: components["schemas"]["ResearchAnalystConsensus"];
+            recentAnalystActions?: {
+                [key: string]: unknown;
+            }[];
+        } & {
+            [key: string]: unknown;
+        };
+        MarketQuoteData: {
+            items: components["schemas"]["MarketQuoteItem"][];
+            total: number;
+        };
+        MarketNewsItem: {
+            title?: string | null;
+            link?: string | null;
+            publisher?: string | null;
+            publishedAt: number | null;
+            thumbnail: string | null;
+            relatedSymbols: string[];
+        };
+        MarketNewsData: {
+            items: components["schemas"]["MarketNewsItem"][];
+            total: number;
+        };
+        WatchlistData: {
+            items: components["schemas"]["WatchlistItem"][];
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        InvestmentPriceHistoryPoint: {
+            timestampMs: number;
+            price: number;
+        };
+        InvestmentPriceHistoryData: {
+            investment_id: number;
+            provider: string;
+            points: components["schemas"]["InvestmentPriceHistoryPoint"][];
+        };
+        /** @description Timestamp plus submitted-series/indicator identifiers. Missing provider volume fields may be absent; non-finite derived values serialize as null. */
+        ResearchPresentationRow: {
+            time: number;
+        } & {
+            [key: string]: number | null;
+        };
+        ResearchPresentationCompareResult: {
+            rows: components["schemas"]["ResearchPresentationRow"][];
+            stats: {
+                symbol: string;
+                totalReturn: number | null;
+                volatility: number | null;
+                maxDrawdown: number | null;
+                firstTime?: number;
+                lastTime?: number;
+            }[];
+            correlation: {
+                symbols: string[];
+                matrix: (number | null)[][];
+            };
+        };
+        ResearchPresentationChartResult: {
+            rows: components["schemas"]["ResearchPresentationRow"][];
+            oscillatorRows: components["schemas"]["ResearchPresentationRow"][];
+        };
+        ResearchPresentationWatchlistList: {
+            distancePercent: number | null;
+            absoluteDistancePercent: number | null;
+            isAtOrBelowTarget: boolean;
+            sinceAddedPercent: number | null;
+        };
+        ResearchPresentationWatchlistResult: {
+            list: components["schemas"]["ResearchPresentationWatchlistList"];
+            chart: {
+                distancePercent: number | null;
+                absoluteDistancePercent: number | null;
+                isAtOrBelowTarget: boolean;
+                hasValidTarget: boolean;
+                domain: number[];
+            };
+            preview: {
+                absolutePercent: number;
+                /** @enum {string} */
+                direction: "below" | "above";
+            } | null;
+        };
+        ResearchPresentationWatchlistBatchResult: {
+            entries: {
+                id: number;
+                list: components["schemas"]["ResearchPresentationWatchlistList"];
+            }[];
+        };
+        ResearchPresentationAnalystResult: {
+            total: number;
+            bullFraction: number;
+            bearFraction: number;
+            /** @enum {string} */
+            verdictKey: "market.strongBuy" | "market.buy" | "market.hold" | "market.sell" | "market.strongSell";
+            /** @enum {string} */
+            tone: "success" | "destructive" | "warning";
+            fractions: components["schemas"]["ResearchAnalystConsensus"];
+        } | null;
+        ResearchPresentationProviderQuoteResult: {
+            symbol: string;
+            name: string;
+            price?: number | null;
+            change: number | null;
+            changePercent: number | null;
+            currency: string;
+            exchange: string;
+            type: string;
+        } | null;
+        ResearchPresentationMarketAddResult: {
+            derivedAmount?: number | null;
+            derivedUnits?: number | null;
+            derivedPrice?: number | null;
+            effectiveAmount?: number | null;
+            effectiveUnits?: number | null;
+            effectivePrice?: number | null;
+            providedCount: number;
+            isConsistent: boolean;
+        };
+        /** @description Uploaded JSON discriminated by kind. compare requires series[{symbol,points}] (max 6). chart requires series[{id,field,type,points}] (max 5), indicators[{id,type,period,seriesId}] (max 20, period 1..500), rebase, oscillator and nullable oscillatorSeriesId. watchlist requires nullable targetPrice/currentPrice/addedPrice and optional points. watchlistBatch requires entries[{id,targetPrice,currentPrice,addedPrice}] (max 5000). providerQuote requires points and investment{name,currency,symbol?,priceProvider?}, with optional selectedSymbol. analyst requires nullable consensus with all five numeric count fields. marketAdd accepts positive amount/units/price and optional derive (default true). Points require time, with optional nullable numeric close/high/low/volume. There is no point-count truncation; transport is bounded. */
+        ResearchPresentationSnapshot: {
+            /** @enum {string} */
+            kind: "compare" | "chart" | "watchlist" | "watchlistBatch" | "providerQuote" | "analyst" | "marketAdd";
+            series?: {
+                symbol?: string;
+                id?: string;
+                /** @enum {string} */
+                field?: "price" | "volume";
+                /** @enum {string} */
+                type?: "line" | "area" | "candlestick" | "bar";
+                points?: components["schemas"]["ResearchChartPoint"][];
+            }[];
+            indicators?: {
+                id: string;
+                /** @enum {string} */
+                type: "sma" | "ema" | "bollinger";
+                period: number;
+                seriesId: string;
+            }[];
+            rebase?: boolean;
+            /** @enum {string} */
+            oscillator?: "none" | "rsi" | "macd";
+            oscillatorSeriesId?: string | null;
+            targetPrice?: number | null;
+            currentPrice?: number | null;
+            addedPrice?: number | null;
+            points?: components["schemas"]["ResearchChartPoint"][];
+            entries?: {
+                id: number;
+                targetPrice: number;
+                currentPrice: number | null;
+                addedPrice: number | null;
+            }[];
+            investment?: {
+                symbol?: string | null;
+                name: string;
+                currency: string;
+                priceProvider?: string | null;
+            };
+            selectedSymbol?: string | null;
+            consensus?: components["schemas"]["ResearchAnalystConsensus"];
+            amount?: number;
+            units?: number;
+            price?: number;
+            /** @default true */
+            derive: boolean;
+        };
+        /** @description result shape is determined by the echoed kind; unavailable analyst/providerQuote results are null. */
+        ResearchPresentationData: {
+            /** @enum {string} */
+            kind: "compare" | "chart" | "watchlist" | "watchlistBatch" | "providerQuote" | "analyst" | "marketAdd";
+            result: (components["schemas"]["ResearchPresentationCompareResult"] | components["schemas"]["ResearchPresentationChartResult"] | components["schemas"]["ResearchPresentationWatchlistResult"] | components["schemas"]["ResearchPresentationWatchlistBatchResult"] | components["schemas"]["ResearchPresentationProviderQuoteResult"] | components["schemas"]["ResearchPresentationAnalystResult"] | components["schemas"]["ResearchPresentationMarketAddResult"]) | null;
+        };
         ResearchMeta: {
             provider: string | null;
             /** @enum {string} */
@@ -6256,42 +6470,42 @@ export interface components {
             requestId?: string;
         };
         ResearchSearchItem: {
-            symbol: string;
-            name?: string;
-            type?: string;
-            exchange?: string;
+            symbol?: string | null;
+            name?: string | null;
+            type?: string | null;
+            exchange?: string | null;
         };
         ResearchSearchData: {
             items: components["schemas"]["ResearchSearchItem"][];
         };
         ResearchQuote: {
             symbol: string;
-            name?: string;
-            price: number;
-            change?: number;
-            changePercent?: number;
-            currency?: string;
-            exchange?: string;
-            type?: string;
-            open?: number;
-            dayHigh?: number;
-            dayLow?: number;
-            prevClose?: number;
-            volume?: number;
-            avgVolume?: number;
-            high52w?: number;
-            low52w?: number;
+            name?: string | null;
+            price?: number | null;
+            change?: number | null;
+            changePercent?: number | null;
+            currency?: string | null;
+            exchange?: string | null;
+            type?: string | null;
+            open?: number | null;
+            dayHigh?: number | null;
+            dayLow?: number | null;
+            prevClose?: number | null;
+            volume?: number | null;
+            avgVolume?: number | null;
+            high52w?: number | null;
+            low52w?: number | null;
         };
         ResearchChartPoint: {
             time: number;
-            close: number;
-            high?: number;
-            low?: number;
-            volume?: number;
+            close?: number | null;
+            high?: number | null;
+            low?: number | null;
+            volume?: number | null;
         };
         ResearchChartData: {
             symbol?: string;
-            currency?: string;
+            currency?: string | null;
             points: components["schemas"]["ResearchChartPoint"][];
         };
         ResearchFundamentals: {
@@ -8028,8 +8242,8 @@ export interface components {
             symbol: string;
             name: string;
             exchange: string;
-            currency: string;
-            type?: string;
+            currency?: string;
+            type: string;
         };
     };
     responses: never;
@@ -14437,8 +14651,22 @@ export interface operations {
     getInvestmentPriceHistory: {
         parameters: {
             query?: {
+                /**
+                 * @deprecated
+                 * @description Accepted but ignored; use from_ms.
+                 */
                 start_date?: string;
+                /**
+                 * @deprecated
+                 * @description Accepted but ignored; use to_ms.
+                 */
                 end_date?: string;
+                /** @description Inclusive epoch milliseconds. Missing or non-finite parsed values leave this bound absent. */
+                from_ms?: number;
+                /** @description Inclusive epoch milliseconds. Missing or non-finite parsed values leave this bound absent. */
+                to_ms?: number;
+                /** @description Defaults true; false allows the existing provider fetch/cache behavior. Lenient boolean parsing is retained. */
+                db_only?: boolean;
             };
             header?: never;
             path: {
@@ -14454,7 +14682,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["InvestmentPriceHistoryData"];
+                    };
                 };
             };
         };
@@ -14593,7 +14823,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: components["schemas"]["MarketSearchResult"][];
+                        data?: components["schemas"]["MarketSearchData"];
                     };
                 };
             };
@@ -14627,10 +14857,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: {
-                            items: Record<string, never>[];
-                            total: number;
-                        };
+                        data?: components["schemas"]["MarketQuoteData"];
                     };
                 };
             };
@@ -14709,10 +14936,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: {
-                            items: Record<string, never>[];
-                            total: number;
-                        };
+                        data?: components["schemas"]["MarketNewsData"];
                     };
                 };
             };
@@ -14727,7 +14951,14 @@ export interface operations {
     };
     getWatchlist: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Optional exact asset-class filter; repeated keys return 400. */
+                asset_class?: string;
+                /** @description Lenient integer parsing; clamped to 1..5000; malformed values use 50. */
+                limit?: number;
+                /** @description Lenient integer parsing; negative values clamp to zero. */
+                offset?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -14741,7 +14972,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: components["schemas"]["WatchlistItem"][];
+                        data?: components["schemas"]["WatchlistData"];
                     };
                 };
             };
@@ -18162,6 +18393,60 @@ export interface operations {
                         };
                     };
                 };
+            };
+        };
+    };
+    computeResearchPresentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Single file field only; its JSON shape is ResearchPresentationSnapshot. Extra multipart fields and repeated files are rejected. */
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /**
+                     * Format: binary
+                     * @description UTF-8 JSON ResearchPresentationSnapshot; maximum 67,108,864 bytes.
+                     */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Computed kind-specific presentation, standard envelope; no read or write side effects. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["ResearchPresentationData"];
+                    };
+                };
+            };
+            /** @description VALIDATION_ERROR for missing/repeated/oversize file, extra multipart fields, invalid JSON or invalid/bounded snapshot. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Existing Research market rate limit. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description File I/O or unexpected calculation failure. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

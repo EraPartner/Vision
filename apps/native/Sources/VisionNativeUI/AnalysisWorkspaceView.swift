@@ -79,6 +79,7 @@ public struct AnalysisWorkspaceView: View {
             }
         }
         .onDisappear {
+            guard !shell.isTemporarilyCovered("/analysis") else { return }
             if let screens = shell.analysis, screens.workspace === model, screens.workbench === workbench {
                 screens.didDisappear()
             } else {

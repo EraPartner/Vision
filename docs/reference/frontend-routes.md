@@ -80,6 +80,15 @@ replace `year` while preserving unrelated parameters. Full Mac/Demo parity revie
 | `/research/charts`    | `ChartBuilderPage`      | AppLayout | Configurable market charts |
 | `/research/dossiers`  | `ResearchDossiersPage`  | AppLayout | Research dossiers          |
 
+The Swift shell draws Research home, Markets, Market lookup, Watchlist and Compare in phase 3l.
+The existing providers, caches and rate limits remain authoritative; native reads retain provider/
+cache metadata and nullable values. Submitted snapshots use shared TypeScript presentation for
+comparison statistics, chart indicators, target/return metrics and trade previews. Lookup's symbol,
+range and tab and Compare's repeated symbols, range, tab and sort preserve unrelated query values.
+Market lookup's Add to portfolio form retains its unsaved-work guard and broker defaults. Forecast,
+Chart Builder and Dossiers remain web. Full Mac/Demo review is pending; see
+[[docs/reference/native-parity/research-and-ai-chat|Research parity]].
+
 ## Admin Routes
 
 Admin routes appear in the sidebar's Admin section, shown only when admin mode is on.

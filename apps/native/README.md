@@ -182,6 +182,15 @@ See [the architecture page](../../docs/architecture/native-app.md#native-navigat
 - `/analysis/monitors` is native (phase 3k): saved-analysis/dossier targets, conditions, schedules,
   observations, unread notifications and rule actions retain server-owned evaluation. Neither
   Analysis route requires admin mode. Full macOS build and Demo parity review remain pending.
+- `/research`, `/research/markets`, `/research/market`, `/research/watchlist` and `/research/compare`
+  are native (phase 3l): search, regional/sector markets, provider-aware instrument details and
+  mapping, portfolio/watchlist actions, target charts, and comparative performance/fundamentals.
+  Provider/cache metadata and nullable Decimal values survive the HTTP envelope. Comparison,
+  indicators, target/return metrics and trade previews use shared TypeScript presentation code;
+  the submitted-data endpoint makes no provider requests. Quotes/news retain source polling and
+  fresh caches; late replies cannot replace another symbol, range, editor or route. Market lookup's
+  retained Add to portfolio drafts use the existing leave guard and broker-history defaults.
+  Forecast, Chart Builder, Dossiers and AI chat remain web. Mac/Demo review is pending.
 - `/admin`, `/admin/providers`, `/admin/endpoints` and `/admin/exchange-rates` are native, in
   admin mode only, and so are `/admin/db` and `/admin/db/:table`; the table editor holds
   navigation and Quit behind a native Leave this page? alert while it has pending changes. The admin token card writes the page's
@@ -489,3 +498,14 @@ Demo visual/keyboard checks remain pending.
     verify interval and cooldown limits, enable/disable a rule during an unsaved edit, and inspect
     observations and unread notifications. Check manual evaluation, delete confirmation, polling,
     error states and late reads after writes or navigation; no stale reply may undo a newer edit.
+29. **Research (phase 3l, pending Mac review).** Compare all regions/sectors, archived holding
+    markers, search keyboard controls and safe news links in EN/NL. Open Yahoo and held-provider
+    instrument URLs; change symbol, range, tab and currency while reads are pending. Inspect
+    fundamentals/analyst/news provenance, mapping context changes, the two Add to portfolio steps,
+    broker defaults and dirty drafts after dismissal. Simulate repeated Record clicks and lost
+    acknowledgements; no ambiguous write may be replayed implicitly. Exercise Watchlist target
+    edits, add/remove and chart ranges, including leaving during a write. Compare up to six symbols,
+    null/missing history, correlation, sorting and late range replies. Reconnect on another route;
+    hidden screens must not start provider reads. Open Settings or the command palette during a
+    draft; the draft and its leave guard must survive coverage. Review chart focus/tooltips and
+    VoiceOver on Mac.

@@ -13,6 +13,7 @@
  */
 
 import { Router } from "express";
+import presentationRouter from "./researchPresentation.ts";
 import type { ExpressResponse } from "../types/express.ts";
 import { z } from "zod";
 import { ValidationError } from "../middleware/errorHandler.ts";
@@ -35,6 +36,7 @@ import {
 } from "../services/research/adapters/macroCatalog.ts";
 
 const router = Router();
+router.use(presentationRouter);
 
 // Keyed by `dataType` (a runtime string from the aggregator's capability map,
 // not a closed union here), and the per-key shapes genuinely differ (items[]

@@ -232,3 +232,21 @@ listResearchDossiers
 
 # Analysis CSV/XLSX import/export use handwritten multipart and binary operations:
 # importAnalysisInterchange, exportAnalysisInterchange.
+
+# Research home, Markets, Market lookup, Watchlist and Compare (phase 3l).
+researchSearch
+researchChart
+researchScorecard
+researchAnalyst
+researchNews
+marketSearch
+getWatchlist
+addToWatchlist
+updateWatchlistItem
+deleteWatchlistItem
+researchListMappings
+researchResolveMappings
+researchSaveMappings
+researchDeleteMapping
+researchAuditMappings
+# computeResearchPresentation uses a handwritten submitted-data multipart operation.

@@ -2,8 +2,8 @@
 title: Research Feature
 type: feature
 status: active
-date: 2026-10-11
-updated: 2026-10-11
+date: 2026-10-13
+updated: 2026-10-13
 tags:
   - url-state
   - feature
@@ -114,7 +114,7 @@ value. Keyboard adjustments update the same blend used by the forecast request.
 
 The Forecast page also supports saved three-month income interruption scenarios. The user enters a baseline monthly surplus, planned portfolio contribution, and monthly income loss. Vision limits the first three months of scenario contributions to the nonnegative reduced surplus, then resumes the baseline contribution. An optional nominal savings goal month compares target probabilities at that month using the same simulation seed for both paths. The UI refuses to attribute an approximate median difference to income interruption if reported market inputs change between the two forecast requests. Scenario definitions are stored under `life_scenarios` in [[docs/api/settings|Settings API]]; results remain on demand. The values are assumptions, not a budget guarantee or a real-value inflation adjustment. See [[docs/api/research|Research API]] for the contribution schedule and goal-month contract and [[docs/diagrams/life-scenario-flow.puml|Life Scenario Flow]] for the request path.
 
-Eighteen endpoints at `/api/research`, all under `marketRateLimiter`: six GET data endpoints (search/quote/chart/fundamentals/analyst/news), two analytics endpoints (scorecard, portfolio-forecast), two macro endpoints (macro/search, macro/series — ADR-082), five symbol-mapping endpoints (`GET/POST/DELETE /mappings`, `POST /mappings/resolve`, `POST /mappings/audit`), and three provider-key Settings endpoints. Full endpoint reference: [[docs/api/research|Research API]].
+Nineteen endpoints at `/api/research`, all under `marketRateLimiter`: six GET data endpoints (search/quote/chart/fundamentals/analyst/news), two analytics endpoints (scorecard, portfolio-forecast), two macro endpoints (macro/search, macro/series — ADR-082), five symbol-mapping endpoints (`GET/POST/DELETE /mappings`, `POST /mappings/resolve`, `POST /mappings/audit`), three provider-key Settings endpoints, and one stateless submitted-data presentation endpoint. Full endpoint reference: [[docs/api/research|Research API]].
 
 | Endpoint                                                        | Data type                                                                                                                                                                                                                                                                                                                                         | Cache / Notes                                                        |
 | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
@@ -343,7 +343,7 @@ surfaces remain consistent with the workspace.
 - [[docs/adr/082-macroeconomic-indicators-data-vertical|ADR-082]] — architecture decision for the macro data vertical (FRED + Eurostat + DBnomics, provider-pinned, ADR-082)
 - [[docs/adr/081-research-analytics-forecasting|ADR-081]] — architecture decision for Pillars B/C/D deepening (portfolio projection engine, scorecard, chart builder)
 - [[docs/adr/079-multi-provider-research-aggregation|ADR-079]] — foundation ADR (aggregation layer, capability map, quota governor, symbol mapping, Pillars A/B/D initial)
-- [[docs/api/research|Research API]] — endpoint reference (all 18 endpoints)
+- [[docs/api/research|Research API]] — endpoint reference (all 19 endpoints)
 - [[docs/integrations/price-providers|Price Providers Integration]] — provider registry and health service this layer builds on
 - [[docs/features/market-lookup|Market Lookup]] — existing Yahoo surface
 - [[docs/features/watchlist|Watchlist]] — watchlist surface
@@ -390,3 +390,16 @@ Invalid fields show inline messages and suspend the forecast query. Results from
 are hidden while inputs are invalid or waiting for the debounce, so a visible chart cannot silently
 represent a different contribution or target. This is frontend validation; the projection API
 contract in [[docs/api/research]] is unchanged.
+
+## Shared presentation calculations (native phase 3l)
+
+Compare statistics/correlations, Chart Builder rebasing/OHLC fallback/indicators, Watchlist target
+and since-added percentages, provider-history quote synthesis, analyst verdicts and market-add
+unit previews are shared pure TypeScript under `packages/shared-utils/src/research/`. The existing
+web pages import these helpers; frontend indicator and portfolio-unit compatibility exports keep
+existing callers and lazy loading. Native callers submit already-fetched values to
+[[docs/api/research#POST /api/research/presentation|the stateless presentation API]], preserving
+source order, null warmups, currency conventions and provider quota. Swift renders returned values
+and edits structural configuration; the endpoint does not fetch, persist, or invent provenance.
+The native macOS/Demo visual and keyboard checks remain pending; see
+[[docs/reference/native-parity/research-and-ai-chat|Research parity]].

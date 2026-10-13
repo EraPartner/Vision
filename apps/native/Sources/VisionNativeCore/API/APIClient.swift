@@ -30,6 +30,17 @@ public struct APIResponse: Equatable, Sendable {
     }
 }
 
+/// A decoded success value and its original envelope metadata (provider, cache source, request id).
+public struct APIDataSnapshot<Value: Sendable>: Sendable {
+    public let data: Value
+    public let meta: JSONValue?
+
+    public init(data: Value, meta: JSONValue? = nil) {
+        self.data = data
+        self.meta = meta
+    }
+}
+
 /// Sends one request. Tests use a fake; the app uses `URLSessionAPITransport`.
 public protocol APITransport: Sendable {
     /// Throws `APIError.timedOut`, `APIError.network` or `CancellationError`.
@@ -234,6 +245,19 @@ public struct APIClient: Sendable {
     /// Performs the operation and returns the envelope's `data`. Throws `APIError`, or
     /// `CancellationError` when the task is cancelled.
     public func send<Operation: APIOperation>(_ operation: Operation) async throws -> Operation.Response {
+        try await perform(operation, preservingMeta: false).data
+    }
+
+    /// Retains metadata from a success envelope with the same transport, decoding and retry policy.
+    public func sendWithMeta<Operation: APIOperation>(_ operation: Operation) async throws
+        -> APIDataSnapshot<Operation.Response>
+    {
+        try await perform(operation, preservingMeta: true)
+    }
+
+    private func perform<Operation: APIOperation>(_ operation: Operation, preservingMeta: Bool) async throws
+        -> APIDataSnapshot<Operation.Response>
+    {
         let method = Operation.method
         let label = "\(method.rawValue) \(operation.path)"
         guard let base = await baseURL() else { throw APIError.backendUnavailable }
@@ -256,14 +280,18 @@ public struct APIClient: Sendable {
             if attempt > 0 {
                 try await sleep(Self.backoff(attempt: attempt - 1, jitter: jitter()))
             }
-            let outcome: Result<Operation.Response, APIError>
+            let outcome: Result<APIDataSnapshot<Operation.Response>, APIError>
             do {
                 let response = try await transport.send(request)
                 if Self.retryableStatuses.contains(response.status), attempt < retries {
                     lastError = .network("Server returned \(response.status)")
                     continue
                 }
-                outcome = Self.decode(response, as: Operation.Response.self, label: label)
+                outcome = Self.decode(response, as: Operation.Response.self, label: label).map { data in
+                    let body = preservingMeta ? try? JSONValue.parse(response.body) : nil
+                    let meta = body?["ok"] == .bool(true) ? body?["meta"] : nil
+                    return APIDataSnapshot(data: data, meta: meta)
+                }
             } catch let error as APIError {
                 outcome = .failure(error)
             } catch is CancellationError {

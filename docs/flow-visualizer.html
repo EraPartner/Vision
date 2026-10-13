@@ -1942,6 +1942,36 @@
             "y": 1240,
             "path": "apps/node-backend/src/services/analysisInterchangeService.ts",
             "desc": "Read-only import/export adapts shared browser serializers/parsers through existing Node CSV and Saxes XML libraries. Scoped transport preserves captured precision, provenance and window metadata."
+          },
+          {
+            "id": "native.research",
+            "label": "Native Research",
+            "sub": "five routes · lossless providers",
+            "kind": "client",
+            "x": 620,
+            "y": 1240,
+            "path": "apps/native/Sources/VisionNativeCore/Screens/Research/ResearchScreens.swift",
+            "desc": "Home, Markets, Lookup, Watchlist and Compare retain scoped caches, provenance, structural controls and guarded write acknowledgements. Chart Builder and remaining Research/AI routes still use the web view."
+          },
+          {
+            "id": "sv.researchpresentation",
+            "label": "Research presentation",
+            "sub": "submitted data · shared TS only",
+            "kind": "service",
+            "x": 800,
+            "y": 1240,
+            "path": "apps/node-backend/src/services/research/presentationService.ts",
+            "desc": "Stateless Compare/chart/watchlist/provider-quote/analyst/market-add transformations reuse pure web helpers. Scoped 64 MiB multipart transport never silently truncates; no extra provider, database, settings or FX calls."
+          },
+          {
+            "id": "sv.marketlookup",
+            "label": "Market lookup",
+            "sub": "Yahoo quotes / chart / news",
+            "kind": "service",
+            "x": 980,
+            "y": 1240,
+            "path": "apps/node-backend/src/services/marketLookupService.ts",
+            "desc": "Existing Yahoo-backed basic/full quote batches, symbol search, chart and news reads serve native Home/Markets/Lookup/Watchlist with unchanged cache, quota and source currency behavior."
           }
         ],
         "baseEdges": [
@@ -2436,6 +2466,26 @@
           [
             "sv.analysisinterchange",
             "pkg.shared-utils"
+          ],
+          [
+            "native.research",
+            "be.routes"
+          ],
+          [
+            "be.routes",
+            "sv.researchpresentation"
+          ],
+          [
+            "sv.researchpresentation",
+            "pkg.shared-utils"
+          ],
+          [
+            "be.routes",
+            "sv.marketlookup"
+          ],
+          [
+            "sv.marketlookup",
+            "ex.yahoo"
           ]
         ],
         "flows": [
@@ -6755,6 +6805,230 @@
               {
                 "path": "api/analysis-monitors.md",
                 "label": "Monitor API"
+              }
+            ]
+          },
+          {
+            "id": "native-research-home-markets",
+            "name": "Read native Research Home and Markets",
+            "category": "Native migration",
+            "summary": "Native catalog/search and quote/news previews retain existing page scopes and unavailable states; shared scoped caching and visible polling preserve late-read authority.",
+            "steps": [
+              {
+                "from": "native.research",
+                "to": "be.routes",
+                "payload": "Existing market quote/news, paged Watchlist and first500 all-investment metadata reads",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/Research/ResearchHomeModel.swift loads the first Watchlist page and fixed benchmark/row quote scopes. apps/native/Sources/VisionNativeCore/Screens/Research/ResearchMarketsModel.swift uses the maintained catalog and raw active=false investment metadata without computing holdings prices."
+              },
+              {
+                "from": "be.routes",
+                "to": "sv.marketlookup",
+                "payload": "Existing basic/full quote batches and symbol/news requests",
+                "annotation": "apps/node-backend/src/services/marketLookupService.ts retains Yahoo source mapping, cached/coalesced quotes, canonical items/total and per-symbol failure behavior. apps/node-backend/src/routes/marketLookup.ts retains request parsing and the shared market rate limiter."
+              },
+              {
+                "from": "sv.marketlookup",
+                "to": "native.research",
+                "payload": "Nullable prices, news URLs and original source/currency values",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/Research/ResearchData.swift retains Decimal and raw unknown leaves. apps/native/Sources/VisionNativeCore/Screens/Research/ResearchSharedModels.swift caches only successful current-scope replies and hides old search hits until the current query matches."
+              },
+              {
+                "from": "native.research",
+                "to": "be.routes",
+                "payload": "Visible delayed refresh, scoped search and explicit Retry",
+                "annotation": "apps/native/Sources/VisionNativeUI/ResearchHomeView.swift and apps/native/Sources/VisionNativeUI/ResearchMarketsView.swift own visible polling. apps/native/Sources/VisionNativeCore/Screens/Research/ResearchScreens.swift propagates online/route changes and retires departing reads; previous usable rows retain scoped refresh errors."
+              }
+            ],
+            "docs": [
+              {
+                "path": "architecture/native-app.md",
+                "label": "Native architecture"
+              },
+              {
+                "path": "reference/native-parity/research-and-ai-chat.md",
+                "label": "Research parity"
+              },
+              {
+                "path": "api/research.md",
+                "label": "Research API"
+              },
+              {
+                "path": "features/research.md",
+                "label": "Research"
+              }
+            ]
+          },
+          {
+            "id": "native-research-lookup",
+            "name": "Inspect native Lookup and submit an existing market action",
+            "category": "Native migration",
+            "summary": "Native symbol/provider lookup retains lazy provenance-aware reads and source currency behavior; analyst/provider/unit previews remain stateless TypeScript and writes reuse existing guarded APIs.",
+            "steps": [
+              {
+                "from": "native.research",
+                "to": "be.routes",
+                "payload": "Current symbol quote/chart plus selected Research analyst/news/scorecard, or provider investment history",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/Research/ResearchMarketLookupModel.swift binds symbol/range/tab/provider reads to their current scope. apps/native/Sources/VisionNativeCore/Screens/Research/ResearchService.swift retains data plus provenance through APIClient.sendWithMeta and maps stored timestampMs/price fields structurally."
+              },
+              {
+                "from": "be.routes",
+                "to": "sv.research",
+                "payload": "Existing aggregator or stored/provider history reads with original metadata",
+                "annotation": "apps/node-backend/src/services/research/researchAggregator.ts retains capability/quota/cache behavior. apps/node-backend/src/services/investmentService.ts serves actual from_ms/to_ms/db_only investment history; no source currency correction is introduced."
+              },
+              {
+                "from": "native.research",
+                "to": "sv.researchpresentation",
+                "payload": "Submitted providerQuote, analyst or marketAdd snapshots in one multipart JSON file",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/Research/ResearchMarketActionModel.swift requests existing two-of-three previews. apps/node-backend/src/services/research/presentationService.ts computes first/last provider quote, consensus verdict/bar fractions and rounded unit consistency without fetching or persisting."
+              },
+              {
+                "from": "sv.researchpresentation",
+                "to": "pkg.shared-utils",
+                "payload": "Exact original provider-order and 0.60/0.45 verdict thresholds; amount4/units8/price6 rounding with 0.01 tolerance",
+                "annotation": "packages/shared-utils/src/research/presentation.ts and packages/shared-utils/src/research/unitMath.ts preserve the existing web algorithms, including first-zero quote percentages and quote-native seed/booking-currency conventions."
+              },
+              {
+                "from": "native.research",
+                "to": "be.routes",
+                "payload": "Existing mapping or Watchlist/trade writes after explicit form validation",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/Research/ResearchMarketMappingModel.swift reuses existing mapping operations and resets proposals/audit/selections when the instrument/investment identity changes. apps/native/Sources/VisionNativeCore/Screens/Research/ResearchMarketActionModel.swift retains failed/uncertain acknowledgements and mutation callbacks; native never invents a retry identity or runs financial normalization."
+              },
+              {
+                "from": "be.routes",
+                "to": "native.research",
+                "payload": "Authoritative write outcome and scoped Portfolio/Watchlist invalidation",
+                "annotation": "apps/native/Sources/VisionNativeUI/ResearchMarketLookupView.swift presents native actions and provider-mode limits. apps/native/Sources/VisionNativeCore/Screens/Research/ResearchScreens.swift coordinates invalidation while retaining already-started write acknowledgements across route changes."
+              }
+            ],
+            "docs": [
+              {
+                "path": "architecture/native-app.md",
+                "label": "Native architecture"
+              },
+              {
+                "path": "reference/native-parity/research-and-ai-chat.md",
+                "label": "Research parity"
+              },
+              {
+                "path": "api/research.md",
+                "label": "Research API"
+              },
+              {
+                "path": "features/market-lookup.md",
+                "label": "Market Lookup"
+              }
+            ]
+          },
+          {
+            "id": "native-research-watchlist",
+            "name": "Read native Watchlist and edit a target",
+            "category": "Native migration",
+            "summary": "Paged persisted rows and quote snapshots produce one batch of TypeScript metrics; target/add writes retire old reads and refresh authority while preserving immutable added-price and source currency.",
+            "steps": [
+              {
+                "from": "native.research",
+                "to": "be.routes",
+                "payload": "Existing paged Watchlist plus matching quote batch and selected chart reads",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/Research/ResearchWatchlistModel.swift scopes list, quotes, chart and chart-quote lanes independently. New list data retires old quote scopes; selection remains an actual row ID."
+              },
+              {
+                "from": "native.research",
+                "to": "sv.researchpresentation",
+                "payload": "watchlistBatch entries or watchlist chart/add snapshots; no new provider call",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/Research/ResearchWatchlistPresentation.swift validates required nullable financial outputs. apps/node-backend/src/services/research/presentationService.ts accepts up to 5000 submitted list entries in order, avoiding one HTTP request per row."
+              },
+              {
+                "from": "sv.researchpresentation",
+                "to": "pkg.shared-utils",
+                "payload": "Signed/absolute target distance, since-added return, positive-target chart domain and separate add-preview convention",
+                "annotation": "packages/shared-utils/src/research/presentation.ts preserves list/chart validity differences, equality as above in Add preview and existing item-currency display. No FX or target inference moves into Swift."
+              },
+              {
+                "from": "native.research",
+                "to": "be.routes",
+                "payload": "PATCH target_price only, explicit Delete, or existing POST add with original quote snapshot",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/Research/ResearchWatchlistAddModel.swift protects selected-symbol quote scope and retains lost-acknowledgement recovery without blindly repeating create. apps/native/Sources/VisionNativeCore/Screens/Research/ResearchWatchlistModel.swift preserves immutable added_price and selected chart until the actual row disappears."
+              },
+              {
+                "from": "be.routes",
+                "to": "native.research",
+                "payload": "Acknowledged or uncertain outcome followed by authoritative list/metric reload",
+                "annotation": "apps/native/Sources/VisionNativeUI/ResearchWatchlistView.swift and apps/native/Sources/VisionNativeUI/ResearchWatchlistChartSheet.swift retain visible errors and chart/target controls. apps/native/Sources/VisionNativeCore/Screens/Research/ResearchWatchlistModel.swift retires reads before and after mutation callbacks so pre-commit readers cannot replace refreshed data."
+              }
+            ],
+            "docs": [
+              {
+                "path": "architecture/native-app.md",
+                "label": "Native architecture"
+              },
+              {
+                "path": "reference/native-parity/research-and-ai-chat.md",
+                "label": "Research parity"
+              },
+              {
+                "path": "api/research.md",
+                "label": "Research API"
+              },
+              {
+                "path": "features/watchlist.md",
+                "label": "Watchlist"
+              }
+            ]
+          },
+          {
+            "id": "native-research-compare",
+            "name": "Compare native Research histories without moving statistics into Swift",
+            "category": "Native migration",
+            "summary": "At most six URL-normalized symbols eagerly read charts and scorecards; submitted data produces the original rebased overlay/statistics/correlations while context guards reject late responses.",
+            "steps": [
+              {
+                "from": "native.research",
+                "to": "be.routes",
+                "payload": "Research charts and scorecards for every selected symbol regardless of visible tab",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/Research/ResearchCompareURLState.swift preserves repeated-symbol normalization, maximum six and range/tab/sort parameters. apps/native/Sources/VisionNativeCore/Screens/Research/ResearchCompareModel.swift retains eager scoped reads and shared cache behavior."
+              },
+              {
+                "from": "be.routes",
+                "to": "sv.research",
+                "payload": "Original provider history, fundamental values, coverage and provenance",
+                "annotation": "apps/node-backend/src/services/research/researchAggregator.ts and apps/node-backend/src/services/research/fundamentalsScorecard.ts retain provider selection and existing server financial heuristics."
+              },
+              {
+                "from": "native.research",
+                "to": "sv.researchpresentation",
+                "payload": "kindcompare with exact submitted time/close rows including empty series",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/Research/ResearchCompareModel.swift submits Decimal-decoded source points and guards source key/generation/cancellation before adopting the full kind/result response."
+              },
+              {
+                "from": "sv.researchpresentation",
+                "to": "pkg.shared-utils",
+                "payload": "Provider-order rebase/return/volatility/drawdown plus sorted timestamp-intersection Pearson correlations",
+                "annotation": "packages/shared-utils/src/research/compare.ts and packages/shared-utils/src/research/presentation.ts preserve duplicate-time last-wins, population log volatility scaled by 252, null unavailable/constant off-diagonal correlations and diagonal 1 for empty history. No sorting/financial semantics fix is bundled."
+              },
+              {
+                "from": "sv.researchpresentation",
+                "to": "native.research",
+                "payload": "Aligned rows, nullable stats, original first/last dates and correlation matrix",
+                "annotation": "apps/native/Sources/VisionNativeUI/ResearchCompareView.swift and apps/native/Sources/VisionNativeUI/ResearchCompareChartView.swift render geometry only. apps/native/Sources/VisionNativeUI/ResearchCompareTables.swift sorts existing fundamental values structurally and preserves unavailable values/provenance; financial results remain server-owned."
+              }
+            ],
+            "docs": [
+              {
+                "path": "architecture/native-app.md",
+                "label": "Native architecture"
+              },
+              {
+                "path": "reference/native-parity/research-and-ai-chat.md",
+                "label": "Research parity"
+              },
+              {
+                "path": "api/research.md",
+                "label": "Research API"
+              },
+              {
+                "path": "features/research.md",
+                "label": "Research comparison"
               }
             ]
           }

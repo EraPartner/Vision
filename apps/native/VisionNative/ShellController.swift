@@ -104,6 +104,8 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
                 _ = await self?.homeLocalStorage(key: "vision.analysis.sqlHistory", value: value)
             })
         let analysisMonitors = AnalysisMonitorsModel(service: client)
+        let research = ResearchScreens(client: client)
+        research.didMutatePortfolio = { [weak self] in await self?.shellModel.portfolioDataDidMutate() }
         analysis.workspace.saveExport = { [weak self] data, name in
             guard let self else { return false }
             return try await self.saveExport(data, suggestedName: name)
@@ -113,6 +115,16 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             if self?.shellModel.route.path == "/analysis/monitors" { await analysisMonitors?.load(force: true) }
         }
         let portfolio = PortfolioScreens(client: client)
+        research.lookup.action.brokerContext = { [weak portfolio] investmentId in
+            guard let portfolio else { return ResearchMarketBrokerContext(accounts: [], preferredBrokerId: nil) }
+            if let investments = try? await client.researchInvestments() {
+                portfolio.editing.bindInvestments(investments)
+            }
+            await portfolio.editing.loadOptions()
+            return ResearchMarketBrokerContext(
+                accounts: portfolio.editing.brokers,
+                preferredBrokerId: portfolio.editing.preferredBrokerId(investmentId: investmentId))
+        }
         let portfolioImports = PortfolioImportScreens(
             service: client,
             store: PortfolioImportClosureSessionStore(
@@ -174,6 +186,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             portfolioImports: portfolioImports,
             analysis: analysis,
             analysisMonitors: analysisMonitors,
+            research: research,
             hiddenSections: Self.loadHiddenSections(),
             loadSettings: { try await client.appSettings() },
             saveHiddenSections: { Self.saveHiddenSections($0) },
