@@ -95,6 +95,24 @@ Its macOS build passed that compiler crash and next reported the Portfolio fresh
 helper reading MainActor shell state from an unisolated function. The follow-up marks
 that helper MainActor; source parsing/format checks pass, and CI will rerun.
 
+`bf658d4a` is pushed and verified. The next macOS compile passed that Portfolio helper
+and found type-checking timeouts in `AIChatToolChart` and `AIInvestigationView`. Their
+follow-up splits chart marks and the OpenAI picker into typed helpers, preserving the
+same values, rendering and labels. The macOS rerun must establish compilation.
+
+Main Settings now passes 33 tests, including six restore-lifetime cases. The data-session
+proof now passes 13 cases: paused reads fail before delegation, and a read epoch invalidates
+pre-restore responses even if audit verification rolls back and the same session resumes.
+Accepted mutations still drain actual delegate completions. The SDK common restore path
+now coalesces fresh-model reconstruction for both native Backup and retained onboarding;
+overlapping restore receipts act only on their own UUID fence. Root's fresh combined proof
+is still pending, and source scope is recorded rather than inferred from earlier proofs.
+
+Independent remaining phase-3 shell preparation has started in parallel: banners owned by
+`review_native`, command palette/shortcuts/404 by `tax_charts_ui`, and native onboarding by
+`tax_deductions`. Their new files are unfinished and not mounted yet. Do not count these
+surfaces as complete merely because their scaffolding appears in a later safety checkpoint.
+
 The API data-session actor and wrapper now exist on disk, and the SDK uses one shared
 session for HTTP and streams. Accepted restore confirmation drains Main Settings, the
 legacy host writer, old chat streams and the data session before the existing unfenced

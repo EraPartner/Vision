@@ -112,20 +112,26 @@ struct AIInvestigationView: View {
             Text(strings.t("aiResearch.publicSymbolsHelp")).font(.caption).foregroundStyle(theme.secondaryLabel)
         }
     }
+    private var openAiModelPicker: some View {
+        Picker(
+            strings.t("aiResearch.openAiModel"),
+            selection: Binding<String>(get: { model.openAiModel }, set: { model.openAiModelOverride = $0 })
+        ) {
+            if model.openAiModels.isEmpty { Text(strings.t("aiResearch.noOpenAiModels")).tag("") }
+            ForEach(model.openAiModels, id: \.id) { (option: OpenAIResearchModel) in
+                Text(openAiOptionLabel(option)).tag(option.id)
+            }
+        }.disabled(!model.openAiEnabled || model.openAiModels.isEmpty)
+    }
+    private func openAiOptionLabel(_ option: OpenAIResearchModel) -> String {
+        let identity: String = "\(option.label) (\(option.id))"
+        guard option.isDefault else { return identity }
+        let defaultLabel: String = strings.t("aiResearch.defaultModel")
+        return "\(identity) — \(defaultLabel)"
+    }
     private var cloudInputs: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Picker(
-                strings.t("aiResearch.openAiModel"),
-                selection: Binding(get: { model.openAiModel }, set: { model.openAiModelOverride = $0 })
-            ) {
-                if model.openAiModels.isEmpty { Text(strings.t("aiResearch.noOpenAiModels")).tag("") }
-                ForEach(model.openAiModels, id: \.id) { option in
-                    Text(
-                        option.label + " (" + option.id + ")"
-                            + (option.isDefault ? " — " + strings.t("aiResearch.defaultModel") : "")
-                    ).tag(option.id)
-                }
-            }.disabled(!model.openAiEnabled || model.openAiModels.isEmpty)
+            openAiModelPicker
             if let option = model.selectedOpenAiModel {
                 Text(
                     strings.t(

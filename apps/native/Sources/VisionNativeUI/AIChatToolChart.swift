@@ -47,25 +47,7 @@ struct AIChatToolChart: View {
         Chart {
             ForEach(Array(presentation.yKeys.enumerated()), id: \.offset) { series, key in
                 ForEach(presentation.rows.indices, id: \.self) { index in
-                    if let value = coordinate(AIChatToolPresentation.value(presentation.rows[index], key: key)) {
-                        if presentation.renderAs == "bar" {
-                            BarMark(x: .value(presentation.xKey, Double(index)), y: .value(key, value))
-                                .foregroundStyle(color(series)).position(by: .value("series", String(series)))
-                                .cornerRadius(4)
-                                .accessibilityLabel(axisLabel(index)).accessibilityValue(
-                                    key + ": " + rawValue(index, key: key))
-                        } else {
-                            LineMark(
-                                x: .value(presentation.xKey, Double(index)), y: .value(key, value),
-                                series: .value("series", String(series) + ":" + String(segment(index, key: key)))
-                            )
-                            .foregroundStyle(color(series)).lineStyle(StrokeStyle(lineWidth: 2)).interpolationMethod(
-                                .monotone
-                            )
-                            .accessibilityLabel(axisLabel(index)).accessibilityValue(
-                                key + ": " + rawValue(index, key: key))
-                        }
-                    }
+                    cartesianMark(index: index, key: key, series: series)
                 }
             }
             if let selected, presentation.rows.indices.contains(selected) {
@@ -110,6 +92,30 @@ struct AIChatToolChart: View {
                 }
             }.frame(height: 224).focusable().focused($focused).onKeyPress(phases: .down, action: move)
             .accessibilityLabel(strings.t("aiChat.toolResult"))
+    }
+    @ChartContentBuilder private func cartesianMark(index: Int, key: String, series: Int) -> some ChartContent {
+        if let value = coordinate(AIChatToolPresentation.value(presentation.rows[index], key: key)) {
+            if presentation.renderAs == "bar" {
+                barMark(index: index, key: key, series: series, value: value)
+            } else {
+                lineMark(index: index, key: key, series: series, value: value)
+            }
+        }
+    }
+    private func barMark(index: Int, key: String, series: Int, value: Double) -> some ChartContent {
+        BarMark(x: .value(presentation.xKey, Double(index)), y: .value(key, value))
+            .foregroundStyle(color(series)).position(by: .value("series", String(series)))
+            .cornerRadius(4)
+            .accessibilityLabel(axisLabel(index)).accessibilityValue(key + ": " + rawValue(index, key: key))
+    }
+    private func lineMark(index: Int, key: String, series: Int, value: Double) -> some ChartContent {
+        let segmentKey = String(series) + ":" + String(segment(index, key: key))
+        return LineMark(
+            x: .value(presentation.xKey, Double(index)), y: .value(key, value),
+            series: .value("series", segmentKey)
+        )
+        .foregroundStyle(color(series)).lineStyle(StrokeStyle(lineWidth: 2)).interpolationMethod(.monotone)
+        .accessibilityLabel(axisLabel(index)).accessibilityValue(key + ": " + rawValue(index, key: key))
     }
     private var pie: some View {
         GeometryReader { geometry in
