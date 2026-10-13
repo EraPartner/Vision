@@ -974,8 +974,11 @@ public final class TransactionsModel {
             }
             await refreshNeedsCategoryCount()
         } catch {
-            if let index, let removed, rows != nil, !(rows ?? []).contains(where: { $0.id == removed.id }) {
-                rows?.insert(removed, at: min(index, rows?.count ?? 0))
+            if let index, let removed, let current = rows, !current.contains(where: { $0.id == removed.id }) {
+                // Read the count before the in-place insert: an argument that reads `rows`
+                // while its modify accessor is open is an exclusivity violation at runtime.
+                let position = min(index, current.count)
+                rows?.insert(removed, at: position)
                 total += 1
             }
             post(.error, "transactions.deleteFailedTitle", detail: errorText(error))
