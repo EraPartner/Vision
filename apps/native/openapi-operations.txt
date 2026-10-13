@@ -60,3 +60,16 @@ exportTransactionsJson
 # The multipart and SSE uploads have no generated struct (the generator writes JSON bodies
 # only); hand-written operations in Screens/Imports/ImportRequests.swift call them:
 # importCsvCustom, importCsvStream, importRecipients, importCategories.
+# Transactions (/transactions, phase 3e part A): the row mutations, delete with undo
+# (the undo recreates the row), the inspector's "Use for all" and the Attachments panel.
+# updateTransaction's explicit-null PATCH body, uploadAttachment's multipart body and
+# downloadAttachment's binary response are hand-written in
+# Screens/Transactions/TransactionsService.swift on top of the generated operation ids.
+getTransaction
+createTransaction
+updateTransaction
+deleteTransaction
+bulkUpdateTransactions
+getTransactionAttachments
+downloadAttachment
+deleteAttachment

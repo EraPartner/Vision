@@ -239,6 +239,11 @@ struct NativeScreenContainer: View {
             ImportExportView(model: model.imports, shell: model)
         case .importReview(let batchId):
             ImportReviewView(model: model.imports.review, toasts: model.imports.toasts, batchId: batchId, shell: model)
+        case .transactions:
+            TransactionsView(model: model.transactions, shell: model)
+        case .owes:
+            // TODO(3e part B): `OwesView`; `TransactionsRoutes.owesIsNative` keeps `/owes` on the web.
+            EmptyView()
         }
     }
 }

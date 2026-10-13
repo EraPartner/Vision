@@ -40,11 +40,13 @@ public struct NativeAppSettings: Equatable, Sendable {
     public var showDecimalPlaces: Int
     public var adminMode: Bool
     public var colorblindGainLoss: Bool
+    /// `defaultPageSize`: the page size of server-paged tables such as `/transactions`.
+    public var defaultPageSize: Int
 
     public init(
         defaultCurrency: String = "EUR", dateFormat: AppDateFormat = .dayMonthYearSlash,
         numberFormat: NumberFormat = .eu, showDecimalPlaces: Int = 2, adminMode: Bool = false,
-        colorblindGainLoss: Bool = false
+        colorblindGainLoss: Bool = false, defaultPageSize: Int = 50
     ) {
         self.defaultCurrency = defaultCurrency
         self.dateFormat = dateFormat
@@ -52,6 +54,7 @@ public struct NativeAppSettings: Equatable, Sendable {
         self.showDecimalPlaces = showDecimalPlaces
         self.adminMode = adminMode
         self.colorblindGainLoss = colorblindGainLoss
+        self.defaultPageSize = defaultPageSize
     }
 
     /// `DEFAULT_APP_SETTINGS`.
@@ -76,6 +79,7 @@ public struct NativeAppSettings: Equatable, Sendable {
         }
         if let value = fields["adminMode"]?.boolValue { settings.adminMode = value }
         if let value = fields["colorblindGainLoss"]?.boolValue { settings.colorblindGainLoss = value }
+        if let value = fields["defaultPageSize"]?.intValue, value > 0 { settings.defaultPageSize = value }
         return settings
     }
 

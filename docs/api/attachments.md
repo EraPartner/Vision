@@ -5,7 +5,7 @@ method: GET, POST, DELETE
 path: /api/attachments
 description: Manage receipt and document attachments for transactions
 date: 2026-10-08
-updated: 2026-10-08
+updated: 2026-10-13
 tags: [api, attachments, receipts, files, storage, phase-5a, security, path-traversal, rfc-5987]
 status: active
 aliases: [attachments-api, receipts, documents, file-management]
@@ -45,7 +45,7 @@ Upload a file attachment to a transaction.
 **Response (201 Created):**
 ```json
 {
-  "id": 42,
+  "id": "42",
   "transaction_id": 123,
   "stored_path": "123/a1b2c3d4-e5f6-7890-abcd-ef1234567890.pdf",
   "mime_type": "application/pdf",
@@ -53,6 +53,8 @@ Upload a file attachment to a transaction.
   "created_at": "2026-04-24T14:30:00Z"
 }
 ```
+
+The attachment `id` is a BIGSERIAL and is serialized as a decimal string; `openapi.yaml` declares it as a string since 2026-10-13.
 
 **Error Responses:**
 - `400` Bad Request — File missing or exceeds size limit
@@ -79,7 +81,7 @@ transaction and `total` is that count. With either, the body also carries `limit
 {
   "items": [
     {
-      "id": 42,
+      "id": "42",
       "transaction_id": 123,
       "stored_path": "123/a1b2c3d4-e5f6-7890-abcd-ef1234567890.pdf",
       "mime_type": "application/pdf",
@@ -87,7 +89,7 @@ transaction and `total` is that count. With either, the body also carries `limit
       "created_at": "2026-04-24T14:30:00Z"
     },
     {
-      "id": 43,
+      "id": "43",
       "transaction_id": 123,
       "stored_path": "123/b2c3d4e5-f6a7-8901-bcde-f12345678901.png",
       "mime_type": "image/png",

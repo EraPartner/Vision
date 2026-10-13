@@ -118,12 +118,18 @@ import Testing
         #expect(NativeScreen.screen(forPath: "/admin/endpoints") == .endpointLiveness)
         #expect(NativeScreen.screen(forPath: "/admin/db") == .databaseMaintenance)
         #expect(NativeScreen.screen(forPath: "/admin/db/transactions") == NativeScreen.tableEditor(table: "transactions"))
-        let adminScreens = NativeScreen.fixedScreens.filter { $0 != .plannedPayments && $0 != .importExport }
+        let adminScreens = NativeScreen.fixedScreens.filter {
+            $0 != .plannedPayments && $0 != .importExport && $0 != .transactions
+        }
         #expect(adminScreens.allSatisfy { screen in screen.requiresAdmin })
         #expect(NativeScreen.tableEditor(table: "x").requiresAdmin)
         #expect(NativeScreen.screen(forPath: "/planned") == .plannedPayments)
         #expect(!NativeScreen.plannedPayments.requiresAdmin)
         #expect(NativeScreen.screen(forPath: "/planned/x") == nil)
+        #expect(NativeScreen.screen(forPath: "/transactions") == .transactions)
+        #expect(!NativeScreen.transactions.requiresAdmin)
+        // `/owes` stays on the web until phase 3e part B.
+        #expect(NativeScreen.screen(forPath: "/owes") == (TransactionsRoutes.owesIsNative ? .owes : nil))
     }
 }
 

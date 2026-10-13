@@ -30,7 +30,7 @@ stays the project-file tool (ADR-204 decision 3). The deployment target and the 
 | `Sources/VisionNativeCore/API/`        | `APIClient` and the generated OpenAPI client (2)           |
 | `Sources/VisionNativeCore/Design/`     | Generated design tokens, `ThemeSelection` (2)              |
 | `Sources/VisionNativeCore/Navigation/` | Generated sidebar registry, routes, shell model (2)        |
-| `Sources/VisionNativeCore/Screens/`    | Screen view models: Exchange rates, Admin, Planned, Import |
+| `Sources/VisionNativeCore/Screens/`    | Screen models: Rates, Admin, Planned, Import, Transactions |
 | `Sources/VisionNativeUI/`              | SwiftUI shell and screens, `Localizable.xcstrings`         |
 | `openapi-operations.txt`               | operationIds the Swift client is generated for             |
 | `i18n-keys.txt`                        | `i18n/source` keys copied into the String Catalog          |
@@ -158,6 +158,14 @@ See [the architecture page](../../docs/architecture/native-app.md#native-navigat
   every row of a group, and commits or discards the batch. A CSV opened from Finder or the dock, or
   dropped on a native screen, pre-fills the card. A chosen file or an unsaved parser edit holds
   navigation and Quit behind the Leave this page? alert.
+- `/transactions` is native in every mode once `app_settings` has loaded (phase 3e part A): the
+  filter toolbar (account, category, date, type, Needs category, View), the filter banner with
+  Export CSV or JSON, search with its suggestions, server sort, column filters, resizable columns,
+  infinite scroll, inline row editing, the Status toggle, the row context menu, delete with an
+  8-second Undo toast (`⌘Z`), the inspector (docked from 1024 points, a sheet below) with its
+  category tips, details, tags and attachments, and Quick Look (Space). The Add transaction sheet,
+  Split, the bulk actions and `/owes` follow in part B: Add opens a placeholder sheet and `/owes`
+  stays on the web view.
 - To add a screen: list its operations and keys, run `bun run native:generate`, add a model in
   `Sources/VisionNativeCore/Screens/`, a view in `Sources/VisionNativeUI/`, and a `NativeScreen`
   case for its route. Pass the model to `NativeShellModel` in `ShellController.makeShellModel` and
@@ -319,6 +327,16 @@ these steps touches Electron Vision or its data.
     advances. When the likely-matches banner shows, Review opens Mark as paid for its first
     payment. In the recurring detection panel, Track adds a planned payment and Dismiss hides the
     pattern, also after a relaunch.
+
+19. **Transactions (phase 3e part A).** With admin mode off, open Transactions. Expected: the
+    native list with the toolbar chips; scrolling loads more rows. Pick an account and a date
+    preset: the URL and the filter banner follow, and Back restores the previous filters. Type in
+    search: the suggestions open, and Amount equals applies an amount filter. Click a row: the
+    inspector docks beside the list (a sheet in a narrow window); ↑/↓ move it, Space opens Quick
+    Look and Escape closes it. Change a category in the inspector, edit a field with its pencil,
+    add a tag and upload a PDF. Double-click a row to edit it in place and press Enter to save.
+    Delete a row from its context menu: the alert asks, the row leaves, and Undo (or `⌘Z`) brings
+    it back.
 
 ## Developer backend override
 

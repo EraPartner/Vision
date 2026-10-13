@@ -195,6 +195,37 @@ extension OpenAPI {
         }
     }
 
+    public struct Attachment: Codable, Equatable, Sendable {
+        /// BIGSERIAL identity, serialized as a decimal string.
+        public let id: String
+        public let transactionId: Int
+        public let filename: String
+        public let storedPath: String
+        public let mimeType: String
+        public let sizeBytes: Int
+        public let createdAt: String
+
+        public init(id: String, transactionId: Int, filename: String, storedPath: String, mimeType: String, sizeBytes: Int, createdAt: String) {
+            self.id = id
+            self.transactionId = transactionId
+            self.filename = filename
+            self.storedPath = storedPath
+            self.mimeType = mimeType
+            self.sizeBytes = sizeBytes
+            self.createdAt = createdAt
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case transactionId = "transaction_id"
+            case filename = "filename"
+            case storedPath = "stored_path"
+            case mimeType = "mime_type"
+            case sizeBytes = "size_bytes"
+            case createdAt = "created_at"
+        }
+    }
+
     public struct CategoryNode: Codable, Equatable, Sendable {
         public let id: Int
         public let name: String
@@ -1341,13 +1372,15 @@ extension OpenAPI {
         /// Format: GENERAL:DETAIL
         public let categoryName: String?
         public let comment: String?
+        /// False when the transaction is excluded from totals and statistics.
+        public let isActive: Bool?
         /// Tags attached to this transaction
         public let tags: [OpenAPI.TransactionTagRef]?
         public let createdAt: String?
         public let updatedAt: String?
         public let links: [OpenAPI.Link]
 
-        public init(id: Int, transactionDate: String, accountId: Int? = nil, isTransfer: Bool? = nil, transferPeerId: Int? = nil, transferSource: String? = nil, bankAccount: String? = nil, recipientId: Int? = nil, recipientName: String? = nil, memo: String? = nil, amount: Decimal, amountEur: Decimal? = nil, currency: String? = nil, balance: Decimal? = nil, runningBalance: Decimal? = nil, categoryId: Int? = nil, categoryName: String? = nil, comment: String? = nil, tags: [OpenAPI.TransactionTagRef]? = nil, createdAt: String? = nil, updatedAt: String? = nil, links: [OpenAPI.Link]) {
+        public init(id: Int, transactionDate: String, accountId: Int? = nil, isTransfer: Bool? = nil, transferPeerId: Int? = nil, transferSource: String? = nil, bankAccount: String? = nil, recipientId: Int? = nil, recipientName: String? = nil, memo: String? = nil, amount: Decimal, amountEur: Decimal? = nil, currency: String? = nil, balance: Decimal? = nil, runningBalance: Decimal? = nil, categoryId: Int? = nil, categoryName: String? = nil, comment: String? = nil, isActive: Bool? = nil, tags: [OpenAPI.TransactionTagRef]? = nil, createdAt: String? = nil, updatedAt: String? = nil, links: [OpenAPI.Link]) {
             self.id = id
             self.transactionDate = transactionDate
             self.accountId = accountId
@@ -1366,6 +1399,7 @@ extension OpenAPI {
             self.categoryId = categoryId
             self.categoryName = categoryName
             self.comment = comment
+            self.isActive = isActive
             self.tags = tags
             self.createdAt = createdAt
             self.updatedAt = updatedAt
@@ -1391,10 +1425,60 @@ extension OpenAPI {
             case categoryId = "category_id"
             case categoryName = "category_name"
             case comment = "comment"
+            case isActive = "is_active"
             case tags = "tags"
             case createdAt = "created_at"
             case updatedAt = "updated_at"
             case links = "links"
+        }
+    }
+
+    public struct TransactionCreate: Codable, Equatable, Sendable {
+        public let transactionDate: String
+        /// Canonical account identity
+        public let accountId: Int
+        public let recipientId: Int
+        public let memo: String?
+        public let amount: Decimal
+        public let currency: String?
+        public let balance: Decimal?
+        /// Absent or null files the transaction uncategorized. Validated since 2026-08-11 — before that
+        /// this operation forwarded the field raw and a malformed value reached Postgres as a cast
+        /// error (500).
+        public let categoryId: Int?
+        public let comment: String?
+        /// Tag slugs to assign (replaces existing tags)
+        public let tags: [String]?
+        /// Explicit confirmation that a matching active manual transaction is intentional. Omit or
+        /// false to retain the default 409 duplicate guard.
+        public let allowDuplicate: Bool?
+
+        public init(transactionDate: String, accountId: Int, recipientId: Int, memo: String? = nil, amount: Decimal, currency: String? = nil, balance: Decimal? = nil, categoryId: Int? = nil, comment: String? = nil, tags: [String]? = nil, allowDuplicate: Bool? = nil) {
+            self.transactionDate = transactionDate
+            self.accountId = accountId
+            self.recipientId = recipientId
+            self.memo = memo
+            self.amount = amount
+            self.currency = currency
+            self.balance = balance
+            self.categoryId = categoryId
+            self.comment = comment
+            self.tags = tags
+            self.allowDuplicate = allowDuplicate
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case transactionDate = "transaction_date"
+            case accountId = "account_id"
+            case recipientId = "recipient_id"
+            case memo = "memo"
+            case amount = "amount"
+            case currency = "currency"
+            case balance = "balance"
+            case categoryId = "category_id"
+            case comment = "comment"
+            case tags = "tags"
+            case allowDuplicate = "allow_duplicate"
         }
     }
 
@@ -1481,6 +1565,54 @@ extension OpenAPI {
             case slug = "slug"
             case color = "color"
             case isActive = "is_active"
+        }
+    }
+
+    /// PATCH semantics: an explicit null on a nullable field clears the stored value; an absent key
+    /// leaves it unchanged.
+    public struct TransactionUpdate: Codable, Equatable, Sendable {
+        public let transactionDate: String?
+        public let accountId: Int?
+        public let recipientId: Int?
+        public let recipientName: String?
+        public let memo: String?
+        public let amount: Decimal?
+        public let currency: String?
+        public let categoryId: Int?
+        public let categoryName: String?
+        public let comment: String?
+        public let isActive: Bool?
+        /// Tag slugs to assign (replaces existing tags when present)
+        public let tags: [String]?
+
+        public init(transactionDate: String? = nil, accountId: Int? = nil, recipientId: Int? = nil, recipientName: String? = nil, memo: String? = nil, amount: Decimal? = nil, currency: String? = nil, categoryId: Int? = nil, categoryName: String? = nil, comment: String? = nil, isActive: Bool? = nil, tags: [String]? = nil) {
+            self.transactionDate = transactionDate
+            self.accountId = accountId
+            self.recipientId = recipientId
+            self.recipientName = recipientName
+            self.memo = memo
+            self.amount = amount
+            self.currency = currency
+            self.categoryId = categoryId
+            self.categoryName = categoryName
+            self.comment = comment
+            self.isActive = isActive
+            self.tags = tags
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case transactionDate = "transaction_date"
+            case accountId = "account_id"
+            case recipientId = "recipient_id"
+            case recipientName = "recipient_name"
+            case memo = "memo"
+            case amount = "amount"
+            case currency = "currency"
+            case categoryId = "category_id"
+            case categoryName = "category_name"
+            case comment = "comment"
+            case isActive = "is_active"
+            case tags = "tags"
         }
     }
 }

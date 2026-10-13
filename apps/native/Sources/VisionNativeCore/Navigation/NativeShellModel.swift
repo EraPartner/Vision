@@ -57,6 +57,8 @@ public final class NativeShellModel {
     public let planned: PlannedPaymentsModel
     /// `/import`.
     public let imports: ImportsModel
+    /// `/transactions`.
+    public let transactions: TransactionsModel
     /// The navigation the Leave this page? alert holds while it asks (`blocker.location`).
     public private(set) var leaveConfirmation: NativeRoute?
 
@@ -84,6 +86,7 @@ public final class NativeShellModel {
         admin: AdminScreens,
         planned: PlannedPaymentsModel,
         imports: ImportsModel,
+        transactions: TransactionsModel,
         hiddenSections: [NavSectionID: Bool]? = nil,
         loadSettings: @escaping @Sendable () async throws -> NativeAppSettings,
         saveHiddenSections: @escaping @MainActor ([NavSectionID: Bool]) -> Void = { _ in },
@@ -97,12 +100,14 @@ public final class NativeShellModel {
         self.admin = admin
         self.planned = planned
         self.imports = imports
+        self.transactions = transactions
         self.hiddenSections = hiddenSections ?? Self.defaultHiddenSections
         self.loadSettings = loadSettings
         self.saveHiddenSections = saveHiddenSections
         self.onNavigate = onNavigate
         self.onSidebarVisibilityChange = onSidebarVisibilityChange
         self.settingsReloadDelay = settingsReloadDelay
+        transactions.attach(self)
     }
 
     /// `DEFAULT_HIDDEN` of useSidebarPreferences.
@@ -200,6 +205,20 @@ public final class NativeShellModel {
         return true
     }
 
+    /// ⌘N, the dock menu's New transaction and the `N` shortcut (`/transactions?new=1`): while
+    /// `/transactions` is native, the Add transaction sheet opens on the native screen, at once
+    /// when it is already shown, otherwise through `new=1`. Returns `false` when the page
+    /// handles it.
+    public func newTransaction() -> Bool {
+        guard settingsLoaded, NativeScreen.screen(forPath: TransactionsRoutes.path) != nil else { return false }
+        if detail == .native(.transactions) {
+            transactions.requestAdd()
+        } else {
+            navigate(to: TransactionsRoutes.newTransactionRoute)
+        }
+        return true
+    }
+
     /// A native screen with unsaved work registers its hook while it is shown.
     public func setLeaveGuard(_ hook: NativeLeaveGuard) {
         leaveGuard = hook
@@ -235,6 +254,14 @@ public final class NativeShellModel {
         onNavigate(.replaceRoute(next.string))
     }
 
+    /// `setSearchParams(next, { replace: true })` with a whole new query for the current path
+    /// (the sort pair, written together).
+    public func replaceQuery(_ query: [URLQueryItem]) {
+        let next = NativeRoute(path: route.path, query: query)
+        route = next
+        onNavigate(.replaceRoute(next.string))
+    }
+
     public func openSettings() {
         willPresent(.openSettings)
         onNavigate(.openSettings)
@@ -264,6 +291,7 @@ public final class NativeShellModel {
         case .consumed:
             return true
         case .navigate(let url):
+            if url == TransactionsRoutes.newTransactionRoute, newTransaction() { return true }
             navigate(to: url)
             return true
         case .openPalette:

@@ -62,7 +62,7 @@ aliases: [vision native, native app, swift app]
 | `apps/native/Sources/VisionNativeCore/API/`        | `APIClient` (the Swift `client.ts`) and the generated OpenAPI models and operations   |
 | `apps/native/Sources/VisionNativeCore/Design/`     | Generated design tokens and `ThemeSelection` (variant and appearance of the page)     |
 | `apps/native/Sources/VisionNativeCore/Navigation/` | Generated sidebar registry, routes, shortcuts and the `NativeShellModel` (phase 2)    |
-| `apps/native/Sources/VisionNativeCore/Screens/`    | View models of native screens (Exchange rates, Admin, Planned, Imports)               |
+| `apps/native/Sources/VisionNativeCore/Screens/`    | View models of native screens (Exchange rates, Admin, Planned, Imports, Transactions) |
 | `apps/native/Sources/VisionNativeUI/`              | SwiftUI shell, native screens and the generated `Localizable.xcstrings` (phase 2)     |
 | `apps/native/openapi-operations.txt`               | The operationIds the Swift client is generated for                                    |
 | `apps/native/i18n-keys.txt`                        | The `i18n/source` keys copied into the String Catalog                                 |
@@ -680,7 +680,7 @@ that way. Every native screen waits for the first `app_settings` answer and show
 then. The native shell never redirects: an admin route shows a native screen only while
 `app_settings` says admin mode is on, and otherwise the web view, where `RequireAdmin` redirects and
 reports the new route. Screens outside the admin section (`/planned`, `/import`,
-`/import/:batchId/review`) are native in
+`/import/:batchId/review`, `/transactions`) are native in
 either mode. The page's topbar keeps its traffic-light inset only while the native sidebar is
 hidden (`native-sidebar`).
 
@@ -802,6 +802,29 @@ dropped on a native screen goes to `NativeShellModel.openImportFile`, which pre-
 card within 30 seconds (after a running import ends) and moves to `/import`; before `app_settings`
 is read the web page also gets the file as `app:csv-opened` and does the navigation, so a cold
 launch keeps the file whichever side draws `/import`. The import never starts by itself.
+
+### Transactions (phase 3e part A)
+
+`/transactions` is native without admin mode
+([[docs/reference/native-parity/transactions-and-splits|transactions parity]],
+[[docs/api/transactions|transactions API]], [[docs/api/attachments|attachments API]]). The URL is
+the source of truth, as on the web: `TransactionFilters` reads the filters from the route, filter
+controls push a new route through the shell, and search and sort replace the query
+(`NativeShellModel.replaceQuery`). `TransactionsModel` loads pages of `defaultPageSize` rows
+(`app_settings`, 50 by default) with one request in flight per query and drops answers for an
+older query; the next page loads when one of the last rows appears. Column filters stay
+client-side over the loaded rows, and column visibility is kept under `transactionsColumns` in the
+`widget_visibility` setting against the baseline of its last read. Row edits,
+category and payee picks and the Status toggle patch the row first and roll back when the `PATCH`
+fails (`TransactionPatch` sends explicit `null`s). Delete asks first, removes the row and offers
+Undo for 8 seconds, which recreates the transaction. The inspector (`TransactionInspectorModel`)
+docks beside the list from a 1024-point page width and is a sheet below it; its tips call the
+bulk update for the payee's uncategorised rows (Use for all) and set the payee's default category
+(Always use). The Attachments panel (`TransactionAttachmentsModel`) uploads one multipart file,
+previews with Quick Look from a temporary file and saves downloads through the export save panel.
+`id` in the URL opens the inspector for that row and `new=1`, `⌘N` and the page's New transaction
+open the Add sheet, which is a placeholder until part B. The Add transaction sheet, Split, the bulk
+actions and `/owes` (`TransactionsRoutes.owesIsNative`) follow in phase 3e part B.
 
 ## CI
 

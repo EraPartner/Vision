@@ -5,7 +5,7 @@ import Foundation
 
 /// One struct per operationId in `apps/native/openapi-operations.txt`, in its order.
 public enum OpenAPIOperations {
-    public static let operationIds = ["getExchangeRates", "refreshExchangeRates", "adminDatabaseStats", "adminProvidersHealth", "adminProviderProbe", "adminMetricsRequests", "adminListEndpoints", "getSetting", "adminDatabaseVacuum", "adminGetTableSchema", "adminGetTableRows", "adminMutateTableRows", "getPlannedTransactions", "createPlannedTransaction", "updatePlannedTransaction", "deletePlannedTransaction", "executePlannedTransaction", "getPlannedMatchSuggestions", "getRecurringPatterns", "getRecipients", "getRecipient", "getAccounts", "getCategoryTree", "getTags", "createTag", "getTransactions", "saveSetting", "getSupportedAdapters", "getCustomParsers", "createCustomParser", "updateCustomParser", "deleteCustomParser", "getImportBatches", "deleteImportBatch", "previewImportBatch", "overrideImportRow", "overrideImportRowCategory", "commitImportBatch", "updateRecipient", "getInfoBanks", "exportTransactionsCsv", "exportTransactionsJson"]
+    public static let operationIds = ["getExchangeRates", "refreshExchangeRates", "adminDatabaseStats", "adminProvidersHealth", "adminProviderProbe", "adminMetricsRequests", "adminListEndpoints", "getSetting", "adminDatabaseVacuum", "adminGetTableSchema", "adminGetTableRows", "adminMutateTableRows", "getPlannedTransactions", "createPlannedTransaction", "updatePlannedTransaction", "deletePlannedTransaction", "executePlannedTransaction", "getPlannedMatchSuggestions", "getRecurringPatterns", "getRecipients", "getRecipient", "getAccounts", "getCategoryTree", "getTags", "createTag", "getTransactions", "saveSetting", "getSupportedAdapters", "getCustomParsers", "createCustomParser", "updateCustomParser", "deleteCustomParser", "getImportBatches", "deleteImportBatch", "previewImportBatch", "overrideImportRow", "overrideImportRowCategory", "commitImportBatch", "updateRecipient", "getInfoBanks", "exportTransactionsCsv", "exportTransactionsJson", "getTransaction", "createTransaction", "updateTransaction", "deleteTransaction", "bulkUpdateTransactions", "getTransactionAttachments", "downloadAttachment", "deleteAttachment"]
 }
 
 extension OpenAPIOperations {
@@ -1399,8 +1399,20 @@ extension OpenAPIOperations {
         public var includeBalance: Bool?
         /// Comma-separated tag slugs — OR filter
         public var tags: String?
+        /// Restrict the export to one transaction id (the list filter of the same name).
+        public var transactionId: Int?
+        public var recipientId: Int?
+        public var categoryId: Int?
+        /// Free-text search, as on the list endpoint (truncated to 200 characters).
+        public var search: String?
+        /// income or expense; any other value is ignored.
+        public var transactionType: String?
+        public var amountMin: Decimal?
+        public var amountMax: Decimal?
+        /// Compare amount_min/amount_max against the signed amount instead of its absolute value.
+        public var amountSigned: Bool?
 
-        public init(startDate: String? = nil, endDate: String? = nil, accountId: Int? = nil, accountIds: String? = nil, bankAccount: String? = nil, bankAccounts: String? = nil, categoryIds: String? = nil, includeBalance: Bool? = nil, tags: String? = nil) {
+        public init(startDate: String? = nil, endDate: String? = nil, accountId: Int? = nil, accountIds: String? = nil, bankAccount: String? = nil, bankAccounts: String? = nil, categoryIds: String? = nil, includeBalance: Bool? = nil, tags: String? = nil, transactionId: Int? = nil, recipientId: Int? = nil, categoryId: Int? = nil, search: String? = nil, transactionType: String? = nil, amountMin: Decimal? = nil, amountMax: Decimal? = nil, amountSigned: Bool? = nil) {
             self.startDate = startDate
             self.endDate = endDate
             self.accountId = accountId
@@ -1410,6 +1422,14 @@ extension OpenAPIOperations {
             self.categoryIds = categoryIds
             self.includeBalance = includeBalance
             self.tags = tags
+            self.transactionId = transactionId
+            self.recipientId = recipientId
+            self.categoryId = categoryId
+            self.search = search
+            self.transactionType = transactionType
+            self.amountMin = amountMin
+            self.amountMax = amountMax
+            self.amountSigned = amountSigned
         }
 
         public var path: String { "/api/transactions/export/csv" }
@@ -1425,6 +1445,14 @@ extension OpenAPIOperations {
             if let categoryIds { items.append(URLQueryItem(name: "category_ids", value: APIQuery.value(categoryIds))) }
             if let includeBalance { items.append(URLQueryItem(name: "include_balance", value: APIQuery.value(includeBalance))) }
             if let tags { items.append(URLQueryItem(name: "tags", value: APIQuery.value(tags))) }
+            if let transactionId { items.append(URLQueryItem(name: "transaction_id", value: APIQuery.value(transactionId))) }
+            if let recipientId { items.append(URLQueryItem(name: "recipient_id", value: APIQuery.value(recipientId))) }
+            if let categoryId { items.append(URLQueryItem(name: "category_id", value: APIQuery.value(categoryId))) }
+            if let search { items.append(URLQueryItem(name: "search", value: APIQuery.value(search))) }
+            if let transactionType { items.append(URLQueryItem(name: "transaction_type", value: APIQuery.value(transactionType))) }
+            if let amountMin { items.append(URLQueryItem(name: "amount_min", value: APIQuery.value(amountMin))) }
+            if let amountMax { items.append(URLQueryItem(name: "amount_max", value: APIQuery.value(amountMax))) }
+            if let amountSigned { items.append(URLQueryItem(name: "amount_signed", value: APIQuery.value(amountSigned))) }
             return items
         }
     }
@@ -1455,8 +1483,20 @@ extension OpenAPIOperations {
         public var categoryIds: String?
         /// Comma-separated tag slugs — OR filter
         public var tags: String?
+        /// Restrict the export to one transaction id (the list filter of the same name).
+        public var transactionId: Int?
+        public var recipientId: Int?
+        public var categoryId: Int?
+        /// Free-text search, as on the list endpoint (truncated to 200 characters).
+        public var search: String?
+        /// income or expense; any other value is ignored.
+        public var transactionType: String?
+        public var amountMin: Decimal?
+        public var amountMax: Decimal?
+        /// Compare amount_min/amount_max against the signed amount instead of its absolute value.
+        public var amountSigned: Bool?
 
-        public init(startDate: String? = nil, endDate: String? = nil, accountId: Int? = nil, accountIds: String? = nil, bankAccount: String? = nil, bankAccounts: String? = nil, categoryIds: String? = nil, tags: String? = nil) {
+        public init(startDate: String? = nil, endDate: String? = nil, accountId: Int? = nil, accountIds: String? = nil, bankAccount: String? = nil, bankAccounts: String? = nil, categoryIds: String? = nil, tags: String? = nil, transactionId: Int? = nil, recipientId: Int? = nil, categoryId: Int? = nil, search: String? = nil, transactionType: String? = nil, amountMin: Decimal? = nil, amountMax: Decimal? = nil, amountSigned: Bool? = nil) {
             self.startDate = startDate
             self.endDate = endDate
             self.accountId = accountId
@@ -1465,6 +1505,14 @@ extension OpenAPIOperations {
             self.bankAccounts = bankAccounts
             self.categoryIds = categoryIds
             self.tags = tags
+            self.transactionId = transactionId
+            self.recipientId = recipientId
+            self.categoryId = categoryId
+            self.search = search
+            self.transactionType = transactionType
+            self.amountMin = amountMin
+            self.amountMax = amountMax
+            self.amountSigned = amountSigned
         }
 
         public var path: String { "/api/transactions/export/json" }
@@ -1479,7 +1527,242 @@ extension OpenAPIOperations {
             if let bankAccounts { items.append(URLQueryItem(name: "bank_accounts", value: APIQuery.value(bankAccounts))) }
             if let categoryIds { items.append(URLQueryItem(name: "category_ids", value: APIQuery.value(categoryIds))) }
             if let tags { items.append(URLQueryItem(name: "tags", value: APIQuery.value(tags))) }
+            if let transactionId { items.append(URLQueryItem(name: "transaction_id", value: APIQuery.value(transactionId))) }
+            if let recipientId { items.append(URLQueryItem(name: "recipient_id", value: APIQuery.value(recipientId))) }
+            if let categoryId { items.append(URLQueryItem(name: "category_id", value: APIQuery.value(categoryId))) }
+            if let search { items.append(URLQueryItem(name: "search", value: APIQuery.value(search))) }
+            if let transactionType { items.append(URLQueryItem(name: "transaction_type", value: APIQuery.value(transactionType))) }
+            if let amountMin { items.append(URLQueryItem(name: "amount_min", value: APIQuery.value(amountMin))) }
+            if let amountMax { items.append(URLQueryItem(name: "amount_max", value: APIQuery.value(amountMax))) }
+            if let amountSigned { items.append(URLQueryItem(name: "amount_signed", value: APIQuery.value(amountSigned))) }
             return items
         }
+    }
+
+    /// GET /api/transactions/{id}: Get transaction
+    public struct GetTransaction: APIOperation {
+        public typealias Response = OpenAPI.Transaction
+        public static let operationId = "getTransaction"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/transactions/{id}"
+
+        public var id: Int
+
+        public init(id: Int) {
+            self.id = id
+        }
+
+        public var path: String { "/api/transactions/\(APIPath.segment(APIQuery.value(id)))" }
+    }
+
+    /// POST /api/transactions: Create transaction
+    public struct CreateTransaction: APIOperation {
+        public typealias Response = OpenAPI.Transaction
+        public static let operationId = "createTransaction"
+        public static let method = HTTPMethod.post
+        public static let pathTemplate = "/api/transactions"
+
+        public var body: OpenAPI.TransactionCreate
+
+        public init(body: OpenAPI.TransactionCreate) {
+            self.body = body
+        }
+
+        public var path: String { "/api/transactions" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+    }
+
+    /// PATCH /api/transactions/{id}: Update transaction
+    public struct UpdateTransaction: APIOperation {
+        public typealias Response = OpenAPI.Transaction
+        public static let operationId = "updateTransaction"
+        public static let method = HTTPMethod.patch
+        public static let pathTemplate = "/api/transactions/{id}"
+
+        public var id: Int
+        public var body: OpenAPI.TransactionUpdate
+
+        public init(id: Int, body: OpenAPI.TransactionUpdate) {
+            self.id = id
+            self.body = body
+        }
+
+        public var path: String { "/api/transactions/\(APIPath.segment(APIQuery.value(id)))" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+    }
+
+    /// DELETE /api/transactions/{id}: Delete transaction
+    public struct DeleteTransaction: APIOperation {
+        public typealias Response = APIEmpty
+        public static let operationId = "deleteTransaction"
+        public static let method = HTTPMethod.delete
+        public static let pathTemplate = "/api/transactions/{id}"
+
+        public var id: Int
+
+        public init(id: Int) {
+            self.id = id
+        }
+
+        public var path: String { "/api/transactions/\(APIPath.segment(APIQuery.value(id)))" }
+    }
+
+    /// POST /api/transactions/bulk-update: Apply a shared field update to transactions selected by ids
+    /// or filter
+    public struct BulkUpdateTransactions: APIOperation {
+        public typealias Response = ResponseData
+        public static let operationId = "bulkUpdateTransactions"
+        public static let method = HTTPMethod.post
+        public static let pathTemplate = "/api/transactions/bulk-update"
+
+        public var body: Body
+
+        public init(body: Body) {
+            self.body = body
+        }
+
+        public var path: String { "/api/transactions/bulk-update" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+
+        public struct ResponseData: Codable, Equatable, Sendable {
+            public let updated: Int
+            public let requested: Int
+            public let matched: Int
+
+            public init(updated: Int, requested: Int, matched: Int) {
+                self.updated = updated
+                self.requested = requested
+                self.matched = matched
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case updated = "updated"
+                case requested = "requested"
+                case matched = "matched"
+            }
+        }
+
+        public struct Body: Codable, Equatable, Sendable {
+            /// At least one of the updatable properties
+            public let fields: Fields
+
+            public init(fields: Fields) {
+                self.fields = fields
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case fields = "fields"
+            }
+
+            public struct Fields: Codable, Equatable, Sendable {
+                public let categoryId: Int?
+                public let recipientId: Int?
+                public let isActive: Bool?
+
+                public init(categoryId: Int? = nil, recipientId: Int? = nil, isActive: Bool? = nil) {
+                    self.categoryId = categoryId
+                    self.recipientId = recipientId
+                    self.isActive = isActive
+                }
+
+                enum CodingKeys: String, CodingKey {
+                    case categoryId = "category_id"
+                    case recipientId = "recipient_id"
+                    case isActive = "is_active"
+                }
+            }
+        }
+    }
+
+    /// GET /api/attachments/transaction/{id}: List attachments for a transaction
+    public struct GetTransactionAttachments: APIOperation {
+        public typealias Response = ResponseData
+        public static let operationId = "getTransactionAttachments"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/attachments/transaction/{id}"
+
+        public var id: Int
+        /// Page size. Omit (together with offset) to receive the whole collection. Values above the
+        /// endpoint's cap are clamped.
+        public var limit: Int?
+        /// Rows to skip. Omit (together with limit) to receive the whole collection.
+        public var offset: Int?
+
+        public init(id: Int, limit: Int? = nil, offset: Int? = nil) {
+            self.id = id
+            self.limit = limit
+            self.offset = offset
+        }
+
+        public var path: String { "/api/attachments/transaction/\(APIPath.segment(APIQuery.value(id)))" }
+
+        public var queryItems: [URLQueryItem] {
+            var items: [URLQueryItem] = []
+            if let limit { items.append(URLQueryItem(name: "limit", value: APIQuery.value(limit))) }
+            if let offset { items.append(URLQueryItem(name: "offset", value: APIQuery.value(offset))) }
+            return items
+        }
+
+        public struct ResponseData: Codable, Equatable, Sendable {
+            public let total: Int
+            public let limit: Int?
+            public let offset: Int?
+            public let items: [OpenAPI.Attachment]
+
+            public init(total: Int, limit: Int? = nil, offset: Int? = nil, items: [OpenAPI.Attachment]) {
+                self.total = total
+                self.limit = limit
+                self.offset = offset
+                self.items = items
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case total = "total"
+                case limit = "limit"
+                case offset = "offset"
+                case items = "items"
+            }
+        }
+    }
+
+    /// GET /api/attachments/{id}/download: Download attachment file
+    public struct DownloadAttachment: APIOperation {
+        public typealias Response = APIEmpty
+        public static let operationId = "downloadAttachment"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/attachments/{id}/download"
+
+        public var id: Int
+
+        public init(id: Int) {
+            self.id = id
+        }
+
+        public var path: String { "/api/attachments/\(APIPath.segment(APIQuery.value(id)))/download" }
+    }
+
+    /// DELETE /api/attachments/{id}: Delete attachment
+    public struct DeleteAttachment: APIOperation {
+        public typealias Response = APIEmpty
+        public static let operationId = "deleteAttachment"
+        public static let method = HTTPMethod.delete
+        public static let pathTemplate = "/api/attachments/{id}"
+
+        public var id: Int
+
+        public init(id: Int) {
+            self.id = id
+        }
+
+        public var path: String { "/api/attachments/\(APIPath.segment(APIQuery.value(id)))" }
     }
 }

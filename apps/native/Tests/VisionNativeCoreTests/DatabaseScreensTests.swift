@@ -899,6 +899,7 @@ enum DatabaseFixture {
             exchangeRates: ExchangeRatesModel(service: FakeExchangeRatesService()),
             admin: AdminFixture.screens(database: database),
             planned: PlannedFixture.idleModel(), imports: ImportFixture.idleModel(),
+            transactions: TransactionsFixture.idleModel(),
             loadSettings: { NativeAppSettings(adminMode: true) }, onNavigate: { recorder.actions.append($0) })
     }
 
