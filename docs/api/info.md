@@ -2,8 +2,8 @@
 title: Info & Analytics API
 type: endpoint
 status: active
-date: 2026-10-12
-updated: 2026-10-12
+date: 2026-10-13
+updated: 2026-10-13
 tags: [api, analytics, statistics, dashboard, phase-g-deprecation, ing, bnp, supported-adapters]
 description: API endpoints for statistics, analytics, and dashboard data. Phase G removed 6 overlapping endpoints; see aggregations API for their replacements. May 2026: Added ING and BNP Paribas Fortis adapters (8 total banks supported).
 aliases: [info-api, analytics-api, statistics-api, dashboard-api]
@@ -398,8 +398,11 @@ Transaction-derived Belgian deduction candidates for the tax overview card and t
       "deductionType": "pensionSavings",
       "total": 1020,
       "byOwner": { "me": 510, "partner": 0, "joint": 510 },
+      "partnerShares": { "A": 765, "B": 255 },
       "categoryCount": 1,
-      "categories": [{ "category": "SAVINGS:PENSION", "total": 1020, "count": 12 }]
+      "categories": [
+        { "category": "SAVINGS:PENSION", "total": 1020, "count": 12 }
+      ]
     }
   ]
 }
@@ -409,6 +412,14 @@ Transaction-derived Belgian deduction candidates for the tax overview card and t
 splits each total by the owner of the transaction's account; a transaction without an account
 counts as `me`. The three values add up to `total`. The frontend maps `me` to partner A,
 `partner` to partner B and halves `joint`.
+
+`partnerShares` (additive, 2026-10-13) returns `{ A, B }` computed by the shared TypeScript
+attribution helper for a two-partner household. Partner B receives `partner + joint / 2`,
+rounded to cents; A receives the remainder so the shares preserve the group total. A
+single-person caller applies the complete total to A. Native deduction review displays and
+applies these returned shares rather than recomputing financial attribution in Swift. This
+adds no writes or migration; confirmation uses the existing settings CAS operation. See
+[[docs/api/belgian-tax|Tax API]] and [[docs/reference/native-parity/tax|native Tax parity]].
 
 ### PUT /api/info/insight-dismissals
 

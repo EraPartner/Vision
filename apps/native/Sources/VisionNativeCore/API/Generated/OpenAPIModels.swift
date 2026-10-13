@@ -623,6 +623,223 @@ extension OpenAPI {
         }
     }
 
+    public struct BelgianTaxDashboard: Codable, Equatable, Sendable {
+        public let year: Int
+        public let currency: String
+        public let isHistorical: Bool
+        public let hasIncomeSources: Bool
+        public let hasStatsData: Bool
+        public let isEmpty: Bool
+        public let portfolioTaxesForYear: Decimal
+        public let totalTaxIncludingPortfolio: Decimal
+        public let totalTaxIncludingPropertyEstimate: Decimal?
+        public let yearlyIncome: [OpenAPI.BelgianTaxDashboardYearlyIncome]
+        public let monthlyIncomeTax: [OpenAPI.BelgianTaxDashboardMonthlyIncome]
+        public let recordedIncomeByPartner: RecordedIncomeByPartner?
+        public let yearCalculations: [OpenAPI.BelgianTaxDashboardYearCalculation]
+        /// Existing projected v1 profile for the viewed year; presentation only. The household remains
+        /// the editable source.
+        public let currentInputs: JSONValue
+        /// Complete v1 projection for the existing input-column CSV format; includes fields omitted
+        /// from the short current-inputs card.
+        public let exportProfile: JSONValue
+        public let suggestions: [SuggestionsItem]
+        public let householdBreakdownRows: [OpenAPI.BelgianTaxDashboardHouseholdRow]
+        public let rules: [OpenAPI.BelgianTaxDashboardRuleSection]
+
+        public init(year: Int, currency: String, isHistorical: Bool, hasIncomeSources: Bool, hasStatsData: Bool, isEmpty: Bool, portfolioTaxesForYear: Decimal, totalTaxIncludingPortfolio: Decimal, totalTaxIncludingPropertyEstimate: Decimal? = nil, yearlyIncome: [OpenAPI.BelgianTaxDashboardYearlyIncome], monthlyIncomeTax: [OpenAPI.BelgianTaxDashboardMonthlyIncome], recordedIncomeByPartner: RecordedIncomeByPartner? = nil, yearCalculations: [OpenAPI.BelgianTaxDashboardYearCalculation], currentInputs: JSONValue, exportProfile: JSONValue, suggestions: [SuggestionsItem], householdBreakdownRows: [OpenAPI.BelgianTaxDashboardHouseholdRow], rules: [OpenAPI.BelgianTaxDashboardRuleSection]) {
+            self.year = year
+            self.currency = currency
+            self.isHistorical = isHistorical
+            self.hasIncomeSources = hasIncomeSources
+            self.hasStatsData = hasStatsData
+            self.isEmpty = isEmpty
+            self.portfolioTaxesForYear = portfolioTaxesForYear
+            self.totalTaxIncludingPortfolio = totalTaxIncludingPortfolio
+            self.totalTaxIncludingPropertyEstimate = totalTaxIncludingPropertyEstimate
+            self.yearlyIncome = yearlyIncome
+            self.monthlyIncomeTax = monthlyIncomeTax
+            self.recordedIncomeByPartner = recordedIncomeByPartner
+            self.yearCalculations = yearCalculations
+            self.currentInputs = currentInputs
+            self.exportProfile = exportProfile
+            self.suggestions = suggestions
+            self.householdBreakdownRows = householdBreakdownRows
+            self.rules = rules
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case year = "year"
+            case currency = "currency"
+            case isHistorical = "isHistorical"
+            case hasIncomeSources = "hasIncomeSources"
+            case hasStatsData = "hasStatsData"
+            case isEmpty = "isEmpty"
+            case portfolioTaxesForYear = "portfolioTaxesForYear"
+            case totalTaxIncludingPortfolio = "totalTaxIncludingPortfolio"
+            case totalTaxIncludingPropertyEstimate = "totalTaxIncludingPropertyEstimate"
+            case yearlyIncome = "yearlyIncome"
+            case monthlyIncomeTax = "monthlyIncomeTax"
+            case recordedIncomeByPartner = "recordedIncomeByPartner"
+            case yearCalculations = "yearCalculations"
+            case currentInputs = "currentInputs"
+            case exportProfile = "exportProfile"
+            case suggestions = "suggestions"
+            case householdBreakdownRows = "householdBreakdownRows"
+            case rules = "rules"
+        }
+
+        public struct RecordedIncomeByPartner: Codable, Equatable, Sendable {
+            public let a: Decimal
+            public let b: Decimal
+
+            public init(a: Decimal, b: Decimal) {
+                self.a = a
+                self.b = b
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case a = "A"
+                case b = "B"
+            }
+        }
+
+        public struct SuggestionsItem: Codable, Equatable, Sendable {
+            public let id: String
+            public let titleKey: String
+            public let descriptionKey: String
+            public let descriptionParams: [String: Decimal]?
+            public let estimate: Decimal?
+            public let noteKey: String?
+
+            public init(id: String, titleKey: String, descriptionKey: String, descriptionParams: [String: Decimal]? = nil, estimate: Decimal? = nil, noteKey: String? = nil) {
+                self.id = id
+                self.titleKey = titleKey
+                self.descriptionKey = descriptionKey
+                self.descriptionParams = descriptionParams
+                self.estimate = estimate
+                self.noteKey = noteKey
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case id = "id"
+                case titleKey = "titleKey"
+                case descriptionKey = "descriptionKey"
+                case descriptionParams = "descriptionParams"
+                case estimate = "estimate"
+                case noteKey = "noteKey"
+            }
+        }
+    }
+
+    public struct BelgianTaxDashboardHouseholdRow: Codable, Equatable, Sendable {
+        public let key: String
+        public let tone: String
+        public let partnerAmounts: [String: Decimal]
+        public let household: Decimal
+
+        public init(key: String, tone: String, partnerAmounts: [String: Decimal], household: Decimal) {
+            self.key = key
+            self.tone = tone
+            self.partnerAmounts = partnerAmounts
+            self.household = household
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case key = "key"
+            case tone = "tone"
+            case partnerAmounts = "partnerAmounts"
+            case household = "household"
+        }
+    }
+
+    public struct BelgianTaxDashboardMonthlyIncome: Codable, Equatable, Sendable {
+        public let period: String
+        public let income: Decimal
+        public let estimatedTax: Decimal
+
+        public init(period: String, income: Decimal, estimatedTax: Decimal) {
+            self.period = period
+            self.income = income
+            self.estimatedTax = estimatedTax
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case period = "period"
+            case income = "income"
+            case estimatedTax = "estimatedTax"
+        }
+    }
+
+    public struct BelgianTaxDashboardRuleSection: Codable, Equatable, Sendable {
+        public let titleKey: String
+        public let itemKeys: [String]
+
+        public init(titleKey: String, itemKeys: [String]) {
+            self.titleKey = titleKey
+            self.itemKeys = itemKeys
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case titleKey = "titleKey"
+            case itemKeys = "itemKeys"
+        }
+    }
+
+    public struct BelgianTaxDashboardYearCalculation: Codable, Equatable, Sendable {
+        public let year: Int
+        public let calculation: OpenAPI.BelgianTaxHistoricalCalculation
+        public let isFiled: Bool
+        public let hasFrozenCalculation: Bool
+        public let isCurrent: Bool
+        public let hasSnapshot: Bool
+        public let hasTransactions: Bool
+
+        public init(year: Int, calculation: OpenAPI.BelgianTaxHistoricalCalculation, isFiled: Bool, hasFrozenCalculation: Bool, isCurrent: Bool, hasSnapshot: Bool, hasTransactions: Bool) {
+            self.year = year
+            self.calculation = calculation
+            self.isFiled = isFiled
+            self.hasFrozenCalculation = hasFrozenCalculation
+            self.isCurrent = isCurrent
+            self.hasSnapshot = hasSnapshot
+            self.hasTransactions = hasTransactions
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case year = "year"
+            case calculation = "calculation"
+            case isFiled = "isFiled"
+            case hasFrozenCalculation = "hasFrozenCalculation"
+            case isCurrent = "isCurrent"
+            case hasSnapshot = "hasSnapshot"
+            case hasTransactions = "hasTransactions"
+        }
+    }
+
+    public struct BelgianTaxDashboardYearlyIncome: Codable, Equatable, Sendable {
+        public let year: String
+        public let income: Decimal
+        public let estimatedTax: Decimal
+        public let netAfterTax: Decimal
+        public let isApproximated: Bool
+
+        public init(year: String, income: Decimal, estimatedTax: Decimal, netAfterTax: Decimal, isApproximated: Bool) {
+            self.year = year
+            self.income = income
+            self.estimatedTax = estimatedTax
+            self.netAfterTax = netAfterTax
+            self.isApproximated = isApproximated
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case year = "year"
+            case income = "income"
+            case estimatedTax = "estimatedTax"
+            case netAfterTax = "netAfterTax"
+            case isApproximated = "isApproximated"
+        }
+    }
+
     public struct BelgianTaxExemptionAllocation: Codable, Equatable, Sendable {
         public let basic: Decimal
         public let disability: Decimal

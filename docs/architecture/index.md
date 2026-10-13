@@ -115,7 +115,7 @@ Located in `docs/diagrams/`:
 
 ## Interactive Flow Visualizer
 
-Open [the interactive visualizer](../flow-visualizer.html#api-request) for 82 components and 47 flows. Journey view follows ordered handoffs; Architecture map shows their place in the whole system. Five learning paths provide a reading order, with source details and links to the fuller notes. [[docs/guides/visual-learning|Understand Vision Visually]] introduces the main boundaries with compact Mermaid diagrams.
+Open [the interactive visualizer](../flow-visualizer.html#api-request) for 82 components and 49 flows. Journey view follows ordered handoffs; Architecture map shows their place in the whole system. Five learning paths provide a reading order, with source details and links to the fuller notes. [[docs/guides/visual-learning|Understand Vision Visually]] introduces the main boundaries with compact Mermaid diagrams.
 
 The system and backend service diagrams include the optional AgentCloak dependency. Desktop mode
 detects selected-text spans before Vision creates encrypted reference tokens; MCP mode keeps the

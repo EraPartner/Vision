@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
-import { screen, within } from "@testing-library/react";
+import { screen, within, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useLocation } from "react-router";
 import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
@@ -10,21 +11,86 @@ import TaxOverviewPage from "@/pages/TaxOverviewPage";
 
 const API_BASE = "http://localhost:3002";
 
+function LocationProbe() {
+    return (
+        <output data-testid="location-search">{useLocation().search}</output>
+    );
+}
+
 describe("TaxOverviewPage (integration)", () => {
+    it("opens the native PDF handoff and preserves the selected tax year and other parameters on close", async () => {
+        const user = userEvent.setup();
+        renderWithApp(
+            <>
+                <TaxOverviewPage />
+                <LocationProbe />
+            </>,
+            { initialEntries: ["/tax?year=2024&source=native&export=pdf"] },
+        );
+        const dialog = await screen.findByRole("dialog");
+        expect(
+            within(dialog).getByRole("heading", { name: /export pdf report/i }),
+        ).toBeInTheDocument();
+        await user.click(
+            within(dialog).getByRole("button", { name: /^cancel$/i }),
+        );
+        await waitFor(() => {
+            expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+            expect(screen.getByTestId("location-search")).toHaveTextContent(
+                "?year=2024&source=native",
+            );
+        });
+        expect(
+            await screen.findByRole("heading", { level: 2, name: "2024" }),
+        ).toBeInTheDocument();
+    });
+
+    it("keeps the native PDF handoff available before profile settings have loaded", async () => {
+        let release!: () => void;
+        const pending = new Promise<void>((resolve) => {
+            release = resolve;
+        });
+        server.use(
+            http.get(`${API_BASE}/api/settings`, async () => {
+                await pending;
+                return ok(settingsWithBaselines({}));
+            }),
+        );
+        try {
+            renderWithApp(<TaxOverviewPage />, {
+                initialEntries: ["/tax?year=2024&export=pdf"],
+            });
+            const dialog = await screen.findByRole("dialog");
+            expect(
+                within(dialog).getByRole("heading", {
+                    name: /export pdf report/i,
+                }),
+            ).toBeInTheDocument();
+        } finally {
+            release();
+        }
+    });
+
     it("renders page heading", async () => {
         renderWithApp(<TaxOverviewPage />);
-        expect(await screen.findByRole("heading", { name: /^taxes$/i })).toBeInTheDocument();
+        expect(
+            await screen.findByRole("heading", { name: /^taxes$/i }),
+        ).toBeInTheDocument();
     });
 
     it("renders no-profile empty state when tax profile is unconfigured", async () => {
         renderWithApp(<TaxOverviewPage />);
-        expect(await screen.findByText(/no tax profile yet/i)).toBeInTheDocument();
+        expect(
+            await screen.findByText(/no tax profile yet/i),
+        ).toBeInTheDocument();
     });
 
     it("renders the Set up tax profile CTA button", async () => {
         renderWithApp(<TaxOverviewPage />);
         // TaxOverviewPage renders two TaxProfileDialog instances (header + empty-state CTA)
-        const btns = await screen.findAllByRole("button", { name: /set up tax profile/i });
+        const btns = await screen.findAllByRole("button", {
+            name: /set up tax profile/i,
+        });
         expect(btns.length).toBeGreaterThan(0);
     });
 
@@ -33,32 +99,38 @@ describe("TaxOverviewPage (integration)", () => {
         renderWithApp(<TaxOverviewPage />);
 
         // Take the first trigger (empty-state CTA); both open the same sheet
-        const [setupBtn] = await screen.findAllByRole("button", { name: /set up tax profile/i });
+        const [setupBtn] = await screen.findAllByRole("button", {
+            name: /set up tax profile/i,
+        });
         await user.click(setupBtn!);
 
         // Sheet header title "Belgian Tax Profile" appears
-        expect(
-            await screen.findByText(/^tax profile$/i),
-        ).toBeInTheDocument();
+        expect(await screen.findByText(/^tax profile$/i)).toBeInTheDocument();
     });
 
     it("opens the wizard on the household step", async () => {
         const user = userEvent.setup();
         renderWithApp(<TaxOverviewPage />);
 
-        const [setupBtn] = await screen.findAllByRole("button", { name: /set up tax profile/i });
+        const [setupBtn] = await screen.findAllByRole("button", {
+            name: /set up tax profile/i,
+        });
         await user.click(setupBtn!);
 
         // The first step is the household: the derived assessment and the partner switch.
         expect(await screen.findByText("Your household")).toBeInTheDocument();
-        expect(screen.getByRole("switch", { name: /i have a partner/i })).toBeInTheDocument();
+        expect(
+            screen.getByRole("switch", { name: /i have a partner/i }),
+        ).toBeInTheDocument();
     });
 
     it("closes tax profile sheet when Escape is pressed", async () => {
         const user = userEvent.setup();
         renderWithApp(<TaxOverviewPage />);
 
-        const [setupBtn] = await screen.findAllByRole("button", { name: /set up tax profile/i });
+        const [setupBtn] = await screen.findAllByRole("button", {
+            name: /set up tax profile/i,
+        });
         await user.click(setupBtn!);
 
         await screen.findByText(/^tax profile$/i);
@@ -93,24 +165,22 @@ describe("TaxOverviewPage (integration)", () => {
 
         expect(await screen.findByRole("dialog")).toBeInTheDocument();
         expect(
-            await screen.findByRole("heading", { name: /customize this page/i }),
+            await screen.findByRole("heading", {
+                name: /customize this page/i,
+            }),
         ).toBeInTheDocument();
     });
 
     it("shows tax year badge", async () => {
         renderWithApp(<TaxOverviewPage />);
         // Badge text: "Tax year YYYY"
-        expect(
-            await screen.findByText(/tax year \d{4}/i),
-        ).toBeInTheDocument();
+        expect(await screen.findByText(/tax year \d{4}/i)).toBeInTheDocument();
     });
 
     it("shows disclaimer text", async () => {
         renderWithApp(<TaxOverviewPage />);
         // Info card: "tax.disclaimerTitle" = "Estimates Only"
-        expect(
-            await screen.findByText(/estimates only/i),
-        ).toBeInTheDocument();
+        expect(await screen.findByText(/estimates only/i)).toBeInTheDocument();
     });
 
     it("shows subtitle text", async () => {
@@ -140,7 +210,9 @@ describe("TaxOverviewPage (integration)", () => {
 
     it("shows the effective burden as the masthead hero figure", async () => {
         renderWithApp(<TaxOverviewPage />);
-        expect(await screen.findByText(/^effective burden$/i)).toBeInTheDocument();
+        expect(
+            await screen.findByText(/^effective burden$/i),
+        ).toBeInTheDocument();
         // Live year, so the masthead reads as a live estimate rather than a filed year.
         expect(await screen.findByText(/^live estimate$/i)).toBeInTheDocument();
     });
@@ -196,9 +268,13 @@ describe("TaxOverviewPage (integration)", () => {
     });
 
     it("renders empty state gracefully when settings API fails with 500", async () => {
-        const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+        const consoleSpy = vi
+            .spyOn(console, "error")
+            .mockImplementation(() => {});
         server.use(
-            http.get(`${API_BASE}/api/settings`, () => err(500, "db unavailable")),
+            http.get(`${API_BASE}/api/settings`, () =>
+                err(500, "db unavailable"),
+            ),
         );
         renderWithApp(<TaxOverviewPage />);
         expect(
@@ -206,13 +282,19 @@ describe("TaxOverviewPage (integration)", () => {
         ).toBeInTheDocument();
         // apiRequest retries on 500 (MAX_RETRIES=2, ~1.5 s backoff) — needs extended timeout
         expect(
-            await screen.findByText(/no tax profile yet/i, {}, { timeout: 5000 }),
+            await screen.findByText(
+                /no tax profile yet/i,
+                {},
+                { timeout: 5000 },
+            ),
         ).toBeInTheDocument();
         consoleSpy.mockRestore();
     });
 
     it("renders empty state gracefully when settings API fails with 403", async () => {
-        const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+        const consoleSpy = vi
+            .spyOn(console, "error")
+            .mockImplementation(() => {});
         server.use(
             http.get(`${API_BASE}/api/settings`, () => err(403, "Forbidden")),
         );
@@ -220,12 +302,16 @@ describe("TaxOverviewPage (integration)", () => {
         expect(
             await screen.findByRole("heading", { name: /^taxes$/i }),
         ).toBeInTheDocument();
-        expect(await screen.findByText(/no tax profile yet/i)).toBeInTheDocument();
+        expect(
+            await screen.findByText(/no tax profile yet/i),
+        ).toBeInTheDocument();
         consoleSpy.mockRestore();
     });
 
     it("shows an error banner instead of the setup prompt when the stats fetch fails", async () => {
-        const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+        const consoleSpy = vi
+            .spyOn(console, "error")
+            .mockImplementation(() => {});
         server.use(
             http.get(`${API_BASE}/api/aggregations/monthly-summary`, () =>
                 err(500, "aggregation failed"),
@@ -234,10 +320,16 @@ describe("TaxOverviewPage (integration)", () => {
         renderWithApp(<TaxOverviewPage />);
         // tax.page.loadError = "Couldn't load tax statistics: {msg}"
         expect(
-            await screen.findByText(/couldn't load tax statistics/i, {}, { timeout: 8000 }),
+            await screen.findByText(
+                /couldn't load tax statistics/i,
+                {},
+                { timeout: 8000 },
+            ),
         ).toBeInTheDocument();
         // A user without a profile must NOT be told to set one up on a fetch error
-        expect(screen.queryByText(/no tax profile yet/i)).not.toBeInTheDocument();
+        expect(
+            screen.queryByText(/no tax profile yet/i),
+        ).not.toBeInTheDocument();
         consoleSpy.mockRestore();
     }, 15000);
 
@@ -255,7 +347,9 @@ describe("TaxOverviewPage (integration)", () => {
     it("opens the year dropdown and lists the active year as current", async () => {
         const user = userEvent.setup();
         renderWithApp(<TaxOverviewPage />);
-        await user.click(await screen.findByRole("button", { name: /switch tax year/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /switch tax year/i }),
+        );
         // "Current" badge appears on the live year row
         expect(await screen.findByText(/^Current$/)).toBeInTheDocument();
     });
@@ -265,7 +359,11 @@ describe("TaxOverviewPage (integration)", () => {
             http.get(`${API_BASE}/api/settings`, () =>
                 ok(
                     settingsWithBaselines({
-                        belgian_tax_profile: { taxYear: 2026, grossAnnualIncome: 50000, profileConfigured: true },
+                        belgian_tax_profile: {
+                            taxYear: 2026,
+                            grossAnnualIncome: 50000,
+                            profileConfigured: true,
+                        },
                         belgian_tax_profile_snapshots_v1: {
                             2024: {
                                 taxYear: 2024,
@@ -281,8 +379,12 @@ describe("TaxOverviewPage (integration)", () => {
         );
         const user = userEvent.setup();
         renderWithApp(<TaxOverviewPage />);
-        await user.click(await screen.findByRole("button", { name: /switch tax year/i }));
-        await user.click(await screen.findByRole("menuitem", { name: /2024/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /switch tax year/i }),
+        );
+        await user.click(
+            await screen.findByRole("menuitem", { name: /2024/i }),
+        );
         expect(
             await screen.findByText(/viewing saved profile for 2024/i),
         ).toBeInTheDocument();

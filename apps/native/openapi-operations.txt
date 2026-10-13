@@ -154,3 +154,9 @@ getTagPivot
 # Belgian tax engine prerequisite (ADR-204): Swift displays TypeScript results.
 computeBelgianTax
 getBelgianTaxOverview
+# Atomic tax snapshot / filing writes use the existing settings operation.
+saveSettings
+
+getBelgianTaxDashboard
+
+getDeductionCandidates

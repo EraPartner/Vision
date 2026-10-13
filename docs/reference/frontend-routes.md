@@ -161,15 +161,17 @@ The three sidebar workspaces and their switcher were replaced by one labelled si
 - `G` then a key jumps to a page (Home is `G H`, previously `G D`); `[` and `]` cycle Home (`/`), Portfolio (`/portfolio`) and Research (`/research`).
 - `data-tint` on the canvas is `wealth` under `/portfolio`, otherwise `money`.
 
-## Native Insights report handoff
+## Native Insights and Tax report handoff
 
-Vision Native draws `/statistics` in SwiftUI while keeping the shared React report dialog for
+Vision Native draws `/statistics` and `/tax` in SwiftUI while keeping the shared React report dialog for
 financial, portfolio, and tax export. `?export=pdf` opens that dialog, preserving other query
 parameters. Closing or completing an export removes only `export` with replace and restores the
 native screen. Browser and Electron report menu actions keep their existing local dialog state.
+Tax retains the selected `year` during the handoff; its menu defaults to the tax report type.
 The tax calculation backend prerequisite is recorded in [[docs/adr/204-vision-native-swift-app-target|ADR-204]];
 see [[docs/architecture/native-app|the native architecture]] and
-[[docs/reference/native-parity/home-and-statistics|Home and Insights parity]].
+[[docs/reference/native-parity/home-and-statistics|Home and Insights parity]] and
+[[docs/reference/native-parity/tax|Tax parity]].
 
 ## Related
 

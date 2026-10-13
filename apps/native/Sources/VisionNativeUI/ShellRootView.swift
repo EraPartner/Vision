@@ -222,6 +222,8 @@ struct NativeScreenContainer: View {
             if let home = model.home { HomeView(model: home, shell: model) }
         case .statistics:
             if let statistics = model.statistics { StatisticsView(screens: statistics, shell: model) }
+        case .tax:
+            if let tax = model.tax { TaxOverviewView(screens: tax, shell: model) }
         case .adminOverview:
             AdminOverviewView(model: model.admin.overview, shell: model)
         case .databaseMaintenance:

@@ -90,6 +90,20 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             guard let self else { return false }
             return try await self.saveExport(data, suggestedName: name)
         }
+        let tax = TaxScreens(client: client)
+        tax.save = { [weak self] data, name in
+            guard let self else { return false }
+            return try await self.saveExport(data, suggestedName: name)
+        }
+        tax.deductions.bindStorage(
+            read: { [weak self] key in
+                guard let value = await self?.homeLocalStorage(key: key) else { return nil }
+                return try? String(data: value.serialized(), encoding: .utf8)
+            },
+            write: { [weak self] key, raw in
+                guard let value = try? JSONValue.parse(Data(raw.utf8)) else { return }
+                _ = await self?.homeLocalStorage(key: key, value: value)
+            })
         return NativeShellModel(
             strings: CatalogStrings(language: strings.language),
             theme: ThemeSelection.resolve(
@@ -108,6 +122,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
                 readLocal: { [weak self] key in await self?.homeLocalStorage(key: key) },
                 writeLocal: { [weak self] key, value in _ = await self?.homeLocalStorage(key: key, value: value) }),
             statistics: StatisticsScreens(client: client),
+            tax: tax,
             hiddenSections: Self.loadHiddenSections(),
             loadSettings: { try await client.appSettings() },
             saveHiddenSections: { Self.saveHiddenSections($0) },
@@ -172,10 +187,11 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
 
     private static let adminTokenTimeout: Duration = .seconds(5)
 
-    /// Home shares the web app's per-device dismissals. Only these two known keys are
+    /// Home and Tax share the web app's per-device dismissals. Only these known keys are
     /// accessible, and every argument goes through WebKit's argument binding.
     private func homeLocalStorage(key: String, value: JSONValue? = nil) async -> JSONValue? {
-        guard ["vision.home.dismissedAccountInactivity", "dismissed_upcoming_planned_payments"].contains(key),
+        guard ["vision.home.dismissedAccountInactivity", "dismissed_upcoming_planned_payments",
+               TaxDeductionsModel.dismissalStorageKey].contains(key),
               queue.isReady, let webView = webShell?.webView else { return nil }
         let encoded = value.flatMap { try? String(data: $0.serialized(), encoding: .utf8) }
         return await withCheckedContinuation { (continuation: CheckedContinuation<JSONValue?, Never>) in

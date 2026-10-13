@@ -31,7 +31,7 @@ tags:
     string-catalog,
     navigation,
   ]
-description: "Vision Native is the Swift macOS app under apps/native/ that replaces the Electron shell in phases (ADR-204). Covers the directory layout, the runtime supervisor that starts its own PostgreSQL 18 cluster and backend on synthetic Demo data, payload discovery, the phase 1c shell (window, launch state, preload bridge, web view navigation and download policy, menus, dock and vibrancy), phase 1d backup and restore (bundle format compatibility, Keychain passphrase, restore allow-list, quit-time backup), the phase 1e audit anchor and Keychain witness with restore continuity, the standard and Demo variants of one build, the Debug-only backend override, the phase 2 foundations (generated OpenAPI client, design tokens, String Catalog and sidebar registry, the native NavigationSplitView shell with the shell:route-changed bridge message, and the native Exchange rates screen), the Native (macOS) CI job with the backup and audit interop job, and install-native.sh."
+description: "Vision Native is the Swift macOS app under apps/native/ that replaces the Electron shell in phases (ADR-204). Covers the directory layout, the runtime supervisor that starts its own PostgreSQL 18 cluster and backend on synthetic Demo data, payload discovery, the phase 1c shell (window, launch state, preload bridge, web view navigation and download policy, menus, dock and vibrancy), phase 1d backup and restore (bundle format compatibility, Keychain passphrase, restore allow-list, quit-time backup), the phase 1e audit anchor and Keychain witness with restore continuity, the standard and Demo variants of one build, the Debug-only backend override, the phase 2 foundations (generated OpenAPI client, design tokens, String Catalog and sidebar registry, the native NavigationSplitView shell with the shell:route-changed bridge message, and the native Exchange rates screen), the Native (macOS) CI job with the backup and audit interop job, screen ports through phase 3h Tax (TypeScript fiscal results, atomic settings CAS, native CSV and retained web PDF), and install-native.sh."
 aliases: [vision native, native app, swift app]
 ---
 
@@ -52,27 +52,27 @@ aliases: [vision native, native app, swift app]
 
 ## Layout
 
-| Path                                               | Purpose                                                                                                                       |
-| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `apps/native/project.yml`                          | XcodeGen spec: project `VisionNative`, macOS app target "Vision Native", macOS 26.0                                           |
-| `apps/native/Config/Signing.xcconfig`              | `DEVELOPMENT_TEAM` from `VISION_NATIVE_TEAM_ID`, optional gitignored `Local.xcconfig`                                         |
-| `apps/native/VisionNative/`                        | AppKit entry point, window, menus, `WKWebView` shell and the SwiftUI launch state                                             |
-| `apps/native/Package.swift`                        | SwiftPM package (Swift 6), libraries `VisionNativeCore` and `VisionNativeUI`, no deps                                         |
-| `apps/native/Sources/VisionNativeCore/`            | `BackendLocator` and `BackendHealth`: non-UI logic, testable without the Xcode UI                                             |
-| `apps/native/Sources/VisionNativeCore/API/`        | `APIClient` (the Swift `client.ts`) and the generated OpenAPI models and operations                                           |
-| `apps/native/Sources/VisionNativeCore/Design/`     | Generated design tokens and `ThemeSelection` (variant and appearance of the page)                                             |
-| `apps/native/Sources/VisionNativeCore/Navigation/` | Generated sidebar registry, routes, shortcuts and the `NativeShellModel` (phase 2)                                            |
-| `apps/native/Sources/VisionNativeCore/Screens/`    | View models of native screens (Exchange rates, Admin, Planned, Imports, Transactions, Owes, Accounts, Categories, Recipients) |
-| `apps/native/Sources/VisionNativeUI/`              | SwiftUI shell, native screens and the generated `Localizable.xcstrings` (phase 2)                                             |
-| `apps/native/openapi-operations.txt`               | The operationIds the Swift client is generated for                                                                            |
-| `apps/native/i18n-keys.txt`                        | The `i18n/source` keys copied into the String Catalog                                                                         |
-| `apps/native/Sources/VisionNativeCore/Runtime/`    | Runtime supervisor, PostgreSQL and backend lifecycle, Demo seeding, system seams                                              |
-| `apps/native/Sources/VisionNativeCore/Shell/`      | Shell logic without AppKit: bridge contract, codec, policy, menu model, window frame                                          |
-| `apps/native/Sources/VisionNativeCore/Backup/`     | Backup bundles, encryption, restore and the `electronBackup` service (phase 1d)                                               |
-| `apps/native/Sources/VisionNativeCore/Audit/`      | Audit anchor, Keychain witness, backend audit bridge and `electronAudit` (phase 1e)                                           |
-| `apps/native/Tests/VisionNativeCoreTests/`         | Swift Testing tests and fixtures (Electron backup bundle, Electron audit anchor)                                              |
-| `apps/native/Tests/VisionNativeUITests/`           | String Catalog completeness (EN and NL) and SwiftUI layout tests                                                              |
-| `install-native.sh`                                | Local Release build and install, by default to `/Applications/Vision Native Demo.app`                                         |
+| Path                                               | Purpose                                                                                                                                           |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/native/project.yml`                          | XcodeGen spec: project `VisionNative`, macOS app target "Vision Native", macOS 26.0                                                               |
+| `apps/native/Config/Signing.xcconfig`              | `DEVELOPMENT_TEAM` from `VISION_NATIVE_TEAM_ID`, optional gitignored `Local.xcconfig`                                                             |
+| `apps/native/VisionNative/`                        | AppKit entry point, window, menus, `WKWebView` shell and the SwiftUI launch state                                                                 |
+| `apps/native/Package.swift`                        | SwiftPM package (Swift 6), libraries `VisionNativeCore` and `VisionNativeUI`, no deps                                                             |
+| `apps/native/Sources/VisionNativeCore/`            | `BackendLocator` and `BackendHealth`: non-UI logic, testable without the Xcode UI                                                                 |
+| `apps/native/Sources/VisionNativeCore/API/`        | `APIClient` (the Swift `client.ts`) and the generated OpenAPI models and operations                                                               |
+| `apps/native/Sources/VisionNativeCore/Design/`     | Generated design tokens and `ThemeSelection` (variant and appearance of the page)                                                                 |
+| `apps/native/Sources/VisionNativeCore/Navigation/` | Generated sidebar registry, routes, shortcuts and the `NativeShellModel` (phase 2)                                                                |
+| `apps/native/Sources/VisionNativeCore/Screens/`    | View models of native screens (Exchange rates, Admin, Planned, Imports, Transactions, Owes, Accounts, Categories, Recipients, Home/Insights, Tax) |
+| `apps/native/Sources/VisionNativeUI/`              | SwiftUI shell, native screens and the generated `Localizable.xcstrings` (phase 2)                                                                 |
+| `apps/native/openapi-operations.txt`               | The operationIds the Swift client is generated for                                                                                                |
+| `apps/native/i18n-keys.txt`                        | The `i18n/source` keys copied into the String Catalog                                                                                             |
+| `apps/native/Sources/VisionNativeCore/Runtime/`    | Runtime supervisor, PostgreSQL and backend lifecycle, Demo seeding, system seams                                                                  |
+| `apps/native/Sources/VisionNativeCore/Shell/`      | Shell logic without AppKit: bridge contract, codec, policy, menu model, window frame                                                              |
+| `apps/native/Sources/VisionNativeCore/Backup/`     | Backup bundles, encryption, restore and the `electronBackup` service (phase 1d)                                                                   |
+| `apps/native/Sources/VisionNativeCore/Audit/`      | Audit anchor, Keychain witness, backend audit bridge and `electronAudit` (phase 1e)                                                               |
+| `apps/native/Tests/VisionNativeCoreTests/`         | Swift Testing tests and fixtures (Electron backup bundle, Electron audit anchor)                                                                  |
+| `apps/native/Tests/VisionNativeUITests/`           | String Catalog completeness (EN and NL) and SwiftUI layout tests                                                                                  |
+| `install-native.sh`                                | Local Release build and install, by default to `/Applications/Vision Native Demo.app`                                                             |
 
 The generated `apps/native/VisionNative.xcodeproj`, its `Info.plist`, `apps/native/build/` and
 the SwiftPM state are gitignored. The app target uses Swift 6 with complete strict concurrency,
@@ -681,7 +681,7 @@ then. The native shell never redirects: an admin route shows a native screen onl
 `app_settings` says admin mode is on, and otherwise the web view, where `RequireAdmin` redirects and
 reports the new route. Screens outside the admin section (`/planned`, `/import`,
 `/import/:batchId/review`, `/transactions`, `/owes`, `/accounts`, `/accounts/:id`, `/categories`,
-`/recipients`) are native in
+`/recipients`, `/`, `/statistics`, `/tax`) are native in
 either mode. The page's topbar keeps its traffic-light inset only while the native sidebar is
 hidden (`native-sidebar`).
 
@@ -964,7 +964,7 @@ The header's PDF action temporarily shows the existing React `ExportDialog` at
 `/statistics?export=pdf`, preserving tab and window parameters. Closing or downloading removes
 only `export`, with replace, and returns to the native screen. The same dialog handles financial,
 portfolio, and tax reports; tax-result serialization stays in the existing TypeScript dialog. The computation operation
-described below is available for the future native Tax and report workflows. This is a retained web surface, not a completed native report
+described below supplies the native Tax screen. This is a retained web surface, not a completed native report
 port, and it keeps this area's phase-3 exit gate open.
 
 ### Belgian tax computation prerequisite
@@ -985,7 +985,47 @@ legacy fields stay unavailable. The native `TaxOverviewModel` caches the selecte
 amounts on a failed year change, and guards against older requests replacing a newer selection.
 Shared schema/migration/default modules keep React's existing behavior and lazy loading.
 
-Native Tax UI, profile editing, snapshot/freeze/file actions, and their persistence remain pending; see [[docs/reference/native-parity/tax|Tax parity]].
+### Tax overview, profile, and year actions (phase 3h)
+
+`/tax` now renders in SwiftUI. `TaxOverviewView` composes the filing masthead, disclosures,
+server-computed income/reserve charts, yearly chart, frozen multi-year trend and comparison,
+current inputs, possible deductions, transaction-derived deduction review, and all eight widget
+visibility controls. Year selection remains `?year=YYYY`. Loading/read failures replace the
+statistics-dependent content; changing the year, currency, or settings invalidates old data and
+late responses cannot replace a newer selection. Missing legacy frozen fields display as
+unavailable; Swift does not reconstruct them.
+
+`GET /api/belgian-tax/dashboard` supplies chart series, recorded income per partner, recorded
+portfolio taxes, year comparison calculations, household presentation rows, rule-key groups,
+live-profile suggestions, and the viewed v1 projection for CSV. Native callers resolve the
+Statistics exclusions and send the explicit last-24-month calendar window. Owner attribution,
+frozen PIT scaling, reserve proration, and all fiscal formulas remain shared TypeScript.
+Recorded portfolio taxes retain the web latest-rate conversion; inactive investments are included.
+See [[docs/api/belgian-tax|the Tax API]] and [[docs/api/info|deduction candidates]] (`partnerShares`).
+
+The six-step `TaxProfileSheet` edits the v2 household: relationship/events and claimants,
+per-partner activities and expense methods, home/residences and regional mortgage inputs,
+category sources, deductions/dependents, and region/communal rate. `TaxProfileModel` sends
+stateless backend previews after a 300 ms debounce and persists edits after 500 ms through the
+existing atomic `saveSettings` operation. CAS baselines come from the overview and advance only
+from acknowledged writes. Save configures the profile; closing flushes pending changes. Earlier
+edits remain saved when the sheet closes, matching the web's write-through behavior. Filed
+profiles stay locked until amendment or unfiling; failures/conflicts preserve the draft and surface
+an error rather than silently overwriting another editor.
+
+`TaxActionsModel` creates missing snapshots, freezes/unfreezes calculations, marks/unmarks
+filings, and records history through the same atomic settings API. Freeze/file computations run
+in the TypeScript backend; metadata retains the frozen household result and calculation.
+`TaxYearCSV` exports the existing input/calculation columns through the native save panel, with
+Decimal precision, escaped fields, and spreadsheet-formula protection. Deduction confirmations
+use server-returned partner shares, include the incomplete-year confirmation, and persist the
+structural household patch with CAS. Dismissals retain the existing `dismissed_deduction_candidates_v1` localStorage behavior through the shell bridge.
+
+The Tax PDF menu sets `export=pdf` on `/tax`, preserving `year` and other query values, and opens
+the shared React report dialog. Closing removes only `export` and restores the native Tax view.
+The report dialog and browser-print surface remain web. This is a native screen implementation,
+not a phase exit: the full macOS build and the owner's synthetic Demo visual/keyboard review
+remain pending. The action mapping is [[docs/reference/native-parity/tax|Tax parity]].
 
 The cloud checks cover portable models, API adapters, generated outputs, and the web handoff.
 The full macOS app/package build and the owner's Demo visual pass have not run in this workspace.

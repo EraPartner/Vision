@@ -97,6 +97,21 @@ final class ShellRecorder {
         #expect(model.settingsRevision == revision + 1)
     }
 
+    @Test func theTaxReportHandoffPreservesTheYearAndReturnsAfterClosing() throws {
+        let recorder = ShellRecorder()
+        let model = makeModel(recorder: recorder)
+        model.routeDidChange(try #require(NativeRoute("/tax?year=2024")))
+        model.openTaxReport()
+        #expect(model.isPresentingWeb)
+        #expect(recorder.actions.last == .replaceRoute("/tax?year=2024&export=pdf"))
+        model.routeDidChange(try #require(NativeRoute("/tax?year=2024&export=pdf")))
+        #expect(model.detail == .web)
+        model.routeDidChange(try #require(NativeRoute("/tax?year=2024")))
+        #expect(!model.isPresentingWeb)
+        #expect(model.route.value("year") == "2024")
+        #expect(NativeScreen.screen(forPath: "/tax") == .tax)
+    }
+
     @Test func theExchangeRatesScreenIsNativeOnlyInAdminMode() async throws {
         let recorder = ShellRecorder()
         let model = makeModel(recorder: recorder)

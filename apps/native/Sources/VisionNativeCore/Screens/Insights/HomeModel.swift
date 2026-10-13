@@ -59,6 +59,7 @@ public final class HomeModel {
     @ObservationIgnored private var forecastRevision = UUID()
     @ObservationIgnored private var forecastTask: Task<Void, Never>?
     @ObservationIgnored private var widgetBaseline: JSONValue = .null
+    @ObservationIgnored private var widgetRevision = UUID()
 
     public init(
         service: any HomeService, calendar: Calendar = .current,
@@ -126,6 +127,7 @@ public final class HomeModel {
     }
 
     private func fetch(token: UUID) async {
+        let widgetToken = widgetRevision
         isFetching = true
         isLoading = monthly == nil
         do {
@@ -207,12 +209,12 @@ public final class HomeModel {
         if case .success(let value) = answers.10 { transactionCount = value }
         if case .success(let value) = answers.11 { self.needsCategory = value }
         if case .success(let value) = answers.12 { matchCount = value }
-        if case .success(let value) = answers.13, !widgetSavePending {
+        if case .success(let value) = answers.13, !widgetSavePending, widgetToken == widgetRevision {
             widgetBaseline = value.expected
             widgets = InsightWidgetVisibility(value.value)
             widgetsLoaded = true
             widgetError = nil
-        } else if case .failure(let error) = answers.13 {
+        } else if case .failure(let error) = answers.13, widgetToken == widgetRevision {
             widgetError = error
         }
         let storedDismissals = await readLocal("vision.home.dismissedAccountInactivity")
@@ -350,6 +352,7 @@ public final class HomeModel {
         let old = widgets
         change(&widgets)
         widgetSavePending = true
+        widgetRevision = UUID()
         widgetError = nil
         do {
             let saved = try await service.saveHomeWidgets(widgets.json, expected: widgetBaseline)
@@ -359,6 +362,7 @@ public final class HomeModel {
             widgets = old
             widgetError = error.localizedDescription
         }
+        widgetRevision = UUID()
         widgetSavePending = false
     }
     public func loadForecast() async {

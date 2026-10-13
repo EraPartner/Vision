@@ -99,6 +99,8 @@ public enum NativeScreen: Equatable, Hashable, Sendable {
     case home
     /// `/statistics`, Insights (phase 3g).
     case statistics
+    /// `/tax`, Belgian tax (phase 3h).
+    case tax
     case adminOverview
     case databaseMaintenance
     /// `/admin/db/:table`, with the decoded table name.
@@ -129,6 +131,7 @@ public enum NativeScreen: Equatable, Hashable, Sendable {
     public static let fixedScreens: [NativeScreen] = [
         .home,
         .statistics,
+        .tax,
         .adminOverview, .databaseMaintenance, .providerHealth, .endpointLiveness, .exchangeRates, .plannedPayments,
         .importExport, .transactions, .accounts, .categories, .recipients,
     ]
@@ -138,6 +141,7 @@ public enum NativeScreen: Equatable, Hashable, Sendable {
         switch self {
         case .home: return InsightsRoutes.home
         case .statistics: return InsightsRoutes.statistics
+        case .tax: return "/tax"
         case .adminOverview: return "/admin"
         case .databaseMaintenance: return TableEditorRoute.maintenancePath
         case .tableEditor(let table): return TableEditorRoute.path(for: table)

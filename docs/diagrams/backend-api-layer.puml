@@ -328,6 +328,12 @@ package "Routes" {
     +GET /sankey : income flow diagram (Phase 7)
   }
 
+  class BelgianTaxRouter <<ADR-204>> {
+    +GET /overview : live/historical frozen figures + CAS baselines
+    +GET /dashboard : server-computed charts + recorded taxes/shares
+    +POST /compute : stateless household preview
+  }
+
   class ReportsRouter <<Phase 3-8>> {
     +POST /financial : PDF financial report (7 sections, Puppeteer)
     +POST /portfolio : PDF portfolio report (6 sections, Phase 8)
@@ -399,6 +405,9 @@ package "Database" {
 }
 
 package "Services" {
+  class TaxOverviewService
+  class TaxDashboardService
+  class SharedBelgianTaxEngine
   class ImportService
   class RawTransactionImportService
   class StreamingImportService
@@ -446,6 +455,7 @@ Main --> AdminRouter
 Main --> CodexExperimentalRouter : /api/admin/codex-experimental\nadmin auth + loopback
 Main --> InternalAuditRouter : /api/internal/audit
 Main --> AggregationsRouter
+Main --> BelgianTaxRouter : /api/belgian-tax\nglobal + aggregation limiter
 Main --> ReportsRouter
 Main --> AiRouter
 Main --> AiResearchRouter : /api/ai-research
@@ -480,6 +490,11 @@ PortfolioImportRouter ..> ImportBatchRoutes : registers shared batch routes
 PortfolioImportRouter --> PortfolioImportBatchService
 PortfolioImportRouter --> PortfolioImportCommitService : reviewed atomic commit
 PortfolioImportRouter --> PortfolioImportReconciliationService : preview selected scope
+BelgianTaxRouter --> TaxOverviewService : settings read + frozen precedence
+BelgianTaxRouter --> TaxDashboardService : chart/recorded aggregation
+BelgianTaxRouter --> SharedBelgianTaxEngine : stateless preview
+TaxDashboardService --> TaxOverviewService
+TaxDashboardService --> SharedBelgianTaxEngine
 SettingsRouter --> SR2
 WatchlistRouter --> WR
 SavedChartsRouter --> SCR

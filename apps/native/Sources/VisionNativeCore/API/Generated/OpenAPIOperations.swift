@@ -5,7 +5,7 @@ import Foundation
 
 /// One struct per operationId in `apps/native/openapi-operations.txt`, in its order.
 public enum OpenAPIOperations {
-    public static let operationIds = ["getExchangeRates", "refreshExchangeRates", "adminDatabaseStats", "adminProvidersHealth", "adminProviderProbe", "adminMetricsRequests", "adminListEndpoints", "getSetting", "adminDatabaseVacuum", "adminGetTableSchema", "adminGetTableRows", "adminMutateTableRows", "getPlannedTransactions", "createPlannedTransaction", "updatePlannedTransaction", "deletePlannedTransaction", "executePlannedTransaction", "getPlannedMatchSuggestions", "getRecurringPatterns", "getRecipients", "getRecipient", "getAccounts", "getCategoryTree", "getTags", "createTag", "getTransactions", "saveSetting", "getSupportedAdapters", "getCustomParsers", "createCustomParser", "updateCustomParser", "deleteCustomParser", "getImportBatches", "deleteImportBatch", "previewImportBatch", "overrideImportRow", "overrideImportRowCategory", "commitImportBatch", "updateRecipient", "getInfoBanks", "exportTransactionsCsv", "exportTransactionsJson", "getTransaction", "createTransaction", "updateTransaction", "deleteTransaction", "bulkUpdateTransactions", "getTransactionAttachments", "downloadAttachment", "deleteAttachment", "bulkDeleteTransactions", "bulkExportTransactions", "bulkTagTransactions", "markTransfer", "createRecipient", "getSplitsByTransaction", "createSplitBatch", "createBulkSplits", "getSplitsOwed", "getSplitOwedByRecipient", "exportSplitsOwedCsv", "paySplit", "settleSplit", "settleAllSplitsForRecipient", "deleteSplit", "createAccount", "updateAccount", "deleteAccount", "previewAccountPortfolioLots", "closeAccount", "mergeAccounts", "previewAccountMerge", "setAccountOpeningBalance", "reconcileAccount", "setAccountStatementBalance", "bulkRetagPortfolioTransactions", "getPortfolioSummary", "createCategoryNode", "updateCategoryNode", "deleteCategoryNode", "mergeCategoryNode", "deleteRecipient", "mergeRecipient", "unmergeRecipient", "getRecipientPatterns", "createRecipientPattern", "previewRecipientPattern", "updateRecipientPattern", "deleteRecipientPattern", "getMonthlySummary", "getAverageVsCurrent", "getBankBalances", "getNetWorth", "getCashflowForecastMethods", "getCashflowForecastRolling", "getCashflowForecastAccuracy", "getTransactionCount", "getCategories", "getCategoryPivot", "getRecipientInsights", "getRecipientByYear", "getSankey", "getInsightsDigest", "dismissInsight", "getSavedCharts", "createSavedChart", "updateSavedChart", "deleteSavedChart", "getRecipientPivot", "getTagPivot", "computeBelgianTax", "getBelgianTaxOverview"]
+    public static let operationIds = ["getExchangeRates", "refreshExchangeRates", "adminDatabaseStats", "adminProvidersHealth", "adminProviderProbe", "adminMetricsRequests", "adminListEndpoints", "getSetting", "adminDatabaseVacuum", "adminGetTableSchema", "adminGetTableRows", "adminMutateTableRows", "getPlannedTransactions", "createPlannedTransaction", "updatePlannedTransaction", "deletePlannedTransaction", "executePlannedTransaction", "getPlannedMatchSuggestions", "getRecurringPatterns", "getRecipients", "getRecipient", "getAccounts", "getCategoryTree", "getTags", "createTag", "getTransactions", "saveSetting", "getSupportedAdapters", "getCustomParsers", "createCustomParser", "updateCustomParser", "deleteCustomParser", "getImportBatches", "deleteImportBatch", "previewImportBatch", "overrideImportRow", "overrideImportRowCategory", "commitImportBatch", "updateRecipient", "getInfoBanks", "exportTransactionsCsv", "exportTransactionsJson", "getTransaction", "createTransaction", "updateTransaction", "deleteTransaction", "bulkUpdateTransactions", "getTransactionAttachments", "downloadAttachment", "deleteAttachment", "bulkDeleteTransactions", "bulkExportTransactions", "bulkTagTransactions", "markTransfer", "createRecipient", "getSplitsByTransaction", "createSplitBatch", "createBulkSplits", "getSplitsOwed", "getSplitOwedByRecipient", "exportSplitsOwedCsv", "paySplit", "settleSplit", "settleAllSplitsForRecipient", "deleteSplit", "createAccount", "updateAccount", "deleteAccount", "previewAccountPortfolioLots", "closeAccount", "mergeAccounts", "previewAccountMerge", "setAccountOpeningBalance", "reconcileAccount", "setAccountStatementBalance", "bulkRetagPortfolioTransactions", "getPortfolioSummary", "createCategoryNode", "updateCategoryNode", "deleteCategoryNode", "mergeCategoryNode", "deleteRecipient", "mergeRecipient", "unmergeRecipient", "getRecipientPatterns", "createRecipientPattern", "previewRecipientPattern", "updateRecipientPattern", "deleteRecipientPattern", "getMonthlySummary", "getAverageVsCurrent", "getBankBalances", "getNetWorth", "getCashflowForecastMethods", "getCashflowForecastRolling", "getCashflowForecastAccuracy", "getTransactionCount", "getCategories", "getCategoryPivot", "getRecipientInsights", "getRecipientByYear", "getSankey", "getInsightsDigest", "dismissInsight", "getSavedCharts", "createSavedChart", "updateSavedChart", "deleteSavedChart", "getRecipientPivot", "getTagPivot", "computeBelgianTax", "getBelgianTaxOverview", "saveSettings", "getBelgianTaxDashboard", "getDeductionCandidates"]
 }
 
 extension OpenAPIOperations {
@@ -3862,6 +3862,223 @@ extension OpenAPIOperations {
             var items: [URLQueryItem] = []
             if let year { items.append(URLQueryItem(name: "year", value: APIQuery.value(year))) }
             return items
+        }
+    }
+
+    /// PUT /api/settings: Atomically replace settings with persisted baselines
+    public struct SaveSettings: APIOperation {
+        public typealias Response = ResponseData
+        public static let operationId = "saveSettings"
+        public static let method = HTTPMethod.put
+        public static let pathTemplate = "/api/settings"
+
+        public var body: Body
+
+        public init(body: Body) {
+            self.body = body
+        }
+
+        public var path: String { "/api/settings" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+
+        public struct ResponseData: Codable, Equatable, Sendable {
+            public let saved: Int?
+
+            public init(saved: Int? = nil) {
+                self.saved = saved
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case saved = "saved"
+            }
+        }
+
+        public struct Body: Codable, Equatable, Sendable {
+            public let settings: JSONValue
+            public let expected: [String: OpenAPI.SettingBaseline]
+
+            public init(settings: JSONValue, expected: [String: OpenAPI.SettingBaseline]) {
+                self.settings = settings
+                self.expected = expected
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case settings = "settings"
+                case expected = "expected"
+            }
+        }
+    }
+
+    /// GET /api/belgian-tax/dashboard: Read server-computed tax charts, recorded income, and tax widget
+    /// presentation
+    public struct GetBelgianTaxDashboard: APIOperation {
+        public typealias Response = OpenAPI.BelgianTaxDashboard
+        public static let operationId = "getBelgianTaxDashboard"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/belgian-tax/dashboard"
+
+        /// Omit to use the live household year.
+        public var year: Int?
+        public var currency: String?
+        /// Defaults to the first day 23 calendar months before today.
+        public var startDate: String?
+        /// Defaults to today in the application timezone.
+        public var endDate: String?
+        public var excludedCategoryIds: [Int]?
+        public var excludedRecipientIds: [Int]?
+
+        public init(year: Int? = nil, currency: String? = nil, startDate: String? = nil, endDate: String? = nil, excludedCategoryIds: [Int]? = nil, excludedRecipientIds: [Int]? = nil) {
+            self.year = year
+            self.currency = currency
+            self.startDate = startDate
+            self.endDate = endDate
+            self.excludedCategoryIds = excludedCategoryIds
+            self.excludedRecipientIds = excludedRecipientIds
+        }
+
+        public var path: String { "/api/belgian-tax/dashboard" }
+
+        public var queryItems: [URLQueryItem] {
+            var items: [URLQueryItem] = []
+            if let year { items.append(URLQueryItem(name: "year", value: APIQuery.value(year))) }
+            if let currency { items.append(URLQueryItem(name: "currency", value: APIQuery.value(currency))) }
+            if let startDate { items.append(URLQueryItem(name: "start_date", value: APIQuery.value(startDate))) }
+            if let endDate { items.append(URLQueryItem(name: "end_date", value: APIQuery.value(endDate))) }
+            if let excludedCategoryIds { for value in excludedCategoryIds { items.append(URLQueryItem(name: "excluded_category_ids", value: APIQuery.value(value))) } }
+            if let excludedRecipientIds { for value in excludedRecipientIds { items.append(URLQueryItem(name: "excluded_recipient_ids", value: APIQuery.value(value))) } }
+            return items
+        }
+    }
+
+    /// GET /api/info/deduction-candidates: Transaction-derived Belgian deduction candidates for one
+    /// year
+    public struct GetDeductionCandidates: APIOperation {
+        public typealias Response = ResponseData
+        public static let operationId = "getDeductionCandidates"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/info/deduction-candidates"
+
+        /// Calendar year (1970-3000); defaults to the current year.
+        public var year: Int?
+
+        public init(year: Int? = nil) {
+            self.year = year
+        }
+
+        public var path: String { "/api/info/deduction-candidates" }
+
+        public var queryItems: [URLQueryItem] {
+            var items: [URLQueryItem] = []
+            if let year { items.append(URLQueryItem(name: "year", value: APIQuery.value(year))) }
+            return items
+        }
+
+        public struct ResponseData: Codable, Equatable, Sendable {
+            public let year: Int
+            public let from: String
+            public let to: String
+            public let currency: String
+            public let byDeductionType: [ByDeductionTypeItem]
+
+            public init(year: Int, from: String, to: String, currency: String, byDeductionType: [ByDeductionTypeItem]) {
+                self.year = year
+                self.from = from
+                self.to = to
+                self.currency = currency
+                self.byDeductionType = byDeductionType
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case year = "year"
+                case from = "from"
+                case to = "to"
+                case currency = "currency"
+                case byDeductionType = "byDeductionType"
+            }
+
+            public struct ByDeductionTypeItem: Codable, Equatable, Sendable {
+                public let deductionType: String
+                public let total: Decimal
+                /// The total split by account owner; the three values add up to `total`.
+                public let byOwner: ByOwner?
+                /// Server-side partner attribution assuming two partners; a single-person caller uses the
+                /// complete total for A.
+                public let partnerShares: PartnerShares?
+                public let categoryCount: Int
+                public let categories: [CategoriesItem]
+
+                public init(deductionType: String, total: Decimal, byOwner: ByOwner? = nil, partnerShares: PartnerShares? = nil, categoryCount: Int, categories: [CategoriesItem]) {
+                    self.deductionType = deductionType
+                    self.total = total
+                    self.byOwner = byOwner
+                    self.partnerShares = partnerShares
+                    self.categoryCount = categoryCount
+                    self.categories = categories
+                }
+
+                enum CodingKeys: String, CodingKey {
+                    case deductionType = "deductionType"
+                    case total = "total"
+                    case byOwner = "byOwner"
+                    case partnerShares = "partnerShares"
+                    case categoryCount = "categoryCount"
+                    case categories = "categories"
+                }
+
+                public struct ByOwner: Codable, Equatable, Sendable {
+                    public let me: Decimal
+                    public let partner: Decimal
+                    public let joint: Decimal
+
+                    public init(me: Decimal, partner: Decimal, joint: Decimal) {
+                        self.me = me
+                        self.partner = partner
+                        self.joint = joint
+                    }
+
+                    enum CodingKeys: String, CodingKey {
+                        case me = "me"
+                        case partner = "partner"
+                        case joint = "joint"
+                    }
+                }
+
+                public struct PartnerShares: Codable, Equatable, Sendable {
+                    public let a: Decimal
+                    public let b: Decimal
+
+                    public init(a: Decimal, b: Decimal) {
+                        self.a = a
+                        self.b = b
+                    }
+
+                    enum CodingKeys: String, CodingKey {
+                        case a = "A"
+                        case b = "B"
+                    }
+                }
+
+                public struct CategoriesItem: Codable, Equatable, Sendable {
+                    public let category: String
+                    public let total: Decimal
+                    public let count: Int
+
+                    public init(category: String, total: Decimal, count: Int) {
+                        self.category = category
+                        self.total = total
+                        self.count = count
+                    }
+
+                    enum CodingKeys: String, CodingKey {
+                        case category = "category"
+                        case total = "total"
+                        case count = "count"
+                    }
+                }
+            }
         }
     }
 }

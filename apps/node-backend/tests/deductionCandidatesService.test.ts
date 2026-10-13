@@ -89,6 +89,7 @@ describe("computeDeductionCandidates", () => {
           deductionType: "charitableDonations",
           total: 200,
           byOwner: mine(200),
+          partnerShares: { A: 200, B: 0 },
           categoryCount: 1,
           categories: [{ category: "GIVING:DONATION", total: 200, count: 1 }],
         },
@@ -96,6 +97,7 @@ describe("computeDeductionCandidates", () => {
           deductionType: "pensionSavings",
           total: 145,
           byOwner: mine(145),
+          partnerShares: { A: 145, B: 0 },
           categoryCount: 2,
           // Nested contributors sorted by total desc.
           categories: [
@@ -107,6 +109,7 @@ describe("computeDeductionCandidates", () => {
           deductionType: "lifeInsurance",
           total: 75,
           byOwner: mine(75),
+          partnerShares: { A: 75, B: 0 },
           categoryCount: 1,
           categories: [{ category: "INSURANCE:LIFE", total: 75, count: 1 }],
         },
@@ -133,6 +136,7 @@ describe("computeDeductionCandidates", () => {
         deductionType: "charitableDonations",
         total: 40,
         byOwner: mine(40),
+        partnerShares: { A: 40, B: 0 },
         categoryCount: 1,
         categories: [{ category: "GIVING:DONATION", total: 40, count: 1 }],
       },
@@ -162,6 +166,7 @@ describe("computeDeductionCandidates", () => {
         deductionType: "lifeInsurance",
         total: 75,
         byOwner: mine(75),
+        partnerShares: { A: 75, B: 0 },
         categoryCount: 1,
         categories: [{ category: "OLD:ALIAS", total: 75, count: 1 }],
       },
@@ -192,6 +197,7 @@ describe("computeDeductionCandidates", () => {
         deductionType: "pensionSavings",
         total: 235.15,
         byOwner: { me: 115, partner: 80.1, joint: 40.05 },
+        partnerShares: { A: 135.02, B: 100.13 },
       }),
     ]);
   });

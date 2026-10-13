@@ -133,7 +133,7 @@ public struct CustomChartDataset: Equatable, Sendable {
         recipients: CustomRecipientPivot?, tags: CustomTagPivot?, otherLabel: String
     ) {
         var entities: [CustomChartEntity] = []
-        let categories = statistics.categories(metric: .absolute)
+        let categories = statistics.categories(metric: .net)
         for row in categories
         where row.id != "null"
             && (configuration.allCategories || row.categoryIds.contains { configuration.categoryIds.contains($0) })
@@ -143,7 +143,8 @@ public struct CustomChartDataset: Equatable, Sendable {
                 let key = configuration.timeBucket == "yearly" ? String(period.prefix(4)) : period
                 if configuration.includesPeriod(key) { values[key, default: 0] += amount }
             }
-            entities.append(CustomChartEntity(id: "cat:\(row.id)", name: row.name, values: values))
+            entities.append(
+                CustomChartEntity(id: "cat:\(row.id)", name: row.name, values: values.mapValues { abs($0) }))
         }
         var recipientRows: [Int: CustomChartEntity] = [:]
         for (period, items) in recipients?.recipientPivot ?? [:] where configuration.includesPeriod(period) {

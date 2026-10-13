@@ -10,6 +10,8 @@ tags: [api, tax, belgian, native, adr-204]
 description: Stateless access to the shared TypeScript household tax engine for native clients.
 related_code:
   - apps/node-backend/src/routes/belgianTax.ts
+  - apps/node-backend/src/routes/belgianTaxDashboard.ts
+  - apps/node-backend/src/services/tax/dashboardService.ts
   - packages/shared-utils/src/belgianTax/household.ts
   - apps/native/Sources/VisionNativeCore/Screens/Tax/TaxComputationService.swift
 ---
@@ -50,8 +52,49 @@ not overwrite malformed records. It uses the global and aggregation rate limits.
 
 `TaxOverviewModel` guards the requested year, coalesces requests, refreshes on invalidation,
 and rejects late responses from another year. A failed year change clears old amounts; a failed
-refresh of the same year keeps the prior snapshot and exposes the error. Native Tax UI and
-filing/editing actions remain pending.
+refresh of the same year keeps the prior snapshot and exposes the error. The native `/tax` view now renders those results; profile edits and snapshot/freeze/filing
+changes use existing atomic settings CAS writes. CSV is native, while PDF remains the shared
+web report dialog. macOS build and Demo parity review remain pending. See
+[[docs/reference/native-parity/tax|the action mapping]].
+
+## Read Tax charts and widget data
+
+`GET /api/belgian-tax/dashboard` is an additive, read-only operation. It accepts the same
+optional four-digit `year`, a three-letter `currency` (default EUR), `start_date` and
+`end_date` calendar dates, and repeatable `excluded_category_ids` / `excluded_recipient_ids`.
+Malformed dates (including impossible days), IDs, repeated scalar inputs, and retired
+`start`/`end` aliases return `400`. If bounds are omitted, the operation uses the first day
+23 calendar months before today through today in the application timezone. Native callers
+send their explicit calendar window and resolve the Statistics settings/hidden-category
+exclusions before requesting the data. The server does not invent exclusion defaults.
+
+The response supplies monthly income/reserve and yearly income/PIT/net series, selected-category
+and recorded-data empty-state flags, recorded income per partner, recorded portfolio tax totals,
+per-year display calculations/status, the four static tax-rule localization-key groups, live-profile
+deduction suggestions, the viewed profile projection, and household breakdown display rows.
+`exportProfile` includes the complete v1 projection used by the existing CSV format; the editable
+source remains the v2 household. Fiscal amounts remain server-owned TypeScript results.
+
+Chart estimates preserve the web hook's behavior: selected category ancestors include descendants;
+positive income is split with account owner `partner` and half of `joint`; a frozen PIT scales by
+the bar's gross relative to the frozen gross. Monthly reserves prorate one annual PIT over income
+shares, limited to the viewed historical year or the live trailing twelve observed months. Trend
+and comparison entries prefer frozen calculations verbatim. Legacy missing calculation fields stay
+unavailable, including a null property-inclusive total when no property estimate was frozen.
+Household rows are omitted for single-person households and legacy frozen filings without a frozen
+household result.
+
+Recorded portfolio taxes include active and inactive investments, explicit tax transactions and
+per-transaction tax fields. They use the web's latest stored FX table with static fallback rates and
+its original-amount fallback for an unavailable rate, rather than portfolio flow-date FX. Manual
+adjustments are excluded from this recorded-only figure. Partner attribution and portfolio tax
+helpers now live in the shared TypeScript package with frontend compatibility exports.
+
+The operation uses the existing global and aggregation rate limits. Settings, aggregation,
+portfolio, or rate-read failures return an error, never an empty setup prompt. It performs no
+settings, migration, or filing writes. Targeted synthetic route tests cover category ancestry,
+frozen scaling, partner attribution, recorded FX, exclusions, and read failures; macOS rendering
+remains a separate native parity gate.
 
 ## Compute an unsaved household
 
@@ -92,6 +135,7 @@ Invalid input returns `400 VALIDATION_ERROR` in the standard error envelope. The
 returns `403` for cross-site requests, and the global and aggregation rate limiters return `429`
 when exceeded. Request bodies use the API's existing 1 MB JSON limit.
 
-The native computation adapter is implemented; native Tax UI, profile editing, and filing actions
-remain pending in [[docs/reference/native-parity/tax|the parity inventory]]. The web app still
-calculates through the same shared engine locally.
+Native Tax UI, write-through profile editing, snapshot/freeze/filing actions and CSV export
+are implemented in phase 3h. The PDF dialog remains web; the full macOS build and the owner's
+Demo visual/keyboard pass are pending in [[docs/reference/native-parity/tax|the parity inventory]].
+The web app still calculates through the same shared engine locally.

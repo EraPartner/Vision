@@ -40,6 +40,7 @@ public final class StatisticsModel {
     @ObservationIgnored private var flowRevision = UUID()
     @ObservationIgnored private var flowTask: Task<Void, Never>?
     @ObservationIgnored private var widgetBaseline: JSONValue = .null
+    @ObservationIgnored private var widgetRevision = UUID()
 
     public init(
         service: any StatisticsService, calendar: Calendar = .current,
@@ -102,6 +103,7 @@ public final class StatisticsModel {
         if revision == token { self.task = nil }
     }
     private func fetch(token: UUID) async {
+        let widgetToken = widgetRevision
         isFetching = true
         do {
             let resolved = try await service.homeExclusions(scope: "statistics")
@@ -128,13 +130,13 @@ public final class StatisticsModel {
             do {
                 let raw = try await visibility
                 guard token == revision, !Task.isCancelled else { return }
-                if !widgetSavePending {
+                if !widgetSavePending, widgetToken == widgetRevision {
                     widgetBaseline = raw.expected
                     widgets = InsightWidgetVisibility(raw.value)
                     widgetsLoaded = true
                     widgetError = nil
                 }
-            } catch { if token == revision { widgetError = error.localizedDescription } }
+            } catch { if token == revision, widgetToken == widgetRevision { widgetError = error.localizedDescription } }
         } catch {
             guard token == revision, !Task.isCancelled else { return }
             self.error = error.localizedDescription
@@ -235,6 +237,7 @@ public final class StatisticsModel {
         let old = widgets
         change(&widgets)
         widgetSavePending = true
+        widgetRevision = UUID()
         widgetError = nil
         do {
             let saved = try await service.saveHomeWidgets(widgets.json, expected: widgetBaseline)
@@ -244,6 +247,7 @@ public final class StatisticsModel {
             widgets = old
             widgetError = error.localizedDescription
         }
+        widgetRevision = UUID()
         widgetSavePending = false
     }
 }

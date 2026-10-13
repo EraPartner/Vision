@@ -71,6 +71,7 @@ public final class NativeShellModel {
     /// `/`, Home; omitted by shell-only test fixtures and older callers.
     public let home: HomeModel?
     public let statistics: StatisticsScreens?
+    public let tax: TaxScreens?
     /// The navigation the Leave this page? alert holds while it asks (`blocker.location`).
     public private(set) var leaveConfirmation: NativeRoute?
 
@@ -104,6 +105,7 @@ public final class NativeShellModel {
         recipients: RecipientsModel,
         home: HomeModel? = nil,
         statistics: StatisticsScreens? = nil,
+        tax: TaxScreens? = nil,
         hiddenSections: [NavSectionID: Bool]? = nil,
         loadSettings: @escaping @Sendable () async throws -> NativeAppSettings,
         saveHiddenSections: @escaping @MainActor ([NavSectionID: Bool]) -> Void = { _ in },
@@ -123,6 +125,7 @@ public final class NativeShellModel {
         self.recipients = recipients
         self.home = home
         self.statistics = statistics
+        self.tax = tax
         self.hiddenSections = hiddenSections ?? Self.defaultHiddenSections
         self.loadSettings = loadSettings
         self.saveHiddenSections = saveHiddenSections
@@ -155,6 +158,7 @@ public final class NativeShellModel {
         if screen.requiresAdmin && !settings.adminMode { return .web }
         if screen == .home && home == nil { return .web }
         if screen == .statistics && (statistics == nil || route.value("export") == "pdf") { return .web }
+        if screen == .tax && (tax == nil || route.value("export") == "pdf") { return .web }
         return .native(screen)
     }
 
@@ -196,6 +200,7 @@ public final class NativeShellModel {
         if settingsClosed { home?.invalidate() }
         if pathChanged && next.path == InsightsRoutes.home { home?.invalidate() }
         if settingsClosed || pathChanged && next.path == InsightsRoutes.statistics { statistics?.model.invalidate() }
+        if settingsClosed || pathChanged && next.path == "/tax" { tax?.invalidate() }
     }
 
     /// A sidebar click, a menu or shortcut navigation, or another native link. The page moves
@@ -218,10 +223,15 @@ public final class NativeShellModel {
         pendingRoute = next
         onNavigate(.replaceRoute(next.string))
     }
-    /// The existing report dialog owns TypeScript tax-result serialization until the tax
-    /// engine's backend operation is available (ADR-204 §6). It stays available on Insights.
+    /// The existing report dialog owns PDF rendering and report serialization.
     public func openStatisticsReport() {
         guard route.path == InsightsRoutes.statistics else { return }
+        isPresentingWeb = true
+        replace(with: route.setting("export", to: "pdf").string)
+    }
+
+    public func openTaxReport() {
+        guard route.path == "/tax" else { return }
         isPresentingWeb = true
         replace(with: route.setting("export", to: "pdf").string)
     }
@@ -381,7 +391,7 @@ public final class NativeShellModel {
 
     /// Applies `app_settings`: formats, admin mode and the colorblind skin.
     public func apply(settings next: NativeAppSettings) {
-        if settingsLoaded { home?.invalidate(); statistics?.model.invalidate() }
+        if settingsLoaded { home?.invalidate(); statistics?.model.invalidate(); tax?.invalidate() }
         settings = next
         settingsLoaded = true
         settingsRevision &+= 1

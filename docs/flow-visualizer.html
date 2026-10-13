@@ -1866,10 +1866,12 @@
           {
             "id": "native.taxclient",
             "label": "Native Tax client",
-            "sub": "TaxComputationService (UI pending)",
+            "sub": "SwiftUI \u00b7 backend fiscal results",
             "kind": "client",
             "x": 780,
-            "y": 44
+            "y": 44,
+            "path": "apps/native/Sources/VisionNativeUI/TaxOverviewView.swift",
+            "desc": "Native Tax widgets, year actions and write-through profile sheet. Fiscal formulas run only in shared TypeScript; Decimal rendering and CSV stay native. PDF dialog remains web."
           }
         ],
         "baseEdges": [
@@ -1985,7 +1987,8 @@
           ["sv.portfolioadjustment", "pkg.shared-utils"],
           ["native.taxclient", "be.routes"],
           ["be.routes", "pkg.shared-utils"],
-          ["fe.stores", "pkg.shared-utils"]
+          ["fe.stores", "pkg.shared-utils"],
+          ["native.taxclient", "fe.pages"]
         ],
         "flows": [
           {
@@ -5533,9 +5536,9 @@
           },
           {
             "id": "native-tax-computation",
-            "name": "Preview Belgian household tax through the backend",
+            "name": "Read and preview native Belgian Tax",
             "category": "Native migration",
-            "summary": "The native model reads a normalized live or historical household with frozen-result precedence, and the adapter can preview unsaved edits through the shared TypeScript engine. Native Tax UI and writes are pending.",
+            "summary": "The native Tax view selects live or historical frozen figures, resolves exclusions before server-computed charts, and previews profile edits through the shared TypeScript engine. macOS parity review remains pending.",
             "steps": [
               {
                 "from": "native.taxclient",
@@ -5565,7 +5568,25 @@
                 "from": "be.routes",
                 "to": "native.taxclient",
                 "payload": "overview, source flags, warnings, original setting records",
-                "annotation": "Generated Decimal fields retain stored amounts; missing legacy fields remain unavailable. Rendering, edits, and filing actions are pending."
+                "annotation": "TaxOverviewView renders Decimal fields; missing legacy frozen values remain unavailable. TaxActionsModel and TaxProfileModel write through the existing settings CAS operation."
+              },
+              {
+                "from": "native.taxclient",
+                "to": "be.routes",
+                "payload": "GET /api/belgian-tax/dashboard?year=2025&currency=EUR&start_date=\u2026&excluded_category_ids=\u2026",
+                "annotation": "TaxDashboardModel.swift resolves Statistics exclusions before its explicit rolling-24-month request. Failed filter reads block chart amounts."
+              },
+              {
+                "from": "be.routes",
+                "to": "pkg.shared-utils",
+                "payload": "chart PIT estimates, frozen gross scaling, partner/joint attribution and live suggestions",
+                "annotation": "services/tax/dashboardService.ts invokes shared household, recordedIncomeAttribution and portfolioTax helpers. Fiscal formulas never move to Swift."
+              },
+              {
+                "from": "be.routes",
+                "to": "native.taxclient",
+                "payload": "monthly/yearly series, recorded taxes/shares, frozen comparison rows, exportProfile",
+                "annotation": "TaxDashboardData.swift decodes money directly as Decimal. Invalidated requests cannot replace a newer year/currency context; charts and household rows use server-owned values."
               },
               {
                 "to": "be.routes",
@@ -5600,6 +5621,118 @@
               {
                 "path": "reference/native-parity/tax.md",
                 "label": "Native Tax parity"
+              }
+            ]
+          },
+          {
+            "id": "native-tax-save",
+            "name": "Save native tax edits and filing records",
+            "category": "Native migration",
+            "summary": "Profile edits persist after a debounce; closing flushes writes. Snapshot, freeze and filing changes atomically update settings with original CAS baselines; financial previews remain server-owned.",
+            "steps": [
+              {
+                "from": "native.taxclient",
+                "to": "be.routes",
+                "payload": "POST /api/belgian-tax/compute { household } for preview/freeze/file",
+                "annotation": "TaxProfileModel.swift debounces stateless previews; TaxActionsModel.swift computes the result before freezing or filing. Filed profile locks require amendment or unfiling."
+              },
+              {
+                "from": "be.routes",
+                "to": "pkg.shared-utils",
+                "payload": "computeHouseholdTax and compatible calculation",
+                "annotation": "routes/belgianTax.ts validates the shared v2 shape and keeps all tax formulas in TypeScript."
+              },
+              {
+                "from": "native.taxclient",
+                "to": "be.routes",
+                "payload": "PUT /api/settings { settings: [{ key, value, expected }] }",
+                "annotation": "TaxSettingsService.swift uses saveSettings for household/snapshot/metadata writes. TaxValue preserves Decimal and unknown edit fields; acknowledged writes alone advance CAS baselines."
+              },
+              {
+                "from": "be.routes",
+                "to": "be.repos",
+                "payload": "validate every key/value and expected baseline; replaceMany atomically",
+                "annotation": "routes/settings.ts and services/settingsService.ts retain existing validation and compare-and-swap behavior. Conflicts surface without discarding the native profile draft."
+              },
+              {
+                "from": "be.repos",
+                "to": "db.postgres",
+                "payload": "BEGIN; compare persisted baselines; replace all submitted settings; COMMIT",
+                "annotation": "repositories/settingsRepository.ts applies the batch in one transaction; snapshot metadata retains frozen calculation and household result."
+              },
+              {
+                "from": "be.routes",
+                "to": "native.taxclient",
+                "payload": "saved count acknowledgement, then authoritative overview/dashboard refresh",
+                "annotation": "TaxSettingsService.swift checks the saved count; TaxProfileModel.swift flushes pending changes on close. TaxActionsModel.swift reloads after acknowledged or uncertain writes."
+              }
+            ],
+            "docs": [
+              {
+                "path": "api/belgian-tax.md",
+                "label": "Tax API"
+              },
+              {
+                "path": "reference/native-parity/tax.md",
+                "label": "Native Tax parity"
+              },
+              {
+                "path": "architecture/native-app.md",
+                "label": "Native architecture"
+              },
+              {
+                "path": "api/settings.md",
+                "label": "Settings CAS contract"
+              }
+            ]
+          },
+          {
+            "id": "native-tax-report",
+            "name": "Export native Tax CSV or open the shared PDF dialog",
+            "category": "Native migration",
+            "summary": "CSV uses backend profile/calculation data and a native save panel. PDF continues through the shared React dialog; closing preserves the selected tax year and restores the SwiftUI page.",
+            "steps": [
+              {
+                "from": "native.taxclient",
+                "to": "native.taxclient",
+                "payload": "TaxYearCSV: backend exportProfile + selected frozen/computed calculation \u2192 UTF-8 CSV",
+                "annotation": "Screens/Tax/TaxYearCSV.swift preserves existing columns, Decimal precision, CSV quoting and spreadsheet-formula protection; the app presents the native save panel."
+              },
+              {
+                "from": "native.taxclient",
+                "to": "fe.pages",
+                "payload": "/tax?year=2025&export=pdf",
+                "annotation": "NativeShellModel.openTaxReport preserves existing query state and presents the web overlay. TaxOverviewPage.tsx defaults ExportDialog to tax."
+              },
+              {
+                "from": "fe.pages",
+                "to": "be.routes",
+                "payload": "POST /api/reports/tax with existing sections, profile and precomputed tax results",
+                "annotation": "features/reports/ExportDialog.tsx retains the shared TypeScript serialization and PDF download contract; this dialog remains a web parity surface."
+              },
+              {
+                "from": "fe.pages",
+                "to": "native.taxclient",
+                "payload": "remove only export with replace; retain year=2025",
+                "annotation": "TaxOverviewPage.tsx closes the dialog and sends the route update, restoring the native Tax screen. Full macOS/Demo review remains pending."
+              }
+            ],
+            "docs": [
+              {
+                "path": "api/belgian-tax.md",
+                "label": "Tax API"
+              },
+              {
+                "path": "reference/native-parity/tax.md",
+                "label": "Native Tax parity"
+              },
+              {
+                "path": "architecture/native-app.md",
+                "label": "Native architecture"
+              },
+              {
+                "path": "api/reports.md",
+                "label": "PDF reports"
               }
             ]
           }

@@ -8,7 +8,7 @@ last_modified: 2026-10-13
 adr-reference: 026
 # Authoritative HTTP-operation count from openapi.yaml. The CI checker also
 # compares every method/path pair; update concrete resource rows when routes change.
-api_operation_count: 303
+api_operation_count: 304
 tags:
   [
     reference,
@@ -591,12 +591,13 @@ The three generic `/api/admin/database/tables/:table/{schema,rows,mutate}` edito
 | POST   | `/api/admin/codex-experimental/synthetic-turn`    | Send one fixed fictional question; no request payload                                                                                        | adminRateLimiter   | [[docs/api/admin\|Admin]] |
 | POST   | `/api/admin/codex-experimental/logout`            | Log out and remove disposable runtime state                                                                                                  | adminRateLimiter   | [[docs/api/admin\|Admin]] |
 
-## Belgian Tax (2 endpoints) — Native phase 3 prerequisite
+## Belgian Tax (3 endpoints) — Native phase 3 prerequisite
 
-| Method | Path                        | Purpose                                                                                                                                  | Rate Limit                                 | Docs                                  |
-| ------ | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ | ------------------------------------- |
-| GET    | `/api/belgian-tax/overview` | Read normalized live/historical household and frozen figures with original CAS baselines; no writes                                      | globalRateLimiter + aggregationRateLimiter | [[docs/api/belgian-tax\|Belgian Tax]] |
-| POST   | `/api/belgian-tax/compute`  | Stateless computation of a complete v2 household using the shared TypeScript tax engine; household result and compatible PIT calculation | globalRateLimiter + aggregationRateLimiter | [[docs/api/belgian-tax\|Belgian Tax]] |
+| Method | Path                         | Purpose                                                                                                                                                             | Rate Limit                                 | Docs                                  |
+| ------ | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ | ------------------------------------- |
+| GET    | `/api/belgian-tax/overview`  | Read normalized live/historical household and frozen figures with original CAS baselines; no writes                                                                 | globalRateLimiter + aggregationRateLimiter | [[docs/api/belgian-tax\|Belgian Tax]] |
+| GET    | `/api/belgian-tax/dashboard` | Server-computed chart series, recorded partner income/portfolio taxes, frozen year comparisons, suggestions, and display rows; explicit caller exclusions and dates | globalRateLimiter + aggregationRateLimiter | [[docs/api/belgian-tax\|Belgian Tax]] |
+| POST   | `/api/belgian-tax/compute`   | Stateless computation of a complete v2 household using the shared TypeScript tax engine; household result and compatible PIT calculation                            | globalRateLimiter + aggregationRateLimiter | [[docs/api/belgian-tax\|Belgian Tax]] |
 
 ## Reports (3 endpoints) — Phase 3 / Phase 5 / Phase 7
 
@@ -746,14 +747,14 @@ equal the main senders and preload subscriptions.
 | Splits                               | 12                            |
 | Health                               | 2                             |
 | Aggregations (Phase 2/6/10/D)        | 15                            |
-| Belgian Tax (ADR-204)                | 2                             |
+| Belgian Tax (ADR-204)                | 3                             |
 | Reports (Phase 3/7)                  | 3                             |
 | Info/Statistics (Phase 14)           | 18                            |
 | AI Chat                              | 9                             |
 | Electron IPC invoke channels         | 25                            |
-| **Total**                            | **330**                       |
+| **Total**                            | **331**                       |
 
-> **303** versioned `/api` HTTP operations are declared in `openapi.yaml`. The checker compares their concrete method/path pairs with the resource tables and also checks `api_operation_count`. The 2 health routes and 25 Electron invoke channels are separate contracts; the 6 Electron event channels are not request endpoints. Resource summary counts and rate-limit descriptions are navigation aids and are not independently gate-checked.
+> **304** versioned `/api` HTTP operations are declared in `openapi.yaml`. The checker compares their concrete method/path pairs with the resource tables and also checks `api_operation_count`. The 2 health routes and 25 Electron invoke channels are separate contracts; the 6 Electron event channels are not request endpoints. Resource summary counts and rate-limit descriptions are navigation aids and are not independently gate-checked.
 
 ## Phase G Endpoint Consolidation (April 2026)
 

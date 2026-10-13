@@ -2946,6 +2946,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/belgian-tax/dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read server-computed tax charts, recorded income, and tax widget presentation
+         * @description Additive read-only operation using the shared TypeScript tax engine. Mirrors the overview web hook, including frozen PIT proportional scaling, selected category ancestry, partner/joint income attribution, latest stored FX for recorded portfolio taxes, and historical monthly reserve proration. Explicit exclusions and date bounds must be resolved by the caller; defaults are EUR and the trailing 24 calendar months through the application-timezone current date. No settings writes.
+         */
+        get: operations["getBelgianTaxDashboard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/belgian-tax/overview": {
         parameters: {
             query?: never;
@@ -5059,6 +5079,78 @@ export interface components {
             householdResultSource: "frozen" | "computed";
             warnings: components["schemas"]["BelgianTaxSettingsWarning"][];
             records: components["schemas"]["Setting"][];
+        };
+        BelgianTaxDashboardYearCalculation: {
+            year: number;
+            calculation: components["schemas"]["BelgianTaxHistoricalCalculation"];
+            isFiled: boolean;
+            hasFrozenCalculation: boolean;
+            isCurrent: boolean;
+            hasSnapshot: boolean;
+            hasTransactions: boolean;
+        };
+        BelgianTaxDashboardYearlyIncome: {
+            year: string;
+            income: number;
+            estimatedTax: number;
+            netAfterTax: number;
+            isApproximated: boolean;
+        };
+        BelgianTaxDashboardMonthlyIncome: {
+            period: string;
+            income: number;
+            estimatedTax: number;
+        };
+        BelgianTaxDashboardRuleSection: {
+            titleKey: string;
+            itemKeys: string[];
+        };
+        BelgianTaxDashboardHouseholdRow: {
+            key: string;
+            /** @enum {string} */
+            tone: "base" | "reduction" | "adjustment" | "total";
+            partnerAmounts: {
+                [key: string]: number;
+            };
+            household: number;
+        };
+        BelgianTaxDashboard: {
+            year: number;
+            currency: string;
+            isHistorical: boolean;
+            hasIncomeSources: boolean;
+            hasStatsData: boolean;
+            isEmpty: boolean;
+            portfolioTaxesForYear: number;
+            totalTaxIncludingPortfolio: number;
+            totalTaxIncludingPropertyEstimate: number | null;
+            yearlyIncome: components["schemas"]["BelgianTaxDashboardYearlyIncome"][];
+            monthlyIncomeTax: components["schemas"]["BelgianTaxDashboardMonthlyIncome"][];
+            recordedIncomeByPartner: {
+                A: number;
+                B: number;
+            } | null;
+            yearCalculations: components["schemas"]["BelgianTaxDashboardYearCalculation"][];
+            /** @description Existing projected v1 profile for the viewed year; presentation only. The household remains the editable source. */
+            currentInputs: {
+                [key: string]: unknown;
+            };
+            /** @description Complete v1 projection for the existing input-column CSV format; includes fields omitted from the short current-inputs card. */
+            exportProfile: {
+                [key: string]: unknown;
+            };
+            suggestions: {
+                id: string;
+                titleKey: string;
+                descriptionKey: string;
+                descriptionParams?: {
+                    [key: string]: number;
+                };
+                estimate?: number;
+                noteKey?: string;
+            }[];
+            householdBreakdownRows: components["schemas"]["BelgianTaxDashboardHouseholdRow"][];
+            rules: components["schemas"]["BelgianTaxDashboardRuleSection"][];
         };
         Envelope: {
             ok: boolean;
@@ -12759,6 +12851,11 @@ export interface operations {
                                     partner: number;
                                     joint: number;
                                 };
+                                /** @description Server-side partner attribution assuming two partners; a single-person caller uses the complete total for A. */
+                                partnerShares?: {
+                                    A: number;
+                                    B: number;
+                                };
                                 categoryCount: number;
                                 categories: {
                                     category: string;
@@ -14703,6 +14800,59 @@ export interface operations {
         responses: {
             /** @description No Content */
             204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getBelgianTaxDashboard: {
+        parameters: {
+            query?: {
+                /** @description Omit to use the live household year. */
+                year?: number;
+                currency?: string;
+                /** @description Defaults to the first day 23 calendar months before today. */
+                start_date?: string;
+                /** @description Defaults to today in the application timezone. */
+                end_date?: string;
+                excluded_category_ids?: number[];
+                excluded_recipient_ids?: number[];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Computed charts and widget data. Money is decoded directly as Decimal by the native client. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data: components["schemas"]["BelgianTaxDashboard"];
+                    };
+                };
+            };
+            /** @description Invalid year */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description API or aggregation rate limit exceeded. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Settings */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };

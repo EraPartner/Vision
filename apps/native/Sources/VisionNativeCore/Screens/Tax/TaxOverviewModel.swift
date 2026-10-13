@@ -17,6 +17,7 @@ public final class TaxOverviewModel {
     @ObservationIgnored private var fetchedAt: Date?
     @ObservationIgnored private var revision = UUID()
     @ObservationIgnored private var task: Task<Void, Never>?
+    @ObservationIgnored public var onInvalidate: (@MainActor () -> Void)?
 
     public init(service: any TaxComputationService, now: @escaping @Sendable () -> Date = { Date() }) {
         self.service = service
@@ -24,11 +25,18 @@ public final class TaxOverviewModel {
     }
 
     public func invalidate() {
+        onInvalidate?()
         revision = UUID()
         task?.cancel()
         task = nil
         fetchedAt = nil
         isFetching = false
+    }
+
+    public func refreshAfterWrite() async {
+        overview = nil
+        invalidate()
+        await load(year: requestedYear, force: true)
     }
 
     public func load(year: Int? = nil, force: Bool = false) async {

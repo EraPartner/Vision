@@ -15,6 +15,7 @@ struct InsightTimelineChart: View {
     var stackedAreas = true
     var rangeComparison = true
     var height: CGFloat = 240
+    var customColors: [String: Color] = [:]
     @Binding var selection: String?
     @Binding var rangeStart: String?
     @FocusState private var focused: Bool
@@ -185,6 +186,7 @@ struct InsightTimelineChart: View {
     }
     private func seriesColor(at index: Int) -> Color {
         let line = series[index]
+        if let color = customColors[line.id] { return color }
         let id = line.id.components(separatedBy: "__").first ?? line.id
         if id == "actual" { return theme.primary }
         if id == "income" { return theme.gain }

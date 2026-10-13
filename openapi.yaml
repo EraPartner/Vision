@@ -1574,6 +1574,143 @@ components:
           items:
             $ref: "#/components/schemas/Setting"
 
+    BelgianTaxDashboardYearCalculation:
+      type: object
+      required:
+        [
+          year,
+          calculation,
+          isFiled,
+          hasFrozenCalculation,
+          isCurrent,
+          hasSnapshot,
+          hasTransactions,
+        ]
+      properties:
+        year: { type: integer }
+        calculation:
+          { $ref: "#/components/schemas/BelgianTaxHistoricalCalculation" }
+        isFiled: { type: boolean }
+        hasFrozenCalculation: { type: boolean }
+        isCurrent: { type: boolean }
+        hasSnapshot: { type: boolean }
+        hasTransactions: { type: boolean }
+    BelgianTaxDashboardYearlyIncome:
+      type: object
+      required: [year, income, estimatedTax, netAfterTax, isApproximated]
+      properties:
+        year: { type: string }
+        income: { type: number }
+        estimatedTax: { type: number }
+        netAfterTax: { type: number }
+        isApproximated: { type: boolean }
+    BelgianTaxDashboardMonthlyIncome:
+      type: object
+      required: [period, income, estimatedTax]
+      properties:
+        period: { type: string }
+        income: { type: number }
+        estimatedTax: { type: number }
+    BelgianTaxDashboardRuleSection:
+      type: object
+      required: [titleKey, itemKeys]
+      properties:
+        titleKey: { type: string }
+        itemKeys:
+          type: array
+          items: { type: string }
+    BelgianTaxDashboardHouseholdRow:
+      type: object
+      required: [key, tone, partnerAmounts, household]
+      properties:
+        key: { type: string }
+        tone: { type: string, enum: [base, reduction, adjustment, total] }
+        partnerAmounts:
+          type: object
+          additionalProperties: { type: number }
+        household: { type: number }
+    BelgianTaxDashboard:
+      type: object
+      required:
+        [
+          year,
+          currency,
+          isHistorical,
+          hasIncomeSources,
+          hasStatsData,
+          isEmpty,
+          portfolioTaxesForYear,
+          totalTaxIncludingPortfolio,
+          totalTaxIncludingPropertyEstimate,
+          yearlyIncome,
+          monthlyIncomeTax,
+          recordedIncomeByPartner,
+          yearCalculations,
+          currentInputs,
+          exportProfile,
+          suggestions,
+          householdBreakdownRows,
+          rules,
+        ]
+      properties:
+        year: { type: integer }
+        currency: { type: string }
+        isHistorical: { type: boolean }
+        hasIncomeSources: { type: boolean }
+        hasStatsData: { type: boolean }
+        isEmpty: { type: boolean }
+        portfolioTaxesForYear: { type: number }
+        totalTaxIncludingPortfolio: { type: number }
+        totalTaxIncludingPropertyEstimate: { type: number, nullable: true }
+        yearlyIncome:
+          type: array
+          items:
+            { $ref: "#/components/schemas/BelgianTaxDashboardYearlyIncome" }
+        monthlyIncomeTax:
+          type: array
+          items:
+            { $ref: "#/components/schemas/BelgianTaxDashboardMonthlyIncome" }
+        recordedIncomeByPartner:
+          type: object
+          nullable: true
+          required: [A, B]
+          properties:
+            A: { type: number }
+            B: { type: number }
+        yearCalculations:
+          type: array
+          items:
+            { $ref: "#/components/schemas/BelgianTaxDashboardYearCalculation" }
+        currentInputs:
+          type: object
+          description: Existing projected v1 profile for the viewed year; presentation only. The household remains the editable source.
+          additionalProperties: true
+        exportProfile:
+          type: object
+          description: Complete v1 projection for the existing input-column CSV format; includes fields omitted from the short current-inputs card.
+          additionalProperties: true
+        suggestions:
+          type: array
+          items:
+            type: object
+            required: [id, titleKey, descriptionKey]
+            properties:
+              id: { type: string }
+              titleKey: { type: string }
+              descriptionKey: { type: string }
+              descriptionParams:
+                type: object
+                additionalProperties: { type: number }
+              estimate: { type: number }
+              noteKey: { type: string }
+        householdBreakdownRows:
+          type: array
+          items:
+            { $ref: "#/components/schemas/BelgianTaxDashboardHouseholdRow" }
+        rules:
+          type: array
+          items: { $ref: "#/components/schemas/BelgianTaxDashboardRuleSection" }
+
     # ADR-026 API envelope
     Envelope:
       type: object
@@ -11156,6 +11293,13 @@ paths:
                                     me: { type: number }
                                     partner: { type: number }
                                     joint: { type: number }
+                                partnerShares:
+                                  type: object
+                                  description: Server-side partner attribution assuming two partners; a single-person caller uses the complete total for A.
+                                  required: [A, B]
+                                  properties:
+                                    A: { type: number }
+                                    B: { type: number }
                                 categoryCount: { type: integer }
                                 categories:
                                   type: array
@@ -13201,6 +13345,71 @@ paths:
           description: No Content
 
   # ─── Reports ─────────────────────────────────────────────────────────────────
+  /api/belgian-tax/dashboard:
+    get:
+      operationId: getBelgianTaxDashboard
+      summary: Read server-computed tax charts, recorded income, and tax widget presentation
+      tags: [Belgian Tax]
+      description: Additive read-only operation using the shared TypeScript tax engine. Mirrors the overview web hook, including frozen PIT proportional scaling, selected category ancestry, partner/joint income attribution, latest stored FX for recorded portfolio taxes, and historical monthly reserve proration. Explicit exclusions and date bounds must be resolved by the caller; defaults are EUR and the trailing 24 calendar months through the application-timezone current date. No settings writes.
+      parameters:
+        - name: year
+          in: query
+          schema: { type: integer, minimum: 1900, maximum: 2200 }
+          description: Omit to use the live household year.
+        - name: currency
+          in: query
+          schema: { type: string, pattern: "^[A-Za-z]{3}$", default: EUR }
+        - name: start_date
+          in: query
+          schema: { type: string, format: date }
+          description: Defaults to the first day 23 calendar months before today.
+        - name: end_date
+          in: query
+          schema: { type: string, format: date }
+          description: Defaults to today in the application timezone.
+        - name: excluded_category_ids
+          in: query
+          style: form
+          explode: true
+          schema:
+            type: array
+            items: { type: integer, minimum: 1, maximum: 2147483647 }
+        - name: excluded_recipient_ids
+          in: query
+          style: form
+          explode: true
+          schema:
+            type: array
+            items: { type: integer, minimum: 1, maximum: 2147483647 }
+      responses:
+        "200":
+          description: Computed charts and widget data. Money is decoded directly as Decimal by the native client.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { $ref: "#/components/schemas/BelgianTaxDashboard" }
+        "400":
+          {
+            description: Invalid year,
+            currency,
+            date bounds,
+            retired date aliases,
+            or exclusion IDs.,
+          }
+        "429": { description: API or aggregation rate limit exceeded. }
+        "500":
+          {
+            description: Settings,
+            aggregation,
+            portfolio,
+            or exchange-rate read failed; never an empty success.,
+          }
+
   /api/belgian-tax/overview:
     get:
       operationId: getBelgianTaxOverview

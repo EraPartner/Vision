@@ -434,6 +434,11 @@ Code links: [[apps/frontend/src/pages/OwesPage.tsx]], [[apps/frontend/src/featur
 
 Belgian tax profile and deduction tracking.
 
+Vision Native implements `/tax` in SwiftUI through phase 3h. Fiscal formulas remain in the
+shared TypeScript backend; profile/year actions use existing atomic settings CAS, and CSV
+export uses a native save panel. The PDF dialog remains web. macOS build and the owner's Demo
+visual/keyboard pass remain pending; see [[docs/reference/native-parity/tax|Tax parity]].
+
 ### Features
 
 - **Premium consistency updates**: page-level header/empty-state patterns are standardized across Overview, Stocks, Crypto, Real Estate, Savings, Performance, Net Worth, Exchange Rates, Watchlist, Market Lookup, and Tax pages using shared `PageHeader` and `EmptyState` where applicable
@@ -806,7 +811,7 @@ Observability hub shown as the sidebar's Admin section (gated by Settings → Ap
 - [[docs/features/index]] - Feature documentation
 - [[docs/api/index]] - API documentation
 - [[docs/components/index]] - UI Components
-- [Interactive flow visualizer](../flow-visualizer.html#api-request) — 82 components / 47 flows, with Journey and Architecture views and five learning paths
+- [Interactive flow visualizer](../flow-visualizer.html#api-request) — 82 components / 49 flows, with Journey and Architecture views and five learning paths
 - [[docs/guides/visual-learning|Understand Vision Visually]] — conceptual diagrams and a suggested reading order
 
 

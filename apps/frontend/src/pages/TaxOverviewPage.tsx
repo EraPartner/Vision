@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router";
 import { FileDown, LayoutGrid, SlidersHorizontal } from "lucide-react";
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
@@ -141,8 +142,33 @@ export default function TaxOverviewPage() {
         resetToDefaults,
         widgets: widgetDefs,
     } = useWidgetVisibility("budgetTax", WIDGETS);
-    const [exportOpen, setExportOpen] = useState(false);
+    const [searchParams, setSearchParams] = useSearchParams();
+    const [localExportOpen, setLocalExportOpen] = useState(false);
+    const nativeReportRequested = searchParams.get("export") === "pdf";
+    const exportOpen = localExportOpen || nativeReportRequested;
+    const setExportOpen = (open: boolean) => {
+        setLocalExportOpen(open);
+        if (!open && nativeReportRequested) {
+            setSearchParams(
+                (previous) => {
+                    const next = new URLSearchParams(previous);
+                    next.delete("export");
+                    return next;
+                },
+                { replace: true },
+            );
+        }
+    };
     const [customizeOpen, setCustomizeOpen] = useState(false);
+
+    const exportDialog = (
+        <ExportDialog
+            defaultType="tax"
+            trigger={null}
+            open={exportOpen}
+            onOpenChange={setExportOpen}
+        />
+    );
 
     const header = (
         <PageHeader
@@ -185,12 +211,6 @@ export default function TaxOverviewPage() {
                             </Button>
                         }
                     />
-                    <ExportDialog
-                        defaultType="tax"
-                        trigger={null}
-                        open={exportOpen}
-                        onOpenChange={setExportOpen}
-                    />
                     <WidgetVisibilityDialog
                         open={customizeOpen}
                         onOpenChange={setCustomizeOpen}
@@ -213,23 +233,27 @@ export default function TaxOverviewPage() {
     // empty-state/content flap plus a refetch storm.
     if (stats.isError) {
         return (
-            <PageShell className="" data-print-page="tax">
-                <PageHeader
-                    title={t("tax.page.title")}
-                    subtitle={t("tax.page.subtitle", { year: viewedYear })}
-                    icon={PAGE_ICONS["/tax"]}
-                />
-                <PageError
-                    message={t("tax.page.loadError", {
-                        msg: stats.error?.message ?? "",
-                    })}
-                />
-            </PageShell>
+            <TooltipProvider>
+                {exportDialog}
+                <PageShell className="" data-print-page="tax">
+                    <PageHeader
+                        title={t("tax.page.title")}
+                        subtitle={t("tax.page.subtitle", { year: viewedYear })}
+                        icon={PAGE_ICONS["/tax"]}
+                    />
+                    <PageError
+                        message={t("tax.page.loadError", {
+                            msg: stats.error?.message ?? "",
+                        })}
+                    />
+                </PageShell>
+            </TooltipProvider>
         );
     }
 
     return (
         <TooltipProvider>
+            {exportDialog}
             <PageShell className="" data-print-page="tax">
                 {header}
                 {/* The year is a document, not a filter: its identity, state, region,

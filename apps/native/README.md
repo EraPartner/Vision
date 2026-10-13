@@ -148,8 +148,12 @@ See [the architecture page](../../docs/architecture/native-app.md#native-navigat
   metrics and hierarchy pivot with drill links, payee table, yearly totals, Sankey flow, deterministic
   findings, and saved charts with all seven variants and live preview. The PDF menu temporarily
   opens the existing web report dialog with `?export=pdf`; closing restores the native tab/window.
-  Financial, portfolio, and tax report options remain available while the tax backend prerequisite
-  is implemented. This report surface and the Mac review remain phase-3 exit requirements.
+  Financial, portfolio, and tax report options remain available through the shared dialog. This report surface and the Mac review remain phase-3 exit requirements.
+- `/tax` is native (phase 3h): the filing masthead, eight configurable widgets, server-computed
+  charts and comparisons, household breakdown, deduction review, six-step write-through profile
+  sheet, snapshot/freeze/filing/history actions, and CSV export. Tax formulas remain shared
+  TypeScript behind the compute/overview/dashboard operations; Swift decodes money as Decimal.
+  PDF export opens the shared web dialog with `?export=pdf`, retaining the selected year.
 - `/admin`, `/admin/providers`, `/admin/endpoints` and `/admin/exchange-rates` are native, in
   admin mode only, and so are `/admin/db` and `/admin/db/:table`; the table editor holds
   navigation and Quit behind a native Leave this page? alert while it has pending changes. The admin token card writes the page's
@@ -397,6 +401,15 @@ already running, for example `http://localhost:3002`. The host must be `localhos
 `::1`. Other hosts, malformed values and the variable in a Release build are ignored with a logged
 reason, and the app starts its own runtime.
 
+22. **Taxes (phase 3h, pending Mac review).** Open Tax in EN and NL and choose live, saved,
+    frozen, and filed years. Check masthead status, disclosures, chart hover/keyboard readouts,
+    partner columns, trend/comparison, all eight widget switches, and no-income/error states.
+    Edit each of the six profile steps; verify backend previews and that closing keeps saved
+    edits. Check filed locks, amendment/unfiling, incomplete deduction confirmations and
+    dismissal. Exercise snapshot/freeze/filing/history actions and native CSV export. Open PDF
+    export, then cancel: the selected `year` must survive and the native screen must return.
+    A stale response or a failed year/currency change must not relabel prior tax amounts.
+
 Apps launched from Finder or the Dock do not inherit your shell environment. Set both variables in
 the Xcode scheme, or pass them with `open`:
 
@@ -405,8 +418,9 @@ open --env VISION_NATIVE_RUNTIME_DIR="$PWD/apps/native/build/payload/native-runt
   "<DerivedData>/Build/Products/Debug/Vision Native.app"
 ```
 
-The Belgian tax computation prerequisite is available through `TaxComputationService` and the
-OpenAPI `computeBelgianTax` operation (`POST /api/belgian-tax/compute`). The TypeScript engine
-is shared with the web app; Swift only decodes its results as `Decimal`. `TaxOverviewModel` reads the live/historical overview and preserves frozen results through
-`GET /api/belgian-tax/overview`. Tax rendering, profile edits, and snapshot/filing actions remain
-web until their native implementation is complete.
+Tax uses `TaxComputationService` and the OpenAPI compute/overview/dashboard operations.
+The TypeScript engine is shared with the web app; Swift displays its results as `Decimal`.
+Profile and year actions use existing atomic settings writes with original CAS baselines. The
+profile sheet previews unsaved inputs through the backend and persists edits as they are made;
+closing flushes pending writes. CSV is native; the PDF dialog remains web. Full macOS build and
+Demo visual/keyboard checks remain pending.

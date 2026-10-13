@@ -27,11 +27,11 @@ public final class SavedChartsModel {
     @ObservationIgnored private var previewRevision = UUID()
     @ObservationIgnored private var previewTask: Task<Void, Never>?
     @ObservationIgnored private var revision = UUID()
+    @ObservationIgnored private var strings: (any Localizing)?
 
     public init(service: any SavedChartsService) { self.service = service }
     public func appear(snapshot: StatisticsSnapshot, currency: String, strings: any Localizing) async {
-        let token = UUID()
-        revision = token
+        self.strings = strings
         if self.currency != currency || self.snapshot != snapshot {
             datasets = [:]
             errors = [:]
@@ -39,17 +39,22 @@ public final class SavedChartsModel {
         self.snapshot = snapshot
         self.currency = currency
         otherLabel = strings.t("customChart.other")
+        guard !isSaving else { return }
+        let token = UUID()
+        revision = token
         isLoading = charts.isEmpty
         do {
             async let charts = service.savedCharts()
             async let recipients = service.customChartRecipients()
             async let tags = service.customChartTags()
             let loaded = try await charts
+            let loadedRecipients = (try? await recipients) ?? []
+            let loadedTags = (try? await tags) ?? []
             guard token == revision, !Task.isCancelled else { return }
             self.charts = loaded
             error = nil
-            self.recipients = (try? await recipients) ?? []
-            self.tags = (try? await tags) ?? []
+            self.recipients = loadedRecipients
+            self.tags = loadedTags
             for chart in loaded {
                 guard token == revision, !Task.isCancelled else { return }
                 do {
@@ -120,6 +125,8 @@ public final class SavedChartsModel {
     }
     public func save() async {
         guard let draft, draft.canSave, !isSaving else { return }
+        revision = UUID()
+        isLoading = false
         isSaving = true
         saveError = nil
         do {
@@ -131,25 +138,30 @@ public final class SavedChartsModel {
             }
             isSaving = false
             close()
-            do { datasets[saved.id] = try await dataset(draft: CustomChartDraft(chart: saved)) } catch {
-                errors[saved.id] = error.localizedDescription
-            }
+            datasets.removeValue(forKey: saved.id)
+            errors.removeValue(forKey: saved.id)
         } catch {
             saveError = error.localizedDescription
             isSaving = false
         }
+        if let snapshot, let strings { await appear(snapshot: snapshot, currency: currency, strings: strings) }
     }
     public func confirmDelete() async {
         guard let chart = pendingDelete, !isSaving else { return }
+        revision = UUID()
+        isLoading = false
         isSaving = true
         error = nil
+        var mutationError: String?
         do {
             try await service.deleteSavedChart(id: chart.id)
             charts.removeAll { $0.id == chart.id }
             datasets.removeValue(forKey: chart.id)
             errors.removeValue(forKey: chart.id)
             pendingDelete = nil
-        } catch { self.error = error.localizedDescription }
+        } catch { mutationError = error.localizedDescription }
         isSaving = false
+        if let snapshot, let strings { await appear(snapshot: snapshot, currency: currency, strings: strings) }
+        if let mutationError { error = mutationError }
     }
 }
