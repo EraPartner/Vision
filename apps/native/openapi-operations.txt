@@ -150,3 +150,6 @@ updateSavedChart
 deleteSavedChart
 getRecipientPivot
 getTagPivot
+
+# Belgian tax engine prerequisite (ADR-204): Swift displays TypeScript results.
+computeBelgianTax

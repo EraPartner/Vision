@@ -79,12 +79,18 @@ package "Frontend" {
 }
 
 package "Backend (Node.js)" {
+  class "POST /api/belgian-tax/compute" as BelgianTaxCompute
   class RESTEndpoints
   class ExpressRoutes
   class Repositories
   class Services
   class "Database (PostgreSQL)" as Database
 }
+
+package "Shared TypeScript" {
+  class "PIT / household engine" as SharedBelgianTax
+}
+class "Native TaxComputationService" as NativeTax
 
 package "External Services" {
   class "ECB (Exchange Rates)" as ECB
@@ -93,6 +99,10 @@ package "External Services" {
   class "Kinesis (US Stock Prices)" as Kinesis
   class "Statbel (Belgian Inflation)" as Statbel
 }
+
+NativeTax --> BelgianTaxCompute : typed household / Decimal results
+BelgianTaxCompute --> SharedBelgianTax : stateless preview
+Pages --> SharedBelgianTax : existing lazy-loaded web tax store
 
 ' Relationships
 Pages --> PortfolioImportSession

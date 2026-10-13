@@ -2,9 +2,34 @@
 title: Feature - Belgian Tax
 type: feature
 status: active
-date: 2026-10-12
-updated: 2026-10-12
-tags: [feature, tax, belgian, cadastral-income, deductions, phase-8, pdf-export, regional-own-home-credit, exemption-brackets, taxable-income-sources, audit-2026-05-11, disabled-dependents, regional-autonomy-factor, property-tax-centimes, etf-tob, reynders-routing, portfolio-tax-pure-module, decimal-migration, point-in-time-fx, url-state, filing-masthead, computation-flow, adr-105]
+date: 2026-10-13
+updated: 2026-10-13
+tags:
+  [
+    feature,
+    tax,
+    belgian,
+    cadastral-income,
+    deductions,
+    phase-8,
+    pdf-export,
+    regional-own-home-credit,
+    exemption-brackets,
+    taxable-income-sources,
+    audit-2026-05-11,
+    disabled-dependents,
+    regional-autonomy-factor,
+    property-tax-centimes,
+    etf-tob,
+    reynders-routing,
+    portfolio-tax-pure-module,
+    decimal-migration,
+    point-in-time-fx,
+    url-state,
+    filing-masthead,
+    computation-flow,
+    adr-105,
+  ]
 description: "Belgian tax profile management with PIT calculator using exemption-bracket method (CIR-92 art. 134 §3), regional own-home credits (Flemish woonbonus, Walloon chèque habitat), taxable income source filtering, cadastral income tracking, deduction management, PDF tax report export, and May 2026 PwC audit fixes (disabled-dependent doubling, child-under-3 forfeiture, regional autonomy factor, property-tax centimes calibration). May 2026: Portfolio-tax estimators extracted to a pure, tested module with Decimal.js accumulation."
 aliases: [belgian-tax, tax-feature, cadastral, deductions, belgium]
 related_code:
@@ -19,11 +44,11 @@ related_code:
   - apps/frontend/src/contexts/BelgianTaxProfileContext.tsx
   - apps/frontend/src/stores/belgianTaxStore.ts
   - apps/frontend/src/lib/belgianTax/householdRuntime.ts
-  - apps/frontend/src/lib/belgianTax/pit.ts
-  - apps/frontend/src/lib/belgianTax/householdOwnHome.ts
-  - apps/frontend/src/lib/belgianTax/constants.ts
-  - apps/frontend/src/lib/belgianTax/socialSecurity.ts
-  - apps/frontend/src/lib/belgianTax/propertyTax.ts
+  - packages/shared-utils/src/belgianTax/pit.ts
+  - packages/shared-utils/src/belgianTax/householdOwnHome.ts
+  - packages/shared-utils/src/belgianTax/constants.ts
+  - packages/shared-utils/src/belgianTax/socialSecurity.ts
+  - packages/shared-utils/src/belgianTax/propertyTax.ts
   - apps/frontend/src/lib/belgianTax/portfolioTax.ts
   - apps/frontend/src/lib/belgianTax/costBreakdown.ts
   - apps/frontend/src/lib/belgianTax/exportTaxYearCsv.ts
@@ -63,29 +88,42 @@ category matches remain suggestions requiring confirmation; category text does n
 
 ## Module layout
 
-Pure tax logic lives in [[apps/frontend/src/lib/belgianTax]] and is split by concern:
+The PIT and household calculation engine lives in `packages/shared-utils/src/belgianTax/`,
+exported through `@vision/shared-utils/belgian-tax/*`. The original frontend module paths are
+compatibility exports, so lazy loading, store behavior, and existing callers retain their behavior.
+Frontend-only settings hydration, migration, portfolio tax, attribution, and CSV helpers remain in
+`apps/frontend/src/lib/belgianTax/`.
 
-| Module                | Responsibility                                                              |
-| --------------------- | --------------------------------------------------------------------------- |
-| `types.ts`            | `BelgianTaxProfile`, `BelgianTaxCalculation`, region & employment unions    |
-| `constants.ts`        | Year-keyed `BelgianTaxYearTable` (IY 2024, 2025, 2026) — brackets, caps, rates |
-| `pit.ts`              | `computeBelgianPIT(profile)` — composes deductions, credits, surcharge      |
-| `socialSecurity.ts`   | Employee SS + step-function special social security contribution (CSSS)     |
-| `propertyTax.ts`      | Indexed cadastral × regional rate × centimes additionnels                   |
-| `portfolioTax.ts`     | Pure portfolio-tax estimators (see below)                                   |
-| `costBreakdown.ts`    | Shared transaction tax and fee bucketing for portfolio-tax views            |
-| `exportTaxYearCsv.ts` | Pure filed/frozen tax-year CSV serialization                                |
-| `personPit.ts`        | Per-person building blocks: progressive tax, exemption valuation, forfait per category, reductions, own-home and service-voucher credits, breakdown rows |
-| `householdTypes.ts`   | `BelgianTaxHouseholdV2`, activities, relationship events, result and issue types |
-| `assessment.ts`       | `deriveAssessment` — single / separate / joint per income year (art. 126)   |
-| `exemptions.ts`       | Dependent supplements and tax-free sum allocation between partners          |
-| `maritalQuotient.ts`  | Arts 87-88 quotient on professional income, IY 2026 senior cap              |
-| `household.ts`        | `computeHouseholdTax`, `toBelgianTaxCalculation`                            |
-| `householdOwnHome.ts` | Own-home credit of the household: one borrower, or a basket per borrower (ADR-202) |
-| `householdMigration.ts` | v1 profile ↔ v2 household upgrade, projection and patching                |
-| `householdSchema.ts`  | zod schemas for the v2 setting values                                       |
-| `householdRuntime.ts` | Lazily loaded engine entry for the store: settings load/upgrade, projections, household diff |
-| `index.ts`            | Explicit supported public re-exports; year-table internals stay private     |
+`POST /api/belgian-tax/compute` exposes the same engine to Vision Native (ADR-204). It accepts a
+complete v2 household and returns `result` (assessment, partner/activity breakdowns, quotient,
+CSSS, totals, and issues) plus `calculation` (the legacy-compatible PIT presentation). This is a
+stateless preview: it does not select a live or historical profile, persist edits, create snapshots,
+or mark a year filed. Callers must retain the existing frozen-result precedence. Existing report
+requests and frontend calculations are unchanged. See [[docs/api/belgian-tax|the API contract]].
+
+Modules are split by concern:
+
+| Module                  | Responsibility                                                                                                                                           |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `types.ts`              | `BelgianTaxProfile`, `BelgianTaxCalculation`, region & employment unions                                                                                 |
+| `constants.ts`          | Year-keyed `BelgianTaxYearTable` (IY 2024, 2025, 2026) — brackets, caps, rates                                                                           |
+| `pit.ts`                | `computeBelgianPIT(profile)` — composes deductions, credits, surcharge                                                                                   |
+| `socialSecurity.ts`     | Employee SS + step-function special social security contribution (CSSS)                                                                                  |
+| `propertyTax.ts`        | Indexed cadastral × regional rate × centimes additionnels                                                                                                |
+| `portfolioTax.ts`       | Pure portfolio-tax estimators (see below)                                                                                                                |
+| `costBreakdown.ts`      | Shared transaction tax and fee bucketing for portfolio-tax views                                                                                         |
+| `exportTaxYearCsv.ts`   | Pure filed/frozen tax-year CSV serialization                                                                                                             |
+| `personPit.ts`          | Per-person building blocks: progressive tax, exemption valuation, forfait per category, reductions, own-home and service-voucher credits, breakdown rows |
+| `householdTypes.ts`     | `BelgianTaxHouseholdV2`, activities, relationship events, result and issue types                                                                         |
+| `assessment.ts`         | `deriveAssessment` — single / separate / joint per income year (art. 126)                                                                                |
+| `exemptions.ts`         | Dependent supplements and tax-free sum allocation between partners                                                                                       |
+| `maritalQuotient.ts`    | Arts 87-88 quotient on professional income, IY 2026 senior cap                                                                                           |
+| `household.ts`          | `computeHouseholdTax`, `toBelgianTaxCalculation`                                                                                                         |
+| `householdOwnHome.ts`   | Own-home credit of the household: one borrower, or a basket per borrower (ADR-202)                                                                       |
+| `householdMigration.ts` | v1 profile ↔ v2 household upgrade, projection and patching                                                                                               |
+| `householdSchema.ts`    | zod schemas for the v2 setting values                                                                                                                    |
+| `householdRuntime.ts`   | Lazily loaded engine entry for the store: settings load/upgrade, projections, household diff                                                             |
+| `index.ts`              | Explicit supported public re-exports; year-table internals stay private                                                                                  |
 
 ### `portfolioTax.ts` — Pure Portfolio-Tax Estimators (2026-05-29)
 
@@ -159,32 +197,32 @@ New years are added by appending a `BelgianTaxYearTable` entry — no calculator
 
 ### Data tracked
 
-| Field                                                                              | Description                                                                                                      |
-| ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| Employment type                                                                    | `employee` / `civil_servant` / `self_employed` / `director` / `retired` / `other`                                |
-| Gross annual income                                                                | Salary / pension / freelance gross                                                                               |
-| Other taxable income                                                               | Rental, additional freelance, etc.                                                                               |
-| Region                                                                             | Flanders / Wallonia / Brussels                                                                                   |
-| Communal surcharge %                                                               | Local surcharge on federal PIT                                                                                   |
-| Dependent children                                                                 | Total count                                                                                                      |
-| Dependent children (disabled)                                                      | Sub-count of disabled children — each counts as TWO per CIR-92 art. 132 4° (optional, clamped to total children) |
-| Other dependents                                                                   | Other persons ten laste / à charge                                                                               |
-| Other dependents (disabled)                                                        | Sub-count of disabled other dependents — each counts as TWO per CIR-92 art. 136 (optional, clamped to total)     |
-| Dependents under 3                                                                 | Sub-count of children under 3 (forfeited if childcare reduction claimed per CIR-92 art. 132bis)                  |
-| Disability flags                                                                   | Self / spouse — each adds €1,980 to personal exemption                                                           |
-| Single-parent flag                                                                 | `isIsolatedParent` adds the single-parent supplement                                                             |
-| Cadastral income + additional residences                                           | For property tax estimate                                                                                        |
-| Mortgage details                                                                   | Interest, capital repaid, region, start year, primary residence status                                           |
-| Taxable income source categories                                                   | Filter for income categories included in tax calculations; used for graph filtering                              |
-| Alimony / pension savings / life insurance / donations / childcare / domestic help | With per-item eligibility flags                                                                                  |
+| Field                                                                              | Description                                                                                                        |
+| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Employment type                                                                    | `employee` / `civil_servant` / `self_employed` / `director` / `retired` / `other`                                  |
+| Gross annual income                                                                | Salary / pension / freelance gross                                                                                 |
+| Other taxable income                                                               | Rental, additional freelance, etc.                                                                                 |
+| Region                                                                             | Flanders / Wallonia / Brussels                                                                                     |
+| Communal surcharge %                                                               | Local surcharge on federal PIT                                                                                     |
+| Dependent children                                                                 | Total count                                                                                                        |
+| Dependent children (disabled)                                                      | Sub-count of disabled children — each counts as TWO per CIR-92 art. 132 4° (optional, clamped to total children)   |
+| Other dependents                                                                   | Other persons ten laste / à charge                                                                                 |
+| Other dependents (disabled)                                                        | Sub-count of disabled other dependents — each counts as TWO per CIR-92 art. 136 (optional, clamped to total)       |
+| Dependents under 3                                                                 | Sub-count of children under 3 (forfeited if childcare reduction claimed per CIR-92 art. 132bis)                    |
+| Disability flags                                                                   | Self / spouse — each adds €1,980 to personal exemption                                                             |
+| Single-parent flag                                                                 | `isIsolatedParent` adds the single-parent supplement                                                               |
+| Cadastral income + additional residences                                           | For property tax estimate                                                                                          |
+| Mortgage details                                                                   | Interest, capital repaid, region, start year, primary residence status                                             |
+| Taxable income source categories                                                   | Filter for income categories included in tax calculations; used for graph filtering                                |
+| Alimony / pension savings / life insurance / donations / childcare / domestic help | With per-item eligibility flags                                                                                    |
 | Service vouchers                                                                   | `serviceVoucherSpend` (EUR, optional, takes precedence) or the legacy `serviceVoucherCount`, with eligibility flag |
-| Annual dividend income                                                             | Drives WHT reclaim estimate                                                                                      |
-| Annual savings interest                                                            | Drives 15% above-exemption tax estimate                                                                          |
-| Tax year                                                                           | Income year — selects the corresponding bracket table                                                            |
+| Annual dividend income                                                             | Drives WHT reclaim estimate                                                                                        |
+| Annual savings interest                                                            | Drives 15% above-exemption tax estimate                                                                            |
+| Tax year                                                                           | Income year — selects the corresponding bracket table                                                              |
 
 ### Employment type → professional expense forfait
 
-WIB 92 art. 51 (amounts from the FPS Finance indexation notice per assessment year, see [[docs/reference/belgian-tax-rule-matrix]]): employees, civil servants and self-employed **trading profits** (winsten) get the 30% forfait (cap €5,930 IY 2025, €6,070 IY 2026). Remunerated company directors get the 3% forfait (cap €3,130 IY 2025). Self-employed **fees** (baten, liberal professions) get the degressive 28.7% / 10% / 5% / 3% scale with its own cap (€5,210 IY 2025). The optional profile field `selfEmployedIncomeKind` (`profits` by default, `fees`) selects the scale; pensions and other replacement income get no forfait. Per art. 51 al. 1 the percentages apply to the gross income after the employee social-security contribution, so for employees and civil servants the 13.07% / 11.05% contribution comes off before the 30% (this matters below the cap, about €22,700 gross in IY 2025). This is enforced in `computeProfessionalExpenses` in [pit.ts](apps/frontend/src/lib/belgianTax/pit.ts). (Until 2026-10-11 the engine gave self-employed taxpayers no forfait at all.)
+WIB 92 art. 51 (amounts from the FPS Finance indexation notice per assessment year, see [[docs/reference/belgian-tax-rule-matrix]]): employees, civil servants and self-employed **trading profits** (winsten) get the 30% forfait (cap €5,930 IY 2025, €6,070 IY 2026). Remunerated company directors get the 3% forfait (cap €3,130 IY 2025). Self-employed **fees** (baten, liberal professions) get the degressive 28.7% / 10% / 5% / 3% scale with its own cap (€5,210 IY 2025). The optional profile field `selfEmployedIncomeKind` (`profits` by default, `fees`) selects the scale; pensions and other replacement income get no forfait. Per art. 51 al. 1 the percentages apply to the gross income after the employee social-security contribution, so for employees and civil servants the 13.07% / 11.05% contribution comes off before the 30% (this matters below the cap, about €22,700 gross in IY 2025). This is enforced in `computeProfessionalExpenses` in [pit.ts](packages/shared-utils/src/belgianTax/pit.ts). (Until 2026-10-11 the engine gave self-employed taxpayers no forfait at all.)
 
 ### Taxable Income Sources
 
@@ -221,7 +259,7 @@ Investments of type `real_estate` include Belgian-specific fields:
 3. Professional expenses: lump-sum forfait (employee / director / self-employed profits or fees, see above) or actual.
 4. Deductions from taxable basis: alimony at the art. 104 share for the income year (80% up to 2024, 70% in 2025, 60% in 2026 — law of 18 December 2025). (2026-06-11 correction: union dues now deduct only inside the _actual_ professional-expense method — they are professional expenses, not a separate deduction — and medical expenses no longer deduct at all; Belgian PIT has no general medical deduction. The breakdown also gained a 'Property Tax (estimate)' row so the visible rows reconcile to Net Take-Home.)
 5. Personal exemption (`quotité du revenu exempté`): basic + dependents (with disabled count doubling per CIR-92 art. 132 4° / 136) + under-3 (forfeited if childcare claimed per CIR-92 art. 132bis) + other dependents + disability + single-parent supplements; applied at the **lowest brackets first** via a dedicated exemption-bracket rate table (CIR-92 art. 134 §3). The exemption amount is taxed from bracket 1 upward using reduced rates (25% on bracket-1 portion, 30% on bracket-2 overflow, then main rates above), and the result is subtracted from gross PIT and reported as `personalExemptionBenefit`. Disabled dependents count as TWO heads each; `dependentChildrenDisabled` and `dependentOtherPersonsDisabled` are clamped to their respective head counts.
-5b. Marital quotient under `married_joint` (arts 87-88): the spouse's own professional income is taxed in their own name with the basic exemption (art. 126 §1 al. 2, décumul); up to 30% of the household professional income is transferred to the spouse so that own income plus transfer reaches the indexed cap (art. 88), and the transfer is kept only when the two spouses' combined tax is lower than without it (art. 88 al. 2). In the household engine that comparison is made on the final tax (after each partner's reductions, the state/regional factor and the communal surcharge), so a partner's reductions cannot make an automatic transfer costly; the quotient benefit is that saving. Until 2026-10-11 the no-quotient baseline omitted the spouse's own tax.
+   5b. Marital quotient under `married_joint` (arts 87-88): the spouse's own professional income is taxed in their own name with the basic exemption (art. 126 §1 al. 2, décumul); up to 30% of the household professional income is transferred to the spouse so that own income plus transfer reaches the indexed cap (art. 88), and the transfer is kept only when the two spouses' combined tax is lower than without it (art. 88 al. 2). In the household engine that comparison is made on the final tax (after each partner's reductions, the state/regional factor and the communal surcharge), so a partner's reductions cannot make an automatic transfer costly; the quotient benefit is that saving. Until 2026-10-11 the no-quotient baseline omitted the spouse's own tax.
 6. Regional own-home credit (optional): applies to mortgages on the taxpayer's primary residence. The regime is that of the taxpayer's region (`region`, the fiscal domicile on 1 January of the assessment year; special finance law of 16 January 1989 arts 5/1 §2 and 5/5 §4), wherever the home lies; the deprecated `mortgageRegion` is ignored since 2026-10-11 ([[docs/adr/202-belgian-tax-region-and-own-home-baskets|ADR-202]]). The claimant's taxable income before the marital quotient sets the woonbonus marginal rate and the chèque habitat income limits (both engines; in the household engine the claimant is `mortgageCreditPartnerId`). Corrected on 2026-10-11 against the regional WIB 92 texts; amounts are not indexed.
    - **Flemish woonbonus (loans signed before 2020)**, credit = min(interest + capital repaid, base + increases) × rate:
      - _Loans before 2015_ (art. 145/37 §2): base €2,280 at the taxpayer's highest art. 130 rate, minimum 30%.

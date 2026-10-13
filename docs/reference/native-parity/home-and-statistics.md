@@ -44,7 +44,7 @@ and inactivity/upcoming dismissals use the web app's existing local-storage keys
 The `native` rows below identify implemented controls. A macOS app build and the owner's visual
 pass on Vision Native Demo are still required before this screen meets ADR-204's exit gate.
 The cloud verification runs the portable model/adapter tests; it does not exercise SwiftUI,
-AppKit, WebKit, or real runtime services. Insights now draws natively; its shared PDF report dialog remains web until the tax-engine backend operation is available.
+AppKit, WebKit, or real runtime services. Insights now draws natively; its shared PDF report dialog remains web. The tax computation operation is now available; native report forms and serialization remain follow-up work.
 
 **Regions shown:** (widget id in brackets; every widget can be hidden through Customize)
 

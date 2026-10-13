@@ -2,7 +2,7 @@
 title: "Native parity inventory: Belgian tax"
 type: reference
 status: active
-date: 2026-10-12
+date: 2026-10-13
 updated: 2026-10-12
 tags: [reference, swift-rewrite, native-parity, tax, belgian-tax, household]
 description: "Code-derived inventory of the /tax route (TaxOverviewPage): year switcher, year actions, as-filed snapshots, exports, widget customisation, the six-step tax profile sheet with every household, income, home, deduction and region input, and the deduction review cards."
@@ -14,8 +14,8 @@ aliases: [native parity tax]
 > [!abstract] Scope
 > Routes: `/tax`. Source: `apps/frontend/src/pages/TaxOverviewPage.tsx`, `apps/frontend/src/features/tax/`, plus the shared `features/reports/ExportDialog.tsx` and `components/shared/WidgetVisibilityDialog.tsx` as opened from `/tax`. Part of [[docs/reference/native-parity/index|the native parity inventory]] for [[docs/adr/204-vision-native-swift-app-target|ADR-204]].
 
-> [!warning] Where the tax engine runs
-> The Belgian tax engine (PIT, household assessment, quotient, own-home credits) runs in the **frontend**, in `apps/frontend/src/lib/belgianTax/` (lazy-loaded through `loadHouseholdRuntime` in `apps/frontend/src/contexts/BelgianTaxProfileContext.tsx:136`). The backend only stores the profile as settings blobs and serves aggregations, deduction candidates and the PDF report. A native screen must either port the engine or obtain the figures from a new backend endpoint. See [[docs/adr/200-belgian-tax-household-model|ADR-200]] and "Gaps and unsure".
+> [!info] TypeScript engine available to native clients
+> The PIT and household engine is shared in `packages/shared-utils/src/belgianTax/` and exposed by `POST /api/belgian-tax/compute` ([[docs/api/belgian-tax|contract]]). Web callers retain compatibility exports and lazy loading. `TaxComputationService` decodes the result directly as `Decimal`; no tax formula is ported to Swift. Tax UI rows below remain web, and profile hydration, historical selection, frozen-result precedence, edits, and filing remain native follow-ups. See ADR-204 §6.
 
 Files outside `/tax` but inside `features/tax/` (`PortfolioProfileInputsCard`, `BelgianPortfolioRulesCard`, `PortfolioBudgetCard`, `PortfolioTaxSummaryCards`, `RecordedVsManualCard`, `YearlyCostTrendCard`, `TaxTypesBreakdownCard`, `HistoricalYearBanner`, `HistoricalYearBannerSection`) are rendered only by `/portfolio/tax` (`apps/frontend/src/pages/portfolio/tax/PortfolioTaxPage.tsx`) and belong to the portfolio inventory. `TaxYearSwitcher`, `YearActionsMenu`, `TaxProfileDialog` and `TaxDisclaimerBanner` are shared with that page.
 
@@ -361,7 +361,7 @@ No page-specific shortcuts: `features/tax/` and `TaxOverviewPage.tsx` register n
 
 ## Cross-cutting notes
 
-- **Engine location.** All figures (PIT, household split, quotient, own-home credits, chart PIT per bar, monthly reserve, CSV) are computed in the browser from `apps/frontend/src/lib/belgianTax/` via `useTaxOverviewData` (`apps/frontend/src/hooks/useTaxOverviewData.ts:66-440`) and the store resolvers `resolveBelgianTaxCalculation` / `resolveBelgianTaxHouseholdResult` (frozen calculation first, then that year's household). No tax endpoint exists.
+- **Engine location.** All figures (PIT, household split, quotient, own-home credits, chart PIT per bar, monthly reserve, CSV) are computed in the browser from `apps/frontend/src/lib/belgianTax/` via `useTaxOverviewData` (`apps/frontend/src/hooks/useTaxOverviewData.ts:66-440`) and the store resolvers `resolveBelgianTaxCalculation` / `resolveBelgianTaxHouseholdResult` (frozen calculation first, then that year's household). The native computation endpoint now exists; the web store retains its existing calculation path through the shared TypeScript modules.
 - **Persistence.** The profile is stored as settings through `PUT /api/settings/{key}` with an optimistic-concurrency `expected` baseline (`apps/frontend/src/lib/api/settings.ts:47-75`), debounced 500 ms, keys `belgian_tax_household_v2`, `belgian_tax_household_snapshots_v2`, `belgian_tax_profile_snapshot_meta_v1`; the v1 keys `belgian_tax_profile` and `belgian_tax_profile_snapshots_v1` are read for the one-time upgrade (`apps/frontend/src/contexts/BelgianTaxProfileContext.tsx:37-41`, `:182-197`, `:227-247`). A failed save raises the toast `settings.saveFailed` (`apps/frontend/src/contexts/BelgianTaxProfileContext.tsx:254-266`). Freeze/file/unfile, snapshot creation, profile edits, deduction-candidate confirmations all go through this path.
 - **Data endpoints read on this screen.** `GET /api/aggregations/monthly-summary` and `GET /api/aggregations/category-pivot` via `useStatistics` (income by month and by category with `incomeByOwnerMonths`; `apps/frontend/src/hooks/useStatistics.ts:344-367`), investments with transactions via `usePortfolio` (portfolio taxes for the year and the years list), `GET /api/info/deduction-candidates?year=`, `GET /api/categories/tree`, exchange rates via `useCurrencyConverter`. Export: `POST /api/reports/tax`.
 - **Viewed year.** `viewedYear` is transient store state shared with `/portfolio/tax`; it drives the masthead, flow, breakdowns, charts, comparison and both year menus. It is mirrored to `?year=`. Exceptions that use the live year (see Gaps): Suggested deductions card, Deduction candidates card, the empty-state and "Add / edit" profile sheet triggers.
@@ -373,7 +373,7 @@ No page-specific shortcuts: `features/tax/` and `TaxOverviewPage.tsx` register n
 
 ## Gaps and unsure
 
-- unverified / brief conflict: the task brief says the tax engine runs in the backend; the code runs it in the frontend (`apps/frontend/src/contexts/BelgianTaxProfileContext.tsx:134-136`, ADR-200). The native app needs a decision: port `lib/belgianTax/` or add a backend computation endpoint.
+- Resolved computation prerequisite (ADR-204 §6): the backend operation uses the shared TypeScript engine. SwiftUI must display these results, preserve frozen filings, and port the remaining profile workflows; it must not reproduce tax formulas.
 - Doc/code conflict: `docs/features/belgian-tax.md` (overview-page composition) says `TaxYearSwitcher` and `YearActionsMenu` live inside `TaxFilingMasthead`; in code they are in the page header actions, and the masthead header comment says so (`apps/frontend/src/features/tax/TaxFilingMasthead.tsx:11-12`, `apps/frontend/src/pages/TaxOverviewPage.tsx:157-176`).
 - Doc/code conflict: the doc says an incoming `?year=` is accepted within ±30 years of the live year; code accepts [live − 30, live + 1] or any snapshot year (`apps/frontend/src/hooks/useTaxYearParam.ts:64-67`).
 - `SuggestedDeductionsCard` reads the live profile and calculation, and `DeductionCandidatesCard` fetches candidates for the live `profile.taxYear`, not the viewed year; both "Add / edit" and the empty-state "Set up tax profile" open the sheet without `targetYear` (live year). Unverified whether intended.

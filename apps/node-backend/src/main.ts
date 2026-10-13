@@ -63,6 +63,7 @@ import portfolioImportRouter from "./routes/portfolioImportRoutes.ts";
 import investmentsRouter from "./routes/investments.ts";
 import recipientBankAccountsRouter from "./routes/recipientBankAccounts.ts";
 import settingsRouter from "./routes/settings.ts";
+import belgianTaxRouter from "./routes/belgianTax.ts";
 import marketLookupRouter from "./routes/marketLookup.ts";
 import researchRouter from "./routes/research.ts";
 import watchlistRouter from "./routes/watchlist.ts";
@@ -290,6 +291,7 @@ mountRouter(
 );
 mountRouter(app, "/api/investments", investmentRateLimiter, investmentsRouter);
 mountRouter(app, "/api/settings", settingsRouter);
+mountRouter(app, "/api/belgian-tax", aggregationRateLimiter, belgianTaxRouter);
 mountRouter(app, "/api/market", marketRateLimiter, marketLookupRouter);
 mountRouter(app, "/api/research", marketRateLimiter, researchRouter);
 mountRouter(app, "/api/watchlist", watchlistRouter);

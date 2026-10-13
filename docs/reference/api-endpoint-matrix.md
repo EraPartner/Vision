@@ -8,7 +8,7 @@ last_modified: 2026-10-13
 adr-reference: 026
 # Authoritative HTTP-operation count from openapi.yaml. The CI checker also
 # compares every method/path pair; update concrete resource rows when routes change.
-api_operation_count: 301
+api_operation_count: 302
 tags:
   [
     reference,
@@ -72,7 +72,7 @@ tags:
     auto-link,
     planned-match,
   ]
-description: Complete matrix of all 301 HTTP API operations (authoritative count from openapi.yaml), 2 health endpoints, and 25 Electron IPC invoke channels. The Electron contract also defines 6 renderer event channels.
+description: Complete matrix of all 302 HTTP API operations (authoritative count from openapi.yaml), 2 health endpoints, and 25 Electron IPC invoke channels. The Electron contract also defines 6 renderer event channels.
 aliases:
   [api matrix, endpoint matrix, all endpoints, api overview, endpoint list]
 ---
@@ -469,23 +469,23 @@ in ascending order and preserves source order within a date. See
 [[docs/api/portfolio-imports|Portfolio Imports API]] and
 [[docs/features/portfolio-import|Portfolio Import Feature]].
 
-| Method | Path                                                                | Description                                                                                           | Rate Limit        | Doc                                               |
-| ------ | ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ----------------- | ------------------------------------------------- |
-| POST   | `/api/portfolio/import/csv/custom`                                  | One-shot CSV/maintained workbook portfolio import; multipart options; returns 201 or 202                        | importRateLimiter | [[docs/api/portfolio-imports\|Portfolio Imports]] |
-| POST   | `/api/portfolio/import/csv/stream`                                  | CSV/maintained workbook import; workbook preflight before SSE progress/review/terminal events                   | importRateLimiter | [[docs/api/portfolio-imports\|Portfolio Imports]] |
-| GET    | `/api/portfolio/import/parsers`                                     | List saved portfolio parser configs (kind=portfolio)                                                  | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
-| POST   | `/api/portfolio/import/parsers`                                     | Create saved portfolio parser; 409 on duplicate name                                                  | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
-| PATCH  | `/api/portfolio/import/parsers/:id`                                 | Update saved portfolio parser name/config                                                             | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
-| DELETE | `/api/portfolio/import/parsers/:id`                                 | Delete saved portfolio parser; 204 on success                                                         | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
-| GET    | `/api/portfolio/import/batches`                                     | List portfolio import batches (limit/offset)                                                          | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
-| GET    | `/api/portfolio/import/batches/:id`                                 | Get portfolio import batch detail                                                                     | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
-| DELETE | `/api/portfolio/import/batches/:id`                                 | Rollback batch (deletes committed portfolio_transactions, marks aborted)                              | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
-| GET    | `/api/portfolio/import/batches/:id/preview`                         | Rows grouped by investment; unresolved rows per distinct raw symbol/name                              | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
-| POST   | `/api/portfolio/import/batches/:id/rows/investment-override`        | Atomically resolve a review group to one existing or newly created investment                         | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
-| POST   | `/api/portfolio/import/batches/:id/rows/:rowId/investment-override` | Resolve unmatched row: pick existing investment or create new                                         | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
-| POST   | `/api/portfolio/import/batches/:id/commit`                          | Commit reviewed batch; maintained completeness/overlap guard may return 409                           | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| Method | Path                                                                | Description                                                                                                        | Rate Limit        | Doc                                               |
+| ------ | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ----------------- | ------------------------------------------------- |
+| POST   | `/api/portfolio/import/csv/custom`                                  | One-shot CSV/maintained workbook portfolio import; multipart options; returns 201 or 202                           | importRateLimiter | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| POST   | `/api/portfolio/import/csv/stream`                                  | CSV/maintained workbook import; workbook preflight before SSE progress/review/terminal events                      | importRateLimiter | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| GET    | `/api/portfolio/import/parsers`                                     | List saved portfolio parser configs (kind=portfolio)                                                               | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| POST   | `/api/portfolio/import/parsers`                                     | Create saved portfolio parser; 409 on duplicate name                                                               | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| PATCH  | `/api/portfolio/import/parsers/:id`                                 | Update saved portfolio parser name/config                                                                          | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| DELETE | `/api/portfolio/import/parsers/:id`                                 | Delete saved portfolio parser; 204 on success                                                                      | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| GET    | `/api/portfolio/import/batches`                                     | List portfolio import batches (limit/offset)                                                                       | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| GET    | `/api/portfolio/import/batches/:id`                                 | Get portfolio import batch detail                                                                                  | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| DELETE | `/api/portfolio/import/batches/:id`                                 | Rollback batch (deletes committed portfolio_transactions, marks aborted)                                           | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| GET    | `/api/portfolio/import/batches/:id/preview`                         | Rows grouped by investment; unresolved rows per distinct raw symbol/name                                           | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| POST   | `/api/portfolio/import/batches/:id/rows/investment-override`        | Atomically resolve a review group to one existing or newly created investment                                      | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| POST   | `/api/portfolio/import/batches/:id/rows/:rowId/investment-override` | Resolve unmatched row: pick existing investment or create new                                                      | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| POST   | `/api/portfolio/import/batches/:id/commit`                          | Commit reviewed batch; maintained completeness/overlap guard may return 409                                        | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
 | POST   | `/api/portfolio/import/reconciliation/preview`                      | Preview full history or derived Kinesis scopes or native IBKR funding corrections with selected and pending counts | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
-| POST   | `/api/portfolio/import/reconciliation/commit`                       | Apply a fingerprint-bound scope; existing-only modes preserve pending rows and review lifecycle       | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| POST   | `/api/portfolio/import/reconciliation/commit`                       | Apply a fingerprint-bound scope; existing-only modes preserve pending rows and review lifecycle                    | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
 
 ## Attachments (4 endpoints) — Phase 5A
 
@@ -527,20 +527,20 @@ in ascending order and preserves source order within a date. See
 
 ## Splits (11 endpoints)
 
-| Method | Path                              | Description                                                           | Rate Limit | Doc                         |
-| ------ | --------------------------------- | --------------------------------------------------------------------- | ---------- | --------------------------- |
-| GET    | `/api/splits/owed`                | Owed summary (optional `limit`/`offset`; omit both for all)           | —          | [[docs/api/splits\|Splits]] |
-| GET    | `/api/splits/owed/:id`            | Owed by recipient (optional `limit`/`offset`; omit both for all)      | —          | [[docs/api/splits\|Splits]] |
-| GET    | `/api/splits/owed/:id/export/csv` | Export owed CSV                                                       | —          | [[docs/api/splits\|Splits]] |
-| GET    | `/api/splits/transaction/:id`     | Splits for transaction (optional `limit`/`offset`; omit both for all) | —          | [[docs/api/splits\|Splits]] |
-| POST   | `/api/splits`                     | Create split                                                          | —          | [[docs/api/splits\|Splits]] |
-| POST   | `/api/splits/batch`               | Create multiple splits                                                | —          | [[docs/api/splits\|Splits]] |
-| POST   | `/api/splits/bulk`                | Bulk split: one payee, preset share (`equal`/`full`) of many transactions | 30/min | [[docs/api/splits\|Splits]] |
-| POST   | `/api/splits/:id/pay`             | Record payment                                                        | —          | [[docs/api/splits\|Splits]] |
-| GET    | `/api/splits/:id/payments`        | Get payments (optional `limit`/`offset`; omit both for all)           | —          | [[docs/api/splits\|Splits]] |
-| POST   | `/api/splits/:id/settle`          | Mark settled                                                          | —          | [[docs/api/splits\|Splits]] |
-| POST   | `/api/splits/owed/:id/settle-all` | Settle all for recipient                                              | —          | [[docs/api/splits\|Splits]] |
-| DELETE | `/api/splits/:id`                 | Delete split                                                          | —          | [[docs/api/splits\|Splits]] |
+| Method | Path                              | Description                                                               | Rate Limit | Doc                         |
+| ------ | --------------------------------- | ------------------------------------------------------------------------- | ---------- | --------------------------- |
+| GET    | `/api/splits/owed`                | Owed summary (optional `limit`/`offset`; omit both for all)               | —          | [[docs/api/splits\|Splits]] |
+| GET    | `/api/splits/owed/:id`            | Owed by recipient (optional `limit`/`offset`; omit both for all)          | —          | [[docs/api/splits\|Splits]] |
+| GET    | `/api/splits/owed/:id/export/csv` | Export owed CSV                                                           | —          | [[docs/api/splits\|Splits]] |
+| GET    | `/api/splits/transaction/:id`     | Splits for transaction (optional `limit`/`offset`; omit both for all)     | —          | [[docs/api/splits\|Splits]] |
+| POST   | `/api/splits`                     | Create split                                                              | —          | [[docs/api/splits\|Splits]] |
+| POST   | `/api/splits/batch`               | Create multiple splits                                                    | —          | [[docs/api/splits\|Splits]] |
+| POST   | `/api/splits/bulk`                | Bulk split: one payee, preset share (`equal`/`full`) of many transactions | 30/min     | [[docs/api/splits\|Splits]] |
+| POST   | `/api/splits/:id/pay`             | Record payment                                                            | —          | [[docs/api/splits\|Splits]] |
+| GET    | `/api/splits/:id/payments`        | Get payments (optional `limit`/`offset`; omit both for all)               | —          | [[docs/api/splits\|Splits]] |
+| POST   | `/api/splits/:id/settle`          | Mark settled                                                              | —          | [[docs/api/splits\|Splits]] |
+| POST   | `/api/splits/owed/:id/settle-all` | Settle all for recipient                                                  | —          | [[docs/api/splits\|Splits]] |
+| DELETE | `/api/splits/:id`                 | Delete split                                                              | —          | [[docs/api/splits\|Splits]] |
 
 ## Health (2 endpoints)
 
@@ -591,14 +591,20 @@ The three generic `/api/admin/database/tables/:table/{schema,rows,mutate}` edito
 | POST   | `/api/admin/codex-experimental/synthetic-turn`    | Send one fixed fictional question; no request payload                                                                                        | adminRateLimiter   | [[docs/api/admin\|Admin]] |
 | POST   | `/api/admin/codex-experimental/logout`            | Log out and remove disposable runtime state                                                                                                  | adminRateLimiter   | [[docs/api/admin\|Admin]] |
 
+## Belgian Tax (1 endpoint) — Native phase 3 prerequisite
+
+| Method | Path                       | Purpose                                                                                                                                  | Rate Limit                                 | Docs                                  |
+| ------ | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ | ------------------------------------- |
+| POST   | `/api/belgian-tax/compute` | Stateless computation of a complete v2 household using the shared TypeScript tax engine; household result and compatible PIT calculation | globalRateLimiter + aggregationRateLimiter | [[docs/api/belgian-tax\|Belgian Tax]] |
+
 ## Reports (3 endpoints) — Phase 3 / Phase 5 / Phase 7
 
 Server-side PDF generation via Puppeteer headless Chrome (Phase 3). Modular section architecture with theme-aware styling and period filtering. Theme tokens (HSL) and section selections passed in POST body. Phase 5 adds paginated footers. Phase 7 adds filter exclusions with impact comparison. Returns binary stream (`application/pdf`).
 
-| Method | Path                     | Description                                                                                                                                                                                                                        | Rate Limit | Doc                                                    |
-| ------ | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------ |
-| POST   | `/api/reports/financial` | Generate financial PDF (7 sections: executive summary, cashflow, categories, recipients, bank balances, rolling averages, planned outlook); supports `excludedCategoryIds` and `excludedRecipientIds` for filter impact comparison | —          | [[docs/features/pdf-report-export\|PDF Report Export]] |
-| POST   | `/api/reports/portfolio` | Generate portfolio PDF (6 sections: executive summary, allocation, top holdings, performance trend, asset class detail, dividend income); Phase 8 complete                                                                         | —          | [[docs/features/pdf-report-export\|PDF Report Export]] |
+| Method | Path                     | Description                                                                                                                                                                                                                                    | Rate Limit | Doc                                                    |
+| ------ | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------ |
+| POST   | `/api/reports/financial` | Generate financial PDF (7 sections: executive summary, cashflow, categories, recipients, bank balances, rolling averages, planned outlook); supports `excludedCategoryIds` and `excludedRecipientIds` for filter impact comparison             | —          | [[docs/features/pdf-report-export\|PDF Report Export]] |
+| POST   | `/api/reports/portfolio` | Generate portfolio PDF (6 sections: executive summary, allocation, top holdings, performance trend, asset class detail, dividend income); Phase 8 complete                                                                                     | —          | [[docs/features/pdf-report-export\|PDF Report Export]] |
 | POST   | `/api/reports/tax`       | Generate tax PDF (7 sections: executive summary, type breakdown, by asset class, monthly trend, top investments, fee breakdown, Belgian rules); accepts optional `taxProfile`, `precomputedPIT`, `household`, `precomputedHousehold` (ADR-201) | —          | [[docs/features/pdf-report-export\|PDF Report Export]] |
 
 ## Aggregations (15 endpoints) — Phase 2 / Phase 6 / Phase 7 / Phase 10 / Phase D / Phase E / Phase 9 / Phase C / Phase G
@@ -636,7 +642,7 @@ Aggregation routes removed in Phase 9 as migration to `/api/aggregations/*` is c
 | GET    | `/api/info/recurring-patterns`              | Recurring detection                                                                                                                                                                                                                                                                                   | —          | [[docs/api/info\|Info]]                           |
 | GET    | `/api/info/insights-digest`                 | Deterministic Smart Insights digest; cash finding is zero-based month-end net cash flow, not an account balance                                                                                                                                                                                       | —          | [[docs/api/info\|Info]]                           |
 | GET    | `/api/info/insights-count`                  | Cheap versioned projection of the undismissed finding count; dirty or expired state returns pending without inline detection                                                                                                                                                                          | —          | [[docs/api/info\|Info]]                           |
-| GET    | `/api/info/deduction-candidates`            | Transaction-derived Belgian deduction candidates for one year; each type carries an additive `byOwner` split by account owner (ADR-201)                                                                                                                                                               | —          | [[docs/api/info\|Info]]|
+| GET    | `/api/info/deduction-candidates`            | Transaction-derived Belgian deduction candidates for one year; each type carries an additive `byOwner` split by account owner (ADR-201)                                                                                                                                                               | —          | [[docs/api/info\|Info]]                           |
 | PUT    | `/api/info/insight-dismissals`              | Strict idempotent server-side subscription or category-outlier dismissal; outlier deviation is derived by the server                                                                                                                                                                                  | —          | [[docs/api/info\|Info]]                           |
 | GET    | `/api/info/net-worth`                       | Net worth; excludes holdings-only wallet/exchange ledger cash (optional `limit`/`offset` paginate snapshots newest-first; omit both for full history)                                                                                                                                                 | 30 req/min | [[docs/api/info\|Info]]                           |
 | GET    | `/api/info/exchange-rates`                  | Exchange rates                                                                                                                                                                                                                                                                                        | 30 req/min | [[docs/api/info\|Info]]                           |
@@ -739,13 +745,14 @@ equal the main senders and preload subscriptions.
 | Splits                               | 12                            |
 | Health                               | 2                             |
 | Aggregations (Phase 2/6/10/D)        | 15                            |
+| Belgian Tax (ADR-204)                | 1                             |
 | Reports (Phase 3/7)                  | 3                             |
 | Info/Statistics (Phase 14)           | 18                            |
 | AI Chat                              | 9                             |
 | Electron IPC invoke channels         | 25                            |
-| **Total**                            | **323**                       |
+| **Total**                            | **329**                       |
 
-> **301** versioned `/api` HTTP operations are declared in `openapi.yaml`. The checker compares their concrete method/path pairs with the resource tables and also checks `api_operation_count`. The 2 health routes and 25 Electron invoke channels are separate contracts; the 6 Electron event channels are not request endpoints. Resource summary counts and rate-limit descriptions are navigation aids and are not independently gate-checked.
+> **302** versioned `/api` HTTP operations are declared in `openapi.yaml`. The checker compares their concrete method/path pairs with the resource tables and also checks `api_operation_count`. The 2 health routes and 25 Electron invoke channels are separate contracts; the 6 Electron event channels are not request endpoints. Resource summary counts and rate-limit descriptions are navigation aids and are not independently gate-checked.
 
 ## Phase G Endpoint Consolidation (April 2026)
 

@@ -963,9 +963,23 @@ it does not run a new detection or forecast engine.
 The header's PDF action temporarily shows the existing React `ExportDialog` at
 `/statistics?export=pdf`, preserving tab and window parameters. Closing or downloading removes
 only `export`, with replace, and returns to the native screen. The same dialog handles financial,
-portfolio, and tax reports; tax-result serialization stays in TypeScript until ADR-204's backend
-calculation operation is implemented. This is a retained web surface, not a completed native report
+portfolio, and tax reports; tax-result serialization stays in the existing TypeScript dialog. The computation operation
+described below is available for the future native Tax and report workflows. This is a retained web surface, not a completed native report
 port, and it keeps this area's phase-3 exit gate open.
+
+### Belgian tax computation prerequisite
+
+`POST /api/belgian-tax/compute` runs the existing PIT/household engine from
+`packages/shared-utils/src/belgianTax/`, shared with the frontend through compatibility exports.
+The endpoint accepts a complete v2 household, validates the existing settings schema, and returns
+both the household result and the compatible PIT calculation. It does not read or write settings
+or filing records. Unknown-year approximation and issue codes retain the engine's behavior.
+
+`TaxComputationService` uses the generated `computeBelgianTax` operation. Generated monetary
+and rate fields decode as `Decimal`; Swift does not calculate taxes. The existing tax scenarios
+and golden parity tests exercise the moved engine, and HTTP/native-adapter tests cover the new
+boundary. Native Tax UI, settings hydration, frozen-result precedence, profile editing, and filing
+remain pending; see [[docs/reference/native-parity/tax|Tax parity]].
 
 The cloud checks cover portable models, API adapters, generated outputs, and the web handoff.
 The full macOS app/package build and the owner's Demo visual pass have not run in this workspace.

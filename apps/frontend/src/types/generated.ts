@@ -2946,6 +2946,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/belgian-tax/compute": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Compute Belgian household tax without saving the profile
+         * @description Runs the same TypeScript engine used by the web Tax screen. Takes a complete v2 household, including unsaved edits or historical inputs; returns the household result and legacy-compatible calculation. Does not read or write settings, transactions, snapshots, or filing records. Unknown tax years retain the engine approximation and warning behavior. Uses the aggregation rate limiter and standard API CSRF guard.
+         */
+        post: operations["computeBelgianTax"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/reports/financial": {
         parameters: {
             query?: never;
@@ -4467,6 +4487,434 @@ export interface components {
             /** @enum {string} */
             mode: "native" | "dev";
             version: string;
+        };
+        BelgianTaxHouseholdTaxResult: {
+            /** @enum {integer} */
+            engineVersion: 2;
+            incomeYear: number;
+            assessment: components["schemas"]["BelgianTaxAssessmentDecision"];
+            partners: components["schemas"]["BelgianTaxPartnerTaxResult"][];
+            quotient: components["schemas"]["BelgianTaxMaritalQuotientResult"];
+            csss: components["schemas"]["BelgianTaxHouseholdCsssResult"];
+            propertyTaxEstimate: number;
+            totals: components["schemas"]["BelgianTaxHouseholdTotals"];
+            issues: components["schemas"]["BelgianTaxHouseholdTaxIssue"][];
+        };
+        BelgianTaxAssessmentDecision: {
+            /** @enum {string} */
+            mode: "single" | "separate" | "joint";
+            /** @enum {string} */
+            reason: "one_partner" | "no_legal_union" | "union_year" | "union_year_after_legal_cohabitation" | "union_in_force" | "factual_separation_year" | "factually_separated" | "dissolution_year" | "dissolved" | "death_year" | "death_year_joint_election" | "surviving_partner" | "treaty_exempt_income" | "legacy_assumed_joint";
+            /** @description Article the decision rests on, e.g. "WIB 92 art. 126 §2 al. 1, 1°". */
+            legalBasis: string;
+            /** @description True when the taxpayer may elect the other mode (year of death, art. 126 §3). */
+            electable?: boolean;
+            /** @description Partners assessed for the year (the survivor only after a death in an earlier year). */
+            partnerIds: ("A" | "B")[];
+        };
+        BelgianTaxPartnerTaxResult: {
+            /** @enum {string} */
+            partnerId: "A" | "B";
+            activities: components["schemas"]["BelgianTaxActivityTaxResult"][];
+            categories: components["schemas"]["BelgianTaxCategoryTaxResult"][];
+            /** @description Gross income of the activities that carry a gross figure (not `net_professional_amount`). */
+            grossIncome: number;
+            employeeSocialSecurity: number;
+            professionalExpenses: number;
+            unionDuesApplied: number;
+            netProfessionalIncome: number;
+            otherTaxableIncome: number;
+            alimonyDeduction: number;
+            /** @description Net professional + other income − alimony, before the marital quotient. */
+            taxableIncomeBeforeQuotient: number;
+            /** @description Positive when the quotient adds income to this partner, negative when it removes some. */
+            quotientAdjustment: number;
+            taxableIncome: number;
+            bracketTax: components["schemas"]["BelgianTaxBracketTax"];
+            exemption: components["schemas"]["BelgianTaxExemptionAllocation"];
+            exemptionBenefit: number;
+            pitAfterExemption: number;
+            reductions: components["schemas"]["BelgianTaxTaxReductionBreakdown"];
+            /** @enum {string} */
+            ownHomeCreditRegime: "none" | "flemish_woonbonus" | "walloon_cheque_habitat";
+            ownHomeCredit: number;
+            /** @description Reduction for pensions of this partner (WIB 92 arts 147-153, per spouse by art. 150). */
+            pensionReduction: number;
+            /**
+             * @description Reductions charged on this partner's tax: min(pension reduction + reductions + own-home
+             *     credit, tax).
+             */
+            reductionsApplied: number;
+            federalPITAfterReductions: number;
+            communalSurcharge: number;
+            totalPIT: number;
+            specialSocialSecurityContribution: number;
+            csssSubject: boolean;
+            dividendWhtReclaim: number;
+            savingsInterestTax: number;
+            marginalRate: number;
+        };
+        BelgianTaxActivityTaxResult: {
+            activityId: string;
+            /** @enum {string} */
+            kind: "employee" | "civil_servant" | "director" | "self_employed_profits" | "self_employed_fees" | "helping_spouse" | "pension" | "other_professional" | "net_professional_amount";
+            /** @enum {string} */
+            forfaitCategory: "director" | "helping_spouse" | "remuneration" | "profits" | "fees" | "none";
+            grossIncome: number;
+            employeeSocialSecurity: number;
+            /** @description Self-employed social contributions deducted before the forfait (art. 52, 7°). */
+            socialContributionsPaid: number;
+            /** @description Category expenses allocated pro rata to this activity. */
+            professionalExpenses: number;
+            netProfessionalIncome: number;
+        };
+        BelgianTaxCategoryTaxResult: {
+            /** @enum {string} */
+            category: "director" | "helping_spouse" | "remuneration" | "profits" | "fees" | "none";
+            /** @enum {string} */
+            method: "lump_sum" | "actual";
+            grossAfterContributions: number;
+            professionalExpenses: number;
+            unionDuesApplied: number;
+            /** @description Category net income, clamped at 0 (no loss offset). */
+            netIncome: number;
+        };
+        BelgianTaxBracketTax: {
+            b1: number;
+            b2: number;
+            b3: number;
+            b4: number;
+            total: number;
+        };
+        BelgianTaxExemptionAllocation: {
+            basic: number;
+            disability: number;
+            dependentSupplements: number;
+            isolatedParentSupplement: number;
+            /** @description basic + disability + dependentSupplements + isolatedParentSupplement. */
+            ownTotal: number;
+            /** @description Unused exemption received from the other spouse (joint assessment). */
+            transferredIn: number;
+            /** @description Unused exemption passed to the other spouse (joint assessment). */
+            transferredOut: number;
+            /** @description ownTotal + transferredIn − transferredOut. */
+            total: number;
+            /** @description Part of `total` charged on the taxable income: min(total, taxable income). */
+            applied: number;
+        };
+        BelgianTaxTaxReductionBreakdown: {
+            pension: number;
+            lifeInsurance: number;
+            groupInsurance: number;
+            donations: number;
+            childcare: number;
+            domesticHelp: number;
+            serviceVouchers: number;
+            /** @description Sum of the reductions above, before the cap at the tax due (own-home credit excluded). */
+            total: number;
+        };
+        BelgianTaxMaritalQuotientResult: {
+            applied: boolean;
+            transfer: number;
+            /** @enum {string} */
+            fromPartnerId?: "A" | "B";
+            /** @enum {string} */
+            toPartnerId?: "A" | "B";
+            /** @description min(30% of the household professional income, cap). */
+            target: number;
+            cap: number;
+            /** @description Combined tax saving (0 when not applied). */
+            benefit: number;
+        };
+        BelgianTaxHouseholdCsssResult: {
+            /** @enum {string} */
+            scale: "single" | "joint" | "none";
+            /** @description Household base under joint assessment, otherwise the sum of each subject partner's base. */
+            base: number;
+            total: number;
+        };
+        BelgianTaxHouseholdTotals: {
+            /** @description Cash income: gross activity income, other taxable income and already-net amounts. */
+            grossIncome: number;
+            employeeSocialSecurity: number;
+            professionalExpenses: number;
+            netProfessionalIncome: number;
+            taxableIncome: number;
+            federalPITBeforeExemption: number;
+            personalExemptionBenefit: number;
+            taxReductions: number;
+            federalPITAfterReductions: number;
+            communalSurcharge: number;
+            totalPIT: number;
+            specialSocialSecurityContribution: number;
+            propertyTaxEstimate: number;
+            totalTaxBurden: number;
+            netTakeHome: number;
+            dividendWhtReclaim: number;
+            savingsInterestTax: number;
+            /** @description Refundable child tax credit (art. 134 §3); always 0 until the formula is sourced. */
+            refundableChildCredit: number;
+        };
+        BelgianTaxHouseholdTaxIssue: {
+            /** @enum {string} */
+            code: "relationship_dates_missing" | "treaty_exempt_separate_assessment" | "deceased_partner_not_assessed" | "director_contributions_not_deducted" | "forfait_category_aggregation_unverified" | "union_dues_outside_remuneration_claim" | "loss_offset_not_modelled" | "joint_reduction_allocation_unverified" | "csss_mixed_activity_base_unverified" | "refundable_child_credit_not_modelled" | "isolated_parent_supplement_not_granted" | "senior_quotient_cap_birth_years_missing" | "woonbonus_children_at_loan_start_missing" | "pension_reduction_activity_income_not_excluded" | "pension_exclusion_other_income_counted_as_activity" | "pension_quotient_partial_exclusion_unverified" | "donation_joint_ceiling_unverified" | "mortgage_region_not_used";
+            /** @enum {string} */
+            severity: "info" | "warning" | "needs_source";
+            /** @enum {string} */
+            partnerId?: "A" | "B";
+            activityId?: string;
+        };
+        BelgianTaxCalculation: {
+            /** @description The taxpayer's own gross income (salary + other taxable income). */
+            grossIncome: number;
+            /**
+             * @description Spouse's professional income counted under a joint assessment (0 otherwise).
+             *     `totalPIT` and the special social security contribution cover both spouses, so
+             *     `householdGrossIncome`, `netTakeHome` and `effectiveRate` include it.
+             */
+            spouseProfessionalIncome: number;
+            /** @description `grossIncome + spouseProfessionalIncome`; the base of `netTakeHome` and `effectiveRate`. */
+            householdGrossIncome: number;
+            employeeSocialSecurity: number;
+            specialSocialSecurityContribution: number;
+            personalExemptionAmount: number;
+            netIncomeAfterSS: number;
+            professionalExpenses: number;
+            otherDeductionsTotal: number;
+            deductions: {
+                [key: string]: number;
+            };
+            taxableIncome: number;
+            federalPITBracket1: number;
+            federalPITBracket2: number;
+            federalPITBracket3: number;
+            federalPITBracket4: number;
+            /** @description Federal PIT before any reduction (exemption, credits). */
+            federalPITBeforeExemption: number;
+            personalExemptionBenefit: number;
+            federalTaxCredits: number;
+            /**
+             * @description Regime applied for own-home credit, if any.
+             * @enum {string}
+             */
+            ownHomeCreditRegime: "none" | "flemish_woonbonus" | "walloon_cheque_habitat";
+            /** @description Estimated regional own-home tax credit (Flemish woonbonus / Walloon chèque habitat). */
+            ownHomeCredit: number;
+            /** @description Sum of reductions actually applied to PIT (clamped — never exceeds gross PIT). */
+            taxReductions: number;
+            /**
+             * @description Reduction for pensions (WIB 92 arts 147-153), part of `federalTaxCredits`. Absent on
+             *     calculations frozen before 2026-10-11.
+             */
+            pensionReduction?: number;
+            federalPITAfterReductions: number;
+            communalSurcharge: number;
+            /** @description Federal PIT after reductions + communal surcharge (income tax only). */
+            totalPIT: number;
+            /** @description Income tax + social security + special SS contribution + property tax estimate. */
+            totalTaxBurden: number;
+            effectiveRate: number;
+            marginalRate: number;
+            netTakeHome: number;
+            monthlyTaxReserve: number;
+            propertyTaxEstimate: number;
+            /** @description Estimated dividend WHT reclaimable through the tax return (first €X of dividends). */
+            dividendWhtReclaim: number;
+            /** @description Estimated savings deposit interest non-recoverable tax (15% above exemption). */
+            savingsInterestTax: number;
+            /**
+             * @description Income transferred to the non-earning / lower-earning spouse under the marital quotient.
+             *     0 when filing status is single or when both spouses earn comparably.
+             */
+            maritalQuotientTransfer: number;
+            /** @description Estimated tax reduction attributable to the marital quotient (informational). */
+            maritalQuotientBenefit: number;
+            /** @description Estimated service-voucher regional credit (after marital quotient). */
+            serviceVoucherCredit: number;
+            breakdown: {
+                /**
+                 * @description English calculation-side label. Not a display string: the on-screen
+                 *     PIT table renders its own translated rows (`tax.pit.row.*`). Consumers
+                 *     that do surface a row translate it themselves.
+                 */
+                label: string;
+                amount: number;
+                rate?: number;
+                bracket?: string;
+                /**
+                 * @description 1-based bracket ordinal, present only on progressive-bracket rows.
+                 *     Carried explicitly because empty brackets are omitted from the array,
+                 *     so position does not imply the bracket number. Maps to the
+                 *     `tax.pit.row.bracket{n}` translation keys.
+                 */
+                bracketNumber?: number;
+            }[];
+        };
+        /** @description V2 household; accepts the same fields and limits as belgian_tax_household_v2 settings. Partner and activity IDs must be unique, partner A is required, partner references must exist, and pensionKind/netProfessionalIncome are restricted to their matching activity kinds. */
+        BelgianTaxHouseholdInput: {
+            /** @enum {integer} */
+            version: 2;
+            taxYear: number;
+            profileConfigured: boolean;
+            /** @enum {string} */
+            region: "flanders" | "wallonia" | "brussels";
+            communalSurchargePercent: number;
+            partners: components["schemas"]["BelgianTaxInputPartner"][];
+            relationship: components["schemas"]["BelgianTaxInputRelationship"];
+            dependents: components["schemas"]["BelgianTaxInputDependents"];
+            home: components["schemas"]["BelgianTaxInputHome"];
+            taxIncomeCategoryIds?: number[];
+            migratedFrom?: components["schemas"]["BelgianTaxInputMigratedFrom"];
+        } & {
+            [key: string]: unknown;
+        };
+        BelgianTaxComputation: {
+            result: components["schemas"]["BelgianTaxHouseholdTaxResult"];
+            calculation: components["schemas"]["BelgianTaxCalculation"];
+        };
+        BelgianTaxInputPartnerActivity: {
+            id: string;
+            /** @enum {string} */
+            kind: "employee" | "civil_servant" | "director" | "self_employed_profits" | "self_employed_fees" | "helping_spouse" | "pension" | "other_professional" | "net_professional_amount";
+            label?: string;
+            grossIncome: number;
+            netProfessionalIncome?: number;
+            /** @enum {string} */
+            pensionKind?: "statutory_from_legal_age" | "survivor_or_transition" | "other";
+            /** Format: date */
+            startDate?: string;
+            /** Format: date */
+            endDate?: string;
+            /** @enum {string} */
+            selfEmployedOccupation?: "main" | "secondary";
+            socialContributionsPaid?: number;
+            withholdingTax?: number;
+            prepayments?: number;
+            sourceRefs?: string[];
+        } & {
+            [key: string]: unknown;
+        };
+        BelgianTaxInputPartnerReductions: {
+            personalPensionContributions: number;
+            /** @enum {string} */
+            pensionScheme?: "1050" | "1350";
+            pensionEligible?: boolean;
+            lifeInsurancePremiums: number;
+            lifeInsuranceEligible?: boolean;
+            employeeGroupInsuranceContributions?: number;
+            employeeGroupInsuranceEligible?: boolean;
+            charitableDonations: number;
+            charitableDonationsEligible?: boolean;
+            childcareCosts: number;
+            childcareEligibleDays?: number;
+            childcareEligible?: boolean;
+            domesticHelpCosts?: number;
+            domesticHelpEligible?: boolean;
+            serviceVoucherCount?: number;
+            serviceVoucherSpend?: number;
+            serviceVoucherEligible?: boolean;
+            medicalExpenses: number;
+        } & {
+            [key: string]: unknown;
+        };
+        BelgianTaxInputPartner: {
+            /** @enum {string} */
+            id: "A" | "B";
+            displayName?: string;
+            birthYear?: number;
+            isDisabled: boolean;
+            isIsolatedParent?: boolean;
+            activities: components["schemas"]["BelgianTaxInputPartnerActivity"][];
+            professionalExpenses: {
+                [key: string]: {
+                    /** @enum {string} */
+                    method: "lump_sum" | "actual";
+                    actualAmount: number;
+                } & {
+                    [key: string]: unknown;
+                };
+            };
+            unionDues: number;
+            otherTaxableIncome: number;
+            alimonyPaid: number;
+            treatyExemptProfessionalIncome?: number;
+            reductions: components["schemas"]["BelgianTaxInputPartnerReductions"];
+            annualDividendIncome?: number;
+            annualSavingsInterest?: number;
+        } & {
+            [key: string]: unknown;
+        };
+        BelgianTaxInputRelationshipEvent: {
+            id: string;
+            /** @enum {string} */
+            kind: "marriage" | "legal_cohabitation" | "legal_cohabitation_ended" | "factual_cohabitation_start" | "factual_separation" | "divorce" | "death";
+            /** Format: date */
+            date: string;
+            /** @enum {string} */
+            partnerId?: "A" | "B";
+        } & {
+            [key: string]: unknown;
+        };
+        BelgianTaxInputRelationship: {
+            events: components["schemas"]["BelgianTaxInputRelationshipEvent"][];
+            /** @enum {string} */
+            deathYearElection?: "joint" | "separate";
+            legacyAssumedJoint?: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        BelgianTaxInputDependents: {
+            children: number;
+            childrenUnder3?: number;
+            childrenDisabled?: number;
+            otherPersons: number;
+            otherPersonsDisabled?: number;
+            /** @enum {string} */
+            claimantPartnerId?: "A" | "B";
+        } & {
+            [key: string]: unknown;
+        };
+        BelgianTaxInputHomeAdditionalResidence: {
+            label?: string;
+            cadastralIncome: number;
+            /** @enum {string} */
+            region?: "flanders" | "wallonia" | "brussels";
+            isOwnHome?: boolean;
+            centimesOverride?: number;
+        } & {
+            [key: string]: unknown;
+        };
+        BelgianTaxInputHome: {
+            cadastralIncome: number;
+            cadastralCentimesOverride?: number;
+            additionalResidences?: components["schemas"]["BelgianTaxInputHomeAdditionalResidence"][];
+            mortgageInterestPaid: number;
+            mortgageCapitalRepaid?: number;
+            mortgageStartYear?: number;
+            /** @enum {string} */
+            mortgageRegion?: "flanders" | "wallonia" | "brussels";
+            mortgageIsPrimaryResidence?: boolean;
+            /** @enum {string} */
+            mortgageCreditPartnerId?: "A" | "B";
+            mortgageSharePartnerB?: number;
+            firstQualifyingYear?: number;
+            woonbonusChildrenAtLoanStart?: number;
+        } & {
+            [key: string]: unknown;
+        };
+        BelgianTaxInputMigratedFromUnmappedField: {
+            field: string;
+            note: string;
+            value?: unknown;
+        } & {
+            [key: string]: unknown;
+        };
+        BelgianTaxInputMigratedFrom: {
+            /** @enum {number} */
+            fromVersion: 1;
+            unmappedFields: components["schemas"]["BelgianTaxInputMigratedFromUnmappedField"][];
+        } & {
+            [key: string]: unknown;
         };
         Envelope: {
             ok: boolean;
@@ -14111,6 +14559,57 @@ export interface operations {
         responses: {
             /** @description No Content */
             204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    computeBelgianTax: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    household: components["schemas"]["BelgianTaxHouseholdInput"];
+                };
+            };
+        };
+        responses: {
+            /** @description Household result and compatible PIT figures, with issue codes and approximation metadata. Monetary values are EUR, rates retain the existing engine units. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data: components["schemas"]["BelgianTaxComputation"];
+                    };
+                };
+            };
+            /** @description Invalid household, missing required input, invalid cross-field references, or unknown top-level fields. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+            /** @description Cross-site request rejected by the API CSRF guard. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description API or aggregation rate limit exceeded. */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -404,3 +404,8 @@ the Xcode scheme, or pass them with `open`:
 open --env VISION_NATIVE_RUNTIME_DIR="$PWD/apps/native/build/payload/native-runtime" \
   "<DerivedData>/Build/Products/Debug/Vision Native.app"
 ```
+
+The Belgian tax computation prerequisite is available through `TaxComputationService` and the
+OpenAPI `computeBelgianTax` operation (`POST /api/belgian-tax/compute`). The TypeScript engine
+is shared with the web app; Swift only decodes its results as `Decimal`. Tax screens, profile
+workflows, and frozen-result handling remain web until their native implementation is complete.

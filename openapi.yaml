@@ -173,6 +173,1169 @@ components:
             ]
         mode: { type: string, enum: [native, dev] }
         version: { type: string, pattern: "^v?[0-9][0-9A-Za-z.+-]{0,63}$" }
+    # Shared TypeScript tax engine (ADR-204); existing web calculations remain compatible.
+    BelgianTaxHouseholdTaxResult:
+      type: object
+      required:
+        - engineVersion
+        - incomeYear
+        - assessment
+        - partners
+        - quotient
+        - csss
+        - propertyTaxEstimate
+        - totals
+        - issues
+      properties:
+        engineVersion:
+          type: integer
+          enum:
+            - 2
+        incomeYear:
+          type: integer
+        assessment:
+          $ref: "#/components/schemas/BelgianTaxAssessmentDecision"
+        partners:
+          type: array
+          items:
+            $ref: "#/components/schemas/BelgianTaxPartnerTaxResult"
+        quotient:
+          $ref: "#/components/schemas/BelgianTaxMaritalQuotientResult"
+        csss:
+          $ref: "#/components/schemas/BelgianTaxHouseholdCsssResult"
+        propertyTaxEstimate:
+          type: number
+        totals:
+          $ref: "#/components/schemas/BelgianTaxHouseholdTotals"
+        issues:
+          type: array
+          items:
+            $ref: "#/components/schemas/BelgianTaxHouseholdTaxIssue"
+    BelgianTaxAssessmentDecision:
+      type: object
+      required:
+        - mode
+        - reason
+        - legalBasis
+        - partnerIds
+      properties:
+        mode:
+          type: string
+          enum:
+            - single
+            - separate
+            - joint
+        reason:
+          type: string
+          enum:
+            - one_partner
+            - no_legal_union
+            - union_year
+            - union_year_after_legal_cohabitation
+            - union_in_force
+            - factual_separation_year
+            - factually_separated
+            - dissolution_year
+            - dissolved
+            - death_year
+            - death_year_joint_election
+            - surviving_partner
+            - treaty_exempt_income
+            - legacy_assumed_joint
+        legalBasis:
+          type: string
+          description: Article the decision rests on, e.g. "WIB 92 art. 126 §2 al. 1, 1°".
+        electable:
+          type: boolean
+          description: True when the taxpayer may elect the other mode (year of death, art. 126 §3).
+        partnerIds:
+          type: array
+          items:
+            type: string
+            enum:
+              - A
+              - B
+          description: Partners assessed for the year (the survivor only after a death in an earlier year).
+    BelgianTaxPartnerTaxResult:
+      type: object
+      required:
+        - partnerId
+        - activities
+        - categories
+        - grossIncome
+        - employeeSocialSecurity
+        - professionalExpenses
+        - unionDuesApplied
+        - netProfessionalIncome
+        - otherTaxableIncome
+        - alimonyDeduction
+        - taxableIncomeBeforeQuotient
+        - quotientAdjustment
+        - taxableIncome
+        - bracketTax
+        - exemption
+        - exemptionBenefit
+        - pitAfterExemption
+        - reductions
+        - ownHomeCreditRegime
+        - ownHomeCredit
+        - pensionReduction
+        - reductionsApplied
+        - federalPITAfterReductions
+        - communalSurcharge
+        - totalPIT
+        - specialSocialSecurityContribution
+        - csssSubject
+        - dividendWhtReclaim
+        - savingsInterestTax
+        - marginalRate
+      properties:
+        partnerId:
+          type: string
+          enum:
+            - A
+            - B
+        activities:
+          type: array
+          items:
+            $ref: "#/components/schemas/BelgianTaxActivityTaxResult"
+        categories:
+          type: array
+          items:
+            $ref: "#/components/schemas/BelgianTaxCategoryTaxResult"
+        grossIncome:
+          type: number
+          description: Gross income of the activities that carry a gross figure (not `net_professional_amount`).
+        employeeSocialSecurity:
+          type: number
+        professionalExpenses:
+          type: number
+        unionDuesApplied:
+          type: number
+        netProfessionalIncome:
+          type: number
+        otherTaxableIncome:
+          type: number
+        alimonyDeduction:
+          type: number
+        taxableIncomeBeforeQuotient:
+          type: number
+          description: Net professional + other income − alimony, before the marital quotient.
+        quotientAdjustment:
+          type: number
+          description: Positive when the quotient adds income to this partner, negative when it removes some.
+        taxableIncome:
+          type: number
+        bracketTax:
+          $ref: "#/components/schemas/BelgianTaxBracketTax"
+        exemption:
+          $ref: "#/components/schemas/BelgianTaxExemptionAllocation"
+        exemptionBenefit:
+          type: number
+        pitAfterExemption:
+          type: number
+        reductions:
+          $ref: "#/components/schemas/BelgianTaxTaxReductionBreakdown"
+        ownHomeCreditRegime:
+          type: string
+          enum:
+            - none
+            - flemish_woonbonus
+            - walloon_cheque_habitat
+        ownHomeCredit:
+          type: number
+        pensionReduction:
+          type: number
+          description: Reduction for pensions of this partner (WIB 92 arts 147-153, per spouse by art. 150).
+        reductionsApplied:
+          type: number
+          description:
+            "Reductions charged on this partner's tax: min(pension reduction + reductions + own-home
+
+            credit, tax)."
+        federalPITAfterReductions:
+          type: number
+        communalSurcharge:
+          type: number
+        totalPIT:
+          type: number
+        specialSocialSecurityContribution:
+          type: number
+        csssSubject:
+          type: boolean
+        dividendWhtReclaim:
+          type: number
+        savingsInterestTax:
+          type: number
+        marginalRate:
+          type: number
+    BelgianTaxActivityTaxResult:
+      type: object
+      required:
+        - activityId
+        - kind
+        - forfaitCategory
+        - grossIncome
+        - employeeSocialSecurity
+        - socialContributionsPaid
+        - professionalExpenses
+        - netProfessionalIncome
+      properties:
+        activityId:
+          type: string
+        kind:
+          type: string
+          enum:
+            - employee
+            - civil_servant
+            - director
+            - self_employed_profits
+            - self_employed_fees
+            - helping_spouse
+            - pension
+            - other_professional
+            - net_professional_amount
+        forfaitCategory:
+          type: string
+          enum:
+            - director
+            - helping_spouse
+            - remuneration
+            - profits
+            - fees
+            - none
+        grossIncome:
+          type: number
+        employeeSocialSecurity:
+          type: number
+        socialContributionsPaid:
+          type: number
+          description: Self-employed social contributions deducted before the forfait (art. 52, 7°).
+        professionalExpenses:
+          type: number
+          description: Category expenses allocated pro rata to this activity.
+        netProfessionalIncome:
+          type: number
+    BelgianTaxCategoryTaxResult:
+      type: object
+      required:
+        - category
+        - method
+        - grossAfterContributions
+        - professionalExpenses
+        - unionDuesApplied
+        - netIncome
+      properties:
+        category:
+          type: string
+          enum:
+            - director
+            - helping_spouse
+            - remuneration
+            - profits
+            - fees
+            - none
+        method:
+          type: string
+          enum:
+            - lump_sum
+            - actual
+        grossAfterContributions:
+          type: number
+        professionalExpenses:
+          type: number
+        unionDuesApplied:
+          type: number
+        netIncome:
+          type: number
+          description: Category net income, clamped at 0 (no loss offset).
+    BelgianTaxBracketTax:
+      type: object
+      required:
+        - b1
+        - b2
+        - b3
+        - b4
+        - total
+      properties:
+        b1:
+          type: number
+        b2:
+          type: number
+        b3:
+          type: number
+        b4:
+          type: number
+        total:
+          type: number
+    BelgianTaxExemptionAllocation:
+      type: object
+      required:
+        - basic
+        - disability
+        - dependentSupplements
+        - isolatedParentSupplement
+        - ownTotal
+        - transferredIn
+        - transferredOut
+        - total
+        - applied
+      properties:
+        basic:
+          type: number
+        disability:
+          type: number
+        dependentSupplements:
+          type: number
+        isolatedParentSupplement:
+          type: number
+        ownTotal:
+          type: number
+          description: basic + disability + dependentSupplements + isolatedParentSupplement.
+        transferredIn:
+          type: number
+          description: Unused exemption received from the other spouse (joint assessment).
+        transferredOut:
+          type: number
+          description: Unused exemption passed to the other spouse (joint assessment).
+        total:
+          type: number
+          description: ownTotal + transferredIn − transferredOut.
+        applied:
+          type: number
+          description: "Part of `total` charged on the taxable income: min(total, taxable income)."
+    BelgianTaxTaxReductionBreakdown:
+      type: object
+      required:
+        - pension
+        - lifeInsurance
+        - groupInsurance
+        - donations
+        - childcare
+        - domesticHelp
+        - serviceVouchers
+        - total
+      properties:
+        pension:
+          type: number
+        lifeInsurance:
+          type: number
+        groupInsurance:
+          type: number
+        donations:
+          type: number
+        childcare:
+          type: number
+        domesticHelp:
+          type: number
+        serviceVouchers:
+          type: number
+        total:
+          type: number
+          description: Sum of the reductions above, before the cap at the tax due (own-home credit excluded).
+    BelgianTaxMaritalQuotientResult:
+      type: object
+      required:
+        - applied
+        - transfer
+        - target
+        - cap
+        - benefit
+      properties:
+        applied:
+          type: boolean
+        transfer:
+          type: number
+        fromPartnerId:
+          type: string
+          enum:
+            - A
+            - B
+        toPartnerId:
+          type: string
+          enum:
+            - A
+            - B
+        target:
+          type: number
+          description: min(30% of the household professional income, cap).
+        cap:
+          type: number
+        benefit:
+          type: number
+          description: Combined tax saving (0 when not applied).
+    BelgianTaxHouseholdCsssResult:
+      type: object
+      required:
+        - scale
+        - base
+        - total
+      properties:
+        scale:
+          type: string
+          enum:
+            - single
+            - joint
+            - none
+        base:
+          type: number
+          description: Household base under joint assessment, otherwise the sum of each subject partner's base.
+        total:
+          type: number
+    BelgianTaxHouseholdTotals:
+      type: object
+      required:
+        - grossIncome
+        - employeeSocialSecurity
+        - professionalExpenses
+        - netProfessionalIncome
+        - taxableIncome
+        - federalPITBeforeExemption
+        - personalExemptionBenefit
+        - taxReductions
+        - federalPITAfterReductions
+        - communalSurcharge
+        - totalPIT
+        - specialSocialSecurityContribution
+        - propertyTaxEstimate
+        - totalTaxBurden
+        - netTakeHome
+        - dividendWhtReclaim
+        - savingsInterestTax
+        - refundableChildCredit
+      properties:
+        grossIncome:
+          type: number
+          description: "Cash income: gross activity income, other taxable income and already-net amounts."
+        employeeSocialSecurity:
+          type: number
+        professionalExpenses:
+          type: number
+        netProfessionalIncome:
+          type: number
+        taxableIncome:
+          type: number
+        federalPITBeforeExemption:
+          type: number
+        personalExemptionBenefit:
+          type: number
+        taxReductions:
+          type: number
+        federalPITAfterReductions:
+          type: number
+        communalSurcharge:
+          type: number
+        totalPIT:
+          type: number
+        specialSocialSecurityContribution:
+          type: number
+        propertyTaxEstimate:
+          type: number
+        totalTaxBurden:
+          type: number
+        netTakeHome:
+          type: number
+        dividendWhtReclaim:
+          type: number
+        savingsInterestTax:
+          type: number
+        refundableChildCredit:
+          type: number
+          description: Refundable child tax credit (art. 134 §3); always 0 until the formula is sourced.
+    BelgianTaxHouseholdTaxIssue:
+      type: object
+      required:
+        - code
+        - severity
+      properties:
+        code:
+          type: string
+          enum:
+            - relationship_dates_missing
+            - treaty_exempt_separate_assessment
+            - deceased_partner_not_assessed
+            - director_contributions_not_deducted
+            - forfait_category_aggregation_unverified
+            - union_dues_outside_remuneration_claim
+            - loss_offset_not_modelled
+            - joint_reduction_allocation_unverified
+            - csss_mixed_activity_base_unverified
+            - refundable_child_credit_not_modelled
+            - isolated_parent_supplement_not_granted
+            - senior_quotient_cap_birth_years_missing
+            - woonbonus_children_at_loan_start_missing
+            - pension_reduction_activity_income_not_excluded
+            - pension_exclusion_other_income_counted_as_activity
+            - pension_quotient_partial_exclusion_unverified
+            - donation_joint_ceiling_unverified
+            - mortgage_region_not_used
+        severity:
+          type: string
+          enum:
+            - info
+            - warning
+            - needs_source
+        partnerId:
+          type: string
+          enum:
+            - A
+            - B
+        activityId:
+          type: string
+    BelgianTaxCalculation:
+      type: object
+      required:
+        - grossIncome
+        - spouseProfessionalIncome
+        - householdGrossIncome
+        - employeeSocialSecurity
+        - specialSocialSecurityContribution
+        - personalExemptionAmount
+        - netIncomeAfterSS
+        - professionalExpenses
+        - otherDeductionsTotal
+        - deductions
+        - taxableIncome
+        - federalPITBracket1
+        - federalPITBracket2
+        - federalPITBracket3
+        - federalPITBracket4
+        - federalPITBeforeExemption
+        - personalExemptionBenefit
+        - federalTaxCredits
+        - ownHomeCreditRegime
+        - ownHomeCredit
+        - taxReductions
+        - federalPITAfterReductions
+        - communalSurcharge
+        - totalPIT
+        - totalTaxBurden
+        - effectiveRate
+        - marginalRate
+        - netTakeHome
+        - monthlyTaxReserve
+        - propertyTaxEstimate
+        - dividendWhtReclaim
+        - savingsInterestTax
+        - maritalQuotientTransfer
+        - maritalQuotientBenefit
+        - serviceVoucherCredit
+        - breakdown
+      properties:
+        grossIncome:
+          type: number
+          description: The taxpayer's own gross income (salary + other taxable income).
+        spouseProfessionalIncome:
+          type: number
+          description:
+            "Spouse's professional income counted under a joint assessment (0 otherwise).
+
+            `totalPIT` and the special social security contribution cover both spouses, so
+
+            `householdGrossIncome`, `netTakeHome` and `effectiveRate` include it."
+        householdGrossIncome:
+          type: number
+          description: "`grossIncome + spouseProfessionalIncome`; the base of `netTakeHome` and `effectiveRate`."
+        employeeSocialSecurity:
+          type: number
+        specialSocialSecurityContribution:
+          type: number
+        personalExemptionAmount:
+          type: number
+        netIncomeAfterSS:
+          type: number
+        professionalExpenses:
+          type: number
+        otherDeductionsTotal:
+          type: number
+        deductions:
+          type: object
+          additionalProperties:
+            type: number
+        taxableIncome:
+          type: number
+        federalPITBracket1:
+          type: number
+        federalPITBracket2:
+          type: number
+        federalPITBracket3:
+          type: number
+        federalPITBracket4:
+          type: number
+        federalPITBeforeExemption:
+          type: number
+          description: Federal PIT before any reduction (exemption, credits).
+        personalExemptionBenefit:
+          type: number
+        federalTaxCredits:
+          type: number
+        ownHomeCreditRegime:
+          type: string
+          enum:
+            - none
+            - flemish_woonbonus
+            - walloon_cheque_habitat
+          description: Regime applied for own-home credit, if any.
+        ownHomeCredit:
+          type: number
+          description: Estimated regional own-home tax credit (Flemish woonbonus / Walloon chèque habitat).
+        taxReductions:
+          type: number
+          description: Sum of reductions actually applied to PIT (clamped — never exceeds gross PIT).
+        pensionReduction:
+          type: number
+          description:
+            "Reduction for pensions (WIB 92 arts 147-153), part of `federalTaxCredits`. Absent on
+
+            calculations frozen before 2026-10-11."
+        federalPITAfterReductions:
+          type: number
+        communalSurcharge:
+          type: number
+        totalPIT:
+          type: number
+          description: Federal PIT after reductions + communal surcharge (income tax only).
+        totalTaxBurden:
+          type: number
+          description: Income tax + social security + special SS contribution + property tax estimate.
+        effectiveRate:
+          type: number
+        marginalRate:
+          type: number
+        netTakeHome:
+          type: number
+        monthlyTaxReserve:
+          type: number
+        propertyTaxEstimate:
+          type: number
+        dividendWhtReclaim:
+          type: number
+          description: Estimated dividend WHT reclaimable through the tax return (first €X of dividends).
+        savingsInterestTax:
+          type: number
+          description: Estimated savings deposit interest non-recoverable tax (15% above exemption).
+        maritalQuotientTransfer:
+          type: number
+          description:
+            "Income transferred to the non-earning / lower-earning spouse under the marital quotient.
+
+            0 when filing status is single or when both spouses earn comparably."
+        maritalQuotientBenefit:
+          type: number
+          description: Estimated tax reduction attributable to the marital quotient (informational).
+        serviceVoucherCredit:
+          type: number
+          description: Estimated service-voucher regional credit (after marital quotient).
+        breakdown:
+          type: array
+          items:
+            type: object
+            required:
+              - label
+              - amount
+            properties:
+              label:
+                type: string
+                description:
+                  "English calculation-side label. Not a display string: the on-screen
+
+                  PIT table renders its own translated rows (`tax.pit.row.*`). Consumers
+
+                  that do surface a row translate it themselves."
+              amount:
+                type: number
+              rate:
+                type: number
+              bracket:
+                type: string
+              bracketNumber:
+                type: number
+                description:
+                  "1-based bracket ordinal, present only on progressive-bracket rows.
+
+                  Carried explicitly because empty brackets are omitted from the array,
+
+                  so position does not imply the bracket number. Maps to the
+
+                  `tax.pit.row.bracket{n}` translation keys."
+    BelgianTaxHouseholdInput:
+      type: object
+      properties:
+        version:
+          type: integer
+          enum:
+            - 2
+        taxYear:
+          type: integer
+          minimum: 1900
+          maximum: 2200
+        profileConfigured:
+          type: boolean
+        region:
+          type: string
+          enum:
+            - flanders
+            - wallonia
+            - brussels
+        communalSurchargePercent:
+          type: number
+          minimum: 0
+          maximum: 9
+        partners:
+          minItems: 1
+          maxItems: 2
+          type: array
+          items:
+            $ref: "#/components/schemas/BelgianTaxInputPartner"
+        relationship:
+          $ref: "#/components/schemas/BelgianTaxInputRelationship"
+        dependents:
+          $ref: "#/components/schemas/BelgianTaxInputDependents"
+        home:
+          $ref: "#/components/schemas/BelgianTaxInputHome"
+        taxIncomeCategoryIds:
+          maxItems: 1000
+          type: array
+          items:
+            type: integer
+            minimum: 1
+            maximum: 9007199254740991
+        migratedFrom:
+          $ref: "#/components/schemas/BelgianTaxInputMigratedFrom"
+      required:
+        - version
+        - taxYear
+        - profileConfigured
+        - region
+        - communalSurchargePercent
+        - partners
+        - relationship
+        - dependents
+        - home
+      additionalProperties: {}
+      description: V2 household; accepts the same fields and limits as belgian_tax_household_v2 settings. Partner and activity IDs must be unique, partner A is required, partner references must exist, and pensionKind/netProfessionalIncome are restricted to their matching activity kinds.
+    BelgianTaxComputation:
+      type: object
+      required:
+        - result
+        - calculation
+      properties:
+        result:
+          $ref: "#/components/schemas/BelgianTaxHouseholdTaxResult"
+        calculation:
+          $ref: "#/components/schemas/BelgianTaxCalculation"
+    BelgianTaxInputPartnerActivity:
+      type: object
+      properties:
+        id:
+          type: string
+          pattern: ^act_[A-Za-z0-9_-]{1,64}$
+        kind:
+          type: string
+          enum:
+            - employee
+            - civil_servant
+            - director
+            - self_employed_profits
+            - self_employed_fees
+            - helping_spouse
+            - pension
+            - other_professional
+            - net_professional_amount
+        label:
+          type: string
+          maxLength: 200
+        grossIncome:
+          type: number
+          minimum: 0
+          maximum: 1000000000000
+        netProfessionalIncome:
+          type: number
+          minimum: 0
+          maximum: 1000000000000
+        pensionKind:
+          type: string
+          enum:
+            - statutory_from_legal_age
+            - survivor_or_transition
+            - other
+        startDate:
+          type: string
+          format: date
+          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+        endDate:
+          type: string
+          format: date
+          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+        selfEmployedOccupation:
+          type: string
+          enum:
+            - main
+            - secondary
+        socialContributionsPaid:
+          type: number
+          minimum: 0
+          maximum: 1000000000000
+        withholdingTax:
+          type: number
+          minimum: 0
+          maximum: 1000000000000
+        prepayments:
+          type: number
+          minimum: 0
+          maximum: 1000000000000
+        sourceRefs:
+          maxItems: 100
+          type: array
+          items:
+            type: string
+            maxLength: 200
+      required:
+        - id
+        - kind
+        - grossIncome
+      additionalProperties: {}
+    BelgianTaxInputPartnerReductions:
+      type: object
+      properties:
+        personalPensionContributions:
+          type: number
+          minimum: 0
+          maximum: 1000000000000
+        pensionScheme:
+          type: string
+          enum:
+            - "1050"
+            - "1350"
+        pensionEligible:
+          type: boolean
+        lifeInsurancePremiums:
+          type: number
+          minimum: 0
+          maximum: 1000000000000
+        lifeInsuranceEligible:
+          type: boolean
+        employeeGroupInsuranceContributions:
+          type: number
+          minimum: 0
+          maximum: 1000000000000
+        employeeGroupInsuranceEligible:
+          type: boolean
+        charitableDonations:
+          type: number
+          minimum: 0
+          maximum: 1000000000000
+        charitableDonationsEligible:
+          type: boolean
+        childcareCosts:
+          type: number
+          minimum: 0
+          maximum: 1000000000000
+        childcareEligibleDays:
+          type: integer
+          minimum: 0
+          maximum: 1000
+        childcareEligible:
+          type: boolean
+        domesticHelpCosts:
+          type: number
+          minimum: 0
+          maximum: 1000000000000
+        domesticHelpEligible:
+          type: boolean
+        serviceVoucherCount:
+          type: integer
+          minimum: 0
+          maximum: 1000
+        serviceVoucherSpend:
+          type: number
+          minimum: 0
+          maximum: 1000000000000
+        serviceVoucherEligible:
+          type: boolean
+        medicalExpenses:
+          type: number
+          minimum: 0
+          maximum: 1000000000000
+      required:
+        - personalPensionContributions
+        - lifeInsurancePremiums
+        - charitableDonations
+        - childcareCosts
+        - medicalExpenses
+      additionalProperties: {}
+    BelgianTaxInputPartner:
+      type: object
+      properties:
+        id:
+          type: string
+          enum:
+            - A
+            - B
+        displayName:
+          type: string
+          maxLength: 80
+        birthYear:
+          type: integer
+          minimum: 1900
+          maximum: 2200
+        isDisabled:
+          type: boolean
+        isIsolatedParent:
+          type: boolean
+        activities:
+          maxItems: 20
+          type: array
+          items:
+            $ref: "#/components/schemas/BelgianTaxInputPartnerActivity"
+        professionalExpenses:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              method:
+                type: string
+                enum:
+                  - lump_sum
+                  - actual
+              actualAmount:
+                type: number
+                minimum: 0
+                maximum: 1000000000000
+            required:
+              - method
+              - actualAmount
+            additionalProperties: {}
+        unionDues:
+          type: number
+          minimum: 0
+          maximum: 1000000000000
+        otherTaxableIncome:
+          type: number
+          minimum: 0
+          maximum: 1000000000000
+        alimonyPaid:
+          type: number
+          minimum: 0
+          maximum: 1000000000000
+        treatyExemptProfessionalIncome:
+          type: number
+          minimum: 0
+          maximum: 1000000000000
+        reductions:
+          $ref: "#/components/schemas/BelgianTaxInputPartnerReductions"
+        annualDividendIncome:
+          type: number
+          minimum: 0
+          maximum: 1000000000000
+        annualSavingsInterest:
+          type: number
+          minimum: 0
+          maximum: 1000000000000
+      required:
+        - id
+        - isDisabled
+        - activities
+        - professionalExpenses
+        - unionDues
+        - otherTaxableIncome
+        - alimonyPaid
+        - reductions
+      additionalProperties: {}
+    BelgianTaxInputRelationshipEvent:
+      type: object
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 64
+        kind:
+          type: string
+          enum:
+            - marriage
+            - legal_cohabitation
+            - legal_cohabitation_ended
+            - factual_cohabitation_start
+            - factual_separation
+            - divorce
+            - death
+        date:
+          type: string
+          format: date
+          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+        partnerId:
+          type: string
+          enum:
+            - A
+            - B
+      required:
+        - id
+        - kind
+        - date
+      additionalProperties: {}
+    BelgianTaxInputRelationship:
+      type: object
+      properties:
+        events:
+          maxItems: 50
+          type: array
+          items:
+            $ref: "#/components/schemas/BelgianTaxInputRelationshipEvent"
+        deathYearElection:
+          type: string
+          enum:
+            - joint
+            - separate
+        legacyAssumedJoint:
+          type: boolean
+      required:
+        - events
+      additionalProperties: {}
+    BelgianTaxInputDependents:
+      type: object
+      properties:
+        children:
+          type: integer
+          minimum: 0
+          maximum: 1000
+        childrenUnder3:
+          type: integer
+          minimum: 0
+          maximum: 1000
+        childrenDisabled:
+          type: integer
+          minimum: 0
+          maximum: 1000
+        otherPersons:
+          type: integer
+          minimum: 0
+          maximum: 1000
+        otherPersonsDisabled:
+          type: integer
+          minimum: 0
+          maximum: 1000
+        claimantPartnerId:
+          type: string
+          enum:
+            - A
+            - B
+      required:
+        - children
+        - otherPersons
+      additionalProperties: {}
+    BelgianTaxInputHomeAdditionalResidence:
+      type: object
+      properties:
+        label:
+          type: string
+          maxLength: 200
+        cadastralIncome:
+          type: number
+          minimum: 0
+          maximum: 1000000000000
+        region:
+          type: string
+          enum:
+            - flanders
+            - wallonia
+            - brussels
+        isOwnHome:
+          type: boolean
+        centimesOverride:
+          type: number
+          minimum: 0
+          maximum: 100000
+      required:
+        - cadastralIncome
+      additionalProperties: {}
+    BelgianTaxInputHome:
+      type: object
+      properties:
+        cadastralIncome:
+          type: number
+          minimum: 0
+          maximum: 1000000000000
+        cadastralCentimesOverride:
+          type: number
+          minimum: 0
+          maximum: 100000
+        additionalResidences:
+          maxItems: 50
+          type: array
+          items:
+            $ref: "#/components/schemas/BelgianTaxInputHomeAdditionalResidence"
+        mortgageInterestPaid:
+          type: number
+          minimum: 0
+          maximum: 1000000000000
+        mortgageCapitalRepaid:
+          type: number
+          minimum: 0
+          maximum: 1000000000000
+        mortgageStartYear:
+          type: integer
+          minimum: 1900
+          maximum: 2200
+        mortgageRegion:
+          type: string
+          enum:
+            - flanders
+            - wallonia
+            - brussels
+        mortgageIsPrimaryResidence:
+          type: boolean
+        mortgageCreditPartnerId:
+          type: string
+          enum:
+            - A
+            - B
+        mortgageSharePartnerB:
+          type: number
+          minimum: 0
+          maximum: 100
+        firstQualifyingYear:
+          type: integer
+          minimum: 1900
+          maximum: 2200
+        woonbonusChildrenAtLoanStart:
+          type: integer
+          minimum: 0
+          maximum: 1000
+      required:
+        - cadastralIncome
+        - mortgageInterestPaid
+      additionalProperties: {}
+    BelgianTaxInputMigratedFromUnmappedField:
+      type: object
+      properties:
+        field:
+          type: string
+          maxLength: 100
+        note:
+          type: string
+          maxLength: 100
+        value: {}
+      required:
+        - field
+        - note
+      additionalProperties: {}
+    BelgianTaxInputMigratedFrom:
+      type: object
+      properties:
+        fromVersion:
+          type: number
+          enum:
+            - 1
+        unmappedFields:
+          maxItems: 200
+          type: array
+          items:
+            $ref: "#/components/schemas/BelgianTaxInputMigratedFromUnmappedField"
+      required:
+        - fromVersion
+        - unmappedFields
+      additionalProperties: {}
+
     # ADR-026 API envelope
     Envelope:
       type: object
@@ -266,13 +1429,24 @@ components:
         schemaname: { type: string }
         table_name: { type: string }
         live_rows:
-          { type: string, description: "BIGINT estimate from pg_stat_user_tables, as decimal text" }
+          {
+            type: string,
+            description: "BIGINT estimate from pg_stat_user_tables, as decimal text",
+          }
         dead_rows:
-          { type: string, description: "BIGINT estimate from pg_stat_user_tables, as decimal text" }
+          {
+            type: string,
+            description: "BIGINT estimate from pg_stat_user_tables, as decimal text",
+          }
         last_autovacuum: { type: string, nullable: true }
         last_autoanalyze: { type: string, nullable: true }
-        size: { type: string, description: pg_size_pretty of the total relation size }
-        size_bytes: { type: string, description: "BIGINT byte count, as decimal text" }
+        size:
+          {
+            type: string,
+            description: pg_size_pretty of the total relation size,
+          }
+        size_bytes:
+          { type: string, description: "BIGINT byte count, as decimal text" }
     DbStats:
       type: object
       required: [tables, db_size]
@@ -281,17 +1455,26 @@ components:
           type: array
           items: { $ref: "#/components/schemas/DbTableStat" }
         db_size:
-          { type: string, nullable: true, description: pg_size_pretty of the database size }
+          {
+            type: string,
+            nullable: true,
+            description: pg_size_pretty of the database size,
+          }
     # POST /api/admin/database/vacuum (routes/admin.ts)
     DbVacuumResult:
       type: object
       required: [vacuumed]
       properties:
-        vacuumed: { type: string, description: "The vacuumed table, or `all` for every table" }
+        vacuumed:
+          {
+            type: string,
+            description: "The vacuumed table, or `all` for every table",
+          }
     # /api/admin/database/tables/* (services/dbEditor.ts, packages/types/src/contracts/admin.ts, ADR-101)
     DbEditorColumn:
       type: object
-      required: [name, dataType, udtName, nullable, hasDefault, generated, writable]
+      required:
+        [name, dataType, udtName, nullable, hasDefault, generated, writable]
       properties:
         name: { type: string }
         dataType: { type: string, description: information_schema data_type }
@@ -300,7 +1483,10 @@ components:
         hasDefault: { type: boolean }
         generated: { type: boolean }
         writable:
-          { type: boolean, description: "False for generated and identity-always columns" }
+          {
+            type: boolean,
+            description: "False for generated and identity-always columns",
+          }
     DbEditorTableSchema:
       type: object
       required: [table, columns, primaryKey]
@@ -328,13 +1514,21 @@ components:
             limit: { type: integer }
             hasMore: { type: boolean }
             nextCursor:
-              { type: string, nullable: true, description: "Opaque cursor of the next page, null on the last page" }
+              {
+                type: string,
+                nullable: true,
+                description: "Opaque cursor of the next page, null on the last page",
+              }
     DbEditorStatement:
       type: object
       required: [op, preview]
       properties:
         op: { type: string }
-        preview: { type: string, description: The SQL statement with its parameters rendered as literals }
+        preview:
+          {
+            type: string,
+            description: The SQL statement with its parameters rendered as literals,
+          }
     DbEditorMutationResult:
       type: object
       description: "A dry run returns `count` and `statements`; a commit returns `applied`, `results` and `refreshScheduled`."
@@ -360,7 +1554,10 @@ components:
                 additionalProperties: {}
                 description: The written row; absent for a delete
         refreshScheduled:
-          { type: boolean, description: "Commit only; true when the dashboard materialized views refresh" }
+          {
+            type: boolean,
+            description: "Commit only; true when the dashboard materialized views refresh",
+          }
     # /api/admin/providers/* (services/providerHealthService.ts, ProviderHealthSchema)
     ProviderHealth:
       type: object
@@ -378,7 +1575,10 @@ components:
       properties:
         provider: { type: string }
         kind:
-          { type: string, description: "The provider kind: price, fx, inflation or research" }
+          {
+            type: string,
+            description: "The provider kind: price, fx, inflation or research",
+          }
         label: { type: string }
         last_success_at: { type: string, format: date-time, nullable: true }
         last_error_at: { type: string, format: date-time, nullable: true }
@@ -399,7 +1599,11 @@ components:
       properties:
         ok: { type: boolean }
         provider: { $ref: "#/components/schemas/ProviderHealth" }
-        error: { type: string, description: "The probe error, only when ok is false" }
+        error:
+          {
+            type: string,
+            description: "The probe error, only when ok is false",
+          }
     # GET /api/admin/metrics/requests (middleware/requestMetrics.ts, RouteMetricSchema)
     RouteMetric:
       type: object
@@ -976,7 +2180,8 @@ components:
     AiAnalysisEditProposal:
       type: object
       additionalProperties: false
-      required: [schemaVersion, savedAnalysisId, baseVersion, rationale, operations]
+      required:
+        [schemaVersion, savedAnalysisId, baseVersion, rationale, operations]
       properties:
         schemaVersion: { type: integer, enum: [1] }
         savedAnalysisId: { type: string, minLength: 1 }
@@ -1928,7 +3133,7 @@ components:
 
     CategoryUpdate:
       type: object
-      description: "`null` for general, detail, or is_active leaves that field unchanged. Each field must have the stated JSON type; a string such as \"false\" for is_active returns 400."
+      description: '`null` for general, detail, or is_active leaves that field unchanged. Each field must have the stated JSON type; a string such as "false" for is_active returns 400.'
       properties:
         general:
           type: string
@@ -2095,7 +3300,7 @@ components:
 
     RecipientUpdate:
       type: object
-      description: "`null` name or is_active leaves that field unchanged. Each field must have the stated JSON type; a string such as \"false\" for is_active returns 400."
+      description: '`null` name or is_active leaves that field unchanged. Each field must have the stated JSON type; a string such as "false" for is_active returns 400.'
       properties:
         name:
           type: string
@@ -4366,7 +5571,14 @@ components:
       description: Present on proved record_income, duplicate or settled paired-income actions in full history or record_in_kind_income_only. Narrow scope requires unitTransactionId and forbids unitRowId. Full scope requires unitRowId binding the distinct selected Gift action in the same batch/investment/payment date. A paired Gift insert has no canonical unit ID until the same atomic commit creates it; a paired adoption or existing Gift requires unitTransactionId, as do repeated income actions. Repeats also identify the distinct existing income through existingTransactionId and may omit source/existing bodies. The server proves literal zero-basis income/units identity and immutable receipt images, binds proof into the fingerprint, and writes income only after its unit is proved. Each income and unit identity is unique; the proof cannot record income again or add another acquisition.
       properties:
         kind: { type: string, enum: [paired_kinesis_income] }
-        unitRowId: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991, description: Required only in full history; output-only staged Gift row ID selected in this review. }
+        unitRowId:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+            description: Required only in full history; output-only staged Gift row ID selected in this review.,
+          }
         unitTransactionId:
           {
             type: integer,
@@ -4378,13 +5590,28 @@ components:
     PortfolioImportReconciliationCashValues:
       type: object
       additionalProperties: false
-      required: [date, amount, currency, accountId, isTransfer, transferSource, transferPeerId]
+      required:
+        [
+          date,
+          amount,
+          currency,
+          accountId,
+          isTransfer,
+          transferSource,
+          transferPeerId,
+        ]
       description: Signed cash ledger values for a proved source event. Required for a new cash action, optional on proved duplicate/settled repeats. Trade quotes and confirmed own-account funding use isTransfer=true; card expenses use false. Every row has brokerage origin and no invented peer. A separately quoted own-account withdrawal fee is retained as a second negative expense component; the transfer component is net of that fee. Card spending already includes its quoted fee and creates no extra fee row.
       properties:
         date: { type: string, format: date }
         amount: { type: string, pattern: "^-?[0-9]+(\\.[0-9]+)?$" }
         currency: { type: string, pattern: "^[A-Z]{3}$" }
-        accountId: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        accountId:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
         isTransfer: { type: boolean }
         transferSource: { type: string, enum: [brokerage] }
         transferPeerId: { type: integer, nullable: true, enum: [null] }
@@ -4392,16 +5619,35 @@ components:
     PortfolioImportReconciliationCashProof:
       type: object
       additionalProperties: false
-      required: [kind, groupKey, eventKey, eventKind, fileHash, memberCount, componentCount]
+      required:
+        [
+          kind,
+          groupKey,
+          eventKey,
+          eventKind,
+          fileHash,
+          memberCount,
+          componentCount,
+        ]
       description: Present only in record_cash_only on every cash, duplicate or settled action. The complete original source and all cash balance chains are proved before selection; every group member selects together. memberCount includes new and repeated cash actions, and equals selected group action count. Event identities are unique, and fileHash is common within a source batch/group. Repeats identify a positive existingTransactionId and create no cash again. Proof is bound to the reviewed fingerprint and confirmed own-account funding policy; it does not authorize portfolio or custody actions.
       properties:
         kind: { type: string, enum: [closed_kinesis_cash] }
         groupKey: { type: string, pattern: "^[a-f0-9]{64}$" }
         eventKey: { type: string, pattern: "^[a-f0-9]{64}$" }
-        eventKind: { type: string, enum: [trade_quote, own_account_funding, card_expense] }
+        eventKind:
+          {
+            type: string,
+            enum: [trade_quote, own_account_funding, card_expense],
+          }
         fileHash: { type: string, pattern: "^[a-f0-9]{64}$" }
         memberCount: { type: integer, minimum: 1, maximum: 9007199254740991 }
-        componentCount: { type: integer, enum: [1, 2], description: One ledger component, or two for a separately quoted own-account withdrawal fee. }
+        componentCount:
+          {
+            type: integer,
+            enum: [1, 2],
+            description: One ledger component,
+            or two for a separately quoted own-account withdrawal fee.,
+          }
 
     PortfolioImportReconciliationCounts:
       type: object
@@ -5211,10 +6457,12 @@ paths:
                   properties:
                     mode: { type: string, enum: [visual] }
                     plan: { $ref: "#/components/schemas/AnalysisVisualPlan" }
-                    requestId: { type: string, pattern: "^[A-Za-z0-9_-]{8,128}$" }
+                    requestId:
+                      { type: string, pattern: "^[A-Za-z0-9_-]{8,128}$" }
                     limit: { type: number }
                     offset: { type: number }
-                    workbench: { $ref: "#/components/schemas/AnalysisWorkbenchInput" }
+                    workbench:
+                      { $ref: "#/components/schemas/AnalysisWorkbenchInput" }
                     scenarioModel:
                       type: object
                       nullable: true
@@ -5263,10 +6511,12 @@ paths:
                           id: { type: string }
                           label: { type: string }
                           type: { type: string }
-                    requestId: { type: string, pattern: "^[A-Za-z0-9_-]{8,128}$" }
+                    requestId:
+                      { type: string, pattern: "^[A-Za-z0-9_-]{8,128}$" }
                     limit: { type: number }
                     offset: { type: number }
-                    workbench: { $ref: "#/components/schemas/AnalysisWorkbenchInput" }
+                    workbench:
+                      { $ref: "#/components/schemas/AnalysisWorkbenchInput" }
                     scenarioModel:
                       type: object
                       nullable: true
@@ -5304,7 +6554,10 @@ paths:
         "408": { description: Query cancelled or timed out }
         "500":
           {
-            description: Database connection, resource, or network failure (server fault, not a rejected query),
+            description: Database connection,
+            resource,
+            or network failure (server fault,
+            not a rejected query),
           }
 
   /api/analysis/pivot:
@@ -5337,7 +6590,8 @@ paths:
                       }
                     filters:
                       type: array
-                      items: { $ref: "#/components/schemas/AnalysisVisualFilter" }
+                      items:
+                        { $ref: "#/components/schemas/AnalysisVisualFilter" }
                 requestId: { type: string, minLength: 8, maxLength: 110 }
       responses:
         "200":
@@ -5346,7 +6600,8 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Envelope" }
         "400": { description: Invalid pivot or complete output exceeds limits }
-        "500": { description: Database connection, resource, or network failure }
+        "500":
+          { description: Database connection, resource, or network failure }
 
   /api/analysis/extensions/evaluate:
     post:
@@ -5380,7 +6635,8 @@ paths:
                 inputComplete: { type: boolean }
                 window: { type: object, additionalProperties: true }
                 coverage: { type: object, additionalProperties: true }
-                workbench: { $ref: "#/components/schemas/AnalysisWorkbenchInput" }
+                workbench:
+                  { $ref: "#/components/schemas/AnalysisWorkbenchInput" }
                 formulas:
                   {
                     type: array,
@@ -5452,7 +6708,8 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Envelope" }
         "400": { description: Invalid drill-through request }
-        "500": { description: Database connection, resource, or network failure }
+        "500":
+          { description: Database connection, resource, or network failure }
 
   /api/analysis/formulas/evaluate:
     post:
@@ -5641,7 +6898,8 @@ paths:
               schema: { $ref: "#/components/schemas/Envelope" }
         "400": { description: Refresh failed }
         "404": { description: Saved analysis not found }
-        "500": { description: Database connection, resource, or network failure }
+        "500":
+          { description: Database connection, resource, or network failure }
 
   /api/analysis/saved/{id}/versions:
     parameters:
@@ -5690,9 +6948,16 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Envelope" }
-        "400": { description: Invalid instruction, or the proposal fails the saved analysis preview }
+        "400":
+          {
+            description: Invalid instruction,
+            or the proposal fails the saved analysis preview,
+          }
         "404": { description: Saved analysis not found }
-        "502": { description: "BAD_GATEWAY: the local model failed, returned invalid JSON, or returned a proposal outside the edit contract" }
+        "502":
+          {
+            description: "BAD_GATEWAY: the local model failed, returned invalid JSON, or returned a proposal outside the edit contract",
+          }
 
   /api/analysis/saved/{id}/restore:
     parameters:
@@ -9635,7 +10900,13 @@ paths:
                             type: array
                             items:
                               type: object
-                              required: [deductionType, total, categoryCount, categories]
+                              required:
+                                [
+                                  deductionType,
+                                  total,
+                                  categoryCount,
+                                  categories,
+                                ]
                               properties:
                                 deductionType: { type: string }
                                 total: { type: number }
@@ -11692,6 +12963,50 @@ paths:
           description: No Content
 
   # ─── Reports ─────────────────────────────────────────────────────────────────
+  /api/belgian-tax/compute:
+    post:
+      summary: Compute Belgian household tax without saving the profile
+      operationId: computeBelgianTax
+      tags:
+        - Belgian Tax
+      description: Runs the same TypeScript engine used by the web Tax screen. Takes a complete v2 household, including unsaved edits or historical inputs; returns the household result and legacy-compatible calculation. Does not read or write settings, transactions, snapshots, or filing records. Unknown tax years retain the engine approximation and warning behavior. Uses the aggregation rate limiter and standard API CSRF guard.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - household
+              properties:
+                household:
+                  $ref: "#/components/schemas/BelgianTaxHouseholdInput"
+      responses:
+        "200":
+          description: Household result and compatible PIT figures, with issue codes and approximation metadata. Monetary values are EUR, rates retain the existing engine units.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    required:
+                      - data
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/BelgianTaxComputation"
+        "400":
+          description: Invalid household, missing required input, invalid cross-field references, or unknown top-level fields.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "403":
+          description: Cross-site request rejected by the API CSRF guard.
+        "429":
+          description: API or aggregation rate limit exceeded.
+
   /api/reports/financial:
     post:
       summary: Generate financial report PDF
@@ -11822,7 +13137,8 @@ paths:
                     household total, the assessment mode and the marital quotient.
                   required: [assessmentMode, partners]
                   properties:
-                    assessmentMode: { type: string, enum: [single, separate, joint] }
+                    assessmentMode:
+                      { type: string, enum: [single, separate, joint] }
                     legalBasis: { type: string, maxLength: 200 }
                     quotient:
                       type: object
@@ -11840,7 +13156,8 @@ paths:
                       maxItems: 2
                       items:
                         type: object
-                        required: [partnerId, grossIncome, taxableIncome, totalPIT]
+                        required:
+                          [partnerId, grossIncome, taxableIncome, totalPIT]
                         properties:
                           partnerId: { type: string, enum: [A, B] }
                           grossIncome: { type: number }
@@ -13295,7 +14612,7 @@ paths:
                       adopt_existing_only,
                       correct_existing_only,
                       record_in_kind_income_only,
-              record_cash_only,
+                      record_cash_only,
                     ]
                   default: full
                   description: >-
@@ -13450,7 +14767,7 @@ paths:
                       adopt_existing_only,
                       correct_existing_only,
                       record_in_kind_income_only,
-              record_cash_only,
+                      record_cash_only,
                     ]
                   default: full
                   description: Same scope as the reviewed preview. Bounded modes require complete unfiltered Kinesis sources and the matching explicit policy (preserve_existing for attachment/income, prefer_source for corrections). Income requires zero yield basis and already proved units; excluded events remain pending.

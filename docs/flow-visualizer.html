@@ -1378,8 +1378,8 @@
           },
           {
             "id": "sv.belgian",
-            "label": "Belgian tax / HICP",
-            "sub": "belgianInflationService + tax reports",
+            "label": "Belgian inflation",
+            "sub": "belgianInflationService",
             "kind": "service",
             "x": 760,
             "y": 540
@@ -1567,7 +1567,7 @@
           {
             "id": "pkg.shared-utils",
             "label": "@vision/shared-utils",
-            "sub": "money \u00b7 slugify \u00b7 downsample",
+            "sub": "money / portfolio / PIT-household",
             "kind": "shared",
             "path": "packages/shared-utils/",
             "desc": "Bun workspace package for pure helpers shared between frontend and backend. money.ts uses ROUND_HALF_EVEN (banker's rounding). Both apps re-export via shims.",
@@ -1862,6 +1862,14 @@
             "y": 1160,
             "path": "apps/node-backend/src/services/portfolio/portfolioAssetAdjustmentService.ts",
             "desc": "Dated yield reversals consume only source-proven zero-basis yield lots. Asset fees consume original lots and purchase FX. Per-method allocations and restrictive source links retain evidence."
+          },
+          {
+            "id": "native.taxclient",
+            "label": "Native Tax client",
+            "sub": "TaxComputationService (UI pending)",
+            "kind": "client",
+            "x": 780,
+            "y": 44
           }
         ],
         "baseEdges": [
@@ -1974,7 +1982,10 @@
           ["sv.portfolioreconciliation", "sv.portfolioadjustment"],
           ["sv.portfolioimport", "sv.portfolioadjustment"],
           ["sv.portfolioadjustment", "be.repos"],
-          ["sv.portfolioadjustment", "pkg.shared-utils"]
+          ["sv.portfolioadjustment", "pkg.shared-utils"],
+          ["native.taxclient", "be.routes"],
+          ["be.routes", "pkg.shared-utils"],
+          ["fe.stores", "pkg.shared-utils"]
         ],
         "flows": [
           {
@@ -3225,55 +3236,49 @@
             "id": "tax-pdf-report",
             "name": "Export a Belgian tax PDF report",
             "category": "Reports",
-            "summary": "Statistics page \u2192 reports route \u2192 streamed PDF rendered from themed HTML via Puppeteer + frozen tax snapshots.",
+            "summary": "The web ExportDialog sends the selected household and frozen or computed figures to POST /api/reports/tax; Puppeteer renders the returned PDF.",
             "steps": [
               {
-                "from": "browser",
                 "to": "fe.pages",
-                "payload": "StatisticsPage  \u00b7  'Export PDF' (tax)",
-                "annotation": "Dialog lets the user pick year, sections, currency."
+                "payload": "ExportDialog: type tax, year, sections, currency",
+                "annotation": "features/reports/ExportDialog.tsx selects the tax year; native Insights currently opens this same dialog in a web overlay.",
+                "from": "browser"
               },
               {
-                "from": "fe.pages",
+                "to": "fe.stores",
+                "payload": "profile/household and result for the selected year",
+                "annotation": "stores/belgianTaxStore.ts prefers frozen calculations for filed years.",
+                "from": "fe.pages"
+              },
+              {
+                "to": "pkg.shared-utils",
+                "payload": "computeHouseholdTax(h); toBelgianTaxCalculation(result, h) when unfrozen",
+                "annotation": "lib/belgianTax compatibility exports use the shared TypeScript engine; existing web calculations remain local.",
+                "from": "fe.stores"
+              },
+              {
                 "to": "fe.apiclient",
-                "payload": "GET /api/reports/tax?year=2025&sections=...",
-                "annotation": "Browser-driven download via createObjectURL."
+                "payload": "POST /api/reports/tax: household, precomputedHousehold, precomputedPIT, year, sections",
+                "annotation": "features/reports/taxReportHousehold.ts serializes the selected household and results; postReportDownload uses an object URL.",
+                "from": "fe.pages"
               },
               {
-                "from": "fe.apiclient",
                 "to": "be.routes",
-                "payload": "report params",
-                "annotation": "routes/reports.ts."
+                "payload": "validated JSON report request",
+                "annotation": "routes/reports.ts validates the profile/result shapes and theme before report rendering.",
+                "from": "fe.apiclient"
               },
               {
-                "from": "be.routes",
                 "to": "sv.reports",
-                "payload": "buildTaxReport(params)",
-                "annotation": "Locks against the as-filed snapshot (ADR-058)."
+                "payload": "generateReport(\"tax\", params)",
+                "annotation": "services/reports/index.ts builds the themed HTML from supplied tax figures and portfolio data.",
+                "from": "be.routes"
               },
               {
-                "from": "sv.reports",
-                "to": "sv.belgian",
-                "payload": "computeBelgianPit(snapshot)",
-                "annotation": "Uses regional autonomy + Reynders split + per-residence centimes (ADR-053..057)."
-              },
-              {
-                "from": "sv.belgian",
-                "to": "be.repos",
-                "payload": "fetch frozen profile + HICP rates",
-                "annotation": "Statbel data accessed through belgianInflationService."
-              },
-              {
-                "from": "be.repos",
-                "to": "db.postgres",
-                "payload": "SELECT \u2026 historical year snapshots",
-                "annotation": "Year-pinned; never recomputed from live profile."
-              },
-              {
-                "from": "sv.reports",
                 "to": "fe.apiclient",
-                "payload": "application/pdf stream",
-                "annotation": "Puppeteer renders themed HTML to a streamed PDF with paginated footer + break-inside rules."
+                "payload": "application/pdf response",
+                "annotation": "Puppeteer renders the report; the frontend downloads the blob. The separate computation operation does not file a tax year.",
+                "from": "sv.reports"
               }
             ],
             "docs": [
@@ -5112,7 +5117,7 @@
                 "title": "Run guarded migrations",
                 "note": "Use the reviewed migration path before normal requests.",
                 "payload": "runMigrations",
-                "annotation": "apps/node-backend/src/main.ts; apps/node-backend/src/database/migrate.ts recognizes exact reviewed 0120–0125 current revisions and pins their automatic additive target to 0125. Existing financial values, legacy objects and old receipt JSON remain unchanged. Older 0118/0119 bridge maintenance remains deferred; unknown successor revisions refuse automatic upgrade. Fresh baseline installs follow the normal chain, and warm boot at 0125 does not request 0118. Migration 0125 extends brokerage origin and typed staging cash receipt protection without creating cash history."
+                "annotation": "apps/node-backend/src/main.ts; apps/node-backend/src/database/migrate.ts recognizes exact reviewed 0120\u20130125 current revisions and pins their automatic additive target to 0125. Existing financial values, legacy objects and old receipt JSON remain unchanged. Older 0118/0119 bridge maintenance remains deferred; unknown successor revisions refuse automatic upgrade. Fresh baseline installs follow the normal chain, and warm boot at 0125 does not request 0118. Migration 0125 extends brokerage origin and typed staging cash receipt protection without creating cash history."
               },
               {
                 "from": "db.alembic",
@@ -5525,6 +5530,48 @@
                 "label": "AI Research API"
               }
             ]
+          },
+          {
+            "id": "native-tax-computation",
+            "name": "Preview Belgian household tax through the backend",
+            "category": "Native migration",
+            "summary": "The native adapter sends a complete v2 household to the shared TypeScript engine. This computation boundary is implemented; native Tax UI is pending.",
+            "steps": [
+              {
+                "to": "be.routes",
+                "payload": "POST /api/belgian-tax/compute { household }",
+                "annotation": "TaxComputationService.swift uses the generated OpenAPI operation; main.ts applies the API CSRF guard and global/aggregation rate limits.",
+                "from": "native.taxclient"
+              },
+              {
+                "to": "pkg.shared-utils",
+                "payload": "computeHouseholdTax(household); toBelgianTaxCalculation(result, household)",
+                "annotation": "routes/belgianTax.ts validates the same v2 settings schema and performs no settings/database writes.",
+                "from": "be.routes"
+              },
+              {
+                "to": "be.routes",
+                "payload": "{ result, calculation }",
+                "annotation": "packages/shared-utils/src/belgianTax/household.ts retains assessment, quotient, CSSS, issue codes, and year approximation.",
+                "from": "pkg.shared-utils"
+              },
+              {
+                "to": "native.taxclient",
+                "payload": "{ ok: true, data: { result, calculation } }",
+                "annotation": "Generated Swift models decode money and rates as Decimal. The client selects historical inputs and preserves frozen filings; no formulas run in Swift.",
+                "from": "be.routes"
+              }
+            ],
+            "docs": [
+              {
+                "path": "api/belgian-tax.md",
+                "label": "Belgian Tax Computation API"
+              },
+              {
+                "path": "reference/native-parity/tax.md",
+                "label": "Native Tax parity"
+              }
+            ]
           }
         ],
         "learningPaths": [
@@ -5532,11 +5579,7 @@
             "id": "start",
             "name": "1. Start here",
             "description": "Learn request boundaries, dashboard data and desktop startup.",
-            "flows": [
-              "api-request",
-              "dashboard-summary",
-              "native-startup"
-            ]
+            "flows": ["api-request", "dashboard-summary", "native-startup"]
           },
           {
             "id": "money",
