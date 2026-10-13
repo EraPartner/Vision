@@ -44,6 +44,9 @@ Counts are the pages' own. The 44 screens are the 40 manifest routes, the `/port
 
 ## Phase 1 exit
 
+[[docs/reference/native-parity/agent-handoff|The active agent handoff]] records the published
+branch, current phase, parallel ownership, unfinished work and validation gaps for continuation.
+
 [[docs/reference/native-parity/phase-1-exit|The phase 1 exit checklist]] maps each of the shell
 page's 205 action rows, its keyboard shortcuts and its bridge methods to the Vision Native code at
 the end of phase 1, and counts the gaps that remain for the hand-over

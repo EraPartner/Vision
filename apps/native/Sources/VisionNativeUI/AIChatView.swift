@@ -16,6 +16,7 @@ public struct AIChatView: View {
     }
     private var strings: any Localizing { shell.strings }
     private var isChat: Bool { model.mode == .chat }
+    private var statusLoading: Bool { model.isLoadingStatus && model.status == nil }
     private var conversationTitle: String {
         guard let title = model.detail?.conversation.title, !title.isEmpty else { return strings.t("aiChat.mode.chat") }
         return title
@@ -87,7 +88,7 @@ public struct AIChatView: View {
                             width: 6, height: 6)
                         Text(
                             strings.t(
-                                model.isLoadingStatus
+                                statusLoading
                                     ? "aiChat.checkingOllama"
                                     : model.status?.ok == true ? "aiChat.ollamaReady" : "aiChat.ollamaUnreachable")
                         )
@@ -97,7 +98,7 @@ public struct AIChatView: View {
                 Spacer(minLength: 0)
             }.padding(16)
             Divider()
-            if !model.isLoadingStatus && model.status?.ok != true {
+            if !statusLoading && model.status?.ok != true {
                 AIChatStatusBanner(model: model, shell: shell).padding(16)
             }
             AIChatTranscript(model: model, shell: shell, isVisible: isChat)
