@@ -114,6 +114,110 @@ struct NativeOnboardingTests {
         #expect(await fixture.expectedWrites == [.object(["exists": .bool(false)])])
         #expect(await fixture.value == .bool(true))
     }
+    @Test func reloadWaitsCategoryCallbackAndDraftReceiptWithoutAcceptingDuplicateClicks() async {
+        let fixture = OnboardingFixture()
+        let store = OnboardingDraftFixture()
+        let gate = OnboardingCallbackGate()
+        let model = makeOnboarding(fixture, store)
+        await model.load()
+        await model.flushDraft()
+        model.didMutateCategories = { await gate.wait() }
+        let creation = Task { await model.createCategories() }
+        await gate.waitUntilEntered()
+        #expect(await fixture.categories.count == 15)
+        #expect(model.creatingCategories && !model.draft.categoriesCreated)
+        var drained = false
+        let reload = Task {
+            await model.flushAcceptedActions()
+            drained = true
+        }
+        await Task.yield()
+        #expect(!drained)
+        await model.createCategories()
+        #expect(await fixture.categories.count == 15)
+        gate.release()
+        await creation.value
+        await reload.value
+        #expect(drained && !model.creatingCategories && model.draft.categoriesCreated)
+        #expect(NativeOnboardingDraft.read(store.data).categoriesCreated)
+    }
+    @Test func retiredCategoryCancellationPreservesDurablePartialSuccessWithoutFailureToast() async {
+        let fixture = OnboardingFixture()
+        let store = OnboardingDraftFixture()
+        let model = makeOnboarding(fixture, store)
+        let notices = NativeNoticeCenter()
+        model.attachNotices(notices)
+        var invalidations = 0
+        model.didMutateCategories = { invalidations += 1 }
+        await model.load()
+        await model.flushDraft()
+        let previous = store.data
+        await fixture.cancelCategory("Rent")
+        await fixture.pauseCategory("Rent")
+        let creation = Task { await model.createCategories() }
+        await fixture.waitForCategory()
+        model.didDisappear()
+        await fixture.releaseCategory()
+        await creation.value
+        await model.flushAcceptedActions()
+        #expect(await fixture.categories.count == 15)
+        #expect(invalidations == 1 && !model.isPresented && !model.draft.categoriesCreated)
+        #expect(store.data == previous && model.notice == nil && notices.visibleEntries.isEmpty)
+    }
+    @Test func reloadWaitsImportCallbackBeforePersistingAcceptedReviewReceipt() async {
+        let fixture = OnboardingFixture()
+        let store = OnboardingDraftFixture()
+        let gate = OnboardingCallbackGate()
+        await fixture.setImport(.init(outcome: .reviewRequired(batchId: 55), reviewRows: 9))
+        let model = makeOnboarding(fixture, store)
+        await model.load()
+        model.selectBank("fixture")
+        model.setFile(.init(name: "synthetic.csv", data: Data()))
+        await model.flushDraft()
+        model.didMutateImports = { await gate.wait() }
+        let upload = Task { await model.importFile() }
+        await gate.waitUntilEntered()
+        #expect(model.importing && model.draft.reviewBatch == nil)
+        var drained = false
+        let reload = Task {
+            await model.flushAcceptedActions()
+            drained = true
+        }
+        await Task.yield()
+        #expect(!drained)
+        gate.release()
+        await upload.value
+        await reload.value
+        #expect(drained && !model.importing)
+        #expect(NativeOnboardingDraft.read(store.data).reviewBatch == .init(batchId: 55, rows: 9))
+    }
+    @Test func reloadWaitsFailedCompletionAcknowledgmentWithoutReplayingRejectedCAS() async {
+        let fixture = OnboardingFixture()
+        let store = OnboardingDraftFixture()
+        let model = makeOnboarding(fixture, store)
+        await model.load()
+        await model.flushDraft()
+        await fixture.failSave(true)
+        await fixture.pauseSave()
+        let completion = Task { await model.finish() }
+        await fixture.waitForSave()
+        var drained = false
+        let reload = Task {
+            await model.flushAcceptedActions()
+            drained = true
+        }
+        await Task.yield()
+        #expect(!drained && model.isCompleting && store.removals == 0)
+        await fixture.releaseSave()
+        await completion.value
+        await reload.value
+        #expect(drained && model.isPresented && !model.isCompleting && store.data != nil)
+        #expect(model.notice?.key == "onboarding.persist.failed")
+        await model.finish()
+        await model.flushAcceptedActions()
+        #expect(await fixture.expectedWrites.count == 1)
+        #expect(store.removals == 0)
+    }
     @Test func cancelledDraftReadPreservesStoredV1AndUnknownCompletionUntilResume() async throws {
         let fixture = OnboardingFixture()
         let store = OnboardingDraftFixture()
@@ -336,6 +440,15 @@ struct NativeOnboardingTests {
 ) -> NativeOnboardingModel {
     .init(service: fixture, persistence: .init(service: fixture), store: store, desktop: desktop)
 }
+@MainActor private final class OnboardingCallbackGate {
+    private var continuation: CheckedContinuation<Void, Never>?
+    func wait() async { await withCheckedContinuation { continuation = $0 } }
+    func waitUntilEntered() async { while continuation == nil { await Task.yield() } }
+    func release() {
+        continuation?.resume()
+        continuation = nil
+    }
+}
 @MainActor private final class OnboardingDraftFixture: NativeOnboardingDraftStore {
     var data: Data?
     var removals = 0
@@ -378,6 +491,9 @@ private actor OnboardingFixture: NativeOnboardingService, NativeSettingsService 
     var settingReads = 0
     private var adaptersFail = false
     private var categoryFail: String?
+    private var categoryCancelled: String?
+    private var gatedCategory: String?
+    private var categoryContinuation: CheckedContinuation<Void, Never>?
     private var saveFails = false
     private var gateSave = false
     private var saveContinuation: CheckedContinuation<Void, Never>?
@@ -387,6 +503,13 @@ private actor OnboardingFixture: NativeOnboardingService, NativeSettingsService 
         outcome: .completed(.init(total: 4, imported: 3, duplicates: 1, errors: 0)))
     func failAdapters(_ value: Bool) { adaptersFail = value }
     func failCategory(_ value: String?) { categoryFail = value }
+    func cancelCategory(_ value: String?) { categoryCancelled = value }
+    func pauseCategory(_ value: String) { gatedCategory = value }
+    func waitForCategory() async { while categoryContinuation == nil { await Task.yield() } }
+    func releaseCategory() {
+        categoryContinuation?.resume()
+        categoryContinuation = nil
+    }
     func failSave(_ value: Bool) { saveFails = value }
     func setImport(_ value: NativeOnboardingImportReceipt) { importReceipt = value }
     func pauseImport() { gateImport = true }
@@ -407,6 +530,11 @@ private actor OnboardingFixture: NativeOnboardingService, NativeSettingsService 
     }
     func onboardingCreateCategory(_ category: NativeOnboardingCategory) async throws {
         categories.append(category)
+        if category.detail == gatedCategory {
+            gatedCategory = nil
+            await withCheckedContinuation { categoryContinuation = $0 }
+        }
+        if category.detail == categoryCancelled { throw CancellationError() }
         if category.detail == categoryFail { throw APIError.backendUnavailable }
     }
     func onboardingImport(file: ImportFile, bank: String) async throws -> NativeOnboardingImportReceipt {

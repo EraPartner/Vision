@@ -205,16 +205,18 @@ struct TaxYearComparisonView: View {
     let overview: OpenAPI.BelgianTaxOverview
     let shell: NativeShellModel
     @State private var compareYear: Int?
+    private let printLayout: Bool
     private let onComparisonChange: ((Int?) -> Void)?
     @Environment(\.visionTheme) private var theme
 
     init(
         model: TaxDashboardModel, overview: OpenAPI.BelgianTaxOverview, shell: NativeShellModel,
-        initialComparisonYear: Int? = nil, onComparisonChange: ((Int?) -> Void)? = nil
+        initialComparisonYear: Int? = nil, printLayout: Bool = false, onComparisonChange: ((Int?) -> Void)? = nil
     ) {
         self.model = model
         self.overview = overview
         self.shell = shell
+        self.printLayout = printLayout
         self._compareYear = State(initialValue: initialComparisonYear)
         self.onComparisonChange = onComparisonChange
     }
@@ -258,8 +260,8 @@ struct TaxYearComparisonView: View {
                 }
                 .accessibilityLabel(shell.strings.t("tax.comparison.selectYear"))
                 .frame(maxWidth: 240, alignment: .leading)
-                ScrollView(.horizontal) {
-                    Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 12) {
+                TaxTableViewport(isPrinting: printLayout) {
+                    Grid(alignment: .leading, horizontalSpacing: printLayout ? 10 : 24, verticalSpacing: 12) {
                         GridRow {
                             Text(shell.strings.t("tax.comparison.header.metric"))
                             Text(String(overview.year)).gridColumnAlignment(.trailing)
@@ -283,7 +285,7 @@ struct TaxYearComparisonView: View {
                         comparisonRow(
                             "netTakeHome", a: overview.calculation.netTakeHome,
                             b: selected.calculation.netTakeHome, higherIsBetter: true)
-                    }.frame(minWidth: 640, maxWidth: .infinity, alignment: .leading)
+                    }.frame(minWidth: printLayout ? nil : 640, maxWidth: .infinity, alignment: .leading)
                 }
             }
             .onAppear { onComparisonChange?(compareYear) }

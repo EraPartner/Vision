@@ -1695,6 +1695,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     private enum PagePrintSnapshot {
         case tax(NativeTaxPrintSnapshot)
         case statistics(NativeStatisticsPrintSnapshot)
+        case netWorth(NativeNetWorthPrintSnapshot)
     }
 
     private func capturePagePrintSnapshot() -> PagePrintSnapshot? {
@@ -1702,6 +1703,8 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         case "/tax": (try? NativeTaxPrintSnapshot.capture(shell: shellModel)).map(PagePrintSnapshot.tax)
         case "/statistics":
             (try? NativeStatisticsPrintSnapshot.capture(shell: shellModel)).map(PagePrintSnapshot.statistics)
+        case "/portfolio/net-worth":
+            (try? NativeNetWorthPrintSnapshot.capture(shell: shellModel)).map(PagePrintSnapshot.netWorth)
         default: nil
         }
     }
@@ -1755,6 +1758,16 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
                                     .frame(width: width)) as NSView
                         }
                     }
+                case .netWorth(let snapshot):
+                    let presentation = NativeNetWorthPrintPresentation.prepare(snapshot)
+                    title = snapshot.strings.t("networth.title")
+                    buildBlocks = { width in
+                        snapshot.sections.map {
+                            NSHostingView(
+                                rootView: NativeNetWorthPrintDocument(presentation: presentation, sections: [$0])
+                                    .frame(width: width)) as NSView
+                        }
+                    }
                 }
                 try self.requireNativeGeneration(generation)
                 guard self.shellModel.route.string == route, !self.restoreFenceEntered,
@@ -1790,6 +1803,9 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         manualReloadTask = Task { [weak self] in
             guard let self else { return }
             defer { self.manualReloadTask = nil }
+            await model.onboarding?.flushAcceptedActions()
+            await model.analysis?.workspace.flushAcceptedRuns()
+            await model.portfolioImports?.session.flushAcceptedCommits()
             await model.nativeSettings?.flush()
             await model.nativeSettings?.suspendForRestore()
             await self.settingsWriter.suspendAndDrain()
@@ -2207,7 +2223,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         await model.shellNotifications?.flushStorage()
         await model.home?.flushLocalStorage()
         await model.researchChartBuilder?.flushStorage()
-        await model.analysis?.flushHistory()
+        await model.analysis?.workspace.flushHistory()
         await model.portfolioImports?.session.flushCheckpoint()
     }
 

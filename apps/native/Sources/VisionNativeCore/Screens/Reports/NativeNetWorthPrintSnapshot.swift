@@ -43,10 +43,13 @@ public struct NativeNetWorthPrintSnapshot: Sendable {
     public let tableQuery: LocalTableQuery
     public let tableLoadedCount: Int
     public let tableTotal: Int
+    public let tableHasMore: Bool
+    public let tableFetchingMore: Bool
     public let tableError: String?
     public let pricesError: String?
     public let stalePriceCount: Int
     public let priceFreshness: String?
+    public let isOnline: Bool
     public let assets: Decimal?
     public let debt: Decimal?
     public let peak: Decimal?
@@ -127,8 +130,10 @@ public struct NativeNetWorthPrintSnapshot: Sendable {
             accountsError: model.accountsError, tableRows: model.tableRows,
             tableKeys: model.tableKeys, tableQuery: model.tableQuery,
             tableLoadedCount: model.tableSnapshots.count, tableTotal: model.tableTotal,
+            tableHasMore: model.hasMore, tableFetchingMore: model.isFetchingMore,
             tableError: model.tableError, pricesError: model.pricesError,
             stalePriceCount: model.stalePriceCount, priceFreshness: model.priceFreshness,
+            isOnline: model.isOnline,
             assets: model.assets, debt: model.debt, peak: model.peak, trough: model.trough,
             allTimeChange: model.allTimeChange, allTimePercent: model.allTimePercent,
             selection: model.selection, rangeStart: model.rangeStart, series: series, readouts: readouts)

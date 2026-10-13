@@ -162,13 +162,16 @@ public struct TaxOverviewView: View {
                     TaxPITBreakdownView(
                         overview: overview, shell: shell, portfolioTaxes: data.portfolioTaxesForYear,
                         totalIncludingPortfolio: data.totalTaxIncludingPortfolio,
-                        totalIncludingProperty: data.totalTaxIncludingPropertyEstimate)
+                        totalIncludingProperty: data.totalTaxIncludingPropertyEstimate,
+                        onExpandedChange: { screens.printLocalState.pitExpanded = $0 })
                 }
                 if screens.widgets.isVisible("taxRules") {
                     TaxRulesView(strings: strings, onExpandedChange: { screens.printLocalState.rulesExpanded = $0 })
                 }
                 if screens.widgets.isVisible("householdBreakdown") {
-                    TaxHouseholdBreakdownView(overview: overview, data: data, shell: shell)
+                    TaxHouseholdBreakdownView(
+                        overview: overview, data: data, shell: shell,
+                        onExpandedChange: { screens.printLocalState.householdExpanded = $0 })
                 }
                 if screens.widgets.isVisible("incomeBreakdown") {
                     TaxMonthlyIncomeView(

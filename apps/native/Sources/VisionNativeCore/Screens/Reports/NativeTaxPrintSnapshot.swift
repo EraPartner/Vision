@@ -3,9 +3,16 @@ import Foundation
 public struct NativeTaxPrintLocalState: Equatable, Sendable {
     public var comparisonYear: Int?
     public var rulesExpanded: Bool
-    public init(comparisonYear: Int? = nil, rulesExpanded: Bool = false) {
+    public var pitExpanded: Bool
+    public var householdExpanded: Bool
+    public init(
+        comparisonYear: Int? = nil, rulesExpanded: Bool = false, pitExpanded: Bool = false,
+        householdExpanded: Bool = false
+    ) {
         self.comparisonYear = comparisonYear
         self.rulesExpanded = rulesExpanded
+        self.pitExpanded = pitExpanded
+        self.householdExpanded = householdExpanded
     }
 }
 

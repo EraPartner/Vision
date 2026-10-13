@@ -65,6 +65,16 @@ request and download PDF bytes retain the same behavior.
 - **Graceful degradation**: Promise.allSettled ensures one failed data source doesn't crash report (a row contract violation still fails it; see [[#Performance]])
 - **Three report types**: Financial (complete), Portfolio (Phase 8 — 6 sections), Tax (Phase 8 — 7 sections + Belgian tax pass-through)
 
+## Native client ownership
+
+The phase-3p native sheet uses these existing binary operations through a dedicated 900-second
+single-attempt client sharing the restore-fenced data session. Tax submission preserves raw Decimal
+and frozen-result values. Its fixed retained TypeScript projection/context callbacks reuse the source
+fiscal engine; the extreme-year callback receives only a fresh five-key fiscal settings snapshot.
+No HTTP operation is added. See [[docs/architecture/native-app#Shell overlays and reports (phase 3p)|native architecture]]
+and [[docs/features/pdf-report-export|export behavior]].
+
+
 ## Phase Updates
 
 ### Phase 8 — Portfolio & Tax Report Implementation (2026-04-27)

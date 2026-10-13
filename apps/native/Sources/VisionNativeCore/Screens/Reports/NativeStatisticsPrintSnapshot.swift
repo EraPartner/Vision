@@ -10,7 +10,8 @@ public struct NativeStatisticsPrintLocalState: Equatable, Sendable {
 public enum NativeStatisticsPrintSection: Hashable, Identifiable, Sendable {
     case header, rhythm, digest, monthly, netTrend, categoryPie, categoryTrend
     case recipients, yearlyComparison, yearlySummary, flow, customHeader, customStatus
-    case pivotTable(Int), savedChart(Int)
+    case pivotTable(Int)
+    case savedChart(Int)
     public var id: String {
         switch self {
         case .pivotTable(let page): return "pivotTable:\(page)"
@@ -94,9 +95,11 @@ public struct NativeStatisticsPrintSnapshot: Sendable {
     ) throws {
         let model = screens.model
         guard route.path == "/statistics", model.matchesPrintRoute(route, currency: settings.defaultCurrency),
-            !model.isFetching, model.error == nil, model.hasData, let filtered = model.filtered,
-            model.tab != .flow || (!model.isFlowLoading && (model.flow != nil || model.flowError != nil)),
-            model.tab != .custom || !screens.saved.isLoading
+            model.hasData, let filtered = model.filtered,
+            model.tab != .flow
+                || (!model.isFlowLoading
+                    && (model.flow.map { $0.year == model.flowYear } ?? (model.flowError != nil))),
+            model.tab != .custom || screens.saved.matchesPrintSnapshot(filtered, currency: settings.defaultCurrency)
         else { throw APIError.invalidRequest("Statistics print requires the currently loaded page") }
         self.filtered = filtered
         unfiltered = model.unfiltered

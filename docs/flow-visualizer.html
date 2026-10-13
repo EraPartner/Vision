@@ -2064,6 +2064,56 @@
             "y": 1180,
             "path": "apps/native/Sources/VisionNativeCore/API/NativeDataSession.swift",
             "desc": "Shared APIClient transport pauses mutation admission, drains accepted transports and refuses paused reads. Prior read epochs remain invalid after failed restore resumes. Success retires old admissions/delivery; no new endpoint or rollback inference. Portable transport cases pass; SDK/macOS verification pending."
+          },
+          {
+            "id": "native.palette",
+            "label": "Native palette / shortcuts",
+            "sub": "fixed source answers",
+            "kind": "client",
+            "x": 20,
+            "y": 260,
+            "path": "apps/native/Sources/VisionNativeCore/Navigation/NativeCommandPaletteModel.swift",
+            "desc": "Native selection/recent actions; fixed retained TypeScript calculator and FX parsers."
+          },
+          {
+            "id": "native.shellbanners",
+            "label": "Native shell banners",
+            "sub": "FX · upcoming · backup",
+            "kind": "client",
+            "x": 220,
+            "y": 260,
+            "path": "apps/native/Sources/VisionNativeCore/Screens/ShellNotifications/NativeShellNotificationsModel.swift",
+            "desc": "App-lifetime source reminders/dismissals; queued local-state writes drain before restore."
+          },
+          {
+            "id": "native.onboarding",
+            "label": "Native setup assistant",
+            "sub": "seven steps · draft / completion",
+            "kind": "client",
+            "x": 400,
+            "y": 260,
+            "path": "apps/native/Sources/VisionNativeCore/Screens/Onboarding/NativeOnboardingModel.swift",
+            "desc": "Source-shaped draft, shared settings completion, existing import review and restore owners."
+          },
+          {
+            "id": "native.reports",
+            "label": "Native PDF reports",
+            "sub": "binary · original fiscal context",
+            "kind": "client",
+            "x": 580,
+            "y": 260,
+            "path": "apps/native/Sources/VisionNativeCore/Screens/Reports/NativeReportModel.swift",
+            "desc": "Three types; same-page draft, live theme/exclusions, one-attempt binary save, exact TS fiscal context."
+          },
+          {
+            "id": "native.print",
+            "label": "Native loaded-page print",
+            "sub": "snapshot · inert section document",
+            "kind": "client",
+            "x": 20,
+            "y": 348,
+            "path": "apps/native/Sources/VisionNativeCore/Screens/Reports/NativeTaxPrintSnapshot.swift",
+            "desc": "Loaded Tax year/widgets/local state; no reads or fiscal recalculation. macOS print rendering pending."
           }
         ],
         "baseEdges": [
@@ -2662,6 +2712,38 @@
           [
             "native.settings",
             "native.datasession"
+          ],
+          [
+            "native.palette",
+            "fe.features"
+          ],
+          [
+            "native.shellbanners",
+            "native.settingsbridge"
+          ],
+          [
+            "native.onboarding",
+            "native.settingsbridge"
+          ],
+          [
+            "native.onboarding",
+            "native.portfolioimport"
+          ],
+          [
+            "native.reports",
+            "native.datasession"
+          ],
+          [
+            "native.reports",
+            "sv.reports"
+          ],
+          [
+            "native.reports",
+            "fe.features"
+          ],
+          [
+            "native.taxclient",
+            "native.print"
           ]
         ],
         "flows": [
@@ -6362,9 +6444,9 @@
           },
           {
             "id": "native-tax-report",
-            "name": "Export native Tax CSV or open the shared PDF dialog",
+            "name": "Export native Tax CSV or PDF",
             "category": "Native migration",
-            "summary": "CSV uses backend profile/calculation data and a native save panel. PDF continues through the shared React dialog; closing preserves the selected tax year and restores the SwiftUI page.",
+            "summary": "CSV keeps backend-selected values; native PDF form retains source draft, period and fiscal context while closing removes only export.",
             "steps": [
               {
                 "from": "native.taxclient",
@@ -6374,21 +6456,21 @@
               },
               {
                 "from": "native.taxclient",
-                "to": "fe.pages",
-                "payload": "/tax?year=2025&export=pdf",
-                "annotation": "NativeShellModel.openTaxReport preserves existing query state and presents the web overlay. TaxOverviewPage.tsx defaults ExportDialog to tax."
+                "to": "native.reports",
+                "payload": "/tax?year=2025&export=pdf → native report sheet",
+                "annotation": "NativeShellModel.swift preserves all query state and same-page drafts; historical route year does not replace source rolling12 default."
               },
               {
-                "from": "fe.pages",
-                "to": "be.routes",
-                "payload": "POST /api/reports/tax with existing sections, profile and precomputed tax results",
-                "annotation": "features/reports/ExportDialog.tsx retains the shared TypeScript serialization and PDF download contract; this dialog remains a web parity surface."
+                "from": "native.reports",
+                "to": "sv.reports",
+                "payload": "POST /api/reports/tax → application/pdf",
+                "annotation": "NativeReportService.swift and NativeTaxReportContext.swift preserve original TaxValue fiscal fields and binary response; retained fixed TypeScript callbacks own projection/extreme context."
               },
               {
-                "from": "fe.pages",
+                "from": "native.reports",
                 "to": "native.taxclient",
-                "payload": "remove only export with replace; retain year=2025",
-                "annotation": "TaxOverviewPage.tsx closes the dialog and sends the route update, restoring the native Tax screen. Full macOS/Demo review remains pending."
+                "payload": "remove only current export parameter after close/success",
+                "annotation": "NativeShellModel.swift retains selected year and filters; NativeReportModel.swift keeps canceled saves open. macOS rendered verification remains pending."
               }
             ],
             "docs": [
@@ -7795,6 +7877,154 @@
               {
                 "path": "architecture/native-app.md",
                 "label": "Native architecture"
+              }
+            ]
+          },
+          {
+            "id": "native-palette-answers",
+            "name": "Use native palette and source answers",
+            "category": "Native migration",
+            "summary": "Native UI retains original TypeScript calculator/FX answer authority.",
+            "steps": [
+              {
+                "from": "native.palette",
+                "to": "fe.features",
+                "payload": "fixed callback and exact submitted input",
+                "annotation": "apps/frontend/src/lib/nativePaletteAnswer.ts retains source parsing/calculation; NativeCommandPaletteModel.swift checks selection/visit authority."
+              },
+              {
+                "from": "fe.features",
+                "to": "native.palette",
+                "payload": "answer or original failure",
+                "annotation": "apps/native/Sources/VisionNativeUI/NativeCommandPaletteView.swift renders the captured answer; NativeShortcutsHelpView.swift owns native help."
+              }
+            ],
+            "docs": [
+              {
+                "path": "architecture/native-app.md",
+                "label": "Native ownership"
+              }
+            ]
+          },
+          {
+            "id": "native-shell-reminders",
+            "name": "Display native FX and upcoming reminders",
+            "category": "Native migration",
+            "summary": "Source reminder state belongs to the native app-lifetime graph.",
+            "steps": [
+              {
+                "from": "native.shellbanners",
+                "to": "be.routes",
+                "payload": "existing FX and upcoming-payment reads",
+                "annotation": "Screens/ShellNotifications/ShellFXStatusModel.swift and ShellUpcomingPaymentsModel.swift retain source windows, refresh and occurrence dismissal."
+              },
+              {
+                "from": "native.shellbanners",
+                "to": "native.settingsbridge",
+                "payload": "queued source dismissal/draft receipts",
+                "annotation": "Shell/NativeLocalStateSession.swift drains accepted storage writes before restore; Components/ShellFXStatusBanner.swift and ShellUpcomingPaymentsBanner.swift render native state."
+              }
+            ],
+            "docs": [
+              {
+                "path": "architecture/native-app.md",
+                "label": "Native ownership"
+              }
+            ]
+          },
+          {
+            "id": "native-onboarding-assistant",
+            "name": "Complete native seven-step setup",
+            "category": "Native migration",
+            "summary": "Native capability removes competing web lifecycle owners.",
+            "steps": [
+              {
+                "from": "native.onboarding",
+                "to": "native.settingsbridge",
+                "payload": "source draft and onboarding_complete write",
+                "annotation": "Screens/Onboarding/NativeOnboardingModel.swift and NativeOnboardingDraft.swift preserve progress; completion uses existing settings persistence."
+              },
+              {
+                "from": "native.onboarding",
+                "to": "native.portfolioimport",
+                "payload": "first CSV review handoff",
+                "annotation": "UI/Screens/Onboarding/NativeOnboardingView.swift reuses import review and backup restore rather than replacing runtime writers."
+              },
+              {
+                "from": "native.onboarding",
+                "to": "native.datasession",
+                "payload": "restore drain then fresh graph",
+                "annotation": "apps/native/VisionNative/ShellController.swift retires old graph on successful shared restore; failed restore resumes admitted state."
+              }
+            ],
+            "docs": [
+              {
+                "path": "architecture/native-app.md",
+                "label": "Native ownership"
+              }
+            ]
+          },
+          {
+            "id": "native-report-binary-save",
+            "name": "Generate and save native PDF reports",
+            "category": "Native migration",
+            "summary": "Three source forms reuse existing binary endpoints and original fiscal authority.",
+            "steps": [
+              {
+                "from": "native.reports",
+                "to": "fe.features",
+                "payload": "original selected-year household or fresh five-key extreme-year context",
+                "annotation": "NativeTaxReportContext.swift and apps/frontend/src/features/reports/taxReportContext.ts preserve frozen precedence and source extreme-year behavior with no new formulas."
+              },
+              {
+                "from": "native.reports",
+                "to": "native.datasession",
+                "payload": "POST /api/reports/{type}, one attempt, 900s",
+                "annotation": "NativeReportService.swift preserves TaxValue Decimal request body and APIResponse headers/binary; shared transport honors restore fences."
+              },
+              {
+                "from": "native.datasession",
+                "to": "sv.reports",
+                "payload": "existing PDF generator request",
+                "annotation": "apps/node-backend/src/routes/reports.ts validates original period/sections/theme/currency and fiscal fragment fields."
+              },
+              {
+                "from": "sv.reports",
+                "to": "native.reports",
+                "payload": "application/pdf → native save panel",
+                "annotation": "NativeReportModel.swift keeps same-page drafts; save cancellation emits no success and stale generations cannot close a new visit."
+              }
+            ],
+            "docs": [
+              {
+                "path": "architecture/native-app.md",
+                "label": "Native ownership"
+              }
+            ]
+          },
+          {
+            "id": "native-tax-visible-page-print",
+            "name": "Print the loaded visible Tax page",
+            "category": "Native migration",
+            "summary": "Current-page print is independent of all-section PDF export; rendered pagination pending.",
+            "steps": [
+              {
+                "from": "native.taxclient",
+                "to": "native.print",
+                "payload": "immutable selected year/widgets/disclosures/comparison/deductions",
+                "annotation": "NativeTaxPrintSnapshot.swift captures already loaded models; missing/error/loading/current-year mismatch rejects without querying."
+              },
+              {
+                "from": "native.print",
+                "to": "native.print",
+                "payload": "inert section presentation → paginated NSPrintOperation",
+                "annotation": "NativeTaxPrintPresentation.swift and UI/Screens/Reports/NativeTaxPrintDocument.swift reuse views without page load hooks; apps/native/VisionNative/ShellController.swift rechecks generation/route/overlays/restore before print."
+              }
+            ],
+            "docs": [
+              {
+                "path": "architecture/native-app.md",
+                "label": "Native ownership"
               }
             ]
           }

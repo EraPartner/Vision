@@ -2,8 +2,8 @@
 title: PDF Report Export
 type: feature
 status: active
-date: 2026-10-11
-updated: 2026-10-11
+date: 2026-10-13
+updated: 2026-10-13
 tags:
   [
     feature,
@@ -69,6 +69,26 @@ related_code:
 > Phase 7 (April 2026): Filter exclusions with impact comparison view — when categories or recipients are excluded via the ExportDialog, the report now displays a "Filter Impact" comparison table on the cover page showing metrics with and without filters applied, plus delta badges for change visibility.
 >
 > Phase 8 (April 2026): Full portfolio and tax report implementation — replaces "Coming soon" placeholders with 6 portfolio sections and 7 tax sections using real data fetchers, shared SVG chart infrastructure (`svgLineChart`, `svgGenericGroupedBarChart`), and Belgian tax pass-through (`taxProfile` + `precomputedPIT`). Portfolio export button added to PortfolioOverviewPage.
+
+## Native report sheet (phase 3p)
+
+`NativeReportSheet` and `NativeReportModel` own the three export types under the native capability;
+the shared web dialog is suppressed before its hooks run. Source period defaults (rolling twelve
+months), section order, twelve currencies and date validation remain authoritative. Same-page reopen
+retains the draft, while leaving the page resets it. An all-selected section list is sent as `[]`,
+retaining the financial server default that omits planned outlook. Theme and financial exclusions are
+resolved at submission. Native save-panel cancellation keeps the draft and emits no success notice.
+
+The existing PDF endpoints return binary data through a single-attempt 900-second client sharing the
+native data session. Tax context preserves original frozen values; normal-year profile projection and
+extreme custom-year fallback reuse fixed shared TypeScript helpers over current raw data. Fiscal
+formulas remain shared TypeScript. See [[docs/api/reports|the request contract]] and
+[[docs/architecture/native-app#Shell overlays and reports (phase 3p)|native ownership]].
+
+Current-page File → Print is separate from generating an export PDF: it captures the loaded Tax year,
+visible widgets and local disclosure/comparison state without new reads or calculations. macOS printer
+pagination and rendered parity remain unverified; see [[docs/reference/native-parity/tax|Tax parity]].
+
 
 ## Phase 7: Filter Exclusions with Impact Comparison & Dual-Chart Visualization
 

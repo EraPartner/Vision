@@ -18,13 +18,7 @@ public struct NativeStatisticsPrintDocument: View {
         }.frame(maxWidth: .infinity, alignment: .leading)
             .fixedSize(horizontal: false, vertical: true).allowsHitTesting(false)
             .environment(\.locale, presentation.snapshot.settings.numberFormat.locale)
-            .environment(
-                \.visionTheme,
-                VisionTheme(selection: ThemeSelection(
-                    variant: presentation.snapshot.theme.variant, appearance: .light,
-                    colorblindGainLoss: presentation.snapshot.theme.colorblindGainLoss,
-                    systemAccentColor: presentation.snapshot.theme.systemAccentColor,
-                    systemAccentForegroundColor: presentation.snapshot.theme.systemAccentForegroundColor)))
+            .environment(\.visionTheme, VisionTheme(selection: presentation.snapshot.theme, isPrintReport: true))
             .preferredColorScheme(.light)
     }
 }
@@ -57,7 +51,9 @@ public struct NativeStatisticsPrintSectionView: View {
                                 settings: snapshot.settings, strings: snapshot.strings,
                                 selection: .constant(snapshot.savedLocalState.selection[String(id)]),
                                 range: .constant(snapshot.savedLocalState.rangeStart[String(id)]))
-                        } else if let error = snapshot.savedErrors[id] { Text(error) }
+                        } else if let error = snapshot.savedErrors[id] {
+                            Text(error)
+                        }
                     }
                 }
             }

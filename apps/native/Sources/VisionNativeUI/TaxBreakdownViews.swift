@@ -89,7 +89,23 @@ struct TaxPITBreakdownView: View {
     let portfolioTaxes: Decimal?
     let totalIncludingPortfolio: Decimal?
     let totalIncludingProperty: Decimal?
+    @State private var expanded: Bool
+    private let onExpandedChange: ((Bool) -> Void)?
     @Environment(\.visionTheme) private var theme
+    init(
+        overview: OpenAPI.BelgianTaxOverview, shell: NativeShellModel, portfolioTaxes: Decimal?,
+        totalIncludingPortfolio: Decimal?, totalIncludingProperty: Decimal?, initiallyExpanded: Bool = false,
+        onExpandedChange: ((Bool) -> Void)? = nil
+    ) {
+        self.overview = overview
+        self.shell = shell
+        self.portfolioTaxes = portfolioTaxes
+        self.totalIncludingPortfolio = totalIncludingPortfolio
+        self.totalIncludingProperty = totalIncludingProperty
+        self._expanded = State(initialValue: initiallyExpanded)
+        self.onExpandedChange = onExpandedChange
+    }
+
     private var strings: any Localizing { shell.strings }
     private var rows: [(String, Decimal?, String)] {
         let c = overview.calculation
@@ -110,7 +126,15 @@ struct TaxPITBreakdownView: View {
     }
     var body: some View {
         TaxCard {
-            DisclosureGroup(strings.t("tax.pit.title")) {
+            DisclosureGroup(
+                strings.t("tax.pit.title"),
+                isExpanded: Binding(
+                    get: { expanded },
+                    set: { value in
+                        expanded = value
+                        onExpandedChange?(value)
+                    })
+            ) {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(strings.t("tax.pit.description")).foregroundStyle(theme.secondaryLabel)
                     Text(strings.t("tax.pit.tooltip")).font(.caption).foregroundStyle(theme.secondaryLabel)
@@ -137,6 +161,8 @@ struct TaxPITBreakdownView: View {
                 }.padding(.top, 12)
             }
         }
+        .onAppear { onExpandedChange?(expanded) }
+        .onDisappear { onExpandedChange?(false) }
     }
 }
 
@@ -202,18 +228,41 @@ struct TaxHouseholdBreakdownView: View {
     let overview: OpenAPI.BelgianTaxOverview
     let data: TaxDashboardData
     let shell: NativeShellModel
+    @State private var expanded: Bool
+    private let onExpandedChange: ((Bool) -> Void)?
+    private let printLayout: Bool
     @Environment(\.visionTheme) private var theme
+    init(
+        overview: OpenAPI.BelgianTaxOverview, data: TaxDashboardData, shell: NativeShellModel,
+        initiallyExpanded: Bool = false, printLayout: Bool = false, onExpandedChange: ((Bool) -> Void)? = nil
+    ) {
+        self.overview = overview
+        self.data = data
+        self.shell = shell
+        self._expanded = State(initialValue: initiallyExpanded)
+        self.printLayout = printLayout
+        self.onExpandedChange = onExpandedChange
+    }
+
     private var strings: any Localizing { shell.strings }
     private var partners: [OpenAPI.BelgianTaxPartnerTaxResult] { overview.result.partners }
     var body: some View {
         if !data.householdBreakdownRows.isEmpty, partners.count > 1 {
             TaxCard {
-                DisclosureGroup(strings.t("tax.householdBreakdown.title")) {
+                DisclosureGroup(
+                    strings.t("tax.householdBreakdown.title"),
+                    isExpanded: Binding(
+                        get: { expanded },
+                        set: { value in
+                            expanded = value
+                            onExpandedChange?(value)
+                        })
+                ) {
                     VStack(alignment: .leading, spacing: 12) {
                         Text(strings.t("tax.householdBreakdown.description", ["year": String(overview.year)]))
                             .foregroundStyle(theme.secondaryLabel)
-                        ScrollView(.horizontal) {
-                            Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 10) {
+                        TaxTableViewport(isPrinting: printLayout) {
+                            Grid(alignment: .leading, horizontalSpacing: printLayout ? 10 : 24, verticalSpacing: 10) {
                                 GridRow {
                                     Text(strings.t("tax.pit.table.component")).font(.caption.weight(.semibold))
                                     ForEach(partners, id: \.partnerId) { partner in
@@ -254,7 +303,7 @@ struct TaxHouseholdBreakdownView: View {
                                         amount(recorded.A + recorded.B)
                                     }
                                 }
-                            }.frame(minWidth: 620, alignment: .leading)
+                            }.frame(minWidth: printLayout ? nil : 620, alignment: .leading)
                         }
                         if data.recordedIncomeByPartner != nil {
                             Text(strings.t("tax.householdBreakdown.recorded.note")).font(.caption).foregroundStyle(
@@ -278,6 +327,8 @@ struct TaxHouseholdBreakdownView: View {
                     }.padding(.top, 12)
                 }
             }
+            .onAppear { onExpandedChange?(expanded) }
+            .onDisappear { onExpandedChange?(false) }
         }
     }
     private var quotientDescription: String {

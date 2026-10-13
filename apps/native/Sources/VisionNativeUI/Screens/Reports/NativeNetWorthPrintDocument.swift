@@ -23,12 +23,7 @@ public struct NativeNetWorthPrintDocument: View {
         .environment(\.visionTheme, printTheme).preferredColorScheme(.light)
     }
     private var printTheme: VisionTheme {
-        let original = presentation.snapshot.theme
-        return VisionTheme(
-            selection: ThemeSelection(
-                variant: original.variant, appearance: .light, colorblindGainLoss: original.colorblindGainLoss,
-                systemAccentColor: original.systemAccentColor,
-                systemAccentForegroundColor: original.systemAccentForegroundColor))
+        VisionTheme(selection: presentation.snapshot.theme, isPrintReport: true)
     }
 }
 
@@ -50,6 +45,9 @@ public struct NativeNetWorthPrintSectionView: View {
             AdminCard {
                 Text(strings.t("networth.emptyTitle")).font(.headline)
                 Text(strings.t("networth.emptyDescription")).foregroundStyle(theme.secondaryLabel)
+                if !snapshot.isOnline {
+                    Text(strings.t("portfolio.refreshPricesOffline")).foregroundStyle(theme.secondaryLabel)
+                }
             }
         case .stalePrices:
             AdminCard {
@@ -57,6 +55,9 @@ public struct NativeNetWorthPrintSectionView: View {
                     strings.t("portfolio.stalePricesBanner", ["n": String(snapshot.stalePriceCount)]),
                     systemImage: "exclamationmark.triangle"
                 ).foregroundStyle(theme.warning)
+                if !snapshot.isOnline {
+                    Text(strings.t("portfolio.refreshPricesOffline")).foregroundStyle(theme.secondaryLabel)
+                }
             }
         case .hero: hero
         case .accounts: accounts
@@ -323,11 +324,14 @@ public struct NativeNetWorthPrintSectionView: View {
                         ForEach(snapshot.tableKeys, id: \.self) { key in
                             Text(tableValue(row, key: key)).font(.caption).monospacedDigit()
                                 .fontWeight(key == "netWorth" ? .bold : .regular)
+                                .foregroundStyle(tableColor(row, key: key))
                                 .frame(maxWidth: .infinity, alignment: key == "date" ? .leading : .trailing)
                         }
                     }
                     Divider()
                 }
+                if snapshot.tableFetchingMore { Text(strings.t("table.loadingMore")).font(.footnote) }
+                Text(tableFooter).font(.footnote).foregroundStyle(theme.secondaryLabel)
             }
             if let error = snapshot.tableError { Text(verbatim: error).foregroundStyle(theme.destructive) }
         }
@@ -336,6 +340,21 @@ public struct NativeNetWorthPrintSectionView: View {
         if key == "date" { return presentation.date(row.snapshot.date) }
         guard case .number(let value) = row.rawValue(key) else { return "—" }
         return presentation.money(value, signed: key == "change")
+    }
+    private var tableFooter: String {
+        var text =
+            snapshot.tableRows.count != snapshot.tableLoadedCount
+            ? strings.t(
+                "table.shownOfFiltered",
+                ["shown": String(snapshot.tableRows.count), "total": String(snapshot.tableTotal)])
+            : strings.t(
+                "table.loadedOf", ["loaded": String(snapshot.tableLoadedCount), "total": String(snapshot.tableTotal)])
+        if snapshot.tableHasMore { text += " · " + strings.t("table.scrollForMore") }
+        return text
+    }
+    private func tableColor(_ row: NetWorthTableRow, key: String) -> Color {
+        guard key == "change", let change = row.change else { return theme.foreground }
+        return change < 0 ? theme.loss : theme.gain
     }
     private func stat(_ key: String, value: String, symbol: String) -> some View {
         AdminCard {

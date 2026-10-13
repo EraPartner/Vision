@@ -32,6 +32,8 @@ import Observation
     @ObservationIgnored private var loadTask: Task<Void, Never>?
     @ObservationIgnored private var loadTaskID: UUID?
     @ObservationIgnored private var draftWrite: Task<Void, Never>?
+    @ObservationIgnored private var acceptedActions: Set<UUID> = []
+    @ObservationIgnored private var acceptedActionWaiters: [CheckedContinuation<Void, Never>] = []
     @ObservationIgnored private var storageFailureShown = false
     @ObservationIgnored private var notices = NoticeCounter()
 
@@ -198,28 +200,40 @@ import Observation
         guard isPresented, !creatingCategories, !isCompleting, !draft.selectedCategoryIndexes.isEmpty else { return }
         creatingCategories = true
         let scope = visit
+        let action = beginAcceptedAction()
+        defer {
+            if scope == visit { creatingCategories = false }
+            finishAcceptedAction(action)
+        }
         let selected = draft.selectedCategoryIndexes
         let service = service
         // Promise.allSettled: every independent request settles, including partial durable success.
-        let results = await withTaskGroup(of: (Int, APIError?).self, returning: [(Int, APIError?)].self) { group in
+        let results = await withTaskGroup(
+            of: (ordinal: Int, error: APIError?, cancelled: Bool).self,
+            returning: [(ordinal: Int, error: APIError?, cancelled: Bool)].self
+        ) {
+            group in
             for (ordinal, index) in selected.enumerated() {
                 let category = NativeOnboardingPreset.categories[index]
                 group.addTask {
                     do {
                         try await service.onboardingCreateCategory(category)
-                        return (ordinal, nil)
-                    } catch { return (ordinal, APIError.wrapping(error)) }
+                        return (ordinal, nil, false)
+                    } catch is CancellationError {
+                        return (ordinal, nil, true)
+                    } catch { return (ordinal, APIError.wrapping(error), false) }
                 }
             }
-            var results: [(Int, APIError?)] = []
+            var results: [(ordinal: Int, error: APIError?, cancelled: Bool)] = []
             for await result in group { results.append(result) }
-            return results.sorted { $0.0 < $1.0 }
+            return results.sorted { $0.ordinal < $1.ordinal }
         }
-        if scope == visit { creatingCategories = false }
-        if results.contains(where: { $0.1 == nil }) { await didMutateCategories?() }
-        if let failure = results.compactMap(\.1).first {
+        if results.contains(where: { $0.error == nil && !$0.cancelled }) { await didMutateCategories?() }
+        if let failure = results.compactMap(\.error).first {
             show(.error, "onboarding.toast.categoriesFailed", ["msg": APIErrorMessage.text(failure, strings: strings)])
         } else {
+            // Retirement cancels outstanding requests without a backend failure or success receipt.
+            guard !results.contains(where: { $0.cancelled }) else { return }
             show(.success, "onboarding.toast.categoriesCreated", ["n": String(results.count)])
             guard scope == visit, isPresented, !isCompleting else { return }
             draft.categoriesCreated = true
@@ -231,7 +245,11 @@ import Observation
         importing = true
         let scope = visit
         let bank = draft.selectedBank
-        defer { if scope == visit { importing = false } }
+        let action = beginAcceptedAction()
+        defer {
+            if scope == visit { importing = false }
+            finishAcceptedAction(action)
+        }
         do {
             let receipt = try await service.onboardingImport(file: file, bank: bank)
             await didMutateImports?()
@@ -256,7 +274,11 @@ import Observation
         guard isPresented, !isCompleting else { return }
         isCompleting = true
         let scope = visit
-        defer { if scope == visit { isCompleting = false } }
+        let action = beginAcceptedAction()
+        defer {
+            if scope == visit { isCompleting = false }
+            finishAcceptedAction(action)
+        }
         await draftWrite?.value
         do {
             if await persistence.baseline("onboarding_complete") == nil {
@@ -294,6 +316,26 @@ import Observation
             visit = UUID()
             didComplete?()
         } catch { if scope == visit { show(.error, "onboarding.persist.failed") } }
+    }
+    /// Ordinary reload waits accepted ACK/callback/draft tails while their writers are still open.
+    /// A database restore uses retirement instead and must not wait here after pausing writers.
+    public func flushAcceptedActions() async {
+        while !acceptedActions.isEmpty {
+            await withCheckedContinuation { acceptedActionWaiters.append($0) }
+        }
+        await draftWrite?.value
+    }
+    private func beginAcceptedAction() -> UUID {
+        let id = UUID()
+        acceptedActions.insert(id)
+        return id
+    }
+    private func finishAcceptedAction(_ id: UUID) {
+        acceptedActions.remove(id)
+        guard acceptedActions.isEmpty else { return }
+        let waiters = acceptedActionWaiters
+        acceptedActionWaiters.removeAll()
+        for waiter in waiters { waiter.resume() }
     }
     public func flushDraft() async { await draftWrite?.value }
     public func didDisappear() {

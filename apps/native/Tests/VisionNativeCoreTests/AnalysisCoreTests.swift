@@ -289,6 +289,99 @@ struct AnalysisCoreTests {
         await screens.didAppear()
         #expect(screens.workspace.sqlHistory == ["SELECT retained"])
     }
+    @Test func reloadDrainWaitsForAcceptedRunAndItsFutureSQLHistoryWrite() async throws {
+        let service = AnalysisFixtureService()
+        let store = AnalysisReloadTailHistoryStore()
+        let model = AnalysisModel(service: service, historyStore: store)
+        model.setMode(.sql)
+        model.sql = "SELECT synthetic_reload"
+        await service.pause("execute")
+        let run = Task { await model.run() }
+        await service.waitForPause()
+        var drained = false
+        let drain = Task {
+            await model.flushAcceptedRuns()
+            drained = true
+        }
+        #expect(await analysisReloadEventually { model.pendingAcceptedRunDrainCount == 1 })
+        #expect(!drained && store.writes.isEmpty)
+        await service.release()
+        #expect(await run.value)
+        await store.waitForWrite()
+        #expect(!drained && store.writes.isEmpty)
+        store.releaseWrite()
+        await drain.value
+        #expect(drained)
+        #expect(store.writes == [["SELECT synthetic_reload", "SELECT retained"]])
+    }
+    @Test func failedAcceptedRunCannotLeaveTheReloadDrainWaitingOrAddHistory() async throws {
+        let service = AnalysisFixtureService()
+        let store = AnalysisReloadTailHistoryStore()
+        let model = AnalysisModel(service: service, historyStore: store)
+        model.setMode(.sql)
+        model.sql = "SELECT synthetic_failure"
+        await service.failExecute()
+        await service.pause("execute")
+        let run = Task { await model.run() }
+        await service.waitForPause()
+        let drain = Task { await model.flushAcceptedRuns() }
+        #expect(await analysisReloadEventually { model.pendingAcceptedRunDrainCount == 1 })
+        await service.release()
+        #expect(await run.value == false)
+        await drain.value
+        #expect(model.pendingAcceptedRunDrainCount == 0)
+        #expect(store.writes.isEmpty && model.sqlHistory == ["SELECT retained"])
+    }
+    @Test func reloadDrainPreservesTheExistingLateQueryExitPolicy() async throws {
+        let service = AnalysisFixtureService()
+        let store = AnalysisReloadTailHistoryStore()
+        let model = AnalysisModel(service: service, historyStore: store)
+        model.setMode(.sql)
+        model.sql = "SELECT synthetic_retired_visit"
+        await service.pause("execute")
+        let run = Task { await model.run() }
+        await service.waitForPause()
+        let drain = Task { await model.flushAcceptedRuns() }
+        #expect(await analysisReloadEventually { model.pendingAcceptedRunDrainCount == 1 })
+        model.resetForVisit()
+        await service.release()
+        #expect(await run.value == false)
+        await drain.value
+        #expect(store.writes.isEmpty)
+        #expect(model.displayedResult == nil)
+        #expect(model.pendingAcceptedRunDrainCount == 0)
+    }
+}
+
+@MainActor private func analysisReloadEventually(_ condition: () -> Bool) async -> Bool {
+    for _ in 0..<10_000 {
+        if condition() { return true }
+        await Task.yield()
+    }
+    return false
+}
+@MainActor private final class AnalysisReloadTailHistoryStore: AnalysisSQLHistoryStore {
+    private(set) var writes: [[String]] = []
+    private var started = false
+    private var waiter: CheckedContinuation<Void, Never>?
+    private var completion: CheckedContinuation<Void, Never>?
+    func read() async -> [String] { ["SELECT retained"] }
+    func write(_ entries: [String]) async {
+        await withCheckedContinuation { continuation in
+            completion = continuation
+            started = true
+            waiter?.resume()
+            waiter = nil
+        }
+        writes.append(entries)
+    }
+    func waitForWrite() async {
+        if !started { await withCheckedContinuation { waiter = $0 } }
+    }
+    func releaseWrite() {
+        completion?.resume()
+        completion = nil
+    }
 }
 
 private func analysisResultWire(id: String? = nil, offset: Int = 0, partial: Bool = false) -> TaxValue {

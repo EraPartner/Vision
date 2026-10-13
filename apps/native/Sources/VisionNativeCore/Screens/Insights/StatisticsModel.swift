@@ -89,7 +89,9 @@ public final class StatisticsModel {
     public var isLoading: Bool { filtered == nil && error == nil }
     public var hasData: Bool { !(filtered?.monthly.months.isEmpty ?? true) }
     public var hasExclusions: Bool { !exclusions.isEmpty }
-    public var currentPeriod: String { frozenPeriod ?? String(StatisticsWindow.day(now(), calendar: calendar).prefix(7)) }
+    public var currentPeriod: String {
+        frozenPeriod ?? String(StatisticsWindow.day(now(), calendar: calendar).prefix(7))
+    }
     public func data(for graph: String) -> StatisticsSnapshot? {
         graphExclusions[graph] == false ? unfiltered : filtered
     }

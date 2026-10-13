@@ -107,13 +107,15 @@ struct StatisticsDigestView: View {
             }
             Spacer()
             content()
-            if !isPrinting { Button {
-                Task { await model.dismiss(body, key: key) }
-            } label: {
-                Image(systemName: "xmark")
+            if !isPrinting {
+                Button {
+                    Task { await model.dismiss(body, key: key) }
+                } label: {
+                    Image(systemName: "xmark")
+                }
+                .buttonStyle(.plain).disabled(model.dismissing.contains(key))
+                .accessibilityLabel(strings.t("insights.dismissFinding", ["kind": strings.t(kind), "name": title]))
             }
-            .buttonStyle(.plain).disabled(model.dismissing.contains(key))
-            .accessibilityLabel(strings.t("insights.dismissFinding", ["kind": strings.t(kind), "name": title])) }
         }.padding(.vertical, 4)
     }
 }

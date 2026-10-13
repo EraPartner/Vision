@@ -51,11 +51,15 @@ private actor NativeTaxPrintTransport: APITransport {
         #expect(value.overview.calculation.grossIncome == nil && value.overview.calculationSource == "frozen")
     }
     @Test func viewComparisonAndRulesExpansionAreImmutableSnapshotValues() throws {
-        var local = NativeTaxPrintLocalState(comparisonYear: 2020, rulesExpanded: true)
+        var local = NativeTaxPrintLocalState(
+            comparisonYear: 2020, rulesExpanded: true, pitExpanded: true, householdExpanded: true)
         let value = try snapshot(localState: local)
         local.comparisonYear = 2024
         local.rulesExpanded = false
+        local.pitExpanded = false
+        local.householdExpanded = false
         #expect(value.localState.comparisonYear == 2020 && value.localState.rulesExpanded)
+        #expect(value.localState.pitExpanded && value.localState.householdExpanded)
     }
     @Test func emptyPageKeepsMastheadTrendAndDisclaimerWithoutAddingWidgets() throws {
         let value = try snapshot(widgets: ["trendStrip", "summaryCards", "yearComparison"], empty: true)

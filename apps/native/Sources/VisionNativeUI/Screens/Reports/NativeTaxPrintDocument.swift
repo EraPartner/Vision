@@ -18,12 +18,7 @@ public struct NativeTaxPrintDocument: View {
             .environment(\.locale, presentation.snapshot.settings.numberFormat.locale)
             .environment(
                 \.visionTheme,
-                VisionTheme(
-                    selection: ThemeSelection(
-                        variant: presentation.snapshot.theme.variant, appearance: .light,
-                        colorblindGainLoss: presentation.snapshot.theme.colorblindGainLoss,
-                        systemAccentColor: presentation.snapshot.theme.systemAccentColor,
-                        systemAccentForegroundColor: presentation.snapshot.theme.systemAccentForegroundColor))
+                VisionTheme(selection: presentation.snapshot.theme, isPrintReport: true)
             )
             .preferredColorScheme(.light)
     }
@@ -86,11 +81,14 @@ public struct NativeTaxPrintSectionView: View {
             TaxPITBreakdownView(
                 overview: overview, shell: shell, portfolioTaxes: data.portfolioTaxesForYear,
                 totalIncludingPortfolio: data.totalTaxIncludingPortfolio,
-                totalIncludingProperty: data.totalTaxIncludingPropertyEstimate)
+                totalIncludingProperty: data.totalTaxIncludingPropertyEstimate,
+                initiallyExpanded: snapshot.localState.pitExpanded)
         case .taxRules:
             TaxRulesView(strings: strings, initiallyExpanded: snapshot.localState.rulesExpanded)
         case .householdBreakdown:
-            TaxHouseholdBreakdownView(overview: overview, data: data, shell: shell)
+            TaxHouseholdBreakdownView(
+                overview: overview, data: data, shell: shell, initiallyExpanded: snapshot.localState.householdExpanded,
+                printLayout: true)
         case .incomeBreakdown:
             TaxMonthlyIncomeView(model: presentation.dashboard, overview: overview, shell: shell)
         case .currentInputs:
@@ -112,7 +110,7 @@ public struct NativeTaxPrintSectionView: View {
         case .yearComparison:
             TaxYearComparisonView(
                 model: presentation.dashboard, overview: overview, shell: shell,
-                initialComparisonYear: snapshot.localState.comparisonYear)
+                initialComparisonYear: snapshot.localState.comparisonYear, printLayout: true)
         case .yearlyOverview:
             TaxYearlyOverviewView(model: presentation.dashboard, overview: overview, shell: shell)
         case .automation:

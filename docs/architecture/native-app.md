@@ -31,7 +31,7 @@ tags:
     string-catalog,
     navigation,
   ]
-description: "Vision Native is the Swift macOS app under apps/native/ that replaces the Electron shell in phases (ADR-204). Covers the directory layout, the runtime supervisor that starts its own PostgreSQL 18 cluster and backend on synthetic Demo data, payload discovery, the phase 1c shell (window, launch state, preload bridge, web view navigation and download policy, menus, dock and vibrancy), phase 1d backup and restore (bundle format compatibility, Keychain passphrase, restore allow-list, quit-time backup), the phase 1e audit anchor and Keychain witness with restore continuity, the standard and Demo variants of one build, the Debug-only backend override, the phase 2 foundations (generated OpenAPI client, design tokens, String Catalog and sidebar registry, the native NavigationSplitView shell with the shell:route-changed bridge message, and the native Exchange rates screen), the Native (macOS) CI job with the backup and audit interop job, screen ports through phase 3o native Settings and global action notices, alongside phase 3n Research Home, Markets, Lookup, Watchlist, Compare, Forecast, Chart Builder, Dossiers and AI chat/Investigation (lossless provider data, shared TypeScript presentation, guarded local drafts/cache, and earlier Analysis/Portfolio/Tax/import screens), and install-native.sh."
+description: "Vision Native is the Swift macOS app under apps/native/ that replaces the Electron shell in phases (ADR-204). Covers the directory layout, the runtime supervisor that starts its own PostgreSQL 18 cluster and backend on synthetic Demo data, payload discovery, the phase 1c shell (window, launch state, preload bridge, web view navigation and download policy, menus, dock and vibrancy), phase 1d backup and restore (bundle format compatibility, Keychain passphrase, restore allow-list, quit-time backup), the phase 1e audit anchor and Keychain witness with restore continuity, the standard and Demo variants of one build, the Debug-only backend override, the phase 2 foundations (generated OpenAPI client, design tokens, String Catalog and sidebar registry, the native NavigationSplitView shell with the shell:route-changed bridge message, and the native Exchange rates screen), the Native (macOS) CI job with the backup and audit interop job, screen ports through phase 3p native shell overlays, onboarding and PDF reports, alongside phase 3n Research Home, Markets, Lookup, Watchlist, Compare, Forecast, Chart Builder, Dossiers and AI chat/Investigation (lossless provider data, shared TypeScript presentation, guarded local drafts/cache, and earlier Analysis/Portfolio/Tax/import screens), and install-native.sh."
 aliases: [vision native, native app, swift app]
 ---
 
@@ -51,7 +51,7 @@ aliases: [vision native, native app, swift app]
 > [[docs/architecture/native-app#Native navigation and screens (phase 2)|phase 2]]). Phase 3 now includes
 > native Research Home, Markets, Lookup, Watchlist, Compare, Forecast and Chart Builder, alongside Analysis, Portfolio
 > Import/review and Portfolio Tax. TypeScript retains financial calculations, restricted execution
-> and import writers. Settings and global notices are native in phase 3o; onboarding and shared PDF overlays retain the web view. Dossiers and AI chat/Investigation
+> and import writers. Settings and global notices are native in phase 3o; palette, banners, onboarding and shared PDF overlays are native in phase 3p. Dossiers and AI chat/Investigation
 > are native in phase 3n. macOS build and synthetic Demo visual/keyboard review remain pending.
 
 ## Layout
@@ -1515,6 +1515,54 @@ Portable source/transport tests and UI syntax checks do not replace macOS SDK or
 VoiceOver/Demo verification. Those checks remain recorded gaps; the user's authorization continues
 later phases without a manual Demo-review intermission. See [[docs/features/settings|Settings]],
 [[docs/api/settings|Settings API]], and [[docs/reference/native-parity/shell-and-settings|Settings parity]].
+
+### Shell overlays and reports (phase 3p)
+
+`NativeCommandPaletteModel` and `NativeCommandPaletteView` own palette selection, recent actions,
+navigation and native shortcuts help. The fixed retained TypeScript answer callback preserves source
+calculator and currency parsing; Swift does not recreate those calculations. `NativeShellNotificationsModel`
+owns the global FX state, Home upcoming-payment reminders and backup reminder. Their dismissal state
+uses the app-lifetime local-state queue, which drains accepted writes before restore.
+
+`NativeOnboardingModel` and `NativeOnboardingView` replace the seven-step Welcome, Overview, Categories,
+Bank, Import, Tour and Backup wizard. Draft progress stays in the existing local-storage shape;
+completion uses the common settings writer. CSV review and backup restore reuse their existing owners.
+The strict native capability suppresses the competing web wizard before its hooks run.
+
+`NativeReportModel` and `NativeReportSheet` provide the shared financial, portfolio and tax export form.
+The initial period remains rolling twelve months, including exports opened from a historical Tax page.
+The source section order, twelve currencies, date/year validation, all-selected empty section array,
+financial exclusion scope and submit-time theme are preserved. Closing and reopening on the same path
+retains the draft; leaving the page resets it. Canceling the native save panel keeps the dialog and
+produces no success notice. Closing removes only the current route's `export` parameter.
+
+The hand-written binary request uses the existing `/api/reports/{type}` routes through a dedicated
+900-second client sharing `NativeDataSession`; PDF data and response headers are retained, with no
+retry. `NativeTaxReportContextService` reads the original selected-year overview and invokes the fixed
+shared TypeScript household projection. Frozen PIT/household precedence and legacy missing-household
+fields are preserved, including Decimal values and unknown household fields. For a custom year outside
+the overview API's 1900–2200 bounds, the fixed `__visionNativeTaxReportContext` callback receives a fresh,
+read-only five-key settings snapshot and uses the original source loaders, resolvers and fiscal engine.
+It neither clamps the requested year nor drops configured fiscal blocks: source-valid one-partner
+requests and source-invalid two-partner household requests retain their original result/error behavior.
+No report endpoint or fiscal formula changes.
+
+File → Print is a separate current-page operation. `NativeTaxPrintSnapshot` freezes the already loaded
+Tax year, visible widgets, comparison year, disclosure state and deduction state. The inert presentation
+and `NativeTaxPrintDocument` reuse section views without query lifecycle hooks or fiscal recalculation.
+Printer-only tables render all columns without horizontal scroll clipping. The SDK checks the route,
+generation, restore state and overlays again before paginated `NSPrintOperation` presentation. This
+implementation does not claim verified printer pagination or rendered macOS parity; those checks remain
+pending. Statistics and Net worth print preparation is tracked separately until their own proof passes.
+
+The immutable combined Foundation proof passed **1,271 tests in 161 suites** for the mounted phase-3p
+Core graph (239 production and 86 test files); it excludes subsequent current-page print additions.
+Focused Reports proof passed **37 tests in two suites**. The retained source fiscal context and export
+regression passed **179 tests across 16 files**, with source typecheck, lint and build passing. These
+checks do not verify SwiftUI/AppKit compilation, accessibility, visual layout or real printer output.
+See [[docs/reference/native-parity/shell-and-settings|shell parity]],
+[[docs/reference/native-parity/tax|Tax parity]], [[docs/features/onboarding|onboarding]],
+[[docs/features/pdf-report-export|PDF export]] and [[docs/diagrams/index|structural diagrams]].
 
 ## Install
 

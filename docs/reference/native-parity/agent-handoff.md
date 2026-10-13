@@ -65,7 +65,7 @@ explicitly. Do not leave the handoff or unfinished task files only in the worksp
 
 ## Current continuation work
 
-Latest full remote checkpoint: **`69415f27`**, pushed and verified after **`106774f2`**.
+Latest full remote checkpoint: **`368a0317`**, pushed and verified after **`2ef06366`**.
 The next full save must include all subsequent dirty/new task files, this handoff and
 the current printing/readiness work. Root owns publication; never wait for manual owner
 verification or a Demo intermission to proceed.
@@ -82,8 +82,9 @@ fixture, but excludes subsequent Tax printable-page preparation, SDK and rendere
 Remaining phase-3p work, in priority order:
 
 1. Follow automatic macOS app/package builds and repair actual compiler diagnostics.
-   The latest repair is StatisticsView's escaping content closure; no full macOS build
-   has passed. Keep SDK runtime/PDFKit/crypto/VoiceOver claims explicitly unverified.
+   The app build passed at `2ef06366`; its package run was cancelled by a later safety push.
+   Newer source needs fresh app/package checks. Keep SDK runtime/PDFKit/crypto/VoiceOver
+   claims explicitly unverified.
 2. Finish SDK shared Home upcoming/dismissal wiring, false/true renderer-ready transitions
    and distinct native-owned versus legacy-web restore reload paths. Native backup must
    settle frontend state/fresh onboarding ACK before its delayed reload; legacy web
@@ -639,6 +640,52 @@ structural docs have no partial changes yet and remain `docs_reports_cont`'s nex
 Keep the 1,271-test proof immutable and establish a new full scope after all new Core
 source stabilizes. Follow real Mac compiler/package runs continuously, then proceed to
 phase 4 under a new ADR; no user manual verification or intermission is needed.
+
+## Full accepted-action/print checkpoint (2026-10-13 23:53 UTC)
+
+`368a0317` saved all 28 files and is pushed and verified. Its Mac build passed the newer
+print/zoom UI stage but failed on the SDK calling flushHistory directly on AnalysisScreens.
+The next snapshot fixes both history/run drain calls through its workspace model. Evidence:
+`/workspace/vision-native-macos-fifteenth-build.log`. The earlier app build at `2ef06366`
+did pass; package tests were cancelled by the next safety push. Branch CI now lets a running
+verification finish and retains the newest pending snapshot; workflow policy and seven
+tests pass. It still does not install, publish, merge or replace CI Complete.
+
+The next full save includes every current task file and unfinished proof preparation.
+On disk: full accepted-action drain hooks for Onboarding, Analysis and Portfolio commit
+tails; SDK normal reload awaits these before pausing writers, drains existing local queues,
+and respects the input/reload-owner fences. Restore keeps intentional old-tail retirement.
+Portfolio commit tests cover both success and lost-ACK tails; Analysis tests cover history
+receipt, failed-query cleanup and visit retirement. Their focused proofs are pending.
+
+Current isolated proofs: 24 Onboarding cases pass with zero owned source drift, immutable
+`/workspace/vision-onboarding-proof-24`, manifest
+`98eb44f6f3d7335d9d331f7598eac3b36e49a824551a35bea0d979e0364bed42`;
+37 report/context cases pass including retained form drafts; 19 Statistics cases pass,
+including six current-view snapshots and original race/aggregation regressions; Net-worth
+11 cases passed before its final metadata refresh. Tax print Core compiled, but an inherited
+Analysis fixture/API typo blocked its test target; the fixture is corrected and the next
+proof refresh must use that actual corrected test. No actual printer rendering claim.
+
+All three native print routes are wired in source. Tax captures comparison/rules/PIT/
+household disclosure state and uses non-scrolling print tables; Statistics captures current
+filters, window, selected/hovered values, widget/custom chart data and cached failures;
+Net-worth freezes loaded rows, period/currency, chart selections and existing partial/error
+states without new queries or financial recomputation. Shared print theme overrides only
+the original white-paper page/card/muted/border roles and retains original chart/semantic
+colours. SwiftUI semantic/rendered proof still depends on Mac CI.
+
+Required 3p docs are on disk: scoped shell/Tax/PDF/onboarding/API/native architecture,
+three PlantUML diagrams and five new native flows, with 106 components/79 flows and all four
+indexes synchronized. Five flow tests, frontmatter/links/paths/geometry and format checks
+pass. A follow-up should refine notification versus Backup reminder ownership and include
+the final Statistics/Net-worth print graph after tests stabilize.
+
+Keep all prior immutable proofs, finish the new lifecycle/print focused proofs and obtain
+a fresh complete source scope. Follow Mac results, then implement phase 4 under a new ADR.
+The read-only dependency audit is `/workspace/vision-phase4-dependency-audit.txt`; preserve
+its staged native route/history/local storage takeover and narrow unchanged-TypeScript
+helper operations. No manual owner verification or phase intermission is required.
 
 ## Tooling and safety for continuation
 

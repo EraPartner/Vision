@@ -41,8 +41,12 @@ struct SavedChartsView: View {
                             CustomChartPlot(
                                 dataset: dataset, kind: CustomChartDraft(chart: chart).kind, settings: settings,
                                 strings: strings,
-                                selection: Binding(get: { model.printLocalState.selection[String(chart.id)] }, set: { model.printLocalState.selection[String(chart.id)] = $0 }),
-                                range: Binding(get: { model.printLocalState.rangeStart[String(chart.id)] }, set: { model.printLocalState.rangeStart[String(chart.id)] = $0 }))
+                                selection: Binding(
+                                    get: { model.printLocalState.selection[String(chart.id)] },
+                                    set: { model.printLocalState.selection[String(chart.id)] = $0 }),
+                                range: Binding(
+                                    get: { model.printLocalState.rangeStart[String(chart.id)] },
+                                    set: { model.printLocalState.rangeStart[String(chart.id)] = $0 }))
                         } else if let error = model.errors[chart.id] {
                             Text(error).foregroundStyle(theme.destructive)
                         } else {
@@ -76,16 +80,22 @@ struct CustomChartPlot: View {
     let kind: CustomChartKind
     let settings: NativeAppSettings
     let strings: any Localizing
-    @Binding var selection: String?
-    @Binding var range: String?
-    init(dataset: CustomChartDataset, kind: CustomChartKind, settings: NativeAppSettings, strings: any Localizing,
-         selection: Binding<String?> = .constant(nil), range: Binding<String?> = .constant(nil)) {
+    private let externalSelection: Binding<String?>?
+    private let externalRange: Binding<String?>?
+    @State private var localSelection: String?
+    @State private var localRange: String?
+    private var selection: Binding<String?> { externalSelection ?? $localSelection }
+    private var range: Binding<String?> { externalRange ?? $localRange }
+    init(
+        dataset: CustomChartDataset, kind: CustomChartKind, settings: NativeAppSettings, strings: any Localizing,
+        selection: Binding<String?>? = nil, range: Binding<String?>? = nil
+    ) {
         self.dataset = dataset
         self.kind = kind
         self.settings = settings
         self.strings = strings
-        _selection = selection
-        _range = range
+        externalSelection = selection
+        externalRange = range
     }
     private var entities: [CustomChartEntity] {
         dataset.entities.map { entity in
@@ -109,14 +119,15 @@ struct CustomChartPlot: View {
                 Text(strings.t("customChart.noSeries"))
             } else if kind == .rankedBar {
                 InsightRankedChart(
-                    rows: entities, settings: settings, currency: settings.defaultCurrency, strings: strings)
+                    rows: entities, settings: settings, currency: settings.defaultCurrency, strings: strings,
+                    initialSelection: selection.wrappedValue, onSelectionChange: { selection.wrappedValue = $0 })
             } else {
                 InsightTimelineChart(
                     series: series, currency: settings.defaultCurrency, settings: settings,
                     title: strings.t("customChart.builder.preview"), bars: kind.chartType == "bar",
                     areas: kind.chartType == "area",
-                    stackedBars: kind == .stackedBar, stackedAreas: kind == .stackedArea, selection: $selection,
-                    rangeStart: $range)
+                    stackedBars: kind == .stackedBar, stackedAreas: kind == .stackedArea, selection: selection,
+                    rangeStart: range)
             }
         }
     }
@@ -128,8 +139,6 @@ private struct CustomChartBuilderSheet: View {
     let settings: NativeAppSettings
     let strings: any Localizing
     @Environment(\.visionTheme) private var theme
-    @State private var previewSelection: String?
-    @State private var previewRange: String?
     private var draft: CustomChartDraft { model.draft ?? CustomChartDraft() }
     private func binding<Value>(_ keyPath: WritableKeyPath<CustomChartDraft, Value>) -> Binding<Value> {
         Binding(
@@ -180,7 +189,7 @@ private struct CustomChartBuilderSheet: View {
                     if model.isPreviewLoading {
                         ProgressView().frame(height: 240)
                     } else if let preview = model.preview {
-                        CustomChartPlot(dataset: preview, kind: draft.kind, settings: settings, strings: strings, selection: $previewSelection, range: $previewRange)
+                        CustomChartPlot(dataset: preview, kind: draft.kind, settings: settings, strings: strings)
                     } else if let error = model.previewError {
                         Text(error).foregroundStyle(theme.destructive)
                     }

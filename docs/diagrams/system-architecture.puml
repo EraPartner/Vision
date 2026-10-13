@@ -310,4 +310,18 @@ note right of NativeDataSession
   Portable transport cases pass; SDK/macOS verification remains pending.
 end note
 
+
+package "Native phase 3p ownership" {
+  node "Palette + shortcuts\nFX / upcoming / backup banners" as NativeShellOverlays
+  node "Seven-step setup assistant\nsource draft / shared completion writer" as NativeOnboarding
+  node "Native PDF form\noriginal source fiscal context\n900s binary response / native save" as NativeReports
+  node "Loaded-page Tax print\nimmutable widgets + local state\nprinter rendering not yet verified" as NativeVisiblePrint
+}
+NativeShellOverlays --> NativeSettings : app-lifetime preference state
+NativeOnboarding --> NativeSettings : completion / restore owner
+NativeReports --> NativeDataSession : shared restore fence
+NativeReports --> Routes : existing POST /api/reports/{type}
+NativeReports --> ReactApp : fixed TS projection / original context
+NativeTax --> NativeVisiblePrint : loaded snapshot / no new computation
+
 @enduml

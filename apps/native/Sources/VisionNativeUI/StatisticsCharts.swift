@@ -8,9 +8,21 @@ struct InsightRankedChart: View {
     let currency: String
     let strings: any Localizing
     @State private var selection: String?
+    private let onSelectionChange: (String?) -> Void
     @Environment(\.visionTheme) private var theme
     @FocusState private var focused: Bool
 
+    init(
+        rows: [CustomChartEntity], settings: NativeAppSettings, currency: String, strings: any Localizing,
+        initialSelection: String? = nil, onSelectionChange: @escaping (String?) -> Void = { _ in }
+    ) {
+        self.rows = rows
+        self.settings = settings
+        self.currency = currency
+        self.strings = strings
+        _selection = State(initialValue: initialSelection)
+        self.onSelectionChange = onSelectionChange
+    }
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             if rows.isEmpty { Text(strings.t("table.noData")).foregroundStyle(theme.secondaryLabel) }
@@ -66,6 +78,7 @@ struct InsightRankedChart: View {
                 return .handled
             }
             .onChange(of: focused) { _, value in if !value { selection = nil } }
+            .onChange(of: selection) { _, value in onSelectionChange(value) }
             if let row = rows.first(where: { $0.id == selection }) {
                 HStack {
                     Text(row.name)
@@ -83,10 +96,22 @@ struct StatisticsCategoryDonut: View {
     let currency: String
     let strings: any Localizing
     @State private var selected: String?
+    private let onSelectionChange: (String?) -> Void
     @State private var angle: Double?
     @FocusState private var focused: Bool
     @Environment(\.visionTheme) private var theme
 
+    init(
+        rows: [StatisticsCategory], settings: NativeAppSettings, currency: String, strings: any Localizing,
+        initialSelection: String? = nil, onSelectionChange: @escaping (String?) -> Void = { _ in }
+    ) {
+        self.rows = rows
+        self.settings = settings
+        self.currency = currency
+        self.strings = strings
+        _selected = State(initialValue: initialSelection)
+        self.onSelectionChange = onSelectionChange
+    }
     var body: some View {
         VStack {
             Chart(rows) { row in
@@ -157,6 +182,7 @@ struct StatisticsCategoryDonut: View {
                 return .handled
             }
             .onChange(of: focused) { _, value in if !value { selected = nil } }
+            .onChange(of: selected) { _, value in onSelectionChange(value) }
             .onChange(of: angle) { _, value in
                 guard let value else { return }
                 var total = 0.0

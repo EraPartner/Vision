@@ -2,8 +2,8 @@
 title: Feature - Onboarding
 type: feature
 status: active
-date: 2026-10-07
-updated: 2026-10-07
+date: 2026-10-13
+updated: 2026-10-13
 tags:
   [
     feature,
@@ -28,6 +28,18 @@ related_code:
 ---
 
 # Feature: Onboarding
+
+## Native setup assistant (phase 3p)
+
+The Swift shell mounts `NativeOnboardingModel` and `NativeOnboardingView` for the same seven-step flow.
+Its strict capability suppresses the web wizard before its state/query hooks run. Draft progress retains
+the source local-storage format; completing or skipping uses the shared settings writer. CSV review
+and backup restore reuse the existing import and restore owners, including the one-time fresh graph
+rebuild after successful restore. Source dialogs remain available when the capability is absent.
+Foundation and source checks do not establish macOS visual or keyboard parity.
+See [[docs/architecture/native-app#Shell overlays and reports (phase 3p)|native ownership]],
+[[docs/reference/native-parity/shell-and-settings|shell parity]] and [[docs/diagrams/index|flow diagrams]].
+
 
 ## Overview
 

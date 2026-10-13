@@ -34,6 +34,7 @@ public final class SavedChartsModel {
     public func appear(snapshot: StatisticsSnapshot, currency: String, strings: any Localizing) async {
         self.strings = strings
         if self.currency != currency || self.snapshot != snapshot {
+            printLocalState = .init()
             datasets = [:]
             errors = [:]
         }
@@ -70,6 +71,10 @@ public final class SavedChartsModel {
             }
         } catch { if token == revision { self.error = error.localizedDescription } }
         if token == revision { isLoading = false }
+    }
+    func matchesPrintSnapshot(_ snapshot: StatisticsSnapshot, currency: String) -> Bool {
+        !isLoading && self.snapshot == snapshot && self.currency == currency
+            && charts.allSatisfy { datasets[$0.id] != nil || errors[$0.id] != nil }
     }
     public func begin(chart: OpenAPI.SavedChart? = nil) {
         guard !isSaving else { return }

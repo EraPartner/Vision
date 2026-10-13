@@ -119,6 +119,86 @@ struct NetWorthTests {
     }
 }
 
+@MainActor @Suite("Current Net Worth print freezes displayed values")
+struct NativeNetWorthPrintTests {
+    private let strings = DictionaryStrings(language: .nl, table: ["networth.title": "Nettovermogen"])
+    private let theme = ThemeSelection(variant: .default, appearance: .dark)
+
+    @Test func captureAndInertFormattingPerformNoQueriesOrPriceWritesAndRetainCurrentControls() async throws {
+        let service = NetWorthFake()
+        let model = NetWorthModel(service: service)
+        await model.load(currency: "EUR", pageSize: 2, route: NativeRoute("/portfolio/net-worth?period=all")!)
+        model.selection = "2025-06-03"
+        model.rangeStart = "2025-06-01"
+        model.tableQuery.setFilter("date", to: "06-03")
+        let calls = await service.calls.count
+        let captured = try NativeNetWorthPrintSnapshot.capture(
+            model: model, settings: .defaults, strings: strings, theme: theme)
+        let presentation = NativeNetWorthPrintPresentation.prepare(captured)
+        _ = presentation.money(captured.data.current.netWorth)
+        _ = presentation.percent(captured.data.monthlyChangePercent)
+        _ = presentation.date("2025-06-03")
+        _ = presentation.tick("2025-06-03")
+        #expect(await service.calls.count == calls)
+        #expect(await service.refreshes == 0)
+        #expect(model.selection == "2025-06-03" && model.rangeStart == "2025-06-01")
+        #expect(captured.period == .all && captured.currency == "EUR")
+        #expect(captured.tableRows.map(\.id) == ["2025-06-03"])
+        #expect(captured.tableQuery == model.tableQuery)
+        #expect(captured.selection == "2025-06-03" && captured.rangeStart == "2025-06-01")
+        #expect(captured.readouts.first(where: { $0.id == "netWorth" })?.value == 3)
+        #expect(captured.readouts.first(where: { $0.id == "netWorth" })?.change == 2)
+    }
+
+    @Test func acceptedSnapshotSurvivesLaterCurrencyPeriodTableAndSelectionChanges() async throws {
+        let service = NetWorthFake()
+        let model = NetWorthModel(service: service)
+        await model.load(currency: "EUR", pageSize: 2, route: NativeRoute("/portfolio/net-worth?period=all")!)
+        model.selection = "2025-06-03"
+        let captured = try NativeNetWorthPrintSnapshot.capture(
+            model: model, settings: .defaults, strings: strings, theme: theme)
+        await model.load(currency: "USD", pageSize: 2, route: NativeRoute("/portfolio/net-worth?period=1m")!)
+        model.tableQuery.search = "No matching rows"
+        model.selection = nil
+        #expect(captured.data.current.netWorth == 100 && captured.currency == "EUR")
+        #expect(captured.period == .all && captured.selection == "2025-06-03")
+        #expect(captured.tableRows.count == 2 && captured.snapshots.count == 4)
+        #expect(captured.theme.appearance == .dark && captured.strings.language == .nl)
+        #expect(model.data?.current.netWorth == 200 && model.currency == "USD")
+    }
+
+    @Test func captureRejectsMissingOrWrongCurrencyDataWithoutStartingAQuery() async throws {
+        let service = NetWorthFake()
+        let model = NetWorthModel(service: service)
+        #expect(throws: APIError.self) {
+            try NativeNetWorthPrintSnapshot.capture(model: model, settings: .defaults, strings: strings, theme: theme)
+        }
+        #expect(await service.calls.isEmpty)
+        await model.load(currency: "EUR", pageSize: 2, route: NativeRoute("/portfolio/net-worth")!)
+        let calls = await service.calls.count
+        let usd = NativeAppSettings(defaultCurrency: "USD")
+        #expect(throws: APIError.self) {
+            try NativeNetWorthPrintSnapshot.capture(model: model, settings: usd, strings: strings, theme: theme)
+        }
+        #expect(await service.calls.count == calls)
+    }
+
+    @Test func loadedErrorsAndIncompleteHistoryRemainTheCurrentViewWithoutFetchingMore() async throws {
+        let service = NetWorthFake()
+        await service.setEmptyPage()
+        await service.failRates()
+        let model = NetWorthModel(service: service)
+        await model.load(currency: "EUR", pageSize: 2, route: NativeRoute("/portfolio/net-worth")!)
+        let captured = try NativeNetWorthPrintSnapshot.capture(
+            model: model, settings: .defaults, strings: strings, theme: theme)
+        #expect(captured.accounts == nil && captured.accountsError != nil)
+        #expect(captured.tableRows.isEmpty && captured.tableError != nil)
+        #expect(captured.sections.contains(.hero) && captured.sections.contains(.accounts))
+        #expect(captured.sections.contains(.table))
+        #expect(await service.calls.count == 2)
+    }
+}
+
 private func snapshot(_ date: String, _ value: Decimal) -> OpenAPI.NetWorthSnapshot {
     .init(date: date, liquid: 0, liabilities: 0, investments: value, netWorth: value)
 }

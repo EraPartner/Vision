@@ -178,4 +178,23 @@ note right of NativeDataSession
   Portable transport cases pass; SDK/macOS verification remains pending.
 end note
 
+
+package "Native reports and loaded-page print (phase 3p)" {
+  class NativeReportSheet
+  class NativeReportModel
+  class NativeTaxReportContextService
+  class "taxReportContext.ts\nfresh five-key snapshot / source engine" as OriginalReportContext
+  class "POST /api/reports/{type}\napplication/pdf" as BinaryReportAPI
+  class NativeTaxPrintSnapshot
+  class NativeTaxPrintDocument
+}
+NativeReportSheet --> NativeReportModel : source form / same-page draft
+NativeReportModel --> NativeTaxReportContextService : requested fiscal year
+NativeTaxReportContextService --> OriginalReportContext : fixed callback / extreme-year fallback
+NativeReportModel --> NativeDataSession : one attempt / 900s binary client
+NativeDataSession --> BinaryReportAPI : existing route / raw Decimal body
+BinaryReportAPI --> Repositories : existing PDF source data
+NativeTax --> NativeTaxPrintSnapshot : already loaded year / visible widgets / local state
+NativeTaxPrintSnapshot --> NativeTaxPrintDocument : inert presentation / no reads or fiscal math
+
 @enduml

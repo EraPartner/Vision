@@ -186,6 +186,8 @@ public final class PortfolioImportSessionModel {
     @ObservationIgnored private var restoreWaiters: [CheckedContinuation<Void, Never>] = []
     @ObservationIgnored private var checkpointRevision = UUID()
     @ObservationIgnored private var checkpointTask: Task<Void, Never>?
+    @ObservationIgnored private var acceptedCommitCount = 0
+    @ObservationIgnored private var commitWaiters: [CheckedContinuation<Void, Never>] = []
     private struct ReviewSettings: Codable {
         let sourceRoutingKey: String
         let batchIds: [Int]
@@ -296,6 +298,12 @@ public final class PortfolioImportSessionModel {
         }
     }
     public func flushCheckpoint() async { await checkpointTask?.value }
+    /// Normal reload waits for a reviewed commit's receipt/invalidation tail to create
+    /// its final checkpoint before storage admission pauses. Restore does not use this.
+    public func flushAcceptedCommits() async {
+        if acceptedCommitCount > 0 { await withCheckedContinuation { commitWaiters.append($0) } }
+        await flushCheckpoint()
+    }
     private func invalidate() {
         revision = UUID()
         plan = nil
@@ -562,12 +570,19 @@ public final class PortfolioImportSessionModel {
     }
     public func commit() async {
         guard canCommit, let plan else { return }
+        acceptedCommitCount += 1
         operation = "commit"
         error = nil
         let submitted = scope
         defer {
             operation = "idle"
             persist()
+            acceptedCommitCount -= 1
+            if acceptedCommitCount == 0 {
+                let waiters = commitWaiters
+                commitWaiters = []
+                for waiter in waiters { waiter.resume() }
+            }
         }
         do {
             let committed = try await service.importReconciliationCommit(

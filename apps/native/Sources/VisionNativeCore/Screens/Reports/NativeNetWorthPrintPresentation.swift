@@ -8,10 +8,9 @@ import Foundation
         NativeNetWorthPrintPresentation(snapshot: snapshot)
     }
     public func money(_ value: Decimal, signed: Bool = false) -> String {
-        (signed && value > 0 ? "+" : "")
-            + VisionFormat.currency(
-                value, code: snapshot.currency, locale: snapshot.settings.numberFormat.locale,
-                fractionDigits: snapshot.settings.showDecimalPlaces)
+        VisionFormat.currency(
+            value, code: snapshot.currency.uppercased(), locale: snapshot.settings.numberFormat.locale,
+            fractionDigits: snapshot.settings.showDecimalPlaces, signed: signed)
     }
     public func percent(_ value: Decimal) -> String {
         (value > 0 ? "+" : "") + VisionFormat.percent(value, locale: snapshot.settings.numberFormat.locale)

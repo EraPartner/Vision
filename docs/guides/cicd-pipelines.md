@@ -16,7 +16,7 @@ tags:
   ]
 description: Current GitHub Actions quality gates, native PostgreSQL verification, and macOS release flow.
 aliases: [CI, CD, GitHub Actions, release pipeline]
-related_code: [".github/workflows/ci.yml", ".github/workflows/release.yml"]
+related_code: [".github/workflows/ci.yml", ".github/workflows/native-branch.yml", ".github/workflows/release.yml"]
 ---
 
 # CI/CD Pipelines
@@ -42,6 +42,13 @@ scan, or publish a product container image. The required aggregate check remains
 `quality-gate` aggregates the portable pre-runtime checks. `CI Complete` aggregates every required
 stage and keeps a stable branch-protection name. A skipped path-filtered job is handled explicitly;
 an absent or failed required result is not treated as green.
+
+Swift continuation branches also run `.github/workflows/native-branch.yml` on pushes to
+`codex/native-phase-*`. It builds the unsigned Debug app and runs the Swift package tests on
+`macos-26`, with the same pinned XcodeGen digest as the main CI job. Frequent safety saves do
+not cancel a running verification before its package tests finish; GitHub retains the newest
+pending snapshot. This branch workflow supplies development evidence and does not publish,
+install or replace the required `CI Complete` merge gate.
 
 The frontend build is followed by `size:check`. Its reviewed gzip limits are 475 KB for the
 initial preload graph and 1374 KB for all route assets. The 2026-10-13 native Settings and fixed

@@ -7,9 +7,23 @@ struct StatisticsFlowView: View {
     let currency: String
     let strings: any Localizing
     @State private var hoveredNode: String?
+    private let onHoverChange: (String?, String?) -> Void
     @State private var hoveredLink: String?
     @Environment(\.visionTheme) private var theme
 
+    init(
+        flow: StatisticsFlow, settings: NativeAppSettings, currency: String, strings: any Localizing,
+        initialNode: String? = nil, initialLink: String? = nil,
+        onHoverChange: @escaping (String?, String?) -> Void = { _, _ in }
+    ) {
+        self.flow = flow
+        self.settings = settings
+        self.currency = currency
+        self.strings = strings
+        _hoveredNode = State(initialValue: initialNode)
+        _hoveredLink = State(initialValue: initialLink)
+        self.onHoverChange = onHoverChange
+    }
     var body: some View {
         let layout = StatisticsFlowLayout(flow: flow)
         GeometryReader { geometry in
@@ -78,6 +92,8 @@ struct StatisticsFlowView: View {
                     .allowsHitTesting(false)
             }
         }.frame(minHeight: 380)
+            .onChange(of: hoveredNode) { _, _ in onHoverChange(hoveredNode, hoveredLink) }
+            .onChange(of: hoveredLink) { _, _ in onHoverChange(hoveredNode, hoveredLink) }
     }
     private func rect(_ node: StatisticsFlowNodeLayout, size: CGSize) -> CGRect {
         let pad: CGFloat = 145

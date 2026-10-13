@@ -8,7 +8,9 @@ permissions: {}
 
 concurrency:
   group: native-branch-${{ github.ref }}
-  cancel-in-progress: true
+  # Frequent safety pushes must not cancel an app build before package tests finish.
+  # GitHub still replaces an older pending run with the newest branch snapshot.
+  cancel-in-progress: false
 
 jobs:
   native-branch-macos:

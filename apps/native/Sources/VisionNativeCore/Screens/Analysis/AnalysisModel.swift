@@ -178,6 +178,9 @@ public final class AnalysisModel {
     @ObservationIgnored private var historyLoading = false
     @ObservationIgnored private var historyWaiters: [CheckedContinuation<Void, Never>] = []
     @ObservationIgnored private var historyTask: Task<Void, Never>?
+    @ObservationIgnored private var acceptedRuns: Set<UUID> = []
+    @ObservationIgnored private var acceptedRunWaiters: [CheckedContinuation<Void, Never>] = []
+    var pendingAcceptedRunDrainCount: Int { acceptedRunWaiters.count }
     private var settings = NativeAppSettings.defaults
     private var applicationPreferences: TaxValue = .object([:])
     @ObservationIgnored private var timezone = TimeZone.current.identifier
@@ -520,6 +523,9 @@ public final class AnalysisModel {
     }
     @discardableResult public func run(offset: Int = 0) async -> Bool {
         guard offset >= 0 else { return false }
+        let accepted = UUID()
+        acceptedRuns.insert(accepted)
+        defer { finishAcceptedRun(accepted) }
         let id = "analysis-" + UUID().uuidString.lowercased()
         let generation = UUID()
         runRevision = generation
@@ -594,6 +600,21 @@ public final class AnalysisModel {
         historyWaiters = []
     }
     public func flushHistory() async { await historyTask?.value }
+    /// Normal reload calls this while HTTP and local storage admission remain open.
+    /// A transport ACK can precede the MainActor result handler that enqueues history.
+    /// Existing stale-query/route-exit guards still decide whether a run adds history.
+    public func flushAcceptedRuns() async {
+        while !acceptedRuns.isEmpty {
+            await withCheckedContinuation { acceptedRunWaiters.append($0) }
+        }
+        await flushHistory()
+    }
+    private func finishAcceptedRun(_ id: UUID) {
+        guard acceptedRuns.remove(id) != nil, acceptedRuns.isEmpty else { return }
+        let waiting = acceptedRunWaiters
+        acceptedRunWaiters.removeAll()
+        for waiter in waiting { waiter.resume() }
+    }
     private func bindChart(to result: AnalysisResult) {
         let columns = result.effectiveColumns
         let ids = columns.map(\.id)
