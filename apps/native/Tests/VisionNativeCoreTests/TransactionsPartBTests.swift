@@ -586,14 +586,14 @@ enum SplitFixture {
 @Suite struct TransactionBulkTests {
     @Test func theSelectorEncodesIdsOrTheFilter() throws {
         let ids = try #require(
-            TransactionBulkUpdateRequest(selector: .ids([3, 1]), fields: BulkUpdateFields(isActive: false)).encodedBody())
+            try TransactionBulkUpdateRequest(selector: .ids([3, 1]), fields: BulkUpdateFields(isActive: false)).encodedBody())
         #expect(String(decoding: ids, as: UTF8.self) == #"{"fields":{"is_active":false},"ids":[3,1]}"#)
         var filters = TransactionFilters()
         filters.uncategorised = true
         filters.recipientId = 4
         let selection = BulkFilterSelection(filters: filters, search: "rent", active: true)
         let body = try #require(
-            TransactionBulkUpdateRequest(
+            try TransactionBulkUpdateRequest(
                 selector: .filter(selection, expectedCount: 12), fields: BulkUpdateFields(categoryId: .some(nil))
             ).encodedBody())
         #expect(
@@ -601,7 +601,7 @@ enum SplitFixture {
                 == #"{"expected_count":12,"fields":{"category_id":null},"filter":{"active":true,"recipient_id":4,"search":"rent","uncategorised":true}}"#
         )
         let export = try #require(
-            TransactionBulkExportRequest(selector: .ids([2]), format: .json).encodedBody())
+            try TransactionBulkExportRequest(selector: .ids([2]), format: .json).encodedBody())
         #expect(String(decoding: export, as: UTF8.self) == #"{"format":"json","ids":[2]}"#)
         #expect(
             TransactionBulkExportRequest.fileName(.json, now: Date(timeIntervalSince1970: 1_791_800_000))
