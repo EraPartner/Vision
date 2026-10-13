@@ -1478,8 +1478,22 @@ native chrome and the retained page.
 Backup/About use the existing native picker, encrypted bundle, passphrase, restore, services,
 update and onboarding bridges. `NativeSettingsStorageBridge.swift` captures the source localStorage
 registry without file bytes and restores captured strings without clearing omitted keys. Confirmed
-restore remains a lifecycle boundary. The restored-model/data-session fencing extension is still
-being implemented at this documentation checkpoint; it is not yet claimed as completed parity.
+restore remains a lifecycle boundary. `NativeSettingsModel.suspendForRestore()` holds the latest
+debounced drafts, retires late reads, and waits for Main-accepted requests and writer queues before
+the database switch. A failed/cancelled restore resumes those drafts with the same opaque baselines
+and sticky failed lanes; it does not reread/rebase them. Successful reload retires callbacks and old
+writers and constructs fresh models/baselines.
+
+`API/NativeDataSession.swift` supplies `NativeSessionAPITransport` to the shared APIClient's HTTP
+and SSE paths. Confirmed restore pauses new mutation admission, waits for accepted transport writes,
+and stops current chat streams through the SDK. New reads are refused while paused, and a read
+admission epoch rejects pre-attempt results/read-stream chunks even if the restore fails and resumes
+the original database. A failed restore resumes the same session. Success retires it, rejecting old
+admissions and late HTTP/SSE delivery; a new client uses a fresh session.
+Transport cancellation does not assert that a server write rolled back. The Main fence has focused
+portable gated tests, and the shared transport has 13 focused cases; SDK/macOS verification
+remains unverified at this checkpoint. The common renderer-ready recovery path for other restore entry points is still being
+integrated and is not claimed complete here.
 
 `Shell/NativeNoticeCenter.swift`, `Components/NativeNoticeHost.swift`, and `ActionToast.swift`
 provide app-lifetime notices and consume captured actions before awaiting them. Transactions,

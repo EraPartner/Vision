@@ -439,24 +439,26 @@ public final class NativeSettingsModel {
             self.pendingDebounces = self.timers.count
             let id = UUID()
             let task = Task { [weak self] in
-                guard let self, !self.retired, !self.isSuspendedForRestore else { return }
-                if self.editRevision[key] == revision { self.pendingDrafts[key] = nil }
-                do { _ = try await self.saveNow(key, value: value) } catch {
+                guard let self else { return }
+                defer { self.writes[id] = nil }
+                guard !self.retired, !self.isSuspendedForRestore else { return }
+                do { _ = try await self.saveNow(key, value: value, draftRevision: revision) } catch {
                     if !self.retired, key != "theme_settings" {
                         self.saveError = "settings.saveFailed"
                         self.saveErrorNonce += 1
                         self.show(.error, "settings.saveFailed")
                     }
                 }
-                self.writes[id] = nil
             }
             self.writes[id] = task
         }
         pendingDebounces = timers.count
     }
-    private func saveNow(_ key: String, value: TaxValue) async throws -> NativeSettingsRecord {
+    private func saveNow(_ key: String, value: TaxValue, draftRevision: Int? = nil) async throws -> NativeSettingsRecord
+    {
         await restoreResume?.value
         guard !retired, !isSuspendedForRestore else { throw CancellationError() }
+        if let draftRevision, editRevision[key] == draftRevision { pendingDrafts[key] = nil }
         pendingWrites += 1
         let id = UUID()
         let writer = persistence

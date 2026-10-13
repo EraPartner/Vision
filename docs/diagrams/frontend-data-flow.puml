@@ -146,13 +146,17 @@ package "Native Settings single writer (phase 3o)" {
   class NativeSettingsWindow
   class NativeSettingsModel
   class NativeSettingsPersistence
+  class NativeSessionAPITransport
+  class NativeDataSession
   class "nativeSettings.ts" as NativeSettingsMirror
   class "shell:settings-change" as NativeSettingsDelta
   class "GET /api/settings\nPUT /api/settings/:key {value, expected}" as NativeSettingsAPI
 }
 NativeSettingsWindow --> NativeSettingsModel : source control edit
 NativeSettingsModel --> NativeSettingsPersistence : 500 ms / per-key serialized write
-NativeSettingsPersistence --> NativeSettingsAPI : original raw CAS expected token
+NativeSettingsPersistence --> NativeSessionAPITransport : shared APIClient request
+NativeSessionAPITransport --> NativeDataSession : mutation admission / completion / delivery guard
+NativeSessionAPITransport --> NativeSettingsAPI : original raw CAS expected token
 NativeSettingsAPI --> Repositories : existing validation / conditional replacement
 NativeSettingsModel --> NativeSettingsMirror : draft then acknowledged receipt
 NativeSettingsMirror --> Pages : retained route / immediate display mirror
@@ -162,6 +166,14 @@ note right of NativeSettingsMirror
   Native mode disables three competing web hydration writers.
   Drafts do not advance server baselines.
   Existing widget/other-key writers are unchanged.
+end note
+
+note right of NativeDataSession
+  Confirmed restore pauses new mutations and drains accepted transports.
+  Paused reads refuse admission; earlier read epochs stay invalid on failure.
+  Failure resumes the same session; success retires old delivery.
+  Main pending drafts/baselines have a separate lifecycle fence.
+  Portable transport cases pass; SDK/macOS verification remains pending.
 end note
 
 @enduml

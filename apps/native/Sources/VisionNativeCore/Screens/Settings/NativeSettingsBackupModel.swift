@@ -22,6 +22,7 @@ import Observation
     public var showRestorePassphrase = false
     public private(set) var notices: [ScreenNotice] = []
     public var didNotice: (@MainActor (ScreenNotice) -> Void)?
+    @ObservationIgnored public var didRestore: (@MainActor () async -> Void)?
     public var usesExternalNotices: Bool { didNotice != nil }
     public private(set) var settingsError: String?
     public var isAvailable: Bool { service.isAvailable }
@@ -53,6 +54,12 @@ import Observation
     public init(service: any NativeSettingsDesktopService, reloadDelay: Duration = .seconds(3)) {
         self.service = service
         self.reloadDelay = reloadDelay
+    }
+    /// Onboarding's independent restore card has no Backup settings/status/reminder queries.
+    public func activateRestoreOnly() {
+        guard isAvailable, !isActive else { return }
+        isActive = true
+        visit = UUID()
     }
     public func load() async {
         guard isAvailable, !Task.isCancelled else { return }
@@ -261,6 +268,7 @@ import Observation
                 if let state = result["frontendState"], state["keys"] != nil {
                     try? await service.applyRestoredFrontendState(state)
                 }
+                await didRestore?()
                 enqueue("settings.restore.success", variables: ["file": result["file"]?.stringValue ?? file])
                 finishWorkflow(captured)
                 // An accepted database restore changes the whole app, even if this section has left.

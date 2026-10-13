@@ -325,6 +325,157 @@ struct NativeSettingsModelTests {
         await model.flush()
         #expect(notices.last?.key == "settings.saveFailed" && notices.count == 2)
     }
+    @Test func restoreSuspensionHoldsLatestDebounceAndFailedRestoreResumesSameDraft() async throws {
+        let transport = NativeSettingsFixture(values: ["app_settings": .object(["future": .number(7)])])
+        let model = NativeSettingsModel(service: settingsClient(transport), debounce: .milliseconds(100))
+        await model.load()
+        model.updateApp(["language": .string("nl")])
+        model.updateApp(["defaultCurrency": .string("USD")])
+        await model.suspendForRestore()
+        await model.flush()
+        #expect(model.isSuspendedForRestore && model.appValue("language") == .string("nl"))
+        #expect(await transport.writes.isEmpty)
+        model.updateApp(["defaultCurrency": .string("GBP")])
+        #expect(model.appValue("defaultCurrency") == .string("USD"))
+        model.resumeAfterFailedRestore()
+        await model.flush()
+        let writes = await transport.writes
+        #expect(!model.isSuspendedForRestore && writes.count == 1)
+        #expect(writes[0].value["language"] == .string("nl") && writes[0].value["defaultCurrency"] == .string("USD"))
+        #expect(writes[0].expected["value"] == .object(["future": .number(7)]))
+    }
+    @Test func restoreSuspensionDrainsAcceptedWriteBeforeHoldingTheNewerDraft() async throws {
+        let transport = NativeSettingsFixture()
+        let model = NativeSettingsModel(service: settingsClient(transport), debounce: .milliseconds(40))
+        await model.load()
+        await transport.gateNextWrite()
+        model.updateApp(["language": .string("nl")])
+        await waitSettings { await transport.writeIsGated }
+        model.updateApp(["defaultCurrency": .string("USD")])
+        var drained = false
+        let suspension = Task {
+            await model.suspendForRestore()
+            drained = true
+        }
+        await waitSettings { model.isSuspendedForRestore }
+        #expect(await transport.writes.count == 1 && !drained)
+        await transport.releaseWrite()
+        await suspension.value
+        #expect(await transport.writes.count == 1 && drained)
+        model.resumeAfterFailedRestore()
+        await model.flush()
+        let writes = await transport.writes
+        #expect(writes.count == 2 && writes[1].expected["value"] == writes[0].value)
+        #expect(writes[1].value["defaultCurrency"] == .string("USD"))
+    }
+    @Test func failedRestoreNeverRebasesOrUnpoisonsARejectedSettingsQueue() async throws {
+        let original: TaxValue = .object(["language": .string("en")])
+        let transport = NativeSettingsFixture(values: ["app_settings": original])
+        let model = settingsModel(transport)
+        await model.load()
+        await transport.failNextWrite(status: 503)
+        model.updateApp(["language": .string("nl")])
+        await model.flush()
+        model.updateApp(["defaultCurrency": .string("USD")])
+        await model.suspendForRestore()
+        await transport.setValue("app_settings", .object(["language": .string("remote")]))
+        await model.load(force: true)
+        model.resumeAfterFailedRestore()
+        await model.flush()
+        #expect(await transport.writes.count == 1 && model.saveErrorNonce == 2)
+        #expect(await model.persistence.baseline("app_settings")?["value"] == original)
+        #expect(model.appValue("language") == .string("nl") && model.appValue("defaultCurrency") == .string("USD"))
+    }
+    @Test func realReloadRetiresPendingDraftsAndLateReadCallbacksWithoutResurrection() async throws {
+        let transport = NativeSettingsFixture()
+        let model = NativeSettingsModel(service: settingsClient(transport), debounce: .milliseconds(100))
+        await model.load()
+        var changes = 0
+        var acknowledgments = 0
+        var notices = 0
+        model.didChangeApp = { _ in changes += 1 }
+        model.didAcknowledge = { _, _ in acknowledgments += 1 }
+        model.didNotice = { _ in notices += 1 }
+        await transport.gateNextRead()
+        await transport.setCategory(
+            .init(
+                id: 99, name: "Old DB", pathIds: [99], path: ["Old DB"], categoryName: "Old DB", depth: 0,
+                isActive: true, hierarchyOnly: false, legacyCompatible: true))
+        await transport.gateNextCategoryRead()
+        let read = Task { await model.load(force: true) }
+        let categoryRead = Task { await model.loadCategories(force: true) }
+        await waitSettings {
+            let read = await transport.readIsGated
+            let category = await transport.categoryIsGated
+            return read && category
+        }
+        model.updateApp(["language": .string("nl")])
+        await model.suspendForRestore()
+        model.retireForReload()
+        await transport.releaseRead()
+        await transport.releaseCategoryRead()
+        await read.value
+        await categoryRead.value
+        #expect(model.categories.isEmpty)
+        model.resumeAfterFailedRestore()
+        model.updateApp(["language": .string("en")])
+        await model.flush()
+        #expect(model.isSuspendedForRestore && changes == 1 && acknowledgments == 0 && notices == 0)
+        #expect(await transport.writes.isEmpty)
+        await #expect(throws: CancellationError.self) {
+            try await model.persistence.save("app_settings", value: .object([:]))
+        }
+    }
+    @Test func restoreDrainIncludesImmediateWritesAndTheirAcknowledgedAuthority() async throws {
+        let transport = NativeSettingsFixture()
+        let model = settingsModel(transport)
+        await model.load()
+        await transport.gateNextWrite()
+        var invalidations = 0
+        model.didChangeIncludeTransfers = { invalidations += 1 }
+        let toggle = Task { await model.setIncludeTransfers(true) }
+        await waitSettings { await transport.writeIsGated }
+        var drained = false
+        let suspension = Task {
+            await model.suspendForRestore()
+            drained = true
+        }
+        await waitSettings { model.isSuspendedForRestore }
+        #expect(!drained)
+        await transport.releaseWrite()
+        await suspension.value
+        await toggle.value
+        #expect(drained && invalidations == 1)
+        model.resumeAfterFailedRestore()
+        await model.setIncludeTransfers(false)
+        let writes = await transport.writes
+        #expect(writes.count == 2 && writes[1].expected == .object(["exists": .bool(true), "value": .bool(true)]))
+    }
+    @Test func repeatedSuspendAndPermanentRetirementKeepTheFenceClosed() async throws {
+        let transport = NativeSettingsFixture()
+        let model = NativeSettingsModel(service: settingsClient(transport), debounce: .milliseconds(100))
+        await model.load()
+        await transport.gateNextWrite()
+        let edit = Task { await model.setCostBasisMethod("fifo") }
+        await waitSettings { await transport.writeIsGated }
+        let first = Task { await model.suspendForRestore() }
+        let second = Task { await model.suspendForRestore() }
+        await waitSettings { model.isSuspendedForRestore }
+        await model.setCostBasisMethod("lifo")
+        #expect(model.appValue("costBasisMethod") == .string("fifo"))
+        await transport.releaseWrite()
+        await edit.value
+        await first.value
+        await second.value
+        model.retireForReload()
+        model.retireForReload()
+        model.resumeAfterFailedRestore()
+        await model.flush()
+        #expect(await transport.writes.count == 1 && model.isSuspendedForRestore)
+        await #expect(throws: CancellationError.self) {
+            try await model.persistence.save("cost_basis_method", value: .string("lifo"))
+        }
+    }
     @Test func hostServicesFailureRollsBackWithoutWritingAppEnvelope() async throws {
         let transport = NativeSettingsFixture()
         let model = settingsModel(transport)
@@ -366,14 +517,24 @@ private actor NativeSettingsFixture: APITransport {
     private var failure: Int?
     private var gateWrite = false
     private var gateRead = false
+    private var gateCategory = false
+    private var categories: [OpenAPI.CategoryNode] = []
+    private var categoryContinuation: CheckedContinuation<Void, Never>?
     private var writeContinuation: CheckedContinuation<Void, Never>?
     private var readContinuation: CheckedContinuation<Void, Never>?
     var writeIsGated: Bool { writeContinuation != nil }
     var readIsGated: Bool { readContinuation != nil }
+    var categoryIsGated: Bool { categoryContinuation != nil }
     init(values: [String: TaxValue] = [:]) { self.values = values }
     func failNextWrite(status: Int) { failure = status }
     func gateNextWrite() { gateWrite = true }
     func gateNextRead() { gateRead = true }
+    func gateNextCategoryRead() { gateCategory = true }
+    func setCategory(_ category: OpenAPI.CategoryNode) { categories = [category] }
+    func releaseCategoryRead() {
+        categoryContinuation?.resume()
+        categoryContinuation = nil
+    }
     func releaseWrite() {
         writeContinuation?.resume()
         writeContinuation = nil
@@ -418,7 +579,18 @@ private actor NativeSettingsFixture: APITransport {
             values[key] = value
             return try response(record(key))
         }
-        if path == "/api/categories/tree" { return try response(.object(["items": .array([]), "total": .number(0)])) }
+        if path == "/api/categories/tree" {
+            let captured = categories
+            if gateCategory {
+                gateCategory = false
+                await withCheckedContinuation { categoryContinuation = $0 }
+            }
+            return try response(
+                .object([
+                    "items": .array(try captured.map { try TaxValue(encoding: $0) }),
+                    "total": .number(Decimal(captured.count)),
+                ]))
+        }
         if path == "/api/recipients" {
             return try response(
                 .object([

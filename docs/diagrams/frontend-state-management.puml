@@ -302,6 +302,15 @@ package "Retained Zustand settings" {
   }
 }
 package "Native Settings and retained WK state (phase 3o)" {
+  class "ShellController" as NativeSettingsHost {
+    +ShellController confirmed restore / reload
+  }
+  class NativeDataSession <<actor>> {
+    +suspendAndDrain(): async
+    +resumeAfterFailedRestore()
+    +retireForReload()
+    +paused reads refused / read epochs invalidated
+  }
   class NativeSettingsModel {
     +migrated app/dashboard editable envelopes
     +unknown fields and optional absence preserved
@@ -328,6 +337,9 @@ package "Native Settings and retained WK state (phase 3o)" {
     +source typing guard / one-slot shortcut
   }
 }
+NativeSettingsHost --> NativeSettingsModel : suspend drafts / failure resume / success retire
+NativeSettingsHost --> NativeDataSession : drain / resume / retire shared transport
+NativeSettingsPersistence ..> NativeDataSession : shared APIClient transport admission
 NativeSettingsModel --> NativeSettingsPersistence : existing conditional settings API
 NativeSettingsModel --> NativeSettingsMirror : draft then receipt
 NativeSettingsMirror --> NativeSettingsPatch : native-only shell:settings-change

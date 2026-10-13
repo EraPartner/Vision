@@ -457,8 +457,14 @@ System accent changes six paired primary/ring/sidebar tokens; appearance auto-ad
 effects above six million physical pixels and retains only session overrides. Global native notices
 retain six eight-second Undo owners and existing non-Undo Retry/Create rule/Import actions.
 
-Restored-model/data-session fencing is still being completed at this checkpoint; it is not a
-completed verification claim. See [[docs/architecture/native-app#Settings and global notices (phase 3o)|Native Settings architecture]],
+Restore fencing is implemented: Main holds the latest preference debounces and drains accepted
+requests/queues before switching databases. Failed restore resumes the same drafts, baselines and
+sticky failures; successful reload retires the old writer and builds fresh models. The shared
+`API/NativeDataSession.swift` transport pauses mutation admission, refuses paused reads, and
+invalidates pre-attempt read results even after failed restore resumes. Retired HTTP/SSE
+requests/replies are rejected. A cancelled transport never proves a server write rolled back. Main has portable
+gated test coverage, and shared transport has 13 focused cases; SDK/macOS verification remains pending. The common
+renderer-ready recovery path for other restore entry points is still being integrated. See [[docs/architecture/native-app#Settings and global notices (phase 3o)|Native Settings architecture]],
 [[docs/api/settings|Settings API]], and [[docs/reference/native-parity/shell-and-settings|Settings parity]].
 
 [Native Settings journey](../flow-visualizer.html#native-settings-instant-apply) and

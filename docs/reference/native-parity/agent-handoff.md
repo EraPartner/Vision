@@ -113,6 +113,41 @@ Independent remaining phase-3 shell preparation has started in parallel: banners
 `tax_deductions`. Their new files are unfinished and not mounted yet. Do not count these
 surfaces as complete merely because their scaffolding appears in a later safety checkpoint.
 
+## Environment refresh checkpoint (2026-10-13 22:23 UTC)
+
+The workspace survived an execution-environment refresh with all dirty work intact.
+The old live agent processes did not survive; restart parallel owners from the files and
+assignments below. This checkpoint saves every dirty tracked and new task file currently
+present, including incomplete phase-3 shell preparation. It is deliberately a safety save,
+not a completed phase claim. Last verified remote before this save: `1fce9851`.
+
+The `1fce9851` macOS build passed the AI chart/picker compile stage. It next reported:
+`ResearchCompareView` uses an unsupported `showZero` argument, `ResearchScreenView` omits
+the watchlist-add model, and `ResearchWatchlistChartSheet` needs its chart expression split.
+Full job evidence is `/workspace/vision-native-macos-seventh-build.log` outside the repo.
+Fix these automatically and keep following the next app/package build results.
+
+Current unmounted shell preparation: Palette Core data/service/model and its UI,
+Shortcuts Help and Not Found UI; Onboarding draft/service/model with its UI and tests still
+missing; FX/upcoming Core models and banners with tests/integration still missing.
+`createCategory` is now in the native generator allowlist; existing `importCsv` uses a
+hand-written multipart operation. The reusable Backup model has restore-only activation
+and an acknowledged-restore callback; its new synthetic test needs final verification.
+
+Next integration must mount these surfaces while retaining the current native route model,
+provide the fixed shared-TypeScript palette arithmetic/FX answer callback, bind narrow
+storage callbacks, and use fresh restored-database authority to finish onboarding after
+restore rather than trying the retired writer. Onboarding category presets preserve the
+source partial-success behavior. Shared native PDF/report dialogs and Tax print are next;
+their existing OpenAPI report descriptions need reconciliation with actual binary PDF routes.
+
+Main Settings 33 tests and API-session 13 tests passed before this refresh. Final frontend
+takeover evidence records 81 tests, typecheck and lint. The fresh combined proof remains
+unfinished: the initial run found two test-fixture errors that have been corrected, then
+unmounted Palette preparation briefly failed compilation; that optional-array expression
+is corrected on disk. Preserve earlier immutable proofs. Refresh the exact final scope
+and hash manifest rather than reporting those partial logs as a completed combined run.
+
 The API data-session actor and wrapper now exist on disk, and the SDK uses one shared
 session for HTTP and streams. Accepted restore confirmation drains Main Settings, the
 legacy host writer, old chat streams and the data session before the existing unfenced

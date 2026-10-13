@@ -166,7 +166,7 @@ final class ShellRecorder {
         #expect(recorder.actions.count == actionCount)
         model.closeSettings()
         #expect(recorder.actions.last == .closeSettings)
-        model.routeDidChange(route.setting("settings", to: nil))
+        model.routeDidChange(route.removing("settings"))
         #expect(!model.isPresentingNativeSettings && model.detail == .native(.plannedPayments))
         #expect(model.route.value("unrelated") == "keep")
         #expect(model.nativeSettings === preferences)

@@ -36,6 +36,8 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     private var dataSession = NativeDataSession()
     private var restoreFenceEntered = false
     private var restoreFenceOwner: UUID?
+    private var restoredNativeGeneration: UUID?
+    private var nativeSettingsRebuildTask: Task<Void, any Error>?
     /// The sidebar, route and settings state of the native navigation shell.
     private lazy var shellModel = makeShellModel()
     /// `ALLOWED_RESTORE_PATHS`: only paths the restore picker returned may be restored.
@@ -85,7 +87,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         nativeSettingsGeneration = settingsGeneration
         let nativeSettings = NativeSettingsModel(client: client)
         let settingsAI = NativeSettingsAIModel(service: client)
-        let desktopSettings = makeNativeSettingsDesktopCallbacks()
+        let desktopSettings = makeNativeSettingsDesktopCallbacks(generation: settingsGeneration)
         let settingsBackup = NativeSettingsBackupModel(service: desktopSettings)
         let settingsAbout = NativeSettingsAboutModel(
             service: desktopSettings,
@@ -348,7 +350,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         return model
     }
 
-    private func makeNativeSettingsDesktopCallbacks() -> NativeSettingsDesktopCallbacks {
+    private func makeNativeSettingsDesktopCallbacks(generation: UUID) -> NativeSettingsDesktopCallbacks {
         NativeSettingsDesktopCallbacks(
             loadBackupSettings: { [weak self] in
                 guard let self else { throw APIError.backendUnavailable }
@@ -384,7 +386,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             },
             reloadFrontend: { [weak self] in
                 guard let self else { throw APIError.backendUnavailable }
-                try await self.reloadNativeSettingsFrontend()
+                try await self.reloadNativeSettingsFrontend(expectedGeneration: generation)
             },
             readBackupReminder: { [weak self] in
                 guard let self else { return false }
@@ -491,6 +493,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     private func observeNativeSettingsSession(model: NativeShellModel, generation: UUID) {
         withObservationTracking {
             _ = model.nativeSettings?.sessionTierOverride
+            _ = model.nativeSettings?.isLoaded
         } onChange: { [weak self, weak model] in
             Task { @MainActor in
                 guard let self, let model, generation == self.nativeSettingsGeneration else { return }
@@ -593,7 +596,34 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         }
     }
 
-    private func reloadNativeSettingsFrontend() async throws {
+    private func reloadNativeSettingsFrontend(expectedGeneration: UUID) async throws {
+        guard expectedGeneration == nativeSettingsGeneration else { return }
+        if let running = nativeSettingsRebuildTask {
+            try await running.value
+            return
+        }
+        guard let webView = webShell?.webView else { throw APIError.backendUnavailable }
+        try await rebuildNativeSettingsGraph(expectedGeneration: expectedGeneration)
+        webView.reload()
+    }
+
+    private func rebuildNativeSettingsGraph(expectedGeneration: UUID) async throws {
+        if let running = nativeSettingsRebuildTask {
+            try await running.value
+            return
+        }
+        guard expectedGeneration == nativeSettingsGeneration else { return }
+        let task = Task { [weak self] in
+            guard let self else { throw APIError.backendUnavailable }
+            try await self.performNativeSettingsGraphRebuild(expectedGeneration: expectedGeneration)
+        }
+        nativeSettingsRebuildTask = task
+        defer { nativeSettingsRebuildTask = nil }
+        try await task.value
+    }
+
+    private func performNativeSettingsGraphRebuild(expectedGeneration: UUID) async throws {
+        guard expectedGeneration == nativeSettingsGeneration else { return }
         guard let webView = webShell?.webView else { throw APIError.backendUnavailable }
         let old = shellModel
         old.nativeSettings?.retireForReload()
@@ -629,8 +659,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         host.isHidden = hidden
         container?.addSubview(host, positioned: .below, relativeTo: launchView)
         shellHost = host
-        shellModel.reloadSettings()
-        webView.reload()
+        if restoredNativeGeneration == expectedGeneration { restoredNativeGeneration = nil }
     }
 
     /// The sections the user hid (`SIDEBAR_HIDDEN_SECTIONS` of the web sidebar), per Mac.
@@ -1280,9 +1309,15 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     func rendererDidBecomeReady() {
         for message in queue.markReady() { evaluate(message.event, message.payload) }
         deliver(.menuAction, BridgeDispatcher.menuActionPayload(.nativeSidebar(visible: shellModel.isSidebarVisible)))
-        let generation = nativeSettingsGeneration
+        let rendererGeneration = nativeSettingsGeneration
         Task { [weak self] in
-            guard let self, generation == self.nativeSettingsGeneration else { return }
+            guard let self else { return }
+            if self.restoredNativeGeneration == rendererGeneration || self.nativeSettingsRebuildTask != nil {
+                do { try await self.rebuildNativeSettingsGraph(expectedGeneration: rendererGeneration) } catch {
+                    return
+                }
+            }
+            let generation = self.nativeSettingsGeneration
             await self.loadNativeSettingsLegacyTheme()
             await self.shellModel.nativeSettings?.load()
             guard generation == self.nativeSettingsGeneration else { return }
@@ -1486,6 +1521,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
                 shellModel.nativeSettings?.retireForReload()
                 await settingsWriter.retireForReload()
                 await dataSession.retireForReload()
+                restoredNativeGeneration = nativeSettingsGeneration
             } else {
                 shellModel.nativeSettings?.resumeAfterFailedRestore()
                 await settingsWriter.resumeAfterFailedRestore()
@@ -1510,6 +1546,8 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         if let streams = shellModel.aiChat?.chat.streams {
             for id in streams.activeIDs { streams.stop(id: id) }
         }
+        shellModel.imports.cancelImport()
+        shellModel.portfolioImports?.advanced.cancel()
         await dataSession.suspendAndDrain()
         return true
     }
@@ -1695,6 +1733,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         guard let model = shellModel.nativeSettings else { throw APIError.backendUnavailable }
         await model.load()
         guard model.isLoaded, generation == nativeSettingsGeneration else { throw APIError.backendUnavailable }
+        guard !model.isSuspendedForRestore else { throw APIError.invalidRequest("Settings are paused during restore") }
         let raw = try JSONDecoder().decode(TaxValue.self, from: JSONEncoder().encode(JSONValue.object(patch.updates)))
         guard var fields = raw.objectValue else { throw APIError.invalidRequest("Invalid native settings patch") }
         switch patch.key {

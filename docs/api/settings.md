@@ -368,6 +368,13 @@ actor serializes writes, advances only acknowledged baselines, and retains rejec
 App/dashboard editable defaults preserve unknown fields; the original expected JSON is unchanged.
 Theme writes contain `mode`, `schedule`, `variant`, and `systemAccent`.
 
+Confirmed restore suspends Main debounces and settles already accepted per-key queues before the
+database switch. Failure resumes the same raw baselines and sticky failures; success retires that
+writer. `NativeDataSession` gates the shared native HTTP/SSE transport without changing these API
+contracts. Reads are refused while paused, and pre-attempt read admissions stay invalid after a
+failed restore resumes. A transport cancellation never implies that a server write was rolled back.
+Portable Main/transport tests exist; SDK/macOS verification remains pending.
+
 For the retained WK page, native-only `shell:settings-change` forwards supported deltas for
 `app_settings`, `dashboard_settings`, and `theme_settings` to that same writer. Draft mirrors do
 not count as receipts. `acknowledgeNativeSettingReceipt` validates the returned value/expected

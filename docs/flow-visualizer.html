@@ -2043,7 +2043,7 @@
             "x": 940,
             "y": 1120,
             "path": "apps/native/Sources/VisionNativeCore/Shell/NativeSettingsPatch.swift",
-            "desc": "App/dashboard migration preserves unknown fields; theme writes known four fields. Retained-page deltas join the same per-key writer; drafts never advance web baselines."
+            "desc": "App/dashboard migration preserves unknown fields; theme writes known four fields. Retained-page deltas join the same per-key writer; drafts never advance web baselines. Restore holds pending debounces and settles accepted per-key queues; failure preserves baselines and sticky failures, while successful reload retires old writer callbacks."
           },
           {
             "id": "native.notices",
@@ -2054,6 +2054,16 @@
             "y": 1180,
             "path": "apps/native/Sources/VisionNativeCore/Shell/NativeNoticeCenter.swift",
             "desc": "App-lifetime host retains six source Undo owners and the one-slot typing-guarded shortcut. Retry/Create rule/Import stay non-Undo actions; callbacks consume before awaiting."
+          },
+          {
+            "id": "native.datasession",
+            "label": "Native data session",
+            "sub": "HTTP / SSE · mutation fence",
+            "kind": "client",
+            "x": 940,
+            "y": 1180,
+            "path": "apps/native/Sources/VisionNativeCore/API/NativeDataSession.swift",
+            "desc": "Shared APIClient transport pauses mutation admission, drains accepted transports and refuses paused reads. Prior read epochs remain invalid after failed restore resumes. Success retires old admissions/delivery; no new endpoint or rollback inference. Portable transport cases pass; SDK/macOS verification pending."
           }
         ],
         "baseEdges": [
@@ -2632,6 +2642,26 @@
           [
             "native.notices",
             "fe.pages"
+          ],
+          [
+            "native.settingsbridge",
+            "native.datasession"
+          ],
+          [
+            "native.aichat",
+            "native.datasession"
+          ],
+          [
+            "native.investigation",
+            "native.datasession"
+          ],
+          [
+            "native.datasession",
+            "be.routes"
+          ],
+          [
+            "native.settings",
+            "native.datasession"
           ]
         ],
         "flows": [
@@ -7667,7 +7697,7 @@
           {
             "id": "native-settings-backup-appearance",
             "name": "Use native appearance and existing Backup/About services",
-            "summary": "Canonical palettes, six system-accent tokens, source display cap and existing backup/restore/update bridges remain shared with the retained page. Restore/session fencing is still pending at this checkpoint.",
+            "summary": "Source appearance and existing Backup/About services retain native controls. Implemented Main/shared-client restore fences hold drafts, drain accepted writes and retire old delivery; portable Main/transport cases pass while SDK/macOS verification remains pending.",
             "steps": [
               {
                 "from": "native.settings",
@@ -7688,10 +7718,22 @@
                 "annotation": "apps/native/Sources/VisionNativeCore/Screens/Settings/NativeSettingsBackupModel.swift and NativeSettingsAboutModel.swift retain source confirmations and desktop operations; .github/workflows/native-branch.yml runs unsigned macOS verification."
               },
               {
+                "from": "native.settings",
+                "to": "native.datasession",
+                "payload": "Confirmed restore holds Main debounces, settles accepted preference/legacy-writer queues, stops chat streams and pauses new shared-client mutation admission",
+                "annotation": "apps/native/Sources/VisionNativeCore/Settings/NativeSettingsModel.swift suspendForRestore; NativeSettingsService.swift native persistence gate; apps/native/VisionNative/ShellController.swift confirmAndSuspendForRestore. Failed restore resumes identical baselines/poisoned lanes; no reread/rebase."
+              },
+              {
+                "from": "native.datasession",
+                "to": "build.native",
+                "payload": "Drain accepted transport writes; refuse paused reads and invalidate pre-attempt read results even on failed restore; resume original session on failure or retire old delivery on successful Settings reload",
+                "annotation": "apps/native/Sources/VisionNativeCore/API/NativeDataSession.swift and ShellController.swift gate the shared APIClient transport. Cancellation does not prove server rollback. Portable Main/transport cases pass; SDK/macOS verification remains pending; common renderer-ready recovery for other restore entry points is still being integrated."
+              },
+              {
                 "from": "build.native",
                 "to": "fe.stores",
                 "payload": "Capture source localStorage registry; confirmed restore reapplies captured strings without clearing omitted keys",
-                "annotation": "apps/native/Sources/VisionNativeCore/Shell/NativeSettingsStorageBridge.swift and Backup/BackupService.swift preserve existing bundle coverage and local-state restoration. Restored-model/data-session fencing is pending; no completed verification claim."
+                "annotation": "apps/native/Sources/VisionNativeCore/Shell/NativeSettingsStorageBridge.swift and Backup/BackupService.swift preserve existing bundle coverage and local-state restoration. Main lifecycle gates are implemented with portable tests; SDK/macOS verification remains pending."
               }
             ],
             "category": "Native migration",

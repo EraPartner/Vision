@@ -43,6 +43,8 @@ getRecipients
 getRecipient
 getAccounts
 getCategoryTree
+# Onboarding's legacy category presets use the existing flat-category operation.
+createCategory
 getTags
 createTag
 # Mark as paid candidates and the Payment history lookups (`transaction_id`)
@@ -68,6 +70,8 @@ exportTransactionsJson
 # The multipart and SSE uploads have no generated struct (the generator writes JSON bodies
 # only); hand-written operations in Screens/Imports/ImportRequests.swift call them:
 # importCsvCustom, importCsvStream, importRecipients, importCategories.
+# Onboarding also uses the existing non-stream importCsv multipart operation;
+# its hand-written request retains the same byte upload and response envelope.
 # Transactions (/transactions, phase 3e part A): the row mutations, delete with undo
 # (the undo recreates the row), the inspector's "Use for all" and the Attachments panel.
 # updateTransaction's explicit-null PATCH body, uploadAttachment's multipart body and

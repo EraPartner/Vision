@@ -9,6 +9,7 @@ skinparam ranksep 70
 actor "User" as User
 
 package "Client" {
+  node "Native data session\nshared HTTP / SSE transport\nmutation drain / retired-delivery guard" as NativeDataSession
   node "Native Settings (seven panes)\nraw CAS / 500 ms sticky lanes\nshared AI receipts + existing desktop bridges" as NativeSettings
   node "Native Settings mirror\nsupported three-key deltas\ndraft then acknowledged receipt" as NativeSettingsMirror
   node "Native app-lifetime notices\nsix 8-second Undo owners\nsource non-Undo actions" as NativeNotices
@@ -86,6 +87,9 @@ cloud "Build & Distribution" as DevToolsCloud {
 package "Client to Server" {
   User --> ReactApp : HTTPS
   ReactApp --> Proxy : REST API
+  NativeSettings --> NativeDataSession : shared APIClient requests
+  NativeAIChat --> NativeDataSession : HTTP / SSE transport
+  NativeDataSession --> Express : existing wire operations unchanged
   NativeSettings --> Express : existing settings CAS / AI-provider operations
   NativeSettings --> NativeSettingsMirror : immediate draft / acknowledged receipt
   NativeSettingsMirror --> ReactApp : suppress duplicate hydration writers
@@ -289,8 +293,19 @@ note right of NativeSettings
   App/dashboard migrations preserve unknown fields and optional absence.
   Theme writes contain mode, schedule, variant, systemAccent only.
   No new backend endpoint or native financial engine.
-  Restore/data-session fencing is pending at this checkpoint.
+  Main holds debounced drafts and drains accepted queues before restore.
+  Failure resumes the same baselines; success retires old writers.
+  Common renderer-ready recovery and macOS verification remain pending.
   Automated branch macOS verification exists but is not yet green.
+end note
+
+note right of NativeDataSession
+  Pause mutation admission and wait for transport completions.
+  Refuse paused reads; invalidate pre-attempt read epochs even on failure.
+  Failed restore resumes the same session; success retires it.
+  Old shared-client admissions and late HTTP/SSE delivery are rejected.
+  Cancellation does not prove a server write was rolled back.
+  Portable transport cases pass; SDK/macOS verification remains pending.
 end note
 
 @enduml

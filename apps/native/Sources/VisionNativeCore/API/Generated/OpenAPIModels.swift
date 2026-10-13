@@ -3185,6 +3185,24 @@ extension OpenAPI {
         }
     }
 
+    public struct CategoryCreate: Codable, Equatable, Sendable {
+        public let general: String
+        public let detail: String
+        public let description: String?
+
+        public init(general: String, detail: String, description: String? = nil) {
+            self.general = general
+            self.detail = detail
+            self.description = description
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case general = "general"
+            case detail = "detail"
+            case description = "description"
+        }
+    }
+
     public struct CategoryList: Codable, Equatable, Sendable {
         public let total: Int
         public let limit: Int?

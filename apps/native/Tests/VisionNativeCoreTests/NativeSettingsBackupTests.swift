@@ -5,6 +5,22 @@ import Testing
 
 @Suite("Native settings backup host contracts and receipt scopes") @MainActor
 struct NativeSettingsBackupTests {
+    @Test func onboardingRestoreOnlyReadsNoBackupPreferencesAndCompletesAfterApplyingFrontendState() async {
+        let host = BackupDesktopFixture()
+        host.restoreReceipts = [.object([
+            "success": .bool(true), "frontendState": .object(["keys": .object(["synthetic": .string("value")])]),
+        ])]
+        let model = NativeSettingsBackupModel(service: host, reloadDelay: .milliseconds(1))
+        model.didRestore = { host.events.append("complete") }
+        model.activateRestoreOnly()
+        model.activateRestoreOnly()
+        await model.startRestore(file: "/synthetic/onboarding.visionbak")
+        #expect(host.preferenceReads.isEmpty)
+        #expect(host.events.prefix(2) == ["apply", "complete"])
+        #expect(host.restoreCalls.count == 1 && model.pendingRestoreFile == nil)
+        await host.waitForReload()
+        #expect(host.events == ["apply", "complete", "reload"])
+    }
     @Test func unreadSettingsNeverPersistDefaultsAndLateReadCannotPublishAfterLeave() async throws {
         let host = BackupDesktopFixture()
         host.settingsFails = true
@@ -290,6 +306,11 @@ private struct BackupFixtureStrings: Localizing {
     }
 }
 @MainActor private final class BackupDesktopFixture: NativeSettingsDesktopService {
+    var preferenceReads: [String] = []
+    private var reloadWaiter: CheckedContinuation<Void, Never>?
+    func waitForReload() async {
+        if reloads == 0 { await withCheckedContinuation { reloadWaiter = $0 } }
+    }
     var isAvailable = true
     var settings = BackupSettingsValue(backupDir: "/synthetic/backups", backupOnQuit: false)
     var settingsFails = false
@@ -351,6 +372,7 @@ private struct BackupFixtureStrings: Localizing {
         restoreGate = nil
     }
     func loadBackupSettings() async throws -> BackupSettingsValue {
+        preferenceReads.append("settings")
         let snapshot = settings
         if pauseSettings {
             pauseSettings = false
@@ -377,7 +399,10 @@ private struct BackupFixtureStrings: Localizing {
     }
     func selectBackupDirectory() async throws -> String? { directoryPick }
     func selectBackupFile() async throws -> String? { filePick }
-    func backupEncryptionStatus() async throws -> PassphraseStatus? { encryption }
+    func backupEncryptionStatus() async throws -> PassphraseStatus? {
+        preferenceReads.append("status")
+        return encryption
+    }
     func setBackupPassphrase(_ passphrase: String) async throws -> PassphraseUpdateResult? {
         passphrases.append(passphrase)
         return passphraseReceipt
@@ -415,8 +440,11 @@ private struct BackupFixtureStrings: Localizing {
     func reloadFrontend() async throws {
         reloads += 1
         events.append("reload")
+        reloadWaiter?.resume()
+        reloadWaiter = nil
     }
     func readBackupReminder() async throws -> Bool {
+        preferenceReads.append("reminder")
         let snapshot = reminderDismissed
         if pauseReminder {
             pauseReminder = false
