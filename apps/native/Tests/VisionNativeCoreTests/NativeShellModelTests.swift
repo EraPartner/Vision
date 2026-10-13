@@ -70,6 +70,8 @@ final class ShellRecorder {
     var actions: [MenuAction] = []
     var sidebar: [Bool] = []
     var saved: [[NavSectionID: Bool]] = []
+    var clipboard: [String] = []
+    var acceptsClipboard = true
 }
 
 @MainActor
@@ -82,6 +84,8 @@ final class ShellRecorder {
         research: ResearchScreens? = nil, researchForecast: ResearchForecastScreens? = nil,
         researchChartBuilder: ResearchChartBuilderModel? = nil, researchDossiers: ResearchDossiersModel? = nil,
         aiChat: AIChatScreens? = nil, nativeSettings: NativeSettingsModel? = nil,
+        commandPalette: NativeCommandPaletteModel? = nil, reports: NativeReportModel? = nil,
+        nativeFallback: Bool = false,
         loadSettings: (@Sendable () async throws -> NativeAppSettings)? = nil
     ) -> NativeShellModel {
         NativeShellModel(
@@ -104,12 +108,70 @@ final class ShellRecorder {
             researchDossiers: researchDossiers,
             aiChat: aiChat,
             nativeSettings: nativeSettings,
+            commandPalette: commandPalette,
+            reports: reports,
+            nativeFallback: nativeFallback,
             hiddenSections: hidden,
             loadSettings: loadSettings ?? { settings },
             saveHiddenSections: { recorder.saved.append($0) },
             onNavigate: { recorder.actions.append($0) },
+            copyToClipboard: {
+                guard recorder.acceptsClipboard else { return false }
+                recorder.clipboard.append($0)
+                return true
+            },
             onSidebarVisibilityChange: { recorder.sidebar.append($0) },
             settingsReloadDelay: .milliseconds(1))
+    }
+
+    @Test func nativeOverlayPriorityPreservesSettingsRouteAndPaletteCopyAcknowledgement() async throws {
+        let recorder = ShellRecorder()
+        let client = APIClient(baseURL: { nil }, adminToken: { nil })
+        let palette = NativeCommandPaletteModel(
+            service: client, answers: NativeCommandPaletteAnswerProvider { _, _, _, _ in nil })
+        let model = makeModel(
+            recorder: recorder, nativeSettings: NativeSettingsModel(client: client), commandPalette: palette)
+        let route = try #require(NativeRoute("/planned?settings=general&unrelated=keep"))
+        model.routeDidChange(route)
+        await model.settingsSettled()
+        #expect(model.detail == .native(.plannedPayments) && model.nativeOverlayKind == .settings)
+        model.openShortcuts()
+        #expect(model.nativeOverlayKind == .shortcuts)
+        model.openPalette()
+        #expect(model.nativeOverlayKind == .palette && model.route == route)
+        await model.closeNativeOverlay()
+        #expect(model.nativeOverlayKind == .shortcuts)
+        await model.closeNativeOverlay()
+        #expect(model.nativeOverlayKind == .settings && model.route == route)
+        #expect(recorder.actions.isEmpty)
+        recorder.acceptsClipboard = false
+        model.activatePaletteAction(.copy("123.45"))
+        #expect(model.notices.entries.isEmpty && recorder.clipboard.isEmpty)
+        recorder.acceptsClipboard = true
+        model.activatePaletteAction(.copy("123.45"))
+        #expect(recorder.clipboard == ["123.45"])
+        #expect(model.notices.entries.last?.notice.key == "commandPalette.copied")
+    }
+
+    @Test func nativeReportCloseRemovesOnlyItsQueryAndUnknownRoutesUseNativeFallback() async throws {
+        let recorder = ShellRecorder()
+        let report = NativeReportModel(
+            service: ReportTestService(),
+            callbacks: NativeReportCallbacks(
+                preferences: { .init() }, theme: { .object([:]) }, save: { _, _ in true }, close: {}, notice: { _ in }))
+        let model = makeModel(recorder: recorder, reports: report, nativeFallback: true)
+        model.routeDidChange(try #require(NativeRoute("/planned?unrelated=keep")))
+        await model.settingsSettled()
+        model.routeDidChange(try #require(NativeRoute("/tax?year=2020&export=pdf&unrelated=keep")))
+        #expect(report.isPresented && report.type == .tax)
+        #expect(report.periodPreset == .rolling12)
+        model.closeReport()
+        #expect(!report.isPresented)
+        #expect(recorder.actions.last == .replaceRoute("/tax?year=2020&unrelated=keep"))
+        model.routeDidChange(try #require(NativeRoute("/unknown?unrelated=keep")))
+        #expect(model.detail == .notFound)
+        model.routeDidChange(try #require(NativeRoute("/portfolio/performance")))
+        #expect(model.detail == .web)
     }
 
     @Test func theReportHandoffPreservesTheTabAndReturnsAfterTheDialogCloses() throws {

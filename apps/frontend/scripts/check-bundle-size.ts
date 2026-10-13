@@ -81,7 +81,9 @@ const BUDGETS_KB = {
     // Raised from 470 for the reduction for pensions (arts 147-153) and the gift
     // ceiling in the shared personPit chunk that computeBelgianPIT keeps in the
     // boot graph: 470.52 measured.
-    preload: 471,
+    // Reviewed native Settings and fixed shell bridge preparation (2026-10-13):
+    // 474.14 KB measured; household schema, migration and engine remain lazy (ADR-200).
+    preload: 475,
     // 1310.71 measured after the lazily loaded xlsx chunk arrived with the
     // IBKR funding import (2026-10-08); raised from 1180 (was 1100 before that).
     // Raised from 1340 for the lazily loaded Belgian-tax household engine, its
@@ -102,7 +104,8 @@ const BUDGETS_KB = {
     // income and their EN/NL strings (ADR-203): 1365.61 measured.
     // Raised from 1366 for the pension-exclusion issues, the published al. 3 difference and
     // the "Not entered" pension type (ADR-203 review): 1366.19 measured.
-    total: 1367,
+    // The same measured integration is 1372.29 KB total, versus 1370.35 KB at b0623fef.
+    total: 1373,
 };
 
 /** Parses dist/index.html for the entry module script and its modulepreload set. */

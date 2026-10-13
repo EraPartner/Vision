@@ -191,6 +191,65 @@ struct NativeShellNotificationsTests {
         #expect(model.dismissalKeys.isEmpty)
     }
 
+    @Test func repeatedRetirementCannotClearTheFreshGraphsDockBadge() async {
+        let service = BannerService()
+        await service.setUpcoming([payment(1, "2026-03-29")])
+        var badge = -1
+        let old = ShellUpcomingPaymentsModel(service: service)
+        old.didChangeDockBadge = { badge = $0 }
+        await old.load()
+        #expect(badge == 1)
+        old.didDisappear()
+        #expect(badge == 0 && old.didChangeDockBadge == nil)
+        await service.setUpcoming([payment(2, "2026-03-29"), payment(3, "2026-03-30")])
+        let fresh = ShellUpcomingPaymentsModel(service: service)
+        fresh.didChangeDockBadge = { badge = $0 }
+        await fresh.load()
+        #expect(badge == 2)
+        old.didDisappear()
+        old.didDisappear()
+        #expect(badge == 2)
+    }
+
+    @Test func cancelledStorageReadDoesNotCommitDefaultsAndFailedRestoreCanResumeTheSameModels() async {
+        let clock = BannerClock()
+        let storage = BannerStorage()
+        storage.cancelReads = true
+        storage.values[.fxDismissedAt] = String(clock.date.timeIntervalSince1970 * 1000)
+        storage.values[.upcomingDismissals] = "[\"1:2026-03-29\"]"
+        let service = BannerService()
+        await service.setUpcoming([payment(1, "2026-03-29")])
+        let fx = ShellFXStatusModel(service: service, storage: storage.callbacks, now: { clock.date })
+        let upcoming = ShellUpcomingPaymentsModel(
+            service: service, storage: storage.callbacks,
+            timeZone: TimeZone(identifier: "UTC")!, now: { clock.date })
+        var mirrored: [[String]] = []
+        var badges: [Int] = []
+        upcoming.didChangeDismissals = { mirrored.append($0) }
+        upcoming.didChangeDockBadge = { badges.append($0) }
+        await fx.load()
+        await upcoming.load()
+        #expect(!fx.isStorageLoaded && !upcoming.isStorageLoaded)
+        #expect(mirrored.isEmpty && badges.isEmpty)
+        storage.cancelReads = false
+        await fx.refreshIfStale()
+        await upcoming.refreshIfStale()
+        #expect(fx.isStorageLoaded && fx.dismissed && !fx.shouldShow)
+        #expect(upcoming.isStorageLoaded && !upcoming.shouldShow)
+        #expect(mirrored == [["1:2026-03-29"]] && badges == [0])
+    }
+
+    @Test func expectedRetiredRefreshCancellationPublishesNoFailureNotice() async {
+        let service = BannerService()
+        await service.cancelNextRefresh()
+        let model = ShellFXStatusModel(service: service)
+        let center = NativeNoticeCenter(automaticExpiry: false)
+        model.attachNotices(center)
+        await model.refresh()
+        #expect(!model.isRefreshing && model.notice == nil && center.entries.isEmpty)
+        #expect(await service.fxReads == 0)
+    }
+
     private func payment(_ id: Int, _ date: String, executed: Bool = false, recurring: Bool = false)
         -> OpenAPI.PlannedTransaction
     {
@@ -212,6 +271,7 @@ private final class BannerClock: @unchecked Sendable {
     var reads: [NativeShellNotificationStorage.Key] = []
     var writes: [(NativeShellNotificationStorage.Key, String)] = []
     var failWrites = false
+    var cancelReads = false
     var pauseRead = false
     private var readGate: CheckedContinuation<Void, Never>?
     private var readWaiter: CheckedContinuation<Void, Never>?
@@ -219,6 +279,7 @@ private final class BannerClock: @unchecked Sendable {
         .init(
             read: { [self] key in
                 reads.append(key)
+                if cancelReads { throw CancellationError() }
                 let snapshot = values[key]
                 if pauseRead {
                     pauseRead = false
@@ -253,6 +314,7 @@ private actor BannerService: ShellNotificationsService {
     private var failFX = false
     private var pauseRefresh = false
     private var pauseUpcoming = false
+    private var cancelRefresh = false
     private var refreshGate: CheckedContinuation<Void, Never>?
     private var refreshWaiter: CheckedContinuation<Void, Never>?
     private var upcomingGate: CheckedContinuation<Void, Never>?
@@ -261,6 +323,7 @@ private actor BannerService: ShellNotificationsService {
     func failNextFXRead() { failFX = true }
     func pauseNextRefresh() { pauseRefresh = true }
     func pauseNextUpcoming() { pauseUpcoming = true }
+    func cancelNextRefresh() { cancelRefresh = true }
     func notificationExchangeRates() async throws -> OpenAPI.ExchangeRates {
         fxReads += 1
         if failFX {
@@ -271,6 +334,10 @@ private actor BannerService: ShellNotificationsService {
     }
     func notificationRefreshExchangeRates() async throws {
         refreshes += 1
+        if cancelRefresh {
+            cancelRefresh = false
+            throw CancellationError()
+        }
         if pauseRefresh {
             pauseRefresh = false
             await withCheckedContinuation {

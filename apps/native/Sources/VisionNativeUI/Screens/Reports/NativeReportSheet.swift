@@ -18,8 +18,10 @@ public struct NativeReportSheet: View {
             }.padding(24)
             Form {
                 Section(strings.t("export.reportType")) {
-                    Picker(strings.t("export.reportType"), selection: Binding(get: { model.type }, set: model.setType))
-                    {
+                    Picker(
+                        strings.t("export.reportType"),
+                        selection: Binding(get: { model.type }, set: { value in model.setType(value) })
+                    ) {
                         ForEach(NativeReportType.allCases) { type in Text(strings.t(type.labelKey)).tag(type) }
                     }.pickerStyle(.segmented).labelsHidden()
                 }

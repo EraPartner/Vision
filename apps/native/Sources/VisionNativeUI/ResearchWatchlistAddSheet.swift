@@ -112,7 +112,8 @@ public struct ResearchWatchlistAddSheet: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(strings.t("addWatchlist.searchLabel")).font(.caption)
                     ResearchSymbolSearchView(
-                        text: Binding(get: { model.query }, set: model.updateSearch), items: model.searchResults,
+                        text: Binding(get: { model.query }, set: { value in model.updateSearch(value) }),
+                        items: model.searchResults,
                         isOpen: model.query.count >= 2, isFetching: model.isSearching,
                         placeholder: strings.t("addWatchlist.searchPlaceholder"), autoFocus: true,
                         onEscape: model.close, shell: shell,

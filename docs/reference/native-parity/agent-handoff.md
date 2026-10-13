@@ -21,9 +21,10 @@ The user also explicitly said to continue without requiring manual verification 
 steps between phases. Carry out available automated checks and continue independent work;
 do not ask the owner to perform those steps as an intermission.
 
-The last completed and published implementation checkpoint is **`17158f6d`**,
-`feat(native): port Dossiers and AI chat for phase 3n`. Phase **3o**, Settings and shared shell
-behaviour, is now in progress. This handoff records intended work; it does not certify that
+Phase **3o**, Settings and shared shell behaviour, has a hash-matched Foundation proof
+of 1,173 tests. Phase **3p**, remaining shell overlays and report parity, is in progress;
+its first full mounted integration checkpoint is **`fcd7ee95`**, pushed and verified.
+This handoff records both implemented and unfinished work; it does not certify that
 in-progress files compile or that macOS validation has passed. Inspect `git log`,
 `git status` and the actual diff before continuing.
 
@@ -449,6 +450,56 @@ architecture/flow documentation; Root integration/tests/checks/publishing. `revi
 finished its assigned portfolio notices, Backup trim and scoped parity documentation.
 The broad UI/runtime, final catalogs/docs checks and actual macOS build/test are still
 required. Keep publishing unfinished checkpoints as well as verified milestones.
+
+## Restore and source parity checkpoint (2026-10-13 23:20 UTC)
+
+`7f11b123` is pushed and verified after `fcd7ee95`. Its macOS build passed the AI Chat
+picker workaround, then crashed on the same actor-bound String setter in
+AnalysisMonitorsCreationView. The next snapshot saves explicit closure workarounds for
+that view, Research Watchlist search, Backup toggle and Reports type picker. Full
+app/package compilation remains unverified; evidence is
+`/workspace/vision-native-macos-tenth-build.log` outside the repository.
+
+The SDK restore coordinator now fences actual WebKit callback completion, including
+completion after a logical timeout. Chart/Tax/SQL/Portfolio/Admin factory callbacks
+capture their originating generation, so retired callbacks cannot write through fresh
+storage authority. Native restore intent defers renderer-ready reconstruction until
+frontend state and fresh restored-database onboarding acknowledgment settle, then the
+source delayed callback rebuilds once and fully reloads the WebView. These SDK changes
+are still awaiting real macOS compilation and focused final review.
+
+On disk: retryable cancelled onboarding/banner storage reads; silent expected retirement
+cancellation; idempotent upcoming-badge teardown; an FX read generation that prevents an
+old GET receipt replacing the result of an explicit cache invalidation/retry. Their new
+tests are in progress. Root added restricted trusted-overlay bridge tests, immutable
+JavaScriptCore capability tests, and route-preserving overlay/copy/report/404 cases.
+
+The extreme Tax-report custom-year fallback is being implemented through fresh raw fiscal
+settings and the existing retained TypeScript resolvers/engine. Preserve source one-partner
+success and the two-partner endpoint validation rejection; do not clamp years, widen the
+API, or drop configured household fields. The common composition is being extracted for
+both web export and the fixed native callback, with fiscal modules staying lazy.
+Tax visible-page printing remains unfinished: generic all-section PDF printing does not
+preserve the source's current loaded year and visible-widget print behavior.
+
+Preliminary new combined proof passed **150 tests in 13 suites** after compiling 239
+actual production sources and 86 permanent test files. Ten files changed during that run,
+so it is not the final hash-matched proof. The next fresh focused/full snapshots must
+include the new tests and latest cancellation/context fixes. Preserve the immutable
+phase-3o 1,173-test proof. Root validation before this snapshot passed frontend typecheck,
+lint (zero errors; 35 existing warnings), locale parity/drift, all native generators,
+309 endpoint matrix and package boundaries. Further source edits require appropriate
+fresh checks. The measured frontend size budget adjustment is 475 KB preload/1,373 KB total,
+based on a 472.94/1,370.35 KB prior snapshot and 474.14/1,372.29 KB overlay implementation;
+the actual final artifact guard and source-context chunk growth remain under verification.
+
+Continue after the full commit and push. Current owners remain SDK `palette_cont`,
+frontend/source helpers `palette_ts_cont`, Reports/print/docs `docs_reports_cont`,
+Onboarding/overlay UI `onboarding_cont`, banners/Home/rates `banners_cont`, verification
+`verify_cont`, and Root integration/tests/handoff/publication. Finish phase-3 parity gaps,
+then autonomously prepare phase 4's new ADR and remove native dependence on web presentation
+without losing source fiscal computations, route/state semantics or backup compatibility.
+No manual owner verification or phase-start intermission is required.
 
 ## Tooling and safety for continuation
 

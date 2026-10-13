@@ -52,7 +52,7 @@ import Observation
         async let rows: Void = loadUpcoming(force: force)
         _ = await (stored, rows)
     }
-    public func refreshIfStale() async { await loadUpcoming(force: false) }
+    public func refreshIfStale() async { await load() }
     public func invalidate() { fetchedAt = nil }
 
     private func restoreDismissals() async {
@@ -67,7 +67,14 @@ import Observation
         let today = ShellNotificationDate.day(now(), timeZone: timeZone)
         let task = Task { [weak self] in
             guard let self, active, token == revision, !Task.isCancelled else { return }
-            let raw = try? await storage.read(.upcomingDismissals)
+            let raw: String?
+            do {
+                raw = try await storage.read(.upcomingDismissals)
+            } catch is CancellationError {
+                return
+            } catch {
+                raw = nil
+            }
             guard active, token == revision, !Task.isCancelled else { return }
             if edits == storageRevision {
                 dismissalKeys = Self.readKeys(raw, today: today)
@@ -124,6 +131,8 @@ import Observation
                 readError = nil
                 didLoadUpcoming?(upcoming ?? [])
                 publishBadge()
+            } catch is CancellationError {
+                return
             } catch {
                 guard active, token == revision, readToken == readRevision, !Task.isCancelled else { return }
                 readError = error.localizedDescription
@@ -158,6 +167,7 @@ import Observation
     }
     public func flushStorage() async { await writeTask?.value }
     public func didDisappear() {
+        guard active else { return }
         active = false
         revision = UUID()
         readTask?.cancel()
@@ -166,5 +176,6 @@ import Observation
         storageTask?.cancel()
         storageTask = nil
         didChangeDockBadge?(0)
+        didChangeDockBadge = nil
     }
 }

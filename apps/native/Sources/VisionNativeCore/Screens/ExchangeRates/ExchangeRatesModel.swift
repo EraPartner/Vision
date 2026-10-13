@@ -75,6 +75,9 @@ public final class ExchangeRatesModel {
     @ObservationIgnored private let now: @Sendable () -> Date
     @ObservationIgnored private var fetchedAt: Date?
     @ObservationIgnored private var inFlight: Task<Void, Never>?
+    @ObservationIgnored private var inFlightID: UUID?
+    @ObservationIgnored private var inFlightRevision: UUID?
+    @ObservationIgnored private var readRevision = UUID()
     @ObservationIgnored private var notices = NoticeCounter()
 
     public init(service: any ExchangeRatesService, now: @escaping @Sendable () -> Date = { Date() }) {
@@ -102,7 +105,10 @@ public final class ExchangeRatesModel {
     }
 
     /// A shared refresh receipt expires this cache without discarding its known rates or issuing a provider request.
-    public func invalidate() { fetchedAt = nil }
+    public func invalidate() {
+        fetchedAt = nil
+        readRevision = UUID()
+    }
 
     /// The screen appeared: fetch unless a result younger than `staleAfter` is cached.
     public func appear() async {
@@ -144,26 +150,45 @@ public final class ExchangeRatesModel {
     /// returning before it settles. The phase changes only when the request ends.
     private func fetch() async {
         if let inFlight {
+            let id = inFlightID
+            let token = inFlightRevision
             await inFlight.value
+            clearRead(id)
+            // A caller explicitly joining after invalidation needs the newer DB receipt.
+            if token != readRevision { await fetch() }
             return
         }
-        let request = Task { await run() }
+        let id = UUID()
+        let token = readRevision
+        let request = Task { await run(token: token) }
         inFlight = request
+        inFlightID = id
+        inFlightRevision = token
         await request.value
-        inFlight = nil
+        clearRead(id)
     }
 
-    private func run() async {
+    private func clearRead(_ id: UUID?) {
+        guard inFlightID == id else { return }
+        inFlight = nil
+        inFlightID = nil
+        inFlightRevision = nil
+    }
+
+    private func run(token: UUID) async {
         isFetching = true
         if case .idle = phase { phase = .loading }
         defer { isFetching = false }
         do {
             let data = try await service.exchangeRates()
+            guard token == readRevision else { return }
             phase = .loaded(data)
             fetchedAt = now()
         } catch is CancellationError {
+            guard token == readRevision else { return }
             if case .loading = phase { phase = .idle }
         } catch {
+            guard token == readRevision else { return }
             phase = .failed
             fetchedAt = nil
         }

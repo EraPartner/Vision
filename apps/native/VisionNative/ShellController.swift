@@ -39,6 +39,9 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     private var restoreFenceEntered = false
     private var restoreFenceOwner: UUID?
     private var restoredNativeGeneration: UUID?
+    /// Accepted restore retains its source workflow until frontend state and the
+    /// onboarding receipt are applied, then performs the source delayed reload.
+    private var pendingRestoreReload: UUID?
     private var onboardingRestoreIntent: UUID?
     private var nativeSettingsRebuildTask: Task<Void, any Error>?
     /// The sidebar, route and settings state of the native navigation shell.
@@ -186,7 +189,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
                     self.shellModel.notices.publish(notice, source: reportNoticeSource)
                 }))
         let settingsAbout = NativeSettingsAboutModel(
-            service: desktopSettings,
+            service: makeNativeSettingsDesktopCallbacks(generation: settingsGeneration, restoreReload: false),
             version: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
             appName: Self.appName)
         nativeSettings.loadKeepServices = { [weak self] in
@@ -198,9 +201,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             try await self.saveServicesSettings(keepServicesOnQuit: keep)
         }
         nativeSettings.clearRecurringLocalState = { [weak self] in
-            _ = try? await self?.nativeSettingsScript(
-                NativeSettingsStorageBridge.removeScript,
-                arguments: NativeSettingsStorageBridge.arguments(for: .recurringDismissals))
+            _ = try? await self?.writeNativeLocalValue(nil, key: .recurringDismissals, generation: settingsGeneration)
         }
         nativeSettings.didChangeApp = { [weak self, weak settingsAI, weak commandPalette] raw in
             guard let self, self.nativeSettingsGeneration == settingsGeneration,
@@ -240,10 +241,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
                 throw APIError.backendUnavailable
             }
             _ = try await nativeSettings.persistence.save("onboarding_complete", value: .bool(false))
-            let result = try await self.nativeSettingsScript(
-                NativeSettingsStorageBridge.removeScript,
-                arguments: NativeSettingsStorageBridge.arguments(for: .onboardingDraft))
-            guard try NativeSettingsStorageBridge.mutationReply(result) else { throw APIError.backendUnavailable }
+            try await self.writeNativeLocalValue(nil, key: .onboardingDraft, generation: settingsGeneration)
             self.shellModel.closeSettings()
         }
         let systemIsDark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
@@ -273,14 +271,18 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         let analysis = AnalysisScreens(
             client: client,
             sqlRead: { [weak self] in
-                guard let value = await self?.homeLocalStorage(key: "vision.analysis.sqlHistory"), value != .null else {
+                guard
+                    let value = await self?.homeLocalStorage(
+                        key: "vision.analysis.sqlHistory", generation: settingsGeneration), value != .null
+                else {
                     return nil
                 }
                 return try? value.serialized()
             },
             sqlWrite: { [weak self] data in
                 guard let value = try? JSONValue.parse(data) else { return }
-                _ = await self?.homeLocalStorage(key: "vision.analysis.sqlHistory", value: value)
+                _ = await self?.homeLocalStorage(
+                    key: "vision.analysis.sqlHistory", value: value, generation: settingsGeneration)
             })
         let analysisMonitors = AnalysisMonitorsModel(service: client)
         let research = ResearchScreens(client: client)
@@ -290,9 +292,11 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             store: ResearchChartLayoutClosureStore(
                 read: { [weak self] in
                     guard let self else { throw APIError.backendUnavailable }
-                    return try await self.readChartLayouts()
+                    return try await self.readChartLayouts(generation: settingsGeneration)
                 },
-                write: { [weak self] data in await self?.writeChartLayouts(data) ?? false }))
+                write: { [weak self] data in
+                    await self?.writeChartLayouts(data, generation: settingsGeneration) ?? false
+                }))
         researchCharts.shareOrigin = { [weak self] in
             guard let url = self?.appURL, var origin = URLComponents(url: url, resolvingAgainstBaseURL: false),
                 origin.scheme != nil, origin.host != nil
@@ -358,14 +362,16 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             service: client,
             store: PortfolioImportClosureSessionStore(
                 read: { [weak self] key in
-                    guard let value = await self?.portfolioSessionStorage(key: key), value != .null else { return nil }
+                    guard let value = await self?.portfolioSessionStorage(key: key, generation: settingsGeneration),
+                        value != .null
+                    else { return nil }
                     return try? value.serialized()
                 },
                 write: { [weak self] key, data in
                     guard let value = data.flatMap({ try? JSONValue.parse($0) }) ?? (data == nil ? .null : nil) else {
                         return
                     }
-                    _ = await self?.portfolioSessionStorage(key: key, value: value)
+                    _ = await self?.portfolioSessionStorage(key: key, value: value, generation: settingsGeneration)
                 }))
         portfolioImports.didMutate = { [weak self] in
             await self?.shellModel.portfolioImportDidMutate()
@@ -384,12 +390,14 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         }
         tax.deductions.bindStorage(
             read: { [weak self] key in
-                guard let value = await self?.homeLocalStorage(key: key) else { return nil }
+                guard let value = await self?.homeLocalStorage(key: key, generation: settingsGeneration) else {
+                    return nil
+                }
                 return try? String(data: value.serialized(), encoding: .utf8)
             },
             write: { [weak self] key, raw in
                 guard let value = try? JSONValue.parse(Data(raw.utf8)) else { return }
-                _ = await self?.homeLocalStorage(key: key, value: value)
+                _ = await self?.homeLocalStorage(key: key, value: value, generation: settingsGeneration)
             })
         let model = NativeShellModel(
             strings: CatalogStrings(language: strings.language),
@@ -397,7 +405,8 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
                 splashTheme: LaunchAppearance.theme(fromSettings: initialSettings), systemIsDark: systemIsDark),
             exchangeRates: rates,
             admin: AdminScreens.make(
-                service: client, database: client, token: makeAdminTokenAccess(), audit: auditChannels),
+                service: client, database: client, token: makeAdminTokenAccess(generation: settingsGeneration),
+                audit: auditChannels),
             planned: PlannedPaymentsModel(service: client, editing: client, pickers: client, rates: rates),
             imports: imports,
             transactions: transactions,
@@ -469,12 +478,12 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             Task { [weak self] in
                 guard let self else { return }
                 guard (try? self.requireNativeGeneration(settingsGeneration)) != nil else { return }
-                _ = try? await self.nativeSettingsScript(
+                _ = try? await self.nativeFrontendMutationScript(
                     """
                     try { window.sessionStorage.removeItem('vision.dashboardArrivalSeen'); } catch {}
                     window.dispatchEvent(new Event('vision:dashboard-arrival'));
                     return true;
-                    """)
+                    """, generation: settingsGeneration)
             }
         }
         observeNativeSettingsSession(model: model, generation: settingsGeneration)
@@ -493,8 +502,16 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         try requireNativeGeneration(generation)
         let session = localStateSession
         try await session.checkRead()
-        let result = try await nativeSettingsScript(
-            NativeSettingsStorageBridge.readScript, arguments: NativeSettingsStorageBridge.arguments(for: key))
+        guard queue.isReady else { throw CancellationError() }
+        let result: JSONValue
+        do {
+            result = try await nativeSettingsScript(
+                NativeSettingsStorageBridge.readScript, arguments: NativeSettingsStorageBridge.arguments(for: key))
+        } catch {
+            guard queue.isReady else { throw CancellationError() }
+            throw error
+        }
+        guard queue.isReady else { throw CancellationError() }
         try requireNativeGeneration(generation)
         try await session.checkRead()
         return try NativeSettingsStorageBridge.readLocalReply(result)
@@ -609,6 +626,18 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
                     """, arguments: ["householdJSON": .string(householdJSON), "year": .number(Double(year))])
                 try self.requireNativeGeneration(generation)
                 return try JSONDecoder().decode(TaxValue.self, from: JSONEncoder().encode(reply))
+            },
+            sourceContext: { [weak self] settings, year in
+                guard let self else { throw APIError.backendUnavailable }
+                try self.requireNativeGeneration(generation)
+                let settingsJSON = String(decoding: try JSONEncoder().encode(settings), as: UTF8.self)
+                let reply = try await self.nativeSettingsScript(
+                    """
+                    if (typeof window.__visionNativeTaxReportContext !== 'function') throw new Error('Tax report context unavailable');
+                    return await window.__visionNativeTaxReportContext(settingsJSON, year);
+                    """, arguments: ["settingsJSON": .string(settingsJSON), "year": .number(Double(year))])
+                try self.requireNativeGeneration(generation)
+                return try JSONDecoder().decode(TaxValue.self, from: JSONEncoder().encode(reply))
             })
         let value = try await context.context(year: year)
         try requireNativeGeneration(generation)
@@ -693,7 +722,9 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         }
     }
 
-    private func makeNativeSettingsDesktopCallbacks(generation: UUID) -> NativeSettingsDesktopCallbacks {
+    private func makeNativeSettingsDesktopCallbacks(
+        generation: UUID, restoreReload: Bool = true
+    ) -> NativeSettingsDesktopCallbacks {
         NativeSettingsDesktopCallbacks(
             loadBackupSettings: { [weak self] in
                 guard let self else { throw APIError.backendUnavailable }
@@ -722,6 +753,9 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             },
             applyRestoredFrontendState: { [weak self] state in
                 guard let self else { throw APIError.backendUnavailable }
+                guard self.pendingRestoreReload == generation, generation == self.nativeSettingsGeneration else {
+                    throw CancellationError()
+                }
                 let result = try await self.nativeSettingsScript(
                     NativeSettingsStorageBridge.restoreScript,
                     arguments: NativeSettingsStorageBridge.restoreArguments(state))
@@ -729,7 +763,8 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             },
             reloadFrontend: { [weak self] in
                 guard let self else { throw APIError.backendUnavailable }
-                try await self.reloadNativeSettingsFrontend(expectedGeneration: generation)
+                try await self.reloadNativeSettingsFrontend(
+                    expectedGeneration: generation, restoreReload: restoreReload)
             },
             readBackupReminder: { [weak self] in
                 guard let self else { return false }
@@ -740,10 +775,8 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             },
             writeBackupReminder: { [weak self] dismissed in
                 guard let self else { throw APIError.backendUnavailable }
-                let result = try await self.nativeSettingsScript(
-                    dismissed ? NativeSettingsStorageBridge.writeScript : NativeSettingsStorageBridge.removeScript,
-                    arguments: NativeSettingsStorageBridge.arguments(for: .reminder, value: dismissed ? "1" : nil))
-                guard try NativeSettingsStorageBridge.mutationReply(result) else { throw APIError.backendUnavailable }
+                try await self.writeNativeLocalValue(
+                    dismissed ? "1" : nil, key: .reminder, generation: generation)
             })
     }
 
@@ -866,12 +899,12 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         let tier = shellModel.nativeSettings?.sessionTierOverride
         Task { [weak self] in
             guard let self, generation == self.nativeSettingsGeneration, self.queue.isReady else { return }
-            _ = try? await self.nativeSettingsScript(
+            _ = try? await self.nativeFrontendMutationScript(
                 """
                 window.__VISION_NATIVE_SETTINGS_SESSION_TIER__.value = tier;
                 window.dispatchEvent(new CustomEvent('vision:native-settings-session', {detail:{sessionTierOverride:tier}}));
                 return true;
-                """, arguments: ["tier": tier.map(JSONValue.string) ?? .null])
+                """, arguments: ["tier": tier.map(JSONValue.string) ?? .null], generation: generation)
         }
     }
 
@@ -953,14 +986,18 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         }
     }
 
-    private func reloadNativeSettingsFrontend(expectedGeneration: UUID) async throws {
+    private func reloadNativeSettingsFrontend(expectedGeneration: UUID, restoreReload: Bool = false) async throws {
         guard expectedGeneration == nativeSettingsGeneration else { return }
+        if let pendingRestoreReload {
+            guard restoreReload, pendingRestoreReload == expectedGeneration else { return }
+        }
         if let running = nativeSettingsRebuildTask {
             try await running.value
             return
         }
         guard let webView = webShell?.webView else { throw APIError.backendUnavailable }
         try await rebuildNativeSettingsGraph(expectedGeneration: expectedGeneration)
+        if pendingRestoreReload == expectedGeneration { pendingRestoreReload = nil }
         webView.reload()
     }
 
@@ -1085,26 +1122,33 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     /// accessible, and every argument goes through WebKit's argument binding.
     private func homeLocalStorage(key: String, value: JSONValue? = nil, generation: UUID? = nil) async -> JSONValue? {
         if let generation, (try? requireNativeGeneration(generation)) == nil { return nil }
-        let result = await webStorage(key: key, value: value, session: false)
+        let result = await webStorage(key: key, value: value, session: false, generation: generation)
         if let generation, (try? requireNativeGeneration(generation)) == nil { return nil }
         return result
     }
 
-    private func readChartLayouts() async throws -> Data? {
-        try await chartLayoutStorage(writing: nil).map { Data($0.utf8) }
+    private func readChartLayouts(generation: UUID) async throws -> Data? {
+        try await chartLayoutStorage(writing: nil, generation: generation).map { Data($0.utf8) }
     }
 
-    private func writeChartLayouts(_ data: Data) async -> Bool {
+    private func writeChartLayouts(_ data: Data, generation: UUID) async -> Bool {
         do {
             let value = try ResearchChartStorageBridge.writeValue(data)
-            return try await chartLayoutStorage(writing: value) == value
+            return try await chartLayoutStorage(writing: value, generation: generation) == value
         } catch { return false }
     }
 
-    private func chartLayoutStorage(writing value: String?) async throws -> String? {
+    private func chartLayoutStorage(writing value: String?, generation: UUID) async throws -> String? {
+        try requireNativeGeneration(generation)
+        let readSession = localStateSession
+        if value == nil { try await readSession.checkRead() }
         guard queue.isReady, let webView = webShell?.webView else { throw APIError.backendUnavailable }
         let admission = value == nil ? nil : try await beginNativeStorageWrite()
-        return try await withCheckedThrowingContinuation {
+        do { try requireNativeGeneration(generation) } catch {
+            if let (session, token) = admission { await session.finishWrite(token) }
+            throw error
+        }
+        let result = try await withCheckedThrowingContinuation {
             (continuation: CheckedContinuation<String?, any Error>) in
             let pending = OSAllocatedUnfairLock<CheckedContinuation<String?, any Error>?>(initialState: continuation)
             let resume: @Sendable (Result<String?, any Error>) -> Void = { result in
@@ -1132,14 +1176,21 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
                 timeout.cancel()
             }
         }
+        try requireNativeGeneration(generation)
+        if value == nil { try await readSession.checkRead() }
+        return result
     }
 
     /// Import checkpoints share the retained web page's session and contain metadata only.
-    private func portfolioSessionStorage(key: String, value: JSONValue? = nil) async -> JSONValue? {
-        await webStorage(key: key, value: value, session: true)
+    private func portfolioSessionStorage(key: String, value: JSONValue? = nil, generation: UUID) async -> JSONValue? {
+        guard (try? requireNativeGeneration(generation)) != nil else { return nil }
+        let result = await webStorage(key: key, value: value, session: true, generation: generation)
+        guard (try? requireNativeGeneration(generation)) != nil else { return nil }
+        return result
     }
 
-    private func webStorage(key: String, value: JSONValue?, session: Bool) async -> JSONValue? {
+    private func webStorage(key: String, value: JSONValue?, session: Bool, generation: UUID? = nil) async -> JSONValue?
+    {
         let permitted =
             session
             ? ["vision.portfolio-import.latest-session.v1", "vision.portfolio-import.latest-review-settings.v1"]
@@ -1152,6 +1203,10 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         else { return nil }
         let admission = value == nil ? nil : try? await beginNativeStorageWrite()
         guard value == nil || admission != nil else { return nil }
+        if let generation, (try? requireNativeGeneration(generation)) == nil {
+            if let (session, token) = admission { await session.finishWrite(token) }
+            return nil
+        }
         let encoded = value.flatMap { try? String(data: $0.serialized(), encoding: .utf8) }
         return await withCheckedContinuation { (continuation: CheckedContinuation<JSONValue?, Never>) in
             let pending = OSAllocatedUnfairLock<CheckedContinuation<JSONValue?, Never>?>(initialState: continuation)
@@ -1184,19 +1239,29 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     private static let adminTokenScript = AdminTokenScript.read
 
     /// The admin token card's access to the page's `sessionStorage`.
-    private func makeAdminTokenAccess() -> AdminTokenAccess {
+    private func makeAdminTokenAccess(generation: UUID) -> AdminTokenAccess {
         AdminTokenAccess(
-            read: { [weak self] in await self?.adminToken() },
-            write: { [weak self] token in await self?.writeAdminToken(token) ?? false })
+            read: { [weak self] in
+                guard let self, (try? self.requireNativeGeneration(generation)) != nil else { return nil }
+                let token = await self.adminToken()
+                guard (try? self.requireNativeGeneration(generation)) != nil else { return nil }
+                return token
+            },
+            write: { [weak self] token in await self?.writeAdminToken(token, generation: generation) ?? false })
     }
 
     /// `setAdminToken(token)` in the page: the trimmed token, or removal for a blank one. The
     /// token goes in as a script argument, never as script text. `false` when the page is not
     /// ready, the script fails or the page does not answer within `adminTokenTimeout`; the
     /// storage is then unchanged as far as the card knows.
-    private func writeAdminToken(_ token: String) async -> Bool {
+    private func writeAdminToken(_ token: String, generation: UUID) async -> Bool {
+        guard (try? requireNativeGeneration(generation)) != nil else { return false }
         guard queue.isReady, let webView = webShell?.webView else { return false }
         guard let (session, writeToken) = try? await beginNativeStorageWrite() else { return false }
+        guard (try? requireNativeGeneration(generation)) != nil else {
+            await session.finishWrite(writeToken)
+            return false
+        }
         return await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
             let pending = OSAllocatedUnfairLock<CheckedContinuation<Bool, Never>?>(initialState: continuation)
             let resume: @Sendable (Bool) -> Void = { stored in
@@ -1689,6 +1754,10 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         let rendererGeneration = nativeSettingsGeneration
         Task { [weak self] in
             guard let self else { return }
+            // Backend readiness can arrive inside the accepted restore. The
+            // Backup workflow still owns applying frontend state and its wizard
+            // completion; its 3 s callback owns rebuilding and reloading the page.
+            if self.restoreFenceEntered || self.pendingRestoreReload == rendererGeneration { return }
             if self.restoredNativeGeneration == rendererGeneration || self.nativeSettingsRebuildTask != nil {
                 do { try await self.rebuildNativeSettingsGraph(expectedGeneration: rendererGeneration) } catch {
                     return
@@ -1884,7 +1953,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     /// `backup:restore`: the localized confirmation, then the restore, which stops and
     /// restarts the backend itself.
     func restoreBackup(_ path: String, passphrase: String?) async -> JSONValue {
-        guard !restoreFenceEntered else {
+        guard !restoreFenceEntered, pendingRestoreReload == nil else {
             return .object(["success": .bool(false), "error": .string("A restore is already in progress")])
         }
         let operation = UUID()
@@ -1903,6 +1972,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         if restoreFenceEntered, restoreFenceOwner == operation {
             if result["success"] == .bool(true) {
                 restoredNativeGeneration = nativeSettingsGeneration
+                pendingRestoreReload = nativeSettingsGeneration
                 await localStateSession.retireForReload()
                 if shellModel.onboarding?.isPresented == true { onboardingRestoreIntent = nativeSettingsGeneration }
                 shellModel.commandPalette?.retireForReload()
@@ -1916,6 +1986,13 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
                 shellModel.nativeSettings?.resumeAfterFailedRestore()
                 await settingsWriter.resumeAfterFailedRestore()
                 await dataSession.resumeAfterFailedRestore()
+                if let onboarding = shellModel.onboarding {
+                    publishNativeOnboarding(model: onboarding, generation: nativeSettingsGeneration)
+                }
+                for (key, value) in nativeSettingsDrafts {
+                    publishNativeSettings(kind: "draft", key: key, value: value)
+                }
+                publishNativeSettingsSession()
             }
             restoreFenceEntered = false
             restoreFenceOwner = nil
@@ -1928,7 +2005,9 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     }
 
     private func confirmAndSuspendForRestore(fileName: String, operation: UUID) async -> Bool {
-        guard !restoreFenceEntered, await confirmRestore(fileName: fileName), !restoreFenceEntered else { return false }
+        guard !restoreFenceEntered, pendingRestoreReload == nil,
+            await confirmRestore(fileName: fileName), !restoreFenceEntered, pendingRestoreReload == nil
+        else { return false }
         restoreFenceEntered = true
         restoreFenceOwner = operation
         await shellModel.nativeSettings?.suspendForRestore()

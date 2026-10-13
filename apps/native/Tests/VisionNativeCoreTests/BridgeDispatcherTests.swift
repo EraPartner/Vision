@@ -19,6 +19,7 @@ final class RecordingBridgeHost: BridgeHost {
     var encrypted = true
     var settingsPatches: [NativeSettingsPatch] = []
     var onboardingPresentations: [Bool] = []
+    var openedOverlays: [NativeShellOverlayKind] = []
 
     func rendererDidFail(_ failure: RendererFailure) { calls.append("fail:\(failure.kind):\(failure.name)") }
     func rendererDidBecomeReady() { calls.append("ready") }
@@ -119,6 +120,10 @@ final class RecordingBridgeHost: BridgeHost {
         if let saveError { throw saveError }
         settingsPatches.append(patch)
     }
+    func openNativeOverlay(_ kind: NativeShellOverlayKind) async throws {
+        if let saveError { throw saveError }
+        openedOverlays.append(kind)
+    }
 }
 
 @MainActor
@@ -176,6 +181,27 @@ final class RecordingBridgeHost: BridgeHost {
         #expect(
             !BridgeSender(isMainFrame: true, origin: BridgeOrigin(scheme: "http", host: "::1", port: 41000)).isTrusted(
                 appURL: app))
+    }
+
+    @Test func nativeOverlaysRequireTheTrustedMainFrameAndRestrictedKinds() async {
+        let host = RecordingBridgeHost()
+        let palette = #"{"channel":"shell:open-overlay","args":["palette"]}"#
+        let subframe = BridgeSender(isMainFrame: false, origin: trusted.origin)
+        #expect(
+            await reply(palette, host: host, sender: subframe) == .reject(BridgeDispatcher.unauthorizedSenderMessage))
+        #expect(host.openedOverlays.isEmpty)
+        for arguments in [
+            #"["settings"]"#, #"["report"]"#, #"["onboarding"]"#, #"["Palette"]"#, "[]", "[true]", #"["palette",0]"#,
+        ] {
+            #expect(await reply("{\"channel\":\"shell:open-overlay\",\"args\":\(arguments)}", host: host) == .failure)
+        }
+        #expect(host.openedOverlays.isEmpty)
+        #expect(await reply(palette, host: host) == .success)
+        #expect(await reply(#"{"channel":"shell:open-overlay","args":["shortcuts"]}"#, host: host) == .success)
+        #expect(host.openedOverlays == [.palette, .shortcuts])
+        host.saveError = SettingsWriteError("Restore in progress")
+        #expect(await reply(palette, host: host) == .reject("Restore in progress"))
+        #expect(host.openedOverlays == [.palette, .shortcuts])
     }
 
     @Test func nativePreferenceChangesRequireTheTrustedMainFrame() async throws {

@@ -56,7 +56,7 @@ import Observation
         async let rates: Void = loadRates(force: force)
         _ = await (stored, rates)
     }
-    public func refreshIfStale() async { await loadRates(force: false) }
+    public func refreshIfStale() async { await load() }
     public func invalidate() { fetchedAt = nil }
 
     private func restoreDismissal() async {
@@ -70,7 +70,14 @@ import Observation
         let edits = storageRevision
         let task = Task { [weak self] in
             guard let self, active, token == revision, !Task.isCancelled else { return }
-            let raw = try? await storage.read(.fxDismissedAt)
+            let raw: String?
+            do {
+                raw = try await storage.read(.fxDismissedAt)
+            } catch is CancellationError {
+                return
+            } catch {
+                raw = nil
+            }
             guard active, token == revision, !Task.isCancelled else { return }
             if edits == storageRevision, let raw, !raw.isEmpty, let milliseconds = Self.dismissalMilliseconds(raw) {
                 dismissed = milliseconds.isFinite && now().timeIntervalSince1970 * 1000 - milliseconds < 3_600_000
@@ -118,6 +125,8 @@ import Observation
                 data = value
                 readError = nil
                 fetchedAt = now()
+            } catch is CancellationError {
+                return
             } catch {
                 guard active, token == revision, !Task.isCancelled else { return }
                 readError = error.localizedDescription
@@ -162,6 +171,8 @@ import Observation
             // The mutation itself survives route changes; a retired shell starts no new read.
             if active { await loadRates(force: true) }
             notice = notices.make(.success, "exchangeRates.refreshSuccess")
+        } catch is CancellationError {
+            // A retired/paused shell has no failed provider receipt to announce.
         } catch {
             notice = notices.make(.error, "exchangeRates.refreshError")
         }

@@ -114,6 +114,81 @@ struct NativeOnboardingTests {
         #expect(await fixture.expectedWrites == [.object(["exists": .bool(false)])])
         #expect(await fixture.value == .bool(true))
     }
+    @Test func cancelledDraftReadPreservesStoredV1AndUnknownCompletionUntilResume() async throws {
+        let fixture = OnboardingFixture()
+        let store = OnboardingDraftFixture()
+        var saved = NativeOnboardingDraft()
+        saved.step = .backup
+        saved.selectedBank = "fixture"
+        store.data = try saved.encoded()
+        store.cancelRead = true
+        let original = store.data
+        let model = makeOnboarding(fixture, store)
+        await model.load()
+        await model.flushDraft()
+        #expect(!model.isPresented && !model.isLoaded && !model.isLoading)
+        #expect(store.data == original && store.writes == 0 && model.notice == nil)
+        store.cancelRead = false
+        await model.load()
+        await model.flushDraft()
+        #expect(model.isPresented && model.isLoaded && model.draft.step == .backup)
+        #expect(store.reads == 2 && store.writes == 1)
+    }
+    @Test func cancellingOneStartupCallerDoesNotDiscardSharedAcceptedDraftRead() async throws {
+        let fixture = OnboardingFixture()
+        let store = OnboardingDraftFixture()
+        var saved = NativeOnboardingDraft()
+        saved.step = .tour
+        saved.selectedBank = "fixture"
+        store.data = try saved.encoded()
+        store.gateRead = true
+        let model = makeOnboarding(fixture, store)
+        let first = Task { await model.load() }
+        await store.waitForRead()
+        first.cancel()
+        let resumed = Task { await model.load() }
+        await Task.yield()
+        #expect(store.reads == 1 && model.isLoading)
+        store.releaseRead()
+        await first.value
+        await resumed.value
+        await model.flushDraft()
+        #expect(model.isLoaded && model.isPresented && model.draft.step == .tour)
+        #expect(store.reads == 1 && store.writes == 1)
+        #expect(await fixture.settingReads == 1)
+    }
+    @Test func retiredGenerationDraftWriteDoesNotPublishStorageFailureToast() async {
+        let fixture = OnboardingFixture()
+        let store = OnboardingDraftFixture()
+        store.cancelWrite = true
+        let model = makeOnboarding(fixture, store)
+        let notices = NativeNoticeCenter()
+        model.attachNotices(notices)
+        await model.load()
+        await model.flushDraft()
+        #expect(model.isPresented && store.writes == 1 && store.data == nil)
+        #expect(model.notice == nil && notices.visibleEntries.isEmpty)
+    }
+    @Test func genuineDraftStorageFailureReportsOnceUntilSuccessfulWrite() async {
+        let fixture = OnboardingFixture()
+        let store = OnboardingDraftFixture()
+        store.failWrite = true
+        let model = makeOnboarding(fixture, store)
+        let notices = NativeNoticeCenter()
+        model.attachNotices(notices)
+        await model.load()
+        await model.flushDraft()
+        model.next()
+        await model.flushDraft()
+        #expect(notices.visibleEntries.count == 1 && model.notice?.key == "onboarding.draftStorageFailed")
+        store.failWrite = false
+        model.next()
+        await model.flushDraft()
+        store.failWrite = true
+        model.next()
+        await model.flushDraft()
+        #expect(notices.visibleEntries.count == 2)
+    }
     @Test func retiredSettingsReadCannotOpenAnOldWizardAfterDatabaseRestore() async {
         let fixture = OnboardingFixture()
         let store = OnboardingDraftFixture()
@@ -264,8 +339,33 @@ struct NativeOnboardingTests {
 @MainActor private final class OnboardingDraftFixture: NativeOnboardingDraftStore {
     var data: Data?
     var removals = 0
-    func read() async throws -> Data? { data }
-    func write(_ value: Data) async throws { data = value }
+    var reads = 0
+    var writes = 0
+    var cancelRead = false
+    var cancelWrite = false
+    var failWrite = false
+    var gateRead = false
+    private var readContinuation: CheckedContinuation<Void, Never>?
+    func read() async throws -> Data? {
+        reads += 1
+        if gateRead {
+            gateRead = false
+            await withCheckedContinuation { readContinuation = $0 }
+        }
+        if cancelRead { throw CancellationError() }
+        return data
+    }
+    func write(_ value: Data) async throws {
+        writes += 1
+        if cancelWrite { throw CancellationError() }
+        if failWrite { throw APIError.backendUnavailable }
+        data = value
+    }
+    func waitForRead() async { while readContinuation == nil { await Task.yield() } }
+    func releaseRead() {
+        readContinuation?.resume()
+        readContinuation = nil
+    }
     func remove() async throws {
         removals += 1
         data = nil

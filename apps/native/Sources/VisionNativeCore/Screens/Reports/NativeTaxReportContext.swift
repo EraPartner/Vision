@@ -94,15 +94,41 @@ public enum NativeTaxReportContext {
     private let client: APIClient
     private let localize: @MainActor (String) -> String
     private let projectProfile: @MainActor (TaxValue, Int) async throws -> TaxValue
+    private let sourceContext: (@MainActor (TaxValue, Int) async throws -> TaxValue)?
+    public static let fiscalSettingKeys = [
+        "belgian_tax_profile", "belgian_tax_profile_snapshots_v1", "belgian_tax_household_v2",
+        "belgian_tax_household_snapshots_v2", "belgian_tax_profile_snapshot_meta_v1",
+    ]
     public init(
         client: APIClient, localize: @escaping @MainActor (String) -> String,
-        projectProfile: @escaping @MainActor (TaxValue, Int) async throws -> TaxValue
+        projectProfile: @escaping @MainActor (TaxValue, Int) async throws -> TaxValue,
+        sourceContext: (@MainActor (TaxValue, Int) async throws -> TaxValue)? = nil
     ) {
         self.client = client
         self.localize = localize
         self.projectProfile = projectProfile
+        self.sourceContext = sourceContext
     }
     public func context(year: Int) async throws -> TaxValue {
+        if !(1900...2200).contains(year) {
+            guard let sourceContext else { throw APIError.invalidRequest("Original tax report context unavailable") }
+            let raw = try await client.send(NativeTaxReportSettingsOperation())
+            guard let settings = raw.objectValue else {
+                throw APIError.contract(
+                    APIContractError(endpoint: "/api/settings", issues: ["settings: not an object"]))
+            }
+            // Source custom-date years exceed the overview API's bounds. Shared TS resolves the
+            // fresh original settings; never clamp a year or silently omit configured fiscal blocks.
+            let fiscal = Dictionary(
+                uniqueKeysWithValues: Self.fiscalSettingKeys.compactMap { key in
+                    settings[key].map { (key, $0) }
+                })
+            let value = try await sourceContext(.object(fiscal), year)
+            guard let fields = value.objectValue,
+                Set(fields.keys).isSubset(of: ["taxProfile", "precomputedPIT", "household", "precomputedHousehold"])
+            else { throw APIError.invalidRequest("Invalid original tax report context") }
+            return value
+        }
         let overview = try await client.send(NativeTaxReportOverviewOperation(year: year))
         let profile: TaxValue?
         if overview["hasProfile"]?.boolValue == true {
@@ -125,4 +151,12 @@ private struct NativeTaxReportOverviewOperation: APIOperation {
     let year: Int
     var path: String { Self.pathTemplate }
     var queryItems: [URLQueryItem] { [URLQueryItem(name: "year", value: String(year))] }
+}
+
+private struct NativeTaxReportSettingsOperation: APIOperation {
+    typealias Response = TaxValue
+    static let operationId = "getSettings"
+    static let method = HTTPMethod.get
+    static let pathTemplate = "/api/settings"
+    var path: String { Self.pathTemplate }
 }

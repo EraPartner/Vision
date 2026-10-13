@@ -103,7 +103,7 @@ public struct ShellRootView<WebContent: View>: View {
                 model.settingsAI?.isOnline = online
                 model.onboarding?.isOnline = online
                 model.shellNotifications?.isOnline = online
-                if reconnecting, model.isRendererReady {
+                if reconnecting, model.isRendererReady, model.nativeSettings?.isSuspendedForRestore != true {
                     Task {
                         await model.shellNotifications?.refreshIfStale()
                         if model.onboarding?.isPresented == true { await model.onboarding?.loadAdapters() }
@@ -111,8 +111,8 @@ public struct ShellRootView<WebContent: View>: View {
                 }
             }
         }
-        .task(id: "\(ObjectIdentifier(model))|\(model.isRendererReady)") {
-            guard model.isRendererReady else { return }
+        .task(id: startupIdentity) {
+            guard model.isRendererReady, model.nativeSettings?.isSuspendedForRestore != true else { return }
             async let notifications: Void = loadNotifications()
             async let onboarding: Void = loadOnboarding()
             _ = await (notifications, onboarding)
@@ -132,6 +132,9 @@ public struct ShellRootView<WebContent: View>: View {
                     .padding(.horizontal, 20).padding(.top, 12)
             }
         }
+    }
+    private var startupIdentity: String {
+        "\(ObjectIdentifier(model))|\(model.isRendererReady)|\(model.nativeSettings?.isSuspendedForRestore == true)"
     }
     private func loadNotifications() async { await model.shellNotifications?.load() }
     private func loadOnboarding() async {

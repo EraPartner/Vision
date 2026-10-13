@@ -145,8 +145,11 @@ type YearResults = Pick<
     frozenCalculation: BelgianTaxCalculation;
 };
 
-function computeYearResults(state: YearState, year: number): YearResults {
-    const runtime = householdRuntime;
+function computeYearResults(
+    state: YearState,
+    year: number,
+    runtime: HouseholdRuntime | undefined = householdRuntime,
+): YearResults {
     const household = resolveBelgianTaxHousehold(state, year);
     if (runtime && household) {
         const result = runtime.computeHouseholdTax(household);
@@ -190,10 +193,11 @@ export function calculateBelgianTaxHouseholdWithPatch(
 export function resolveBelgianTaxCalculation(
     state: YearState & Pick<BelgianTaxSlice, "snapshotMetas">,
     year: number,
+    runtime?: HouseholdRuntime,
 ): BelgianTaxCalculation {
     return (
         state.snapshotMetas[year]?.frozenCalculation ??
-        computeYearResults(state, year).frozenCalculation
+        computeYearResults(state, year, runtime).frozenCalculation
     );
 }
 
@@ -206,12 +210,13 @@ export function resolveBelgianTaxHouseholdResult(
     state: YearState &
         Pick<BelgianTaxSlice, "snapshotMetas" | "householdResult">,
     year: number,
+    runtime?: HouseholdRuntime,
 ): HouseholdTaxResult | null {
     const frozen = state.snapshotMetas[year]?.frozenHouseholdResult;
     if (frozen) return frozen;
     if (state.household && year === state.household.taxYear)
         return state.householdResult;
-    return computeYearResults(state, year).frozenHouseholdResult ?? null;
+    return computeYearResults(state, year, runtime).frozenHouseholdResult ?? null;
 }
 
 /**

@@ -43,21 +43,14 @@ import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { useSettings } from "@/stores/hydration/SettingsHydration";
 import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
-import {
-    resolveBelgianTaxCalculation,
-    resolveBelgianTaxHousehold,
-    resolveBelgianTaxHouseholdResult,
-    resolveBelgianTaxProfile,
-} from "@/stores/belgianTaxStore";
-import { reportTaxYear, toTaxReportHousehold } from "./taxReportHousehold";
+import { reportTaxYear } from "./taxReportHousehold";
+import { taxReportContext } from "./taxReportContext";
 import { SUPPORTED_CURRENCIES } from "@/utils/currency";
 import {
     downloadFinancialReport,
     downloadPortfolioReport,
     downloadTaxReport,
-    type ReportOptions,
     type ReportPeriod,
-    type TaxReportPIT,
 } from "@/lib/api/reports";
 import {
     SECTIONS_BY_TYPE,
@@ -154,7 +147,6 @@ function WebExportDialog({
         householdResult: state.householdResult,
         snapshotMetas: state.snapshotMetas,
     }));
-    const taxProfile = taxState.profile;
     const defaultCurrency = appSettings.defaultCurrency || "EUR";
     const currentYear = new Date().getFullYear();
 
@@ -261,72 +253,9 @@ function WebExportDialog({
                 // report's tables. A frozen (or filed) year exports its frozen calculation and
                 // household result, never a live recompute (ADR-059).
                 const taxYear = reportTaxYear(period, todayYmd());
-                const configured = taxProfile.profileConfigured;
-                const yearProfile = resolveBelgianTaxProfile(taxState, taxYear);
-                const resolvedTaxProfile = taxProfile.profileConfigured
-                    ? {
-                          filingStatus: yearProfile.employmentType,
-                          region: yearProfile.region,
-                          taxYear: yearProfile.taxYear,
-                      }
-                    : undefined;
-                let resolvedPIT: TaxReportPIT | undefined;
-                let householdBlock: Pick<
-                    ReportOptions,
-                    "household" | "precomputedHousehold"
-                > = {};
-                if (configured) {
-                    const pitCalc = resolveBelgianTaxCalculation(
-                        taxState,
-                        taxYear,
-                    );
-                    resolvedPIT = {
-                        taxableIncome: pitCalc.taxableIncome,
-                        totalTax: pitCalc.totalPIT,
-                        brackets: pitCalc.breakdown
-                            .filter((e) => e.bracket)
-                            // Translate the bracket label here rather than shipping pit.ts's
-                            // English one into the report: reuses the same
-                            // `tax.pit.row.bracket{n}` keys PitBreakdownCard renders on
-                            // screen, so the exported report matches the UI in both
-                            // languages. Rates are identical across tax years (25/40/45/50),
-                            // only the boundaries move, so the fixed-rate key text is safe.
-                            .map((e) => ({
-                                label: e.bracketNumber
-                                    ? t(`tax.pit.row.bracket${e.bracketNumber}`)
-                                    : e.label,
-                                rate: e.rate,
-                                taxAmount: e.amount,
-                            })),
-                    };
-                    const yearHousehold = resolveBelgianTaxHousehold(
-                        taxState,
-                        taxYear,
-                    );
-                    // Only a two-partner household adds rows; a one-partner request stays
-                    // exactly as it was before households existed.
-                    if (yearHousehold && yearHousehold.partners.length === 2) {
-                        const meta = taxState.snapshotMetas[taxYear];
-                        const householdResult =
-                            meta?.frozenCalculation &&
-                            !meta.frozenHouseholdResult
-                                ? null
-                                : resolveBelgianTaxHouseholdResult(
-                                      taxState,
-                                      taxYear,
-                                  );
-                        householdBlock = {
-                            household: yearHousehold,
-                            precomputedHousehold:
-                                toTaxReportHousehold(householdResult),
-                        };
-                    }
-                }
                 await downloadTaxReport({
                     ...baseOpts,
-                    taxProfile: resolvedTaxProfile,
-                    precomputedPIT: resolvedPIT,
-                    ...householdBlock,
+                    ...taxReportContext(taxState, taxYear, t),
                 });
             }
             toast.success(t("statsPage.report.downloadSuccess"));

@@ -2,7 +2,7 @@
 title: CI/CD Pipelines
 type: guide
 status: active
-date: 2026-10-11
+date: 2026-10-13
 tags:
   [
     guide,
@@ -43,12 +43,13 @@ scan, or publish a product container image. The required aggregate check remains
 stage and keeps a stable branch-protection name. A skipped path-filtered job is handled explicitly;
 an absent or failed required result is not treated as green.
 
-The frontend build is followed by `size:check`. Its measured gzip limits are 468 KB for the
-initial preload graph and 1340 KB for all route assets. The preload limit includes about five
-percent headroom over the 2026-09-24 build. The owner raised the total limit to 1180 KB on
-2026-10-06 for growth in lazy route and locale chunks, and to 1340 KB on 2026-10-08 after the
-lazily loaded `xlsx` chunk for the IBKR funding import brought the total to 1310.71 KB. The checker reads the generated `index.html` and assets to catch new eager
-imports and total bundle growth.
+The frontend build is followed by `size:check`. Its reviewed gzip limits are 475 KB for the
+initial preload graph and 1373 KB for all route assets. The 2026-10-13 native Settings and fixed
+shell bridge preparation measures 474.14 KB and 1372.29 KB respectively; the shell takeover adds
+1.20 KB to preload and 1.94 KB overall compared with checkpoint `b0623fef`. The household schema,
+migration, and engine remain lazy as required by [[docs/adr/200-belgian-tax-household-model|ADR-200]].
+The checker reads the generated `index.html` and assets to catch new eager imports and total
+bundle growth.
 
 Python is checked by `mypy --strict` from `config/mypy.ini` (Alembic env and migrations,
 `scripts/`, the packaged Alembic wrapper) in the `Type Check (Python)` job, which installs the

@@ -58,7 +58,7 @@ struct AnalysisMonitorsCreationView: View {
         VStack(alignment: .leading, spacing: 8) {
             Picker(
                 strings.t("monitors.analysis"),
-                selection: Binding(get: { draft.savedAnalysisId }, set: model.chooseAnalysis)
+                selection: Binding(get: { draft.savedAnalysisId }, set: { value in model.chooseAnalysis(value) })
             ) {
                 Text(strings.t("monitors.selectAnalysis")).tag("")
                 ForEach(model.eligibleAnalyses) { Text($0.name).tag($0.id) }

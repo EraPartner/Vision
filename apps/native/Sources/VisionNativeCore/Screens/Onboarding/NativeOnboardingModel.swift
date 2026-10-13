@@ -29,6 +29,8 @@ import Observation
     @ObservationIgnored private let store: any NativeOnboardingDraftStore
     @ObservationIgnored private var visit = UUID()
     public private(set) var isLoaded = false
+    @ObservationIgnored private var loadTask: Task<Void, Never>?
+    @ObservationIgnored private var loadTaskID: UUID?
     @ObservationIgnored private var draftWrite: Task<Void, Never>?
     @ObservationIgnored private var storageFailureShown = false
     @ObservationIgnored private var notices = NoticeCounter()
@@ -49,7 +51,26 @@ import Observation
     }
     public func clearNotice(_ id: Int) { if notice?.id == id { notice = nil } }
     public func load(force: Bool = false) async {
+        if let loadTask {
+            await loadTask.value
+            return
+        }
         guard !isLoading, force || !isLoaded else { return }
+        let id = UUID()
+        loadTaskID = id
+        let task = Task { [weak self] in
+            guard let self else { return }
+            await self.loadCompletion()
+        }
+        loadTask = task
+        await task.value
+        if loadTaskID == id {
+            loadTask = nil
+            loadTaskID = nil
+        }
+    }
+    private func loadCompletion() async {
+        guard !Task.isCancelled else { return }
         isLoading = true
         let scope = visit
         let completed: Bool
@@ -59,7 +80,11 @@ import Observation
             if scope == visit { isLoading = false }
             return
         } catch { completed = false }
-        guard scope == visit, !Task.isCancelled else { return }
+        guard scope == visit else { return }
+        guard !Task.isCancelled else {
+            stopCancelledOpening(scope)
+            return
+        }
         isLoading = false
         isLoaded = true
         if !completed { await begin() }
@@ -72,8 +97,20 @@ import Observation
         isLoading = true
         await draftWrite?.value
         guard scope == visit else { return }
-        let data = try? await store.read()
+        guard !Task.isCancelled else {
+            stopCancelledOpening(scope)
+            return
+        }
+        let data: Data?
+        do { data = try await store.read() } catch is CancellationError {
+            stopCancelledOpening(scope)
+            return
+        } catch { data = nil }
         guard scope == visit else { return }
+        guard !Task.isCancelled else {
+            stopCancelledOpening(scope)
+            return
+        }
         draft = NativeOnboardingDraft.read(data)
         file = nil
         importing = false
@@ -84,6 +121,11 @@ import Observation
         restore.activateRestoreOnly()
         persistDraft()
         await loadAdapters()
+    }
+    private func stopCancelledOpening(_ scope: UUID) {
+        guard scope == visit else { return }
+        isLoading = false
+        if !isPresented { isLoaded = false }
     }
     public func selectRestoreFile() async -> String? {
         let scope = visit
@@ -255,6 +297,9 @@ import Observation
     }
     public func flushDraft() async { await draftWrite?.value }
     public func didDisappear() {
+        loadTask?.cancel()
+        loadTask = nil
+        loadTaskID = nil
         visit = UUID()
         isPresented = false
         isLoading = false
@@ -272,6 +317,9 @@ import Observation
             do {
                 try await store.write(value.encoded())
                 if let self, scope == self.visit { self.storageFailureShown = false }
+            } catch is CancellationError {
+                // A retired local generation deliberately discards its pending draft write.
+                return
             } catch {
                 guard let self, scope == self.visit, !self.storageFailureShown else { return }
                 self.storageFailureShown = true

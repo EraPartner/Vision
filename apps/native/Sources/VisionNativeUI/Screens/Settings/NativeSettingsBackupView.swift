@@ -81,7 +81,7 @@ struct NativeSettingsBackupView: View {
             ) {
                 Toggle(
                     strings.t("settings.backup.backupOnQuit"),
-                    isOn: Binding(get: { model.backupOnQuit }, set: model.setBackupOnQuit)
+                    isOn: Binding(get: { model.backupOnQuit }, set: { value in model.setBackupOnQuit(value) })
                 )
                 .labelsHidden().toggleStyle(.switch).disabled(model.backupDir.isEmpty)
             }
