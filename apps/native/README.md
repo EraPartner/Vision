@@ -17,25 +17,25 @@ stays the project-file tool (ADR-204 decision 3). The deployment target and the 
 
 ## Layout
 
-| Path                                   | Purpose                                               |
-| -------------------------------------- | ----------------------------------------------------- |
-| `project.yml`                          | XcodeGen spec for the "Vision Native" app target      |
-| `Config/Signing.xcconfig`              | Signing team from `VISION_NATIVE_TEAM_ID`             |
-| `VisionNative/`                        | AppKit app, window, menus and the `WKWebView` shell   |
-| `Package.swift`                        | SwiftPM package: `VisionNativeCore`, `VisionNativeUI` |
-| `Sources/VisionNativeCore/`            | Non-UI logic: runtime supervision, health, override   |
-| `Sources/VisionNativeCore/Shell/`      | Bridge contract and codec, web view policy, menus     |
-| `Sources/VisionNativeCore/Backup/`     | Backup bundles, encryption and restore (phase 1d)     |
-| `Sources/VisionNativeCore/Audit/`      | Audit anchor, Keychain witness, audit bridge (1e)     |
-| `Sources/VisionNativeCore/API/`        | `APIClient` and the generated OpenAPI client (2)      |
-| `Sources/VisionNativeCore/Design/`     | Generated design tokens, `ThemeSelection` (2)         |
-| `Sources/VisionNativeCore/Navigation/` | Generated sidebar registry, routes, shell model (2)   |
-| `Sources/VisionNativeCore/Screens/`    | Native screen view models (Exchange rates, Admin)     |
-| `Sources/VisionNativeUI/`              | SwiftUI shell and screens, `Localizable.xcstrings`    |
-| `openapi-operations.txt`               | operationIds the Swift client is generated for        |
-| `i18n-keys.txt`                        | `i18n/source` keys copied into the String Catalog     |
-| `Tests/VisionNativeCoreTests/`         | Swift Testing tests and `Fixtures/` from Electron     |
-| `Tests/VisionNativeUITests/`           | String Catalog (EN and NL) and SwiftUI layout tests   |
+| Path                                   | Purpose                                                    |
+| -------------------------------------- | ---------------------------------------------------------- |
+| `project.yml`                          | XcodeGen spec for the "Vision Native" app target           |
+| `Config/Signing.xcconfig`              | Signing team from `VISION_NATIVE_TEAM_ID`                  |
+| `VisionNative/`                        | AppKit app, window, menus and the `WKWebView` shell        |
+| `Package.swift`                        | SwiftPM package: `VisionNativeCore`, `VisionNativeUI`      |
+| `Sources/VisionNativeCore/`            | Non-UI logic: runtime supervision, health, override        |
+| `Sources/VisionNativeCore/Shell/`      | Bridge contract and codec, web view policy, menus          |
+| `Sources/VisionNativeCore/Backup/`     | Backup bundles, encryption and restore (phase 1d)          |
+| `Sources/VisionNativeCore/Audit/`      | Audit anchor, Keychain witness, audit bridge (1e)          |
+| `Sources/VisionNativeCore/API/`        | `APIClient` and the generated OpenAPI client (2)           |
+| `Sources/VisionNativeCore/Design/`     | Generated design tokens, `ThemeSelection` (2)              |
+| `Sources/VisionNativeCore/Navigation/` | Generated sidebar registry, routes, shell model (2)        |
+| `Sources/VisionNativeCore/Screens/`    | Native screen view models (Exchange rates, Admin, Planned) |
+| `Sources/VisionNativeUI/`              | SwiftUI shell and screens, `Localizable.xcstrings`         |
+| `openapi-operations.txt`               | operationIds the Swift client is generated for             |
+| `i18n-keys.txt`                        | `i18n/source` keys copied into the String Catalog          |
+| `Tests/VisionNativeCoreTests/`         | Swift Testing tests and `Fixtures/` from Electron          |
+| `Tests/VisionNativeUITests/`           | String Catalog (EN and NL) and SwiftUI layout tests        |
 
 `VisionNative.xcodeproj`, `VisionNative/Info.plist`, `build/`, `.build/` and
 `Config/Local.xcconfig` are generated or local and are gitignored.
@@ -144,9 +144,16 @@ See [the architecture page](../../docs/architecture/native-app.md#native-navigat
   navigation and Quit behind a native Leave this page? alert while it has pending changes. The admin token card writes the page's
   `sessionStorage`, and the audit history card uses the native audit channels. Native requests carry the page's admin
   token from `sessionStorage`, read from the web view, and nothing else stores it.
+- `/planned` is native in every mode once `app_settings` has loaded (phase 3c). Add payment and
+  Edit open the native planned-payment sheet, which holds navigation and Quit behind the Leave this
+  page? alert while it has unsaved edits. Mark as paid opens the native transaction picker, the
+  match suggestions banner's Review opens it for the first suggestion, and the recurring detection
+  panel tracks a pattern as a planned payment or dismisses it (kept on this Mac and in the
+  `dismissed_recurring_patterns` setting).
 - To add a screen: list its operations and keys, run `bun run native:generate`, add a model in
   `Sources/VisionNativeCore/Screens/`, a view in `Sources/VisionNativeUI/`, and a `NativeScreen`
-  case for its route.
+  case for its route. Pass the model to `NativeShellModel` in `ShellController.makeShellModel` and
+  show it in `NativeScreenContainer`.
 
 ## Backup and restore
 
@@ -292,6 +299,18 @@ these steps touches Electron Vision or its data.
     Expected: the native screen with three summary cards, Live/Fallback (the URL keeps `?tab`, and
     the tab survives a reload), the rates table and the Refresh button, which spins and shows a
     toast. `⌘K` opens the command palette over the page. Turn admin mode off: the app goes to Home.
+18. **Planned payments (phase 3c).** With admin mode off, open Planned. Expected: the native screen
+    with the Next 7 days strip, Estimated monthly and the payments table. View > Include paused adds
+    `?show_all=true` to the URL and shows paused rows. Pause a row from its ••• menu: a toast with
+    Undo appears for 8 seconds and `⌘Z` undoes it (but not while a text field has focus). Delete
+    asks first. More actions > Payment history lists the linked transactions. Add payment opens the
+    sheet: fill in a name, amount, due date and bank account and save; the row appears with a
+    toast. Edit a row: the sheet shows its values, including the bank account. Change a field and
+    click another sidebar entry: the Leave this page? alert asks first. Mark a row as paid: pick a
+    transaction and click Link and mark as paid; the dialog closes with a toast and the row
+    advances. When the likely-matches banner shows, Review opens Mark as paid for its first
+    payment. In the recurring detection panel, Track adds a planned payment and Dismiss hides the
+    pattern, also after a relaunch.
 
 ## Developer backend override
 

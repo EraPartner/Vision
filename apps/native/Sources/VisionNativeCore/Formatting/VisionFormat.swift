@@ -34,14 +34,21 @@ public enum VisionFormat {
         value.formatted(IntegerFormatStyle<Int>(locale: locale))
     }
 
-    /// `formatCurrency(amount, code, locale, fractionDigits)`: fixed fraction digits; a
-    /// fraction-digit count outside 0...20 falls back to the bare number, as `Intl` throws.
-    public static func currency(_ value: Decimal, code: String, locale: Locale, fractionDigits: Int) -> String {
+    /// `formatCurrency(amount, code, locale, fractionDigits, signed)`: fixed fraction digits;
+    /// `signed` is `signDisplay: "exceptZero"` (a `+` before positive amounts, no sign on
+    /// zero). A fraction-digit count outside 0...20 falls back to the bare number, as `Intl`
+    /// throws.
+    public static func currency(
+        _ value: Decimal, code: String, locale: Locale, fractionDigits: Int, signed: Bool = false
+    ) -> String {
         guard (0...20).contains(fractionDigits), !value.isNaN else { return "\(value)" }
-        return value.formatted(
-            Decimal.FormatStyle.Currency(code: code, locale: locale)
-                .precision(.fractionLength(fractionDigits))
-                .rounded(rule: .toNearestOrAwayFromZero))
+        let style = Decimal.FormatStyle.Currency(code: code, locale: locale)
+            .precision(.fractionLength(fractionDigits))
+            .rounded(rule: .toNearestOrAwayFromZero)
+        if signed {
+            return value.formatted(style.sign(strategy: .always(showZero: false)))
+        }
+        return value.formatted(style)
     }
 
     /// `1 / rate` for the "1 EUR =" column; `1 / 0` is `Infinity` in JavaScript.

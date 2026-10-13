@@ -898,6 +898,7 @@ enum DatabaseFixture {
             strings: DictionaryStrings(language: .en, table: [:]), theme: ThemeSelection(appearance: .light),
             exchangeRates: ExchangeRatesModel(service: FakeExchangeRatesService()),
             admin: AdminFixture.screens(database: database),
+            planned: PlannedFixture.idleModel(),
             loadSettings: { NativeAppSettings(adminMode: true) }, onNavigate: { recorder.actions.append($0) })
     }
 

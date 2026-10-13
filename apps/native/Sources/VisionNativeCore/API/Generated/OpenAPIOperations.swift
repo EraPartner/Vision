@@ -5,7 +5,7 @@ import Foundation
 
 /// One struct per operationId in `apps/native/openapi-operations.txt`, in its order.
 public enum OpenAPIOperations {
-    public static let operationIds = ["getExchangeRates", "refreshExchangeRates", "adminDatabaseStats", "adminProvidersHealth", "adminProviderProbe", "adminMetricsRequests", "adminListEndpoints", "getSetting", "adminDatabaseVacuum", "adminGetTableSchema", "adminGetTableRows", "adminMutateTableRows"]
+    public static let operationIds = ["getExchangeRates", "refreshExchangeRates", "adminDatabaseStats", "adminProvidersHealth", "adminProviderProbe", "adminMetricsRequests", "adminListEndpoints", "getSetting", "adminDatabaseVacuum", "adminGetTableSchema", "adminGetTableRows", "adminMutateTableRows", "getPlannedTransactions", "createPlannedTransaction", "updatePlannedTransaction", "deletePlannedTransaction", "executePlannedTransaction", "getPlannedMatchSuggestions", "getRecurringPatterns", "getRecipients", "getRecipient", "getAccounts", "getCategoryTree", "getTags", "createTag", "getTransactions", "saveSetting"]
 }
 
 extension OpenAPIOperations {
@@ -281,6 +281,680 @@ extension OpenAPIOperations {
                     case set = "set"
                     case xmin = "xmin"
                 }
+            }
+        }
+    }
+
+    /// GET /api/planned-transactions: List planned transactions
+    public struct GetPlannedTransactions: APIOperation {
+        public typealias Response = OpenAPI.PlannedTransactionList
+        public static let operationId = "getPlannedTransactions"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/planned-transactions"
+
+        public var limit: Int?
+        public var offset: Int?
+        public var bankAccount: String?
+        /// Exact account foreign-key filter; takes precedence over bank_account.
+        public var accountId: Int?
+        public var isRecurring: Bool?
+        public var isExecuted: Bool?
+        /// true (the default) lists active payments only; false includes paused ones.
+        public var active: Bool?
+
+        public init(limit: Int? = nil, offset: Int? = nil, bankAccount: String? = nil, accountId: Int? = nil, isRecurring: Bool? = nil, isExecuted: Bool? = nil, active: Bool? = nil) {
+            self.limit = limit
+            self.offset = offset
+            self.bankAccount = bankAccount
+            self.accountId = accountId
+            self.isRecurring = isRecurring
+            self.isExecuted = isExecuted
+            self.active = active
+        }
+
+        public var path: String { "/api/planned-transactions" }
+
+        public var queryItems: [URLQueryItem] {
+            var items: [URLQueryItem] = []
+            if let limit { items.append(URLQueryItem(name: "limit", value: APIQuery.value(limit))) }
+            if let offset { items.append(URLQueryItem(name: "offset", value: APIQuery.value(offset))) }
+            if let bankAccount { items.append(URLQueryItem(name: "bank_account", value: APIQuery.value(bankAccount))) }
+            if let accountId { items.append(URLQueryItem(name: "account_id", value: APIQuery.value(accountId))) }
+            if let isRecurring { items.append(URLQueryItem(name: "is_recurring", value: APIQuery.value(isRecurring))) }
+            if let isExecuted { items.append(URLQueryItem(name: "is_executed", value: APIQuery.value(isExecuted))) }
+            if let active { items.append(URLQueryItem(name: "active", value: APIQuery.value(active))) }
+            return items
+        }
+    }
+
+    /// POST /api/planned-transactions: Create planned transaction
+    public struct CreatePlannedTransaction: APIOperation {
+        public typealias Response = OpenAPI.PlannedTransaction
+        public static let operationId = "createPlannedTransaction"
+        public static let method = HTTPMethod.post
+        public static let pathTemplate = "/api/planned-transactions"
+
+        public var body: OpenAPI.PlannedTransactionCreate
+
+        public init(body: OpenAPI.PlannedTransactionCreate) {
+            self.body = body
+        }
+
+        public var path: String { "/api/planned-transactions" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+    }
+
+    /// PATCH /api/planned-transactions/{id}: Update planned transaction
+    public struct UpdatePlannedTransaction: APIOperation {
+        public typealias Response = OpenAPI.PlannedTransaction
+        public static let operationId = "updatePlannedTransaction"
+        public static let method = HTTPMethod.patch
+        public static let pathTemplate = "/api/planned-transactions/{id}"
+
+        public var id: Int
+        public var body: Body
+
+        public init(id: Int, body: Body) {
+            self.id = id
+            self.body = body
+        }
+
+        public var path: String { "/api/planned-transactions/\(APIPath.segment(APIQuery.value(id)))" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+
+        public struct Body: Codable, Equatable, Sendable {
+            public let plannedDate: String?
+            /// Canonical account identity (the retired bank_account string is rejected)
+            public let accountId: Int?
+            public let recipientId: Int?
+            public let memo: String?
+            public let amount: Decimal?
+            public let currency: String?
+            public let categoryId: Int?
+            public let comment: String?
+            public let url: String?
+            public let isRecurring: Bool?
+            public let recurrencePattern: String?
+            public let recurrenceEndDate: String?
+            public let maxOccurrences: Int?
+            public let isActive: Bool?
+            public let isLoan: Bool?
+            public let loanType: OpenAPI.PlannedLoanType?
+            public let loanPrincipal: Decimal?
+            public let loanAnnualInterestRate: Decimal?
+            public let loanTermMonths: Int?
+            public let loanStartDate: String?
+            public let loanPaymentDay: Int?
+            /// Tag slugs; replaces the attached set
+            public let tags: [String]?
+
+            public init(plannedDate: String? = nil, accountId: Int? = nil, recipientId: Int? = nil, memo: String? = nil, amount: Decimal? = nil, currency: String? = nil, categoryId: Int? = nil, comment: String? = nil, url: String? = nil, isRecurring: Bool? = nil, recurrencePattern: String? = nil, recurrenceEndDate: String? = nil, maxOccurrences: Int? = nil, isActive: Bool? = nil, isLoan: Bool? = nil, loanType: OpenAPI.PlannedLoanType? = nil, loanPrincipal: Decimal? = nil, loanAnnualInterestRate: Decimal? = nil, loanTermMonths: Int? = nil, loanStartDate: String? = nil, loanPaymentDay: Int? = nil, tags: [String]? = nil) {
+                self.plannedDate = plannedDate
+                self.accountId = accountId
+                self.recipientId = recipientId
+                self.memo = memo
+                self.amount = amount
+                self.currency = currency
+                self.categoryId = categoryId
+                self.comment = comment
+                self.url = url
+                self.isRecurring = isRecurring
+                self.recurrencePattern = recurrencePattern
+                self.recurrenceEndDate = recurrenceEndDate
+                self.maxOccurrences = maxOccurrences
+                self.isActive = isActive
+                self.isLoan = isLoan
+                self.loanType = loanType
+                self.loanPrincipal = loanPrincipal
+                self.loanAnnualInterestRate = loanAnnualInterestRate
+                self.loanTermMonths = loanTermMonths
+                self.loanStartDate = loanStartDate
+                self.loanPaymentDay = loanPaymentDay
+                self.tags = tags
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case plannedDate = "planned_date"
+                case accountId = "account_id"
+                case recipientId = "recipient_id"
+                case memo = "memo"
+                case amount = "amount"
+                case currency = "currency"
+                case categoryId = "category_id"
+                case comment = "comment"
+                case url = "url"
+                case isRecurring = "is_recurring"
+                case recurrencePattern = "recurrence_pattern"
+                case recurrenceEndDate = "recurrence_end_date"
+                case maxOccurrences = "max_occurrences"
+                case isActive = "is_active"
+                case isLoan = "is_loan"
+                case loanType = "loan_type"
+                case loanPrincipal = "loan_principal"
+                case loanAnnualInterestRate = "loan_annual_interest_rate"
+                case loanTermMonths = "loan_term_months"
+                case loanStartDate = "loan_start_date"
+                case loanPaymentDay = "loan_payment_day"
+                case tags = "tags"
+            }
+        }
+    }
+
+    /// DELETE /api/planned-transactions/{id}: Delete planned transaction
+    public struct DeletePlannedTransaction: APIOperation {
+        public typealias Response = APIEmpty
+        public static let operationId = "deletePlannedTransaction"
+        public static let method = HTTPMethod.delete
+        public static let pathTemplate = "/api/planned-transactions/{id}"
+
+        public var id: Int
+
+        public init(id: Int) {
+            self.id = id
+        }
+
+        public var path: String { "/api/planned-transactions/\(APIPath.segment(APIQuery.value(id)))" }
+    }
+
+    /// POST /api/planned-transactions/{id}/execute: Link a real transaction and advance the planned
+    /// payment
+    public struct ExecutePlannedTransaction: APIOperation {
+        public typealias Response = OpenAPI.PlannedTransaction
+        public static let operationId = "executePlannedTransaction"
+        public static let method = HTTPMethod.post
+        public static let pathTemplate = "/api/planned-transactions/{id}/execute"
+
+        public var id: Int
+        public var body: Body
+
+        public init(id: Int, body: Body) {
+            self.id = id
+            self.body = body
+        }
+
+        public var path: String { "/api/planned-transactions/\(APIPath.segment(APIQuery.value(id)))/execute" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+
+        public struct Body: Codable, Equatable, Sendable {
+            public let executedTransactionId: Int
+            public let executionDate: String?
+
+            public init(executedTransactionId: Int, executionDate: String? = nil) {
+                self.executedTransactionId = executedTransactionId
+                self.executionDate = executionDate
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case executedTransactionId = "executed_transaction_id"
+                case executionDate = "execution_date"
+            }
+        }
+    }
+
+    /// GET /api/planned-transactions/match-suggestions: List planned payments with likely-matching
+    /// unlinked transactions
+    public struct GetPlannedMatchSuggestions: APIOperation {
+        public typealias Response = ResponseData
+        public static let operationId = "getPlannedMatchSuggestions"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/planned-transactions/match-suggestions"
+
+        public init() {}
+
+        public var path: String { "/api/planned-transactions/match-suggestions" }
+
+        public struct ResponseData: Codable, Equatable, Sendable {
+            public let total: Int
+            public let items: [ItemsItem]
+
+            public init(total: Int, items: [ItemsItem]) {
+                self.total = total
+                self.items = items
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case total = "total"
+                case items = "items"
+            }
+
+            public struct ItemsItem: Codable, Equatable, Sendable {
+                public let planned: Planned?
+                public let candidates: [CandidatesItem]?
+
+                public init(planned: Planned? = nil, candidates: [CandidatesItem]? = nil) {
+                    self.planned = planned
+                    self.candidates = candidates
+                }
+
+                enum CodingKeys: String, CodingKey {
+                    case planned = "planned"
+                    case candidates = "candidates"
+                }
+
+                public struct Planned: Codable, Equatable, Sendable {
+                    public let id: Int?
+                    public let recipientId: Int?
+                    public let recipientName: String?
+                    public let amount: Decimal?
+                    public let plannedDate: String?
+                    public let currency: String?
+                    public let isRecurring: Bool?
+
+                    public init(id: Int? = nil, recipientId: Int? = nil, recipientName: String? = nil, amount: Decimal? = nil, plannedDate: String? = nil, currency: String? = nil, isRecurring: Bool? = nil) {
+                        self.id = id
+                        self.recipientId = recipientId
+                        self.recipientName = recipientName
+                        self.amount = amount
+                        self.plannedDate = plannedDate
+                        self.currency = currency
+                        self.isRecurring = isRecurring
+                    }
+
+                    enum CodingKeys: String, CodingKey {
+                        case id = "id"
+                        case recipientId = "recipient_id"
+                        case recipientName = "recipient_name"
+                        case amount = "amount"
+                        case plannedDate = "planned_date"
+                        case currency = "currency"
+                        case isRecurring = "is_recurring"
+                    }
+                }
+
+                public struct CandidatesItem: Codable, Equatable, Sendable {
+                    public let id: Int?
+                    public let recipientName: String?
+                    public let amount: Decimal?
+                    public let transactionDate: String?
+                    public let currency: String?
+                    public let memo: String?
+
+                    public init(id: Int? = nil, recipientName: String? = nil, amount: Decimal? = nil, transactionDate: String? = nil, currency: String? = nil, memo: String? = nil) {
+                        self.id = id
+                        self.recipientName = recipientName
+                        self.amount = amount
+                        self.transactionDate = transactionDate
+                        self.currency = currency
+                        self.memo = memo
+                    }
+
+                    enum CodingKeys: String, CodingKey {
+                        case id = "id"
+                        case recipientName = "recipient_name"
+                        case amount = "amount"
+                        case transactionDate = "transaction_date"
+                        case currency = "currency"
+                        case memo = "memo"
+                    }
+                }
+            }
+        }
+    }
+
+    /// GET /api/info/recurring-patterns: Detect recurring transaction patterns
+    public struct GetRecurringPatterns: APIOperation {
+        public typealias Response = JSONValue
+        public static let operationId = "getRecurringPatterns"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/info/recurring-patterns"
+
+        public init() {}
+
+        public var path: String { "/api/info/recurring-patterns" }
+    }
+
+    /// GET /api/recipients: List recipients
+    public struct GetRecipients: APIOperation {
+        public typealias Response = OpenAPI.RecipientList
+        public static let operationId = "getRecipients"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/recipients"
+
+        public var limit: Int?
+        public var offset: Int?
+        public var name: String?
+        /// Truncated to 200 characters.
+        public var search: String?
+        /// Empty means no filter; any other non-id value returns 400.
+        public var defaultCategoryId: Int?
+        /// Accepts true/false/1/0 (default true); other values use the default.
+        public var active: Bool?
+        public var uncategorized: Bool?
+        public var sortBy: String?
+        /// Any other value uses the default order.
+        public var sortDir: String?
+
+        public init(limit: Int? = nil, offset: Int? = nil, name: String? = nil, search: String? = nil, defaultCategoryId: Int? = nil, active: Bool? = nil, uncategorized: Bool? = nil, sortBy: String? = nil, sortDir: String? = nil) {
+            self.limit = limit
+            self.offset = offset
+            self.name = name
+            self.search = search
+            self.defaultCategoryId = defaultCategoryId
+            self.active = active
+            self.uncategorized = uncategorized
+            self.sortBy = sortBy
+            self.sortDir = sortDir
+        }
+
+        public var path: String { "/api/recipients" }
+
+        public var queryItems: [URLQueryItem] {
+            var items: [URLQueryItem] = []
+            if let limit { items.append(URLQueryItem(name: "limit", value: APIQuery.value(limit))) }
+            if let offset { items.append(URLQueryItem(name: "offset", value: APIQuery.value(offset))) }
+            if let name { items.append(URLQueryItem(name: "name", value: APIQuery.value(name))) }
+            if let search { items.append(URLQueryItem(name: "search", value: APIQuery.value(search))) }
+            if let defaultCategoryId { items.append(URLQueryItem(name: "default_category_id", value: APIQuery.value(defaultCategoryId))) }
+            if let active { items.append(URLQueryItem(name: "active", value: APIQuery.value(active))) }
+            if let uncategorized { items.append(URLQueryItem(name: "uncategorized", value: APIQuery.value(uncategorized))) }
+            if let sortBy { items.append(URLQueryItem(name: "sort_by", value: APIQuery.value(sortBy))) }
+            if let sortDir { items.append(URLQueryItem(name: "sort_dir", value: APIQuery.value(sortDir))) }
+            return items
+        }
+    }
+
+    /// GET /api/recipients/{id}: Get recipient
+    public struct GetRecipient: APIOperation {
+        public typealias Response = OpenAPI.Recipient
+        public static let operationId = "getRecipient"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/recipients/{id}"
+
+        public var id: Int
+
+        public init(id: Int) {
+            self.id = id
+        }
+
+        public var path: String { "/api/recipients/\(APIPath.segment(APIQuery.value(id)))" }
+    }
+
+    /// GET /api/accounts: List accounts
+    public struct GetAccounts: APIOperation {
+        public typealias Response = OpenAPI.AccountList
+        public static let operationId = "getAccounts"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/accounts"
+
+        /// Filter by active status (default true)
+        public var active: String?
+        /// Page size. Omit (together with offset) to receive the whole collection. Values above the
+        /// endpoint's cap are clamped.
+        public var limit: Int?
+        /// Rows to skip. Omit (together with limit) to receive the whole collection.
+        public var offset: Int?
+
+        public init(active: String? = nil, limit: Int? = nil, offset: Int? = nil) {
+            self.active = active
+            self.limit = limit
+            self.offset = offset
+        }
+
+        public var path: String { "/api/accounts" }
+
+        public var queryItems: [URLQueryItem] {
+            var items: [URLQueryItem] = []
+            if let active { items.append(URLQueryItem(name: "active", value: APIQuery.value(active))) }
+            if let limit { items.append(URLQueryItem(name: "limit", value: APIQuery.value(limit))) }
+            if let offset { items.append(URLQueryItem(name: "offset", value: APIQuery.value(offset))) }
+            return items
+        }
+    }
+
+    /// GET /api/categories/tree: List all category hierarchy nodes, including assignable roots
+    public struct GetCategoryTree: APIOperation {
+        public typealias Response = OpenAPI.CategoryTreeEnvelope
+        public static let operationId = "getCategoryTree"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/categories/tree"
+
+        public init() {}
+
+        public var path: String { "/api/categories/tree" }
+    }
+
+    /// GET /api/tags: List tags
+    public struct GetTags: APIOperation {
+        public typealias Response = OpenAPI.TagList
+        public static let operationId = "getTags"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/tags"
+
+        /// Filter by active status (default true; `all` disables the filter). Accepts true/false/1/0;
+        /// other values use the default.
+        public var active: String?
+        /// Page size. Omit (together with offset) to receive the whole collection. Values above the
+        /// endpoint's cap are clamped.
+        public var limit: Int?
+        /// Rows to skip. Omit (together with limit) to receive the whole collection.
+        public var offset: Int?
+
+        public init(active: String? = nil, limit: Int? = nil, offset: Int? = nil) {
+            self.active = active
+            self.limit = limit
+            self.offset = offset
+        }
+
+        public var path: String { "/api/tags" }
+
+        public var queryItems: [URLQueryItem] {
+            var items: [URLQueryItem] = []
+            if let active { items.append(URLQueryItem(name: "active", value: APIQuery.value(active))) }
+            if let limit { items.append(URLQueryItem(name: "limit", value: APIQuery.value(limit))) }
+            if let offset { items.append(URLQueryItem(name: "offset", value: APIQuery.value(offset))) }
+            return items
+        }
+    }
+
+    /// POST /api/tags: Create or reactivate tag
+    public struct CreateTag: APIOperation {
+        public typealias Response = ResponseData
+        public static let operationId = "createTag"
+        public static let method = HTTPMethod.post
+        public static let pathTemplate = "/api/tags"
+
+        public var body: OpenAPI.TagCreate
+
+        public init(body: OpenAPI.TagCreate) {
+            self.body = body
+        }
+
+        public var path: String { "/api/tags" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+
+        public struct ResponseData: Codable, Equatable, Sendable {
+            public let id: Int
+            public let slug: String
+            public let color: String?
+            public let isActive: Bool
+            public let createdAt: String
+            public let updatedAt: String
+            public let created: Bool
+
+            public init(id: Int, slug: String, color: String? = nil, isActive: Bool, createdAt: String, updatedAt: String, created: Bool) {
+                self.id = id
+                self.slug = slug
+                self.color = color
+                self.isActive = isActive
+                self.createdAt = createdAt
+                self.updatedAt = updatedAt
+                self.created = created
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case id = "id"
+                case slug = "slug"
+                case color = "color"
+                case isActive = "is_active"
+                case createdAt = "created_at"
+                case updatedAt = "updated_at"
+                case created = "created"
+            }
+        }
+    }
+
+    /// GET /api/transactions: List transactions
+    public struct GetTransactions: APIOperation {
+        public typealias Response = OpenAPI.TransactionList
+        public static let operationId = "getTransactions"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/transactions"
+
+        public var limit: Int?
+        public var offset: Int?
+        public var startDate: String?
+        public var endDate: String?
+        /// Preferred account filter (exact FK match, ADR-088); bank_account remains a substring escape
+        /// hatch
+        public var accountId: Int?
+        public var bankAccount: String?
+        public var categoryId: Int?
+        public var recipientId: Int?
+        public var search: String?
+        public var sortBy: String?
+        public var sortDir: String?
+        /// Comma-separated tag slugs — OR filter
+        public var tags: String?
+        /// Fetch a single transaction by id (exact match)
+        public var transactionId: Int?
+        /// Comma-separated category ids — OR filter. Every element must be a plain base-10 integer in
+        /// 1..2147483647; a malformed element returns 400 VALIDATION_ERROR (the parser used to
+        /// truncate/drop it). An absent or empty value means no filter.
+        public var categoryIds: String?
+        /// Filter by primary (grouped) recipient id
+        public var recipientGroupId: Int?
+        /// Filter by recipient display name (substring)
+        public var recipientName: String?
+        /// Include only active (default true) or inactive rows
+        public var active: Bool?
+        /// Include the running-balance column on each row
+        public var includeBalance: Bool?
+        /// Filter by kind (e.g. income/expense)
+        public var transactionType: String?
+        /// Minimum amount (see amount_signed for sign semantics)
+        public var amountMin: Decimal?
+        /// Maximum amount (see amount_signed)
+        public var amountMax: Decimal?
+        /// Exact amount — shorthand for amount_min == amount_max
+        public var amountExact: Decimal?
+        /// When true, amount_* compare signed values; otherwise magnitude
+        public var amountSigned: Bool?
+        /// When true, return the active uncategorised queue and its filtered size as total; category
+        /// filters are ignored consistently and pagination affects items only.
+        public var uncategorised: Bool?
+        /// Convert amounts to EUR (or target_currency) at read time
+        public var normalizeToEur: Bool?
+        /// Target currency for normalize_to_eur (defaults to EUR)
+        public var targetCurrency: String?
+
+        public init(limit: Int? = nil, offset: Int? = nil, startDate: String? = nil, endDate: String? = nil, accountId: Int? = nil, bankAccount: String? = nil, categoryId: Int? = nil, recipientId: Int? = nil, search: String? = nil, sortBy: String? = nil, sortDir: String? = nil, tags: String? = nil, transactionId: Int? = nil, categoryIds: String? = nil, recipientGroupId: Int? = nil, recipientName: String? = nil, active: Bool? = nil, includeBalance: Bool? = nil, transactionType: String? = nil, amountMin: Decimal? = nil, amountMax: Decimal? = nil, amountExact: Decimal? = nil, amountSigned: Bool? = nil, uncategorised: Bool? = nil, normalizeToEur: Bool? = nil, targetCurrency: String? = nil) {
+            self.limit = limit
+            self.offset = offset
+            self.startDate = startDate
+            self.endDate = endDate
+            self.accountId = accountId
+            self.bankAccount = bankAccount
+            self.categoryId = categoryId
+            self.recipientId = recipientId
+            self.search = search
+            self.sortBy = sortBy
+            self.sortDir = sortDir
+            self.tags = tags
+            self.transactionId = transactionId
+            self.categoryIds = categoryIds
+            self.recipientGroupId = recipientGroupId
+            self.recipientName = recipientName
+            self.active = active
+            self.includeBalance = includeBalance
+            self.transactionType = transactionType
+            self.amountMin = amountMin
+            self.amountMax = amountMax
+            self.amountExact = amountExact
+            self.amountSigned = amountSigned
+            self.uncategorised = uncategorised
+            self.normalizeToEur = normalizeToEur
+            self.targetCurrency = targetCurrency
+        }
+
+        public var path: String { "/api/transactions" }
+
+        public var queryItems: [URLQueryItem] {
+            var items: [URLQueryItem] = []
+            if let limit { items.append(URLQueryItem(name: "limit", value: APIQuery.value(limit))) }
+            if let offset { items.append(URLQueryItem(name: "offset", value: APIQuery.value(offset))) }
+            if let startDate { items.append(URLQueryItem(name: "start_date", value: APIQuery.value(startDate))) }
+            if let endDate { items.append(URLQueryItem(name: "end_date", value: APIQuery.value(endDate))) }
+            if let accountId { items.append(URLQueryItem(name: "account_id", value: APIQuery.value(accountId))) }
+            if let bankAccount { items.append(URLQueryItem(name: "bank_account", value: APIQuery.value(bankAccount))) }
+            if let categoryId { items.append(URLQueryItem(name: "category_id", value: APIQuery.value(categoryId))) }
+            if let recipientId { items.append(URLQueryItem(name: "recipient_id", value: APIQuery.value(recipientId))) }
+            if let search { items.append(URLQueryItem(name: "search", value: APIQuery.value(search))) }
+            if let sortBy { items.append(URLQueryItem(name: "sort_by", value: APIQuery.value(sortBy))) }
+            if let sortDir { items.append(URLQueryItem(name: "sort_dir", value: APIQuery.value(sortDir))) }
+            if let tags { items.append(URLQueryItem(name: "tags", value: APIQuery.value(tags))) }
+            if let transactionId { items.append(URLQueryItem(name: "transaction_id", value: APIQuery.value(transactionId))) }
+            if let categoryIds { items.append(URLQueryItem(name: "category_ids", value: APIQuery.value(categoryIds))) }
+            if let recipientGroupId { items.append(URLQueryItem(name: "recipient_group_id", value: APIQuery.value(recipientGroupId))) }
+            if let recipientName { items.append(URLQueryItem(name: "recipient_name", value: APIQuery.value(recipientName))) }
+            if let active { items.append(URLQueryItem(name: "active", value: APIQuery.value(active))) }
+            if let includeBalance { items.append(URLQueryItem(name: "include_balance", value: APIQuery.value(includeBalance))) }
+            if let transactionType { items.append(URLQueryItem(name: "transaction_type", value: APIQuery.value(transactionType))) }
+            if let amountMin { items.append(URLQueryItem(name: "amount_min", value: APIQuery.value(amountMin))) }
+            if let amountMax { items.append(URLQueryItem(name: "amount_max", value: APIQuery.value(amountMax))) }
+            if let amountExact { items.append(URLQueryItem(name: "amount_exact", value: APIQuery.value(amountExact))) }
+            if let amountSigned { items.append(URLQueryItem(name: "amount_signed", value: APIQuery.value(amountSigned))) }
+            if let uncategorised { items.append(URLQueryItem(name: "uncategorised", value: APIQuery.value(uncategorised))) }
+            if let normalizeToEur { items.append(URLQueryItem(name: "normalize_to_eur", value: APIQuery.value(normalizeToEur))) }
+            if let targetCurrency { items.append(URLQueryItem(name: "target_currency", value: APIQuery.value(targetCurrency))) }
+            return items
+        }
+    }
+
+    /// PUT /api/settings/{key}: Save setting
+    public struct SaveSetting: APIOperation {
+        public typealias Response = OpenAPI.Setting
+        public static let operationId = "saveSetting"
+        public static let method = HTTPMethod.put
+        public static let pathTemplate = "/api/settings/{key}"
+
+        public var key: String
+        public var body: Body
+
+        public init(key: String, body: Body) {
+            self.key = key
+            self.body = body
+        }
+
+        public var path: String { "/api/settings/\(APIPath.segment(APIQuery.value(key)))" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+
+        public struct Body: Codable, Equatable, Sendable {
+            public let value: JSONValue
+            public let expected: OpenAPI.SettingBaseline
+
+            public init(value: JSONValue, expected: OpenAPI.SettingBaseline) {
+                self.value = value
+                self.expected = expected
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case value = "value"
+                case expected = "expected"
             }
         }
     }

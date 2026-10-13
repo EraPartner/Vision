@@ -95,6 +95,13 @@ import Testing
         #expect(NativeRoute("/" + String(repeating: "a", count: NativeRoute.maximumLength)) == nil)
     }
 
+    @Test func removingAQueryValueDropsEveryValueOfThatName() throws {
+        let route = try #require(NativeRoute("/planned?show_all=true&tab=x&show_all=false"))
+        #expect(route.removing("show_all").string == "/planned?tab=x")
+        #expect(route.removing("missing") == route)
+        #expect(NativeRoute(path: "/planned").removing("show_all").string == "/planned")
+    }
+
     @Test func settingAQueryValueReplacesItAndKeepsTheRest() throws {
         let route = try #require(NativeRoute("/admin/exchange-rates?settings=general&tab=live&tab=x"))
         let next = route.setting("tab", to: "fallback")
@@ -102,7 +109,7 @@ import Testing
         #expect(NativeRoute(path: "/p").setting("tab", to: "live").string == "/p?tab=live")
     }
 
-    @Test func nativeScreensAreBehindTheAdminGate() {
+    @Test func theAdminScreensAreBehindTheAdminGateAndPlannedIsNot() {
         #expect(NativeScreen.screen(forPath: "/admin/exchange-rates") == .exchangeRates)
         #expect(NativeScreen.screen(forPath: "/admin/exchange-rates/x") == nil)
         #expect(NativeScreen.exchangeRates.requiresAdmin)
@@ -111,8 +118,12 @@ import Testing
         #expect(NativeScreen.screen(forPath: "/admin/endpoints") == .endpointLiveness)
         #expect(NativeScreen.screen(forPath: "/admin/db") == .databaseMaintenance)
         #expect(NativeScreen.screen(forPath: "/admin/db/transactions") == NativeScreen.tableEditor(table: "transactions"))
-        #expect(NativeScreen.fixedScreens.allSatisfy { $0.requiresAdmin })
+        let adminScreens = NativeScreen.fixedScreens.filter { $0 != .plannedPayments }
+        #expect(adminScreens.allSatisfy { screen in screen.requiresAdmin })
         #expect(NativeScreen.tableEditor(table: "x").requiresAdmin)
+        #expect(NativeScreen.screen(forPath: "/planned") == .plannedPayments)
+        #expect(!NativeScreen.plannedPayments.requiresAdmin)
+        #expect(NativeScreen.screen(forPath: "/planned/x") == nil)
     }
 }
 

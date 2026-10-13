@@ -62,7 +62,7 @@ aliases: [vision native, native app, swift app]
 | `apps/native/Sources/VisionNativeCore/API/`        | `APIClient` (the Swift `client.ts`) and the generated OpenAPI models and operations   |
 | `apps/native/Sources/VisionNativeCore/Design/`     | Generated design tokens and `ThemeSelection` (variant and appearance of the page)     |
 | `apps/native/Sources/VisionNativeCore/Navigation/` | Generated sidebar registry, routes, shortcuts and the `NativeShellModel` (phase 2)    |
-| `apps/native/Sources/VisionNativeCore/Screens/`    | View models and presentation of native screens (Exchange rates, Admin)                |
+| `apps/native/Sources/VisionNativeCore/Screens/`    | View models and presentation of native screens (Exchange rates, Admin, Planned)       |
 | `apps/native/Sources/VisionNativeUI/`              | SwiftUI shell, native screens and the generated `Localizable.xcstrings` (phase 2)     |
 | `apps/native/openapi-operations.txt`               | The operationIds the Swift client is generated for                                    |
 | `apps/native/i18n-keys.txt`                        | The `i18n/source` keys copied into the String Catalog                                 |
@@ -669,13 +669,16 @@ shortcuts, and the menu bar's Go items all pass through `navigate`. Quit asks to
 reports changes, `applicationShouldTerminate` shows the same alert as an `NSAlert` and quits only on
 Leave and discard. A move the page makes on its own (the command palette) is not held. A native `?tab` change sends
 `replace-route`, which the page applies with `replace`, like `useTabParam`; the page accepts
-`navigate` and `replace-route` payloads that start with one `/` only.
+`navigate` and `replace-route` payloads that start with one `/` only. `replaceQuery` with no value
+removes the parameter, like `useSearchParamState` writing its default.
 
 `app_settings` is read again when the page reports a new path and when the settings dialog closes
 (`?settings` removed), plus once more 600 ms after that close, because the page saves its settings
-500 ms after a change. Admin mode and number and date formats follow the page that way. The native
-shell never redirects: an admin route shows a native screen only while `app_settings` says admin mode
-is on, and otherwise the web view, where `RequireAdmin` redirects and reports the new route. The
+500 ms after a change. Admin mode, the default currency and number and date formats follow the page
+that way. Every native screen waits for the first `app_settings` answer and shows the web view until
+then. The native shell never redirects: an admin route shows a native screen only while
+`app_settings` says admin mode is on, and otherwise the web view, where `RequireAdmin` redirects and
+reports the new route. Screens outside the admin section (`/planned`) are native in either mode. The
 page's topbar keeps its traffic-light inset only while the native sidebar is hidden
 (`native-sidebar`).
 
@@ -735,6 +738,39 @@ refresh mutation (toast, then refetch); `ExchangeRatesPresentation` produces the
 tables with the web's formats through `VisionFormat` (six and four fraction digits, money with the
 `showDecimalPlaces` setting, `Intl`-compatible locales of the four number formats, the five app date
 formats and a two-digit local time). The Live/Fallback tab lives in `?tab`.
+
+### Planned payments (phase 3c)
+
+`/planned` is the first native screen outside the admin section and does not need admin mode
+([[docs/reference/native-parity/planned-payments|planned payments parity]],
+[[docs/adr/183-remaining-screens-redesign|ADR-183]]). `PlannedPaymentsModel` keeps one list per
+`show_all` value like the web query key (30-second stale time, one request at a time, a failed
+answer is never fresh) and maps rows with `PlannedPayment` (`mapFromAPI`, the default currency from
+`app_settings`). The Next 7 days strip (`PlannedStrip`, eight local days) and Estimated monthly
+convert to the default currency through the shared `ExchangeRatesModel`, so the screen and Exchange
+rates share one rates cache; a payment without a rate is counted, not summed. Money stays
+`Decimal`. The table (`LocalDataTable` with `LocalTableQuery`) searches, filters and sorts the raw
+row fields like `VirtualDataTable`. Pause and Resume write the server's row into the cached list
+and offer Undo for 8 seconds (⌘Z while the toast shows); Delete asks in an alert first. Payment
+history looks up every execution's transaction in parallel and offers Retry after a partial
+failure. View › Include paused writes `?show_all=true` with `replace-route`.
+
+Phase 3c part B adds the rest of the page. Add payment, a strip item and the row menu's Edit open the
+planned-payment sheet (`PlannedPaymentFormModel`, `PlannedPaymentFormSheet`). It has every field of
+the web form, `parseLocaleNumber` amounts in the app number format and the web's validation:
+errors show after a blocked submit, which scrolls to and focuses the first invalid field. Create
+sends `POST`; an edit sends a `PATCH` body (`PlannedPaymentPatch`) that can carry the explicit
+`null` the web sends for a cleared End date or Max occurrences. While the sheet holds edits, the
+model's leave guard makes the shell ask before leaving `/planned`. Mark as paid and the match
+suggestions' Review open `PlannedLinkModel`: debounced candidate fetches (the payee's merge-cluster
+root when known), the local search and amount match, and `POST …/execute` with the chosen
+transaction's date. `PlannedRecurringModel` drives the recurring panel. It keeps the 5-minute
+pattern cache and merges the dismissed payees of the `dismissed_recurring_patterns` setting with a
+per-device copy in user defaults. A dismissal saves both; the setting is written against the
+baseline of its last read. Track creates the planned payment directly. The shared pickers live in
+`VisionNativeUI/Components` over `PickerDataModel`: `VisionDateField` (typed date, calendar, Clear),
+`RecipientPicker`, `CategoryPicker`, `AccountPicker` and `TagField`. Every model that a view's
+`.task` loads shares one request in flight, so a second caller waits for the first.
 
 ## CI
 
