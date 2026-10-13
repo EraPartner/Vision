@@ -103,16 +103,17 @@ private let childEnvironment = ["PATH": "/usr/bin:/bin"]
         let started = Date()
         let error = await #expect(throws: ProcessRunError.self) {
             try await runner.run(
-                "/bin/sh", ["-c", "trap \"\" TERM; sleep 30"],
+                "/bin/sh", ["-c", "trap \"\" TERM; sleep 120"],
                 options: RunOptions(environment: childEnvironment, timeout: 0.5))
         }
         let elapsed = Date().timeIntervalSince(started)
         #expect(error?.message == "sh timed out")
         #expect(error?.exitStatus == 128 + SIGKILL)
         // 0.5 s timeout + 2 s kill grace + at most 2 s for the orphaned sleep's pipe. The
-        // bound only has to prove the kill happened before the 30 s sleep ended on its own:
-        // CPU-bound suites (scrypt) running in parallel delayed this to 14 s on the CI runner.
-        #expect(elapsed < 25)
+        // bound only has to prove the kill happened before the 120 s sleep ended on its own:
+        // suites running in parallel delayed this to 29 s on the CI runner, so the bound sits
+        // just under the test's one-minute limit.
+        #expect(elapsed < 55)
     }
 
     @Test(.timeLimit(.minutes(1))) func cancellationTerminatesTheChild() async throws {
