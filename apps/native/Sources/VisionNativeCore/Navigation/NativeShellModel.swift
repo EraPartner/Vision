@@ -152,6 +152,9 @@ public final class NativeShellModel {
         route = next
         if pathChanged { leaveConfirmation = nil }
         admin.database.routeDidChange(path: next.path)
+        // ⌘N's pending Add sheet belongs to the arrival at `/transactions`; landing elsewhere
+        // (a redirect, the page's own prompt) drops it.
+        if next.path != TransactionsRoutes.path { transactions.cancelAddOnArrival() }
         if let section = NavigationRegistry.matchSection(path: next.path), hiddenSections[section] == true {
             // Landing inside a hidden section shows it for good, like the web sidebar.
             setSection(section, expanded: true)

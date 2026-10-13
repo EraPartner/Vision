@@ -17,9 +17,10 @@ public enum MoneyMath {
 
     /// `allocateEvenly(total, parts)`: `parts` cent-exact shares that add up to `total`; the
     /// remaining cents go to the first shares. `allocateEvenly(10, 3)` is `[3.34, 3.33, 3.33]`.
+    /// The total's cents round half to even, like the web's `Decimal.round()`.
     public static func allocateEvenly(_ total: Decimal, parts: Int) -> [Decimal] {
         guard parts > 0 else { return [] }
-        let cents = rounded(total * 100, places: 0, mode: .plain)
+        let cents = rounded(total * 100, places: 0, mode: .bankers)
         let whole = NSDecimalNumber(decimal: cents).intValue
         let base = whole / parts
         let remainder = whole - base * parts

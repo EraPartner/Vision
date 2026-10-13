@@ -1082,20 +1082,33 @@ actor StaticSplitsService: TransactionBulkService, SplitsService {
         let model = shell.owes
         shell.routeDidChange(try #require(NativeRoute("/owes")))
         await shell.settingsSettled()
+        // Each host stays alive until the end: a released host can fire `.onDisappear`,
+        // whose `model.disappear()` would drop the person detail between the awaits and the
+        // assertions below.
+        var hosts: [NSView] = []
+        defer { withExtendedLifetime(hosts) {} }
         // Loading, then the totals and the people list.
         #expect(model.isLoadingSummary)
-        #expect(layOutOwes(shell).fittingSize.width > 0)
+        let loadingHost = layOutOwes(shell)
+        hosts.append(loadingHost)
+        #expect(loadingHost.fittingSize.width > 0)
         await model.appear()
         #expect(model.summary?.count == 1)
         #expect(model.totalOutstanding == Decimal(string: "21.50"))
-        #expect(layOutOwes(shell).fittingSize.height > 0)
+        let listHost = layOutOwes(shell)
+        hosts.append(listHost)
+        #expect(listHost.fittingSize.height > 0)
         // The person detail with its splits and Recent transactions.
-        await model.open(try #require(model.summary?.first))
+        let person = try #require(model.summary?.first)
+        await model.open(person)
         await model.loadRecent()
         #expect(model.splits?.count == 2)
         #expect(model.recentRows.count == 3)
-        #expect(layOutOwes(shell).fittingSize.height > 0)
-        // Record payment.
+        let detailHost = layOutOwes(shell)
+        hosts.append(detailHost)
+        #expect(detailHost.fittingSize.height > 0)
+        // Record payment, with the detail re-established right before it is read.
+        await model.open(person)
         model.openPayment(try #require(model.splits?.first))
         #expect(model.payment != nil)
         #expect(layOut(OwesPaymentSheet(model: model, shell: shell).environment(\.visionTheme, theme)).fittingSize.height > 0)

@@ -245,7 +245,10 @@ public final class TransactionsModel {
     /// `new=1` and `id` are handled and removed with replace, and the list loads for the
     /// filters, search, sort, Show excluded and page size.
     public func sync() async {
-        guard let shell, shell.route.path == TransactionsRoutes.path else { return }
+        guard let shell, shell.route.path == TransactionsRoutes.path else {
+            addOnArrival = false
+            return
+        }
         let param = shell.route.value(TransactionsRoutes.searchParameter)
         if param != lastSearchParam {
             lastSearchParam = param
@@ -465,6 +468,9 @@ public final class TransactionsModel {
             fetchedAt = now()
             reconcileSelection()
         } catch is CancellationError {
+            // `query` already names `next`: the rows still answer the previous query, so
+            // they must not count as fresh for it.
+            if version == listVersion { fetchedAt = nil }
             return
         } catch {
             guard version == listVersion else { return }
@@ -718,6 +724,13 @@ public final class TransactionsModel {
                 guard let self else { return false }
                 return try await self.save(data, name)
             })
+    }
+
+    /// Below `dockedInspectorWidth` the inspector is a sheet. While it is, the Split dialog,
+    /// the Delete alert and the Add sheet present from inside it (a window shows one sheet
+    /// per presenter), so its Split and Delete keep the inspector open behind them.
+    public func inspectorIsSheet(pageWidth: Double) -> Bool {
+        pageWidth < Self.dockedInspectorWidth && selectedRow != nil && inspector != nil
     }
 
     /// The close button or Escape: the row loses the inspector and gets focus back.

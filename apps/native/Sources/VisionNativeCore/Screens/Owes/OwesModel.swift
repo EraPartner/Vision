@@ -112,6 +112,8 @@ public final class OwesModel {
     @ObservationIgnored private var recentOffset = 0
     @ObservationIgnored private var recentVersion = 0
     @ObservationIgnored private var isVisible = false
+    /// Bumped by `invalidate()`: a fetch that started before it does not count as fresh.
+    @ObservationIgnored private var cacheGeneration = 0
 
     public init(service: any SplitsService, calendar: Calendar = PlannedDates.local, now: @escaping @Sendable () -> Date = { Date() }) {
         self.service = service
@@ -151,6 +153,15 @@ public final class OwesModel {
 
     // MARK: Summary
 
+    /// `invalidateQueries({ queryKey: splitKeys.all })` after a split is created elsewhere
+    /// (the Split dialog, Bulk split): the summary and the person detail refetch on their
+    /// next load instead of serving a 30 s old answer.
+    public func invalidate() {
+        cacheGeneration += 1
+        summaryFetchedAt = nil
+        splitsFetchedAt = nil
+    }
+
     public var isLoadingSummary: Bool { summary == nil && summaryError == nil }
 
     /// `useOwedSummary`: one request at a time; a fresh answer (30 s) is reused unless
@@ -166,12 +177,13 @@ public final class OwesModel {
             return
         }
         let service = service
+        let generation = cacheGeneration
         let task = Task { [weak self] in
             do {
                 let items = try await service.owedSummary()
                 self?.summary = items
                 self?.summaryError = nil
-                self?.summaryFetchedAt = self?.now()
+                self?.summaryFetchedAt = self?.cacheGeneration == generation ? self?.now() : nil
             } catch is CancellationError {
                 return
             } catch {
@@ -258,13 +270,14 @@ public final class OwesModel {
             return
         }
         let service = service
+        let generation = cacheGeneration
         let task = Task { [weak self] in
             do {
                 let items = try await service.owed(recipientId: id)
                 guard self?.person?.id == id else { return }
                 self?.splits = items
                 self?.splitsError = nil
-                self?.splitsFetchedAt = self?.now()
+                self?.splitsFetchedAt = self?.cacheGeneration == generation ? self?.now() : nil
             } catch is CancellationError {
                 return
             } catch {

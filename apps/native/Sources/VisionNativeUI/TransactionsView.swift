@@ -29,6 +29,9 @@ public struct TransactionsView: View {
     /// The inspector docks beside the list from the `lg` width.
     private var isDocked: Bool { Double(pageWidth) >= TransactionsModel.dockedInspectorWidth }
 
+    /// Below the `lg` width the selected row's inspector is a sheet.
+    private var inspectorIsSheet: Bool { model.inspectorIsSheet(pageWidth: Double(pageWidth)) }
+
     public var body: some View {
         AdminPage {
             content
@@ -63,42 +66,9 @@ public struct TransactionsView: View {
                 clear: { model.clearNotice($0) },
                 bindsUndoShortcut: model.actionIsUndo)
         }
-        // `useConfirmDialog`, destructive. The buttons decide; the binding only reads.
-        .alert(
-            strings.t("txPage.delete.title"),
-            isPresented: Binding(get: { model.pendingDelete != nil }, set: { _ in })
-        ) {
-            Button(strings.t("common.cancel"), role: .cancel) { model.cancelDelete() }
-            Button(strings.t("txPage.delete.confirm"), role: .destructive) {
-                Task { await model.confirmDelete() }
-            }
-        } message: {
-            Text(strings.t("txPage.delete.desc", ["desc": model.pendingDelete?.deleteDescription(model.labels) ?? ""]))
-        }
-        .sheet(
-            isPresented: Binding(
-                get: { model.isAddPresented },
-                set: { presented in
-                    if !presented { model.dismissAdd() }
-                })
-        ) {
-            if let form = model.addForm {
-                TransactionAddSheet(model: model, form: form, shell: shell)
-                    .environment(\.visionTheme, theme)
-                    .environment(\.colorScheme, theme.colorScheme)
-            }
-        }
-        .sheet(
-            item: Binding(
-                get: { model.splitForm.map { SplitSheetItem(form: $0) } },
-                set: { item in
-                    if item == nil { model.dismissSplit() }
-                })
-        ) { item in
-            TransactionSplitSheet(model: model, form: item.form, shell: shell)
-                .environment(\.visionTheme, theme)
-                .environment(\.colorScheme, theme.colorScheme)
-        }
+        // The Delete alert, the Add sheet and the Split dialog present from here, or from
+        // inside the inspector sheet while it is open (one sheet per presenter).
+        .modifier(TransactionDialogs(model: model, shell: shell, theme: theme, hosts: !inspectorIsSheet))
         .sheet(
             item: Binding(
                 get: { model.quickLookRow },
@@ -113,7 +83,7 @@ public struct TransactionsView: View {
         // Below the `lg` width the inspector is a sheet.
         .sheet(
             isPresented: Binding(
-                get: { !isDocked && model.selectedRow != nil && model.inspector != nil },
+                get: { inspectorIsSheet },
                 set: { presented in
                     if !presented { model.closeInspector() }
                 })
@@ -121,6 +91,7 @@ public struct TransactionsView: View {
             if let row = model.selectedRow, let inspector = model.inspector {
                 TransactionInspectorView(model: model, inspector: inspector, row: row, shell: shell, docked: false)
                     .frame(minWidth: 380, idealWidth: 420, minHeight: 520)
+                    .modifier(TransactionDialogs(model: model, shell: shell, theme: theme, hosts: true))
                     .environment(\.visionTheme, theme)
                     .environment(\.colorScheme, theme.colorScheme)
             }
@@ -224,6 +195,59 @@ public struct TransactionsView: View {
         .task(id: message) {
             AccessibilityNotification.Announcement("\(strings.t("common.error")). \(message)").post()
         }
+    }
+}
+
+/// The Delete transaction alert (`useConfirmDialog`, destructive), the Add transaction sheet
+/// and the Split transaction dialog. Only the presenter that `hosts` them binds the model's
+/// state: the page, or the inspector sheet while it is open, since macOS presents nothing
+/// from a view that already presents a sheet.
+private struct TransactionDialogs: ViewModifier {
+    let model: TransactionsModel
+    let shell: NativeShellModel
+    let theme: VisionTheme
+    let hosts: Bool
+
+    private var strings: any Localizing { shell.strings }
+
+    func body(content: Content) -> some View {
+        content
+            // The buttons decide; the binding only reads.
+            .alert(
+                strings.t("txPage.delete.title"),
+                isPresented: Binding(get: { hosts && model.pendingDelete != nil }, set: { _ in })
+            ) {
+                Button(strings.t("common.cancel"), role: .cancel) { model.cancelDelete() }
+                Button(strings.t("txPage.delete.confirm"), role: .destructive) {
+                    Task { await model.confirmDelete() }
+                }
+            } message: {
+                Text(strings.t("txPage.delete.desc", ["desc": model.pendingDelete?.deleteDescription(model.labels) ?? ""]))
+            }
+            .sheet(
+                isPresented: Binding(
+                    get: { hosts && model.isAddPresented },
+                    set: { presented in
+                        if !presented { model.dismissAdd() }
+                    })
+            ) {
+                if let form = model.addForm {
+                    TransactionAddSheet(model: model, form: form, shell: shell)
+                        .environment(\.visionTheme, theme)
+                        .environment(\.colorScheme, theme.colorScheme)
+                }
+            }
+            .sheet(
+                item: Binding(
+                    get: { hosts ? model.splitForm.map { SplitSheetItem(form: $0) } : nil },
+                    set: { item in
+                        if item == nil { model.dismissSplit() }
+                    })
+            ) { item in
+                TransactionSplitSheet(model: model, form: item.form, shell: shell)
+                    .environment(\.visionTheme, theme)
+                    .environment(\.colorScheme, theme.colorScheme)
+            }
     }
 }
 

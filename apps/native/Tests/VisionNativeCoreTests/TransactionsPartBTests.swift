@@ -494,6 +494,20 @@ enum SplitFixture {
         await model.sync()
         #expect(!model.isAddPresented)
     }
+
+    @Test func aPendingNewTransactionIsDroppedWhenTheShellLandsElsewhere() async throws {
+        let model = TransactionsFixture.idleModel()
+        let shell = TxFixture.shell(model, recorder: ShellRecorder())
+        shell.routeDidChange(try #require(NativeRoute("/planned")))
+        await shell.settingsSettled()
+        #expect(shell.newTransaction())
+        // The page redirected somewhere else instead of `/transactions`.
+        shell.routeDidChange(try #require(NativeRoute("/accounts")))
+        #expect(!model.addOnArrival)
+        shell.routeDidChange(try #require(NativeRoute("/transactions")))
+        await model.sync()
+        #expect(!model.isAddPresented)
+    }
 }
 
 // MARK: - Split transaction
@@ -504,6 +518,9 @@ enum SplitFixture {
         #expect(MoneyMath.allocateEvenly(10, parts: 3) == [SplitFixture.decimal("3.34"), SplitFixture.decimal("3.33"), SplitFixture.decimal("3.33")])
         #expect(MoneyMath.allocateEvenly(SplitFixture.decimal("0.01"), parts: 2) == [SplitFixture.decimal("0.01"), 0])
         #expect(MoneyMath.allocateEvenly(5, parts: 0).isEmpty)
+        // The total's cents round half to even too: 0.025 is 2 cents, 0.035 is 4.
+        #expect(MoneyMath.allocateEvenly(SplitFixture.decimal("0.025"), parts: 1) == [SplitFixture.decimal("0.02")])
+        #expect(MoneyMath.allocateEvenly(SplitFixture.decimal("0.035"), parts: 1) == [SplitFixture.decimal("0.04")])
         #expect(MoneyMath.round(SplitFixture.decimal("2.345")) == SplitFixture.decimal("2.34"))
         #expect(MoneyMath.round(SplitFixture.decimal("2.355")) == SplitFixture.decimal("2.36"))
     }
@@ -577,6 +594,91 @@ enum SplitFixture {
         #expect(model.splitForm != nil)
         model.dismissSplit()
         #expect(model.splitRequest == nil)
+    }
+
+    @Test func anUndockedInspectorKeepsSplitDeleteAndAddPresentable() async throws {
+        let service = FakeTransactionsService(rows: TxFixture.rows(3))
+        let (model, shell) = try await TxFixture.opened(service)
+        defer { withExtendedLifetime(shell) {} }
+        let narrow = TransactionsModel.dockedInspectorWidth - 1
+        #expect(!model.inspectorIsSheet(pageWidth: narrow))
+        model.select(2)
+        let row = try #require(model.selectedRow)
+        #expect(model.inspectorIsSheet(pageWidth: narrow))
+        #expect(!model.inspectorIsSheet(pageWidth: TransactionsModel.dockedInspectorWidth))
+        // The inspector's Split: the dialog's state is set and the inspector sheet, which
+        // presents it, stays open.
+        model.requestSplit(row)
+        #expect(model.splitForm?.row.id == 2)
+        #expect(model.inspectorIsSheet(pageWidth: narrow))
+        model.dismissSplit()
+        #expect(model.inspectorIsSheet(pageWidth: narrow))
+        // The inspector's Delete asks while the inspector stays open.
+        model.requestDelete(row)
+        #expect(model.pendingDelete?.id == 2)
+        #expect(model.inspectorIsSheet(pageWidth: narrow))
+        model.cancelDelete()
+        // ⌘N over the inspector sheet.
+        model.requestAdd()
+        #expect(model.isAddPresented)
+        #expect(model.inspectorIsSheet(pageWidth: narrow))
+        model.dismissAdd()
+        // Confirming the delete closes the inspector with its row.
+        model.requestDelete(row)
+        await model.confirmDelete()
+        #expect(await service.deleted == [2])
+        #expect(!model.inspectorIsSheet(pageWidth: narrow))
+        #expect(model.row(2) == nil)
+    }
+
+    @Test func aNewSplitRefreshesWhoOwesYou() async throws {
+        let splits = FakeSplitsService(owed: [SplitFixture.owed(1, amount: 20)])
+        let service = FakeTransactionsService(rows: [TxFixture.wire(id: 1, amount: -10), TxFixture.wire(id: 2, amount: -6)])
+        let (model, shell) = try await TxFixture.opened(service, splits: splits)
+        defer { withExtendedLifetime(shell) {} }
+        let owes = model.owes
+        await owes.loadSummary()
+        await owes.open(try #require(owes.summary?.first))
+        #expect(await splits.summaryLoads == 1)
+        #expect(await splits.detailLoads == [4])
+        // Within 30 s both answers are reused.
+        await owes.loadSummary()
+        await owes.loadSplits()
+        #expect(await splits.summaryLoads == 1)
+        #expect(await splits.detailLoads == [4])
+        // The Split dialog's create invalidates `splitKeys.all`.
+        model.requestSplit(try #require(model.row(1)))
+        let form = try #require(model.splitForm)
+        await form.load()
+        form.setRecipient(1, to: 4)
+        await model.submitSplit()
+        #expect(model.notice?.key == "splits.created")
+        await owes.loadSummary()
+        await owes.loadSplits()
+        #expect(await splits.summaryLoads == 2)
+        #expect(await splits.detailLoads == [4, 4])
+        // So does Bulk split.
+        model.toggleSelection(1)
+        model.toggleSelection(2)
+        model.openBulkDialog(.split)
+        model.setBulkSplitRecipient(4)
+        await model.applyBulkSplit()
+        #expect(await splits.bulkCalls.count == 1)
+        await owes.loadSummary()
+        await owes.loadSplits()
+        #expect(await splits.summaryLoads == 3)
+        #expect(await splits.detailLoads == [4, 4, 4])
+        // A failed create leaves the cached answers alone.
+        await splits.fail(true)
+        model.requestSplit(try #require(model.row(2)))
+        let failing = try #require(model.splitForm)
+        await failing.load()
+        failing.setRecipient(1, to: 4)
+        await model.submitSplit()
+        #expect(model.notice?.key == "splits.createFailed")
+        await splits.fail(false)
+        await owes.loadSummary()
+        #expect(await splits.summaryLoads == 3)
     }
 }
 
@@ -827,6 +929,36 @@ enum SplitFixture {
         #expect(linked.map { legs in Set(legs) } == [[1, 2]])
         #expect(model.notice?.key == "txPage.bulk.markTransferSuccess")
         #expect(!model.showsBulkBar)
+    }
+
+    @Test func theTransferRecheckComparesOnlyTheLegFields() {
+        let leg = TransactionRow(TxFixture.wire(id: 1, accountId: 7, amount: -50))
+        // A category, payee or memo edit while the alert asks keeps the link.
+        var edited = leg
+        edited.categoryId = 5
+        edited.categoryName = "Food"
+        edited.recipientId = 9
+        edited.memo = "Savings"
+        #expect(TransactionsModel.sameTransferLeg(edited, leg))
+        // The fields the confirmation showed, or that make it a transfer, cancel it.
+        var moved = leg
+        moved.amount = -40
+        #expect(!TransactionsModel.sameTransferLeg(moved, leg))
+        var redated = leg
+        redated.date = "2026-10-02"
+        #expect(!TransactionsModel.sameTransferLeg(redated, leg))
+        var excluded = leg
+        excluded.isActive = false
+        #expect(!TransactionsModel.sameTransferLeg(excluded, leg))
+        var linked = leg
+        linked.transferPeerId = 2
+        #expect(!TransactionsModel.sameTransferLeg(linked, leg))
+        var otherAccount = leg
+        otherAccount.accountId = 8
+        #expect(!TransactionsModel.sameTransferLeg(otherAccount, leg))
+        var otherCurrency = leg
+        otherCurrency.currency = "USD"
+        #expect(!TransactionsModel.sameTransferLeg(otherCurrency, leg))
     }
 
     @Test func deletedToastsFollowTheResult() {

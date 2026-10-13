@@ -818,7 +818,8 @@ client-side over the loaded rows, and column visibility is kept under `transacti
 category and payee picks and the Status toggle patch the row first and roll back when the `PATCH`
 fails (`TransactionPatch` sends explicit `null`s). Delete asks first, removes the row and offers
 Undo for 8 seconds, which recreates the transaction. The inspector (`TransactionInspectorModel`)
-docks beside the list from a 1024-point page width and is a sheet below it; its tips call the
+docks beside the list from a 1024-point page width and is a sheet below it, which then presents
+the Split dialog, the Delete alert and the Add sheet over itself; its tips call the
 bulk update for the payee's uncategorised rows (Use for all) and set the payee's default category
 (Always use). The Attachments panel (`TransactionAttachmentsModel`) uploads one multipart file,
 previews with Quick Look from a temporary file and saves downloads through the export save panel.
@@ -832,7 +833,8 @@ inflow legs, and links them with `markTransfer`. A `409` shows the duplicate pro
 anyway, and the form persists across Cancel until a create succeeds, guarded by the leave guard
 while dirty. The payee picker offers "Add {name}" (`POST /api/recipients`). The Split dialog
 (`SplitDialogModel`) splits equally, lets others pay all or takes custom amounts, rounding with
-`MoneyMath` (banker's rounding, like `ROUND_HALF_EVEN`). The bulk bar (`TransactionsModel+Actions`)
+`MoneyMath` (banker's rounding, like `ROUND_HALF_EVEN`); a created split, single or bulk,
+invalidates the `/owes` summary and person detail like `splitKeys.all`. The bulk bar (`TransactionsModel+Actions`)
 acts on the checked ids or, after "Select all {n} matching filter", on the filter with
 `expected_count`; tag and split stay id-only. `/owes` (`OwesModel`, `OwesView`) shows the total
 outstanding and the people, and a person's detail records payments, settles, settles all, deletes

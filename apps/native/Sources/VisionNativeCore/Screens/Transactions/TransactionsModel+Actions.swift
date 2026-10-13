@@ -172,6 +172,7 @@ extension TransactionsModel {
         defer { form.isPending = false }
         do {
             try await splitsService.createSplits(transactionId: form.row.id, shares: shares)
+            owes.invalidate()
             form.resetEntries()
             post(.success, "splits.created")
             if splitForm === form { dismissSplit() }
@@ -337,6 +338,14 @@ extension TransactionsModel {
         return variables
     }
 
+    /// `ExistingTransferLeg`: the fields the confirmation showed and the link depends on. A
+    /// category or payee edit to a leg while the alert asked does not cancel the link.
+    nonisolated static func sameTransferLeg(_ current: TransactionRow, _ asked: TransactionRow) -> Bool {
+        current.id == asked.id && current.accountId == asked.accountId && current.amount == asked.amount
+            && current.date == asked.date && current.currency == asked.currency
+            && current.isActive == asked.isActive && current.transferPeerId == asked.transferPeerId
+    }
+
     /// The alert's confirm button.
     public func confirmBulk() async {
         guard let confirmation = bulkConfirmation else { return }
@@ -347,7 +356,9 @@ extension TransactionsModel {
         case .deactivate:
             await runBulkUpdate(BulkUpdateFields(isActive: false), closing: nil)
         case .markTransfer(let first, let second):
-            guard let current = transferPair, current.0 == first, current.1 == second else {
+            guard let current = transferPair, Self.sameTransferLeg(current.0, first),
+                Self.sameTransferLeg(current.1, second)
+            else {
                 post(.error, "txPage.bulk.failed", detail: strings.t("txPage.bulk.transferSelectionChanged"))
                 return
             }
@@ -484,6 +495,7 @@ extension TransactionsModel {
         do {
             let result = try await splitsService.bulkSplit(
                 transactionIds: selection.ids.sorted(), recipientId: recipientId, mode: bulkDrafts.splitMode)
+            owes.invalidate()
             let detail = Self.bulkSplitDetail(result, strings: strings)
             if result.split == 0 {
                 post(.info, "splits.bulkNothingSplit", detail: detail)
