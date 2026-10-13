@@ -65,7 +65,7 @@ explicitly. Do not leave the handoff or unfinished task files only in the worksp
 
 ## Current continuation work
 
-Latest remote checkpoint: **`106774f2`**, pushed and verified after **`c188f14b`**.
+Latest full remote checkpoint: **`69415f27`**, pushed and verified after **`106774f2`**.
 The next full save must include all subsequent dirty/new task files, this handoff and
 the current printing/readiness work. Root owns publication; never wait for manual owner
 verification or a Demo intermission to proceed.
@@ -583,6 +583,29 @@ accepted-write draining; current menu reload only refreshes the web document. Zo
 must affect native detail content using the existing bounded PageZoom factors. Phase-4
 dependency audit is read-only preparation while these phase-3 gaps and automated Mac checks
 are completed. Continue without an owner intermission.
+
+## Post-checkpoint repairs (2026-10-13 23:37 UTC)
+
+`69415f27` saved all 18 task files and is pushed and verified. Its Mac build found a
+Sendable return restriction in the overlay focus monitor: `MainActor.assumeIsolated`
+must return Void, with the unchanged NSEvent returned outside. The source repair is
+included in the next compiler push; actual AppKit responder tests remain pending.
+
+Review found that typed local shell keys had expanded to six while the emitted JavaScript
+guard still accepted only three. The guard now derives from `LocalKey.allCases`.
+Actual Swift sources compile and emit the tested scripts; Bun execution passed six raw-string
+round trips, 15 denied operations before storage access, injection-string preservation and
+the unchanged 15-key manual backup registry. FX dismissal remains excluded from that registry.
+Proof: `/workspace/vision-native-storage-script-check`. Permanent JavaScriptCore cases are
+added for Mac execution. This is newer source than the immutable 1,271-test proof.
+
+Root added finite bounded native `pageZoom` and `isReloadingGraph` input fencing, with
+one new meaningful shell test and a stable-identity native detail zoom wrapper. SDK/UI
+wiring is on disk but awaits the next full save, focused Core proof and Mac compilation.
+Native Tax local comparison/rules state capture is on disk; Statistics and Net-worth
+current-view print work is parallel preparation. Notification/rates latest focused proof
+passes 54 cases with zero drift; manifest
+`b6f3c6275f163b6e2ae56e5b23807d7cc746b1beac1447bc250de1bb95f49803`.
 
 ## Tooling and safety for continuation
 

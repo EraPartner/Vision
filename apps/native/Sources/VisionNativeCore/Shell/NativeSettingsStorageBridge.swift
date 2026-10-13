@@ -1,7 +1,7 @@
 import Foundation
 
-/// Private host scripts for Settings backup/restore and the three local Settings
-/// controls. The shell binds arguments through WKWebView; no storage RPC is added.
+/// Private host scripts for Settings backup/restore and typed local shell controls.
+/// The shell binds arguments through WKWebView; no storage RPC is added.
 public enum NativeSettingsStorageBridge {
     /// Exact LOCAL_STORAGE_KEYS order from frontend lib/localStorage-keys.ts.
     /// BackupSection intentionally snapshots the entire registry rather than the
@@ -87,7 +87,7 @@ public enum NativeSettingsStorageBridge {
             try { window.localStorage.removeItem(key); return true; } catch { return false; }
             """
     private static let localGuard = """
-        if (!["vision.backup.passphrase.reminder.dismissed", "vision.onboarding.draft.v1", "dismissed_recurring_patterns"].includes(key)) {
+        if (!\(literal(LocalKey.allCases.map(\.rawValue))).includes(key)) {
             throw new Error("Unsupported Settings storage key");
         }
 

@@ -47,6 +47,12 @@ public final class NativeShellModel {
     /// `false` until `app_settings` has been read once; native screens wait for it.
     public private(set) var settingsLoaded = false
     public var isRendererReady = false
+    public var isReloadingGraph = false
+    public private(set) var pageZoom: Double = 1
+    public func setPageZoom(_ factor: Double) {
+        guard factor.isFinite else { return }
+        pageZoom = min(PageZoom.maximumFactor, max(PageZoom.minimumFactor, factor))
+    }
     /// A completed settings read also refreshes dashboard settings after the web dialog's
     /// 500 ms save debounce, even when the app-format fields themselves did not change.
     public private(set) var settingsRevision = 0
@@ -601,7 +607,7 @@ public final class NativeShellModel {
     }
     public var isPresentingNativeOverlay: Bool { nativeOverlayKind != nil }
     public func openPalette() {
-        guard nativeSettings?.isSuspendedForRestore != true else { return }
+        guard !isReloadingGraph, nativeSettings?.isSuspendedForRestore != true else { return }
         guard let commandPalette else {
             willPresent(.openPalette)
             onNavigate(.openPalette)
@@ -612,7 +618,7 @@ public final class NativeShellModel {
     }
     public func closePalette() { commandPalette?.close() }
     public func openShortcuts() {
-        guard nativeSettings?.isSuspendedForRestore != true else { return }
+        guard !isReloadingGraph, nativeSettings?.isSuspendedForRestore != true else { return }
         if commandPalette == nil {
             willPresent(.openShortcuts)
             onNavigate(.openShortcuts)
@@ -636,7 +642,7 @@ public final class NativeShellModel {
         }
     }
     public func activatePaletteAction(_ action: NativeCommandPaletteAction) {
-        guard nativeSettings?.isSuspendedForRestore != true else { return }
+        guard !isReloadingGraph, nativeSettings?.isSuspendedForRestore != true else { return }
         switch action {
         case .navigate(let route): navigate(to: route.string)
         case .newTransaction:
@@ -689,6 +695,7 @@ public final class NativeShellModel {
         _ key: String, command: Bool = false, control: Bool = false, option: Bool = false, shift: Bool = false,
         now: Date = Date()
     ) -> Bool {
+        guard !isReloadingGraph else { return true }
         switch shortcuts.handle(
             key: key, command: command, control: control, option: option, shift: shift, path: route.path, now: now)
         {

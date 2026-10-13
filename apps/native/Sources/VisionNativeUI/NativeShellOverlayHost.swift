@@ -7,7 +7,7 @@ struct NativeShellOverlayHost: View {
     let shell: NativeShellModel
     var body: some View {
         content
-            .disabled(shell.nativeSettings?.isSuspendedForRestore == true)
+            .disabled(shell.isReloadingGraph || shell.nativeSettings?.isSuspendedForRestore == true)
             .interactiveDismissDisabled(preventsInteractiveDismissal)
             .environment(\.nativeNoticeCenter, shell.notices)
             .background { NativeOverlayFocusBridge(kind: shell.nativeOverlayKind).frame(width: 0, height: 0) }
@@ -60,7 +60,7 @@ struct NativeShellOverlayHost: View {
         }
     }
     private var preventsInteractiveDismissal: Bool {
-        if shell.nativeSettings?.isSuspendedForRestore == true { return true }
+        if shell.isReloadingGraph || shell.nativeSettings?.isSuspendedForRestore == true { return true }
         switch shell.nativeOverlayKind {
         // Explicit Close/Escape writes completion first, retaining the wizard after a failed ACK.
         case .some(.onboarding): return true
@@ -130,8 +130,8 @@ private struct NativeOverlayFocusBridge: NSViewRepresentable {
                     {
                         self.capture(window)
                     }
-                    return event
                 }
+                return event
             }
         }
         private func capture(_ window: NSWindow) {

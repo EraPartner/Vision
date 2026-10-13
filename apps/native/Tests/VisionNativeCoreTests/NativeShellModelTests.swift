@@ -174,6 +174,29 @@ final class ShellRecorder {
         #expect(model.detail == .web)
     }
 
+    @Test func pageZoomKeepsSourceBoundsAndReloadFencesNativeShortcutInput() async {
+        let recorder = ShellRecorder()
+        let model = makeModel(recorder: recorder)
+        model.setPageZoom(1.2)
+        #expect(model.pageZoom == 1.2)
+        model.setPageZoom(.nan)
+        model.setPageZoom(.infinity)
+        #expect(model.pageZoom == 1.2)
+        model.setPageZoom(0)
+        #expect(model.pageZoom == PageZoom.minimumFactor)
+        model.setPageZoom(100)
+        #expect(model.pageZoom == PageZoom.maximumFactor)
+        model.isReloadingGraph = true
+        #expect(model.handleKey("k", command: true))
+        model.openPalette()
+        model.openShortcuts()
+        model.activatePaletteAction(.copy("synthetic"))
+        #expect(recorder.actions.isEmpty && recorder.clipboard.isEmpty)
+        model.isReloadingGraph = false
+        model.openPalette()
+        #expect(recorder.actions == [.openPalette])
+    }
+
     @Test func theReportHandoffPreservesTheTabAndReturnsAfterTheDialogCloses() throws {
         let recorder = ShellRecorder()
         let model = makeModel(recorder: recorder)
