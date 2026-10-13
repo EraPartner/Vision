@@ -1390,16 +1390,24 @@ extension OpenAPIOperations {
         /// Capped at 50 entries after validation.
         public var accountIds: String?
         public var bankAccount: String?
+        /// Comma-separated account labels (legacy escape hatch next to account_ids); blank entries are
+        /// dropped and the list is capped at 50 entries.
+        public var bankAccounts: String?
+        /// Comma-separated category ids. Every element must be a plain base-10 integer in
+        /// 1..2147483647; a malformed element returns 400 VALIDATION_ERROR.
+        public var categoryIds: String?
         public var includeBalance: Bool?
         /// Comma-separated tag slugs — OR filter
         public var tags: String?
 
-        public init(startDate: String? = nil, endDate: String? = nil, accountId: Int? = nil, accountIds: String? = nil, bankAccount: String? = nil, includeBalance: Bool? = nil, tags: String? = nil) {
+        public init(startDate: String? = nil, endDate: String? = nil, accountId: Int? = nil, accountIds: String? = nil, bankAccount: String? = nil, bankAccounts: String? = nil, categoryIds: String? = nil, includeBalance: Bool? = nil, tags: String? = nil) {
             self.startDate = startDate
             self.endDate = endDate
             self.accountId = accountId
             self.accountIds = accountIds
             self.bankAccount = bankAccount
+            self.bankAccounts = bankAccounts
+            self.categoryIds = categoryIds
             self.includeBalance = includeBalance
             self.tags = tags
         }
@@ -1413,6 +1421,8 @@ extension OpenAPIOperations {
             if let accountId { items.append(URLQueryItem(name: "account_id", value: APIQuery.value(accountId))) }
             if let accountIds { items.append(URLQueryItem(name: "account_ids", value: APIQuery.value(accountIds))) }
             if let bankAccount { items.append(URLQueryItem(name: "bank_account", value: APIQuery.value(bankAccount))) }
+            if let bankAccounts { items.append(URLQueryItem(name: "bank_accounts", value: APIQuery.value(bankAccounts))) }
+            if let categoryIds { items.append(URLQueryItem(name: "category_ids", value: APIQuery.value(categoryIds))) }
             if let includeBalance { items.append(URLQueryItem(name: "include_balance", value: APIQuery.value(includeBalance))) }
             if let tags { items.append(URLQueryItem(name: "tags", value: APIQuery.value(tags))) }
             return items
@@ -1437,15 +1447,23 @@ extension OpenAPIOperations {
         /// Capped at 50 entries after validation.
         public var accountIds: String?
         public var bankAccount: String?
+        /// Comma-separated account labels (legacy escape hatch next to account_ids); blank entries are
+        /// dropped and the list is capped at 50 entries.
+        public var bankAccounts: String?
+        /// Comma-separated category ids. Every element must be a plain base-10 integer in
+        /// 1..2147483647; a malformed element returns 400 VALIDATION_ERROR.
+        public var categoryIds: String?
         /// Comma-separated tag slugs — OR filter
         public var tags: String?
 
-        public init(startDate: String? = nil, endDate: String? = nil, accountId: Int? = nil, accountIds: String? = nil, bankAccount: String? = nil, tags: String? = nil) {
+        public init(startDate: String? = nil, endDate: String? = nil, accountId: Int? = nil, accountIds: String? = nil, bankAccount: String? = nil, bankAccounts: String? = nil, categoryIds: String? = nil, tags: String? = nil) {
             self.startDate = startDate
             self.endDate = endDate
             self.accountId = accountId
             self.accountIds = accountIds
             self.bankAccount = bankAccount
+            self.bankAccounts = bankAccounts
+            self.categoryIds = categoryIds
             self.tags = tags
         }
 
@@ -1458,6 +1476,8 @@ extension OpenAPIOperations {
             if let accountId { items.append(URLQueryItem(name: "account_id", value: APIQuery.value(accountId))) }
             if let accountIds { items.append(URLQueryItem(name: "account_ids", value: APIQuery.value(accountIds))) }
             if let bankAccount { items.append(URLQueryItem(name: "bank_account", value: APIQuery.value(bankAccount))) }
+            if let bankAccounts { items.append(URLQueryItem(name: "bank_accounts", value: APIQuery.value(bankAccounts))) }
+            if let categoryIds { items.append(URLQueryItem(name: "category_ids", value: APIQuery.value(categoryIds))) }
             if let tags { items.append(URLQueryItem(name: "tags", value: APIQuery.value(tags))) }
             return items
         }

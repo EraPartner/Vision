@@ -7237,6 +7237,78 @@
         }
       }
     },
+    "importReview.legend.exact": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The name matched an existing payee."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "De naam kwam overeen met een bestaande ontvanger."
+          }
+        }
+      }
+    },
+    "importReview.legend.fuzzy": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The name is close to a known payee. Check it."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "De naam lijkt op een bekende ontvanger. Controleer dit."
+          }
+        }
+      }
+    },
+    "importReview.legend.new": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No payee exists yet. One is created on import."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Er bestaat nog geen ontvanger. Er wordt er een aangemaakt bij het importeren."
+          }
+        }
+      }
+    },
+    "importReview.legend.pattern": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A payee rule matched the description."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Een ontvangerregel kwam overeen met de omschrijving."
+          }
+        }
+      }
+    },
     "importReview.legend.title": {
       "comment": "Generated from i18n/source by scripts/native-strings.ts.",
       "extractionState": "manual",
@@ -7251,6 +7323,114 @@
           "stringUnit": {
             "state": "translated",
             "value": "Wat de labels betekenen"
+          }
+        }
+      }
+    },
+    "importReview.legend.unresolved": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No payee could be found. Choose one."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Er is geen ontvanger gevonden. Kies er een."
+          }
+        }
+      }
+    },
+    "importReview.match.exact": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exact match"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exacte overeenkomst"
+          }
+        }
+      }
+    },
+    "importReview.match.fuzzy": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Suggested match"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voorgestelde overeenkomst"
+          }
+        }
+      }
+    },
+    "importReview.match.new": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New payee"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nieuwe ontvanger"
+          }
+        }
+      }
+    },
+    "importReview.match.pattern": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rule match"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Overeenkomst via regel"
+          }
+        }
+      }
+    },
+    "importReview.match.unresolved": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Needs review"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Controle nodig"
           }
         }
       }

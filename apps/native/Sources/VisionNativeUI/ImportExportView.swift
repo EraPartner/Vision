@@ -5,10 +5,16 @@ import VisionNativeCore
 /// receipt, the bank import card with its dropzone, bank source, custom CSV setup, detected
 /// columns and progress, and Import history. Delete parser? and Roll back import? ask in
 /// alerts; the screen's unsaved-work guard covers a chosen file and an unsaved parser edit.
-// TODO(3d part B): the sidebar column with the export card and Setup and reference.
+/// The sidebar holds the export card and Setup and reference; below the wide breakpoint
+/// (the web's `xl`) it moves under the main column.
 public struct ImportExportView: View {
+    /// The width from which the sidebar sits beside the main column.
+    nonisolated static let sidebarBreakpoint: CGFloat = 960
+    nonisolated static let sidebarWidth: CGFloat = 360
+
     private let model: ImportsModel
     private let shell: NativeShellModel
+    @State private var isWide = true
     @Environment(\.visionTheme) private var theme
 
     public init(model: ImportsModel, shell: NativeShellModel) {
@@ -28,16 +34,24 @@ public struct ImportExportView: View {
                     model.dismissCommitReceipt()
                 }
             }
-            HStack(alignment: .top, spacing: 24) {
-                VStack(alignment: .leading, spacing: 24) {
-                    ImportBankCard(model: model, strings: strings)
-                    ImportHistoryCard(model: model, strings: strings) { batchId in
-                        shell.navigate(to: ImportRoutes.reviewPath(batchId))
-                    }
+            if isWide {
+                HStack(alignment: .top, spacing: 24) {
+                    mainColumn
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                    sidebar
+                        .frame(width: Self.sidebarWidth, alignment: .topLeading)
                 }
-                .frame(maxWidth: .infinity, alignment: .topLeading)
-                // TODO(3d part B): `ExportCard` and the collapsible Setup and reference card.
+            } else {
+                VStack(alignment: .leading, spacing: 24) {
+                    mainColumn
+                    sidebar
+                }
             }
+        }
+        .onGeometryChange(for: Bool.self) { proxy in
+            proxy.size.width >= Self.sidebarBreakpoint
+        } action: { wide in
+            isWide = wide
         }
         .task { await model.appear(strings: strings) }
         .onAppear { shell.setLeaveGuard(model.leaveGuard) }
@@ -51,9 +65,7 @@ public struct ImportExportView: View {
             model.didHandleNavigation()
         }
         .overlay(alignment: .bottom) {
-            ActionToast(
-                notice: model.notice, strings: strings, actionTitle: nil, duration: ImportsModel.noticeDuration,
-                action: {}, clear: { model.clearNotice($0) })
+            ImportToastStack(center: model.toasts, strings: strings) { route in shell.navigate(to: route) }
         }
         // `useConfirmDialog`, destructive. The buttons decide; the binding only reads.
         .alert(
@@ -82,6 +94,23 @@ public struct ImportExportView: View {
                         "importHistory.rollbackDesc",
                         ["n": String(batch.transactionsRemaining), "file": batch.title(strings)]))
             }
+        }
+    }
+
+    private var mainColumn: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            ImportBankCard(model: model, strings: strings)
+            ImportHistoryCard(model: model, strings: strings) { batchId in
+                shell.navigate(to: ImportRoutes.reviewPath(batchId))
+            }
+        }
+    }
+
+    /// The `aside`: the export card, then Setup and reference.
+    private var sidebar: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            ImportExportCard(model: model.export, settings: shell.settings, strings: strings)
+            ImportSetupReferenceCard(model: model, strings: strings)
         }
     }
 

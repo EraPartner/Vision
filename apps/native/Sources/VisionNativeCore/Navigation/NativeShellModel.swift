@@ -172,6 +172,14 @@ public final class NativeShellModel {
         send(next)
     }
 
+    /// `navigate(url, { replace: true })` from a native screen (Review import's Commit and
+    /// Discard): the page replaces its history entry and reports the new route.
+    public func replace(with url: String) {
+        guard let next = NativeRoute(url) else { return }
+        pendingRoute = next
+        onNavigate(.replaceRoute(next.string))
+    }
+
     private func send(_ next: NativeRoute) {
         pendingRoute = next
         onNavigate(.navigate(next.string))

@@ -73,6 +73,76 @@ actor StaticImportService: ImportService {
     func rollbackImportBatch(id: Int) async throws -> Int { 37 }
 }
 
+extension StaticImportService: ImportExportService {
+    func exportTransactions(_ format: ExportFormat, filters: ExportFilters) async throws -> Data {
+        if failing { throw APIError.network("offline") }
+        return Data("Date,Amount\n".utf8)
+    }
+
+    func bankAccountLabels() async throws -> [String] { ["BE00 1234 5678 9012", "Spaarrekening"] }
+
+    func importRecipientsCSV(file: ImportFile, separator: String, encoding: String) async throws -> SimpleImportResult {
+        if failing { throw APIError.network("offline") }
+        return SimpleImportResult(totalProcessed: 12, imported: 10, skipped: 1, errors: 1)
+    }
+
+    func importCategoriesCSV(file: ImportFile, separator: String, encoding: String) async throws -> SimpleImportResult {
+        SimpleImportResult(totalProcessed: 4, imported: 4, skipped: 0, errors: 0)
+    }
+}
+
+extension StaticImportService: ImportReviewService {
+    static let preview = ImportPreview(
+        batchId: 13,
+        groups: [
+            ImportPreviewGroup(
+                recipientId: 1, recipientName: "Landlord", currentCategoryId: 7, currentCategoryLabel: "Housing / Energy",
+                rowCount: 2,
+                rows: [
+                    ImportStagingRow(
+                        id: "501", recipientRaw: "HUISBAAS NV OVERSCHRIJVING HUUR OKTOBER", amount: "-950.00",
+                        currency: "EUR", txDate: "2026-10-01", memo: "Huur oktober 2026 appartement", bankAccount: "BE00 1234",
+                        matchSource: "exact"),
+                    ImportStagingRow(
+                        id: "502", recipientRaw: "HUISBAAS NV", amount: "-950.00", currency: "EUR", txDate: "2026-09-01",
+                        memo: nil, bankAccount: "BE00 1234", matchSource: "fuzzy", matchSimilarity: 0.86),
+                ]),
+            ImportPreviewGroup(
+                recipientName: nil, matchedPatternText: "WERKGEVER*", rowCount: 1,
+                rows: [
+                    ImportStagingRow(
+                        id: "503", recipientRaw: "WERKGEVER BV", amount: "2500.00", currency: nil, txDate: "2026-10-25",
+                        memo: "Loon", bankAccount: "Nieuwe rekening", matchSource: nil)
+                ]),
+            ImportPreviewGroup(
+                recipientId: 2, recipientName: "Streaming service", rowCount: 1,
+                rows: [
+                    ImportStagingRow(
+                        id: "504", recipientRaw: "STREAM", amount: "-12.99", txDate: "2026-10-05", matchSource: "pattern")
+                ]),
+        ],
+        totals: ["exact": 1, "fuzzy": 1, "pattern": 1, "new": 0, "unresolved": 1])
+
+    func importPreview(batchId: Int) async throws -> ImportPreview {
+        if failing { throw APIError.client(APIClientError(status: 404, code: .notFound, message: "Batch not found")) }
+        return Self.preview
+    }
+
+    func overrideImportRow(batchId: Int, rowId: String, recipientId: Int?) async throws {}
+
+    func overrideImportRowCategory(batchId: Int, rowId: String, categoryId: Int?) async throws {}
+
+    func setRecipientDefaultCategory(recipientId: Int, categoryId: Int) async throws {}
+
+    func commitImportBatch(batchId: Int) async throws -> ImportCommitResult {
+        ImportCommitResult(imported: 4, duplicates: 0, errors: 0, autoLinkedCount: 1)
+    }
+
+    func discardImportBatch(batchId: Int) async throws {}
+
+    func allAccounts() async throws -> [OpenAPI.Account] { [] }
+}
+
 actor StaticRatesService: ExchangeRatesService {
     let result: OpenAPI.ExchangeRates
 
@@ -443,7 +513,7 @@ extension StaticPlannedService: PickerDataService {
                 token: AdminTokenAccess(read: { "token" }, write: { _ in true }), audit: StaticAuditHistory()),
             planned: PlannedPaymentsModel(
                 service: planned, editing: planned, pickers: planned, rates: rates, dismissals: .memory()),
-            imports: ImportsModel(service: imports),
+            imports: ImportsModel(service: imports, exports: imports, review: imports, pickers: planned),
             loadSettings: { NativeAppSettings(adminMode: adminMode) },
             onNavigate: { _ in })
     }
@@ -857,4 +927,85 @@ extension StaticPlannedService: PickerDataService {
         #expect(layOutImports(failing).fittingSize.height > 0)
     }
 
+
+    @Test(arguments: [NativeLanguage.en, .nl], [ThemeAppearance.light, .dark])
+    func theImportSidebarLaysOutWithFiltersAndReferenceCards(_ language: NativeLanguage, _ appearance: ThemeAppearance)
+        async throws
+    {
+        let shell = makeShell(language: language, appearance: appearance)
+        let model = shell.imports
+        shell.routeDidChange(try #require(NativeRoute("/import")))
+        await model.appear(strings: shell.strings)
+        // The export card with its filters open and some picked, then exporting.
+        await model.export.toggleFilters()
+        #expect(model.export.showsFilters)
+        #expect(model.export.bankAccounts.count == 2)
+        model.export.filters.startDate = PlannedDay(year: 2026, month: 1, day: 1)
+        model.export.toggleBankAccount("Spaarrekening")
+        model.export.toggleCategory(7)
+        #expect(model.export.filters.categoryIds == [7])
+        #expect(layOutImports(shell).fittingSize.height > 0)
+        // Setup and reference open: a payee file with its result, the category card, the banks.
+        model.toggleSetupReference()
+        #expect(model.isSetupReferenceExpanded)
+        model.recipientsCSV.chooseFile(ImportFile(name: "begunstigden.csv", data: StaticImportService.csv, mimeType: "text/csv"))
+        #expect(layOutImports(shell).fittingSize.height > 0)
+        await model.recipientsCSV.startImport(strings: shell.strings)
+        #expect(model.recipientsCSV.result?.imported == 10)
+        model.categoriesCSV.chooseFile(ImportFile(name: "categorieen.csv", data: StaticImportService.csv, mimeType: "text/csv"))
+        #expect(layOutImports(shell).fittingSize.height > 0)
+        // A narrow window stacks the sidebar under the main column.
+        let narrow = NSHostingView(
+            rootView: ImportExportView(model: model, shell: shell)
+                .environment(\.visionTheme, VisionTheme(selection: shell.theme)))
+        narrow.frame = NSRect(x: 0, y: 0, width: 720, height: 760)
+        narrow.layoutSubtreeIfNeeded()
+        #expect(narrow.fittingSize.height > 0)
+        // Loading lists: the Supported banks badge says so.
+        let loading = makeShell(language: language, appearance: appearance, imports: StaticImportService(hangs: true))
+        loading.imports.toggleSetupReference()
+        #expect(loading.imports.isLoadingAdapters)
+        #expect(layOutImports(loading).fittingSize.height > 0)
+    }
+
+    func layOutReview(_ shell: NativeShellModel, batchId: Int = 13) -> NSHostingView<some View> {
+        layOut(
+            ImportReviewView(model: shell.imports.review, toasts: shell.imports.toasts, batchId: batchId, shell: shell)
+                .environment(\.visionTheme, VisionTheme(selection: shell.theme)))
+    }
+
+    @Test(arguments: [NativeLanguage.en, .nl], [ThemeAppearance.light, .dark])
+    func theReviewScreenLaysOutLoadingLoadedOpenAndOnErrors(_ language: NativeLanguage, _ appearance: ThemeAppearance)
+        async throws
+    {
+        let shell = makeShell(language: language, appearance: appearance)
+        let review = shell.imports.review
+        shell.routeDidChange(try #require(NativeRoute("/import/13/review")))
+        // Loading.
+        #expect(review.isLoading)
+        #expect(layOutReview(shell).fittingSize.width > 0)
+        // Loaded: the legend, the accounts with a new one, the collapsed groups.
+        await review.appear(batchId: 13)
+        #expect(review.preview?.groups.count == 3)
+        #expect(review.newAccountCount == 2)
+        #expect(review.totalRows == 4)
+        #expect(layOutReview(shell).fittingSize.height > 0)
+        // Every group open, one saving, the discard alert up.
+        for group in StaticImportService.preview.groups { review.setExpanded(group, true) }
+        review.setPersistDefault(false, for: StaticImportService.preview.groups[0])
+        review.requestDiscard()
+        #expect(review.isDiscardConfirmationPresented)
+        #expect(layOutReview(shell).fittingSize.height > 0)
+        review.cancelDiscard()
+        // Committing hands the receipt to /import and leaves toasts with an action.
+        await review.commit(strings: shell.strings)
+        #expect(shell.imports.commitReceipt?.imported == 4)
+        #expect(shell.imports.toasts.notices.count == 3)
+        #expect(layOutImports(shell).fittingSize.height > 0)
+        // The error state with Retry.
+        let failing = makeShell(language: language, appearance: appearance, imports: StaticImportService(failing: true))
+        await failing.imports.review.appear(batchId: 13)
+        #expect(failing.imports.review.showsError)
+        #expect(layOutReview(failing).fittingSize.height > 0)
+    }
 }

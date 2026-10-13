@@ -275,6 +275,42 @@ public struct APIClient: Sendable {
         throw lastError
     }
 
+    /// `requestBlob`: a file the endpoint answers with (an export) instead of a JSON envelope.
+    /// One attempt, like the web's `rawFetch`; a non-2xx answer throws its failure envelope
+    /// with `fallbackMessage`.
+    public func download<Operation: APIOperation>(_ operation: Operation, fallbackMessage: String = "Export failed")
+        async throws -> Data
+    {
+        let label = "\(Operation.method.rawValue) \(operation.path)"
+        guard let base = await baseURL() else { throw APIError.backendUnavailable }
+        guard let url = Self.url(base: base, path: operation.path, queryItems: operation.queryItems) else {
+            throw APIError.invalidRequest(label)
+        }
+        let body: Data?
+        do {
+            body = try operation.encodedBody()
+        } catch {
+            throw APIError.invalidRequest(label)
+        }
+        let headers = await requestHeaders(contentType: operation.contentType)
+        let request = APIRequest(method: Operation.method, url: url, headers: headers, body: body, timeout: timeout)
+        let response: APIResponse
+        do {
+            response = try await transport.send(request)
+        } catch let error as APIError {
+            throw error
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            throw APIError.network(error.localizedDescription)
+        }
+        guard (200..<300).contains(response.status) else {
+            throw APIError.client(
+                Self.envelopeError(status: response.status, body: response.body, fallbackMessage: fallbackMessage))
+        }
+        return response.body
+    }
+
     /// The idle timeout of an event stream: the web's stream `fetch` has none, and a large
     /// file can stage for a while between progress events.
     public static let streamTimeout: TimeInterval = 600

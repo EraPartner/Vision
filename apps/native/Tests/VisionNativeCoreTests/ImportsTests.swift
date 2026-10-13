@@ -171,11 +171,23 @@ enum ImportFixture {
     }
 
     @MainActor
-    static func model(_ service: FakeImportService = FakeImportService(), clock: ImportClock = ImportClock())
-        -> ImportsModel
-    {
-        ImportsModel(service: service, now: { clock.now })
+    static func model(
+        _ service: FakeImportService = FakeImportService(), clock: ImportClock = ImportClock(),
+        exports: FakeImportExportService = FakeImportExportService(),
+        review: FakeImportReviewService = FakeImportReviewService(),
+        pickers: FakePickerService = FakePickerService()
+    ) -> ImportsModel {
+        ImportsModel(
+            service: service, exports: exports, review: review, pickers: pickers, now: { clock.now },
+            calendar: ImportFixture.calendar)
     }
+
+    /// A fixed Brussels calendar, so the export's day does not depend on the runner.
+    static let calendar: Calendar = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Europe/Brussels") ?? .gmt
+        return calendar
+    }()
 
     @MainActor
     static func idleModel() -> ImportsModel {
@@ -674,7 +686,7 @@ enum ImportFixture {
         #expect(ImportRoutes.reviewBatchId(forPath: "/import/١٢/review") == nil)
     }
 
-    @Test func importIsANativeScreenForEveryoneAndReviewWaitsForPartB() {
+    @Test func importAndItsReviewAreNativeScreensForEveryone() {
         #expect(NativeScreen.screen(forPath: "/import") == .importExport)
         #expect(!NativeScreen.importExport.requiresAdmin)
         #expect(NativeScreen.importExport.path == "/import")

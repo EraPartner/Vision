@@ -8386,6 +8386,21 @@ paths:
           schema:
             type: string
         - in: query
+          name: bank_accounts
+          description: >-
+            Comma-separated account labels (legacy escape hatch next to account_ids); blank
+            entries are dropped and the list is capped at 50 entries.
+          schema:
+            type: string
+        - in: query
+          name: category_ids
+          description: >-
+            Comma-separated category ids. Every element must be a plain base-10 integer in
+            1..2147483647; a malformed element returns 400 VALIDATION_ERROR.
+          schema:
+            type: string
+            pattern: "^[0-9]+(,[0-9]+)*$"
+        - in: query
           name: include_balance
           schema:
             type: boolean
@@ -8439,6 +8454,21 @@ paths:
           name: bank_account
           schema:
             type: string
+        - in: query
+          name: bank_accounts
+          description: >-
+            Comma-separated account labels (legacy escape hatch next to account_ids); blank
+            entries are dropped and the list is capped at 50 entries.
+          schema:
+            type: string
+        - in: query
+          name: category_ids
+          description: >-
+            Comma-separated category ids. Every element must be a plain base-10 integer in
+            1..2147483647; a malformed element returns 400 VALIDATION_ERROR.
+          schema:
+            type: string
+            pattern: "^[0-9]+(,[0-9]+)*$"
         - in: query
           name: tags
           schema:

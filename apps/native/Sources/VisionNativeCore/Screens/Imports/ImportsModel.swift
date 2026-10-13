@@ -4,11 +4,9 @@ import Observation
 /// The state of the Import & export page (`ImportPage` with `TransactionImportCard` and
 /// `ImportHistoryCard`): the commit receipt, the bank import card (file, bank source, the
 /// custom CSV setup with saved parsers, the import with its progress panel), and Import
-/// history with Roll back.
-///
-/// The export card and the Setup and reference card are phase 3d part B.
-// TODO(3d part B): the export card (filters, Export CSV / Export JSON through the save panel),
-// Setup and reference (Payees and Categories from CSV, Supported banks).
+/// history with Roll back; in the sidebar the export card and the collapsible Setup and
+/// reference card (Payees and Categories from CSV, Supported banks). It also owns the Review
+/// import page's model, whose commit hands its receipt back here.
 @MainActor
 @Observable
 public final class ImportsModel {
@@ -78,14 +76,27 @@ public final class ImportsModel {
 
     /// The receipt a review commit handed over (`importCommitReceipt`).
     public private(set) var commitReceipt: ImportCommitReceipt?
-    public private(set) var notice: ScreenNotice?
+    /// The Setup and reference card is open (collapsed by default).
+    public private(set) var isSetupReferenceExpanded = false
     /// A navigation the page asks the shell for (the review of a parked import); the view
     /// performs it and calls `didHandleNavigation()`.
     public private(set) var navigationRequest: String?
 
+    // MARK: Sidebar and review
+
+    /// The toasts this page and the review page share.
+    public let toasts: ImportNoticeCenter
+    /// The export card.
+    public let export: TransactionExportModel
+    /// Payees from CSV.
+    public let recipientsCSV: SimpleCSVImportModel
+    /// Categories from CSV.
+    public let categoriesCSV: SimpleCSVImportModel
+    /// `/import/:batchId/review`.
+    public let review: ImportReviewModel
+
     @ObservationIgnored private let service: any ImportService
     @ObservationIgnored private let now: @Sendable () -> Date
-    @ObservationIgnored private var notices = NoticeCounter()
     @ObservationIgnored private var bypassNextNavigation = false
     @ObservationIgnored private var isVisible = false
     @ObservationIgnored private var pendingHandoff: (file: ImportFile, expiresAt: Date)?
@@ -100,9 +111,21 @@ public final class ImportsModel {
     @ObservationIgnored private var previewCache: (key: PreviewKey, value: CSVPreview?)?
     @ObservationIgnored private var separatorCache: (file: UUID, separator: String)?
 
-    public init(service: any ImportService, now: @escaping @Sendable () -> Date = { Date() }) {
+    public init(
+        service: any ImportService, exports: any ImportExportService, review: any ImportReviewService,
+        pickers: any PickerDataService, now: @escaping @Sendable () -> Date = { Date() }, calendar: Calendar = .current
+    ) {
+        let toasts = ImportNoticeCenter()
         self.service = service
         self.now = now
+        self.toasts = toasts
+        self.export = TransactionExportModel(
+            service: exports, pickers: pickers, toasts: toasts, now: now, calendar: calendar)
+        self.recipientsCSV = SimpleCSVImportModel(kind: .recipients, service: exports, toasts: toasts)
+        self.categoriesCSV = SimpleCSVImportModel(kind: .categories, service: exports, toasts: toasts)
+        self.review = ImportReviewModel(service: review, pickers: pickers, toasts: toasts)
+        self.review.onCommitted = { [weak self] receipt in self?.showCommitReceipt(receipt) }
+        self.review.onHistoryChanged = { [weak self] in self?.invalidateHistory() }
     }
 
     // MARK: Lifecycle
@@ -126,6 +149,10 @@ public final class ImportsModel {
         pendingParserDelete = nil
         pendingRollback = nil
         commitReceipt = nil
+        isSetupReferenceExpanded = false
+        export.reset()
+        recipientsCSV.reset()
+        categoriesCSV.reset()
         historyOffset = 0
         if let cached = historyCache[0] { historyPage = cached.page }
         if !isImporting { resetCard(keepingProgress: false) }
@@ -627,6 +654,12 @@ public final class ImportsModel {
         await fetchHistory(historyOffset, strings: strings)
     }
 
+    /// The review page committed or discarded a batch: the next visit loads Import history
+    /// again.
+    func invalidateHistory() {
+        historyCache = [:]
+    }
+
     /// Previous: back ten batches.
     public func showPreviousPage(strings: any Localizing) async {
         guard canShowPreviousPage else { return }
@@ -705,7 +738,6 @@ public final class ImportsModel {
     // MARK: Commit receipt
 
     /// The review page committed a parked import and returned here with its receipt.
-    // TODO(3d part B): the native Review import screen's Commit calls this before navigating.
     public func showCommitReceipt(_ receipt: ImportCommitReceipt) {
         commitReceipt = receipt
     }
@@ -715,16 +747,26 @@ public final class ImportsModel {
         commitReceipt = nil
     }
 
+    // MARK: Setup and reference
+
+    /// The chevron of Setup and reference.
+    public func toggleSetupReference() {
+        isSetupReferenceExpanded.toggle()
+    }
+
     // MARK: Toasts
 
+    /// The newest toast.
+    public var notice: ScreenNotice? { toasts.latest }
+
     public func clearNotice(_ id: Int) {
-        if notice?.id == id { notice = nil }
+        toasts.clear(id)
     }
 
     private func post(
         _ kind: ScreenNotice.Kind, _ key: String, _ variables: [String: String] = [:], detail: String? = nil
     ) {
-        notice = notices.make(kind, key, variables, detail: detail)
+        toasts.post(kind, key, variables, detail: detail)
     }
 }
 

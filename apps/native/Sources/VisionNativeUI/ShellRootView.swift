@@ -237,10 +237,8 @@ struct NativeScreenContainer: View {
             PlannedPaymentsView(model: model.planned, shell: model)
         case .importExport:
             ImportExportView(model: model.imports, shell: model)
-        case .importReview:
-            // TODO(3d part B): the native Review import screen. `ImportRoutes.reviewIsNative`
-            // keeps this route on the web app until then.
-            EmptyView()
+        case .importReview(let batchId):
+            ImportReviewView(model: model.imports.review, toasts: model.imports.toasts, batchId: batchId, shell: model)
         }
     }
 }

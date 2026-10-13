@@ -11092,6 +11092,10 @@ export interface operations {
                 /** @description Comma-separated account ids (exact FK match, ADR-088); preferred over bank_accounts. Every element must be a plain base-10 integer in 1..2147483647; a malformed element returns 400 VALIDATION_ERROR rather than being dropped, which used to widen the export to every account. Capped at 50 entries after validation. */
                 account_ids?: string;
                 bank_account?: string;
+                /** @description Comma-separated account labels (legacy escape hatch next to account_ids); blank entries are dropped and the list is capped at 50 entries. */
+                bank_accounts?: string;
+                /** @description Comma-separated category ids. Every element must be a plain base-10 integer in 1..2147483647; a malformed element returns 400 VALIDATION_ERROR. */
+                category_ids?: string;
                 include_balance?: boolean;
                 /** @description Comma-separated tag slugs — OR filter */
                 tags?: string;
@@ -11123,6 +11127,10 @@ export interface operations {
                 /** @description Comma-separated account ids (exact FK match, ADR-088); preferred over bank_accounts. Every element must be a plain base-10 integer in 1..2147483647; a malformed element returns 400 VALIDATION_ERROR rather than being dropped, which used to widen the export to every account. Capped at 50 entries after validation. */
                 account_ids?: string;
                 bank_account?: string;
+                /** @description Comma-separated account labels (legacy escape hatch next to account_ids); blank entries are dropped and the list is capped at 50 entries. */
+                bank_accounts?: string;
+                /** @description Comma-separated category ids. Every element must be a plain base-10 integer in 1..2147483647; a malformed element returns 400 VALIDATION_ERROR. */
+                category_ids?: string;
                 /** @description Comma-separated tag slugs — OR filter */
                 tags?: string;
             };

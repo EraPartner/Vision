@@ -679,7 +679,8 @@ removes the parameter, like `useSearchParamState` writing its default.
 that way. Every native screen waits for the first `app_settings` answer and shows the web view until
 then. The native shell never redirects: an admin route shows a native screen only while
 `app_settings` says admin mode is on, and otherwise the web view, where `RequireAdmin` redirects and
-reports the new route. Screens outside the admin section (`/planned`, `/import`) are native in
+reports the new route. Screens outside the admin section (`/planned`, `/import`,
+`/import/:batchId/review`) are native in
 either mode. The page's topbar keeps its traffic-light inset only while the native sidebar is
 hidden (`native-sidebar`).
 
@@ -775,18 +776,23 @@ baseline of its last read. Track creates the planned payment directly. The share
 
 ### Import & export (phase 3d)
 
-`/import` is native without admin mode
-([[docs/reference/native-parity/imports|imports parity]], [[docs/api/imports|imports API]]); part A
-draws the commit receipt, the bank import card and Import history, and part B adds the export
-card, Setup and reference and `/import/:batchId/review` (`ImportRoutes.reviewIsNative`; until then
-the review route stays in the web app). `ImportsModel` loads the built-in adapters once, the saved
+`/import` and `/import/:batchId/review` are native without admin mode
+([[docs/reference/native-parity/imports|imports parity]], [[docs/api/imports|imports API]]): the
+commit receipt, the bank import card, Import history, the export card, Setup and reference and the
+Review import screen (`ImportRoutes.reviewIsNative`). The export card downloads the raw body through
+`APIClient.download` and hands it to `TransactionExportModel.save`, which the app target implements
+with an `NSSavePanel`. The review model (`ImportReviewModel`) sends one override request per row
+when a group's payee or category changes, then reloads the preview; Commit and Discard replace the
+route with `/import` (`NativeShellModel.replace(with:)`) and the commit hands its receipt to
+`ImportsModel.showCommitReceipt`. One `ImportNoticeCenter` stacks the toasts of both pages. `ImportsModel` loads the built-in adapters once, the saved
 parsers (one-minute stale time) and the history pages (ten per page, 30-second stale time), each
 with one request in flight. A built-in bank streams `POST /api/import/csv/stream` through
 `APIClient.streamEvents`: a hand-written `multipart/form-data` body (`MultipartFormData`), the
 response read as Server-Sent Events (`ServerSentEventParser`, the web's `readSseFrames`) over the
 `APIStreamTransport` seam, and Cancel cancels the task, which closes the connection. A custom or
 saved parser posts one `POST /api/import/csv/custom` (`ImportCsvCustomRequest`). The generator
-writes JSON bodies only, so these two and the payee and category imports stay hand-written.
+writes JSON bodies only, so these two and the payee and category imports stay hand-written, as
+do the review's preview, override and commit requests (the override body sends an explicit `null`).
 `CSVPreview` reads the detected columns and sample rows from the first 16 KB of the file on the
 Mac, like `useCsvPreview`. A batch that needs review navigates to its review route without the
 Leave this page? alert; a chosen file or an unsaved parser edit otherwise registers the shell's

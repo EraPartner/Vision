@@ -71,6 +71,12 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         // The rates page and the planned payments page share one rates cache, like the web's
         // shared query key.
         let rates = ExchangeRatesModel(service: client)
+        let imports = ImportsModel(service: client, exports: client, review: client, pickers: client)
+        // `downloadBlob`: the export asks where to save, under the web's file name.
+        imports.export.save = { [weak self] data, name in
+            guard let self else { return false }
+            return try await self.saveExport(data, suggestedName: name)
+        }
         return NativeShellModel(
             strings: CatalogStrings(language: strings.language),
             theme: ThemeSelection.resolve(
@@ -79,7 +85,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             admin: AdminScreens.make(
                 service: client, database: client, token: makeAdminTokenAccess(), audit: auditChannels),
             planned: PlannedPaymentsModel(service: client, editing: client, pickers: client, rates: rates),
-            imports: ImportsModel(service: client),
+            imports: imports,
             hiddenSections: Self.loadHiddenSections(),
             loadSettings: { try await client.appSettings() },
             saveHiddenSections: { Self.saveHiddenSections($0) },
@@ -862,6 +868,19 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             response = alert.runModal()
         }
         return response == .alertFirstButtonReturn
+    }
+
+    /// The export card's file: a Save panel with the suggested name, then the bytes are
+    /// written. `false` when the user cancels.
+    private func saveExport(_ data: Data, suggestedName: String) async throws -> Bool {
+        let panel = NSSavePanel()
+        panel.canCreateDirectories = true
+        panel.nameFieldStringValue = suggestedName
+        let fileExtension = (suggestedName as NSString).pathExtension
+        if let type = UTType(filenameExtension: fileExtension) { panel.allowedContentTypes = [type] }
+        guard await runPanel(panel) == .OK, let url = panel.url else { return false }
+        try data.write(to: url, options: .atomic)
+        return true
     }
 
     /// `dialog.showSaveDialog`.

@@ -14,6 +14,10 @@ struct ActionToast: View {
     let duration: Duration
     let action: () -> Void
     let clear: (Int) -> Void
+    /// ⌘Z runs the action (an Undo); off for an action that is not one.
+    var bindsUndoShortcut = true
+    /// Lifts a stacked toast above the newer ones.
+    var bottomPadding: CGFloat = 20
     @Environment(\.visionTheme) var theme
 
     var body: some View {
@@ -36,11 +40,13 @@ struct ActionToast: View {
                         .background {
                             // The shortcut lives on its own invisible button so a click on Undo
                             // still acts while a field keeps focus; only the key checks typing.
-                            Button("", action: undoShortcut)
-                                .keyboardShortcut("z", modifiers: .command)
-                                .opacity(0)
-                                .frame(width: 0, height: 0)
-                                .accessibilityHidden(true)
+                            if bindsUndoShortcut {
+                                Button("", action: undoShortcut)
+                                    .keyboardShortcut("z", modifiers: .command)
+                                    .opacity(0)
+                                    .frame(width: 0, height: 0)
+                                    .accessibilityHidden(true)
+                            }
                         }
                 }
             }
@@ -49,7 +55,7 @@ struct ActionToast: View {
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.card))
             .foregroundStyle(notice.kind == .error ? theme.destructive : theme.foreground)
             .frame(maxWidth: 560)
-            .padding(.bottom, 20)
+            .padding(.bottom, bottomPadding)
             .transition(.move(edge: .bottom).combined(with: .opacity))
             .accessibilityElement(children: .contain)
             .task(id: notice.id) {

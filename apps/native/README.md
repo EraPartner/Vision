@@ -150,12 +150,14 @@ See [the architecture page](../../docs/architecture/native-app.md#native-navigat
   match suggestions banner's Review opens it for the first suggestion, and the recurring detection
   panel tracks a pattern as a planned payment or dismisses it (kept on this Mac and in the
   `dismissed_recurring_patterns` setting).
-- `/import` is native in every mode once `app_settings` has loaded (phase 3d part A): the bank
-  import card (dropzone, bank source, custom CSV setup and saved parsers, detected columns, live
-  progress for built-in banks) and Import history. A CSV opened from Finder or the dock, or dropped
-  on a native screen, pre-fills the card. A chosen file or an unsaved parser edit holds navigation
-  and Quit behind the Leave this page? alert. The export card, Setup and reference and the review
-  page still run in the web view until part B.
+- `/import` and `/import/:batchId/review` are native in every mode once `app_settings` has loaded
+  (phase 3d): the bank import card (dropzone, bank source, custom CSV setup and saved parsers,
+  detected columns, live progress for built-in banks), Import history, the export card (filters,
+  Export CSV or JSON through a save panel) and Setup and reference (supported banks, payees and
+  categories from CSV). The review page groups the rows by payee, applies a payee or category to
+  every row of a group, and commits or discards the batch. A CSV opened from Finder or the dock, or
+  dropped on a native screen, pre-fills the card. A chosen file or an unsaved parser edit holds
+  navigation and Quit behind the Leave this page? alert.
 - To add a screen: list its operations and keys, run `bun run native:generate`, add a model in
   `Sources/VisionNativeCore/Screens/`, a view in `Sources/VisionNativeUI/`, and a `NativeScreen`
   case for its route. Pass the model to `NativeShellModel` in `ShellController.makeShellModel` and

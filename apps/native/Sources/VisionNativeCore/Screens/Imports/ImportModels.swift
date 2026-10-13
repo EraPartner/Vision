@@ -5,10 +5,8 @@ import UniformTypeIdentifiers
 public enum ImportRoutes {
     public static let path = "/import"
 
-    /// `/import/:batchId/review` draws natively from phase 3d part B; until then the web app
-    /// shows it.
-    // TODO(3d part B): set to true with the native Review import screen.
-    public static let reviewIsNative = false
+    /// `/import/:batchId/review` draws natively (phase 3d part B).
+    public static let reviewIsNative = true
 
     /// `/import/{batchId}/review`.
     public static func reviewPath(_ batchId: Int) -> String {

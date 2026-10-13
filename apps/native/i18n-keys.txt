@@ -694,6 +694,16 @@ importReview.discarding
 importReview.groups.desc
 importReview.groups.title
 importReview.legend.title
+importReview.legend.exact
+importReview.legend.fuzzy
+importReview.legend.new
+importReview.legend.pattern
+importReview.legend.unresolved
+importReview.match.exact
+importReview.match.fuzzy
+importReview.match.new
+importReview.match.pattern
+importReview.match.unresolved
 importReview.newRecipient
 importReview.pattern
 importReview.persistDefault
