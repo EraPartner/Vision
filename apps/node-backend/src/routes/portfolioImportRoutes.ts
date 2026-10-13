@@ -34,6 +34,7 @@ import {
   assertPortfolioUploadSupported,
 } from "../lib/portfolioUpload.ts";
 import { streamImport } from "../lib/importProgress.ts";
+import { registerPortfolioImportProbeRoute } from "./portfolioImportProbeRoutes.ts";
 import { runPortfolioImportPipeline } from "../services/portfolioImportPipeline/index.ts";
 import { VALID_PORTFOLIO_TXN_TYPES } from "../lib/portfolioTxnTypes.ts";
 import {
@@ -64,6 +65,8 @@ const router = Router();
 
 const PARSER_KIND = "portfolio";
 const MAX_BULK_RESOLUTION_ROWS = 5000;
+
+registerPortfolioImportProbeRoute(router);
 
 // The raw label → canonical type map is only shape-checked here; the type
 // normalizer rejects any mapped value that is not a valid canonical type.

@@ -335,6 +335,352 @@ extension OpenAPI {
         }
     }
 
+    public struct BelgianPortfolioTaxAssetCosts: Codable, Equatable, Sendable {
+        public let assetClass: String
+        public let taxes: Decimal
+        public let fees: Decimal
+        public let total: Decimal
+
+        public init(assetClass: String, taxes: Decimal, fees: Decimal, total: Decimal) {
+            self.assetClass = assetClass
+            self.taxes = taxes
+            self.fees = fees
+            self.total = total
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case assetClass = "assetClass"
+            case taxes = "taxes"
+            case fees = "fees"
+            case total = "total"
+        }
+    }
+
+    /// Percent-valued display badges, computed by TypeScript from the fraction-valued rates.
+    public struct BelgianPortfolioTaxBadgePercent: Codable, Equatable, Sendable {
+        public let securitiesAccountTaxRate: Decimal
+        public let capitalGainsTaxRate: Decimal
+        public let reyndersTaxRate: Decimal
+        public let dividendWHTRate: Decimal
+
+        public init(securitiesAccountTaxRate: Decimal, capitalGainsTaxRate: Decimal, reyndersTaxRate: Decimal, dividendWHTRate: Decimal) {
+            self.securitiesAccountTaxRate = securitiesAccountTaxRate
+            self.capitalGainsTaxRate = capitalGainsTaxRate
+            self.reyndersTaxRate = reyndersTaxRate
+            self.dividendWHTRate = dividendWHTRate
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case securitiesAccountTaxRate = "securitiesAccountTaxRate"
+            case capitalGainsTaxRate = "capitalGainsTaxRate"
+            case reyndersTaxRate = "reyndersTaxRate"
+            case dividendWHTRate = "dividendWHTRate"
+        }
+    }
+
+    public struct BelgianPortfolioTaxCostEntry: Codable, Equatable, Sendable {
+        public let nameKey: String
+        public let value: Decimal
+
+        public init(nameKey: String, value: Decimal) {
+            self.nameKey = nameKey
+            self.value = value
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case nameKey = "nameKey"
+            case value = "value"
+        }
+    }
+
+    public struct BelgianPortfolioTaxDashboard: Codable, Equatable, Sendable {
+        public let year: Int
+        public let currency: String
+        public let isEmpty: Bool
+        public let hasProfile: Bool
+        public let hasInKindIncomeUnclassified: Bool
+        public let totals: OpenAPI.BelgianPortfolioTaxTotals
+        public let taxBreakdown: [OpenAPI.BelgianPortfolioTaxCostEntry]
+        public let feeBreakdown: [OpenAPI.BelgianPortfolioTaxCostEntry]
+        public let taxByAssetClass: [OpenAPI.BelgianPortfolioTaxAssetCosts]
+        public let investmentBreakdown: [OpenAPI.BelgianPortfolioTaxInvestmentCosts]
+        public let yearlyCostTrend: [OpenAPI.BelgianPortfolioTaxMonthlyCosts]
+        public let dividend: OpenAPI.BelgianPortfolioTaxDividend
+        public let estimates: OpenAPI.BelgianPortfolioTaxEstimates
+        public let taxTable: OpenAPI.BelgianPortfolioTaxRates
+        public let summaries: [OpenAPI.BelgianPortfolioTaxSummary]
+        public let records: [OpenAPI.Setting]
+
+        public init(year: Int, currency: String, isEmpty: Bool, hasProfile: Bool, hasInKindIncomeUnclassified: Bool, totals: OpenAPI.BelgianPortfolioTaxTotals, taxBreakdown: [OpenAPI.BelgianPortfolioTaxCostEntry], feeBreakdown: [OpenAPI.BelgianPortfolioTaxCostEntry], taxByAssetClass: [OpenAPI.BelgianPortfolioTaxAssetCosts], investmentBreakdown: [OpenAPI.BelgianPortfolioTaxInvestmentCosts], yearlyCostTrend: [OpenAPI.BelgianPortfolioTaxMonthlyCosts], dividend: OpenAPI.BelgianPortfolioTaxDividend, estimates: OpenAPI.BelgianPortfolioTaxEstimates, taxTable: OpenAPI.BelgianPortfolioTaxRates, summaries: [OpenAPI.BelgianPortfolioTaxSummary], records: [OpenAPI.Setting]) {
+            self.year = year
+            self.currency = currency
+            self.isEmpty = isEmpty
+            self.hasProfile = hasProfile
+            self.hasInKindIncomeUnclassified = hasInKindIncomeUnclassified
+            self.totals = totals
+            self.taxBreakdown = taxBreakdown
+            self.feeBreakdown = feeBreakdown
+            self.taxByAssetClass = taxByAssetClass
+            self.investmentBreakdown = investmentBreakdown
+            self.yearlyCostTrend = yearlyCostTrend
+            self.dividend = dividend
+            self.estimates = estimates
+            self.taxTable = taxTable
+            self.summaries = summaries
+            self.records = records
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case year = "year"
+            case currency = "currency"
+            case isEmpty = "isEmpty"
+            case hasProfile = "hasProfile"
+            case hasInKindIncomeUnclassified = "hasInKindIncomeUnclassified"
+            case totals = "totals"
+            case taxBreakdown = "taxBreakdown"
+            case feeBreakdown = "feeBreakdown"
+            case taxByAssetClass = "taxByAssetClass"
+            case investmentBreakdown = "investmentBreakdown"
+            case yearlyCostTrend = "yearlyCostTrend"
+            case dividend = "dividend"
+            case estimates = "estimates"
+            case taxTable = "taxTable"
+            case summaries = "summaries"
+            case records = "records"
+        }
+    }
+
+    /// Unknown ordinary dividend conventions leave gross base, reclaim, and net cost null.
+    /// Included-in-units dividends are excluded; married reclaim uses a doubled exemption while
+    /// dividendExemption is the single-taxpayer table value.
+    public struct BelgianPortfolioTaxDividend: Codable, Equatable, Sendable {
+        public let totalDividendIncome: Decimal
+        public let dividendWhtRecorded: Decimal
+        public let grossDividendWht: Decimal
+        public let dividendExemption: Decimal
+        public let grossDividendBase: Decimal?
+        public let dividendWhtReclaim: Decimal?
+        public let dividendWhtNetCost: Decimal?
+        public let unknownDividendConventionCount: Int
+
+        public init(totalDividendIncome: Decimal, dividendWhtRecorded: Decimal, grossDividendWht: Decimal, dividendExemption: Decimal, grossDividendBase: Decimal? = nil, dividendWhtReclaim: Decimal? = nil, dividendWhtNetCost: Decimal? = nil, unknownDividendConventionCount: Int) {
+            self.totalDividendIncome = totalDividendIncome
+            self.dividendWhtRecorded = dividendWhtRecorded
+            self.grossDividendWht = grossDividendWht
+            self.dividendExemption = dividendExemption
+            self.grossDividendBase = grossDividendBase
+            self.dividendWhtReclaim = dividendWhtReclaim
+            self.dividendWhtNetCost = dividendWhtNetCost
+            self.unknownDividendConventionCount = unknownDividendConventionCount
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case totalDividendIncome = "totalDividendIncome"
+            case dividendWhtRecorded = "dividendWhtRecorded"
+            case grossDividendWht = "grossDividendWht"
+            case dividendExemption = "dividendExemption"
+            case grossDividendBase = "grossDividendBase"
+            case dividendWhtReclaim = "dividendWhtReclaim"
+            case dividendWhtNetCost = "dividendWhtNetCost"
+            case unknownDividendConventionCount = "unknownDividendConventionCount"
+        }
+    }
+
+    public struct BelgianPortfolioTaxEstimates: Codable, Equatable, Sendable {
+        public let tobRecorded: Decimal
+        public let tobAutoEstimate: Decimal
+        public let tacrEstimate: Decimal
+        public let reyndersEstimate: Decimal
+        public let cgtEstimate: Decimal
+
+        public init(tobRecorded: Decimal, tobAutoEstimate: Decimal, tacrEstimate: Decimal, reyndersEstimate: Decimal, cgtEstimate: Decimal) {
+            self.tobRecorded = tobRecorded
+            self.tobAutoEstimate = tobAutoEstimate
+            self.tacrEstimate = tacrEstimate
+            self.reyndersEstimate = reyndersEstimate
+            self.cgtEstimate = cgtEstimate
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case tobRecorded = "tobRecorded"
+            case tobAutoEstimate = "tobAutoEstimate"
+            case tacrEstimate = "tacrEstimate"
+            case reyndersEstimate = "reyndersEstimate"
+            case cgtEstimate = "cgtEstimate"
+        }
+    }
+
+    /// realizedGain and all cost amounts are already expressed in the response currency; assetClass is
+    /// the untranslated localization suffix.
+    public struct BelgianPortfolioTaxInvestmentCosts: Codable, Equatable, Sendable {
+        public let id: Int
+        public let name: String
+        public let symbol: String?
+        public let assetClass: String
+        public let recordedTaxes: Decimal
+        public let recordedFees: Decimal
+        public let manualTaxes: Decimal
+        public let manualFees: Decimal
+        public let taxes: Decimal
+        public let fees: Decimal
+        public let total: Decimal
+        public let realizedGain: Decimal
+        public let currency: String
+
+        public init(id: Int, name: String, symbol: String? = nil, assetClass: String, recordedTaxes: Decimal, recordedFees: Decimal, manualTaxes: Decimal, manualFees: Decimal, taxes: Decimal, fees: Decimal, total: Decimal, realizedGain: Decimal, currency: String) {
+            self.id = id
+            self.name = name
+            self.symbol = symbol
+            self.assetClass = assetClass
+            self.recordedTaxes = recordedTaxes
+            self.recordedFees = recordedFees
+            self.manualTaxes = manualTaxes
+            self.manualFees = manualFees
+            self.taxes = taxes
+            self.fees = fees
+            self.total = total
+            self.realizedGain = realizedGain
+            self.currency = currency
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case name = "name"
+            case symbol = "symbol"
+            case assetClass = "assetClass"
+            case recordedTaxes = "recordedTaxes"
+            case recordedFees = "recordedFees"
+            case manualTaxes = "manualTaxes"
+            case manualFees = "manualFees"
+            case taxes = "taxes"
+            case fees = "fees"
+            case total = "total"
+            case realizedGain = "realizedGain"
+            case currency = "currency"
+        }
+    }
+
+    /// YYYY-MM ordinary-transaction costs, including zero-cost months with transactions. Manual
+    /// adjustments are excluded.
+    public struct BelgianPortfolioTaxMonthlyCosts: Codable, Equatable, Sendable {
+        public let period: String
+        public let taxes: Decimal
+        public let fees: Decimal
+
+        public init(period: String, taxes: Decimal, fees: Decimal) {
+            self.period = period
+            self.taxes = taxes
+            self.fees = fees
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case period = "period"
+            case taxes = "taxes"
+            case fees = "fees"
+        }
+    }
+
+    public struct BelgianPortfolioTaxRates: Codable, Equatable, Sendable {
+        public let securitiesAccountTaxRate: Decimal
+        public let capitalGainsTaxRate: Decimal
+        public let reyndersTaxRate: Decimal
+        public let dividendWHTRate: Decimal
+        public let securitiesAccountTaxThreshold: Decimal
+        public let badgePercent: OpenAPI.BelgianPortfolioTaxBadgePercent
+
+        public init(securitiesAccountTaxRate: Decimal, capitalGainsTaxRate: Decimal, reyndersTaxRate: Decimal, dividendWHTRate: Decimal, securitiesAccountTaxThreshold: Decimal, badgePercent: OpenAPI.BelgianPortfolioTaxBadgePercent) {
+            self.securitiesAccountTaxRate = securitiesAccountTaxRate
+            self.capitalGainsTaxRate = capitalGainsTaxRate
+            self.reyndersTaxRate = reyndersTaxRate
+            self.dividendWHTRate = dividendWHTRate
+            self.securitiesAccountTaxThreshold = securitiesAccountTaxThreshold
+            self.badgePercent = badgePercent
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case securitiesAccountTaxRate = "securitiesAccountTaxRate"
+            case capitalGainsTaxRate = "capitalGainsTaxRate"
+            case reyndersTaxRate = "reyndersTaxRate"
+            case dividendWHTRate = "dividendWHTRate"
+            case securitiesAccountTaxThreshold = "securitiesAccountTaxThreshold"
+            case badgePercent = "badgePercent"
+        }
+    }
+
+    public struct BelgianPortfolioTaxSummary: Codable, Equatable, Sendable {
+        public let id: Int
+        public let name: String
+        public let symbol: String?
+        public let assetClass: String
+        public let currency: String
+
+        public init(id: Int, name: String, symbol: String? = nil, assetClass: String, currency: String) {
+            self.id = id
+            self.name = name
+            self.symbol = symbol
+            self.assetClass = assetClass
+            self.currency = currency
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case name = "name"
+            case symbol = "symbol"
+            case assetClass = "assetClass"
+            case currency = "currency"
+        }
+    }
+
+    /// Server-computed display totals. effectiveTaxRate is a percent; totalPIT is selected-year
+    /// frozen-first. Historical realized/unrealized gains retain the web all-time holdings calculation.
+    public struct BelgianPortfolioTaxTotals: Codable, Equatable, Sendable {
+        public let totalTaxes: Decimal
+        public let totalFees: Decimal
+        public let totalTaxesAndFees: Decimal
+        public let totalRecordedTaxes: Decimal
+        public let totalRecordedFees: Decimal
+        public let totalManualTaxes: Decimal
+        public let totalManualFees: Decimal
+        public let totalManualCosts: Decimal
+        public let totalRealizedGain: Decimal
+        public let totalUnrealizedGain: Decimal
+        public let effectiveTaxRate: Decimal
+        public let totalPIT: Decimal
+        public let portfolioTaxesPlusPIT: Decimal
+
+        public init(totalTaxes: Decimal, totalFees: Decimal, totalTaxesAndFees: Decimal, totalRecordedTaxes: Decimal, totalRecordedFees: Decimal, totalManualTaxes: Decimal, totalManualFees: Decimal, totalManualCosts: Decimal, totalRealizedGain: Decimal, totalUnrealizedGain: Decimal, effectiveTaxRate: Decimal, totalPIT: Decimal, portfolioTaxesPlusPIT: Decimal) {
+            self.totalTaxes = totalTaxes
+            self.totalFees = totalFees
+            self.totalTaxesAndFees = totalTaxesAndFees
+            self.totalRecordedTaxes = totalRecordedTaxes
+            self.totalRecordedFees = totalRecordedFees
+            self.totalManualTaxes = totalManualTaxes
+            self.totalManualFees = totalManualFees
+            self.totalManualCosts = totalManualCosts
+            self.totalRealizedGain = totalRealizedGain
+            self.totalUnrealizedGain = totalUnrealizedGain
+            self.effectiveTaxRate = effectiveTaxRate
+            self.totalPIT = totalPIT
+            self.portfolioTaxesPlusPIT = portfolioTaxesPlusPIT
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case totalTaxes = "totalTaxes"
+            case totalFees = "totalFees"
+            case totalTaxesAndFees = "totalTaxesAndFees"
+            case totalRecordedTaxes = "totalRecordedTaxes"
+            case totalRecordedFees = "totalRecordedFees"
+            case totalManualTaxes = "totalManualTaxes"
+            case totalManualFees = "totalManualFees"
+            case totalManualCosts = "totalManualCosts"
+            case totalRealizedGain = "totalRealizedGain"
+            case totalUnrealizedGain = "totalUnrealizedGain"
+            case effectiveTaxRate = "effectiveTaxRate"
+            case totalPIT = "totalPIT"
+            case portfolioTaxesPlusPIT = "portfolioTaxesPlusPIT"
+        }
+    }
+
     public struct BelgianTaxActivityTaxResult: Codable, Equatable, Sendable {
         public let activityId: String
         public let kind: String
@@ -3839,6 +4185,577 @@ extension OpenAPI {
             case maximumAgeDays = "maximumAgeDays"
             case stale = "stale"
             case coverageStatus = "coverageStatus"
+        }
+    }
+
+    public struct PortfolioImportBatch: Codable, Equatable, Sendable {
+        public let id: String
+        public let adapterName: String
+        public let sourceFilename: String?
+        public let sourceSizeBytes: Int?
+        public let status: String
+        public let rowsTotal: Int
+        public let rowsImported: Int
+        public let rowsDuplicate: Int
+        public let rowsError: Int
+        public let errorSummary: String?
+        public let startedAt: String
+        public let completedAt: String?
+
+        public init(id: String, adapterName: String, sourceFilename: String? = nil, sourceSizeBytes: Int? = nil, status: String, rowsTotal: Int, rowsImported: Int, rowsDuplicate: Int, rowsError: Int, errorSummary: String? = nil, startedAt: String, completedAt: String? = nil) {
+            self.id = id
+            self.adapterName = adapterName
+            self.sourceFilename = sourceFilename
+            self.sourceSizeBytes = sourceSizeBytes
+            self.status = status
+            self.rowsTotal = rowsTotal
+            self.rowsImported = rowsImported
+            self.rowsDuplicate = rowsDuplicate
+            self.rowsError = rowsError
+            self.errorSummary = errorSummary
+            self.startedAt = startedAt
+            self.completedAt = completedAt
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case adapterName = "adapter_name"
+            case sourceFilename = "source_filename"
+            case sourceSizeBytes = "source_size_bytes"
+            case status = "status"
+            case rowsTotal = "rows_total"
+            case rowsImported = "rows_imported"
+            case rowsDuplicate = "rows_duplicate"
+            case rowsError = "rows_error"
+            case errorSummary = "error_summary"
+            case startedAt = "started_at"
+            case completedAt = "completed_at"
+        }
+    }
+
+    public struct PortfolioImportPreviewData: Codable, Equatable, Sendable {
+        public let batchId: Int
+        public let accountId: Int?
+        public let accountName: String?
+        /// True only when account_id still names an active portfolio account.
+        public let accountValid: Bool
+        public let groups: [JSONValue]
+        public let totals: [String: Int]
+
+        public init(batchId: Int, accountId: Int? = nil, accountName: String? = nil, accountValid: Bool, groups: [JSONValue], totals: [String: Int]) {
+            self.batchId = batchId
+            self.accountId = accountId
+            self.accountName = accountName
+            self.accountValid = accountValid
+            self.groups = groups
+            self.totals = totals
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case batchId = "batch_id"
+            case accountId = "account_id"
+            case accountName = "account_name"
+            case accountValid = "account_valid"
+            case groups = "groups"
+            case totals = "totals"
+        }
+    }
+
+    public struct PortfolioImportPreviewEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let data: OpenAPI.PortfolioImportPreviewData?
+        public let error: OpenAPI.ErrorPayload?
+
+        public init(ok: Bool, data: OpenAPI.PortfolioImportPreviewData? = nil, error: OpenAPI.ErrorPayload? = nil) {
+            self.ok = ok
+            self.data = data
+            self.error = error
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case data = "data"
+            case error = "error"
+        }
+    }
+
+    /// Present only in record_cash_only on every cash, duplicate or settled action. The complete
+    /// original source and all cash balance chains are proved before selection; every group member
+    /// selects together. memberCount includes new and repeated cash actions, and equals selected group
+    /// action count. Event identities are unique, and fileHash is common within a source batch/group.
+    /// Repeats identify a positive existingTransactionId and create no cash again. Proof is bound to
+    /// the reviewed fingerprint and confirmed own-account funding policy; it does not authorize
+    /// portfolio or custody actions.
+    public struct PortfolioImportReconciliationCashProof: Codable, Equatable, Sendable {
+        public let kind: String
+        public let groupKey: String
+        public let eventKey: String
+        public let eventKind: String
+        public let fileHash: String
+        public let memberCount: Int
+        /// One ledger component
+        public let componentCount: Int
+
+        public init(kind: String, groupKey: String, eventKey: String, eventKind: String, fileHash: String, memberCount: Int, componentCount: Int) {
+            self.kind = kind
+            self.groupKey = groupKey
+            self.eventKey = eventKey
+            self.eventKind = eventKind
+            self.fileHash = fileHash
+            self.memberCount = memberCount
+            self.componentCount = componentCount
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case kind = "kind"
+            case groupKey = "groupKey"
+            case eventKey = "eventKey"
+            case eventKind = "eventKind"
+            case fileHash = "fileHash"
+            case memberCount = "memberCount"
+            case componentCount = "componentCount"
+        }
+    }
+
+    /// Signed cash ledger values for a proved source event. Required for a new cash action, optional on
+    /// proved duplicate/settled repeats. Trade quotes and confirmed own-account funding use
+    /// isTransfer=true; card expenses use false. Every row has brokerage origin and no invented peer. A
+    /// separately quoted own-account withdrawal fee is retained as a second negative expense component;
+    /// the transfer component is net of that fee. Card spending already includes its quoted fee and
+    /// creates no extra fee row.
+    public struct PortfolioImportReconciliationCashValues: Codable, Equatable, Sendable {
+        public let date: String
+        public let amount: String
+        public let currency: String
+        public let accountId: Int
+        public let isTransfer: Bool
+        public let transferSource: String
+        public let transferPeerId: Int?
+
+        public init(date: String, amount: String, currency: String, accountId: Int, isTransfer: Bool, transferSource: String, transferPeerId: Int? = nil) {
+            self.date = date
+            self.amount = amount
+            self.currency = currency
+            self.accountId = accountId
+            self.isTransfer = isTransfer
+            self.transferSource = transferSource
+            self.transferPeerId = transferPeerId
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case date = "date"
+            case amount = "amount"
+            case currency = "currency"
+            case accountId = "accountId"
+            case isTransfer = "isTransfer"
+            case transferSource = "transferSource"
+            case transferPeerId = "transferPeerId"
+        }
+    }
+
+    public struct PortfolioImportReconciliationCommitResult: Codable, Equatable, Sendable {
+        public let imported: Int
+        public let duplicates: Int
+        public let adopted: Int
+        public let repaired: Int
+        public let errors: Int
+        /// Additive aggregate and batch subtotal of newly recorded cash ledger components. In full
+        /// history it is a subset of imported alongside recordedIncome and ordinary records. In
+        /// record_cash_only it equals imported, includes separately quoted withdrawal fee expenses, and
+        /// adopted/repaired/recordedIncome are zero; summary.cash counts source actions and may be
+        /// smaller. Repeated settlement records no new cash.
+        public let recordedCash: Int?
+        /// Additive aggregate and batch subtotal of newly recorded paired canonical income rows. In
+        /// full history it is a subset of imported; the paired Gift is recorded or adopted once in the
+        /// same commit. In record_in_kind_income_only it equals imported and no units/acquisitions are
+        /// created; adopted/repaired are zero. Repeats may settle duplicates but recordedIncome is
+        /// zero. Missing subtotals remain valid for older full responses.
+        public let recordedIncome: Int?
+        public let reconciliationScope: String?
+        /// Excluded unsettled source rows after selected actions; per-batch counts sum to the session
+        /// total.
+        public let pending: Int?
+        /// True exactly when pending is zero.
+        public let complete: Bool?
+        /// Pending rows grouped by staged event kind, including dividend, gift, sell, cash,
+        /// asset_transfer, asset_adjustment, account_internal and unsupported when present. Values sum
+        /// to pending.
+        public let deferredCounts: [String: Int]?
+        /// Present for every bounded scope; server-derived staging IDs, never caller-selectable.
+        /// Already settled actions need not add to duplicates.
+        public let selectedRowIds: [Int]?
+        public let batches: [BatchesItem]
+
+        public init(imported: Int, duplicates: Int, adopted: Int, repaired: Int, errors: Int, recordedCash: Int? = nil, recordedIncome: Int? = nil, reconciliationScope: String? = nil, pending: Int? = nil, complete: Bool? = nil, deferredCounts: [String: Int]? = nil, selectedRowIds: [Int]? = nil, batches: [BatchesItem]) {
+            self.imported = imported
+            self.duplicates = duplicates
+            self.adopted = adopted
+            self.repaired = repaired
+            self.errors = errors
+            self.recordedCash = recordedCash
+            self.recordedIncome = recordedIncome
+            self.reconciliationScope = reconciliationScope
+            self.pending = pending
+            self.complete = complete
+            self.deferredCounts = deferredCounts
+            self.selectedRowIds = selectedRowIds
+            self.batches = batches
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case imported = "imported"
+            case duplicates = "duplicates"
+            case adopted = "adopted"
+            case repaired = "repaired"
+            case errors = "errors"
+            case recordedCash = "recordedCash"
+            case recordedIncome = "recordedIncome"
+            case reconciliationScope = "reconciliationScope"
+            case pending = "pending"
+            case complete = "complete"
+            case deferredCounts = "deferredCounts"
+            case selectedRowIds = "selectedRowIds"
+            case batches = "batches"
+        }
+
+        public struct BatchesItem: Codable, Equatable, Sendable {
+            public let imported: Int
+            public let duplicates: Int
+            public let adopted: Int
+            public let repaired: Int
+            public let errors: Int
+            /// Additive aggregate and batch subtotal of newly recorded cash ledger components. In full
+            /// history it is a subset of imported alongside recordedIncome and ordinary records. In
+            /// record_cash_only it equals imported, includes separately quoted withdrawal fee expenses, and
+            /// adopted/repaired/recordedIncome are zero; summary.cash counts source actions and may be
+            /// smaller. Repeated settlement records no new cash.
+            public let recordedCash: Int?
+            /// Additive aggregate and batch subtotal of newly recorded paired canonical income rows. In
+            /// full history it is a subset of imported; the paired Gift is recorded or adopted once in the
+            /// same commit. In record_in_kind_income_only it equals imported and no units/acquisitions are
+            /// created; adopted/repaired are zero. Repeats may settle duplicates but recordedIncome is
+            /// zero. Missing subtotals remain valid for older full responses.
+            public let recordedIncome: Int?
+            public let reconciliationScope: String?
+            /// Excluded unsettled source rows after selected actions; per-batch counts sum to the session
+            /// total.
+            public let pending: Int?
+            /// True exactly when pending is zero.
+            public let complete: Bool?
+            /// Pending rows grouped by staged event kind, including dividend, gift, sell, cash,
+            /// asset_transfer, asset_adjustment, account_internal and unsupported when present. Values sum
+            /// to pending.
+            public let deferredCounts: [String: Int]?
+            public let batchId: Int
+
+            public init(imported: Int, duplicates: Int, adopted: Int, repaired: Int, errors: Int, recordedCash: Int? = nil, recordedIncome: Int? = nil, reconciliationScope: String? = nil, pending: Int? = nil, complete: Bool? = nil, deferredCounts: [String: Int]? = nil, batchId: Int) {
+                self.imported = imported
+                self.duplicates = duplicates
+                self.adopted = adopted
+                self.repaired = repaired
+                self.errors = errors
+                self.recordedCash = recordedCash
+                self.recordedIncome = recordedIncome
+                self.reconciliationScope = reconciliationScope
+                self.pending = pending
+                self.complete = complete
+                self.deferredCounts = deferredCounts
+                self.batchId = batchId
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case imported = "imported"
+                case duplicates = "duplicates"
+                case adopted = "adopted"
+                case repaired = "repaired"
+                case errors = "errors"
+                case recordedCash = "recordedCash"
+                case recordedIncome = "recordedIncome"
+                case reconciliationScope = "reconciliationScope"
+                case pending = "pending"
+                case complete = "complete"
+                case deferredCounts = "deferredCounts"
+                case batchId = "batch_id"
+            }
+        }
+    }
+
+    /// Present only on a correct_existing_only prefer_source date-only adoption of a proved closed
+    /// Kinesis yield group. Existing and source dates equal recordedDate and paymentDate respectively.
+    /// Quantities, type and all financial values are unchanged. memberCount includes unchanged yield
+    /// anchors, which need not be selected correction actions; complete group closure and atomic
+    /// selection are proved by the server and bound in the reviewed fingerprint.
+    public struct PortfolioImportReconciliationDateProof: Codable, Equatable, Sendable {
+        public let kind: String
+        public let groupKey: String
+        public let recordedDate: String
+        public let paymentDate: String
+        public let memberCount: Int
+
+        public init(kind: String, groupKey: String, recordedDate: String, paymentDate: String, memberCount: Int) {
+            self.kind = kind
+            self.groupKey = groupKey
+            self.recordedDate = recordedDate
+            self.paymentDate = paymentDate
+            self.memberCount = memberCount
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case kind = "kind"
+            case groupKey = "groupKey"
+            case recordedDate = "recordedDate"
+            case paymentDate = "paymentDate"
+            case memberCount = "memberCount"
+        }
+    }
+
+    /// Present on proved record_income, duplicate or settled paired-income actions in full history or
+    /// record_in_kind_income_only. Narrow scope requires unitTransactionId and forbids unitRowId. Full
+    /// scope requires unitRowId binding the distinct selected Gift action in the same
+    /// batch/investment/payment date. A paired Gift insert has no canonical unit ID until the same
+    /// atomic commit creates it; a paired adoption or existing Gift requires unitTransactionId, as do
+    /// repeated income actions. Repeats also identify the distinct existing income through
+    /// existingTransactionId and may omit source/existing bodies. The server proves literal zero-basis
+    /// income/units identity and immutable receipt images, binds proof into the fingerprint, and writes
+    /// income only after its unit is proved. Each income and unit identity is unique; the proof cannot
+    /// record income again or add another acquisition.
+    /// A oneOf/anyOf schema, decoded as plain JSON.
+    public typealias PortfolioImportReconciliationIncomeProof = JSONValue
+
+    public struct PortfolioImportReconciliationPlan: Codable, Equatable, Sendable {
+        public let reconciliationScope: String?
+        /// Excluded unsettled source rows after selected actions; per-batch counts sum to the session
+        /// total.
+        public let pending: Int?
+        /// True exactly when pending is zero.
+        public let complete: Bool?
+        /// Pending rows grouped by staged event kind, including dividend, gift, sell, cash,
+        /// asset_transfer, asset_adjustment, account_internal and unsupported when present. Values sum
+        /// to pending.
+        public let deferredCounts: [String: Int]?
+        public let batchIds: [Int]
+        public let adoptPolicy: String?
+        public let batchPolicies: [BatchPoliciesItem]
+        public let planFingerprint: String
+        public let ready: Bool
+        /// Full-scope reviewed actions; attachment/correction selects adopt/duplicate/settled,
+        /// record_in_kind_income_only selects record_income/duplicate/settled, and record_cash_only
+        /// selects cash/duplicate/settled only.
+        public let actions: [ActionsItem]
+        public let blockers: [JSONValue]
+        /// Counts of actions in this plan; narrow scope excludes deferred events.
+        public let summary: [String: Int]
+        /// Present for every bounded scope; exactly the distinct row IDs in selected actions, derived
+        /// by the server.
+        public let selectedRowIds: [Int]?
+        /// Present only in narrow preview; commit reports progress within batches instead.
+        public let batchProgress: [BatchProgressItem]?
+
+        public init(reconciliationScope: String? = nil, pending: Int? = nil, complete: Bool? = nil, deferredCounts: [String: Int]? = nil, batchIds: [Int], adoptPolicy: String? = nil, batchPolicies: [BatchPoliciesItem], planFingerprint: String, ready: Bool, actions: [ActionsItem], blockers: [JSONValue], summary: [String: Int], selectedRowIds: [Int]? = nil, batchProgress: [BatchProgressItem]? = nil) {
+            self.reconciliationScope = reconciliationScope
+            self.pending = pending
+            self.complete = complete
+            self.deferredCounts = deferredCounts
+            self.batchIds = batchIds
+            self.adoptPolicy = adoptPolicy
+            self.batchPolicies = batchPolicies
+            self.planFingerprint = planFingerprint
+            self.ready = ready
+            self.actions = actions
+            self.blockers = blockers
+            self.summary = summary
+            self.selectedRowIds = selectedRowIds
+            self.batchProgress = batchProgress
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case reconciliationScope = "reconciliationScope"
+            case pending = "pending"
+            case complete = "complete"
+            case deferredCounts = "deferredCounts"
+            case batchIds = "batchIds"
+            case adoptPolicy = "adoptPolicy"
+            case batchPolicies = "batchPolicies"
+            case planFingerprint = "planFingerprint"
+            case ready = "ready"
+            case actions = "actions"
+            case blockers = "blockers"
+            case summary = "summary"
+            case selectedRowIds = "selectedRowIds"
+            case batchProgress = "batchProgress"
+        }
+
+        public struct BatchPoliciesItem: Codable, Equatable, Sendable {
+            public let batchId: Int
+            public let adoptPolicy: String
+
+            public init(batchId: Int, adoptPolicy: String) {
+                self.batchId = batchId
+                self.adoptPolicy = adoptPolicy
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case batchId = "batchId"
+                case adoptPolicy = "adoptPolicy"
+            }
+        }
+
+        public struct ActionsItem: Codable, Equatable, Sendable {
+            /// Resolved investment identity; required on full paired income and its selected Gift action,
+            /// including bodyless repeats.
+            public let investmentId: Int?
+            /// Existing canonical identity for adoption or owned duplicate/settled actions. Full paired
+            /// income requires distinct existing income and unit identities on repeats.
+            public let existingTransactionId: Int?
+            /// True for proven native IBKR funding corrections. existingTransactionId identifies the cash
+            /// ledger; investmentId is null. Only amount and currency can change, retaining the original
+            /// date, notes and financial provenance.
+            public let isCash: Bool?
+            public let dateProof: OpenAPI.PortfolioImportReconciliationDateProof?
+            public let incomeProof: OpenAPI.PortfolioImportReconciliationIncomeProof?
+            public let cashProof: OpenAPI.PortfolioImportReconciliationCashProof?
+            public let cashValues: OpenAPI.PortfolioImportReconciliationCashValues?
+            /// Required on new componentCount=2 own-account withdrawals. Negative
+            /// same-date/currency/account fee expense with isTransfer=false, brokerage origin and null
+            /// peer. Main cashValues is the net withdrawal and isTransfer=true; no separate fee is invented
+            /// for card payments. Optional alongside main values on repeats.
+            public let cashFeeValues: CashFeeValues?
+            /// Required on duplicate/settled componentCount=2 repeats; a distinct existing fee transaction
+            /// whose complete after-image is guarded. Forbidden for single-component actions.
+            public let existingCashFeeTransactionId: Int?
+
+            public init(investmentId: Int? = nil, existingTransactionId: Int? = nil, isCash: Bool? = nil, dateProof: OpenAPI.PortfolioImportReconciliationDateProof? = nil, incomeProof: OpenAPI.PortfolioImportReconciliationIncomeProof? = nil, cashProof: OpenAPI.PortfolioImportReconciliationCashProof? = nil, cashValues: OpenAPI.PortfolioImportReconciliationCashValues? = nil, cashFeeValues: CashFeeValues? = nil, existingCashFeeTransactionId: Int? = nil) {
+                self.investmentId = investmentId
+                self.existingTransactionId = existingTransactionId
+                self.isCash = isCash
+                self.dateProof = dateProof
+                self.incomeProof = incomeProof
+                self.cashProof = cashProof
+                self.cashValues = cashValues
+                self.cashFeeValues = cashFeeValues
+                self.existingCashFeeTransactionId = existingCashFeeTransactionId
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case investmentId = "investmentId"
+                case existingTransactionId = "existingTransactionId"
+                case isCash = "isCash"
+                case dateProof = "dateProof"
+                case incomeProof = "incomeProof"
+                case cashProof = "cashProof"
+                case cashValues = "cashValues"
+                case cashFeeValues = "cashFeeValues"
+                case existingCashFeeTransactionId = "existingCashFeeTransactionId"
+            }
+
+            public struct CashFeeValues: Codable, Equatable, Sendable {
+                public let date: String
+                public let amount: String
+                public let currency: String
+                public let accountId: Int
+                public let isTransfer: Bool
+                public let transferSource: String
+                public let transferPeerId: Int?
+
+                public init(date: String, amount: String, currency: String, accountId: Int, isTransfer: Bool, transferSource: String, transferPeerId: Int? = nil) {
+                    self.date = date
+                    self.amount = amount
+                    self.currency = currency
+                    self.accountId = accountId
+                    self.isTransfer = isTransfer
+                    self.transferSource = transferSource
+                    self.transferPeerId = transferPeerId
+                }
+
+                enum CodingKeys: String, CodingKey {
+                    case date = "date"
+                    case amount = "amount"
+                    case currency = "currency"
+                    case accountId = "accountId"
+                    case isTransfer = "isTransfer"
+                    case transferSource = "transferSource"
+                    case transferPeerId = "transferPeerId"
+                }
+            }
+        }
+
+        public struct BatchProgressItem: Codable, Equatable, Sendable {
+            public let reconciliationScope: String?
+            /// Excluded unsettled source rows after selected actions; per-batch counts sum to the session
+            /// total.
+            public let pending: Int
+            /// True exactly when pending is zero.
+            public let complete: Bool
+            /// Pending rows grouped by staged event kind, including dividend, gift, sell, cash,
+            /// asset_transfer, asset_adjustment, account_internal and unsupported when present. Values sum
+            /// to pending.
+            public let deferredCounts: [String: Int]
+            public let batchId: Int
+
+            public init(reconciliationScope: String? = nil, pending: Int, complete: Bool, deferredCounts: [String: Int], batchId: Int) {
+                self.reconciliationScope = reconciliationScope
+                self.pending = pending
+                self.complete = complete
+                self.deferredCounts = deferredCounts
+                self.batchId = batchId
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case reconciliationScope = "reconciliationScope"
+                case pending = "pending"
+                case complete = "complete"
+                case deferredCounts = "deferredCounts"
+                case batchId = "batchId"
+            }
+        }
+    }
+
+    public struct PortfolioParserConfig: Codable, Equatable, Sendable {
+        public let id: Int
+        public let name: String
+        public let config: Config
+        public let createdAt: String?
+        public let updatedAt: String?
+
+        public init(id: Int, name: String, config: Config, createdAt: String? = nil, updatedAt: String? = nil) {
+            self.id = id
+            self.name = name
+            self.config = config
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case name = "name"
+            case config = "config"
+            case createdAt = "created_at"
+            case updatedAt = "updated_at"
+        }
+
+        public struct Config: Codable, Equatable, Sendable {
+            /// Optional active portfolio account used as the file-level broker destination.
+            public let accountId: Int?
+            /// Optional custody account receiving asset withdrawals.
+            public let transferDestinationAccountId: Int?
+            /// Optional custody account supplying incoming asset returns.
+            public let transferOriginAccountId: Int?
+            /// Optional explicit known-zero basis policy for Kinesis yield unit receipts and reversals.
+            public let yieldBasisPolicy: String?
+
+            public init(accountId: Int? = nil, transferDestinationAccountId: Int? = nil, transferOriginAccountId: Int? = nil, yieldBasisPolicy: String? = nil) {
+                self.accountId = accountId
+                self.transferDestinationAccountId = transferDestinationAccountId
+                self.transferOriginAccountId = transferOriginAccountId
+                self.yieldBasisPolicy = yieldBasisPolicy
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case accountId = "accountId"
+                case transferDestinationAccountId = "transferDestinationAccountId"
+                case transferOriginAccountId = "transferOriginAccountId"
+                case yieldBasisPolicy = "yieldBasisPolicy"
+            }
         }
     }
 

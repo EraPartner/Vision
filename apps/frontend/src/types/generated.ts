@@ -2949,6 +2949,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/belgian-tax/portfolio-dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read authoritative Portfolio Tax costs, estimates, and editable setting baselines
+         * @description Read-only parity with usePortfolioTaxData. First 500 name-ordered investments, active canonical summaries plus archived ordinary/current-FX presentation, and newest 1000 ordinary transactions per investment. Recorded costs/dividends/manual adjustments use the selected year; gains/current values retain all-time/live holdings semantics. Uses shared TypeScript tax helpers and frozen-first PIT. Original adjustment/classification settings and CAS baselines are returned without writes. Native consumers decode numeric amounts directly as Decimal.
+         */
+        get: operations["getBelgianPortfolioTaxDashboard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/belgian-tax/dashboard": {
         parameters: {
             query?: never;
@@ -3408,6 +3428,26 @@ export interface paths {
         put?: never;
         /** Commit import batch — writes transactions to DB */
         post: operations["commitImportBatch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/portfolio/import/probe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read-only maintained statement detection and CSV header preview
+         * @description Inspects an uploaded file without creating a batch or financial rows. Uses the same maintained-format detection and 16384-byte, five-row CSV preview rules as the web frontend. Full-file detection retains every source account identity. Detection and preview errors are independent; a supported workbook can be detected while CSV preview is unavailable. Temporary uploads are cleaned up on every outcome. The existing 50 MB upload and workbook inflation limits apply.
+         */
+        post: operations["probePortfolioImport"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5081,6 +5121,160 @@ export interface components {
             /** @enum {string} */
             householdResultSource: "frozen" | "computed";
             warnings: components["schemas"]["BelgianTaxSettingsWarning"][];
+            records: components["schemas"]["Setting"][];
+        };
+        /** @description Server-computed display totals. effectiveTaxRate is a percent; totalPIT is selected-year frozen-first. Historical realized/unrealized gains retain the web all-time holdings calculation. */
+        BelgianPortfolioTaxTotals: {
+            /** Format: double */
+            totalTaxes: number;
+            /** Format: double */
+            totalFees: number;
+            /** Format: double */
+            totalTaxesAndFees: number;
+            /** Format: double */
+            totalRecordedTaxes: number;
+            /** Format: double */
+            totalRecordedFees: number;
+            /** Format: double */
+            totalManualTaxes: number;
+            /** Format: double */
+            totalManualFees: number;
+            /** Format: double */
+            totalManualCosts: number;
+            /** Format: double */
+            totalRealizedGain: number;
+            /** Format: double */
+            totalUnrealizedGain: number;
+            /** Format: double */
+            effectiveTaxRate: number;
+            /** Format: double */
+            totalPIT: number;
+            /** Format: double */
+            portfolioTaxesPlusPIT: number;
+        };
+        BelgianPortfolioTaxCostEntry: {
+            nameKey: string;
+            /** Format: double */
+            value: number;
+        };
+        BelgianPortfolioTaxAssetCosts: {
+            assetClass: string;
+            /** Format: double */
+            taxes: number;
+            /** Format: double */
+            fees: number;
+            /** Format: double */
+            total: number;
+        };
+        /** @description realizedGain and all cost amounts are already expressed in the response currency; assetClass is the untranslated localization suffix. */
+        BelgianPortfolioTaxInvestmentCosts: {
+            id: number;
+            name: string;
+            symbol: string | null;
+            assetClass: string;
+            /** Format: double */
+            recordedTaxes: number;
+            /** Format: double */
+            recordedFees: number;
+            /** Format: double */
+            manualTaxes: number;
+            /** Format: double */
+            manualFees: number;
+            /** Format: double */
+            taxes: number;
+            /** Format: double */
+            fees: number;
+            /** Format: double */
+            total: number;
+            /** Format: double */
+            realizedGain: number;
+            currency: string;
+        };
+        /** @description YYYY-MM ordinary-transaction costs, including zero-cost months with transactions. Manual adjustments are excluded. */
+        BelgianPortfolioTaxMonthlyCosts: {
+            period: string;
+            /** Format: double */
+            taxes: number;
+            /** Format: double */
+            fees: number;
+        };
+        /** @description Unknown ordinary dividend conventions leave gross base, reclaim, and net cost null. Included-in-units dividends are excluded; married reclaim uses a doubled exemption while dividendExemption is the single-taxpayer table value. */
+        BelgianPortfolioTaxDividend: {
+            /** Format: double */
+            totalDividendIncome: number;
+            /** Format: double */
+            dividendWhtRecorded: number;
+            /** Format: double */
+            grossDividendWht: number;
+            /** Format: double */
+            dividendExemption: number;
+            /** Format: double */
+            grossDividendBase: number | null;
+            /** Format: double */
+            dividendWhtReclaim: number | null;
+            /** Format: double */
+            dividendWhtNetCost: number | null;
+            unknownDividendConventionCount: number;
+        };
+        BelgianPortfolioTaxEstimates: {
+            /** Format: double */
+            tobRecorded: number;
+            /** Format: double */
+            tobAutoEstimate: number;
+            /** Format: double */
+            tacrEstimate: number;
+            /** Format: double */
+            reyndersEstimate: number;
+            /** Format: double */
+            cgtEstimate: number;
+        };
+        /** @description Percent-valued display badges, computed by TypeScript from the fraction-valued rates. */
+        BelgianPortfolioTaxBadgePercent: {
+            /** Format: double */
+            securitiesAccountTaxRate: number;
+            /** Format: double */
+            capitalGainsTaxRate: number;
+            /** Format: double */
+            reyndersTaxRate: number;
+            /** Format: double */
+            dividendWHTRate: number;
+        };
+        BelgianPortfolioTaxRates: {
+            /** Format: double */
+            securitiesAccountTaxRate: number;
+            /** Format: double */
+            capitalGainsTaxRate: number;
+            /** Format: double */
+            reyndersTaxRate: number;
+            /** Format: double */
+            dividendWHTRate: number;
+            /** Format: double */
+            securitiesAccountTaxThreshold: number;
+            badgePercent: components["schemas"]["BelgianPortfolioTaxBadgePercent"];
+        };
+        BelgianPortfolioTaxSummary: {
+            id: number;
+            name: string;
+            symbol: string | null;
+            assetClass: string;
+            currency: string;
+        };
+        BelgianPortfolioTaxDashboard: {
+            year: number;
+            currency: string;
+            isEmpty: boolean;
+            hasProfile: boolean;
+            hasInKindIncomeUnclassified: boolean;
+            totals: components["schemas"]["BelgianPortfolioTaxTotals"];
+            taxBreakdown: components["schemas"]["BelgianPortfolioTaxCostEntry"][];
+            feeBreakdown: components["schemas"]["BelgianPortfolioTaxCostEntry"][];
+            taxByAssetClass: components["schemas"]["BelgianPortfolioTaxAssetCosts"][];
+            investmentBreakdown: components["schemas"]["BelgianPortfolioTaxInvestmentCosts"][];
+            yearlyCostTrend: components["schemas"]["BelgianPortfolioTaxMonthlyCosts"][];
+            dividend: components["schemas"]["BelgianPortfolioTaxDividend"];
+            estimates: components["schemas"]["BelgianPortfolioTaxEstimates"];
+            taxTable: components["schemas"]["BelgianPortfolioTaxRates"];
+            summaries: components["schemas"]["BelgianPortfolioTaxSummary"][];
             records: components["schemas"]["Setting"][];
         };
         BelgianTaxDashboardYearCalculation: {
@@ -14927,6 +15121,54 @@ export interface operations {
             };
         };
     };
+    getBelgianPortfolioTaxDashboard: {
+        parameters: {
+            query?: {
+                /** @description Omit to use the live household year. Historical years use their snapshot or a year-pinned live estimate. */
+                year?: number;
+                /** @description Response display currency, normalized uppercase. Ordinary recorded costs use latest stored/fallback rates and retain the existing original-amount fallback when a rate is unavailable. */
+                currency?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Server-computed fiscal dashboard and original setting records. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data: components["schemas"]["BelgianPortfolioTaxDashboard"];
+                    };
+                };
+            };
+            /** @description Invalid or repeated year/currency. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description API or aggregation rate limit exceeded. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Settings */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     getBelgianTaxDashboard: {
         parameters: {
             query?: {
@@ -16035,6 +16277,73 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Envelope"];
                 };
+            };
+        };
+    };
+    probePortfolioImport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                    /**
+                     * @description Omit to sniff the first nonempty header line.
+                     * @enum {string}
+                     */
+                    separator?: "," | ";" | "\t" | "|";
+                    /**
+                     * @description Case-insensitive and trimmed; Latin-1 aliases normalize to latin1.
+                     * @default utf-8
+                     * @enum {string}
+                     */
+                    encoding?: "utf-8" | "utf8" | "latin1" | "latin-1" | "iso-8859-1" | "windows-1252";
+                    /** @default 0 */
+                    skipRows?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Independent detection and CSV preview outcomes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: {
+                            detected: {
+                                /** @enum {string} */
+                                source: "ibkr" | "kinesis" | "nexo" | "nexo_pro" | "saxo" | "native_receipts";
+                                sourceAccountIdentities: string[];
+                                /** @enum {string} */
+                                presetKey?: "ibkr_funding_history";
+                            } | null;
+                            /** @enum {string|null} */
+                            detectionError: "parse_error" | null;
+                            preview: {
+                                headers: string[];
+                                rows: string[][];
+                            } | null;
+                            /** @enum {string|null} */
+                            previewError: "parse_error" | null;
+                            /** @enum {string} */
+                            separator: "," | ";" | "\t" | "|";
+                        };
+                    };
+                };
+            };
+            /** @description Missing or unsupported upload or invalid probe options */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

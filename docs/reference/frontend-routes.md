@@ -60,6 +60,13 @@ Settings remain a dialog rather than a page route, but its section is deep-linka
 | `/portfolio/tax`                    | `PortfolioTaxPage`          | AppLayout | Portfolio tax calculations                                       | [[apps/frontend/src/pages/portfolio/tax/PortfolioTaxPage.tsx\|PortfolioTaxPage.tsx]]               |
 | `/portfolio/rebalance`              | `RebalancePage`             | AppLayout | Portfolio allocation and rebalance plan                          | [[apps/frontend/src/pages/portfolio/RebalancePage.tsx\|RebalancePage.tsx]]                         |
 
+The Swift shell also draws `/portfolio/import`, `/portfolio/import/:batchId/review` and
+`/portfolio/tax` in phase 3j. Import keeps the same reviewed TypeScript operations and shares
+session metadata with the retained web page; a read-only upload probe supplies maintained
+workbook detection and bounded CSV previews. Portfolio Tax reads server-computed fiscal results
+and reuses native profile/year actions. Both tax routes adopt validated historical years and
+replace `year` while preserving unrelated parameters. Full Mac/Demo parity review is pending.
+
 ## Research Pages (Research section)
 
 | Route                 | Component               | Layout    | Description                |

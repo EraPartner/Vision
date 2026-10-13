@@ -5,7 +5,7 @@ import Foundation
 
 /// One struct per operationId in `apps/native/openapi-operations.txt`, in its order.
 public enum OpenAPIOperations {
-    public static let operationIds = ["getExchangeRates", "refreshExchangeRates", "adminDatabaseStats", "adminProvidersHealth", "adminProviderProbe", "adminMetricsRequests", "adminListEndpoints", "getSetting", "adminDatabaseVacuum", "adminGetTableSchema", "adminGetTableRows", "adminMutateTableRows", "getPlannedTransactions", "createPlannedTransaction", "updatePlannedTransaction", "deletePlannedTransaction", "executePlannedTransaction", "getPlannedMatchSuggestions", "getRecurringPatterns", "getRecipients", "getRecipient", "getAccounts", "getCategoryTree", "getTags", "createTag", "getTransactions", "saveSetting", "getSupportedAdapters", "getCustomParsers", "createCustomParser", "updateCustomParser", "deleteCustomParser", "getImportBatches", "deleteImportBatch", "previewImportBatch", "overrideImportRow", "overrideImportRowCategory", "commitImportBatch", "updateRecipient", "getInfoBanks", "exportTransactionsCsv", "exportTransactionsJson", "getTransaction", "createTransaction", "updateTransaction", "deleteTransaction", "bulkUpdateTransactions", "getTransactionAttachments", "downloadAttachment", "deleteAttachment", "bulkDeleteTransactions", "bulkExportTransactions", "bulkTagTransactions", "markTransfer", "createRecipient", "getSplitsByTransaction", "createSplitBatch", "createBulkSplits", "getSplitsOwed", "getSplitOwedByRecipient", "exportSplitsOwedCsv", "paySplit", "settleSplit", "settleAllSplitsForRecipient", "deleteSplit", "createAccount", "updateAccount", "deleteAccount", "previewAccountPortfolioLots", "closeAccount", "mergeAccounts", "previewAccountMerge", "setAccountOpeningBalance", "reconcileAccount", "setAccountStatementBalance", "bulkRetagPortfolioTransactions", "getPortfolioSummary", "createCategoryNode", "updateCategoryNode", "deleteCategoryNode", "mergeCategoryNode", "deleteRecipient", "mergeRecipient", "unmergeRecipient", "getRecipientPatterns", "createRecipientPattern", "previewRecipientPattern", "updateRecipientPattern", "deleteRecipientPattern", "getMonthlySummary", "getAverageVsCurrent", "getBankBalances", "getNetWorth", "getCashflowForecastMethods", "getCashflowForecastRolling", "getCashflowForecastAccuracy", "getTransactionCount", "getCategories", "getCategoryPivot", "getRecipientInsights", "getRecipientByYear", "getSankey", "getInsightsDigest", "dismissInsight", "getSavedCharts", "createSavedChart", "updateSavedChart", "deleteSavedChart", "getRecipientPivot", "getTagPivot", "computeBelgianTax", "getBelgianTaxOverview", "saveSettings", "getBelgianTaxDashboard", "getDeductionCandidates", "getInvestments", "createInvestment", "updateInvestment", "deleteInvestment", "getInvestment", "getInvestmentTransactions", "createInvestmentTransaction", "updatePortfolioTransaction", "deletePortfolioTransaction", "getPortfolioPerformance", "getPortfolioPerformanceByBroker", "getPortfolioExposure", "upsertPortfolioExposureSources", "refreshInvestmentPrices", "listInvestmentProviders", "getInvestmentPriceHistory", "getInvestmentSummary", "marketQuote", "marketNews", "marketChart", "computeRebalance", "computeCommitmentAwareCash", "getBulkPortfolioTransactions"]
+    public static let operationIds = ["getExchangeRates", "refreshExchangeRates", "adminDatabaseStats", "adminProvidersHealth", "adminProviderProbe", "adminMetricsRequests", "adminListEndpoints", "getSetting", "adminDatabaseVacuum", "adminGetTableSchema", "adminGetTableRows", "adminMutateTableRows", "getPlannedTransactions", "createPlannedTransaction", "updatePlannedTransaction", "deletePlannedTransaction", "executePlannedTransaction", "getPlannedMatchSuggestions", "getRecurringPatterns", "getRecipients", "getRecipient", "getAccounts", "getCategoryTree", "getTags", "createTag", "getTransactions", "saveSetting", "getSupportedAdapters", "getCustomParsers", "createCustomParser", "updateCustomParser", "deleteCustomParser", "getImportBatches", "deleteImportBatch", "previewImportBatch", "overrideImportRow", "overrideImportRowCategory", "commitImportBatch", "updateRecipient", "getInfoBanks", "exportTransactionsCsv", "exportTransactionsJson", "getTransaction", "createTransaction", "updateTransaction", "deleteTransaction", "bulkUpdateTransactions", "getTransactionAttachments", "downloadAttachment", "deleteAttachment", "bulkDeleteTransactions", "bulkExportTransactions", "bulkTagTransactions", "markTransfer", "createRecipient", "getSplitsByTransaction", "createSplitBatch", "createBulkSplits", "getSplitsOwed", "getSplitOwedByRecipient", "exportSplitsOwedCsv", "paySplit", "settleSplit", "settleAllSplitsForRecipient", "deleteSplit", "createAccount", "updateAccount", "deleteAccount", "previewAccountPortfolioLots", "closeAccount", "mergeAccounts", "previewAccountMerge", "setAccountOpeningBalance", "reconcileAccount", "setAccountStatementBalance", "bulkRetagPortfolioTransactions", "getPortfolioSummary", "createCategoryNode", "updateCategoryNode", "deleteCategoryNode", "mergeCategoryNode", "deleteRecipient", "mergeRecipient", "unmergeRecipient", "getRecipientPatterns", "createRecipientPattern", "previewRecipientPattern", "updateRecipientPattern", "deleteRecipientPattern", "getMonthlySummary", "getAverageVsCurrent", "getBankBalances", "getNetWorth", "getCashflowForecastMethods", "getCashflowForecastRolling", "getCashflowForecastAccuracy", "getTransactionCount", "getCategories", "getCategoryPivot", "getRecipientInsights", "getRecipientByYear", "getSankey", "getInsightsDigest", "dismissInsight", "getSavedCharts", "createSavedChart", "updateSavedChart", "deleteSavedChart", "getRecipientPivot", "getTagPivot", "computeBelgianTax", "getBelgianTaxOverview", "saveSettings", "getBelgianTaxDashboard", "getDeductionCandidates", "getInvestments", "createInvestment", "updateInvestment", "deleteInvestment", "getInvestment", "getInvestmentTransactions", "createInvestmentTransaction", "updatePortfolioTransaction", "deletePortfolioTransaction", "getPortfolioPerformance", "getPortfolioPerformanceByBroker", "getPortfolioExposure", "upsertPortfolioExposureSources", "refreshInvestmentPrices", "listInvestmentProviders", "getInvestmentPriceHistory", "getInvestmentSummary", "marketQuote", "marketNews", "marketChart", "computeRebalance", "computeCommitmentAwareCash", "getBulkPortfolioTransactions", "getPortfolioParsers", "createPortfolioParser", "updatePortfolioParser", "deletePortfolioParser", "getPortfolioImportBatches", "getPortfolioImportBatch", "deletePortfolioImportBatch", "previewPortfolioImportBatch", "portfolioImportRowInvestmentOverride", "portfolioImportRowsInvestmentOverride", "previewPortfolioImportReconciliation", "commitReviewedPortfolioImports", "commitPortfolioImportBatch", "getBelgianPortfolioTaxDashboard"]
 }
 
 extension OpenAPIOperations {
@@ -4936,6 +4936,533 @@ extension OpenAPIOperations {
             if let perInvestmentLimit { items.append(URLQueryItem(name: "per_investment_limit", value: APIQuery.value(perInvestmentLimit))) }
             if let limit { items.append(URLQueryItem(name: "limit", value: APIQuery.value(limit))) }
             if let offset { items.append(URLQueryItem(name: "offset", value: APIQuery.value(offset))) }
+            return items
+        }
+    }
+
+    /// GET /api/portfolio/import/parsers: List saved portfolio parser configs (kind=portfolio)
+    public struct GetPortfolioParsers: APIOperation {
+        public typealias Response = ResponseData
+        public static let operationId = "getPortfolioParsers"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/portfolio/import/parsers"
+
+        public init() {}
+
+        public var path: String { "/api/portfolio/import/parsers" }
+
+        public struct ResponseData: Codable, Equatable, Sendable {
+            public let items: [OpenAPI.PortfolioParserConfig]
+            public let total: Int
+
+            public init(items: [OpenAPI.PortfolioParserConfig], total: Int) {
+                self.items = items
+                self.total = total
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case items = "items"
+                case total = "total"
+            }
+        }
+    }
+
+    /// POST /api/portfolio/import/parsers: Create a saved portfolio parser config; 409 on duplicate
+    /// name
+    public struct CreatePortfolioParser: APIOperation {
+        public typealias Response = OpenAPI.PortfolioParserConfig
+        public static let operationId = "createPortfolioParser"
+        public static let method = HTTPMethod.post
+        public static let pathTemplate = "/api/portfolio/import/parsers"
+
+        public var body: Body
+
+        public init(body: Body) {
+            self.body = body
+        }
+
+        public var path: String { "/api/portfolio/import/parsers" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+
+        public struct Body: Codable, Equatable, Sendable {
+            public let name: String
+            public let config: Config
+
+            public init(name: String, config: Config) {
+                self.name = name
+                self.config = config
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case name = "name"
+                case config = "config"
+            }
+
+            public struct Config: Codable, Equatable, Sendable {
+                public let numberFormat: OpenAPI.CsvNumberFormat?
+
+                public init(numberFormat: OpenAPI.CsvNumberFormat? = nil) {
+                    self.numberFormat = numberFormat
+                }
+
+                enum CodingKeys: String, CodingKey {
+                    case numberFormat = "number_format"
+                }
+            }
+        }
+    }
+
+    /// PATCH /api/portfolio/import/parsers/{id}: Update a saved portfolio parser config
+    public struct UpdatePortfolioParser: APIOperation {
+        public typealias Response = OpenAPI.PortfolioParserConfig
+        public static let operationId = "updatePortfolioParser"
+        public static let method = HTTPMethod.patch
+        public static let pathTemplate = "/api/portfolio/import/parsers/{id}"
+
+        public var id: Int
+        public var body: Body
+
+        public init(id: Int, body: Body) {
+            self.id = id
+            self.body = body
+        }
+
+        public var path: String { "/api/portfolio/import/parsers/\(APIPath.segment(APIQuery.value(id)))" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+
+        public struct Body: Codable, Equatable, Sendable {
+            public let name: String?
+            public let config: Config?
+
+            public init(name: String? = nil, config: Config? = nil) {
+                self.name = name
+                self.config = config
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case name = "name"
+                case config = "config"
+            }
+
+            public struct Config: Codable, Equatable, Sendable {
+                public let numberFormat: OpenAPI.CsvNumberFormat?
+
+                public init(numberFormat: OpenAPI.CsvNumberFormat? = nil) {
+                    self.numberFormat = numberFormat
+                }
+
+                enum CodingKeys: String, CodingKey {
+                    case numberFormat = "number_format"
+                }
+            }
+        }
+    }
+
+    /// DELETE /api/portfolio/import/parsers/{id}: Delete a saved portfolio parser config
+    public struct DeletePortfolioParser: APIOperation {
+        public typealias Response = APIEmpty
+        public static let operationId = "deletePortfolioParser"
+        public static let method = HTTPMethod.delete
+        public static let pathTemplate = "/api/portfolio/import/parsers/{id}"
+
+        public var id: Int
+
+        public init(id: Int) {
+            self.id = id
+        }
+
+        public var path: String { "/api/portfolio/import/parsers/\(APIPath.segment(APIQuery.value(id)))" }
+    }
+
+    /// GET /api/portfolio/import/batches: List portfolio import batches
+    public struct GetPortfolioImportBatches: APIOperation {
+        public typealias Response = ResponseData
+        public static let operationId = "getPortfolioImportBatches"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/portfolio/import/batches"
+
+        public var limit: Int?
+        public var offset: Int?
+
+        public init(limit: Int? = nil, offset: Int? = nil) {
+            self.limit = limit
+            self.offset = offset
+        }
+
+        public var path: String { "/api/portfolio/import/batches" }
+
+        public var queryItems: [URLQueryItem] {
+            var items: [URLQueryItem] = []
+            if let limit { items.append(URLQueryItem(name: "limit", value: APIQuery.value(limit))) }
+            if let offset { items.append(URLQueryItem(name: "offset", value: APIQuery.value(offset))) }
+            return items
+        }
+
+        public struct ResponseData: Codable, Equatable, Sendable {
+            public let total: Int
+            public let limit: Int
+            public let offset: Int
+            public let items: [OpenAPI.PortfolioImportBatch]
+
+            public init(total: Int, limit: Int, offset: Int, items: [OpenAPI.PortfolioImportBatch]) {
+                self.total = total
+                self.limit = limit
+                self.offset = offset
+                self.items = items
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case total = "total"
+                case limit = "limit"
+                case offset = "offset"
+                case items = "items"
+            }
+        }
+    }
+
+    /// GET /api/portfolio/import/batches/{id}: Get portfolio import batch
+    public struct GetPortfolioImportBatch: APIOperation {
+        public typealias Response = OpenAPI.PortfolioImportBatch
+        public static let operationId = "getPortfolioImportBatch"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/portfolio/import/batches/{id}"
+
+        public var id: Int
+
+        public init(id: Int) {
+            self.id = id
+        }
+
+        public var path: String { "/api/portfolio/import/batches/\(APIPath.segment(APIQuery.value(id)))" }
+    }
+
+    /// DELETE /api/portfolio/import/batches/{id}: Rollback portfolio import batch (deletes committed
+    /// portfolio_transactions, marks batch aborted)
+    public struct DeletePortfolioImportBatch: APIOperation {
+        public typealias Response = JSONValue
+        public static let operationId = "deletePortfolioImportBatch"
+        public static let method = HTTPMethod.delete
+        public static let pathTemplate = "/api/portfolio/import/batches/{id}"
+
+        public var id: Int
+
+        public init(id: Int) {
+            self.id = id
+        }
+
+        public var path: String { "/api/portfolio/import/batches/\(APIPath.segment(APIQuery.value(id)))" }
+    }
+
+    /// GET /api/portfolio/import/batches/{id}/preview: Preview portfolio import batch rows grouped by
+    /// investment
+    public struct PreviewPortfolioImportBatch: APIOperation {
+        public typealias Response = OpenAPI.PortfolioImportPreviewEnvelope
+        public static let operationId = "previewPortfolioImportBatch"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/portfolio/import/batches/{id}/preview"
+
+        public var id: Int
+
+        public init(id: Int) {
+            self.id = id
+        }
+
+        public var path: String { "/api/portfolio/import/batches/\(APIPath.segment(APIQuery.value(id)))/preview" }
+    }
+
+    /// POST /api/portfolio/import/batches/{id}/rows/{rowId}/investment-override: Resolve an unmatched
+    /// non-cash portfolio import row to an existing investment or request a new one be created
+    public struct PortfolioImportRowInvestmentOverride: APIOperation {
+        public typealias Response = JSONValue
+        public static let operationId = "portfolioImportRowInvestmentOverride"
+        public static let method = HTTPMethod.post
+        public static let pathTemplate = "/api/portfolio/import/batches/{id}/rows/{rowId}/investment-override"
+
+        public var id: Int
+        public var rowId: Int
+        public var body: Body
+
+        public init(id: Int, rowId: Int, body: Body) {
+            self.id = id
+            self.rowId = rowId
+            self.body = body
+        }
+
+        public var path: String { "/api/portfolio/import/batches/\(APIPath.segment(APIQuery.value(id)))/rows/\(APIPath.segment(APIQuery.value(rowId)))/investment-override" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+
+        public struct Body: Codable, Equatable, Sendable {
+            /// Existing investment to link this row to. `null` — or an absent field — clears the override.
+            /// A present value must be a positive integer; a malformed one is rejected rather than coerced,
+            /// because a coerced id names a different instrument and the committed lot records it.
+            public let investmentId: Int?
+            /// When true, a new investment record is created from the row's symbol/name/asset_class and
+            /// linked
+            public let createNew: Bool?
+
+            public init(investmentId: Int? = nil, createNew: Bool? = nil) {
+                self.investmentId = investmentId
+                self.createNew = createNew
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case investmentId = "investment_id"
+                case createNew = "create_new"
+            }
+        }
+    }
+
+    /// POST /api/portfolio/import/batches/{id}/rows/investment-override: Atomically resolve a portfolio
+    /// import review group to one investment
+    public struct PortfolioImportRowsInvestmentOverride: APIOperation {
+        public typealias Response = JSONValue
+        public static let operationId = "portfolioImportRowsInvestmentOverride"
+        public static let method = HTTPMethod.post
+        public static let pathTemplate = "/api/portfolio/import/batches/{id}/rows/investment-override"
+
+        public var id: Int
+        public var body: JSONValue
+
+        public init(id: Int, body: JSONValue) {
+            self.id = id
+            self.body = body
+        }
+
+        public var path: String { "/api/portfolio/import/batches/\(APIPath.segment(APIQuery.value(id)))/rows/investment-override" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+    }
+
+    /// POST /api/portfolio/import/reconciliation/preview: Preview reconciliation across a complete
+    /// portfolio statement scope
+    public struct PreviewPortfolioImportReconciliation: APIOperation {
+        public typealias Response = OpenAPI.PortfolioImportReconciliationPlan
+        public static let operationId = "previewPortfolioImportReconciliation"
+        public static let method = HTTPMethod.post
+        public static let pathTemplate = "/api/portfolio/import/reconciliation/preview"
+
+        public var body: Body
+
+        public init(body: Body) {
+            self.body = body
+        }
+
+        public var path: String { "/api/portfolio/import/reconciliation/preview" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+
+        public struct Body: Codable, Equatable, Sendable {
+            public let batchIds: [Int]
+            /// Preserve recorded facts, or use proven source facts while preserving known original transfer
+            /// basis.
+            public let adoptPolicy: String?
+            /// Optional additive scope. adopt_existing_only requires Kinesis sources, explicit global
+            /// preserve_existing, no conflicting overrides, no included_symbols/skipped source rows, and
+            /// verified complete source capture. Row IDs cannot be supplied by callers.
+            /// correct_existing_only instead requires explicit global prefer_source and either complete
+            /// Kinesis financial/date proof or a separate native IBKR funding scope proving exact existing
+            /// base-currency cash corrections. record_in_kind_income_only requires explicit global
+            /// preserve_existing, zero yield basis and a proved existing zero-basis income/units pair;
+            /// retained source proof remains readable and other events remain pending. record_cash_only
+            /// requires complete unfiltered Kinesis source, explicit preserve_existing and
+            /// cash_funding_policy=own_account_transfer; only the complete proved cash chain is selected,
+            /// with no XML application.
+            public let reconciliationScope: String?
+            /// Required only with record_cash_only. Explicit source-bound confirmation that all source cash
+            /// deposits and withdrawals are transfers between the user's own accounts. Bound in the
+            /// reviewed fingerprint; no opposite bank leg is created.
+            public let cashFundingPolicy: String?
+            /// Explicit per-batch overrides of adopt_policy. Each selected batch may occur at most once;
+            /// IDs outside batch_ids reject. The reviewed fingerprint binds the sorted overrides.
+            public let batchPolicies: [BatchPoliciesItem]?
+
+            public init(batchIds: [Int], adoptPolicy: String? = nil, reconciliationScope: String? = nil, cashFundingPolicy: String? = nil, batchPolicies: [BatchPoliciesItem]? = nil) {
+                self.batchIds = batchIds
+                self.adoptPolicy = adoptPolicy
+                self.reconciliationScope = reconciliationScope
+                self.cashFundingPolicy = cashFundingPolicy
+                self.batchPolicies = batchPolicies
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case batchIds = "batch_ids"
+                case adoptPolicy = "adopt_policy"
+                case reconciliationScope = "reconciliation_scope"
+                case cashFundingPolicy = "cash_funding_policy"
+                case batchPolicies = "batch_policies"
+            }
+
+            public struct BatchPoliciesItem: Codable, Equatable, Sendable {
+                public let batchId: Int
+                public let adoptPolicy: String
+
+                public init(batchId: Int, adoptPolicy: String) {
+                    self.batchId = batchId
+                    self.adoptPolicy = adoptPolicy
+                }
+
+                enum CodingKeys: String, CodingKey {
+                    case batchId = "batch_id"
+                    case adoptPolicy = "adopt_policy"
+                }
+            }
+        }
+    }
+
+    /// POST /api/portfolio/import/reconciliation/commit: Atomically commit a reviewed portfolio
+    /// statement scope
+    public struct CommitReviewedPortfolioImports: APIOperation {
+        public typealias Response = OpenAPI.PortfolioImportReconciliationCommitResult
+        public static let operationId = "commitReviewedPortfolioImports"
+        public static let method = HTTPMethod.post
+        public static let pathTemplate = "/api/portfolio/import/reconciliation/commit"
+
+        public var body: Body
+
+        public init(body: Body) {
+            self.body = body
+        }
+
+        public var path: String { "/api/portfolio/import/reconciliation/commit" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+
+        public struct Body: Codable, Equatable, Sendable {
+            public let batchIds: [Int]
+            public let adoptPolicy: String?
+            /// Same scope as the reviewed preview. Bounded modes require complete unfiltered Kinesis
+            /// sources and the matching explicit policy (preserve_existing for attachment/income,
+            /// prefer_source for corrections). Income requires zero yield basis and already proved units;
+            /// excluded events remain pending.
+            public let reconciliationScope: String?
+            /// Required only with record_cash_only. Explicit source-bound confirmation that all source cash
+            /// deposits and withdrawals are transfers between the user's own accounts. Bound in the
+            /// reviewed fingerprint; no opposite bank leg is created.
+            public let cashFundingPolicy: String?
+            /// Exact selected per-batch overrides used by the reviewed preview.
+            public let batchPolicies: [BatchPoliciesItem]?
+            /// Exact fingerprint returned by preview for this source/reconciliation scope, global policy
+            /// and per-batch overrides; narrow fingerprints also bind selected records, full source proof,
+            /// receipt context and deferred counts.
+            public let expectedPlanFingerprint: String
+
+            public init(batchIds: [Int], adoptPolicy: String? = nil, reconciliationScope: String? = nil, cashFundingPolicy: String? = nil, batchPolicies: [BatchPoliciesItem]? = nil, expectedPlanFingerprint: String) {
+                self.batchIds = batchIds
+                self.adoptPolicy = adoptPolicy
+                self.reconciliationScope = reconciliationScope
+                self.cashFundingPolicy = cashFundingPolicy
+                self.batchPolicies = batchPolicies
+                self.expectedPlanFingerprint = expectedPlanFingerprint
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case batchIds = "batch_ids"
+                case adoptPolicy = "adopt_policy"
+                case reconciliationScope = "reconciliation_scope"
+                case cashFundingPolicy = "cash_funding_policy"
+                case batchPolicies = "batch_policies"
+                case expectedPlanFingerprint = "expected_plan_fingerprint"
+            }
+
+            public struct BatchPoliciesItem: Codable, Equatable, Sendable {
+                public let batchId: Int
+                public let adoptPolicy: String
+
+                public init(batchId: Int, adoptPolicy: String) {
+                    self.batchId = batchId
+                    self.adoptPolicy = adoptPolicy
+                }
+
+                enum CodingKeys: String, CodingKey {
+                    case batchId = "batch_id"
+                    case adoptPolicy = "adopt_policy"
+                }
+            }
+        }
+    }
+
+    /// POST /api/portfolio/import/batches/{id}/commit: Commit a reviewed portfolio import batch
+    public struct CommitPortfolioImportBatch: APIOperation {
+        public typealias Response = JSONValue
+        public static let operationId = "commitPortfolioImportBatch"
+        public static let method = HTTPMethod.post
+        public static let pathTemplate = "/api/portfolio/import/batches/{id}/commit"
+
+        public var id: Int
+        public var body: Body?
+
+        public init(id: Int, body: Body? = nil) {
+            self.id = id
+            self.body = body
+        }
+
+        public var path: String { "/api/portfolio/import/batches/\(APIPath.segment(APIQuery.value(id)))/commit" }
+
+        public func encodedBody() throws -> Data? {
+            try body.map { try APIBody.encode($0) }
+        }
+
+        public struct Body: Codable, Equatable, Sendable {
+            /// Brokerage sleeve account (ADR-095) stamped on the batch, so every lot it commits inherits
+            /// it. `null` — or an absent field — preserves the existing batch account. A present value must
+            /// be a positive integer naming an existing account; a malformed one is rejected rather than
+            /// coerced, since a coerced id names a different account and passes the existence check. On
+            /// recommit, a present account also resets cash rows that failed solely because the batch
+            /// account was missing.
+            public let accountId: Int?
+
+            public init(accountId: Int? = nil) {
+                self.accountId = accountId
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case accountId = "account_id"
+            }
+        }
+    }
+
+    /// GET /api/belgian-tax/portfolio-dashboard: Read authoritative Portfolio Tax costs, estimates, and
+    /// editable setting baselines
+    public struct GetBelgianPortfolioTaxDashboard: APIOperation {
+        public typealias Response = OpenAPI.BelgianPortfolioTaxDashboard
+        public static let operationId = "getBelgianPortfolioTaxDashboard"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/belgian-tax/portfolio-dashboard"
+
+        /// Omit to use the live household year. Historical years use their snapshot or a year-pinned
+        /// live estimate.
+        public var year: Int?
+        /// Response display currency, normalized uppercase. Ordinary recorded costs use latest
+        /// stored/fallback rates and retain the existing original-amount fallback when a rate is
+        /// unavailable.
+        public var currency: String?
+
+        public init(year: Int? = nil, currency: String? = nil) {
+            self.year = year
+            self.currency = currency
+        }
+
+        public var path: String { "/api/belgian-tax/portfolio-dashboard" }
+
+        public var queryItems: [URLQueryItem] {
+            var items: [URLQueryItem] = []
+            if let year { items.append(URLQueryItem(name: "year", value: APIQuery.value(year))) }
+            if let currency { items.append(URLQueryItem(name: "currency", value: APIQuery.value(currency))) }
             return items
         }
     }

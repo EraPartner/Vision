@@ -57,7 +57,8 @@ final class ShellRecorder {
 @Suite struct NativeShellModelTests {
     func makeModel(
         settings: NativeAppSettings = NativeAppSettings(adminMode: true), recorder: ShellRecorder,
-        hidden: [NavSectionID: Bool]? = nil, portfolio: PortfolioScreens? = nil
+        hidden: [NavSectionID: Bool]? = nil, portfolio: PortfolioScreens? = nil,
+        portfolioImports: PortfolioImportScreens? = nil, tax: TaxScreens? = nil
     ) -> NativeShellModel {
         NativeShellModel(
             strings: DictionaryStrings(language: .en, table: [:]),
@@ -68,7 +69,9 @@ final class ShellRecorder {
             transactions: TransactionsFixture.idleModel(),
             accounts: AccountsFixture.idleModel(),
             categories: CategoriesFixture.idleModel(), recipients: RecipientsFixture.idleModel(),
+            tax: tax,
             portfolio: portfolio,
+            portfolioImports: portfolioImports,
             hiddenSections: hidden,
             loadSettings: { settings },
             saveHiddenSections: { recorder.saved.append($0) },
@@ -134,6 +137,33 @@ final class ShellRecorder {
         #expect(!model.isPresentingWeb)
         #expect(model.detail == .native(try #require(NativeScreen.screen(forPath: path))))
         #expect(model.route.value("period") == "1y" && model.route.value("fx_neutral") == "true")
+    }
+
+    @Test(arguments: [
+        "/portfolio/import", "/portfolio/import/7/review", "/portfolio/import/invalid/review", "/portfolio/tax",
+    ])
+    func remainingPortfolioScreensAreNativeWithoutAdminMode(path: String) async throws {
+        let client = APIClient(baseURL: { nil }, adminToken: { nil })
+        let model = makeModel(
+            settings: NativeAppSettings(adminMode: false), recorder: ShellRecorder(),
+            portfolio: PortfolioScreens(client: client), portfolioImports: PortfolioImportScreens(service: client),
+            tax: TaxScreens(client: client))
+        model.routeDidChange(try #require(NativeRoute(path + "?year=2024")))
+        await model.settingsSettled()
+        #expect(model.detail == .native(try #require(NativeScreen.screen(forPath: path))))
+        #expect(model.route.value("year") == "2024")
+    }
+
+    @Test func portfolioTaxHasNoPortfolioPDFAction() async throws {
+        let client = APIClient(baseURL: { nil }, adminToken: { nil })
+        let recorder = ShellRecorder()
+        let model = makeModel(
+            recorder: recorder, portfolio: PortfolioScreens(client: client), tax: TaxScreens(client: client))
+        model.routeDidChange(try #require(NativeRoute("/portfolio/tax?year=2024")))
+        await model.settingsSettled()
+        model.openPortfolioReport()
+        #expect(recorder.actions.isEmpty)
+        #expect(model.detail == .native(.portfolioTax))
     }
 
     @Test func theExchangeRatesScreenIsNativeOnlyInAdminMode() async throws {

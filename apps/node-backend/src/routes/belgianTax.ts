@@ -1,5 +1,6 @@
 import { Router } from "express";
 import dashboardRouter from "./belgianTaxDashboard.ts";
+import portfolioTaxRouter from "./belgianPortfolioTax.ts";
 import { z } from "zod";
 import {
   computeHouseholdTax,
@@ -12,6 +13,7 @@ import { getTaxOverview } from "../services/tax/overviewService.ts";
 
 const router = Router();
 router.use(dashboardRouter);
+router.use(portfolioTaxRouter);
 const computationSchema = z.strictObject({
   household: belgianTaxHouseholdV2Schema,
 });

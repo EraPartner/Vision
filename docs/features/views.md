@@ -811,7 +811,7 @@ Observability hub shown as the sidebar's Admin section (gated by Settings → Ap
 - [[docs/features/index]] - Feature documentation
 - [[docs/api/index]] - API documentation
 - [[docs/components/index]] - UI Components
-- [Interactive flow visualizer](../flow-visualizer.html#api-request) — 84 components / 52 flows, with Journey and Architecture views and five learning paths
+- [Interactive flow visualizer](../flow-visualizer.html#api-request) — 86 components / 55 flows, with Journey and Architecture views and five learning paths
 - [[docs/guides/visual-learning|Understand Vision Visually]] — conceptual diagrams and a suggested reading order
 
 

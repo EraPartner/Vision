@@ -10,6 +10,8 @@ actor "User" as User
 
 package "Client" {
   node "Vision Native (synthetic Demo)\nSwiftUI Tax, Portfolio + wealth tools\nDecimal display / native drafts" as NativeTax
+  node "Native Portfolio Import\nprobe · parser · staged session\nreview · history · fingerprint commit" as NativeImport
+  node "Native Portfolio Tax\nDecimal widgets + live-year drafts\nexisting atomic settings CAS" as NativePortfolioTax
 
   rectangle "Browser  /  Electron Renderer" {
     node "React 19 + TypeScript" as ReactApp
@@ -30,6 +32,7 @@ package "Server" {
     node "Middleware Stack\nrequestId · Host guard · metrics\nCORS · CSRF · adminAuth · rate limit\nenvelope · errors" as Middleware
     node "Routes\ntransactions · planning · portfolio · imports\nreports · AI · settings · admin · private audit" as Routes
     node "Services\nimports + XML evidence + reconciliation + custody/adjustments · prices · FX · tax · snapshots\nbackup · AI orchestration + references + Desktop setup · reports · attachments" as Services
+    node "Shared TypeScript helpers\ncomplete-source detection + bounded CSV preview\nPortfolio Tax estimators + cost buckets" as SharedNativeHelpers
     node "Repositories\ntransaction · recipient · planning · portfolio\nimports + history receipts · AI jobs + reference maps · attachments · settings · info" as Repos
     node "Background Jobs\nrefreshCashflowForecastMc · local analysis monitor scheduler" as Jobs
   }
@@ -73,6 +76,8 @@ package "Client to Server" {
   User --> ReactApp : HTTPS
   ReactApp --> Proxy : REST API
   NativeTax --> Express : loopback OpenAPI financial reads + writes
+  NativeImport --> Express : readonly probe + existing import/review operations
+  NativePortfolioTax --> Express : portfolio-dashboard + settings CAS
   NativeTax --> ReactApp : retained PDF dialog overlay
   Proxy --> Express : Forward
 }
@@ -98,6 +103,7 @@ package "Server Components" {
   Express --> Middleware
   Middleware --> Routes
   Routes --> Services
+  Services --> SharedNativeHelpers : reuse pure parsing / fiscal calculations
   Services --> Repos
   Jobs --> Services
 }
@@ -170,6 +176,24 @@ note right of NativeRuntime
   the user to the last migration-capable release (ADR-133).
   Vision Demo reuses this provider with an isolated runtime,
   port, and deterministic seed activated atomically (ADR-114).
+end note
+
+note right of NativeImport
+  Probe creates no batches or financial records.
+  Multi-statement staging retains review-required batches.
+  Scope/policy edits invalidate the reviewed fingerprint;
+  commit and rollback reuse existing TypeScript writers.
+  Checkpoints exclude file bytes; uncertain results block blind repeats.
+end note
+
+note right of NativePortfolioTax
+  Historical recorded costs use the selected year;
+  gains/current values retain existing all-time web semantics.
+  Active canonical and archived/current-FX display stay distinct.
+  Decimal decode/rendering and drafts stay native;
+  fiscal formulas, cost buckets and badge rates stay TypeScript.
+  Both setting maps retain unknown fields and original CAS tokens.
+  macOS package and Demo parity review remain pending.
 end note
 
 @enduml

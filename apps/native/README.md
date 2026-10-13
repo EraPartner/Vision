@@ -164,6 +164,15 @@ See [the architecture page](../../docs/architecture/native-app.md#native-navigat
 - `/portfolio/net-worth` renders full daily chart history, account reconciliation and a separate
   newest-first paginated table. Period changes retain the full chart series; stale currency reads
   cannot replace the current values. Full macOS compilation and Demo review remain pending.
+- `/portfolio/import` and `/portfolio/import/:batchId/review` are native (phase 3j): maintained
+  CSV/XLS/XLSX detection uses a read-only server probe; staging, parser configuration, history,
+  mapping, reconciliation and commits retain the existing TypeScript contracts. Native and web
+  views share session metadata through the two existing sessionStorage keys, without file bytes.
+- `/portfolio/tax` displays authoritative TypeScript costs and fiscal estimates, with the shared
+  tax year/profile/snapshot/filing/history/CSV actions and seven widget preferences. Manual costs
+  and classifications edit the live year with original CAS baselines, even from historical views.
+  Both tax routes validate and mirror the viewed year in the URL after reading the live profile
+  and snapshots. Portfolio Tax has no PDF action in the existing app.
 - `/admin`, `/admin/providers`, `/admin/endpoints` and `/admin/exchange-rates` are native, in
   admin mode only, and so are `/admin/db` and `/admin/db/:table`; the table editor holds
   navigation and Quit behind a native Leave this page? alert while it has pending changes. The admin token card writes the page's
@@ -446,3 +455,17 @@ Demo visual/keyboard checks remain pending.
     account totals, full daily series, each period and newest-first table pagination. Change
     currency during a read and period during price refresh; old values must not reappear under
     new labels. Verify offline refresh, fallback notices and retained web printing.
+
+25. **Portfolio Import (phase 3j, pending Mac review).** Compare maintained CSV, original IBKR
+    funding XLS/XLSX and supported Saxo XLSX detection with the web view on synthetic files.
+    Inspect source identity ambiguity, header/sample preview, broker and transfer routing, custom
+    parser save/update/delete, session restoration from staged web metadata, and history rollback.
+    Review evidence and scope policies, map unresolved groups, create holdings, repair broker
+    routing and commit. Cancel during uploads and simulate lost responses: retain receipts, block
+    unverified replay and invalidate the other wealth screens. No file bytes may enter storage.
+26. **Portfolio Tax (phase 3j, pending Mac review).** Compare all seven widgets, tax and fee
+    breakdowns, unknown dividend conventions and inactive investments against the web app.
+    Open historical and frozen years, change currency during reads, and test invalid/missing year
+    URLs. Edit live-year manual costs/classifications from a historical view, exercise CAS conflicts
+    and lost acknowledgements, and confirm unknown settings survive. Test profile/year actions,
+    filing history and CSV export in EN/NL and each number/date format.

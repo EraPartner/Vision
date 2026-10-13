@@ -8,7 +8,7 @@ last_modified: 2026-10-13
 adr-reference: 026
 # Authoritative HTTP-operation count from openapi.yaml. The CI checker also
 # compares every method/path pair; update concrete resource rows when routes change.
-api_operation_count: 304
+api_operation_count: 306
 tags:
   [
     reference,
@@ -459,7 +459,7 @@ Provider-agnostic research surface mounted at `/api/research` under `marketRateL
 | PATCH  | `/api/import/parsers/:id`                               | Update saved parser name and/or config; 404 if missing; 409 on name conflict | —          | [[docs/api/imports\|Imports]] |
 | DELETE | `/api/import/parsers/:id`                               | Delete saved parser; 204 on success; 404 if missing                          | —          | [[docs/api/imports\|Imports]] |
 
-## Portfolio Import (13 endpoints) — ADR-078
+## Portfolio Import (14 endpoints) — ADR-078
 
 All routes mounted at `/api/portfolio/import` with `importRateLimiter`. The pipeline stages,
 validates, and matches CSV history or supported Saxo XLSX. Maintained formats always require review.
@@ -471,6 +471,7 @@ in ascending order and preserves source order within a date. See
 
 | Method | Path                                                                | Description                                                                                                        | Rate Limit        | Doc                                               |
 | ------ | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ----------------- | ------------------------------------------------- |
+| POST   | `/api/portfolio/import/probe` | Read-only full-file maintained detection and bounded CSV header preview; no batch writes | importRateLimiter | [[docs/api/portfolio-imports\|Portfolio Imports]] |
 | POST   | `/api/portfolio/import/csv/custom`                                  | One-shot CSV/maintained workbook portfolio import; multipart options; returns 201 or 202                           | importRateLimiter | [[docs/api/portfolio-imports\|Portfolio Imports]] |
 | POST   | `/api/portfolio/import/csv/stream`                                  | CSV/maintained workbook import; workbook preflight before SSE progress/review/terminal events                      | importRateLimiter | [[docs/api/portfolio-imports\|Portfolio Imports]] |
 | GET    | `/api/portfolio/import/parsers`                                     | List saved portfolio parser configs (kind=portfolio)                                                               | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
@@ -591,12 +592,13 @@ The three generic `/api/admin/database/tables/:table/{schema,rows,mutate}` edito
 | POST   | `/api/admin/codex-experimental/synthetic-turn`    | Send one fixed fictional question; no request payload                                                                                        | adminRateLimiter   | [[docs/api/admin\|Admin]] |
 | POST   | `/api/admin/codex-experimental/logout`            | Log out and remove disposable runtime state                                                                                                  | adminRateLimiter   | [[docs/api/admin\|Admin]] |
 
-## Belgian Tax (3 endpoints) — Native phase 3 prerequisite
+## Belgian Tax (4 endpoints) — Native phase 3 prerequisite
 
 | Method | Path                         | Purpose                                                                                                                                                             | Rate Limit                                 | Docs                                  |
 | ------ | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ | ------------------------------------- |
 | GET    | `/api/belgian-tax/overview`  | Read normalized live/historical household and frozen figures with original CAS baselines; no writes                                                                 | globalRateLimiter + aggregationRateLimiter | [[docs/api/belgian-tax\|Belgian Tax]] |
 | GET    | `/api/belgian-tax/dashboard` | Server-computed chart series, recorded partner income/portfolio taxes, frozen year comparisons, suggestions, and display rows; explicit caller exclusions and dates | globalRateLimiter + aggregationRateLimiter | [[docs/api/belgian-tax\|Belgian Tax]] |
+| GET    | `/api/belgian-tax/portfolio-dashboard` | Authoritative Portfolio Tax costs, estimates, frozen-first PIT budget, display rates, and original adjustment/classification CAS records; read-only historical/current-FX web parity | globalRateLimiter + aggregationRateLimiter | [[docs/api/belgian-tax\|Belgian Tax]] |
 | POST   | `/api/belgian-tax/compute`   | Stateless computation of a complete v2 household using the shared TypeScript tax engine; household result and compatible PIT calculation                            | globalRateLimiter + aggregationRateLimiter | [[docs/api/belgian-tax\|Belgian Tax]] |
 
 ## Reports (3 endpoints) — Phase 3 / Phase 5 / Phase 7
@@ -659,8 +661,7 @@ Aggregation routes removed in Phase 9 as migration to `/api/aggregations/*` is c
 The additive `active=false` scope on `portfolio-summary` includes all canonical holdings and
 an inactive-only `archivedPresentation` retaining the web's ordinary-history/current-FX display.
 The default active response is unchanged; scope and currency have separate cache entries and
-share mutation invalidation. This adds no operation (304 API operations, Belgian Tax 3,
-overall 331 including health/IPC). See [[docs/api/portfolio-summary|the full contract]].
+share mutation invalidation. This query scope adds no operation. See [[docs/api/portfolio-summary|the full contract]].
 
 `portfolio-summary` also returns optional additive `brokerageCashFees` (dated source-owned cash costs,
 `gainAfterFees` and account subtotals). Existing investment totals and return series keep their scope.
@@ -743,7 +744,7 @@ equal the main senders and preload subscriptions.
 | Market Lookup                        | 4                             |
 | Research (ADR-079/081/082)           | 18                            |
 | Import                               | 16                            |
-| Portfolio Import (ADR-078)           | 13                            |
+| Portfolio Import (ADR-078)           | 14                            |
 | Attachments (Phase 5A)               | 4                             |
 | Saved Charts                         | 4                             |
 | Settings                             | 5                             |
@@ -753,14 +754,14 @@ equal the main senders and preload subscriptions.
 | Splits                               | 12                            |
 | Health                               | 2                             |
 | Aggregations (Phase 2/6/10/D)        | 15                            |
-| Belgian Tax (ADR-204)                | 3                             |
+| Belgian Tax (ADR-204)                | 4                             |
 | Reports (Phase 3/7)                  | 3                             |
 | Info/Statistics (Phase 14)           | 18                            |
 | AI Chat                              | 9                             |
 | Electron IPC invoke channels         | 25                            |
-| **Total**                            | **331**                       |
+| **Total**                            | **333**                       |
 
-> **304** versioned `/api` HTTP operations are declared in `openapi.yaml`. The checker compares their concrete method/path pairs with the resource tables and also checks `api_operation_count`. The 2 health routes and 25 Electron invoke channels are separate contracts; the 6 Electron event channels are not request endpoints. Resource summary counts and rate-limit descriptions are navigation aids and are not independently gate-checked.
+> **306** versioned `/api` HTTP operations are declared in `openapi.yaml`. The checker compares their concrete method/path pairs with the resource tables and also checks `api_operation_count`. The 2 health routes and 25 Electron invoke channels are separate contracts; the 6 Electron event channels are not request endpoints. Resource summary counts and rate-limit descriptions are navigation aids and are not independently gate-checked.
 
 ## Phase G Endpoint Consolidation (April 2026)
 

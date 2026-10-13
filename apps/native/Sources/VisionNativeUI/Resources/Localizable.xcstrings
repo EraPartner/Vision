@@ -9307,6 +9307,60 @@
         }
       }
     },
+    "combobox.investment.empty": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No investments found"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geen beleggingen gevonden"
+          }
+        }
+      }
+    },
+    "combobox.investment.placeholder": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select an investment…"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selecteer een belegging…"
+          }
+        }
+      }
+    },
+    "combobox.investment.search": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search investments…"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beleggingen zoeken…"
+          }
+        }
+      }
+    },
     "combobox.recipient.create": {
       "comment": "Generated from i18n/source by scripts/native-strings.ts.",
       "extractionState": "manual",
@@ -9573,6 +9627,24 @@
           "stringUnit": {
             "state": "translated",
             "value": "Sluiten"
+          }
+        }
+      }
+    },
+    "common.confirm": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Confirm"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bevestigen"
           }
         }
       }
@@ -30111,6 +30183,4830 @@
           "stringUnit": {
             "state": "translated",
             "value": "Rendement"
+          }
+        }
+      }
+    },
+    "portfolioImport.autoDetect": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detect automatically"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatisch herkennen"
+          }
+        }
+      }
+    },
+    "portfolioImport.chooseFile": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a portfolio CSV or XLSX file"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kies een CSV- of XLSX-bestand met portefeuilletransacties"
+          }
+        }
+      }
+    },
+    "portfolioImport.chooseFileFirst": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a CSV file to match its columns to your transactions."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kies een CSV-bestand om de kolommen aan je transacties te koppelen."
+          }
+        }
+      }
+    },
+    "portfolioImport.col.amount": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Amount column"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bedragkolom"
+          }
+        }
+      }
+    },
+    "portfolioImport.col.currency": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Currency column"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Valutakolom"
+          }
+        }
+      }
+    },
+    "portfolioImport.col.date": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Date column"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Datumkolom"
+          }
+        }
+      }
+    },
+    "portfolioImport.col.fees": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fees column"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kostenkolom"
+          }
+        }
+      }
+    },
+    "portfolioImport.col.fxRate": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exchange rate column"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wisselkoerskolom"
+          }
+        }
+      }
+    },
+    "portfolioImport.col.name": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Name column"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Naamkolom"
+          }
+        }
+      }
+    },
+    "portfolioImport.col.note": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Note column"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Notitiekolom"
+          }
+        }
+      }
+    },
+    "portfolioImport.col.price": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Price column"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prijskolom"
+          }
+        }
+      }
+    },
+    "portfolioImport.col.symbol": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Symbol column"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Symboolkolom"
+          }
+        }
+      }
+    },
+    "portfolioImport.col.taxes": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Taxes column"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Belastingkolom"
+          }
+        }
+      }
+    },
+    "portfolioImport.col.type": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Type column"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Typekolom"
+          }
+        }
+      }
+    },
+    "portfolioImport.col.units": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quantity column"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aantalkolom"
+          }
+        }
+      }
+    },
+    "portfolioImport.defaultAssetClass": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Default asset class"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Standaard activaklasse"
+          }
+        }
+      }
+    },
+    "portfolioImport.defaultType": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Default type"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Standaardtype"
+          }
+        }
+      }
+    },
+    "portfolioImport.desc": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import a broker or exchange transaction history. Supported statements are detected automatically and reviewed before import."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importeer de transactiegeschiedenis van een broker of handelsplatform. Ondersteunde afschriften worden automatisch herkend en vóór het importeren gecontroleerd."
+          }
+        }
+      }
+    },
+    "portfolioImport.detecting": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detecting statement format…"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afschriftformaat herkennen…"
+          }
+        }
+      }
+    },
+    "portfolioImport.detectionFailed": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This statement could not be read as a supported portfolio export. No transactions were imported."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dit afschrift kon niet als ondersteunde portefeuille-export worden gelezen. Er zijn geen transacties geïmporteerd."
+          }
+        }
+      }
+    },
+    "portfolioImport.dropzone": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Drag & drop your CSV or XLSX here"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sleep je CSV- of XLSX-bestand hierheen"
+          }
+        }
+      }
+    },
+    "portfolioImport.duplicateColumnsWarning": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The same CSV column is mapped to more than one field: {columns}. Every mapped field will copy that column's value, so check this is intended."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dezelfde CSV-kolom is aan meer dan één veld gekoppeld: {columns}. Elk gekoppeld veld neemt de waarde van die kolom over, dus controleer of dit de bedoeling is."
+          }
+        }
+      }
+    },
+    "portfolioImport.fileLabel": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transaction history file"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bestand met transactiegeschiedenis"
+          }
+        }
+      }
+    },
+    "portfolioImport.formatOptions": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CSV format options"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CSV-indelingsopties"
+          }
+        }
+      }
+    },
+    "portfolioImport.ibkrFundingParser": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "IBKR funding history"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "IBKR-financieringsgeschiedenis"
+          }
+        }
+      }
+    },
+    "portfolioImport.ibkrFundingParserHint": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use the original Excel export from IBKR Transaction Status & History, with Deposit and Withdrawal sheets. Native amounts, currencies, account and reference numbers are read automatically. Choose Correct existing financial values to reconcile funding already imported from Transaction History. Each correction requires an exact match and keeps its existing transaction ID."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gebruik de oorspronkelijke Excel-export uit IBKR Transaction Status & History, met de bladen Deposit en Withdrawal. Bedragen, valuta, rekening- en referentienummers worden automatisch gelezen. Kies Bestaande financiële waarden corrigeren om financiering uit de transactiegeschiedenis te reconciliëren. Elke correctie vereist een exacte overeenkomst en behoudt het bestaande transactie-ID."
+          }
+        }
+      }
+    },
+    "portfolioImport.ibkrParser": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "IBKR transaction history"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "IBKR-transactiegeschiedenis"
+          }
+        }
+      }
+    },
+    "portfolioImport.ibkrParserHint": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In IBKR, export Transaction History as a CSV for trades, income and charges. Its funding amounts use the statement base currency. Also export deposits and withdrawals from Transaction Status & History as an Excel workbook to verify their original amounts and currencies. Select the broker account that receives these events. Forex principal is not a portfolio trade; explicit charges remain cash fees."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exporteer in IBKR de transactiegeschiedenis als CSV voor transacties, inkomsten en kosten. Financieringsbedragen gebruiken de basisvaluta van het afschrift. Exporteer ook stortingen en opnames uit Transaction Status & History als Excel-werkmap om hun oorspronkelijke bedragen en valuta te bewijzen. Selecteer de brokerrekening voor deze gebeurtenissen. Valutaconversies zijn geen portefeuilletransacties; expliciete kosten blijven kaskosten."
+          }
+        }
+      }
+    },
+    "portfolioImport.invalidFile": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a CSV or XLSX file."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kies een CSV- of XLSX-bestand."
+          }
+        }
+      }
+    },
+    "portfolioImport.kinesisParser": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kinesis transaction history"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kinesis-transactiegeschiedenis"
+          }
+        }
+      }
+    },
+    "portfolioImport.kinesisParserHint": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In Kinesis Money, export a Transactions statement as CSV and select that file here. Select the Kinesis account that receives its trades and cash movements. Paired currency legs are combined. Asset withdrawals and negative unit adjustments that cannot be represented safely remain visible as review errors and require manual reconciliation."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exporteer in Kinesis Money een transactieoverzicht als CSV en selecteer dat bestand hier. Selecteer de Kinesis-rekening voor de transacties en kasmutaties. Gekoppelde valutaregels worden samengevoegd. Opnames van activa en negatieve eenheidsaanpassingen die niet veilig kunnen worden weergegeven, blijven zichtbaar als beoordelingsfouten en vereisen handmatige afstemming."
+          }
+        }
+      }
+    },
+    "portfolioImport.newCustom": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New custom parser"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nieuwe aangepaste parser"
+          }
+        }
+      }
+    },
+    "portfolioImport.nexoParser": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nexo transaction history"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nexo-transactiegeschiedenis"
+          }
+        }
+      }
+    },
+    "portfolioImport.nexoParserHint": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In Nexo, export Transaction history as CSV and select that file here. Select the Nexo account used for the import. Lifecycle rows, internal transfers, asset withdrawals, and fees that cannot be valued or paired safely remain visible as review errors and require manual reconciliation."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exporteer in Nexo de transactiegeschiedenis als CSV en selecteer dat bestand hier. Selecteer de Nexo-rekening voor de import. Levenscyclusregels, interne overdrachten, opnames van activa en kosten die niet veilig kunnen worden gewaardeerd of gekoppeld, blijven zichtbaar als beoordelingsfouten en vereisen handmatige afstemming."
+          }
+        }
+      }
+    },
+    "portfolioImport.nexoProParser": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nexo Pro Spot"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nexo Pro Spot"
+          }
+        }
+      }
+    },
+    "portfolioImport.nexoProParserHint": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export Spot history from Nexo Pro Activity. Include each period of your trading history. The Nexo wallet export is separate."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exporteer de Spot-geschiedenis via Activiteit in Nexo Pro. Neem elke periode van je handelsgeschiedenis op. De Nexo-walletexport is afzonderlijk."
+          }
+        }
+      }
+    },
+    "portfolioImport.optionalColumns": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Additional columns"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aanvullende kolommen"
+          }
+        }
+      }
+    },
+    "portfolioImport.parserNamePlaceholder": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "e.g. IBKR, Nexo, Saxo"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bijv. IBKR, Nexo, Saxo"
+          }
+        }
+      }
+    },
+    "portfolioImport.parserSource": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parser"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parser"
+          }
+        }
+      }
+    },
+    "portfolioImport.requiredNote": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Map a date column and a symbol or name column, and choose an asset class."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wijs een datumkolom en een symbool- of naamkolom toe en kies een activaklasse."
+          }
+        }
+      }
+    },
+    "portfolioImport.review.cashAccount": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Account for cash movements"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rekening voor kasmutaties"
+          }
+        }
+      }
+    },
+    "portfolioImport.review.cashMovements": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cash movements"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kasmutaties"
+          }
+        }
+      }
+    },
+    "portfolioImport.review.commit": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Confirm import"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import bevestigen"
+          }
+        }
+      }
+    },
+    "portfolioImport.review.createNew": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create new investment"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nieuwe belegging aanmaken"
+          }
+        }
+      }
+    },
+    "portfolioImport.review.holding": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Investment"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Belegging"
+          }
+        }
+      }
+    },
+    "portfolioImport.review.matched": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{n} matched"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{n} gekoppeld"
+          }
+        }
+      }
+    },
+    "portfolioImport.review.routingBroker": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count} trades to {broker}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count} transacties naar {broker}"
+          }
+        }
+      }
+    },
+    "portfolioImport.review.routingBrokerOne": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 trade to {broker}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 transactie naar {broker}"
+          }
+        }
+      }
+    },
+    "portfolioImport.review.routingUnassigned": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count} trades to Unassigned"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count} transacties naar Niet toegewezen"
+          }
+        }
+      }
+    },
+    "portfolioImport.review.routingUnassignedOne": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 trade to Unassigned"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 transactie naar Niet toegewezen"
+          }
+        }
+      }
+    },
+    "portfolioImport.review.routingUnavailable": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The saved broker account is unavailable. Choose an active portfolio account before importing."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "De opgeslagen brokerrekening is niet beschikbaar. Kies een actieve portefeuillerekening voordat je importeert."
+          }
+        }
+      }
+    },
+    "portfolioImport.review.subtitle": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Match each row to an investment, then confirm."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Koppel elke regel aan een belegging en bevestig."
+          }
+        }
+      }
+    },
+    "portfolioImport.review.title": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review portfolio import"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Portefeuille-import controleren"
+          }
+        }
+      }
+    },
+    "portfolioImport.review.unknownInstrument": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unknown instrument"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Onbekend instrument"
+          }
+        }
+      }
+    },
+    "portfolioImport.review.unresolved": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{n} to resolve"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{n} op te lossen"
+          }
+        }
+      }
+    },
+    "portfolioImport.saveParserOptions": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save this setup for reuse"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bewaar deze instellingen voor hergebruik"
+          }
+        }
+      }
+    },
+    "portfolioImport.saxoParser": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saxo transaction history"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saxo-transactiegeschiedenis"
+          }
+        }
+      }
+    },
+    "portfolioImport.saxoParserHint": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export Saxo transaction history as XLSX or CSV. XLSX includes the detailed tax and fee breakdown. Trades and cash movements use the selected Saxo account."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exporteer de Saxo-transactiegeschiedenis als XLSX of CSV. XLSX bevat de uitsplitsing van belastingen en kosten. Transacties en geldbewegingen gebruiken de gekozen Saxo-rekening."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.accountId": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Account {id}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rekening {id}"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.accountRequired": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The broker account is ambiguous or missing. Choose the existing destination before staging."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "De brokerrekening is niet eenduidig of ontbreekt. Kies de bestaande bestemming voordat je de historiek klaarzet."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.actions.adjustment": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Asset adjustments"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activa-aanpassingen"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.actions.adopt": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Existing transactions to reconcile"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bestaande transacties om af te stemmen"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.actions.blocked": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Blocked records"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geblokkeerde records"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.actions.cash": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cash transactions"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geldtransacties"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.actions.duplicate": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Already imported"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Al geïmporteerd"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.actions.duplicate_source": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repeated source records"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Herhaalde bronrecords"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.actions.insert": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New transactions"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nieuwe transacties"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.actions.internal_annotation": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Internal movements"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Interne bewegingen"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.actions.other": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Other reviewed action"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Andere gecontroleerde actie"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.actions.policy_required": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose how to handle differences"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kies hoe je verschillen wilt verwerken"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.actions.record_income": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Record paired income"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bijbehorende inkomsten vastleggen"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.actions.repair_duplicate": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Duplicate records to repair"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Duplicaten om te herstellen"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.actions.settled": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Already settled"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Al verwerkt"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.actions.transfer": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dated asset transfers"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gedateerde activa-overdrachten"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.adjustment.account": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Affected account"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Betrokken rekening"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.adjustment.basis": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cost basis treatment"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Behandeling van de aanschaffingswaarde"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.adjustment.basis.carried": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Carry the existing cost basis"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "De bestaande aanschaffingswaarde behouden"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.adjustment.basis.zero_yield_only": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Consume only confirmed yield units with zero cost"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alleen bevestigde opbrengsteenheden met nulkosten verbruiken"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.adjustment.kind": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adjustment kind"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Soort aanpassing"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.adjustment.kind.asset_fee": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fee paid in asset units"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kosten betaald in activa-eenheden"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.adjustment.kind.yield_reversal": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reversal of yield units"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Terugname van opbrengsteenheden"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.advanced": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Advanced single-file import"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geavanceerde import van één bestand"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.allAssets": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All assets"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle activa"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.annotationHint": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Source evidence with no change to cash or holdings."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bronbewijs zonder wijziging van geld of posities."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.appliedPolicy": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Applied policy: {policy}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toegepast beleid: {policy}"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.assetScope": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Assets to include"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Op te nemen activa"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.assetScopeHelp": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leave empty for the full statement, or enter asset symbols separated by commas. Other assets remain outside this import."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Laat leeg voor het volledige overzicht of voer activasymbolen in, gescheiden door komma's. Andere activa blijven buiten deze import."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.atomic": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Commit this reviewed session together. If the preview is stale or any row fails, the server rejects the entire commit."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sla deze gecontroleerde sessie samen op. Als de controle verouderd is of een rij faalt, weigert de server de volledige opslag."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.attachReviewed": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Attach reviewed source records"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gecontroleerde bronrecords koppelen"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.attachSourceRecords": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Link matching existing records"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Koppel overeenkomende bestaande records"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.attachmentAtomic": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Attach the reviewed source records together. Recorded dates and financial values stay unchanged, including grouped yield matches; broker payment dates remain source evidence. No new transactions or duplicate repairs are included. Remaining events and the reference stay queued if the session is incomplete. A stale preview is rejected."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Koppel de gecontroleerde bronrecords samen. Vastgelegde datums en financiële waarden blijven ongewijzigd, ook bij gegroepeerde yield-koppelingen; betaaldatums van de broker blijven bronbewijs. Er worden geen nieuwe transacties of duplicatenherstellingen opgenomen. Resterende gebeurtenissen blijven klaarstaan als de sessie onvolledig is. Een verouderde controle wordt geweigerd."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.attachmentCounts": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "0 new transactions; {adopted} existing records to attach; {pending} events remain pending."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "0 nieuwe transacties; {adopted} bestaande records om te koppelen; {pending} gebeurtenissen blijven in afwachting."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.attachmentHint": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose this scope before staging complete Kinesis statements. Attach only proven existing records while preserving their dates and financial values, including the recorded zero basis of existing yield-unit receipts. Records without enough broker evidence, new acquisitions and income remain pending."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kies deze scope voordat je volledige Kinesis-afschriften klaarzet. Koppel alleen bewezen bestaande records en behoud hun datums en financiële waarden, inclusief de vastgelegde nulbasis van bestaande opbrengsteenheden. Records zonder voldoende brokerbewijs, nieuwe verwervingen en inkomsten blijven openstaan."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.attachmentUnavailable": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Source attachment requires only complete Kinesis statements and preserving existing facts. Remove asset filters or conflicting statement policies, or choose full history."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bronrecords koppelen vereist uitsluitend volledige Kinesis-overzichten en het behoud van bestaande gegevens. Verwijder filters voor beleggingen of tegenstrijdig beleid per bestand, of kies de volledige historiek."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.auto": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatic exact matches"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatische exacte overeenkomsten"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.batch": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Batch {id}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Batch {id}"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.blocked": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import is blocked until these source or matching issues are resolved."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "De import is geblokkeerd totdat deze bron- of afstemmingsproblemen zijn opgelost."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.blockers.adjustmentBasis": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The original cost basis for this adjustment is unresolved."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "De oorspronkelijke aanschaffingswaarde voor deze aanpassing is onduidelijk."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.blockers.adjustmentIncomplete": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The source does not provide complete asset adjustment evidence."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "De bron bevat onvoldoende gegevens voor de activa-aanpassing."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.blockers.adjustmentKind": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The kind of asset adjustment is unresolved. More source evidence is required."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Het soort activa-aanpassing is onduidelijk. Meer brongegevens zijn nodig."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.blockers.ambiguous": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "More than one existing transaction could represent this event."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meer dan één bestaande transactie kan deze gebeurtenis voorstellen."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.blockers.assigned": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This event overlaps history already assigned to an account or import."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deze gebeurtenis overlapt historiek die al aan een rekening of import is gekoppeld."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.blockers.basis": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The original acquisition cost is missing. Additional source evidence is required."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "De oorspronkelijke aanschaffingswaarde ontbreekt. Aanvullend bronbewijs is nodig."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.blockers.cashScope": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Record new Kinesis cash through the cash-only scope and confirm own-account funding before importing."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Registreer nieuwe Kinesis-geldhistoriek via de modus voor alleen geldhistoriek en bevestig financiering tussen eigen rekeningen vóór het importeren."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.blockers.companionPro": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Include the completed Nexo Pro trade history for this account to explain its internal movements."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voeg de voltooide Nexo Pro-handelshistoriek voor deze rekening toe om de interne bewegingen te verklaren."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.blockers.currency": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The currency conversion is not proven by the source."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "De valutaomrekening is niet bewezen door de bron."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.blockers.economics": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The source does not prove equivalent financial values."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "De bron bewijst geen gelijkwaardige financiële waarden."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.blockers.identity": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The source identity is missing or conflicts with another record."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "De bronidentiteit ontbreekt of is in conflict met een ander record."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.blockers.incomplete": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The source row is incomplete or its holding is unresolved."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "De bronrij is onvolledig of de positie is niet gekoppeld."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.blockers.invalid": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The source values do not form a valid transaction."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "De bronwaarden vormen geen geldige transactie."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.blockers.other": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This event needs further source evidence before importing."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deze gebeurtenis vereist aanvullend bronbewijs voordat je kunt importeren."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.blockers.policy": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Source facts differ. Choose whether to preserve existing facts or use proven source facts."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Brongegevens verschillen. Kies of je bestaande gegevens behoudt of bewezen brongegevens gebruikt."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.blockers.projectedHistory": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The combined history cannot be replayed consistently. Resolve its source or cost basis conflicts before importing."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "De gecombineerde historiek kan niet consistent worden verwerkt. Los conflicten in brongegevens of aanschaffingswaarden op voordat je importeert."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.blockers.referenceAccount": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The source and reference account mappings disagree. Review the selected source and custody accounts."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "De rekeningkoppelingen van bron en referentie verschillen. Controleer de geselecteerde bron- en bewaarrekeningen."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.blockers.referenceAsset": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The reference asset cannot be matched uniquely to the selected source history."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Het activum uit de referentie kan niet uniek aan de geselecteerde bronhistoriek worden gekoppeld."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.blockers.referenceEvent": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No unique selected source event matches this reference entry. Check historical coverage."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geen unieke geselecteerde brongebeurtenis past bij deze referentieregel. Controleer de historische dekking."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.blockers.referenceFee": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The reference transfer fee cannot be proved from the source history."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "De overdrachtskosten uit de referentie kunnen niet uit de bronhistoriek worden bewezen."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.blockers.referenceMatch": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "More than one source event matches this reference entry. Resolve the ambiguity before importing."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meer dan één brongebeurtenis past bij deze referentieregel. Los de dubbelzinnigheid op voordat je importeert."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.blockers.referencePortfolio": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This reference portfolio has no explicit account mapping in the selected statements."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deze referentieportefeuille heeft geen expliciete rekeningkoppeling in de geselecteerde overzichten."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.blockers.referenceTrade": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The reference conflicts with an existing trade supported by source evidence."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "De referentie is in strijd met een bestaande transactie die door brongegevens wordt ondersteund."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.blockers.zeroYield": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This adjustment requires an explicit policy for confirmed yield placeholders with zero cost."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deze aanpassing vereist een expliciet beleid voor bevestigde tijdelijke opbrengstwaarden met nulkosten."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.cashAccount": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cash account"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geldrekening"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.cashAtomic": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The complete proved cash chain is recorded together. No portfolio, income, custody or other pending source events are committed by this mode."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "De volledige bewezen geldketen wordt samen geregistreerd. Deze modus verwerkt geen portefeuille-, inkomsten-, bewarings- of andere brongebeurtenissen die nog in afwachting zijn."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.cashCounts": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{events} new cash source events; {recorded} new cash ledger records; 0 new holdings or income records. {pending} source events remain pending."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{events} nieuwe geldgebeurtenissen uit de bron; {recorded} nieuwe grootboekrecords; 0 nieuwe posities of inkomstenrecords. {pending} brongebeurtenissen blijven in afwachting."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.cashExpense": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Card expense"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kaartuitgave"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.cashFeeExistingId": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Existing fee transaction {id}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bestaande kostentransactie {id}"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.cashFeeExpense": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Separate withdrawal fee expense: {amount} {currency}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afzonderlijke opnamekost als uitgave: {amount} {currency}"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.cashFundingConfirmation": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I confirm that this statement's cash deposits and withdrawals are transfers between my own accounts."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ik bevestig dat de geldstortingen en geldopnames in dit overzicht overboekingen tussen mijn eigen rekeningen zijn."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.cashFundingHint": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trade cash and confirmed funding are excluded from income and expenses; a separately quoted funding withdrawal fee remains an expense. Card payments include their quoted fee as spending. Only the recorded broker leg is imported; no opposite bank transaction is created."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Handelsbedragen en bevestigde financiering worden uitgesloten van inkomsten en uitgaven; een afzonderlijk vermelde opnamekost blijft een uitgave. Kaartbetalingen bevatten hun vermelde kost als uitgave. Alleen de vastgelegde brokerzijde wordt geïmporteerd; er wordt geen tegenovergestelde banktransactie aangemaakt."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.cashHint": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review the complete Kinesis statement for trade cash, own-account funding and card expenses. Holdings, income and custody stay unchanged; other source events remain pending."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Controleer het volledige Kinesis-overzicht op handelsbedragen, financiering tussen eigen rekeningen en kaartuitgaven. Posities, inkomsten en bewaring blijven ongewijzigd; andere brongebeurtenissen blijven in afwachting."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.cashKinds.card_expense": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Card payment"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kaartbetaling"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.cashKinds.own_account_funding": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Own-account funding"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Financiering tussen eigen rekeningen"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.cashKinds.trade_quote": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trade cash"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Handelsbedrag"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.cashPartialSuccess": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{recordedCash} cash records recorded; {duplicates} duplicate source rows settled. {pending} source events remain queued. Holdings and income are unchanged."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{recordedCash} geldrecords geregistreerd; {duplicates} dubbele bronregels afgehandeld. {pending} brongebeurtenissen blijven in de wachtrij. Posities en inkomsten zijn ongewijzigd."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.cashPolicyHint": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Existing portfolio records stay unchanged. The server proves and records the whole cash chain together, with its source classification and no invented counterpart."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bestaande portefeuillerecords blijven ongewijzigd. De server bewijst en registreert de volledige geldketen samen, met de bronclassificatie en zonder verzonnen tegenboeking."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.cashSuccess": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{recordedCash} cash records recorded; {duplicates} duplicate source rows settled. Holdings and income are unchanged."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{recordedCash} geldrecords geregistreerd; {duplicates} dubbele bronregels afgehandeld. Posities en inkomsten zijn ongewijzigd."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.cashTransfer": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Internal transfer; excluded from income and expenses"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Interne overboeking; uitgesloten van inkomsten en uitgaven"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.cashTreatment": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Treatment"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verwerking"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.cashUnavailable": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use complete Kinesis sources, preserve existing facts and confirm own-account funding before staging or reviewing cash."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gebruik volledige Kinesis-bronnen, behoud bestaande gegevens en bevestig financiering tussen eigen rekeningen voordat je geldhistoriek klaarmaakt of controleert."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.clear": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start new session"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nieuwe sessie starten"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.commit": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import reviewed history"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gecontroleerde historiek importeren"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.committing": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importing reviewed history…"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gecontroleerde historiek importeren…"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.convention.gross": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gross"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bruto"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.convention.net": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Net"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Netto"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.convention.unknown": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unknown"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Onbekend"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.correctExistingRecords": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Correct proven existing records"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bewezen bestaande records corrigeren"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.correctReviewed": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apply reviewed corrections"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gecontroleerde correcties toepassen"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.correctionAtomic": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apply the proven corrections together. Quantities, types, notes and transaction IDs stay unchanged. Dates change only to the broker payment date for a proven complete yield group; its financial values stay unchanged. Ordinary financial corrections retain their dates. No new transactions, duplicate repairs, cash movements or custody transfers are included. Pending events stay queued. A stale preview is rejected."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pas de bewezen correcties samen toe. Hoeveelheden, types, notities en transactie-ID's blijven ongewijzigd. Datums veranderen alleen naar de betaaldatum van de broker voor een bewezen volledige yield-groep; de financiële waarden blijven ongewijzigd. Gewone financiële correcties behouden hun datums. Er worden geen nieuwe transacties, duplicatenherstellingen, geldbewegingen of bewaarnemingsoverdrachten opgenomen. Resterende gebeurtenissen blijven klaarstaan. Een verouderde controle wordt geweigerd."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.correctionCounts": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "0 new transactions; {adopted} existing records to correct; {pending} events remain pending."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "0 nieuwe transacties; {adopted} bestaande records om te corrigeren; {pending} gebeurtenissen blijven in afwachting."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.correctionHint": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose this scope for native IBKR funding exports or complete Kinesis statements. Correct proven financial differences using the original broker records and retained source evidence. IBKR funding corrections keep the existing records and use their original amounts and currencies. Kinesis can also correct proven yield payment dates; new acquisitions and income remain pending."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kies deze scope voor oorspronkelijke IBKR-financieringsexports of volledige Kinesis-afschriften. Corrigeer bewezen financiële verschillen met de oorspronkelijke brokergegevens en bewaard bronbewijs. IBKR-financieringscorrecties behouden de bestaande records en gebruiken de oorspronkelijke bedragen en valuta. Kinesis kan ook bewezen betaaldatums van opbrengsten corrigeren; nieuwe verwervingen en inkomsten blijven openstaan."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.correctionPolicyHint": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use proven source values while keeping quantities, types, notes and transaction IDs. Ordinary financial corrections retain dates; only a proven complete yield group can use its broker payment date. Review every proposed correction below."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gebruik bewezen bronwaarden en behoud hoeveelheden, types, notities en transactie-ID's. Gewone financiële correcties behouden datums; alleen een bewezen volledige yield-groep kan de betaaldatum van de broker gebruiken. Controleer hieronder elke voorgestelde correctie."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.correctionUnavailable": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Existing corrections require only complete Kinesis statements and using proven source facts. Remove asset filters or conflicting statement policies, or choose full history."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bestaande records corrigeren vereist uitsluitend volledige Kinesis-overzichten en het gebruik van bewezen brongegevens. Verwijder filters voor beleggingen of tegenstrijdig beleid per bestand, of kies de volledige historiek."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.custodyUnassigned": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose only for transfers to or from another account"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kies alleen voor overdrachten naar of van een andere rekening"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.deferred": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Events excluded from this commit remain pending:"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gebeurtenissen buiten deze opslag blijven in afwachting:"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.deferredKinds.asset_adjustment": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Asset adjustments"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aanpassingen van beleggingen"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.deferredKinds.asset_transfer": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Asset transfers"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Overdrachten van beleggingen"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.deferredKinds.cash": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cash movements"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geldbewegingen"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.deferredKinds.dividend": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Income events"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inkomsten"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.deferredKinds.gift": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gift events"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schenkingen"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.deferredKinds.sell": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sales"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verkopen"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.deferredKinds.unsupported": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Other events requiring review"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Andere gebeurtenissen die controle vereisen"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.description": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select statements to detect their sources and review their history and differences together."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selecteer afschriften om hun bronnen te herkennen en hun geschiedenis en verschillen samen te controleren."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.detecting": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detecting statement format…"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Formaat van het overzicht herkennen…"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.evidence": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Source evidence and proposed changes"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bronbewijs en voorgestelde wijzigingen"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.existing.add": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add selected history"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geselecteerde historiek toevoegen"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.existing.choose": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Existing source batch"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bestaande bronbatch"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.existing.hint": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a completed IBKR source batch explicitly when its original file is unavailable. Vision reviews its retained broker evidence before any reviewed commit."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kies expliciet een voltooide IBKR-bronbatch als het oorspronkelijke bestand niet beschikbaar is. Vision beoordeelt het bewaarde brokerbewijs vóór een gecontroleerde import."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.existing.load": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Load existing batches"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bestaande batches laden"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.existing.newer": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Newer batches"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nieuwere batches"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.existing.older": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Older batches"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oudere batches"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.existing.option": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{name} · Batch {id} · {account} · {status}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{name} · Batch {id} · {account} · {status}"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.existing.readonly": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Original source batch remains read-only:"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oorspronkelijke bronbatch blijft alleen-lezen:"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.existing.source": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Explicitly selected prior source history"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Expliciet geselecteerde eerdere bronhistoriek"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.existing.status.complete": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Completed"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afgerond"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.existing.status.complete_with_errors": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Completed with errors"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afgerond met fouten"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.existing.title": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reconcile existing import history"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bestaande importhistoriek afstemmen"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.existing.unselected": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a completed IBKR source batch"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kies een afgeronde IBKR-bronbatch"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.existingId": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Existing transaction {id}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bestaande transactie {id}"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.existingValues": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Existing"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bestaand"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.field": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Field"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Veld"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.fields.amount": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Principal"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hoofdsom"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.fields.currency": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Currency"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Valuta"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.fields.date": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Date"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Datum"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.fields.dividend_amount_convention": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dividend amount convention"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conventie voor het dividendbedrag"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.fields.fees": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fees"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kosten"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.fields.fx_rate_to_eur": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exchange rate to EUR"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wisselkoers naar EUR"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.fields.income_recognition_role": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Income accounting role"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Boekhoudkundige inkomstenrol"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.fields.price_per_unit": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unit price"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eenheidsprijs"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.fields.taxes": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Taxes"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Belastingen"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.fields.type": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Type"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Type"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.fields.units": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Units"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eenheden"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.files": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Statements (CSV or XLSX)"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Overzichten (CSV of XLSX)"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.fullHistory": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Full history"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volledige historiek"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.fullHistoryHint": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review all selected history together. Reconcile proven existing records and import proven missing acquisitions, sales, paired income, transfers and unit adjustments. New Kinesis cash requires the cash-only confirmation."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beoordeel de volledige geselecteerde geschiedenis samen. Koppel bewezen bestaande transacties en importeer bewezen ontbrekende verwervingen, verkopen, gekoppelde inkomsten, overdrachten en aanpassingen van eenheden. Nieuwe Kinesis-kasmutaties vereisen de bevestiging voor de kasimport."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.grossDebit": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gross debited units"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bruto afgeschreven eenheden"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.groupDateCorrection": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The whole proven yield group is reviewed together. Changed dates use the broker payment date shown below; quantities and financial values stay unchanged."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "De hele bewezen yield-groep wordt samen gecontroleerd. Gewijzigde datums gebruiken de hieronder getoonde betaaldatum van de broker; hoeveelheden en financiële waarden blijven ongewijzigd."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.history.rollback": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Roll back statement"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afschrift terugdraaien"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.history.rollbackDescription": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restore adopted records to their values before importing \"{file}\" and remove records created by this statement. The original source file can be staged again. Rollback is blocked if affected history has changed."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Herstel overgenomen records naar hun waarden vóór de import van \"{file}\" en verwijder records die door dit afschrift zijn aangemaakt. Het oorspronkelijke bronbestand kan opnieuw worden voorbereid. Terugdraaien wordt geblokkeerd als de betrokken geschiedenis is gewijzigd."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.history.rollbackFailed": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Statement rollback failed"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Terugdraaien van afschrift mislukt"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.history.rollbackSuccess": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Statement rolled back. Original adopted records restored."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afschrift teruggedraaid. Oorspronkelijke overgenomen records hersteld."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.history.rollbackTitle": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Roll back this statement?"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dit afschrift terugdraaien?"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.history.title": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import history"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importgeschiedenis"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.importedValues": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Redundant imported record"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Overbodig geïmporteerd record"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.incomeAtomic": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Record the reviewed paired income together. Existing units, acquisitions, values and notes stay unchanged. Literal income is kept separately and does not add to gains again. No duplicate repairs, cash movements or custody transfers are included. Other events stay queued if incomplete. A stale preview is rejected."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leg de gecontroleerde bijbehorende inkomsten samen vast. Bestaande eenheden, verwervingen, waarden en notities blijven ongewijzigd. Letterlijke inkomsten worden afzonderlijk bewaard en niet opnieuw bij de winst opgeteld. Er worden geen duplicatenherstellingen, geldbewegingen of bewaarnemingsoverdrachten opgenomen. Andere gebeurtenissen blijven klaarstaan als de sessie onvolledig is. Een verouderde controle wordt geweigerd."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.incomeCounts": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "0 new acquisitions; {recorded} income records to record; {pending} events remain pending."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "0 nieuwe verwervingen; {recorded} inkomstenrecords om vast te leggen; {pending} gebeurtenissen blijven in afwachting."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.incomeHint": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose this scope before staging complete Kinesis statements. Record literal income only when its paired zero-basis acquisition is already proved in existing history. No new units, acquisitions or cash movements are created. Other events remain pending. The original statement and acquisition receipts provide the evidence."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kies deze scope voordat je volledige Kinesis-afschriften klaarzet. Leg letterlijke inkomsten alleen vast als de bijbehorende verwerving met nulbasis al in de bestaande historie is bewezen. Er ontstaan geen nieuwe eenheden, verwervingen of kasbewegingen. Andere gebeurtenissen blijven openstaan. Het oorspronkelijke afschrift en de verwervingsbewijzen leveren het bewijs."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.incomePartialSuccess": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recorded {recordedIncome} proven income records; 0 new acquisitions; {pending} events remain pending. Statements stay queued for a fresh review."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{recordedIncome} bewezen inkomstenrecords vastgelegd; 0 nieuwe verwervingen; {pending} gebeurtenissen blijven in afwachting. Overzichten blijven klaarstaan voor een nieuwe controle."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.incomePolicyHint": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preserve existing acquisitions and record only their proven paired income. The income amount is retained separately because its value is already represented by the units."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Behoud bestaande verwervingen en leg alleen hun bewezen bijbehorende inkomsten vast. Het inkomstenbedrag wordt afzonderlijk bewaard omdat de waarde al in de eenheden zit."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.incomeSuccess": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recorded {recordedIncome} proven income records; 0 new acquisitions. Existing units stay unchanged."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{recordedIncome} bewezen inkomstenrecords vastgelegd; 0 nieuwe verwervingen. Bestaande eenheden blijven ongewijzigd."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.incomeUnavailable": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In-kind income requires only complete Kinesis statements and preserving proved existing units. Remove asset filters or conflicting statement policies, or choose full history."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inkomsten in natura vereisen alleen volledige Kinesis-overzichten en het behoud van bewezen bestaande eenheden. Verwijder actiefilters of tegenstrijdig overzichtsbeleid, of kies de volledige historiek."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.more": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show more rows"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meer rijen tonen"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.netReceived": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Net received units"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Netto ontvangen eenheden"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.otherCustodyAccount": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Other custody account (for asset transfers)"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Andere bewaarrekening (voor activa-overdrachten)"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.otherCustodyHint": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select the actual account receiving withdrawals and sending returning assets. The same account applies in both directions; transfers carry its existing cost basis."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selecteer de werkelijke rekening die opnames ontvangt en terugkerende activa verstuurt. Dezelfde rekening geldt voor beide richtingen; overdrachten behouden de bestaande aanschaffingswaarde."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.partialSuccess": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{imported} new records; {adopted} existing records reconciled; {repaired} duplicate records repaired; {duplicates} unchanged duplicates. {pending} events remain pending. Statements stay queued for a fresh review."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{imported} nieuwe records; {adopted} bestaande records afgestemd; {repaired} duplicaten hersteld; {duplicates} ongewijzigde duplicaten. {pending} gebeurtenissen blijven in afwachting. Overzichten blijven klaarstaan voor een nieuwe controle."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.policy": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Existing transaction facts"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gegevens van bestaande transacties"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.policyForFile": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Policy for {name}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beleid voor {name}"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.policyHint.auto": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adopt only exact existing records automatically. Differences remain blocked for a policy decision."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neem alleen exacte bestaande records automatisch over. Verschillen blijven geblokkeerd totdat je een beleid kiest."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.policyHint.prefer_source": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Replace existing dates and financial values only when source evidence proves the same event. Review every proposed difference below."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vervang bestaande datums en financiële waarden alleen als bronbewijs dezelfde gebeurtenis aantoont. Controleer hieronder elk voorgesteld verschil."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.policyHint.preserve_existing": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keep existing transaction dates and financial values while linking proven source history."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Behoud bestaande transactiedatums en financiële waarden en koppel de bewezen bronhistoriek."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.policyName.exact": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatic exact match"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatische exacte overeenkomst"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.policyName.prefer_source": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use detailed source facts"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gedetailleerde brongegevens gebruiken"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.policyName.preserve_existing": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preserve existing facts"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bestaande gegevens behouden"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.preserve": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preserve existing facts"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bestaande gegevens behouden"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.preview": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review reconciliation"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afstemming controleren"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.previewMismatch": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The preview does not match this session. Review reconciliation again."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "De controle komt niet overeen met deze sessie. Controleer de afstemming opnieuw."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.previewing": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comparing source history with existing transactions…"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bronhistoriek vergelijken met bestaande transacties…"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.previousPending": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "An earlier version has a separate pending batch:"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Een eerdere versie heeft een aparte openstaande batch:"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.recordCash": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Record proven cash history"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bewezen geldhistoriek vastleggen"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.recordInKindIncome": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Record proven in-kind income"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bewezen inkomsten in natura vastleggen"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.recordReviewedCash": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Record reviewed cash history"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gecontroleerde geldhistoriek vastleggen"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.recordReviewedIncome": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Record reviewed income"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gecontroleerde inkomsten vastleggen"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.remove": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verwijderen"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.removeFile": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove {name}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{name} verwijderen"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.repairHint": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retain existing transaction {existing} and remove redundant imported transaction {imported} from batch {batch}. The retained values follow the reviewed policy."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Behoud bestaande transactie {existing} en verwijder overbodige geïmporteerde transactie {imported} uit batch {batch}. De behouden waarden volgen het gecontroleerde beleid."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.responseUnverified": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The response could not be verified. Inspect this session and review reconciliation again before retrying."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Het antwoord kon niet worden bevestigd. Controleer deze sessie en de afstemming opnieuw voordat je het opnieuw probeert."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.review": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reconciliation review"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Controle van de afstemming"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.row": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Row {n}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rij {n}"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.rows": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{n} rows · {skipped} skipped · {errors} need review"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{n} rijen · {skipped} overgeslagen · {errors} te controleren"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.scope": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reconciliation scope"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bereik van de afstemming"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.source": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use detailed source facts"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gedetailleerde brongegevens gebruiken"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.sourceValues": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Source"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bron"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.stage": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prepare for review"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voorbereiden voor controle"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.stageFailed": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Staging stopped. The returned batches remain available for review; resolve the reported issue before continuing."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Het klaarzetten is gestopt. De ontvangen batches blijven beschikbaar voor controle; los het gemelde probleem op voordat je doorgaat."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.stageUnverified": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The staging result could not be verified. Inspect pending batches before retrying this statement."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Het resultaat van het klaarzetten kon niet worden bevestigd. Controleer openstaande batches voordat je dit overzicht opnieuw probeert."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.staging": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Staging this statement…"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dit overzicht klaarzetten…"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.statementBroker": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Broker for {name}"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Broker voor {name}"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.statementPolicy": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Statement policy"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beleid voor het overzicht"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.stop": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stop after current statement"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stoppen na het huidige overzicht"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.stopped": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stopped after the current statement. Returned batches are retained; remaining files were not staged."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gestopt na het huidige overzicht. Ontvangen batches zijn bewaard; resterende bestanden zijn niet klaargezet."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.success": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{imported} new records; {adopted} existing records reconciled; {repaired} duplicate records repaired; {duplicates} unchanged duplicates."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{imported} nieuwe records; {adopted} bestaande records afgestemd; {repaired} duplicaten hersteld; {duplicates} ongewijzigde duplicaten."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.title": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import portfolio history"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Portefeuillehistoriek importeren"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.tooMany": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A session can contain at most 100 statements."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Een sessie kan maximaal 100 overzichten bevatten."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.transferDestination": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Asset withdrawal destination (if present)"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bestemming van activa-opnames (indien aanwezig)"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.transferFee": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fee units"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eenheden voor kosten"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.transferHint": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select the actual receiving portfolio account. Transfers carry existing cost basis; a missing destination or acquisition cost remains blocked."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selecteer de werkelijke ontvangende portefeuillerekening. Overdrachten behouden de bestaande aanschaffingswaarde; een ontbrekende bestemming of aanschaffingswaarde blijft geblokkeerd."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.transferSource": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Source account"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bronrekening"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.transferUnassigned": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose only when the statement contains asset withdrawals"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kies alleen als het overzicht activa-opnames bevat"
+          }
+        }
+      }
+    },
+    "portfolioImport.session.unsupported": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This statement has no supported automatic adapter. Resolve its format before importing."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dit overzicht heeft geen ondersteunde automatische adapter. Los het formaat op voordat je importeert."
+          }
+        }
+      }
+    },
+    "portfolioImport.session.useSessionPolicy": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use session policy"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sessiebeleid gebruiken"
+          }
+        }
+      }
+    },
+    "portfolioImport.title": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Portfolio import"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Portefeuille importeren"
+          }
+        }
+      }
+    },
+    "portfolioImport.toast.brokerAccountRequired": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select a broker account before importing a maintained transaction-history file."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selecteer een brokerrekening voordat je een ondersteund transactiegeschiedenisbestand importeert."
+          }
+        }
+      }
+    },
+    "portfolioImport.toast.holdingCreated": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Investment created."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Belegging aangemaakt."
+          }
+        }
+      }
+    },
+    "portfolioImport.toast.importSuccess": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Imported {n} transactions ({dups} duplicates skipped)."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{n} transacties geïmporteerd ({dups} duplicaten overgeslagen)."
+          }
+        }
+      }
+    },
+    "portfolioImport.toast.noMapping": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Map a date column, a symbol or name column, and an asset class first."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wijs eerst een datumkolom, een symbool- of naamkolom en een activaklasse toe."
+          }
+        }
+      }
+    },
+    "portfolioImport.toast.rowsSkipped": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{n} rows could not be read and were skipped. Check the column mapping and date format."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{n} rijen konden niet worden gelezen en zijn overgeslagen. Controleer de kolomtoewijzing en het datumformaat."
+          }
+        }
+      }
+    },
+    "portfolioImport.typeMappingAuto": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatisch"
+          }
+        }
+      }
+    },
+    "portfolioImport.typeMappingTitle": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Map transaction types"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transactietypes toewijzen"
           }
         }
       }

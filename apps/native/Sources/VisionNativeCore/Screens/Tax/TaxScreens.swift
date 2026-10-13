@@ -13,11 +13,14 @@ public final class TaxScreens {
     public let deductions: TaxDeductionsModel
     public private(set) var exportError: String?
     public private(set) var profileOpenError: String?
+    public private(set) var routeLoadError: String?
     public private(set) var isExporting = false
     @ObservationIgnored public var save: (@MainActor (Data, String) async throws -> Bool)?
+    @ObservationIgnored public var didInvalidate: (@MainActor () -> Void)?
     @ObservationIgnored private let client: APIClient
     @ObservationIgnored private var currency = "EUR"
     @ObservationIgnored private var revision = UUID()
+    @ObservationIgnored private var routeRevision = UUID()
     @ObservationIgnored private var isOpeningProfile = false
 
     public init(client: APIClient) {
@@ -30,14 +33,47 @@ public final class TaxScreens {
         actions = TaxActionsModel(overview: overview, computations: client, settings: client)
         widgets = TaxWidgetsModel(service: client)
         deductions = TaxDeductionsModel(service: client)
-        overview.onInvalidate = { [weak dashboard] in dashboard?.invalidate() }
+        overview.onInvalidate = { [weak self, weak dashboard] in
+            dashboard?.invalidate()
+            self?.didInvalidate?()
+        }
     }
 
     public func invalidate() {
         revision = UUID()
+        routeRevision = UUID()
+        routeLoadError = nil
         overview.invalidate()
         widgets.invalidate()
         deductions.invalidate()
+    }
+
+    /// Adopt and mirror the URL after the live household and stored snapshot years are known.
+    public func loadRoute(route: NativeRoute, currency: String, force: Bool = false) async -> NativeRoute? {
+        let token = UUID()
+        routeRevision = token
+        routeLoadError = nil
+        let fallbackYear = overview.overview?.year
+        // Retire the prior route's reads before waiting for the live-year authority request.
+        // That probe may fail, and an older historical response must still remain obsolete.
+        revision = UUID()
+        overview.invalidate()
+        deductions.invalidate()
+        do {
+            let source = try await client.taxOverview(year: nil)
+            guard token == routeRevision, !Task.isCancelled else { return nil }
+            guard source.year == source.liveYear else { throw APIError.invalidRequest("Live tax year is unavailable") }
+            let canonical = TaxYearRoute.canonicalRoute(
+                route: route, liveYear: source.liveYear,
+                snapshotYears: Set(source.householdSnapshots.keys.compactMap(Int.init)), fallbackYear: fallbackYear)
+            let selected = TaxYearRoute.parse(canonical.value("year")) ?? source.liveYear
+            await load(year: selected, currency: currency, force: force)
+            guard token == routeRevision, !Task.isCancelled else { return nil }
+            return canonical
+        } catch {
+            if token == routeRevision, !Task.isCancelled { routeLoadError = error.localizedDescription }
+            return nil
+        }
     }
 
     public func load(year: Int? = nil, currency: String, force: Bool = false) async {

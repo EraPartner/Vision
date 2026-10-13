@@ -184,3 +184,21 @@ marketChart
 computeRebalance
 computeCommitmentAwareCash
 getBulkPortfolioTransactions
+
+# Portfolio Import (phase 3j). Multipart/SSE uploads use hand-written operations:
+# portfolioImportCsvCustom, portfolioImportCsvStream.
+getPortfolioParsers
+createPortfolioParser
+updatePortfolioParser
+deletePortfolioParser
+getPortfolioImportBatches
+getPortfolioImportBatch
+deletePortfolioImportBatch
+previewPortfolioImportBatch
+portfolioImportRowInvestmentOverride
+portfolioImportRowsInvestmentOverride
+previewPortfolioImportReconciliation
+commitReviewedPortfolioImports
+commitPortfolioImportBatch
+# Authoritative Portfolio Tax results (phase 3j), computed by the shared TS engine.
+getBelgianPortfolioTaxDashboard

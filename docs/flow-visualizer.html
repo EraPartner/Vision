@@ -1892,6 +1892,26 @@
             "y": 44,
             "path": "apps/native/Sources/VisionNativeCore/Screens/Portfolio/NetWorthModel.swift",
             "desc": "Net Worth keeps full daily charts and paginated table reads separate. Rebalance sends structural inputs to the existing TypeScript deployment and commitment engines."
+          },
+          {
+            "id": "native.portfolioimport",
+            "label": "Native Portfolio Import",
+            "sub": "SwiftUI · probe, stage and review",
+            "kind": "client",
+            "x": 20,
+            "y": 44,
+            "path": "apps/native/Sources/VisionNativeCore/Screens/PortfolioImport/PortfolioImportScreens.swift",
+            "desc": "Native file/parser/session/history/review models preserve existing TypeScript import writers. Read-only detection never creates a batch; reviewed multi-statement reconciliation binds the exact plan fingerprint and scope."
+          },
+          {
+            "id": "native.portfoliotax",
+            "label": "Native Portfolio Tax",
+            "sub": "SwiftUI · TS fiscal dashboard",
+            "kind": "client",
+            "x": 200,
+            "y": 44,
+            "path": "apps/native/Sources/VisionNativeCore/Screens/PortfolioTax/PortfolioTaxModel.swift",
+            "desc": "Decimal dashboard readers and seven configurable widgets use server costs/rates/estimates. Live-year adjustments and classification drafts preserve complete records and original atomic settings CAS baselines."
           }
         ],
         "baseEdges": [
@@ -2361,6 +2381,14 @@
           ],
           [
             "native.wealthclient",
+            "be.routes"
+          ],
+          [
+            "native.portfolioimport",
+            "be.routes"
+          ],
+          [
+            "native.portfoliotax",
             "be.routes"
           ]
         ],
@@ -6263,6 +6291,198 @@
                 "label": "Wealth tools parity"
               }
             ]
+          },
+          {
+            "id": "native-portfolio-import-stage",
+            "name": "Probe and stage native portfolio statements",
+            "category": "Native migration",
+            "summary": "A bounded native file read asks TypeScript for complete-source detection and header preview; multi-statement staging retains review-required batches and explicit destination choices.",
+            "steps": [
+              {
+                "from": "native.portfolioimport",
+                "to": "be.routes",
+                "payload": "POST /api/portfolio/import/probe multipart file, encoding, separator and skipRows; maximum 50 MiB",
+                "annotation": "apps/native/Sources/VisionNativeUI/PortfolioImportFileViews.swift handles security-scoped native file access. apps/native/Sources/VisionNativeCore/Screens/PortfolioImport/PortfolioImportService.swift sends the original bytes; no financial parsing moves to Swift."
+              },
+              {
+                "from": "be.routes",
+                "to": "pkg.shared-utils",
+                "payload": "Complete CSV/XLS/XLSX source identities plus bounded header/sample preview; no batch creation",
+                "annotation": "apps/node-backend/src/services/portfolioImportProbe.ts uses shared detection/CSV helpers and bounded workbook preflight. Complete-source account detection is distinct from the preview prefix; parse failures remain explicit."
+              },
+              {
+                "from": "pkg.shared-utils",
+                "to": "native.portfolioimport",
+                "payload": "detected preset/source-account identities, separator, rawHeaders/sampleRows and parse-error flags",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/PortfolioImport/PortfolioImportParserModel.swift guards stale probe results and retains mapping edits. apps/native/Sources/VisionNativeCore/Screens/PortfolioImport/PortfolioImportSessionModel.swift accepts unique active broker matches; ambiguity stays an explicit choice."
+              },
+              {
+                "from": "native.portfolioimport",
+                "to": "be.routes",
+                "payload": "POST /api/portfolio/import/csv/stream maintained preset, account, transfer routing, included symbols and policy",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/PortfolioImport/PortfolioImportSessionModel.swift stages sequentially and pins Kinesis narrowed staging to zero yield basis. Stop waits for the current upload to retain its batch. The separate advanced parser uses the existing custom import behavior."
+              },
+              {
+                "from": "be.routes",
+                "to": "sv.portfolioimport",
+                "payload": "Existing stage/validate/match pipeline and progress events",
+                "annotation": "apps/node-backend/src/routes/portfolioImportRoutes.ts retains the existing upload preflight, source evidence and TypeScript pipeline. apps/node-backend/src/services/portfolioImportPipeline/index.ts owns staging and financial behavior."
+              },
+              {
+                "from": "sv.portfolioimport",
+                "to": "native.portfolioimport",
+                "payload": "Verified review_required with imported=0 and positive batch ID, then GET batch preview",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/PortfolioImport/PortfolioImportService.swift validates terminal SSE events. apps/native/Sources/VisionNativeCore/Screens/PortfolioImport/PortfolioImportSessionModel.swift retains batch metadata without file bytes, verifies preview evidence, and blocks blind retries after an uncertain write."
+              }
+            ],
+            "docs": [
+              {
+                "path": "architecture/native-app.md",
+                "label": "Native architecture"
+              },
+              {
+                "path": "reference/native-parity/portfolio-wealth-tools.md",
+                "label": "Wealth tools parity"
+              },
+              {
+                "path": "api/portfolio-imports.md",
+                "label": "Portfolio import API"
+              },
+              {
+                "path": "features/portfolio-import.md",
+                "label": "Portfolio import"
+              }
+            ]
+          },
+          {
+            "id": "native-portfolio-import-review",
+            "name": "Review and commit native portfolio history reconciliation",
+            "category": "Native migration",
+            "summary": "Single-batch investment resolution and multi-statement reconciliation use existing server operations; scope changes invalidate reviewed fingerprints, and ambiguous writes trigger authoritative refreshes.",
+            "steps": [
+              {
+                "from": "native.portfolioimport",
+                "to": "be.routes",
+                "payload": "GET /api/portfolio/import/batches/:id/preview plus active investment picker and broker accounts",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/PortfolioImport/PortfolioImportReviewModel.swift parses exact positive batch IDs and guards stale source reads. apps/native/Sources/VisionNativeCore/Screens/PortfolioImport/PortfolioImportService.swift pages and verifies the complete active investment picker."
+              },
+              {
+                "from": "native.portfolioimport",
+                "to": "be.routes",
+                "payload": "Resolve selected unresolved row IDs to an active investment or explicit create_new; reread preview",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/PortfolioImport/PortfolioImportReviewModel.swift uses current resolvable groups and retains errors after uncertain acknowledgements. The service verifies returned resolution counts and identity before enabling subsequent actions."
+              },
+              {
+                "from": "native.portfolioimport",
+                "to": "sv.portfolioreconciliation",
+                "payload": "POST /api/portfolio/import/reconciliation/preview with selected batch_ids, policies and reconciliation scope",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/PortfolioImport/PortfolioImportReconciliation.swift validates full, attach-existing, source-correction, in-kind-income-only and cash-only request structures. Cash-only scope requires current own-account funding confirmation. apps/node-backend/src/services/portfolioImportReconciliationService.ts computes the authoritative plan."
+              },
+              {
+                "from": "sv.portfolioreconciliation",
+                "to": "native.portfolioimport",
+                "payload": "ready, blockers, actions and plan fingerprint bound to the reviewed source/policy scope",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/PortfolioImport/PortfolioImportSessionModel.swift permits commit only when the exact scope still matches reviewKey, all statements are staged, and server actions are recognized. Changing routing or policy drops the old plan and funding confirmation as applicable."
+              },
+              {
+                "from": "native.portfolioimport",
+                "to": "be.routes",
+                "payload": "POST /api/portfolio/import/reconciliation/commit with unchanged scope and expected_plan_fingerprint; or existing single-batch commit",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/PortfolioImport/PortfolioImportService.swift retains existing reconciliation and single-batch operations. Swift validates request/response identity and displays the server plan; fiscal, lot, proof and custody calculations stay in TypeScript."
+              },
+              {
+                "from": "be.routes",
+                "to": "sv.portfolioreconciliation",
+                "payload": "Existing atomic reviewed commit, exact source locks, immutable receipts and scope-specific writers",
+                "annotation": "apps/node-backend/src/services/portfolioImportReconciliationService.ts revalidates the fingerprint and retained evidence. Existing custody, adjustment, income and cash helpers preserve their current scope/after-image rules; no new database migration or import writer is introduced."
+              },
+              {
+                "from": "sv.portfolioreconciliation",
+                "to": "native.portfolioimport",
+                "payload": "Commit result or explicit uncertain outcome; reread retained batches/previews and invalidate wealth readers",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/PortfolioImport/PortfolioImportSessionModel.swift blocks blind repeat commits after a lost acknowledgement. apps/native/Sources/VisionNativeCore/Screens/PortfolioImport/PortfolioImportScreens.swift coordinates mutation invalidation. apps/native/Sources/VisionNativeCore/Screens/PortfolioImport/PortfolioImportHistoryModel.swift pages batch history and uses guarded existing rollback."
+              }
+            ],
+            "docs": [
+              {
+                "path": "architecture/native-app.md",
+                "label": "Native architecture"
+              },
+              {
+                "path": "reference/native-parity/portfolio-wealth-tools.md",
+                "label": "Wealth tools parity"
+              },
+              {
+                "path": "api/portfolio-imports.md",
+                "label": "Portfolio import API"
+              },
+              {
+                "path": "reference/fund-holdings-import-contract.md",
+                "label": "Import evidence contract"
+              }
+            ]
+          },
+          {
+            "id": "native-portfolio-tax",
+            "name": "Read native Portfolio Tax and save live-year adjustments",
+            "category": "Native migration",
+            "summary": "A shared TypeScript dashboard preserves historical/current-FX web semantics; native Decimal widgets and live-year editors retain original CAS baselines and reject late contexts.",
+            "steps": [
+              {
+                "from": "native.portfoliotax",
+                "to": "be.routes",
+                "payload": "GET /api/belgian-tax/portfolio-dashboard?year=...&currency=... alongside existing Tax overview/dashboard reads",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/PortfolioTax/PortfolioTaxService.swift uses getBelgianPortfolioTaxDashboard. apps/native/Sources/VisionNativeUI/PortfolioTaxView.swift verifies year/currency against the selected overview before displaying widgets."
+              },
+              {
+                "from": "be.routes",
+                "to": "be.repos",
+                "payload": "First 500 name-ordered metadata rows, newest 1000 ordinary rows per investment, current stored FX and original setting baselines",
+                "annotation": "apps/node-backend/src/services/tax/portfolioDashboardService.ts composes canonical active and explicit archivedPresentation summaries. Historical selections filter recorded costs/manual keys while retaining all-time gains/current values and frozen-first PIT."
+              },
+              {
+                "from": "be.routes",
+                "to": "pkg.shared-utils",
+                "payload": "Shared cost bucket precedence, Decimal-accumulating estimators, monthly series, localization keys and percent badges",
+                "annotation": "packages/shared-utils/src/belgianTax/portfolioDashboard.ts and packages/shared-utils/src/belgianTax/costBreakdown.ts preserve usePortfolioTaxData outputs. Unknown ordinary dividend conventions retain null reclaim/net cost; included-in-units dividends remain excluded from dividend estimates."
+              },
+              {
+                "from": "pkg.shared-utils",
+                "to": "native.portfoliotax",
+                "payload": "Target-converted costs/gains, PIT budget, estimates/rates and original adjustment/classification records",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/PortfolioTax/PortfolioTaxData.swift decodes financial numbers directly as Decimal. apps/native/Sources/VisionNativeCore/Screens/PortfolioTax/PortfolioTaxModel.swift rejects late year/currency revisions. Native charts convert only coordinates to floating point; no fiscal or FX formulas move to Swift."
+              },
+              {
+                "from": "native.portfoliotax",
+                "to": "be.routes",
+                "payload": "PUT /api/settings atomic portfolio_tax_adjustments_v1 and portfolio_tax_classifications_v1 with untouched expected tokens",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/PortfolioTax/PortfolioTaxSettingsDraft.swift edits the live household year even when viewing history, retaining other years, archived rows and unknown fields. apps/native/Sources/VisionNativeCore/Screens/PortfolioTax/PortfolioTaxService.swift verifies the saved count; conflicts retain the open form."
+              },
+              {
+                "from": "be.routes",
+                "to": "native.portfoliotax",
+                "payload": "Acknowledgement or lost-response error, followed by authoritative dashboard refresh and new CAS baselines",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/PortfolioTax/PortfolioTaxModel.swift retains submitted baselines on failed saves and never reuses them after success. apps/native/Sources/VisionNativeCore/Screens/PortfolioTax/PortfolioTaxWidgetsModel.swift separately persists all seven widget choices while preserving other pages. Shared Tax profile/filing actions and native CSV are reused; this page has no PDF action."
+              }
+            ],
+            "docs": [
+              {
+                "path": "architecture/native-app.md",
+                "label": "Native architecture"
+              },
+              {
+                "path": "reference/native-parity/portfolio-wealth-tools.md",
+                "label": "Wealth tools parity"
+              },
+              {
+                "path": "api/belgian-tax.md",
+                "label": "Portfolio Tax dashboard API"
+              },
+              {
+                "path": "features/portfolio-tax.md",
+                "label": "Portfolio Tax"
+              }
+            ]
           }
         ],
         "learningPaths": [
@@ -6305,7 +6525,10 @@
               "close-account",
               "native-portfolio-read",
               "native-portfolio-edit",
-              "native-wealth-planning"
+              "native-wealth-planning",
+              "native-portfolio-import-stage",
+              "native-portfolio-import-review",
+              "native-portfolio-tax"
             ]
           },
           {

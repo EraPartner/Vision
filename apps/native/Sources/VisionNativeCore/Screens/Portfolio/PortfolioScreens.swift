@@ -9,22 +9,26 @@ public final class PortfolioScreens {
     public let editing: PortfolioEditingModel
     public let rebalance: RebalanceModel
     public let netWorth: NetWorthModel
+    public let tax: PortfolioTaxModel
 
     public init(client: APIClient) {
         model = PortfolioModel(service: client)
         editing = PortfolioEditingModel(service: client)
         rebalance = RebalanceModel(service: client)
         netWorth = NetWorthModel(service: client)
+        tax = PortfolioTaxModel(service: client)
         model.pricesDidChange = { [weak self] in
             guard let self else { return }
             netWorth.invalidate()
             rebalance.invalidate()
+            tax.invalidate()
             dataRevision &+= 1
         }
         netWorth.pricesDidChange = { [weak self] in
             guard let self else { return }
             model.invalidate()
             rebalance.invalidate()
+            tax.invalidate()
             dataRevision &+= 1
         }
         editing.bindChanged { [weak self] in
@@ -33,6 +37,7 @@ public final class PortfolioScreens {
             model.invalidate()
             netWorth.invalidate()
             rebalance.invalidate()
+            tax.invalidate()
             await model.load(currency: model.currency, force: true)
             dataRevision &+= 1
             if let id = model.selectedInvestmentId {
@@ -50,5 +55,12 @@ public final class PortfolioScreens {
         editing.invalidateBrokerHistory()
         netWorth.invalidate()
         rebalance.invalidate()
+        tax.invalidate()
+    }
+
+    /// Import and settings writes can complete after navigation, including lost acknowledgements.
+    public func dataDidChange() {
+        invalidate()
+        dataRevision &+= 1
     }
 }

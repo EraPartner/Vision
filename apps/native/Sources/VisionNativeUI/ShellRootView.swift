@@ -37,6 +37,12 @@ public struct ShellRootView<WebContent: View>: View {
         }
         .environment(\.visionTheme, theme)
         .environment(\.locale, Locale(identifier: model.strings.language.rawValue))
+        .overlay(alignment: .bottom) {
+            if let review = model.portfolioImports?.review {
+                PortfolioImportSuccessToast(model: review, shell: model)
+                    .environment(\.visionTheme, theme)
+            }
+        }
         // `UnsavedChangesProvider`'s Leave this page? alert. The buttons decide; the binding
         // only reads, so a dismissal never drops the held navigation by itself.
         .alert(
@@ -226,6 +232,16 @@ struct NativeScreenContainer: View {
             if let statistics = model.statistics { StatisticsView(screens: statistics, shell: model) }
         case .tax:
             if let tax = model.tax { TaxOverviewView(screens: tax, shell: model) }
+        case .portfolioTax:
+            if let portfolio = model.portfolio, let tax = model.tax {
+                PortfolioTaxView(model: portfolio.tax, tax: tax, shell: model, dataRevision: portfolio.dataRevision)
+            }
+        case .portfolioImport:
+            if let imports = model.portfolioImports { PortfolioImportView(screens: imports, shell: model) }
+        case .portfolioImportReview:
+            if let imports = model.portfolioImports {
+                PortfolioImportReviewView(model: imports.review, shell: model)
+            }
         case .portfolio:
             if let portfolio = model.portfolio { PortfolioScreenView(screens: portfolio, shell: model) }
         case .portfolioHoldings(let assetClass):

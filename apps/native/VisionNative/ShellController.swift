@@ -1,11 +1,11 @@
 import AppKit
 import OSLog
-import os
 import SwiftUI
 import UniformTypeIdentifiers
 import VisionNativeCore
 import VisionNativeUI
 import WebKit
+import os
 
 /// Owns the window, menus, dock and web shell, and answers the page's bridge calls
 /// (the main-process side of packaging/electron/main.ts for phases 1c, 1d and 1e). From
@@ -91,6 +91,31 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             return try await self.saveExport(data, suggestedName: name)
         }
         let tax = TaxScreens(client: client)
+        let portfolio = PortfolioScreens(client: client)
+        let portfolioImports = PortfolioImportScreens(
+            service: client,
+            store: PortfolioImportClosureSessionStore(
+                read: { [weak self] key in
+                    guard let value = await self?.portfolioSessionStorage(key: key), value != .null else { return nil }
+                    return try? value.serialized()
+                },
+                write: { [weak self] key, data in
+                    guard let value = data.flatMap({ try? JSONValue.parse($0) }) ?? (data == nil ? .null : nil) else {
+                        return
+                    }
+                    _ = await self?.portfolioSessionStorage(key: key, value: value)
+                }))
+        portfolioImports.didMutate = { [weak self] in
+            await self?.shellModel.portfolioImportDidMutate()
+        }
+        portfolioImports.navigateToReview = { [weak self] batchId in
+            self?.shellModel.navigate(to: "/portfolio/import/\(batchId)/review")
+        }
+        tax.didInvalidate = { [weak portfolio] in portfolio?.tax.invalidate() }
+        portfolio.tax.didSave = { [weak tax, weak portfolio] in
+            tax?.invalidate()
+            portfolio?.dataDidChange()
+        }
         tax.save = { [weak self] data, name in
             guard let self else { return false }
             return try await self.saveExport(data, suggestedName: name)
@@ -118,12 +143,14 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             accounts: AccountsModel(service: client, rates: rates),
             categories: CategoriesModel(service: client),
             recipients: RecipientsModel(service: client),
-            home: HomeModel(service: client,
+            home: HomeModel(
+                service: client,
                 readLocal: { [weak self] key in await self?.homeLocalStorage(key: key) },
                 writeLocal: { [weak self] key, value in _ = await self?.homeLocalStorage(key: key, value: value) }),
             statistics: StatisticsScreens(client: client),
             tax: tax,
-            portfolio: PortfolioScreens(client: client),
+            portfolio: portfolio,
+            portfolioImports: portfolioImports,
             hiddenSections: Self.loadHiddenSections(),
             loadSettings: { try await client.appSettings() },
             saveHiddenSections: { Self.saveHiddenSections($0) },
@@ -191,15 +218,32 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     /// Home and Tax share the web app's per-device dismissals. Only these known keys are
     /// accessible, and every argument goes through WebKit's argument binding.
     private func homeLocalStorage(key: String, value: JSONValue? = nil) async -> JSONValue? {
-        guard ["vision.home.dismissedAccountInactivity", "dismissed_upcoming_planned_payments",
-               TaxDeductionsModel.dismissalStorageKey].contains(key),
-              queue.isReady, let webView = webShell?.webView else { return nil }
+        await webStorage(key: key, value: value, session: false)
+    }
+
+    /// Import checkpoints share the retained web page's session and contain metadata only.
+    private func portfolioSessionStorage(key: String, value: JSONValue? = nil) async -> JSONValue? {
+        await webStorage(key: key, value: value, session: true)
+    }
+
+    private func webStorage(key: String, value: JSONValue?, session: Bool) async -> JSONValue? {
+        let permitted =
+            session
+            ? ["vision.portfolio-import.latest-session.v1", "vision.portfolio-import.latest-review-settings.v1"]
+            : [
+                "vision.home.dismissedAccountInactivity", "dismissed_upcoming_planned_payments",
+                TaxDeductionsModel.dismissalStorageKey,
+            ]
+        guard permitted.contains(key),
+            queue.isReady, let webView = webShell?.webView
+        else { return nil }
         let encoded = value.flatMap { try? String(data: $0.serialized(), encoding: .utf8) }
         return await withCheckedContinuation { (continuation: CheckedContinuation<JSONValue?, Never>) in
             let pending = OSAllocatedUnfairLock<CheckedContinuation<JSONValue?, Never>?>(initialState: continuation)
             let resume: @Sendable (JSONValue?) -> Void = { answer in
                 let waiting = pending.withLock { state -> CheckedContinuation<JSONValue?, Never>? in
-                    defer { state = nil }; return state
+                    defer { state = nil }
+                    return state
                 }
                 waiting?.resume(returning: answer)
             }
@@ -208,11 +252,15 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
                 resume(nil)
             }
             webView.callAsyncJavaScript(
-                "try { if (writing) localStorage.setItem(key, value); return localStorage.getItem(key) || 'null'; } catch { return 'null'; }",
-                arguments: ["key": key, "value": encoded ?? "null", "writing": value != nil], in: nil, in: .page
+                "try { const storage = session ? sessionStorage : localStorage; if (writing) { if (removing) storage.removeItem(key); else storage.setItem(key, value); } return storage.getItem(key) || 'null'; } catch { return 'null'; }",
+                arguments: [
+                    "key": key, "value": encoded ?? "null", "writing": value != nil,
+                    "session": session, "removing": session && value == .null,
+                ], in: nil, in: .page
             ) { result in
                 let answer = ((try? result.get()) as? String).flatMap { try? JSONValue.parse(Data($0.utf8)) }
-                resume(answer); timeout.cancel()
+                resume(answer)
+                timeout.cancel()
             }
         }
     }
@@ -580,7 +628,8 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     }
 
     private func evaluate(_ event: BridgeEvent, _ payload: JSONValue) {
-        webShell?.webView.evaluateJavaScript(BridgeDispatcher.eventScript(event, payload: payload), completionHandler: nil)
+        webShell?.webView.evaluateJavaScript(
+            BridgeDispatcher.eventScript(event, payload: payload), completionHandler: nil)
     }
 
     /// Finder "Open With" and dock drops of a CSV. The native import card always gets the
@@ -700,7 +749,9 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
 
     func rendererDidFail(_ failure: RendererFailure) {
         let location = failure.line > 0 ? "\(failure.source):\(failure.line)" : failure.source
-        logger.error("[renderer] \(failure.kind, privacy: .public) (\(failure.name, privacy: .public)) at \(location, privacy: .public)")
+        logger.error(
+            "[renderer] \(failure.kind, privacy: .public) (\(failure.name, privacy: .public)) at \(location, privacy: .public)"
+        )
     }
 
     func rendererDidBecomeReady() {
@@ -861,7 +912,8 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     /// A sheet on the window when it is visible, else an app-modal panel.
     private func runPanel(_ panel: NSSavePanel) async -> NSApplication.ModalResponse {
         guard let window, window.isVisible else { return panel.runModal() }
-        return await withCheckedContinuation { (continuation: CheckedContinuation<NSApplication.ModalResponse, Never>) in
+        return await withCheckedContinuation {
+            (continuation: CheckedContinuation<NSApplication.ModalResponse, Never>) in
             panel.beginSheetModal(for: window) { response in continuation.resume(returning: response) }
         }
     }
@@ -1041,7 +1093,9 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
 
     func titlebarDoubleClicked() {
         guard let window else { return }
-        switch TitlebarDoubleClickAction.from(userDefault: UserDefaults.standard.string(forKey: "AppleActionOnDoubleClick")) {
+        switch TitlebarDoubleClickAction.from(
+            userDefault: UserDefaults.standard.string(forKey: "AppleActionOnDoubleClick"))
+        {
         case .zoom: window.performZoom(nil)
         case .minimize: window.performMiniaturize(nil)
         case .none: break

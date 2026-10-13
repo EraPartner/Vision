@@ -43,7 +43,15 @@ struct PortfolioDetailSheet: View {
                     }
                 }
             } else {
-                ProgressView().frame(maxWidth: .infinity).padding(50)
+                if model.isFetching || model.historyLoading {
+                    ProgressView().frame(maxWidth: .infinity).padding(50)
+                } else if model.error == nil {
+                    Text(strings.t("apiError.notFound"))
+                        .foregroundStyle(theme.secondaryLabel).frame(maxWidth: .infinity).padding(50)
+                    Button(strings.t("common.retry")) {
+                        Task { await model.load(currency: shell.settings.defaultCurrency, force: true) }
+                    }
+                }
                 Button(strings.t("common.close")) { model.closeDetail() }.keyboardShortcut(.cancelAction)
             }
         }.padding(24).frame(minWidth: 680, idealWidth: 800)

@@ -14,20 +14,23 @@ public struct TaxOverviewView: View {
         self.shell = shell
     }
     private var strings: any Localizing { shell.strings }
-    private var overview: OpenAPI.BelgianTaxOverview? { screens.overview.overview }
+    private var overview: OpenAPI.BelgianTaxOverview? {
+        guard let value = screens.overview.overview, value.year == (requestedYear ?? value.liveYear) else { return nil }
+        return value
+    }
     private var data: TaxDashboardData? {
         guard let data = screens.dashboard.data, data.year == overview?.year,
             data.currency == shell.settings.defaultCurrency
         else { return nil }
         return data
     }
-    private var requestedYear: Int? { shell.route.value("year").flatMap(Int.init) }
+    private var requestedYear: Int? { TaxYearRoute.parse(shell.route.value("year")) }
 
     public var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 header
-                if let error = screens.overview.error ?? screens.dashboard.error {
+                if let error = screens.routeLoadError ?? screens.overview.error ?? screens.dashboard.error {
                     Text(strings.t("tax.page.loadError", ["msg": error])).foregroundStyle(theme.destructive)
                     Button(strings.t("common.retry")) { Task { await reload(force: true) } }
                 } else if screens.overview.isLoading || screens.dashboard.isLoading || overview == nil {
@@ -231,6 +234,11 @@ public struct TaxOverviewView: View {
         if await screens.actions.perform(action) { await reload(force: true) }
     }
     private func reload(force: Bool = false) async {
-        await screens.load(year: requestedYear, currency: shell.settings.defaultCurrency, force: force)
+        let route = shell.route
+        let currency = shell.settings.defaultCurrency
+        guard let canonical = await screens.loadRoute(route: route, currency: currency, force: force),
+            !Task.isCancelled, shell.route == route, shell.settings.defaultCurrency == currency
+        else { return }
+        if canonical != route { shell.replaceQuery(canonical.query) }
     }
 }

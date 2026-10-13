@@ -5,8 +5,8 @@ method: POST, GET, PATCH, DELETE
 path: /api/portfolio/import
 description: Portfolio CSV/Saxo XLSX/native IBKR funding XLS or XLSX staging, reviewed reconciliation, immutable receipts, and dated custody/unit adjustments with original basis
 date: 2026-10-08
-updated: 2026-10-08
-last_modified: 2026-10-08
+updated: 2026-10-13
+last_modified: 2026-10-13
 tags:
   [
     api,
@@ -56,6 +56,9 @@ related_code:
   - "apps/node-backend/src/repositories/portfolioImportBatchRepository.ts"
   - "apps/node-backend/src/services/customParserConfigService.ts"
   - "apps/node-backend/src/lib/portfolioUpload.ts"
+  - "apps/node-backend/src/services/portfolioImportProbe.ts"
+  - "packages/shared-utils/src/portfolioImportDetection.ts"
+  - "packages/shared-utils/src/csvPreview.ts"
   - "apps/node-backend/src/services/portfolio/fxResolve.ts"
   - "apps/frontend/src/pages/portfolio/PortfolioImportPage.tsx"
   - "apps/frontend/src/pages/portfolio/PortfolioImportSession.tsx"
@@ -99,6 +102,29 @@ All routes are mounted at `/api/portfolio/import` with `importRateLimiter`.
 
 ## Upload Endpoints
 
+### POST /api/portfolio/import/probe
+
+The native Import screen sends a read-only multipart probe before staging. `file` is required;
+`separator` can be comma, semicolon, tab or pipe (omit to sniff), `encoding` defaults to `utf-8`
+and also accepts `latin1` or `windows-1252` (case-insensitive, with `utf8`, `latin-1` and
+`iso-8859-1` aliases), and `skipRows` is a decimal string defaulting to `0`.
+The existing upload filter, 50 MB limit and workbook inflation limits apply. Temporary files
+are cleaned up on success and failure. No batch, staging, investment or financial row is written.
+
+The envelope data is `{detected, detectionError, preview, previewError, separator}`. Detection
+contains `source`, every `sourceAccountIdentities` value, and the optional IBKR funding
+`presetKey`. Unknown formats return `detected: null`; detection parse failures additionally
+return `detectionError: "parse_error"`. Preview contains `headers` and at most five `rows`
+from the first 16,384 bytes, or `null` with `previewError: "parse_error"` if parsing fails.
+The two outcomes are independent: a maintained workbook can be detected even when its
+CSV preview is unreadable. The frontend still displays its existing unreadable notice for an
+empty header set. Distinct type mapping values come from these preview rows, as in the web UI.
+
+Maintained record and funding-workbook predicates and CSV preview decoding now live in
+`@vision/shared-utils`; the web frontend keeps compatibility entry points. Detection uses the
+complete file so another source account cannot be hidden beyond the preview prefix. This is an
+additive API prerequisite for ADR-204 phase 3j; existing upload behavior is unchanged.
+
 ### POST /api/portfolio/import/csv/custom
 
 One-shot portfolio history import. The existing endpoint path accepts CSV and maintained Saxo or native IBKR funding workbooks.
@@ -114,7 +140,7 @@ field. Query fields are ignored. This is a breaking request-contract change unde
 
 | Field                             | Type    | Required | Description                                                                                                                                                                                 |
 | --------------------------------- | ------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `file`                            | File    | Yes      | CSV or maintained workbook (max 50 MiB); Saxo XLSX requires `saxo_transaction_history`; IBKR funding XLS/XLSX requires `ibkr_funding_history`                                                                                      |
+| `file`                            | File    | Yes      | CSV or maintained workbook (max 50 MiB); Saxo XLSX requires `saxo_transaction_history`; IBKR funding XLS/XLSX requires `ibkr_funding_history`                                               |
 | `adapter_name`                    | string  | No       | Display label for the import source (written as `bank_account` on portfolio_transactions)                                                                                                   |
 | `portfolio_format`                | string  | No       | Specialized parser: `ibkr_transaction_history`, `kinesis_transaction_history`, `nexo_transaction_history`, `nexo_pro_spot_history`, or `saxo_transaction_history`. Omit for generic mapping |
 | `date_format`                     | string  | No       | Python strptime format; default `%Y-%m-%d`                                                                                                                                                  |

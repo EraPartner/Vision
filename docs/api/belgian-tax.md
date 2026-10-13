@@ -10,6 +10,9 @@ tags: [api, tax, belgian, native, adr-204]
 description: Stateless access to the shared TypeScript household tax engine for native clients.
 related_code:
   - apps/node-backend/src/routes/belgianTax.ts
+  - apps/node-backend/src/routes/belgianPortfolioTax.ts
+  - apps/node-backend/src/services/tax/portfolioDashboardService.ts
+  - packages/shared-utils/src/belgianTax/portfolioDashboard.ts
   - apps/node-backend/src/routes/belgianTaxDashboard.ts
   - apps/node-backend/src/services/tax/dashboardService.ts
   - packages/shared-utils/src/belgianTax/household.ts
@@ -56,6 +59,47 @@ refresh of the same year keeps the prior snapshot and exposes the error. The nat
 changes use existing atomic settings CAS writes. CSV is native, while PDF remains the shared
 web report dialog. macOS build and Demo parity review remain pending. See
 [[docs/reference/native-parity/tax|the action mapping]].
+
+## Read Portfolio Tax widget data
+
+`GET /api/belgian-tax/portfolio-dashboard` (`getBelgianPortfolioTaxDashboard`) is an additive,
+read-only operation for `/portfolio/tax`. It accepts the same optional `year` (1900–2200)
+and three-letter `currency` (default EUR, normalized uppercase). Invalid or repeated scalar
+values return `400`; source read failures and malformed frozen PIT calculations return `500`,
+never an empty dashboard. It shares the existing global and aggregation rate limits.
+
+The typed response contains recorded/manual tax and fee totals, effective tax rate, frozen-first
+selected-year PIT and combined budget, tax/fee localization-key breakdowns, asset-class costs,
+per-investment costs and target-converted realized gains, monthly costs, Belgian TOB/TACR/Reynders/
+CGT estimates, dividend withholding/reclaim details, fraction-valued tax rates and precomputed
+percent badges. `isEmpty` reflects holdings; `hasProfile` reflects the live profile. The
+`hasInKindIncomeUnclassified` flag identifies selected-year included-in-units income. Unknown
+ordinary dividend conventions leave gross dividend base, reclaim, and net cost null; included-in-
+units dividends do not enter dividend income/WHT estimates.
+
+Source scope preserves `usePortfolioTaxData` rather than introducing fiscal changes during the
+native migration: first 500 name-ordered investment metadata rows, newest 1000 ordinary transactions
+per investment, active canonical summaries, and inactive `archivedPresentation` summaries from
+[[docs/api/portfolio-summary|Portfolio Summary]]. Ordinary recorded costs use latest stored rates
+over fallbacks and retain the existing original-amount display fallback when a currency rate is
+unavailable, even when a transaction stores dated FX. Archived ordinary gains/current values keep
+the web current-FX presentation; active canonical gains retain their dated attribution. A historical
+selection changes recorded cost/dividend/buy-leg years, manual adjustment keys and annual tax tables;
+realized/unrealized gains and current-value estimates remain the current all-time holdings figures.
+PIT retains the selected overview's frozen-first number and existing currency behavior. Monthly
+series include transaction months with zero costs and exclude manual adjustments. Explicit tax/fee
+transactions retain existing breakdown bucket precedence, which can differ from aggregate recorded
+costs when their own `taxes`/`fees` fields are also populated.
+
+`records` returns both complete `portfolio_tax_adjustments_v1` and
+`portfolio_tax_classifications_v1` settings plus untouched CAS `expected` baselines. Missing values
+are null with `exists: false`; unknown fields, other-year adjustments, JSON null, and legacy raw
+JSON-string baselines remain intact. Edits use the existing atomic [[docs/api/settings|Settings API]];
+this endpoint never writes settings. `summaries` supplies the investment identity/currency/asset
+class rows needed by those editors. Fiscal formulas and cost bucket logic stay in shared TypeScript,
+including the frontend compatibility exports. Native clients decode money and rates directly as
+`Decimal`; no fiscal or FX formula moves to Swift. See [[docs/features/portfolio-tax|Portfolio Tax]]
+and [[docs/reference/native-parity/portfolio-wealth-tools|the wealth-tool action inventory]].
 
 ## Read Tax charts and widget data
 

@@ -12,7 +12,10 @@
     "./portfolio": "./src/portfolio.ts",
     "./csv": "./src/csv.ts",
     "./slugify": "./src/slugify.ts",
-    "./belgian-tax/*": "./src/belgianTax/*.ts"
+    "./belgian-tax/*": "./src/belgianTax/*.ts",
+    "./portfolio-import-detection": "./src/portfolioImportDetection.ts",
+    "./csv-preview": "./src/csvPreview.ts",
+    "./csv-separator": "./src/csvSeparator.ts"
   },
   "files": [
     "src"

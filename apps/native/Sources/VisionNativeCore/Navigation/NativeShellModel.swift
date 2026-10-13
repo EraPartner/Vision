@@ -73,6 +73,7 @@ public final class NativeShellModel {
     public let statistics: StatisticsScreens?
     public let tax: TaxScreens?
     public let portfolio: PortfolioScreens?
+    public let portfolioImports: PortfolioImportScreens?
     /// The navigation the Leave this page? alert holds while it asks (`blocker.location`).
     public private(set) var leaveConfirmation: NativeRoute?
 
@@ -108,6 +109,7 @@ public final class NativeShellModel {
         statistics: StatisticsScreens? = nil,
         tax: TaxScreens? = nil,
         portfolio: PortfolioScreens? = nil,
+        portfolioImports: PortfolioImportScreens? = nil,
         hiddenSections: [NavSectionID: Bool]? = nil,
         loadSettings: @escaping @Sendable () async throws -> NativeAppSettings,
         saveHiddenSections: @escaping @MainActor ([NavSectionID: Bool]) -> Void = { _ in },
@@ -129,6 +131,7 @@ public final class NativeShellModel {
         self.statistics = statistics
         self.tax = tax
         self.portfolio = portfolio
+        self.portfolioImports = portfolioImports
         self.hiddenSections = hiddenSections ?? Self.defaultHiddenSections
         self.loadSettings = loadSettings
         self.saveHiddenSections = saveHiddenSections
@@ -165,6 +168,9 @@ public final class NativeShellModel {
         if screen.path == "/portfolio" || screen.path.hasPrefix("/portfolio/") {
             if portfolio == nil || route.value("export") == "pdf" { return .web }
         }
+        if screen == .portfolioTax && tax == nil { return .web }
+        if screen == .portfolioImport && portfolioImports == nil { return .web }
+        if case .portfolioImportReview = screen, portfolioImports == nil { return .web }
         return .native(screen)
     }
 
@@ -207,7 +213,11 @@ public final class NativeShellModel {
         if pathChanged && next.path == InsightsRoutes.home { home?.invalidate() }
         if settingsClosed || pathChanged && next.path == InsightsRoutes.statistics { statistics?.model.invalidate() }
         if settingsClosed || pathChanged && next.path == "/tax" { tax?.invalidate() }
-        if settingsClosed || pathChanged && (next.path == "/portfolio" || next.path.hasPrefix("/portfolio/")) { portfolio?.invalidate() }
+        if settingsClosed || pathChanged && next.path == "/portfolio/tax" { tax?.invalidate() }
+        if settingsClosed || pathChanged && (next.path == "/portfolio" || next.path.hasPrefix("/portfolio/")) {
+            portfolio?.invalidate()
+        }
+        if settingsClosed || pathChanged && next.path.hasPrefix("/portfolio/import") { portfolioImports?.invalidate() }
     }
 
     /// A sidebar click, a menu or shortcut navigation, or another native link. The page moves
@@ -290,6 +300,37 @@ public final class NativeShellModel {
 
     /// `/owes`.
     public var owes: OwesModel { transactions.owes }
+
+    /// Import cash and trades can become durable after the user has opened another screen.
+    public func portfolioImportDidMutate() async {
+        home?.invalidate()
+        statistics?.model.invalidate()
+        tax?.invalidate()
+        portfolio?.dataDidChange()
+        transactions.invalidate()
+        accounts.invalidate()
+        let currentRoute = route
+        let currentSettings = settings
+        guard case .native(let screen) = detail else { return }
+        switch screen {
+        case .home:
+            await home?.appear(settings: currentSettings, route: currentRoute, force: true)
+        case .statistics:
+            await statistics?.model.appear(settings: currentSettings, route: currentRoute, force: true)
+            if route == currentRoute { await statistics?.digest.load(force: true) }
+        case .transactions:
+            await transactions.reload()
+        case .accounts:
+            await accounts.load(force: true)
+            if route == currentRoute { await accounts.loadPortfolio(force: true) }
+        case .accountDetail:
+            await accounts.load(force: true)
+        case .tax:
+            _ = await tax?.loadRoute(route: currentRoute, currency: currentSettings.defaultCurrency, force: true)
+        default:
+            break
+        }
+    }
 
     /// A native screen with unsaved work registers its hook while it is shown.
     public func setLeaveGuard(_ hook: NativeLeaveGuard) {
@@ -407,7 +448,13 @@ public final class NativeShellModel {
 
     /// Applies `app_settings`: formats, admin mode and the colorblind skin.
     public func apply(settings next: NativeAppSettings) {
-        if settingsLoaded { home?.invalidate(); statistics?.model.invalidate(); tax?.invalidate(); portfolio?.invalidate() }
+        if settingsLoaded {
+            home?.invalidate()
+            statistics?.model.invalidate()
+            tax?.invalidate()
+            portfolio?.invalidate()
+            portfolioImports?.invalidate()
+        }
         settings = next
         settingsLoaded = true
         settingsRevision &+= 1

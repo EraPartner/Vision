@@ -1574,6 +1574,257 @@ components:
           items:
             $ref: "#/components/schemas/Setting"
 
+    BelgianPortfolioTaxTotals:
+      type: object
+      description: Server-computed display totals. effectiveTaxRate is a percent; totalPIT is selected-year frozen-first. Historical realized/unrealized gains retain the web all-time holdings calculation.
+      required:
+        [
+          totalTaxes,
+          totalFees,
+          totalTaxesAndFees,
+          totalRecordedTaxes,
+          totalRecordedFees,
+          totalManualTaxes,
+          totalManualFees,
+          totalManualCosts,
+          totalRealizedGain,
+          totalUnrealizedGain,
+          effectiveTaxRate,
+          totalPIT,
+          portfolioTaxesPlusPIT,
+        ]
+      properties:
+        totalTaxes: { type: number, format: double }
+        totalFees: { type: number, format: double }
+        totalTaxesAndFees: { type: number, format: double }
+        totalRecordedTaxes: { type: number, format: double }
+        totalRecordedFees: { type: number, format: double }
+        totalManualTaxes: { type: number, format: double }
+        totalManualFees: { type: number, format: double }
+        totalManualCosts: { type: number, format: double }
+        totalRealizedGain: { type: number, format: double }
+        totalUnrealizedGain: { type: number, format: double }
+        effectiveTaxRate: { type: number, format: double }
+        totalPIT: { type: number, format: double }
+        portfolioTaxesPlusPIT: { type: number, format: double }
+
+    BelgianPortfolioTaxCostEntry:
+      type: object
+      required: [nameKey, value]
+      properties:
+        nameKey: { type: string }
+        value: { type: number, format: double }
+
+    BelgianPortfolioTaxAssetCosts:
+      type: object
+      required: [assetClass, taxes, fees, total]
+      properties:
+        assetClass: { type: string }
+        taxes: { type: number, format: double }
+        fees: { type: number, format: double }
+        total: { type: number, format: double }
+
+    BelgianPortfolioTaxInvestmentCosts:
+      type: object
+      description: realizedGain and all cost amounts are already expressed in the response currency; assetClass is the untranslated localization suffix.
+      required:
+        [
+          id,
+          name,
+          symbol,
+          assetClass,
+          recordedTaxes,
+          recordedFees,
+          manualTaxes,
+          manualFees,
+          taxes,
+          fees,
+          total,
+          realizedGain,
+          currency,
+        ]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        symbol: { type: string, nullable: true }
+        assetClass: { type: string }
+        recordedTaxes: { type: number, format: double }
+        recordedFees: { type: number, format: double }
+        manualTaxes: { type: number, format: double }
+        manualFees: { type: number, format: double }
+        taxes: { type: number, format: double }
+        fees: { type: number, format: double }
+        total: { type: number, format: double }
+        realizedGain: { type: number, format: double }
+        currency: { type: string }
+
+    BelgianPortfolioTaxMonthlyCosts:
+      type: object
+      description: YYYY-MM ordinary-transaction costs, including zero-cost months with transactions. Manual adjustments are excluded.
+      required: [period, taxes, fees]
+      properties:
+        period: { type: string }
+        taxes: { type: number, format: double }
+        fees: { type: number, format: double }
+
+    BelgianPortfolioTaxDividend:
+      type: object
+      description: Unknown ordinary dividend conventions leave gross base, reclaim, and net cost null. Included-in-units dividends are excluded; married reclaim uses a doubled exemption while dividendExemption is the single-taxpayer table value.
+      required:
+        [
+          totalDividendIncome,
+          dividendWhtRecorded,
+          grossDividendWht,
+          dividendExemption,
+          grossDividendBase,
+          dividendWhtReclaim,
+          dividendWhtNetCost,
+          unknownDividendConventionCount,
+        ]
+      properties:
+        totalDividendIncome: { type: number, format: double }
+        dividendWhtRecorded: { type: number, format: double }
+        grossDividendWht: { type: number, format: double }
+        dividendExemption: { type: number, format: double }
+        grossDividendBase: { type: number, format: double, nullable: true }
+        dividendWhtReclaim: { type: number, format: double, nullable: true }
+        dividendWhtNetCost: { type: number, format: double, nullable: true }
+        unknownDividendConventionCount: { type: integer }
+
+    BelgianPortfolioTaxEstimates:
+      type: object
+      required:
+        [
+          tobRecorded,
+          tobAutoEstimate,
+          tacrEstimate,
+          reyndersEstimate,
+          cgtEstimate,
+        ]
+      properties:
+        tobRecorded: { type: number, format: double }
+        tobAutoEstimate: { type: number, format: double }
+        tacrEstimate: { type: number, format: double }
+        reyndersEstimate: { type: number, format: double }
+        cgtEstimate: { type: number, format: double }
+
+    BelgianPortfolioTaxBadgePercent:
+      type: object
+      description: Percent-valued display badges, computed by TypeScript from the fraction-valued rates.
+      required:
+        [
+          securitiesAccountTaxRate,
+          capitalGainsTaxRate,
+          reyndersTaxRate,
+          dividendWHTRate,
+        ]
+      properties:
+        securitiesAccountTaxRate: { type: number, format: double }
+        capitalGainsTaxRate: { type: number, format: double }
+        reyndersTaxRate: { type: number, format: double }
+        dividendWHTRate: { type: number, format: double }
+
+    BelgianPortfolioTaxRates:
+      type: object
+      required:
+        [
+          securitiesAccountTaxRate,
+          capitalGainsTaxRate,
+          reyndersTaxRate,
+          dividendWHTRate,
+          securitiesAccountTaxThreshold,
+          badgePercent,
+        ]
+      properties:
+        securitiesAccountTaxRate: { type: number, format: double }
+        capitalGainsTaxRate: { type: number, format: double }
+        reyndersTaxRate: { type: number, format: double }
+        dividendWHTRate: { type: number, format: double }
+        securitiesAccountTaxThreshold: { type: number, format: double }
+        badgePercent:
+          { $ref: "#/components/schemas/BelgianPortfolioTaxBadgePercent" }
+
+    BelgianPortfolioTaxSummary:
+      type: object
+      required: [id, name, symbol, assetClass, currency]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        symbol: { type: string, nullable: true }
+        assetClass: { type: string }
+        currency: { type: string }
+
+    BelgianPortfolioTaxDashboard:
+      type: object
+      required:
+        [
+          year,
+          currency,
+          isEmpty,
+          hasProfile,
+          hasInKindIncomeUnclassified,
+          totals,
+          taxBreakdown,
+          feeBreakdown,
+          taxByAssetClass,
+          investmentBreakdown,
+          yearlyCostTrend,
+          dividend,
+          estimates,
+          taxTable,
+          summaries,
+          records,
+        ]
+      properties:
+        year: { type: integer }
+        currency: { type: string }
+        isEmpty: { type: boolean }
+        hasProfile: { type: boolean }
+        hasInKindIncomeUnclassified: { type: boolean }
+        totals: { $ref: "#/components/schemas/BelgianPortfolioTaxTotals" }
+        taxBreakdown:
+          {
+            type: array,
+            items:
+              { $ref: "#/components/schemas/BelgianPortfolioTaxCostEntry" },
+          }
+        feeBreakdown:
+          {
+            type: array,
+            items:
+              { $ref: "#/components/schemas/BelgianPortfolioTaxCostEntry" },
+          }
+        taxByAssetClass:
+          {
+            type: array,
+            items:
+              { $ref: "#/components/schemas/BelgianPortfolioTaxAssetCosts" },
+          }
+        investmentBreakdown:
+          {
+            type: array,
+            items:
+              {
+                $ref: "#/components/schemas/BelgianPortfolioTaxInvestmentCosts",
+              },
+          }
+        yearlyCostTrend:
+          {
+            type: array,
+            items:
+              { $ref: "#/components/schemas/BelgianPortfolioTaxMonthlyCosts" },
+          }
+        dividend: { $ref: "#/components/schemas/BelgianPortfolioTaxDividend" }
+        estimates: { $ref: "#/components/schemas/BelgianPortfolioTaxEstimates" }
+        taxTable: { $ref: "#/components/schemas/BelgianPortfolioTaxRates" }
+        summaries:
+          {
+            type: array,
+            items: { $ref: "#/components/schemas/BelgianPortfolioTaxSummary" },
+          }
+        records:
+          { type: array, items: { $ref: "#/components/schemas/Setting" } }
+
     BelgianTaxDashboardYearCalculation:
       type: object
       required:
@@ -13542,6 +13793,47 @@ paths:
           description: No Content
 
   # ─── Reports ─────────────────────────────────────────────────────────────────
+  /api/belgian-tax/portfolio-dashboard:
+    get:
+      operationId: getBelgianPortfolioTaxDashboard
+      summary: Read authoritative Portfolio Tax costs, estimates, and editable setting baselines
+      tags: [Belgian Tax]
+      description: Read-only parity with usePortfolioTaxData. First 500 name-ordered investments, active canonical summaries plus archived ordinary/current-FX presentation, and newest 1000 ordinary transactions per investment. Recorded costs/dividends/manual adjustments use the selected year; gains/current values retain all-time/live holdings semantics. Uses shared TypeScript tax helpers and frozen-first PIT. Original adjustment/classification settings and CAS baselines are returned without writes. Native consumers decode numeric amounts directly as Decimal.
+      parameters:
+        - name: year
+          in: query
+          schema: { type: integer, minimum: 1900, maximum: 2200 }
+          description: Omit to use the live household year. Historical years use their snapshot or a year-pinned live estimate.
+        - name: currency
+          in: query
+          schema: { type: string, pattern: "^[A-Za-z]{3}$", default: EUR }
+          description: Response display currency, normalized uppercase. Ordinary recorded costs use latest stored/fallback rates and retain the existing original-amount fallback when a rate is unavailable.
+      responses:
+        "200":
+          description: Server-computed fiscal dashboard and original setting records.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        {
+                          $ref: "#/components/schemas/BelgianPortfolioTaxDashboard",
+                        }
+        "400": { description: Invalid or repeated year/currency. }
+        "429": { description: API or aggregation rate limit exceeded. }
+        "500":
+          {
+            description: Settings,
+            portfolio,
+            transaction,
+            FX read,
+            or frozen PIT contract failure; never an empty success.,
+          }
+
   /api/belgian-tax/dashboard:
     get:
       operationId: getBelgianTaxDashboard
@@ -14750,6 +15042,116 @@ paths:
                 $ref: "#/components/schemas/Envelope"
 
   # ─── Portfolio Import ─────────────────────────────────────────────────────────
+  /api/portfolio/import/probe:
+    post:
+      summary: Read-only maintained statement detection and CSV header preview
+      description: >-
+        Inspects an uploaded file without creating a batch or financial rows. Uses
+        the same maintained-format detection and 16384-byte, five-row CSV preview
+        rules as the web frontend. Full-file detection retains every source account
+        identity. Detection and preview errors are independent; a supported workbook
+        can be detected while CSV preview is unavailable. Temporary uploads are cleaned
+        up on every outcome. The existing 50 MB upload and workbook inflation limits apply.
+      operationId: probePortfolioImport
+      tags: [PortfolioImport]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                separator:
+                  type: string
+                  enum: [",", ";", "\t", "|"]
+                  description: Omit to sniff the first nonempty header line.
+                encoding:
+                  type: string
+                  enum: [utf-8, utf8, latin1, latin-1, iso-8859-1, windows-1252]
+                  description: Case-insensitive and trimmed; Latin-1 aliases normalize to latin1.
+                  default: utf-8
+                skipRows:
+                  type: string
+                  pattern: '^\d{1,6}$'
+                  default: "0"
+      responses:
+        "200":
+          description: Independent detection and CSV preview outcomes
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required:
+                          [
+                            detected,
+                            detectionError,
+                            preview,
+                            previewError,
+                            separator,
+                          ]
+                        properties:
+                          detected:
+                            type: object
+                            nullable: true
+                            required: [source, sourceAccountIdentities]
+                            properties:
+                              source:
+                                type: string
+                                enum:
+                                  [
+                                    ibkr,
+                                    kinesis,
+                                    nexo,
+                                    nexo_pro,
+                                    saxo,
+                                    native_receipts,
+                                  ]
+                              sourceAccountIdentities:
+                                type: array
+                                items:
+                                  type: string
+                              presetKey:
+                                type: string
+                                enum: [ibkr_funding_history]
+                          detectionError:
+                            type: string
+                            nullable: true
+                            enum: [parse_error]
+                          preview:
+                            type: object
+                            nullable: true
+                            required: [headers, rows]
+                            properties:
+                              headers:
+                                type: array
+                                items:
+                                  type: string
+                              rows:
+                                type: array
+                                maxItems: 5
+                                items:
+                                  type: array
+                                  items:
+                                    type: string
+                          previewError:
+                            type: string
+                            nullable: true
+                            enum: [parse_error]
+                          separator:
+                            type: string
+                            enum: [",", ";", "\t", "|"]
+        "400":
+          description: Missing or unsupported upload or invalid probe options
+
   /api/portfolio/import/csv/custom:
     post:
       summary: One-shot portfolio history import with custom mapping or a supported format

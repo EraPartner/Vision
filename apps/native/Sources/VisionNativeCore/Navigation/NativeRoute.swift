@@ -105,6 +105,9 @@ public enum NativeScreen: Equatable, Hashable, Sendable {
     case portfolioHoldings(assetClass: String)
     case rebalance
     case netWorth
+    case portfolioTax
+    case portfolioImport
+    case portfolioImportReview(batchId: String)
     case adminOverview
     case databaseMaintenance
     /// `/admin/db/:table`, with the decoded table name.
@@ -138,7 +141,7 @@ public enum NativeScreen: Equatable, Hashable, Sendable {
         .tax,
         .portfolio, .portfolioHoldings(assetClass: "stock"), .portfolioHoldings(assetClass: "crypto"),
         .portfolioHoldings(assetClass: "metals"), .portfolioHoldings(assetClass: "real_estate"),
-        .portfolioHoldings(assetClass: "savings"), .rebalance, .netWorth,
+        .portfolioHoldings(assetClass: "savings"), .rebalance, .netWorth, .portfolioTax, .portfolioImport,
         .adminOverview, .databaseMaintenance, .providerHealth, .endpointLiveness, .exchangeRates, .plannedPayments,
         .importExport, .transactions, .accounts, .categories, .recipients,
     ]
@@ -151,9 +154,13 @@ public enum NativeScreen: Equatable, Hashable, Sendable {
         case .tax: return "/tax"
         case .portfolio: return "/portfolio"
         case .portfolioHoldings(let assetClass):
-            return "/portfolio/" + (assetClass == "real_estate" ? "real-estate" : assetClass == "stock" ? "stocks" : assetClass)
+            return "/portfolio/"
+                + (assetClass == "real_estate" ? "real-estate" : assetClass == "stock" ? "stocks" : assetClass)
         case .rebalance: return "/portfolio/rebalance"
         case .netWorth: return "/portfolio/net-worth"
+        case .portfolioTax: return "/portfolio/tax"
+        case .portfolioImport: return "/portfolio/import"
+        case .portfolioImportReview(let batchId): return "/portfolio/import/\(batchId)/review"
         case .adminOverview: return "/admin"
         case .databaseMaintenance: return TableEditorRoute.maintenancePath
         case .tableEditor(let table): return TableEditorRoute.path(for: table)
@@ -179,6 +186,12 @@ public enum NativeScreen: Equatable, Hashable, Sendable {
 
     public static func screen(forPath path: String) -> NativeScreen? {
         if let screen = fixedScreens.first(where: { $0.path == path }) { return screen }
+        let components = path.split(separator: "/", omittingEmptySubsequences: false)
+        if components.count == 5, components[0].isEmpty, components[1] == "portfolio",
+            components[2] == "import", components[4] == "review", !components[3].isEmpty
+        {
+            return .portfolioImportReview(batchId: String(components[3]))
+        }
         if TransactionsRoutes.owesIsNative && path == TransactionsRoutes.owesPath { return .owes }
         if let id = AccountsRoutes.detailId(forPath: path) { return .accountDetail(id: id) }
         if ImportRoutes.reviewIsNative, let batchId = ImportRoutes.reviewBatchId(forPath: path) {
