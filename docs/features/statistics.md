@@ -3,7 +3,7 @@ title: Statistics Feature
 type: feature
 status: active
 date: 2026-10-08
-updated: 2026-10-08
+updated: 2026-10-13
 last_modified: 2026-09-27
 tags:
   [
@@ -143,24 +143,24 @@ The Statistics page (`StatisticsPage.tsx`, 232 lines) is a thin orchestrator tha
 
 **Sub-components:**
 
-| Component                     | Lines | Purpose                                                                                                                                                                                                                                                   | Tabs           |
-| ----------------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
-| `ChartCard.tsx`               | 48    | Card wrapper with ExclusionToggle and render-prop children                                                                                                                                                                                                | All            |
-| `MonthlyRhythm.tsx`           | —     | Overview lede: scrubbable per-month net strip + typical-month figures + best/worst/in-the-black facts. The month in progress is labelled "so far" and left out of best/worst (replaced `SummaryCards`, whose income/spending/net tiles restated the dashboard hero and whose 4th tile, "Months tracked", was filler) | Overview       |
-| `MonthlyChart.tsx`            | 42    | Monthly income/spending bar chart                                                                                                                                                                                                                         | Overview       |
-| `NetTrendChart.tsx`           | 44    | Net balance area chart over time                                                                                                                                                                                                                          | Overview       |
-| `CategoryPieChart.tsx`        | 64    | Category spending donut chart (top 10, year-filterable)                                                                                                                                                                                                   | Categories     |
-| `CategoryTrendChart.tsx`      | 50    | Top-5 category trend line chart                                                                                                                                                                                                                           | Categories     |
-| `CategoryPivotTable.tsx`      | —     | Hierarchical pivot table with mode/year filters                                                                                                                                                                                                           | Categories     |
-| `TopRecipientsChart.tsx`      | 67    | Top recipients horizontal bar chart (year-filterable)                                                                                                                                                                                                     | Recipients     |
-| `YearlyComparisonChart.tsx`   | 41    | Year-over-year bar chart                                                                                                                                                                                                                                  | Yearly         |
-| `YearlySummaryTable.tsx`      | 67    | Yearly summary table (income, spending, net, tx count)                                                                                                                                                                                                    | Yearly         |
-| `SavedChartsSection.tsx`      | 42    | Full tab content rendering user-created saved charts in grid with builder modal                                                                                                                                                                           | Custom Charts  |
-| `CustomChart.tsx`             | —     | Pure read-only chart display merging category + recipient pivot data                                                                                                                                                                                      | Custom Charts  |
-| `CustomChartBuilderModal.tsx` | —     | Two-column dialog (form left, live preview right) for creating/editing charts                                                                                                                                                                             | Custom Charts  |
-| `RecipientInsightsTab.tsx`    | 311   | Merchant spending insights (MoM alerts, filters)                                                                                                                                                                                                          | Recipients     |
-| `InsightsDigestPanel.tsx`     | —     | Collapsed finding counts with an always-visible cash forecast; expandable subscription and category findings, contextual dismiss actions, and exact day 1 through N category windows                                                                                                                 | Overview       |
-| `SankeyTab.tsx`               | 88    | Sankey flow diagram with year selector and exclusion toggle                                                                                                                                                                                               | Flow           |
+| Component                     | Lines | Purpose                                                                                                                                                                                                                                                                                                              | Tabs          |
+| ----------------------------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| `ChartCard.tsx`               | 48    | Card wrapper with ExclusionToggle and render-prop children                                                                                                                                                                                                                                                           | All           |
+| `MonthlyRhythm.tsx`           | —     | Overview lede: scrubbable per-month net strip + typical-month figures + best/worst/in-the-black facts. The month in progress is labelled "so far" and left out of best/worst (replaced `SummaryCards`, whose income/spending/net tiles restated the dashboard hero and whose 4th tile, "Months tracked", was filler) | Overview      |
+| `MonthlyChart.tsx`            | 42    | Monthly income/spending bar chart                                                                                                                                                                                                                                                                                    | Overview      |
+| `NetTrendChart.tsx`           | 44    | Net balance area chart over time                                                                                                                                                                                                                                                                                     | Overview      |
+| `CategoryPieChart.tsx`        | 64    | Category spending donut chart (top 10, year-filterable)                                                                                                                                                                                                                                                              | Categories    |
+| `CategoryTrendChart.tsx`      | 50    | Top-5 category trend line chart                                                                                                                                                                                                                                                                                      | Categories    |
+| `CategoryPivotTable.tsx`      | —     | Hierarchical pivot table with mode/year filters                                                                                                                                                                                                                                                                      | Categories    |
+| `TopRecipientsChart.tsx`      | 67    | Top recipients horizontal bar chart (year-filterable)                                                                                                                                                                                                                                                                | Recipients    |
+| `YearlyComparisonChart.tsx`   | 41    | Year-over-year bar chart                                                                                                                                                                                                                                                                                             | Yearly        |
+| `YearlySummaryTable.tsx`      | 67    | Yearly summary table (income, spending, net, tx count)                                                                                                                                                                                                                                                               | Yearly        |
+| `SavedChartsSection.tsx`      | 42    | Full tab content rendering user-created saved charts in grid with builder modal                                                                                                                                                                                                                                      | Custom Charts |
+| `CustomChart.tsx`             | —     | Pure read-only chart display merging category + recipient pivot data                                                                                                                                                                                                                                                 | Custom Charts |
+| `CustomChartBuilderModal.tsx` | —     | Two-column dialog (form left, live preview right) for creating/editing charts                                                                                                                                                                                                                                        | Custom Charts |
+| `RecipientInsightsTab.tsx`    | 311   | Merchant spending insights (MoM alerts, filters)                                                                                                                                                                                                                                                                     | Recipients    |
+| `InsightsDigestPanel.tsx`     | —     | Collapsed finding counts with an always-visible cash forecast; expandable subscription and category findings, contextual dismiss actions, and exact day 1 through N category windows                                                                                                                                 | Overview      |
+| `SankeyTab.tsx`               | 88    | Sankey flow diagram with year selector and exclusion toggle                                                                                                                                                                                                                                                          | Flow          |
 
 **Shared utilities:**
 
@@ -531,14 +531,19 @@ See [[docs/features/rolling-averages|Rolling Averages Feature]].
 
 ### PDF export
 
-The page header's ••• menu offers **Export PDF…**, which opens the shared `ExportDialog`:
+The page header's ••• menu offers **Export PDF…**, opening the shared `ExportDialog` for financial,
+portfolio, or tax reports. It selects a period, sections, and currency, posts to
+`/api/reports/financial`, `/api/reports/portfolio`, or `/api/reports/tax`, and downloads
+`vision-<type>-<YYYY-MM-DD>.pdf`. The backend renders the PDF with headless Chrome; the tax request
+still serializes the TypeScript frontend's computed tax result. See
+[[docs/features/pdf-report-export|PDF Report Export]] for the complete report contract.
 
-- **Generates**: A4 PDF with summary cards, monthly table, top 10 categories
-- **Endpoint**: `GET /api/reports/financial?currency=EUR`
-- **Implementation**: Server-side via Puppeteer (headless Chrome); `pdfkit` was removed (see [[docs/adr/038-dependency-slim-down-supply-chain-risk|ADR-038]])
-- **Download**: Browser automatically downloads as `financial-report-{YYYY-MM-DD}.pdf`
-
-See [[docs/features/pdf-report-export|PDF Report Export Feature]].
+Vision Native's six Insights tabs are implemented in SwiftUI. Its PDF action temporarily opens
+this same report dialog through `?export=pdf`; closing removes that parameter and restores the
+native tab/window. Native report serialization awaits the tax-engine backend operation required
+by [[docs/adr/204-vision-native-swift-app-target|ADR-204]]. The macOS build and Demo visual review
+remain pending; see [[docs/architecture/native-app|Vision Native architecture]] and
+[[docs/reference/native-parity/home-and-statistics|the native parity inventory]].
 
 ### Browser print layout
 

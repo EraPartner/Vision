@@ -36,6 +36,7 @@ public struct ShellRootView<WebContent: View>: View {
             }
         }
         .environment(\.visionTheme, theme)
+        .environment(\.locale, Locale(identifier: model.strings.language.rawValue))
         // `UnsavedChangesProvider`'s Leave this page? alert. The buttons decide; the binding
         // only reads, so a dismissal never drops the held navigation by itself.
         .alert(
@@ -217,6 +218,10 @@ struct NativeScreenContainer: View {
     @ViewBuilder
     private var content: some View {
         switch screen {
+        case .home:
+            if let home = model.home { HomeView(model: home, shell: model) }
+        case .statistics:
+            if let statistics = model.statistics { StatisticsView(screens: statistics, shell: model) }
         case .adminOverview:
             AdminOverviewView(model: model.admin.overview, shell: model)
         case .databaseMaintenance:

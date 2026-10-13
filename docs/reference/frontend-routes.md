@@ -2,9 +2,10 @@
 title: Frontend Routes Reference
 type: reference
 status: active
-date: 2026-10-12
-updated: 2026-10-12
-tags: [reference, frontend, routing, pages, react-router, admin, sidebar-sections]
+date: 2026-10-13
+updated: 2026-10-13
+tags:
+  [reference, frontend, routing, pages, react-router, admin, sidebar-sections]
 description: Complete reference of all frontend routes and their page components, including admin routes and the sidebar sections that offer them
 aliases: [routes, pages, navigation, url paths, frontend routes, admin routes]
 ---
@@ -27,37 +28,37 @@ Settings remain a dialog rather than a page route, but its section is deep-linka
 
 ## Budgeting Pages (top and Money sections)
 
-| Route                     | Component             | Layout    | Description                          | Code                                                                         |
-| ------------------------- | --------------------- | --------- | ------------------------------------ | ---------------------------------------------------------------------------- |
-| `/`                       | `DashboardPage`       | AppLayout | Home: month-to-date hero and lists   | [[apps/frontend/src/pages/DashboardPage.tsx\|DashboardPage.tsx]]             |
+| Route                     | Component             | Layout    | Description                           | Code                                                                         |
+| ------------------------- | --------------------- | --------- | ------------------------------------- | ---------------------------------------------------------------------------- |
+| `/`                       | `DashboardPage`       | AppLayout | Home: month-to-date hero and lists    | [[apps/frontend/src/pages/DashboardPage.tsx\|DashboardPage.tsx]]             |
 | `/transactions`           | `TransactionsPage`    | AppLayout | Transactions list, filters, inspector | [[apps/frontend/src/pages/TransactionsPage.tsx\|TransactionsPage.tsx]]       |
-| `/categories`             | `CategoriesPage`      | AppLayout | Category management                  | [[apps/frontend/src/pages/CategoriesPage.tsx\|CategoriesPage.tsx]]           |
-| `/accounts`               | `AccountsPage`        | AppLayout | Account management                   | [[apps/frontend/src/pages/AccountsPage.tsx\|AccountsPage.tsx]]               |
-| `/accounts/:id`           | `AccountDetailPage`   | AppLayout | Account ledger and reconciliation    | [[apps/frontend/src/pages/AccountDetailPage.tsx\|AccountDetailPage.tsx]]     |
-| `/recipients`             | `RecipientsPage`      | AppLayout | Recipient management                 | [[apps/frontend/src/pages/RecipientsPage.tsx\|RecipientsPage.tsx]]           |
-| `/planned`                | `PlannedPaymentsPage` | AppLayout | Planned and recurring payments       | [[apps/frontend/src/pages/PlannedPaymentsPage.tsx\|PlannedPaymentsPage.tsx]] |
-| `/statistics`             | `StatisticsPage`      | AppLayout | Analytics and reporting              | [[apps/frontend/src/pages/StatisticsPage.tsx\|StatisticsPage.tsx]]           |
-| `/import`                 | `ImportPage`          | AppLayout | CSV import                           | [[apps/frontend/src/pages/ImportPage.tsx\|ImportPage.tsx]]                   |
-| `/import/:batchId/review` | `ImportReviewPage`    | AppLayout | Review a budgeting import batch      | [[apps/frontend/src/pages/ImportReviewPage.tsx\|ImportReviewPage.tsx]]       |
-| `/owes`                   | `OwesPage`            | AppLayout | Transaction splits and debt tracking | [[apps/frontend/src/pages/OwesPage.tsx\|OwesPage.tsx]]                       |
-| `/tax`                    | `TaxOverviewPage`     | AppLayout | Belgian tax overview                 | [[apps/frontend/src/pages/TaxOverviewPage.tsx\|TaxOverviewPage.tsx]]         |
+| `/categories`             | `CategoriesPage`      | AppLayout | Category management                   | [[apps/frontend/src/pages/CategoriesPage.tsx\|CategoriesPage.tsx]]           |
+| `/accounts`               | `AccountsPage`        | AppLayout | Account management                    | [[apps/frontend/src/pages/AccountsPage.tsx\|AccountsPage.tsx]]               |
+| `/accounts/:id`           | `AccountDetailPage`   | AppLayout | Account ledger and reconciliation     | [[apps/frontend/src/pages/AccountDetailPage.tsx\|AccountDetailPage.tsx]]     |
+| `/recipients`             | `RecipientsPage`      | AppLayout | Recipient management                  | [[apps/frontend/src/pages/RecipientsPage.tsx\|RecipientsPage.tsx]]           |
+| `/planned`                | `PlannedPaymentsPage` | AppLayout | Planned and recurring payments        | [[apps/frontend/src/pages/PlannedPaymentsPage.tsx\|PlannedPaymentsPage.tsx]] |
+| `/statistics`             | `StatisticsPage`      | AppLayout | Analytics and reporting               | [[apps/frontend/src/pages/StatisticsPage.tsx\|StatisticsPage.tsx]]           |
+| `/import`                 | `ImportPage`          | AppLayout | CSV import                            | [[apps/frontend/src/pages/ImportPage.tsx\|ImportPage.tsx]]                   |
+| `/import/:batchId/review` | `ImportReviewPage`    | AppLayout | Review a budgeting import batch       | [[apps/frontend/src/pages/ImportReviewPage.tsx\|ImportReviewPage.tsx]]       |
+| `/owes`                   | `OwesPage`            | AppLayout | Transaction splits and debt tracking  | [[apps/frontend/src/pages/OwesPage.tsx\|OwesPage.tsx]]                       |
+| `/tax`                    | `TaxOverviewPage`     | AppLayout | Belgian tax overview                  | [[apps/frontend/src/pages/TaxOverviewPage.tsx\|TaxOverviewPage.tsx]]         |
 
 ## Portfolio Pages (Wealth section)
 
-| Route                               | Component                   | Layout    | Description                             | Code                                                                                               |
-| ----------------------------------- | --------------------------- | --------- | --------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `/portfolio`                        | `PortfolioPage`             | AppLayout | Portfolio overview and performance      | [[apps/frontend/src/pages/portfolio/PortfolioPage.tsx\|PortfolioPage.tsx]]                     |
-| `/portfolio/stocks`                 | `StocksPage`                | AppLayout | Stocks and ETFs                         | [[apps/frontend/src/pages/portfolio/StocksPage.tsx\|StocksPage.tsx]]                               |
-| `/portfolio/crypto`                 | `CryptoPage`                | AppLayout | Cryptocurrency holdings                 | [[apps/frontend/src/pages/portfolio/CryptoPage.tsx\|CryptoPage.tsx]]                               |
-| `/portfolio/metals`                 | `MetalsPage`                | AppLayout | Precious metals                         | [[apps/frontend/src/pages/portfolio/MetalsPage.tsx\|MetalsPage.tsx]]                               |
-| `/portfolio/real-estate`            | `RealEstatePage`            | AppLayout | Real estate holdings                    | [[apps/frontend/src/pages/portfolio/RealEstatePage.tsx\|RealEstatePage.tsx]]                       |
-| `/portfolio/savings`                | `SavingsPage`               | AppLayout | Savings accounts                        | [[apps/frontend/src/pages/portfolio/SavingsPage.tsx\|SavingsPage.tsx]]                             |
-| `/portfolio/performance`            | redirect                    | AppLayout | Legacy; redirects to `/portfolio` and preserves the query string | [[apps/frontend/src/lib/routePreload.ts\|routePreload.ts]] (`legacyRouteRedirects`)              |
-| `/portfolio/net-worth`              | `NetWorthPage`              | AppLayout | Net worth tracking                      | [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx\|NetWorthPage.tsx]]                 |
-| `/portfolio/import`                 | `PortfolioImportPage`       | AppLayout | Brokerage import                        | [[apps/frontend/src/pages/portfolio/PortfolioImportPage.tsx\|PortfolioImportPage.tsx]]             |
-| `/portfolio/import/:batchId/review` | `PortfolioImportReviewPage` | AppLayout | Review a brokerage import batch         | [[apps/frontend/src/pages/portfolio/PortfolioImportReviewPage.tsx\|PortfolioImportReviewPage.tsx]] |
-| `/portfolio/tax`                    | `PortfolioTaxPage`          | AppLayout | Portfolio tax calculations              | [[apps/frontend/src/pages/portfolio/tax/PortfolioTaxPage.tsx\|PortfolioTaxPage.tsx]]               |
-| `/portfolio/rebalance`              | `RebalancePage`             | AppLayout | Portfolio allocation and rebalance plan | [[apps/frontend/src/pages/portfolio/RebalancePage.tsx\|RebalancePage.tsx]]                         |
+| Route                               | Component                   | Layout    | Description                                                      | Code                                                                                               |
+| ----------------------------------- | --------------------------- | --------- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `/portfolio`                        | `PortfolioPage`             | AppLayout | Portfolio overview and performance                               | [[apps/frontend/src/pages/portfolio/PortfolioPage.tsx\|PortfolioPage.tsx]]                         |
+| `/portfolio/stocks`                 | `StocksPage`                | AppLayout | Stocks and ETFs                                                  | [[apps/frontend/src/pages/portfolio/StocksPage.tsx\|StocksPage.tsx]]                               |
+| `/portfolio/crypto`                 | `CryptoPage`                | AppLayout | Cryptocurrency holdings                                          | [[apps/frontend/src/pages/portfolio/CryptoPage.tsx\|CryptoPage.tsx]]                               |
+| `/portfolio/metals`                 | `MetalsPage`                | AppLayout | Precious metals                                                  | [[apps/frontend/src/pages/portfolio/MetalsPage.tsx\|MetalsPage.tsx]]                               |
+| `/portfolio/real-estate`            | `RealEstatePage`            | AppLayout | Real estate holdings                                             | [[apps/frontend/src/pages/portfolio/RealEstatePage.tsx\|RealEstatePage.tsx]]                       |
+| `/portfolio/savings`                | `SavingsPage`               | AppLayout | Savings accounts                                                 | [[apps/frontend/src/pages/portfolio/SavingsPage.tsx\|SavingsPage.tsx]]                             |
+| `/portfolio/performance`            | redirect                    | AppLayout | Legacy; redirects to `/portfolio` and preserves the query string | [[apps/frontend/src/lib/routePreload.ts\|routePreload.ts]] (`legacyRouteRedirects`)                |
+| `/portfolio/net-worth`              | `NetWorthPage`              | AppLayout | Net worth tracking                                               | [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx\|NetWorthPage.tsx]]                 |
+| `/portfolio/import`                 | `PortfolioImportPage`       | AppLayout | Brokerage import                                                 | [[apps/frontend/src/pages/portfolio/PortfolioImportPage.tsx\|PortfolioImportPage.tsx]]             |
+| `/portfolio/import/:batchId/review` | `PortfolioImportReviewPage` | AppLayout | Review a brokerage import batch                                  | [[apps/frontend/src/pages/portfolio/PortfolioImportReviewPage.tsx\|PortfolioImportReviewPage.tsx]] |
+| `/portfolio/tax`                    | `PortfolioTaxPage`          | AppLayout | Portfolio tax calculations                                       | [[apps/frontend/src/pages/portfolio/tax/PortfolioTaxPage.tsx\|PortfolioTaxPage.tsx]]               |
+| `/portfolio/rebalance`              | `RebalancePage`             | AppLayout | Portfolio allocation and rebalance plan                          | [[apps/frontend/src/pages/portfolio/RebalancePage.tsx\|RebalancePage.tsx]]                         |
 
 ## Research Pages (Research section)
 
@@ -87,11 +88,11 @@ Admin routes appear in the sidebar's Admin section, shown only when admin mode i
 
 ## Global Routes
 
-| Route       | Component               | Layout    | Description                                               | Code                                                                             |
-| ----------- | ----------------------- | --------- | --------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| `/analysis` | `AnalysisWorkspacePage` | AppLayout | Manual visual, SQL, spreadsheet, and saved-analysis tools | [[apps/frontend/src/pages/AnalysisWorkspacePage.tsx\|AnalysisWorkspacePage.tsx]] |
-| `/ai-chat`  | `AIChatPage`            | AppLayout | Local AI chat for natural-language queries                | [[apps/frontend/src/pages/AIChatPage.tsx\|AIChatPage.tsx]]                       |
-| `/analysis/monitors` | `AnalysisMonitorsPage` | AppLayout | Saved-analysis monitors with an unread badge | [[apps/frontend/src/pages/AnalysisMonitorsPage.tsx\|AnalysisMonitorsPage.tsx]] |
+| Route                | Component               | Layout    | Description                                               | Code                                                                             |
+| -------------------- | ----------------------- | --------- | --------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `/analysis`          | `AnalysisWorkspacePage` | AppLayout | Manual visual, SQL, spreadsheet, and saved-analysis tools | [[apps/frontend/src/pages/AnalysisWorkspacePage.tsx\|AnalysisWorkspacePage.tsx]] |
+| `/ai-chat`           | `AIChatPage`            | AppLayout | Local AI chat for natural-language queries                | [[apps/frontend/src/pages/AIChatPage.tsx\|AIChatPage.tsx]]                       |
+| `/analysis/monitors` | `AnalysisMonitorsPage`  | AppLayout | Saved-analysis monitors with an unread badge              | [[apps/frontend/src/pages/AnalysisMonitorsPage.tsx\|AnalysisMonitorsPage.tsx]]   |
 
 > Settings is no longer a route — it is rendered as `DashboardSettingsDialog` opened from the layout. See [[apps/frontend/src/features/settings/DashboardSettingsDialog.tsx\|DashboardSettingsDialog.tsx]] and [[docs/features/settings|Settings Feature]].
 
@@ -155,10 +156,20 @@ const lazyAppRoutes = appRouteManifest.map(({ path, loader, admin }) => ({
 The three sidebar workspaces and their switcher were replaced by one labelled sidebar
 ([[docs/adr/180-sidebar-sections-replace-workspaces|ADR-180]]). `lib/navigation.ts` maps routes to sidebar sections: the top items (Home, Transactions, Accounts, Planned Payments), **Money**, **Wealth**, **Research** (hidden until the user shows it) and **Admin** (admin mode only). The route groups above are page groupings, not modes; no route derives or persists a workspace. A registry test (`lib/__tests__/navigation.test.ts`) asserts that every parameterless route in `appRouteManifest` has exactly one navigation entry and that admin routes appear only in the Admin section.
 
-- Navigation labels and their page titles use sentence case ([[docs/adr/187-completeness-sweep|ADR-187]]): *AI chat*, *Chart builder*, *Database maintenance*, *Exchange rates*, *Market lookup*, *Real estate*, *Research home*, *Savings & bonds* and *Who owes you*. The labels live in the `nav.*` keys of `i18n/source/en.json`.
+- Navigation labels and their page titles use sentence case ([[docs/adr/187-completeness-sweep|ADR-187]]): _AI chat_, _Chart builder_, _Database maintenance_, _Exchange rates_, _Market lookup_, _Real estate_, _Research home_, _Savings & bonds_ and _Who owes you_. The labels live in the `nav.*` keys of `i18n/source/en.json`.
 - Landing on a page inside a hidden section shows that section and persists the choice (`vision.sidebar.hiddenSections`).
 - `G` then a key jumps to a page (Home is `G H`, previously `G D`); `[` and `]` cycle Home (`/`), Portfolio (`/portfolio`) and Research (`/research`).
 - `data-tint` on the canvas is `wealth` under `/portfolio`, otherwise `money`.
+
+## Native Insights report handoff
+
+Vision Native draws `/statistics` in SwiftUI while keeping the shared React report dialog for
+financial, portfolio, and tax export. `?export=pdf` opens that dialog, preserving other query
+parameters. Closing or completing an export removes only `export` with replace and restores the
+native screen. Browser and Electron report menu actions keep their existing local dialog state.
+The tax calculation backend prerequisite is recorded in [[docs/adr/204-vision-native-swift-app-target|ADR-204]];
+see [[docs/architecture/native-app|the native architecture]] and
+[[docs/reference/native-parity/home-and-statistics|Home and Insights parity]].
 
 ## Related
 

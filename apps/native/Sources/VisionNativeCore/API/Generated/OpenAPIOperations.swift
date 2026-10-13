@@ -5,7 +5,7 @@ import Foundation
 
 /// One struct per operationId in `apps/native/openapi-operations.txt`, in its order.
 public enum OpenAPIOperations {
-    public static let operationIds = ["getExchangeRates", "refreshExchangeRates", "adminDatabaseStats", "adminProvidersHealth", "adminProviderProbe", "adminMetricsRequests", "adminListEndpoints", "getSetting", "adminDatabaseVacuum", "adminGetTableSchema", "adminGetTableRows", "adminMutateTableRows", "getPlannedTransactions", "createPlannedTransaction", "updatePlannedTransaction", "deletePlannedTransaction", "executePlannedTransaction", "getPlannedMatchSuggestions", "getRecurringPatterns", "getRecipients", "getRecipient", "getAccounts", "getCategoryTree", "getTags", "createTag", "getTransactions", "saveSetting", "getSupportedAdapters", "getCustomParsers", "createCustomParser", "updateCustomParser", "deleteCustomParser", "getImportBatches", "deleteImportBatch", "previewImportBatch", "overrideImportRow", "overrideImportRowCategory", "commitImportBatch", "updateRecipient", "getInfoBanks", "exportTransactionsCsv", "exportTransactionsJson", "getTransaction", "createTransaction", "updateTransaction", "deleteTransaction", "bulkUpdateTransactions", "getTransactionAttachments", "downloadAttachment", "deleteAttachment", "bulkDeleteTransactions", "bulkExportTransactions", "bulkTagTransactions", "markTransfer", "createRecipient", "getSplitsByTransaction", "createSplitBatch", "createBulkSplits", "getSplitsOwed", "getSplitOwedByRecipient", "exportSplitsOwedCsv", "paySplit", "settleSplit", "settleAllSplitsForRecipient", "deleteSplit", "createAccount", "updateAccount", "deleteAccount", "previewAccountPortfolioLots", "closeAccount", "mergeAccounts", "previewAccountMerge", "setAccountOpeningBalance", "reconcileAccount", "setAccountStatementBalance", "bulkRetagPortfolioTransactions", "getPortfolioSummary", "createCategoryNode", "updateCategoryNode", "deleteCategoryNode", "mergeCategoryNode", "deleteRecipient", "mergeRecipient", "unmergeRecipient", "getRecipientPatterns", "createRecipientPattern", "previewRecipientPattern", "updateRecipientPattern", "deleteRecipientPattern"]
+    public static let operationIds = ["getExchangeRates", "refreshExchangeRates", "adminDatabaseStats", "adminProvidersHealth", "adminProviderProbe", "adminMetricsRequests", "adminListEndpoints", "getSetting", "adminDatabaseVacuum", "adminGetTableSchema", "adminGetTableRows", "adminMutateTableRows", "getPlannedTransactions", "createPlannedTransaction", "updatePlannedTransaction", "deletePlannedTransaction", "executePlannedTransaction", "getPlannedMatchSuggestions", "getRecurringPatterns", "getRecipients", "getRecipient", "getAccounts", "getCategoryTree", "getTags", "createTag", "getTransactions", "saveSetting", "getSupportedAdapters", "getCustomParsers", "createCustomParser", "updateCustomParser", "deleteCustomParser", "getImportBatches", "deleteImportBatch", "previewImportBatch", "overrideImportRow", "overrideImportRowCategory", "commitImportBatch", "updateRecipient", "getInfoBanks", "exportTransactionsCsv", "exportTransactionsJson", "getTransaction", "createTransaction", "updateTransaction", "deleteTransaction", "bulkUpdateTransactions", "getTransactionAttachments", "downloadAttachment", "deleteAttachment", "bulkDeleteTransactions", "bulkExportTransactions", "bulkTagTransactions", "markTransfer", "createRecipient", "getSplitsByTransaction", "createSplitBatch", "createBulkSplits", "getSplitsOwed", "getSplitOwedByRecipient", "exportSplitsOwedCsv", "paySplit", "settleSplit", "settleAllSplitsForRecipient", "deleteSplit", "createAccount", "updateAccount", "deleteAccount", "previewAccountPortfolioLots", "closeAccount", "mergeAccounts", "previewAccountMerge", "setAccountOpeningBalance", "reconcileAccount", "setAccountStatementBalance", "bulkRetagPortfolioTransactions", "getPortfolioSummary", "createCategoryNode", "updateCategoryNode", "deleteCategoryNode", "mergeCategoryNode", "deleteRecipient", "mergeRecipient", "unmergeRecipient", "getRecipientPatterns", "createRecipientPattern", "previewRecipientPattern", "updateRecipientPattern", "deleteRecipientPattern", "getMonthlySummary", "getAverageVsCurrent", "getBankBalances", "getNetWorth", "getCashflowForecastMethods", "getCashflowForecastRolling", "getCashflowForecastAccuracy", "getTransactionCount", "getCategories", "getCategoryPivot", "getRecipientInsights", "getRecipientByYear", "getSankey", "getInsightsDigest", "dismissInsight", "getSavedCharts", "createSavedChart", "updateSavedChart", "deleteSavedChart", "getRecipientPivot", "getTagPivot"]
 }
 
 extension OpenAPIOperations {
@@ -3139,5 +3139,672 @@ extension OpenAPIOperations {
         }
 
         public var path: String { "/api/recipients/\(APIPath.segment(APIQuery.value(id)))/patterns/\(APIPath.segment(APIQuery.value(patternId)))" }
+    }
+
+    /// GET /api/aggregations/monthly-summary: Monthly income/expense summary
+    public struct GetMonthlySummary: APIOperation {
+        public typealias Response = JSONValue
+        public static let operationId = "getMonthlySummary"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/aggregations/monthly-summary"
+
+        public var currency: String?
+        /// Inclusive lower transaction-date bound. Ignored when all_time=true.
+        public var startDate: String?
+        /// Inclusive upper transaction-date bound. Ignored when all_time=true.
+        public var endDate: String?
+        /// Return the complete history and ignore explicit date bounds.
+        public var allTime: Bool?
+        public var excludedCategoryIds: [Int]?
+        public var excludedRecipientIds: [Int]?
+
+        public init(currency: String? = nil, startDate: String? = nil, endDate: String? = nil, allTime: Bool? = nil, excludedCategoryIds: [Int]? = nil, excludedRecipientIds: [Int]? = nil) {
+            self.currency = currency
+            self.startDate = startDate
+            self.endDate = endDate
+            self.allTime = allTime
+            self.excludedCategoryIds = excludedCategoryIds
+            self.excludedRecipientIds = excludedRecipientIds
+        }
+
+        public var path: String { "/api/aggregations/monthly-summary" }
+
+        public var queryItems: [URLQueryItem] {
+            var items: [URLQueryItem] = []
+            if let currency { items.append(URLQueryItem(name: "currency", value: APIQuery.value(currency))) }
+            if let startDate { items.append(URLQueryItem(name: "start_date", value: APIQuery.value(startDate))) }
+            if let endDate { items.append(URLQueryItem(name: "end_date", value: APIQuery.value(endDate))) }
+            if let allTime { items.append(URLQueryItem(name: "all_time", value: APIQuery.value(allTime))) }
+            if let excludedCategoryIds { for value in excludedCategoryIds { items.append(URLQueryItem(name: "excluded_category_ids", value: APIQuery.value(value))) } }
+            if let excludedRecipientIds { for value in excludedRecipientIds { items.append(URLQueryItem(name: "excluded_recipient_ids", value: APIQuery.value(value))) } }
+            return items
+        }
+    }
+
+    /// GET /api/aggregations/average-vs-current: Current month vs historical average
+    public struct GetAverageVsCurrent: APIOperation {
+        public typealias Response = JSONValue
+        public static let operationId = "getAverageVsCurrent"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/aggregations/average-vs-current"
+
+        public var currency: String?
+
+        public init(currency: String? = nil) {
+            self.currency = currency
+        }
+
+        public var path: String { "/api/aggregations/average-vs-current" }
+
+        public var queryItems: [URLQueryItem] {
+            var items: [URLQueryItem] = []
+            if let currency { items.append(URLQueryItem(name: "currency", value: APIQuery.value(currency))) }
+            return items
+        }
+    }
+
+    /// GET /api/aggregations/bank-balances: Current balance per bank account
+    public struct GetBankBalances: APIOperation {
+        public typealias Response = JSONValue
+        public static let operationId = "getBankBalances"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/aggregations/bank-balances"
+
+        public init() {}
+
+        public var path: String { "/api/aggregations/bank-balances" }
+    }
+
+    /// GET /api/info/net-worth: Get net worth summary
+    public struct GetNetWorth: APIOperation {
+        public typealias Response = OpenAPI.NetWorthResponse
+        public static let operationId = "getNetWorth"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/info/net-worth"
+
+        /// Target currency (3-letter code; `target_currency` is an alias). A malformed code falls back
+        /// to EUR. A repeated key returns 400.
+        public var currency: String?
+        /// Page size. Omit (together with offset) to receive the whole collection. Values above the
+        /// endpoint's cap are clamped.
+        public var limit: Int?
+        /// Rows to skip. Omit (together with limit) to receive the whole collection.
+        public var offset: Int?
+
+        public init(currency: String? = nil, limit: Int? = nil, offset: Int? = nil) {
+            self.currency = currency
+            self.limit = limit
+            self.offset = offset
+        }
+
+        public var path: String { "/api/info/net-worth" }
+
+        public var queryItems: [URLQueryItem] {
+            var items: [URLQueryItem] = []
+            if let currency { items.append(URLQueryItem(name: "currency", value: APIQuery.value(currency))) }
+            if let limit { items.append(URLQueryItem(name: "limit", value: APIQuery.value(limit))) }
+            if let offset { items.append(URLQueryItem(name: "offset", value: APIQuery.value(offset))) }
+            return items
+        }
+    }
+
+    /// GET /api/aggregations/cashflow-forecast-methods: List available cashflow forecast methods
+    public struct GetCashflowForecastMethods: APIOperation {
+        public typealias Response = JSONValue
+        public static let operationId = "getCashflowForecastMethods"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/aggregations/cashflow-forecast-methods"
+
+        public init() {}
+
+        public var path: String { "/api/aggregations/cashflow-forecast-methods" }
+    }
+
+    /// GET /api/aggregations/cashflow-forecast-rolling: Rolling-window cashflow forecast
+    public struct GetCashflowForecastRolling: APIOperation {
+        public typealias Response = JSONValue
+        public static let operationId = "getCashflowForecastRolling"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/aggregations/cashflow-forecast-rolling"
+
+        public var months: Int?
+        public var currency: String?
+
+        public init(months: Int? = nil, currency: String? = nil) {
+            self.months = months
+            self.currency = currency
+        }
+
+        public var path: String { "/api/aggregations/cashflow-forecast-rolling" }
+
+        public var queryItems: [URLQueryItem] {
+            var items: [URLQueryItem] = []
+            if let months { items.append(URLQueryItem(name: "months", value: APIQuery.value(months))) }
+            if let currency { items.append(URLQueryItem(name: "currency", value: APIQuery.value(currency))) }
+            return items
+        }
+    }
+
+    /// GET /api/aggregations/cashflow-forecast-accuracy: Forecast accuracy metrics vs actuals
+    public struct GetCashflowForecastAccuracy: APIOperation {
+        public typealias Response = JSONValue
+        public static let operationId = "getCashflowForecastAccuracy"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/aggregations/cashflow-forecast-accuracy"
+
+        public init() {}
+
+        public var path: String { "/api/aggregations/cashflow-forecast-accuracy" }
+    }
+
+    /// GET /api/info/transaction-count: Get transaction count
+    public struct GetTransactionCount: APIOperation {
+        public typealias Response = JSONValue
+        public static let operationId = "getTransactionCount"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/info/transaction-count"
+
+        /// Preferred account filter (exact FK match, ADR-088); bank_account remains a substring escape
+        /// hatch
+        public var accountId: Int?
+        public var bankAccount: String?
+
+        public init(accountId: Int? = nil, bankAccount: String? = nil) {
+            self.accountId = accountId
+            self.bankAccount = bankAccount
+        }
+
+        public var path: String { "/api/info/transaction-count" }
+
+        public var queryItems: [URLQueryItem] {
+            var items: [URLQueryItem] = []
+            if let accountId { items.append(URLQueryItem(name: "account_id", value: APIQuery.value(accountId))) }
+            if let bankAccount { items.append(URLQueryItem(name: "bank_account", value: APIQuery.value(bankAccount))) }
+            return items
+        }
+    }
+
+    /// GET /api/categories: List categories
+    public struct GetCategories: APIOperation {
+        public typealias Response = OpenAPI.CategoryList
+        public static let operationId = "getCategories"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/categories"
+
+        /// Page size. Omit (together with offset) to receive the whole collection. Values above the
+        /// endpoint's cap are clamped.
+        public var limit: Int?
+        /// Rows to skip. Omit (together with limit) to receive the whole collection.
+        public var offset: Int?
+        public var search: String?
+        public var isActive: Bool?
+
+        public init(limit: Int? = nil, offset: Int? = nil, search: String? = nil, isActive: Bool? = nil) {
+            self.limit = limit
+            self.offset = offset
+            self.search = search
+            self.isActive = isActive
+        }
+
+        public var path: String { "/api/categories" }
+
+        public var queryItems: [URLQueryItem] {
+            var items: [URLQueryItem] = []
+            if let limit { items.append(URLQueryItem(name: "limit", value: APIQuery.value(limit))) }
+            if let offset { items.append(URLQueryItem(name: "offset", value: APIQuery.value(offset))) }
+            if let search { items.append(URLQueryItem(name: "search", value: APIQuery.value(search))) }
+            if let isActive { items.append(URLQueryItem(name: "is_active", value: APIQuery.value(isActive))) }
+            return items
+        }
+    }
+
+    /// GET /api/aggregations/category-pivot: Category spending pivot (months × categories)
+    public struct GetCategoryPivot: APIOperation {
+        public typealias Response = OpenAPI.CategoryPivotData
+        public static let operationId = "getCategoryPivot"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/aggregations/category-pivot"
+
+        public var currency: String?
+        /// Inclusive lower transaction-date bound.
+        public var startDate: String?
+        /// Inclusive upper transaction-date bound.
+        public var endDate: String?
+        public var excludedCategoryIds: [Int]?
+        public var excludedRecipientIds: [Int]?
+
+        public init(currency: String? = nil, startDate: String? = nil, endDate: String? = nil, excludedCategoryIds: [Int]? = nil, excludedRecipientIds: [Int]? = nil) {
+            self.currency = currency
+            self.startDate = startDate
+            self.endDate = endDate
+            self.excludedCategoryIds = excludedCategoryIds
+            self.excludedRecipientIds = excludedRecipientIds
+        }
+
+        public var path: String { "/api/aggregations/category-pivot" }
+
+        public var queryItems: [URLQueryItem] {
+            var items: [URLQueryItem] = []
+            if let currency { items.append(URLQueryItem(name: "currency", value: APIQuery.value(currency))) }
+            if let startDate { items.append(URLQueryItem(name: "start_date", value: APIQuery.value(startDate))) }
+            if let endDate { items.append(URLQueryItem(name: "end_date", value: APIQuery.value(endDate))) }
+            if let excludedCategoryIds { for value in excludedCategoryIds { items.append(URLQueryItem(name: "excluded_category_ids", value: APIQuery.value(value))) } }
+            if let excludedRecipientIds { for value in excludedRecipientIds { items.append(URLQueryItem(name: "excluded_recipient_ids", value: APIQuery.value(value))) } }
+            return items
+        }
+    }
+
+    /// GET /api/aggregations/recipient-insights: Spending insights by recipient
+    public struct GetRecipientInsights: APIOperation {
+        public typealias Response = JSONValue
+        public static let operationId = "getRecipientInsights"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/aggregations/recipient-insights"
+
+        public var currency: String?
+        /// Inclusive lower transaction-date bound.
+        public var startDate: String?
+        /// Inclusive upper transaction-date bound.
+        public var endDate: String?
+
+        public init(currency: String? = nil, startDate: String? = nil, endDate: String? = nil) {
+            self.currency = currency
+            self.startDate = startDate
+            self.endDate = endDate
+        }
+
+        public var path: String { "/api/aggregations/recipient-insights" }
+
+        public var queryItems: [URLQueryItem] {
+            var items: [URLQueryItem] = []
+            if let currency { items.append(URLQueryItem(name: "currency", value: APIQuery.value(currency))) }
+            if let startDate { items.append(URLQueryItem(name: "start_date", value: APIQuery.value(startDate))) }
+            if let endDate { items.append(URLQueryItem(name: "end_date", value: APIQuery.value(endDate))) }
+            return items
+        }
+    }
+
+    /// GET /api/aggregations/recipient-by-year: Recipient spending grouped by year
+    public struct GetRecipientByYear: APIOperation {
+        public typealias Response = JSONValue
+        public static let operationId = "getRecipientByYear"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/aggregations/recipient-by-year"
+
+        public var currency: String?
+        /// Inclusive lower transaction-date bound.
+        public var startDate: String?
+        /// Inclusive upper transaction-date bound.
+        public var endDate: String?
+        public var excludedCategoryIds: [Int]?
+        public var excludedRecipientIds: [Int]?
+
+        public init(currency: String? = nil, startDate: String? = nil, endDate: String? = nil, excludedCategoryIds: [Int]? = nil, excludedRecipientIds: [Int]? = nil) {
+            self.currency = currency
+            self.startDate = startDate
+            self.endDate = endDate
+            self.excludedCategoryIds = excludedCategoryIds
+            self.excludedRecipientIds = excludedRecipientIds
+        }
+
+        public var path: String { "/api/aggregations/recipient-by-year" }
+
+        public var queryItems: [URLQueryItem] {
+            var items: [URLQueryItem] = []
+            if let currency { items.append(URLQueryItem(name: "currency", value: APIQuery.value(currency))) }
+            if let startDate { items.append(URLQueryItem(name: "start_date", value: APIQuery.value(startDate))) }
+            if let endDate { items.append(URLQueryItem(name: "end_date", value: APIQuery.value(endDate))) }
+            if let excludedCategoryIds { for value in excludedCategoryIds { items.append(URLQueryItem(name: "excluded_category_ids", value: APIQuery.value(value))) } }
+            if let excludedRecipientIds { for value in excludedRecipientIds { items.append(URLQueryItem(name: "excluded_recipient_ids", value: APIQuery.value(value))) } }
+            return items
+        }
+    }
+
+    /// GET /api/aggregations/sankey: Balanced Sankey flow data (income/funding gap → spending →
+    /// category)
+    public struct GetSankey: APIOperation {
+        public typealias Response = JSONValue
+        public static let operationId = "getSankey"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/aggregations/sankey"
+
+        public var year: Int?
+        public var excludedCategoryIds: [Int]?
+        public var excludedRecipientIds: [Int]?
+        public var currency: String?
+
+        public init(year: Int? = nil, excludedCategoryIds: [Int]? = nil, excludedRecipientIds: [Int]? = nil, currency: String? = nil) {
+            self.year = year
+            self.excludedCategoryIds = excludedCategoryIds
+            self.excludedRecipientIds = excludedRecipientIds
+            self.currency = currency
+        }
+
+        public var path: String { "/api/aggregations/sankey" }
+
+        public var queryItems: [URLQueryItem] {
+            var items: [URLQueryItem] = []
+            if let year { items.append(URLQueryItem(name: "year", value: APIQuery.value(year))) }
+            if let excludedCategoryIds { for value in excludedCategoryIds { items.append(URLQueryItem(name: "excluded_category_ids", value: APIQuery.value(value))) } }
+            if let excludedRecipientIds { for value in excludedRecipientIds { items.append(URLQueryItem(name: "excluded_recipient_ids", value: APIQuery.value(value))) } }
+            if let currency { items.append(URLQueryItem(name: "currency", value: APIQuery.value(currency))) }
+            return items
+        }
+    }
+
+    /// GET /api/info/insights-digest: Get deterministic Smart Insights findings
+    public struct GetInsightsDigest: APIOperation {
+        public typealias Response = OpenAPI.InsightsDigestEnvelope
+        public static let operationId = "getInsightsDigest"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/info/insights-digest"
+
+        public init() {}
+
+        public var path: String { "/api/info/insights-digest" }
+    }
+
+    /// PUT /api/info/insight-dismissals: Persist an insight dismissal
+    public struct DismissInsight: APIOperation {
+        public typealias Response = JSONValue
+        public static let operationId = "dismissInsight"
+        public static let method = HTTPMethod.put
+        public static let pathTemplate = "/api/info/insight-dismissals"
+
+        public var body: OpenAPI.InsightDismissalRequest
+
+        public init(body: OpenAPI.InsightDismissalRequest) {
+            self.body = body
+        }
+
+        public var path: String { "/api/info/insight-dismissals" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+    }
+
+    /// GET /api/saved-charts: List saved charts
+    public struct GetSavedCharts: APIOperation {
+        public typealias Response = ResponseData
+        public static let operationId = "getSavedCharts"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/saved-charts"
+
+        /// Page size. Omit (together with offset) to receive the whole collection. Values above the
+        /// endpoint's cap are clamped.
+        public var limit: Int?
+        /// Rows to skip. Omit (together with limit) to receive the whole collection.
+        public var offset: Int?
+
+        public init(limit: Int? = nil, offset: Int? = nil) {
+            self.limit = limit
+            self.offset = offset
+        }
+
+        public var path: String { "/api/saved-charts" }
+
+        public var queryItems: [URLQueryItem] {
+            var items: [URLQueryItem] = []
+            if let limit { items.append(URLQueryItem(name: "limit", value: APIQuery.value(limit))) }
+            if let offset { items.append(URLQueryItem(name: "offset", value: APIQuery.value(offset))) }
+            return items
+        }
+
+        public struct ResponseData: Codable, Equatable, Sendable {
+            public let total: Int
+            public let limit: Int?
+            public let offset: Int?
+            public let items: [OpenAPI.SavedChart]
+
+            public init(total: Int, limit: Int? = nil, offset: Int? = nil, items: [OpenAPI.SavedChart]) {
+                self.total = total
+                self.limit = limit
+                self.offset = offset
+                self.items = items
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case total = "total"
+                case limit = "limit"
+                case offset = "offset"
+                case items = "items"
+            }
+        }
+    }
+
+    /// POST /api/saved-charts: Create saved chart
+    public struct CreateSavedChart: APIOperation {
+        public typealias Response = OpenAPI.SavedChart
+        public static let operationId = "createSavedChart"
+        public static let method = HTTPMethod.post
+        public static let pathTemplate = "/api/saved-charts"
+
+        public var body: Body
+
+        public init(body: Body) {
+            self.body = body
+        }
+
+        public var path: String { "/api/saved-charts" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+
+        public struct Body: Codable, Equatable, Sendable {
+            /// Chart name (non-empty, max 500 chars)
+            public let name: String
+            public let chartType: String?
+            /// ranked only valid with chartType=bar
+            public let chartVariant: String?
+            /// Ignored when chartVariant=ranked
+            public let timeBucket: String?
+            public let categoryIds: [Int]?
+            public let recipientIds: [Int]?
+            public let tagIds: [Int]?
+            public let allCategories: Bool?
+            public let allRecipients: Bool?
+            public let allTags: Bool?
+            public let dateRangeStart: String?
+            public let dateRangeEnd: String?
+
+            public init(name: String, chartType: String? = nil, chartVariant: String? = nil, timeBucket: String? = nil, categoryIds: [Int]? = nil, recipientIds: [Int]? = nil, tagIds: [Int]? = nil, allCategories: Bool? = nil, allRecipients: Bool? = nil, allTags: Bool? = nil, dateRangeStart: String? = nil, dateRangeEnd: String? = nil) {
+                self.name = name
+                self.chartType = chartType
+                self.chartVariant = chartVariant
+                self.timeBucket = timeBucket
+                self.categoryIds = categoryIds
+                self.recipientIds = recipientIds
+                self.tagIds = tagIds
+                self.allCategories = allCategories
+                self.allRecipients = allRecipients
+                self.allTags = allTags
+                self.dateRangeStart = dateRangeStart
+                self.dateRangeEnd = dateRangeEnd
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case name = "name"
+                case chartType = "chartType"
+                case chartVariant = "chartVariant"
+                case timeBucket = "timeBucket"
+                case categoryIds = "categoryIds"
+                case recipientIds = "recipientIds"
+                case tagIds = "tagIds"
+                case allCategories = "allCategories"
+                case allRecipients = "allRecipients"
+                case allTags = "allTags"
+                case dateRangeStart = "dateRangeStart"
+                case dateRangeEnd = "dateRangeEnd"
+            }
+        }
+    }
+
+    /// PATCH /api/saved-charts/{id}: Update saved chart
+    public struct UpdateSavedChart: APIOperation {
+        public typealias Response = OpenAPI.SavedChart
+        public static let operationId = "updateSavedChart"
+        public static let method = HTTPMethod.patch
+        public static let pathTemplate = "/api/saved-charts/{id}"
+
+        public var id: Int
+        public var body: Body
+
+        public init(id: Int, body: Body) {
+            self.id = id
+            self.body = body
+        }
+
+        public var path: String { "/api/saved-charts/\(APIPath.segment(APIQuery.value(id)))" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+
+        public struct Body: Codable, Equatable, Sendable {
+            public let name: String?
+            public let chartType: String?
+            /// ranked only valid with chartType=bar
+            public let chartVariant: String?
+            public let timeBucket: String?
+            public let categoryIds: [Int]?
+            public let recipientIds: [Int]?
+            public let tagIds: [Int]?
+            public let allCategories: Bool?
+            public let allRecipients: Bool?
+            public let allTags: Bool?
+            public let dateRangeStart: String?
+            public let dateRangeEnd: String?
+
+            public init(name: String? = nil, chartType: String? = nil, chartVariant: String? = nil, timeBucket: String? = nil, categoryIds: [Int]? = nil, recipientIds: [Int]? = nil, tagIds: [Int]? = nil, allCategories: Bool? = nil, allRecipients: Bool? = nil, allTags: Bool? = nil, dateRangeStart: String? = nil, dateRangeEnd: String? = nil) {
+                self.name = name
+                self.chartType = chartType
+                self.chartVariant = chartVariant
+                self.timeBucket = timeBucket
+                self.categoryIds = categoryIds
+                self.recipientIds = recipientIds
+                self.tagIds = tagIds
+                self.allCategories = allCategories
+                self.allRecipients = allRecipients
+                self.allTags = allTags
+                self.dateRangeStart = dateRangeStart
+                self.dateRangeEnd = dateRangeEnd
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case name = "name"
+                case chartType = "chartType"
+                case chartVariant = "chartVariant"
+                case timeBucket = "timeBucket"
+                case categoryIds = "categoryIds"
+                case recipientIds = "recipientIds"
+                case tagIds = "tagIds"
+                case allCategories = "allCategories"
+                case allRecipients = "allRecipients"
+                case allTags = "allTags"
+                case dateRangeStart = "dateRangeStart"
+                case dateRangeEnd = "dateRangeEnd"
+            }
+        }
+    }
+
+    /// DELETE /api/saved-charts/{id}: Delete saved chart
+    public struct DeleteSavedChart: APIOperation {
+        public typealias Response = APIEmpty
+        public static let operationId = "deleteSavedChart"
+        public static let method = HTTPMethod.delete
+        public static let pathTemplate = "/api/saved-charts/{id}"
+
+        public var id: Int
+
+        public init(id: Int) {
+            self.id = id
+        }
+
+        public var path: String { "/api/saved-charts/\(APIPath.segment(APIQuery.value(id)))" }
+    }
+
+    /// GET /api/aggregations/recipient-pivot: Top-recipient spending pivot (months × recipients)
+    public struct GetRecipientPivot: APIOperation {
+        public typealias Response = JSONValue
+        public static let operationId = "getRecipientPivot"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/aggregations/recipient-pivot"
+
+        /// Recipient ids to include as series (repeatable). A primary or alias selects its full
+        /// cluster.
+        public var recipientIds: [Int]?
+        /// Canonical recipient cluster ids to exclude (repeatable).
+        public var excludedRecipientIds: [Int]?
+        public var bucket: String?
+        /// Inclusive start date.
+        public var startDate: String?
+        /// Inclusive end date.
+        public var endDate: String?
+        public var currency: String?
+
+        public init(recipientIds: [Int]? = nil, excludedRecipientIds: [Int]? = nil, bucket: String? = nil, startDate: String? = nil, endDate: String? = nil, currency: String? = nil) {
+            self.recipientIds = recipientIds
+            self.excludedRecipientIds = excludedRecipientIds
+            self.bucket = bucket
+            self.startDate = startDate
+            self.endDate = endDate
+            self.currency = currency
+        }
+
+        public var path: String { "/api/aggregations/recipient-pivot" }
+
+        public var queryItems: [URLQueryItem] {
+            var items: [URLQueryItem] = []
+            if let recipientIds { for value in recipientIds { items.append(URLQueryItem(name: "recipient_ids", value: APIQuery.value(value))) } }
+            if let excludedRecipientIds { for value in excludedRecipientIds { items.append(URLQueryItem(name: "excluded_recipient_ids", value: APIQuery.value(value))) } }
+            if let bucket { items.append(URLQueryItem(name: "bucket", value: APIQuery.value(bucket))) }
+            if let startDate { items.append(URLQueryItem(name: "start_date", value: APIQuery.value(startDate))) }
+            if let endDate { items.append(URLQueryItem(name: "end_date", value: APIQuery.value(endDate))) }
+            if let currency { items.append(URLQueryItem(name: "currency", value: APIQuery.value(currency))) }
+            return items
+        }
+    }
+
+    /// GET /api/aggregations/tag-pivot: Per-tag spending pivot (periods × tags) for custom charts
+    public struct GetTagPivot: APIOperation {
+        public typealias Response = JSONValue
+        public static let operationId = "getTagPivot"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/aggregations/tag-pivot"
+
+        /// Tag ids to include as series (repeatable). Ignored when all=true.
+        public var tagIds: [Int]?
+        /// When true, returns all active tags; tag_ids is ignored.
+        public var all: Bool?
+        public var bucket: String?
+        /// Inclusive start date.
+        public var startDate: String?
+        /// Inclusive end date.
+        public var endDate: String?
+        public var currency: String?
+
+        public init(tagIds: [Int]? = nil, all: Bool? = nil, bucket: String? = nil, startDate: String? = nil, endDate: String? = nil, currency: String? = nil) {
+            self.tagIds = tagIds
+            self.all = all
+            self.bucket = bucket
+            self.startDate = startDate
+            self.endDate = endDate
+            self.currency = currency
+        }
+
+        public var path: String { "/api/aggregations/tag-pivot" }
+
+        public var queryItems: [URLQueryItem] {
+            var items: [URLQueryItem] = []
+            if let tagIds { for value in tagIds { items.append(URLQueryItem(name: "tag_ids", value: APIQuery.value(value))) } }
+            if let all { items.append(URLQueryItem(name: "all", value: APIQuery.value(all))) }
+            if let bucket { items.append(URLQueryItem(name: "bucket", value: APIQuery.value(bucket))) }
+            if let startDate { items.append(URLQueryItem(name: "start_date", value: APIQuery.value(startDate))) }
+            if let endDate { items.append(URLQueryItem(name: "end_date", value: APIQuery.value(endDate))) }
+            if let currency { items.append(URLQueryItem(name: "currency", value: APIQuery.value(currency))) }
+            return items
+        }
     }
 }

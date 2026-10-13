@@ -75,6 +75,28 @@ final class ShellRecorder {
             settingsReloadDelay: .milliseconds(1))
     }
 
+    @Test func theReportHandoffPreservesTheTabAndReturnsAfterTheDialogCloses() throws {
+        let recorder = ShellRecorder()
+        let model = makeModel(recorder: recorder)
+        model.routeDidChange(try #require(NativeRoute("/statistics?tab=yearly&window=all")))
+        model.openStatisticsReport()
+        #expect(model.isPresentingWeb)
+        #expect(recorder.actions.last == .replaceRoute("/statistics?tab=yearly&window=all&export=pdf"))
+        model.routeDidChange(try #require(NativeRoute("/statistics?tab=yearly&window=all&export=pdf")))
+        #expect(model.detail == .web)
+        model.routeDidChange(try #require(NativeRoute("/statistics?tab=yearly&window=all")))
+        #expect(!model.isPresentingWeb)
+        #expect(model.route.value("tab") == "yearly")
+    }
+
+    @Test func repeatedSettingsReadsRefreshNativePagesEvenWhenFormatsStayTheSame() {
+        let model = makeModel(recorder: ShellRecorder())
+        model.apply(settings: .defaults)
+        let revision = model.settingsRevision
+        model.apply(settings: .defaults)
+        #expect(model.settingsRevision == revision + 1)
+    }
+
     @Test func theExchangeRatesScreenIsNativeOnlyInAdminMode() async throws {
         let recorder = ShellRecorder()
         let model = makeModel(recorder: recorder)

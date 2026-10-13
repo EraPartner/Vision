@@ -110,6 +110,10 @@ import Testing
     }
 
     @Test func theAdminScreensAreBehindTheAdminGateAndPlannedIsNot() {
+        #expect(NativeScreen.screen(forPath: "/") == .home)
+        #expect(!NativeScreen.home.requiresAdmin)
+        #expect(NativeScreen.screen(forPath: "/statistics") == .statistics)
+        #expect(!NativeScreen.statistics.requiresAdmin)
         #expect(NativeScreen.screen(forPath: "/admin/exchange-rates") == .exchangeRates)
         #expect(NativeScreen.screen(forPath: "/admin/exchange-rates/x") == nil)
         #expect(NativeScreen.exchangeRates.requiresAdmin)

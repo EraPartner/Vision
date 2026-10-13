@@ -104,6 +104,10 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             accounts: AccountsModel(service: client, rates: rates),
             categories: CategoriesModel(service: client),
             recipients: RecipientsModel(service: client),
+            home: HomeModel(service: client,
+                readLocal: { [weak self] key in await self?.homeLocalStorage(key: key) },
+                writeLocal: { [weak self] key, value in _ = await self?.homeLocalStorage(key: key, value: value) }),
+            statistics: StatisticsScreens(client: client),
             hiddenSections: Self.loadHiddenSections(),
             loadSettings: { try await client.appSettings() },
             saveHiddenSections: { Self.saveHiddenSections($0) },
@@ -167,6 +171,34 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     }
 
     private static let adminTokenTimeout: Duration = .seconds(5)
+
+    /// Home shares the web app's per-device dismissals. Only these two known keys are
+    /// accessible, and every argument goes through WebKit's argument binding.
+    private func homeLocalStorage(key: String, value: JSONValue? = nil) async -> JSONValue? {
+        guard ["vision.home.dismissedAccountInactivity", "dismissed_upcoming_planned_payments"].contains(key),
+              queue.isReady, let webView = webShell?.webView else { return nil }
+        let encoded = value.flatMap { try? String(data: $0.serialized(), encoding: .utf8) }
+        return await withCheckedContinuation { (continuation: CheckedContinuation<JSONValue?, Never>) in
+            let pending = OSAllocatedUnfairLock<CheckedContinuation<JSONValue?, Never>?>(initialState: continuation)
+            let resume: @Sendable (JSONValue?) -> Void = { answer in
+                let waiting = pending.withLock { state -> CheckedContinuation<JSONValue?, Never>? in
+                    defer { state = nil }; return state
+                }
+                waiting?.resume(returning: answer)
+            }
+            let timeout = Task {
+                try? await Task.sleep(for: Self.adminTokenTimeout)
+                resume(nil)
+            }
+            webView.callAsyncJavaScript(
+                "try { if (writing) localStorage.setItem(key, value); return localStorage.getItem(key) || 'null'; } catch { return 'null'; }",
+                arguments: ["key": key, "value": encoded ?? "null", "writing": value != nil], in: nil, in: .page
+            ) { result in
+                let answer = ((try? result.get()) as? String).flatMap { try? JSONValue.parse(Data($0.utf8)) }
+                resume(answer); timeout.cancel()
+            }
+        }
+    }
 
     private static let adminTokenScript = AdminTokenScript.read
 

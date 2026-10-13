@@ -890,6 +890,88 @@ passphrase, and `createAuditAnchor` must import the audit transfer. A skipped te
 Quality Gate needs both jobs and tolerates `skipped`, so a failed native build, test or interop
 check blocks "CI Complete" through Quality Gate.
 
+### Home and shared chart foundations (phase 3g part A)
+
+`/` draws with `HomeView` once app settings load. The eleven web widget ids and their defaults
+are preserved: summary cards and bank balances start hidden. The native page has the greeting
+and date, spending pace hero, Needs attention, net worth, planned payments, accounts, summary
+cards, bank balance history, monthly bars, category donut, forecast, and recent transactions.
+The UI uses the generated theme tokens and EN/NL String Catalog.
+
+`HomeModel` resolves `dashboard_settings` and hidden categories before requesting filtered
+aggregates. Exclusions are repeated query parameters, with a separate unfiltered monthly
+summary only when needed. Recent filtered rows scan additional server pages until five survive.
+The hero keeps the web's unfiltered month-to-date and stored planned-amount behavior. Financial
+responses decode directly as `Decimal` through `InsightRequest`, which specializes the generated
+OpenAPI operations without bypassing `APIClient`'s envelope or authentication handling. A failed
+refetch for the same currency and exclusion set retains successful data; changed exclusions clear old filtered totals; entering Home invalidates its snapshot so edits on other screens
+are reflected. A replaced currency request cannot publish an older answer.
+
+`InsightTimelineChart` uses Swift Charts for line, grouped-bar, and stacked-area layouts. Negative
+bank balances use lines instead of a misleading positive stack, as on the web. Hover, arrow keys,
+Home/End, Escape, and drag/Shift-arrow range comparisons display the original decimal values.
+The bank history and forecast share the selected date and range. The net sparkline scrubs the
+summary amount and returns to the latest month after release. Category slices navigate with
+`category_id`, `uncategorised`, or the remaining `category_ids`; recent rows use the native `id`
+inspector parameter.
+
+Forecast mode and rolling-day controls preserve the URL and call the existing forecast services;
+Swift does not calculate forecasts. Scheduled ledger transactions and planned payments are already
+included in the server series and are not added again. Cumulative uncertainty bands use only the
+server's cumulative bands. Diagnostics loads the rolling backtest on demand, shows MAE/RMSE/MAPE,
+persisted accuracy sparklines, and the web's shrunk inverse-MSE weight preview.
+
+Customize preserves other pages and unknown widget ids in `widget_visibility`, saves with the
+previous JSON value as `expected`, and rolls back the UI on failure. The shell binds only the
+`vision.home.dismissedAccountInactivity` and `dismissed_upcoming_planned_payments` local-storage
+keys through WebKit arguments, with a timeout. Add transaction reuses the native sheet and leave
+guard; a successful creation navigates to `/transactions?id=…`.
+
+The parity mapping is in [[docs/reference/native-parity/home-and-statistics|Home and Insights]].
+The macOS build, SwiftUI runtime behavior, and Demo visual comparison remain unverified locally.
+Insights now uses the native implementation below; the shared report dialog still uses the web view.
+
+### Insights, saved charts, and the report handoff (phase 3g part B)
+
+`/statistics` draws `StatisticsView` with the six existing tab ids. `StatisticsModel` reads
+`?window=all` or the local first day 23 months ago through today, resolves the statistics exclusion
+scope, and fetches monthly, category, payee, and payee-by-year aggregates in parallel. Tab changes
+reuse the snapshot. Each chart can independently use the filtered or unfiltered snapshot, while
+the payee details keep their server-filtered, alias-aware population. A changed currency, window,
+or exclusion set cannot display totals from the previous query; failed refreshes of the same query
+retain successful data. The shell's settings-read revision refreshes these models after the web
+settings dialog's 500 ms persistence debounce, even when date/currency formats did not change.
+
+The monthly rhythm excludes the current month from best/worst comparisons when completed months
+exist. Category amounts use the explicit income/expense split, including refunds, and ordered path
+segments take precedence over legacy colon-delimited labels. Pivot ancestor rows roll up their
+canonical descendant ids without counting transactions twice. Metric, year, expansion, 12-month
+column paging, sticky labels, and transaction drill links are native. Payee details reuse the
+shared searchable, sortable, filterable table and reveal additional loaded rows on scroll. Yearly
+summaries and Sankey flows continue to use the backend's aggregates. Sankey labels and category
+colors follow the existing reserved-id and stable-hash rules.
+
+`SavedChartsModel` retains the saved-chart schema, excludes internal `autochart:` records, and
+fetches payee/tag pivots for selected sources. The builder preserves all seven type/variant
+combinations, monthly/yearly buckets, clearable date bounds, dynamic All sources, searchable
+multi-selection, and a debounced live preview. Yearly bounds compare year prefixes, and dynamic
+sources retain eight leading entities plus Other. Saving explicitly sends null for cleared bounds.
+Historical FX fallback remains visible. Native menus edit and delete charts, with confirmation.
+`StatisticsDigestModel` reads existing deterministic findings and persists the same dismissal shapes;
+it does not run a new detection or forecast engine.
+
+The header's PDF action temporarily shows the existing React `ExportDialog` at
+`/statistics?export=pdf`, preserving tab and window parameters. Closing or downloading removes
+only `export`, with replace, and returns to the native screen. The same dialog handles financial,
+portfolio, and tax reports; tax-result serialization stays in TypeScript until ADR-204's backend
+calculation operation is implemented. This is a retained web surface, not a completed native report
+port, and it keeps this area's phase-3 exit gate open.
+
+The cloud checks cover portable models, API adapters, generated outputs, and the web handoff.
+The full macOS app/package build and the owner's Demo visual pass have not run in this workspace.
+See [[docs/reference/native-parity/home-and-statistics|the action mapping]] and
+[[docs/features/statistics|Statistics]] for the remaining review surface.
+
 ## Install
 
 `install-native.sh` requires `xcodegen` and `xcodebuild`. It prepares the payload with the same

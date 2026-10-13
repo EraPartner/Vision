@@ -393,6 +393,63 @@ extension OpenAPI {
         }
     }
 
+    public struct Category: Codable, Equatable, Sendable {
+        public let id: Int
+        public let general: String
+        public let detail: String
+        public let description: String?
+        public let isActive: Bool
+        public let createdAt: String
+        public let updatedAt: String?
+        public let links: [OpenAPI.Link]
+
+        public init(id: Int, general: String, detail: String, description: String? = nil, isActive: Bool, createdAt: String, updatedAt: String? = nil, links: [OpenAPI.Link]) {
+            self.id = id
+            self.general = general
+            self.detail = detail
+            self.description = description
+            self.isActive = isActive
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
+            self.links = links
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case general = "general"
+            case detail = "detail"
+            case description = "description"
+            case isActive = "is_active"
+            case createdAt = "created_at"
+            case updatedAt = "updated_at"
+            case links = "links"
+        }
+    }
+
+    public struct CategoryList: Codable, Equatable, Sendable {
+        public let total: Int
+        public let limit: Int?
+        public let offset: Int?
+        public let items: [OpenAPI.Category]
+        public let links: [OpenAPI.Link]
+
+        public init(total: Int, limit: Int? = nil, offset: Int? = nil, items: [OpenAPI.Category], links: [OpenAPI.Link]) {
+            self.total = total
+            self.limit = limit
+            self.offset = offset
+            self.items = items
+            self.links = links
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case total = "total"
+            case limit = "limit"
+            case offset = "offset"
+            case items = "items"
+            case links = "links"
+        }
+    }
+
     public struct CategoryNode: Codable, Equatable, Sendable {
         public let id: Int
         public let name: String
@@ -490,6 +547,72 @@ extension OpenAPI {
             case parentId = "parentId"
             case description = "description"
             case isActive = "is_active"
+        }
+    }
+
+    public struct CategoryPivotData: Codable, Equatable, Sendable {
+        public let categoryPivot: [String: [CategoryPivotValueItem]]
+
+        public init(categoryPivot: [String: [CategoryPivotValueItem]]) {
+            self.categoryPivot = categoryPivot
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case categoryPivot = "categoryPivot"
+        }
+
+        public struct CategoryPivotValueItem: Codable, Equatable, Sendable {
+            public let categoryId: Int?
+            public let categoryName: String
+            public let categoryPathIds: [Int]
+            public let categoryPathSegments: [String]
+            public let total: Decimal
+            public let income: Decimal
+            public let expense: Decimal
+            public let transactionCount: Int
+            /// Additive (ADR-201). Part of `income` booked on accounts whose owner is `partner` or `joint`;
+            /// present only when one of them is non-zero. The rest of `income` is on `me` accounts or on
+            /// transactions without an account.
+            public let incomeByOwner: IncomeByOwner?
+
+            public init(categoryId: Int? = nil, categoryName: String, categoryPathIds: [Int], categoryPathSegments: [String], total: Decimal, income: Decimal, expense: Decimal, transactionCount: Int, incomeByOwner: IncomeByOwner? = nil) {
+                self.categoryId = categoryId
+                self.categoryName = categoryName
+                self.categoryPathIds = categoryPathIds
+                self.categoryPathSegments = categoryPathSegments
+                self.total = total
+                self.income = income
+                self.expense = expense
+                self.transactionCount = transactionCount
+                self.incomeByOwner = incomeByOwner
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case categoryId = "categoryId"
+                case categoryName = "categoryName"
+                case categoryPathIds = "categoryPathIds"
+                case categoryPathSegments = "categoryPathSegments"
+                case total = "total"
+                case income = "income"
+                case expense = "expense"
+                case transactionCount = "transactionCount"
+                case incomeByOwner = "incomeByOwner"
+            }
+
+            public struct IncomeByOwner: Codable, Equatable, Sendable {
+                public let partner: Decimal?
+                public let joint: Decimal?
+
+                public init(partner: Decimal? = nil, joint: Decimal? = nil) {
+                    self.partner = partner
+                    self.joint = joint
+                }
+
+                enum CodingKeys: String, CodingKey {
+                    case partner = "partner"
+                    case joint = "joint"
+                }
+            }
         }
     }
 
@@ -963,6 +1086,94 @@ extension OpenAPI {
         }
     }
 
+    /// A oneOf/anyOf schema, decoded as plain JSON.
+    public typealias InsightDismissalRequest = JSONValue
+
+    public struct InsightsDigestData: Codable, Equatable, Sendable {
+        public let subscriptionCreep: SubscriptionCreep
+        public let categoryOutliers: [JSONValue]
+        public let cashForecast: CashForecast?
+
+        public init(subscriptionCreep: SubscriptionCreep, categoryOutliers: [JSONValue], cashForecast: CashForecast? = nil) {
+            self.subscriptionCreep = subscriptionCreep
+            self.categoryOutliers = categoryOutliers
+            self.cashForecast = cashForecast
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case subscriptionCreep = "subscriptionCreep"
+            case categoryOutliers = "categoryOutliers"
+            case cashForecast = "cashForecast"
+        }
+
+        public struct SubscriptionCreep: Codable, Equatable, Sendable {
+            public let new: [JSONValue]
+            public let priceChanges: [JSONValue]
+
+            public init(new: [JSONValue], priceChanges: [JSONValue]) {
+                self.new = new
+                self.priceChanges = priceChanges
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case new = "new"
+                case priceChanges = "priceChanges"
+            }
+        }
+
+        public struct CashForecast: Codable, Equatable, Sendable {
+            public let month: String
+            public let currency: String
+            /// Zero-based expected income minus outflows at month end; not an account balance.
+            public let monthEndNetCashflow: Decimal
+            public let monthEndNetCashflowLow: Decimal?
+            public let monthEndNetCashflowHigh: Decimal?
+            public let movedSignificantly: Bool
+            public let prominence: String
+            public let methodId: String
+
+            public init(month: String, currency: String, monthEndNetCashflow: Decimal, monthEndNetCashflowLow: Decimal? = nil, monthEndNetCashflowHigh: Decimal? = nil, movedSignificantly: Bool, prominence: String, methodId: String) {
+                self.month = month
+                self.currency = currency
+                self.monthEndNetCashflow = monthEndNetCashflow
+                self.monthEndNetCashflowLow = monthEndNetCashflowLow
+                self.monthEndNetCashflowHigh = monthEndNetCashflowHigh
+                self.movedSignificantly = movedSignificantly
+                self.prominence = prominence
+                self.methodId = methodId
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case month = "month"
+                case currency = "currency"
+                case monthEndNetCashflow = "monthEndNetCashflow"
+                case monthEndNetCashflowLow = "monthEndNetCashflowLow"
+                case monthEndNetCashflowHigh = "monthEndNetCashflowHigh"
+                case movedSignificantly = "movedSignificantly"
+                case prominence = "prominence"
+                case methodId = "methodId"
+            }
+        }
+    }
+
+    public struct InsightsDigestEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let data: OpenAPI.InsightsDigestData?
+        public let error: OpenAPI.ErrorPayload?
+
+        public init(ok: Bool, data: OpenAPI.InsightsDigestData? = nil, error: OpenAPI.ErrorPayload? = nil) {
+            self.ok = ok
+            self.data = data
+            self.error = error
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case data = "data"
+            case error = "error"
+        }
+    }
+
     public struct Link: Codable, Equatable, Sendable {
         public let rel: String
         public let href: String
@@ -981,6 +1192,86 @@ extension OpenAPI {
             case href = "href"
             case method = "method"
             case title = "title"
+        }
+    }
+
+    public struct NetWorthResponse: Codable, Equatable, Sendable {
+        public let current: Current
+        public let monthlyChange: Decimal
+        public let monthlyChangePercent: Decimal
+        public let snapshots: [OpenAPI.NetWorthSnapshot]
+        public let snapshotsTotal: Int?
+        public let snapshotsLimit: Int?
+        public let snapshotsOffset: Int?
+
+        public init(current: Current, monthlyChange: Decimal, monthlyChangePercent: Decimal, snapshots: [OpenAPI.NetWorthSnapshot], snapshotsTotal: Int? = nil, snapshotsLimit: Int? = nil, snapshotsOffset: Int? = nil) {
+            self.current = current
+            self.monthlyChange = monthlyChange
+            self.monthlyChangePercent = monthlyChangePercent
+            self.snapshots = snapshots
+            self.snapshotsTotal = snapshotsTotal
+            self.snapshotsLimit = snapshotsLimit
+            self.snapshotsOffset = snapshotsOffset
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case current = "current"
+            case monthlyChange = "monthlyChange"
+            case monthlyChangePercent = "monthlyChangePercent"
+            case snapshots = "snapshots"
+            case snapshotsTotal = "snapshotsTotal"
+            case snapshotsLimit = "snapshotsLimit"
+            case snapshotsOffset = "snapshotsOffset"
+        }
+
+        public struct Current: Codable, Equatable, Sendable {
+            public let liquid: Decimal
+            public let liabilities: Decimal
+            public let investments: Decimal
+            public let netWorth: Decimal
+            public let currency: String
+
+            public init(liquid: Decimal, liabilities: Decimal, investments: Decimal, netWorth: Decimal, currency: String) {
+                self.liquid = liquid
+                self.liabilities = liabilities
+                self.investments = investments
+                self.netWorth = netWorth
+                self.currency = currency
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case liquid = "liquid"
+                case liabilities = "liabilities"
+                case investments = "investments"
+                case netWorth = "netWorth"
+                case currency = "currency"
+            }
+        }
+    }
+
+    public struct NetWorthSnapshot: Codable, Equatable, Sendable {
+        public let date: String
+        public let liquid: Decimal
+        /// Σ liability-account balances (negative); split out of liquid so debt is not counted as a
+        /// liquid asset (ADR-092).
+        public let liabilities: Decimal
+        public let investments: Decimal
+        public let netWorth: Decimal
+
+        public init(date: String, liquid: Decimal, liabilities: Decimal, investments: Decimal, netWorth: Decimal) {
+            self.date = date
+            self.liquid = liquid
+            self.liabilities = liabilities
+            self.investments = investments
+            self.netWorth = netWorth
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case date = "date"
+            case liquid = "liquid"
+            case liabilities = "liabilities"
+            case investments = "investments"
+            case netWorth = "netWorth"
         }
     }
 
@@ -1789,6 +2080,65 @@ extension OpenAPI {
         enum CodingKeys: String, CodingKey {
             case items = "items"
             case total = "total"
+        }
+    }
+
+    public struct SavedChart: Codable, Equatable, Sendable {
+        public let id: Int
+        public let name: String
+        public let chartType: String
+        /// ranked is only valid with chart_type=bar; line:ranked and area:ranked return 400
+        public let chartVariant: String
+        /// Ignored when chart_variant=ranked
+        public let timeBucket: String
+        /// Ignored when all_categories=true
+        public let categoryIds: [Int]
+        /// Ignored when all_recipients=true
+        public let recipientIds: [Int]
+        /// Ignored when all_tags=true
+        public let tagIds: [Int]
+        public let allCategories: Bool
+        public let allRecipients: Bool
+        public let allTags: Bool
+        public let dateRangeStart: String?
+        public let dateRangeEnd: String?
+        public let createdAt: String
+        public let updatedAt: String
+
+        public init(id: Int, name: String, chartType: String, chartVariant: String, timeBucket: String, categoryIds: [Int], recipientIds: [Int], tagIds: [Int], allCategories: Bool, allRecipients: Bool, allTags: Bool, dateRangeStart: String? = nil, dateRangeEnd: String? = nil, createdAt: String, updatedAt: String) {
+            self.id = id
+            self.name = name
+            self.chartType = chartType
+            self.chartVariant = chartVariant
+            self.timeBucket = timeBucket
+            self.categoryIds = categoryIds
+            self.recipientIds = recipientIds
+            self.tagIds = tagIds
+            self.allCategories = allCategories
+            self.allRecipients = allRecipients
+            self.allTags = allTags
+            self.dateRangeStart = dateRangeStart
+            self.dateRangeEnd = dateRangeEnd
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case name = "name"
+            case chartType = "chart_type"
+            case chartVariant = "chart_variant"
+            case timeBucket = "time_bucket"
+            case categoryIds = "category_ids"
+            case recipientIds = "recipient_ids"
+            case tagIds = "tag_ids"
+            case allCategories = "all_categories"
+            case allRecipients = "all_recipients"
+            case allTags = "all_tags"
+            case dateRangeStart = "date_range_start"
+            case dateRangeEnd = "date_range_end"
+            case createdAt = "created_at"
+            case updatedAt = "updated_at"
         }
     }
 

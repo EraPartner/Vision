@@ -40,6 +40,9 @@ public final class NativeShellModel {
     public private(set) var settings: NativeAppSettings = .defaults
     /// `false` until `app_settings` has been read once; native screens wait for it.
     public private(set) var settingsLoaded = false
+    /// A completed settings read also refreshes dashboard settings after the web dialog's
+    /// 500 ms save debounce, even when the app-format fields themselves did not change.
+    public private(set) var settingsRevision = 0
     public var strings: any Localizing
     public var theme: ThemeSelection
     public private(set) var isSidebarVisible = true
@@ -65,6 +68,9 @@ public final class NativeShellModel {
     public let categories: CategoriesModel
     /// `/recipients`.
     public let recipients: RecipientsModel
+    /// `/`, Home; omitted by shell-only test fixtures and older callers.
+    public let home: HomeModel?
+    public let statistics: StatisticsScreens?
     /// The navigation the Leave this page? alert holds while it asks (`blocker.location`).
     public private(set) var leaveConfirmation: NativeRoute?
 
@@ -96,6 +102,8 @@ public final class NativeShellModel {
         accounts: AccountsModel,
         categories: CategoriesModel,
         recipients: RecipientsModel,
+        home: HomeModel? = nil,
+        statistics: StatisticsScreens? = nil,
         hiddenSections: [NavSectionID: Bool]? = nil,
         loadSettings: @escaping @Sendable () async throws -> NativeAppSettings,
         saveHiddenSections: @escaping @MainActor ([NavSectionID: Bool]) -> Void = { _ in },
@@ -113,6 +121,8 @@ public final class NativeShellModel {
         self.accounts = accounts
         self.categories = categories
         self.recipients = recipients
+        self.home = home
+        self.statistics = statistics
         self.hiddenSections = hiddenSections ?? Self.defaultHiddenSections
         self.loadSettings = loadSettings
         self.saveHiddenSections = saveHiddenSections
@@ -143,6 +153,8 @@ public final class NativeShellModel {
             return .web
         }
         if screen.requiresAdmin && !settings.adminMode { return .web }
+        if screen == .home && home == nil { return .web }
+        if screen == .statistics && (statistics == nil || route.value("export") == "pdf") { return .web }
         return .native(screen)
     }
 
@@ -159,10 +171,11 @@ public final class NativeShellModel {
     public func routeDidChange(_ next: NativeRoute) {
         let pathChanged = next.path != route.path
         let settingsClosed = route.value("settings") != nil && next.value("settings") == nil
+        let reportClosed = route.value("export") == "pdf" && next.value("export") != "pdf"
         // A new page, the settings dialog closing (`?settings` removed), or the same route
         // again (the palette or shortcuts overlay closed) ends a web presentation over a
         // native screen.
-        if pathChanged || settingsClosed || next == route { isPresentingWeb = false }
+        if pathChanged || settingsClosed || reportClosed || next == route { isPresentingWeb = false }
         pendingRoute = nil
         route = next
         if pathChanged { leaveConfirmation = nil }
@@ -180,6 +193,9 @@ public final class NativeShellModel {
         // The page saves `app_settings` 500 ms after a change, so a read right after the
         // dialog closes can still see the old values.
         if settingsClosed { reloadSettingsLater() }
+        if settingsClosed { home?.invalidate() }
+        if pathChanged && next.path == InsightsRoutes.home { home?.invalidate() }
+        if settingsClosed || pathChanged && next.path == InsightsRoutes.statistics { statistics?.model.invalidate() }
     }
 
     /// A sidebar click, a menu or shortcut navigation, or another native link. The page moves
@@ -201,6 +217,13 @@ public final class NativeShellModel {
         guard let next = NativeRoute(url) else { return }
         pendingRoute = next
         onNavigate(.replaceRoute(next.string))
+    }
+    /// The existing report dialog owns TypeScript tax-result serialization until the tax
+    /// engine's backend operation is available (ADR-204 §6). It stays available on Insights.
+    public func openStatisticsReport() {
+        guard route.path == InsightsRoutes.statistics else { return }
+        isPresentingWeb = true
+        replace(with: route.setting("export", to: "pdf").string)
     }
 
     private func send(_ next: NativeRoute) {
@@ -358,8 +381,10 @@ public final class NativeShellModel {
 
     /// Applies `app_settings`: formats, admin mode and the colorblind skin.
     public func apply(settings next: NativeAppSettings) {
+        if settingsLoaded { home?.invalidate(); statistics?.model.invalidate() }
         settings = next
         settingsLoaded = true
+        settingsRevision &+= 1
         theme.colorblindGainLoss = next.colorblindGainLoss
     }
 

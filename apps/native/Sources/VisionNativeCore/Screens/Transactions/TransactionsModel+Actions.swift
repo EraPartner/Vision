@@ -129,6 +129,9 @@ extension TransactionsModel {
         if let shell, shell.route.path == TransactionsRoutes.path {
             // `id` is read and removed by `sync`, which then selects the row in the first page.
             shell.replace(with: "\(TransactionsRoutes.path)?\(TransactionsRoutes.selectParameter)=\(created.id)")
+        } else if let shell, shell.route.path == InsightsRoutes.home {
+            shell.home?.invalidate()
+            shell.navigate(to: "\(TransactionsRoutes.path)?\(TransactionsRoutes.selectParameter)=\(created.id)")
         }
         await refreshNeedsCategoryCount()
     }

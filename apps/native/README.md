@@ -17,25 +17,25 @@ stays the project-file tool (ADR-204 decision 3). The deployment target and the 
 
 ## Layout
 
-| Path                                   | Purpose                                                    |
-| -------------------------------------- | ---------------------------------------------------------- |
-| `project.yml`                          | XcodeGen spec for the "Vision Native" app target           |
-| `Config/Signing.xcconfig`              | Signing team from `VISION_NATIVE_TEAM_ID`                  |
-| `VisionNative/`                        | AppKit app, window, menus and the `WKWebView` shell        |
-| `Package.swift`                        | SwiftPM package: `VisionNativeCore`, `VisionNativeUI`      |
-| `Sources/VisionNativeCore/`            | Non-UI logic: runtime supervision, health, override        |
-| `Sources/VisionNativeCore/Shell/`      | Bridge contract and codec, web view policy, menus          |
-| `Sources/VisionNativeCore/Backup/`     | Backup bundles, encryption and restore (phase 1d)          |
-| `Sources/VisionNativeCore/Audit/`      | Audit anchor, Keychain witness, audit bridge (1e)          |
-| `Sources/VisionNativeCore/API/`        | `APIClient` and the generated OpenAPI client (2)           |
-| `Sources/VisionNativeCore/Design/`     | Generated design tokens, `ThemeSelection` (2)              |
-| `Sources/VisionNativeCore/Navigation/` | Generated sidebar registry, routes, shell model (2)        |
-| `Sources/VisionNativeCore/Screens/`    | Screen models: Rates, Admin, Planned, Import, Transactions |
-| `Sources/VisionNativeUI/`              | SwiftUI shell and screens, `Localizable.xcstrings`         |
-| `openapi-operations.txt`               | operationIds the Swift client is generated for             |
-| `i18n-keys.txt`                        | `i18n/source` keys copied into the String Catalog          |
-| `Tests/VisionNativeCoreTests/`         | Swift Testing tests and `Fixtures/` from Electron          |
-| `Tests/VisionNativeUITests/`           | String Catalog (EN and NL) and SwiftUI layout tests        |
+| Path                                   | Purpose                                                                        |
+| -------------------------------------- | ------------------------------------------------------------------------------ |
+| `project.yml`                          | XcodeGen spec for the "Vision Native" app target                               |
+| `Config/Signing.xcconfig`              | Signing team from `VISION_NATIVE_TEAM_ID`                                      |
+| `VisionNative/`                        | AppKit app, window, menus and the `WKWebView` shell                            |
+| `Package.swift`                        | SwiftPM package: `VisionNativeCore`, `VisionNativeUI`                          |
+| `Sources/VisionNativeCore/`            | Non-UI logic: runtime supervision, health, override                            |
+| `Sources/VisionNativeCore/Shell/`      | Bridge contract and codec, web view policy, menus                              |
+| `Sources/VisionNativeCore/Backup/`     | Backup bundles, encryption and restore (phase 1d)                              |
+| `Sources/VisionNativeCore/Audit/`      | Audit anchor, Keychain witness, audit bridge (1e)                              |
+| `Sources/VisionNativeCore/API/`        | `APIClient` and the generated OpenAPI client (2)                               |
+| `Sources/VisionNativeCore/Design/`     | Generated design tokens, `ThemeSelection` (2)                                  |
+| `Sources/VisionNativeCore/Navigation/` | Generated sidebar registry, routes, shell model (2)                            |
+| `Sources/VisionNativeCore/Screens/`    | Screen models: Rates, Admin, Planned, Import, Transactions, Accounts, Insights |
+| `Sources/VisionNativeUI/`              | SwiftUI shell and screens, `Localizable.xcstrings`                             |
+| `openapi-operations.txt`               | operationIds the Swift client is generated for                                 |
+| `i18n-keys.txt`                        | `i18n/source` keys copied into the String Catalog                              |
+| `Tests/VisionNativeCoreTests/`         | Swift Testing tests and `Fixtures/` from Electron                              |
+| `Tests/VisionNativeUITests/`           | String Catalog (EN and NL) and SwiftUI layout tests                            |
 
 `VisionNative.xcodeproj`, `VisionNative/Info.plist`, `build/`, `.build/` and
 `Config/Local.xcconfig` are generated or local and are gitignored.
@@ -139,6 +139,17 @@ See [the architecture page](../../docs/architecture/native-app.md#native-navigat
   and a detail column with the web view or a native screen. The page reports its route through
   `electronAPI.routeChanged` (`shell:route-changed`) and hides its own sidebar when
   `electronAPI.nativeNavigation` is set.
+- `/` is native once `app_settings` loads (phase 3g part A): the eleven Home widgets, native
+  charts with hover and keyboard readouts, balance/forecast range comparisons, exclusion toggles,
+  forecast controls and diagnostics, widget customization, inactivity dismissals, and links into
+  the native transaction inspector. Add transaction reuses the native sheet and opens its created
+  row in Transactions.
+- `/statistics` draws all six tabs natively (phase 3g part B): monthly rhythm and charts, category
+  metrics and hierarchy pivot with drill links, payee table, yearly totals, Sankey flow, deterministic
+  findings, and saved charts with all seven variants and live preview. The PDF menu temporarily
+  opens the existing web report dialog with `?export=pdf`; closing restores the native tab/window.
+  Financial, portfolio, and tax report options remain available while the tax backend prerequisite
+  is implemented. This report surface and the Mac review remain phase-3 exit requirements.
 - `/admin`, `/admin/providers`, `/admin/endpoints` and `/admin/exchange-rates` are native, in
   admin mode only, and so are `/admin/db` and `/admin/db/:table`; the table editor holds
   navigation and Quit behind a native Leave this page? alert while it has pending changes. The admin token card writes the page's
@@ -351,6 +362,33 @@ these steps touches Electron Vision or its data.
     add a tag and upload a PDF. Double-click a row to edit it in place and press Enter to save.
     Delete a row from its context menu: the alert asks, the row leaves, and Undo (or `⌘Z`) brings
     it back.
+
+20. **Home (phase 3g part A).** Open Home with admin mode off. Expected: the native greeting,
+    spending hero, Needs attention, net worth, upcoming payments, accounts, monthly bars, category
+    donut, forecast, and recent transactions. More actions > Customize shows all eleven widgets;
+    enable Summary cards and Account balances, close, and revisit Home to confirm persistence.
+    In Settings configure an exclusion, return to Home, and toggle exclusions separately on
+    Monthly trends, Category distribution, and Recent transactions. Drill through an income or
+    spending total, a category/Other/Uncategorised slice, and a recent row; check the filters or
+    selected inspector. Scrub the net sparkline, use arrows/Home/End/Escape, and check the latest
+    amount returns after release. Hover and drag bank history and forecast to compare dates and
+    values. Switch forecast mode, every rolling window, cumulative/daily, With planned, and
+    method choices; reopen Diagnostics and check its table and persisted trend. Dismiss and
+    restore an inactivity alert. Add a transaction from Home, exercise the unsaved-changes guard,
+    save, and confirm Transactions opens the created row. Repeat in Dutch and a narrow window.
+    These Mac checks have not been run in the Linux cloud workspace.
+
+21. **Insights (phase 3g part B).** Open Insights and switch Last 24 months/All time and every
+    tab; confirm the URL retains `window` and `tab`. Customize, toggle each chart's exclusions,
+    scrub Monthly rhythm, and show the 3-month averages. On Categories choose a year and each
+    metric, expand ancestors, page month columns, and drill group/child/Uncategorised/total cells.
+    On Payees search, filter, sort, and scroll the details table; check the year picker and full
+    names in the chart readout. Check yearly totals. On Flow switch years, hover nodes/links, and
+    resize the window. Dismiss a deterministic finding. On Custom charts create/edit all seven
+    variants with category/payee/tag sources, All sources, date clearing, and yearly bounds;
+    verify live preview, Other, save, and delete confirmation. Export PDF opens the existing web
+    dialog; exercise its three report types and cancel/download, then confirm the native tab and
+    window return. Repeat in Dutch. These Mac checks remain unperformed in the Linux workspace.
 
 ## Developer backend override
 
