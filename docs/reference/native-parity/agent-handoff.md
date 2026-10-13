@@ -148,6 +148,45 @@ unmounted Palette preparation briefly failed compilation; that optional-array ex
 is corrected on disk. Preserve earlier immutable proofs. Refresh the exact final scope
 and hash manifest rather than reporting those partial logs as a completed combined run.
 
+## Next full-work snapshot (2026-10-13 22:35 UTC)
+
+`0a8fa5ab` is pushed and verified and saved all 40 files present after recovery. Live
+parallel owners were restarted as `onboarding_cont`, `palette_cont`, `banners_cont`,
+`verify_cont`, `palette_ts_cont` and `docs_reports_cont`. Root owns shared shell/SDK/bridge
+integration, generation and publication. The current next snapshot includes every dirty
+task file, including new UI/tests and unfinished Reports scaffolding.
+
+The three Research compiler repairs are on disk: use Decimal sign-formatting's actual
+`includingZero` label, provide the existing watchlist-add model to Lookup, and split the
+Watchlist target editor into typed helpers. Mac CI must confirm these repairs.
+
+Current source prep is still unmounted. Onboarding now has three Core files, three UI
+files and 14 synthetic tests; Palette has three Core/three UI files plus source-score and
+lifecycle tests; banners have 10 tests and the reusable Backup suite has 15 tests.
+Their focused final proofs are running. Accepted local draft/recents/dismissal writes must
+be drained before restored frontend state is applied; SDK storage callbacks must be bound
+to the original factory generation. Ordinary overlay dismissal keeps accepted writes alive.
+
+The fixed TypeScript palette answer module/component is implemented, with arithmetic/FX
+delegated to existing source helpers and the shared rate cache. Its first 27 focused tests
+passed; minimal AppLayout mounting and broader integration/type checks are underway.
+Native activation still needs document-start capability and SDK/native overlay wiring.
+All existing React palette, shortcuts, banners and onboarding mounts remain in place until
+their corresponding native graph is actually mounted.
+
+The report specification now matches the existing binary PDF routes and period/sections/
+theme/currency/tax-context request fields. Runtime is unchanged; stale generated JSON/date
+consumers see a corrective breaking specification change. All 10 existing report parser
+tests pass and the endpoint matrix remains 309 HTTP operations/336 combined entries.
+Frontend types have been regenerated. Native Reports currently has four Core scaffolding
+files only; UI, focused proofs, save/print and origin-query integration remain to be done.
+
+The exact phase-3o combined focus passed 79 tests in six suites. Full proof is rebuilding
+its scoped 222 actual production sources and 79 permanent test files; unfinished unmounted
+phase-3p prep is explicitly excluded. Do not describe this as a completed full run yet.
+The frontend report generation and 137 additional existing EN/NL native catalog keys are
+included in this snapshot. Structural flow docs/tests pass at 101 components/74 flows.
+
 The API data-session actor and wrapper now exist on disk, and the SDK uses one shared
 session for HTTP and streams. Accepted restore confirmation drains Main Settings, the
 legacy host writer, old chat streams and the data session before the existing unfenced

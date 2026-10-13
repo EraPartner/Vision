@@ -7,9 +7,11 @@ import Testing
 struct NativeSettingsBackupTests {
     @Test func onboardingRestoreOnlyReadsNoBackupPreferencesAndCompletesAfterApplyingFrontendState() async {
         let host = BackupDesktopFixture()
-        host.restoreReceipts = [.object([
-            "success": .bool(true), "frontendState": .object(["keys": .object(["synthetic": .string("value")])]),
-        ])]
+        host.restoreReceipts = [
+            .object([
+                "success": .bool(true), "frontendState": .object(["keys": .object(["synthetic": .string("value")])]),
+            ])
+        ]
         let model = NativeSettingsBackupModel(service: host, reloadDelay: .milliseconds(1))
         model.didRestore = { host.events.append("complete") }
         model.activateRestoreOnly()

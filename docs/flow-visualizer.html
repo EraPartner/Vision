@@ -7720,14 +7720,14 @@
               {
                 "from": "native.settings",
                 "to": "native.datasession",
-                "payload": "Confirmed restore holds Main debounces, settles accepted preference/legacy-writer queues, stops chat streams and pauses new shared-client mutation admission",
+                "payload": "UUID-owned confirmed restore holds Main debounces, settles accepted preference/legacy-writer queues, stops chat/import streams and pauses shared-client mutation admission",
                 "annotation": "apps/native/Sources/VisionNativeCore/Settings/NativeSettingsModel.swift suspendForRestore; NativeSettingsService.swift native persistence gate; apps/native/VisionNative/ShellController.swift confirmAndSuspendForRestore. Failed restore resumes identical baselines/poisoned lanes; no reread/rebase."
               },
               {
                 "from": "native.datasession",
                 "to": "build.native",
                 "payload": "Drain accepted transport writes; refuse paused reads and invalidate pre-attempt read results even on failed restore; resume original session on failure or retire old delivery on successful Settings reload",
-                "annotation": "apps/native/Sources/VisionNativeCore/API/NativeDataSession.swift and ShellController.swift gate the shared APIClient transport. Cancellation does not prove server rollback. Portable Main/transport cases pass; SDK/macOS verification remains pending; common renderer-ready recovery for other restore entry points is still being integrated."
+                "annotation": "apps/native/Sources/VisionNativeCore/API/NativeDataSession.swift and ShellController.swift gate the shared APIClient transport. Cancellation does not prove server rollback. Portable Main/transport cases pass; SDK/macOS verification remains pending; the common UUID-owned Settings/web-onboarding restore path and generation-checked native/renderer-ready rebuild are implemented."
               },
               {
                 "from": "build.native",

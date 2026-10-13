@@ -373,7 +373,11 @@ database switch. Failure resumes the same raw baselines and sticky failures; suc
 writer. `NativeDataSession` gates the shared native HTTP/SSE transport without changing these API
 contracts. Reads are refused while paused, and pre-attempt read admissions stay invalid after a
 failed restore resumes. A transport cancellation never implies that a server write was rolled back.
-Portable Main/transport tests exist; SDK/macOS verification remains pending.
+The SDK common restore path is UUID-owned and serves native Settings and retained web onboarding.
+Main and legacy writers drain before chat/import streams stop and the shared transport drains; the
+Backup service uses its existing unfenced restore transport. Native reload and renderer-ready recovery
+share a generation-checked rebuild task. Portable Main/transport tests exist; SDK/macOS verification
+remains pending.
 
 For the retained WK page, native-only `shell:settings-change` forwards supported deltas for
 `app_settings`, `dashboard_settings`, and `theme_settings` to that same writer. Draft mirrors do

@@ -23,6 +23,8 @@ import Observation
     @ObservationIgnored private var searchTask: Task<Void, Never>?
     @ObservationIgnored private var answerTask: Task<Void, Never>?
     @ObservationIgnored private var recentsTask: Task<Void, Never>?
+    @ObservationIgnored private var recentWriteTask: Task<Void, Never>?
+    @ObservationIgnored private var isRetired = false
     private struct Cached<Value> {
         let value: Value
         let at: Date
@@ -45,10 +47,11 @@ import Observation
         self.now = now
     }
 
-    public var trimmedQuery: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
+    public var trimmedQuery: String { NativeCommandPaletteQueries.trim(query) }
     public var tickerSymbol: String? { NativeCommandPaletteQueries.ticker(trimmedQuery) }
 
     public func configure(settings: NativeAppSettings) {
+        guard !isRetired else { return }
         guard self.settings != settings else { return }
         let answersChanged =
             self.settings.numberFormat != settings.numberFormat
@@ -59,13 +62,15 @@ import Observation
     }
 
     public func open() {
-        guard !isOpen else { return }
+        guard !isRetired, !isOpen else { return }
         visit = UUID()
         isOpen = true
         let opened = visit
         recents = []
+        let precedingWrite = recentWriteTask
         recentsTask = Task { [weak self] in
             guard let self else { return }
+            await precedingWrite?.value
             let raw = try? await readRecents()
             guard isOpen, visit == opened, !Task.isCancelled else { return }
             recents = NativeCommandPaletteQueries.recents(raw)
@@ -88,10 +93,12 @@ import Observation
     }
 
     public func activate(_ entry: NativeCommandPaletteEntry) {
-        guard isOpen else { return }
+        guard !isRetired, isOpen else { return }
         close()
         if case .navigate(let route) = entry.action {
-            Task {
+            let precedingWrite = recentWriteTask
+            recentWriteTask = Task {
+                await precedingWrite?.value
                 let raw: String? = try? await readRecents()
                 let current = NativeCommandPaletteQueries.recents(raw)
                 let next = NativeCommandPaletteQueries.pushing(route.string, into: current)
@@ -101,6 +108,18 @@ import Observation
             }
         }
         onAction?(entry.action)
+    }
+
+    /// Accepted navigation history survives ordinary dismissals. The desktop
+    /// restore coordinator drains it before replacing frontend storage.
+    public func flushRecents() async { await recentWriteTask?.value }
+
+    /// Called after the restore coordinator drains accepted history. A retired
+    /// factory graph can never reopen or dispatch another palette action.
+    public func retireForReload() {
+        isRetired = true
+        close()
+        onAction = nil
     }
 
     /// Dynamic answers/search hits are force-mounted, as in cmdk. Navigation/actions
@@ -244,7 +263,7 @@ import Observation
     private func schedule() {
         revision = UUID()
         searchTask?.cancel()
-        guard isOpen else { return }
+        guard !isRetired, isOpen else { return }
         let context = revision
         let opened = visit
         let text = trimmedQuery

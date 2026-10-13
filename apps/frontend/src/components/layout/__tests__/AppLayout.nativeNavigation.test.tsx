@@ -19,6 +19,7 @@ import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { ok } from "@/test/msw/handlers";
 import { AppLayout } from "@/components/layout/AppLayout";
+import type { NativePaletteWindow } from "@/lib/nativePaletteAnswer";
 
 const API_BASE = "http://localhost:3002";
 
@@ -109,6 +110,7 @@ describe("AppLayout with Vision Native's sidebar", () => {
     afterEach(() => {
         Reflect.deleteProperty(window, "electronAPI");
         Reflect.deleteProperty(window, "__VISION_NATIVE_SETTINGS__");
+        Reflect.deleteProperty(window, "__VISION_NATIVE_PALETTE__");
         document.documentElement.className = "";
     });
 
@@ -292,5 +294,26 @@ describe("AppLayout with Vision Native's sidebar", () => {
             ),
         );
         expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
+    it("mounts the fixed palette answer callback and deactivates it with the layout", async () => {
+        Object.defineProperty(window, "__VISION_NATIVE_PALETTE__", {
+            value: true,
+            configurable: true,
+        });
+        installNativeBridge(true);
+        const view = renderLayout();
+        await screen.findByText("page content");
+        const host = window as NativePaletteWindow;
+        await waitFor(() => expect(host.__visionNativePaletteAnswer).toBeTypeOf("function"));
+        const answer = host.__visionNativePaletteAnswer!;
+        expect(await answer("1,5 + 2", "eu", "EUR", 2)).toEqual({
+            kind: "arithmetic",
+            text: "3,5",
+        });
+        expect(Object.getOwnPropertyDescriptor(window, "__visionNativePaletteAnswer"))
+            .toMatchObject({ writable: false, configurable: false });
+        view.unmount();
+        expect(await answer("1,5 + 2", "eu", "EUR", 2)).toBeNull();
     });
 });

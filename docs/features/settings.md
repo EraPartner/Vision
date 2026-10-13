@@ -463,8 +463,11 @@ sticky failures; successful reload retires the old writer and builds fresh model
 `API/NativeDataSession.swift` transport pauses mutation admission, refuses paused reads, and
 invalidates pre-attempt read results even after failed restore resumes. Retired HTTP/SSE
 requests/replies are rejected. A cancelled transport never proves a server write rolled back. Main has portable
-gated test coverage, and shared transport has 13 focused cases; SDK/macOS verification remains pending. The common
-renderer-ready recovery path for other restore entry points is still being integrated. See [[docs/architecture/native-app#Settings and global notices (phase 3o)|Native Settings architecture]],
+gated test coverage, and shared transport has 13 focused cases; SDK/macOS verification remains pending.
+The SDK common restore path also serves retained web onboarding, with UUID ownership for each fence.
+It drains Main and legacy preference writers, stops chat/import streams, then drains shared transport
+before the existing Backup service switches the database. Native reload and renderer-ready recovery
+share a generation-checked rebuild task that creates fresh models and writers once. See [[docs/architecture/native-app#Settings and global notices (phase 3o)|Native Settings architecture]],
 [[docs/api/settings|Settings API]], and [[docs/reference/native-parity/shell-and-settings|Settings parity]].
 
 [Native Settings journey](../flow-visualizer.html#native-settings-instant-apply) and

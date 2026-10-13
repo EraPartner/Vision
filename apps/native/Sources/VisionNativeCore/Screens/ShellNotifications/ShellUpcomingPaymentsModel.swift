@@ -143,6 +143,7 @@ import Observation
     public func dismiss(_ payment: OpenAPI.PlannedTransaction) { dismissKeys([Self.dismissKey(payment)]) }
     public func dismissAll() { dismissKeys(visibleUpcoming.map(Self.dismissKey)) }
     private func dismissKeys(_ keys: [String]) {
+        guard active else { return }
         storageRevision += 1
         for key in keys where !dismissalKeys.contains(key) { dismissalKeys.append(key) }
         didChangeDismissals?(dismissalKeys)

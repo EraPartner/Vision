@@ -34,6 +34,12 @@ import Foundation
         fx.invalidate()
         upcoming.invalidate()
     }
+    /// Finish already accepted local writes before a database restore replaces frontend storage.
+    public func flushStorage() async {
+        async let fx: Void = fx.flushStorage()
+        async let upcoming: Void = upcoming.flushStorage()
+        _ = await (fx, upcoming)
+    }
     public func didDisappear() {
         active = false
         fx.didDisappear()

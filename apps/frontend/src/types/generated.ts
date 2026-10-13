@@ -3095,7 +3095,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Generate portfolio report */
+        /** Generate portfolio report PDF */
         post: operations["generatePortfolioReport"];
         delete?: never;
         options?: never;
@@ -3112,7 +3112,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Generate Belgian tax report */
+        /** Generate tax report PDF */
         post: operations["generateTaxReport"];
         delete?: never;
         options?: never;
@@ -4554,6 +4554,122 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * @description Report window. Custom dates validate their YYYY-MM-DD shape; the route does not check calendar validity or from/to ordering.
+         * @default {
+         *       "kind": "rolling",
+         *       "months": 12
+         *     }
+         */
+        ReportPeriod: {
+            /** @enum {string} */
+            kind: "ytd";
+        } | {
+            /** @enum {string} */
+            kind: "rolling";
+            months: number;
+        } | {
+            /** @enum {string} */
+            kind: "custom";
+            from: string;
+            to: string;
+        } | {
+            /** @enum {string} */
+            kind: "year";
+            year: number;
+        };
+        /**
+         * @description HSL component triple only, without hsl() or CSS declarations. The shape guard does not impose numeric hue/saturation/lightness bounds.
+         * @example 158 62% 32%
+         */
+        ReportThemeToken: string;
+        /**
+         * @description Known optional HSL tokens. Unknown properties are stripped by the route; omitted mode defaults to light.
+         * @default {
+         *       "mode": "light"
+         *     }
+         */
+        ReportTheme: {
+            primary?: components["schemas"]["ReportThemeToken"];
+            accent?: components["schemas"]["ReportThemeToken"];
+            success?: components["schemas"]["ReportThemeToken"];
+            expense?: components["schemas"]["ReportThemeToken"];
+            surface?: components["schemas"]["ReportThemeToken"];
+            text?: components["schemas"]["ReportThemeToken"];
+            muted?: components["schemas"]["ReportThemeToken"];
+            border?: components["schemas"]["ReportThemeToken"];
+            chart1?: components["schemas"]["ReportThemeToken"];
+            chart2?: components["schemas"]["ReportThemeToken"];
+            chart3?: components["schemas"]["ReportThemeToken"];
+            chart4?: components["schemas"]["ReportThemeToken"];
+            chart5?: components["schemas"]["ReportThemeToken"];
+            chart6?: components["schemas"]["ReportThemeToken"];
+            chart7?: components["schemas"]["ReportThemeToken"];
+            chart8?: components["schemas"]["ReportThemeToken"];
+            /**
+             * @default light
+             * @enum {string}
+             */
+            mode: "light" | "dark";
+        };
+        /** @default [] */
+        ReportExclusionIds: number[];
+        ReportTaxProfile: {
+            filingStatus?: string;
+            region?: string;
+            taxYear?: number;
+        };
+        /** @description Existing frontend-engine amounts; no server-side PIT calculation. Bracket rate uses percent units (25 means 25%). */
+        ReportPrecomputedPIT: {
+            taxableIncome?: number;
+            totalTax?: number;
+            brackets?: {
+                label?: string;
+                rate?: number;
+                taxableIncome?: number;
+                taxAmount?: number;
+            }[];
+        };
+        /** @description Frontend-engine per-partner figures. Partner ids must be unique; duplicate ids are rejected with 400. */
+        ReportPrecomputedHousehold: {
+            /** @enum {string} */
+            assessmentMode: "single" | "separate" | "joint";
+            legalBasis?: string;
+            quotient?: {
+                applied: boolean;
+                transfer: number;
+                /** @enum {string} */
+                fromPartnerId?: "A" | "B";
+                /** @enum {string} */
+                toPartnerId?: "A" | "B";
+                benefit: number;
+            };
+            partners: {
+                /** @enum {string} */
+                partnerId: "A" | "B";
+                grossIncome: number;
+                taxableIncome: number;
+                totalPIT: number;
+            }[];
+        };
+        /** @description Shared validated request for all three existing report routes. An empty object is valid. Unknown fields are stripped, including the obsolete top-level start_date/end_date/year; select a window through period instead. Tax context fields are accepted by all routes but forwarded to rendering only for the tax report. Null is not an omitted field. */
+        ReportRequest: {
+            /** @default EUR */
+            currency: string;
+            period?: components["schemas"]["ReportPeriod"];
+            /**
+             * @description Section ids; omitted or empty selects the renderer defaults. The route does not enforce a section-id enum.
+             * @default []
+             */
+            sections: string[];
+            theme?: components["schemas"]["ReportTheme"];
+            excludedCategoryIds?: components["schemas"]["ReportExclusionIds"];
+            excludedRecipientIds?: components["schemas"]["ReportExclusionIds"];
+            taxProfile?: components["schemas"]["ReportTaxProfile"];
+            precomputedPIT?: components["schemas"]["ReportPrecomputedPIT"];
+            household?: components["schemas"]["BelgianTaxHouseholdInput"];
+            precomputedHousehold?: components["schemas"]["ReportPrecomputedHousehold"];
+        };
         /**
          * @description Generic custom numeric grammar, independent of the CSV delimiter. Auto rejects values with conflicting valid decimal/grouping interpretations. Choose decimal_dot or decimal_comma to disambiguate. Ambiguity rejects the complete import with a row/column diagnostic before staging.
          * @default auto
@@ -15857,26 +15973,45 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    /** Format: date */
-                    start_date?: string;
-                    /** Format: date */
-                    end_date?: string;
-                    currency?: string;
-                    excludedCategoryIds?: number[];
-                    excludedRecipientIds?: number[];
-                };
+                "application/json": components["schemas"]["ReportRequest"];
             };
         };
         responses: {
-            /** @description Report PDF or data */
+            /** @description Raw financial PDF bytes; no JSON envelope. */
             200: {
+                headers: {
+                    /** @description Attachment filename in the form vision-financial-YYYY-MM-DD.pdf. */
+                    "Content-Disposition"?: string;
+                    /** @description PDF byte count. */
+                    "Content-Length"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            /** @description Invalid JSON body or report field; report validation uses VALIDATION_ERROR. */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"];
                 };
+            };
+            /** @description Cross-site request rejected by the API CSRF guard. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Global API rate limit exceeded. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -15889,22 +16024,45 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    currency?: string;
-                    excludedCategoryIds?: number[];
-                    excludedRecipientIds?: number[];
-                };
+                "application/json": components["schemas"]["ReportRequest"];
             };
         };
         responses: {
-            /** @description Portfolio report */
+            /** @description Raw portfolio PDF bytes; no JSON envelope. */
             200: {
+                headers: {
+                    /** @description Attachment filename in the form vision-portfolio-YYYY-MM-DD.pdf. */
+                    "Content-Disposition"?: string;
+                    /** @description PDF byte count. */
+                    "Content-Length"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            /** @description Invalid JSON body or report field; report validation uses VALIDATION_ERROR. */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"];
                 };
+            };
+            /** @description Cross-site request rejected by the API CSRF guard. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Global API rate limit exceeded. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -15917,67 +16075,45 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    year?: number;
-                    currency?: string;
-                    /** @description Belgian filing context echoed into the Belgian rules section. */
-                    taxProfile?: {
-                        filingStatus?: string;
-                        region?: string;
-                        taxYear?: number;
-                    };
-                    /** @description PIT figures from the frontend engine; bracket `rate` is in percent units. */
-                    precomputedPIT?: {
-                        taxableIncome?: number;
-                        totalTax?: number;
-                        brackets?: {
-                            label?: string;
-                            rate?: number;
-                            taxableIncome?: number;
-                            taxAmount?: number;
-                        }[];
-                    };
-                    /** @description Additive (ADR-201). The year's Belgian tax household, validated like the `belgian_tax_household_v2` setting; only partner display names are rendered. */
-                    household?: {
-                        [key: string]: unknown;
-                    };
-                    /** @description Additive (ADR-201). Per-partner result from the frontend household engine. With two partners the Belgian rules section adds a row per partner, the household total, the assessment mode and the marital quotient. */
-                    precomputedHousehold?: {
-                        /** @enum {string} */
-                        assessmentMode: "single" | "separate" | "joint";
-                        legalBasis?: string;
-                        quotient?: {
-                            applied: boolean;
-                            transfer: number;
-                            /** @enum {string} */
-                            fromPartnerId?: "A" | "B";
-                            /** @enum {string} */
-                            toPartnerId?: "A" | "B";
-                            benefit: number;
-                        };
-                        /** @description One entry per partner; partner ids must be unique. */
-                        partners: {
-                            /** @enum {string} */
-                            partnerId: "A" | "B";
-                            grossIncome: number;
-                            taxableIncome: number;
-                            totalPIT: number;
-                        }[];
-                    };
-                    excludedCategoryIds?: number[];
-                    excludedRecipientIds?: number[];
-                };
+                "application/json": components["schemas"]["ReportRequest"];
             };
         };
         responses: {
-            /** @description Tax report */
+            /** @description Raw tax PDF bytes; no JSON envelope. */
             200: {
+                headers: {
+                    /** @description Attachment filename in the form vision-tax-YYYY-MM-DD.pdf. */
+                    "Content-Disposition"?: string;
+                    /** @description PDF byte count. */
+                    "Content-Length"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            /** @description Invalid JSON body or report field; report validation uses VALIDATION_ERROR. */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"];
                 };
+            };
+            /** @description Cross-site request rejected by the API CSRF guard. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Global API rate limit exceeded. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

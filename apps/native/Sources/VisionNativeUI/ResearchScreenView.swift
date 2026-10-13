@@ -47,7 +47,7 @@ struct ResearchScreenView: View {
         case .researchMarkets:
             ResearchMarketsView(model: screens.markets, shell: shell)
         case .researchMarketLookup:
-            ResearchMarketLookupView(model: screens.lookup, shell: shell)
+            ResearchMarketLookupView(model: screens.lookup, watchlistAdd: screens.watchlistAdd, shell: shell)
         case .researchWatchlist:
             ResearchWatchlistView(model: screens.watchlist, shell: shell)
         case .researchCompare:

@@ -8,7 +8,7 @@ public protocol ShellNotificationsService: Sendable {
 
 extension APIClient: ShellNotificationsService {
     public func notificationExchangeRates() async throws -> OpenAPI.ExchangeRates {
-        try await exchangeRates()
+        try await send(OpenAPIOperations.GetExchangeRates(dbOnly: true), retries: 0)
     }
     public func notificationRefreshExchangeRates() async throws {
         _ = try await refreshExchangeRates()

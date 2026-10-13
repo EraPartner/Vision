@@ -150,7 +150,7 @@ enum ResearchCompareStyle {
         let display = value * 100  // Presentation scaling only; the server supplies the fraction.
         let style = Decimal.FormatStyle(locale: settings.numberFormat.locale).precision(.fractionLength(2)).rounded(
             rule: .toNearestOrAwayFromZero)
-        return display.formatted(signed ? style.sign(strategy: .always(showZero: false)) : style) + "%"
+        return display.formatted(signed ? style.sign(strategy: .always(includingZero: false)) : style) + "%"
     }
     static func compact(_ value: Decimal?) -> String {
         guard let value, !value.isNaN else { return "—" }

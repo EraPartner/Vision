@@ -295,7 +295,9 @@ note right of NativeSettings
   No new backend endpoint or native financial engine.
   Main holds debounced drafts and drains accepted queues before restore.
   Failure resumes the same baselines; success retires old writers.
-  Common renderer-ready recovery and macOS verification remain pending.
+  UUID-owned restore serves Settings and retained onboarding.
+  Generation-checked reload creates a fresh graph once.
+  SDK/macOS verification remains pending.
   Automated branch macOS verification exists but is not yet green.
 end note
 

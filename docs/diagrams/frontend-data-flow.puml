@@ -173,6 +173,8 @@ note right of NativeDataSession
   Paused reads refuse admission; earlier read epochs stay invalid on failure.
   Failure resumes the same session; success retires old delivery.
   Main pending drafts/baselines have a separate lifecycle fence.
+  UUID-owned SDK restore serves Settings and retained onboarding.
+  Fresh graph rebuild is shared by native reload and renderer-ready.
   Portable transport cases pass; SDK/macOS verification remains pending.
 end note
 

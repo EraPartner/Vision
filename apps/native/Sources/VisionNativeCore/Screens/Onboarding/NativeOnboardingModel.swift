@@ -13,7 +13,7 @@ import Observation
     public private(set) var creatingCategories = false
     public private(set) var notice: ScreenNotice?
     public var isOnline = true
-    public var strings: any Localizing = CatalogStrings(language: .en)
+    public var strings: any Localizing = DictionaryStrings(language: .en, table: [:])
     public let restore: NativeSettingsBackupModel
     public var didComplete: (@MainActor () -> Void)?
     public var navigate: (@MainActor (String) -> Void)?
@@ -24,6 +24,7 @@ import Observation
     /// Explicit restore intent gets new restored-database authority, never the retired writer.
     public var completeAfterRestore: (@MainActor () async throws -> Void)?
     @ObservationIgnored private let service: any NativeOnboardingService
+    @ObservationIgnored private let desktop: any NativeSettingsDesktopService
     @ObservationIgnored private let persistence: NativeSettingsPersistence
     @ObservationIgnored private let store: any NativeOnboardingDraftStore
     @ObservationIgnored private var visit = UUID()
@@ -32,9 +33,14 @@ import Observation
     @ObservationIgnored private var storageFailureShown = false
     @ObservationIgnored private var notices = NoticeCounter()
 
-    public init(service: any NativeOnboardingService, persistence: NativeSettingsPersistence,
-                store: any NativeOnboardingDraftStore, desktop: any NativeSettingsDesktopService) {
-        self.service = service; self.persistence = persistence; self.store = store
+    public init(
+        service: any NativeOnboardingService, persistence: NativeSettingsPersistence,
+        store: any NativeOnboardingDraftStore, desktop: any NativeSettingsDesktopService
+    ) {
+        self.service = service
+        self.desktop = desktop
+        self.persistence = persistence
+        self.store = store
         restore = NativeSettingsBackupModel(service: desktop)
         restore.didRestore = { [weak self] in await self?.completedRestore() }
     }
@@ -46,24 +52,49 @@ import Observation
         guard !isLoading, force || !hasLoaded else { return }
         isLoading = true
         let scope = visit
-        let completed = (try? await persistence.read("onboarding_complete"))?.value == .bool(true)
-        guard scope == visit else { return }
-        isLoading = false; hasLoaded = true
+        let completed: Bool
+        do {
+            completed = try await persistence.read("onboarding_complete").value == .bool(true)
+        } catch is CancellationError {
+            if scope == visit { isLoading = false }
+            return
+        } catch { completed = false }
+        guard scope == visit, !Task.isCancelled else { return }
+        isLoading = false
+        hasLoaded = true
         if !completed { await begin() }
     }
     /// Called on every closed-to-open transition, including Settings restart.
     public func begin() async {
+        guard !Task.isCancelled else { return }
         visit = UUID()
         let scope = visit
         isLoading = true
+        await draftWrite?.value
+        guard scope == visit else { return }
         let data = try? await store.read()
         guard scope == visit else { return }
         draft = NativeOnboardingDraft.read(data)
         file = nil
-        isLoading = false; isPresented = true
+        importing = false
+        creatingCategories = false
+        isCompleting = false
+        isLoading = false
+        isPresented = true
         restore.activateRestoreOnly()
         persistDraft()
         await loadAdapters()
+    }
+    public func selectRestoreFile() async -> String? {
+        let scope = visit
+        do {
+            let file = try await desktop.selectBackupFile()
+            guard scope == visit, isPresented, let file, !file.isEmpty else { return nil }
+            return file
+        } catch {
+            if scope == visit { show(.error, "settings.restore.failed", ["msg": error.localizedDescription]) }
+            return nil
+        }
     }
     public func loadAdapters() async {
         guard isPresented, isOnline, !adaptersLoading else { return }
@@ -79,7 +110,9 @@ import Observation
                 if draft.step == .importData, draft.importResult == nil, draft.reviewBatch == nil { draft.step = .bank }
                 persistDraft()
             }
-        } catch { /* Source useAdapters shows its empty catalog on a failed read. */ }
+        } catch {
+            // Source useAdapters shows its empty catalog on a failed read.
+        }
     }
     public var stepIndex: Int { NativeOnboardingStep.allCases.firstIndex(of: draft.step) ?? 0 }
     public var canImport: Bool { file != nil && !draft.selectedBank.isEmpty && !importing && !isCompleting }
@@ -87,27 +120,35 @@ import Observation
     public func back() { setStep(stepIndex - 1) }
     private func setStep(_ index: Int) {
         guard isPresented, !isCompleting, NativeOnboardingStep.allCases.indices.contains(index) else { return }
-        draft.step = NativeOnboardingStep.allCases[index]; persistDraft()
+        draft.step = NativeOnboardingStep.allCases[index]
+        persistDraft()
     }
     public func selectBank(_ key: String) {
         guard isPresented, !isCompleting else { return }
-        draft.selectedBank = key; persistDraft()
+        draft.selectedBank = key
+        persistDraft()
     }
     public func setFile(_ value: ImportFile?) {
         guard isPresented, !isCompleting else { return }
         if let value, !value.isCSV { return }
         file = value
     }
-    public func unreadableFile() { show(.error, "onboarding.toast.importFailed", ["msg": strings.t("apiError.unknown")]) }
+    public func unreadableFile() {
+        show(.error, "onboarding.toast.importFailed", ["msg": strings.t("apiError.unknown")])
+    }
     public func toggleCategory(_ index: Int) {
         guard isPresented, !isCompleting, NativeOnboardingPreset.categories.indices.contains(index) else { return }
-        if let existing = draft.selectedCategoryIndexes.firstIndex(of: index) { draft.selectedCategoryIndexes.remove(at: existing) }
-        else { draft.selectedCategoryIndexes.append(index) }
+        if let existing = draft.selectedCategoryIndexes.firstIndex(of: index) {
+            draft.selectedCategoryIndexes.remove(at: existing)
+        } else {
+            draft.selectedCategoryIndexes.append(index)
+        }
         persistDraft()
     }
     public func toggleAllCategories() {
         guard isPresented, !isCompleting else { return }
-        draft.selectedCategoryIndexes = draft.selectedCategoryIndexes.count == NativeOnboardingPreset.categories.count
+        draft.selectedCategoryIndexes =
+            draft.selectedCategoryIndexes.count == NativeOnboardingPreset.categories.count
             ? [] : Array(NativeOnboardingPreset.categories.indices)
         persistDraft()
     }
@@ -122,44 +163,49 @@ import Observation
             for (ordinal, index) in selected.enumerated() {
                 let category = NativeOnboardingPreset.categories[index]
                 group.addTask {
-                    do { try await service.onboardingCreateCategory(category); return (ordinal, nil) }
-                    catch { return (ordinal, APIError.wrapping(error)) }
+                    do {
+                        try await service.onboardingCreateCategory(category)
+                        return (ordinal, nil)
+                    } catch { return (ordinal, APIError.wrapping(error)) }
                 }
             }
             var results: [(Int, APIError?)] = []
             for await result in group { results.append(result) }
             return results.sorted { $0.0 < $1.0 }
         }
-        creatingCategories = false
+        if scope == visit { creatingCategories = false }
         if results.contains(where: { $0.1 == nil }) { await didMutateCategories?() }
-        guard scope == visit, isPresented, !isCompleting else { return }
         if let failure = results.compactMap(\.1).first {
             show(.error, "onboarding.toast.categoriesFailed", ["msg": APIErrorMessage.text(failure, strings: strings)])
         } else {
-            draft.categoriesCreated = true; persistDraft()
             show(.success, "onboarding.toast.categoriesCreated", ["n": String(results.count)])
+            guard scope == visit, isPresented, !isCompleting else { return }
+            draft.categoriesCreated = true
+            persistDraft()
         }
     }
     public func importFile() async {
         guard isPresented, canImport, let file else { return }
         importing = true
-        let scope = visit; let bank = draft.selectedBank
-        defer { importing = false }
+        let scope = visit
+        let bank = draft.selectedBank
+        defer { if scope == visit { importing = false } }
         do {
             let receipt = try await service.onboardingImport(file: file, bank: bank)
             await didMutateImports?()
-            guard scope == visit, isPresented, !isCompleting else { return }
             switch receipt.outcome {
             case .completed(let counts):
-                draft.importResult = .init(imported: counts.imported, duplicates: counts.duplicates)
                 show(.success, "onboarding.toast.imported", ["n": String(counts.imported)])
+                guard scope == visit, isPresented, !isCompleting else { return }
+                draft.importResult = .init(imported: counts.imported, duplicates: counts.duplicates)
             case .reviewRequired(let id):
-                draft.reviewBatch = .init(batchId: id, rows: receipt.reviewRows)
                 show(.info, "onboarding.toast.reviewRequired", ["n": String(receipt.reviewRows)])
+                guard scope == visit, isPresented, !isCompleting else { return }
+                draft.reviewBatch = .init(batchId: id, rows: receipt.reviewRows)
             }
             persistDraft()
         } catch {
-            if scope == visit, isPresented, !isCompleting {
+            if !(error is CancellationError) {
                 show(.error, "onboarding.toast.importFailed", ["msg": ImportErrorText.text(error, strings: strings)])
             }
         }
@@ -171,11 +217,16 @@ import Observation
         defer { if scope == visit { isCompleting = false } }
         await draftWrite?.value
         do {
+            if await persistence.baseline("onboarding_complete") == nil {
+                _ = try await persistence.read("onboarding_complete")
+            }
             _ = try await persistence.save("onboarding_complete", value: .bool(true))
             guard scope == visit, isPresented else { return }
             try? await store.remove()
             guard scope == visit else { return }
-            isPresented = false; visit = UUID(); isCompleting = false
+            isPresented = false
+            visit = UUID()
+            isCompleting = false
             restore.didDisappear()
             didComplete?()
             if dashboardArrival { requestDashboardArrival?() }
@@ -184,8 +235,11 @@ import Observation
         } catch { if scope == visit { show(.error, "onboarding.persist.failed") } }
     }
     public func finishFinalStep() async {
-        if let review = draft.reviewBatch { await finish(path: ImportRoutes.reviewPath(review.batchId)) }
-        else { await finish(path: "/", dashboardArrival: true) }
+        if let review = draft.reviewBatch {
+            await finish(path: ImportRoutes.reviewPath(review.batchId))
+        } else {
+            await finish(path: "/", dashboardArrival: true)
+        }
     }
     private func completedRestore() async {
         let scope = visit
@@ -197,18 +251,25 @@ import Observation
             await draftWrite?.value
             try? await store.remove()
             guard scope == visit else { return }
-            isPresented = false; visit = UUID()
+            isPresented = false
+            visit = UUID()
             didComplete?()
         } catch { if scope == visit { show(.error, "onboarding.persist.failed") } }
     }
     public func flushDraft() async { await draftWrite?.value }
     public func didDisappear() {
-        visit = UUID(); isPresented = false; isLoading = false; adaptersLoading = false
-        file = nil; restore.didDisappear()
+        visit = UUID()
+        isPresented = false
+        isLoading = false
+        adaptersLoading = false
+        file = nil
+        restore.didDisappear()
     }
     private func persistDraft() {
         guard isPresented, !isCompleting else { return }
-        let previous = draftWrite; let scope = visit; let value = draft
+        let previous = draftWrite
+        let scope = visit
+        let value = draft
         draftWrite = Task { [weak self, store] in
             await previous?.value
             do {

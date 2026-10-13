@@ -49,6 +49,134 @@ components:
       description: Rows to skip. Omit (together with limit) to receive the whole collection.
 
   schemas:
+    ReportPeriod:
+      description: Report window. Custom dates validate their YYYY-MM-DD shape; the route does not check calendar validity or from/to ordering.
+      default: { kind: rolling, months: 12 }
+      oneOf:
+        - type: object
+          required: [kind]
+          properties:
+            kind: { type: string, enum: [ytd] }
+        - type: object
+          required: [kind, months]
+          properties:
+            kind: { type: string, enum: [rolling] }
+            months: { type: integer, minimum: 1, maximum: 60 }
+        - type: object
+          required: [kind, from, to]
+          properties:
+            kind: { type: string, enum: [custom] }
+            from: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+            to: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+        - type: object
+          required: [kind, year]
+          properties:
+            kind: { type: string, enum: [year] }
+            year: { type: integer, minimum: 2000, maximum: 2100 }
+      discriminator:
+        propertyName: kind
+    ReportThemeToken:
+      type: string
+      pattern: '^\d{1,3}(?:\.\d+)?\s+\d{1,3}(?:\.\d+)?%\s+\d{1,3}(?:\.\d+)?%$'
+      description: HSL component triple only, without hsl() or CSS declarations. The shape guard does not impose numeric hue/saturation/lightness bounds.
+      example: '158 62% 32%'
+    ReportTheme:
+      type: object
+      default: { mode: light }
+      description: Known optional HSL tokens. Unknown properties are stripped by the route; omitted mode defaults to light.
+      properties:
+        primary: { $ref: "#/components/schemas/ReportThemeToken" }
+        accent: { $ref: "#/components/schemas/ReportThemeToken" }
+        success: { $ref: "#/components/schemas/ReportThemeToken" }
+        expense: { $ref: "#/components/schemas/ReportThemeToken" }
+        surface: { $ref: "#/components/schemas/ReportThemeToken" }
+        text: { $ref: "#/components/schemas/ReportThemeToken" }
+        muted: { $ref: "#/components/schemas/ReportThemeToken" }
+        border: { $ref: "#/components/schemas/ReportThemeToken" }
+        chart1: { $ref: "#/components/schemas/ReportThemeToken" }
+        chart2: { $ref: "#/components/schemas/ReportThemeToken" }
+        chart3: { $ref: "#/components/schemas/ReportThemeToken" }
+        chart4: { $ref: "#/components/schemas/ReportThemeToken" }
+        chart5: { $ref: "#/components/schemas/ReportThemeToken" }
+        chart6: { $ref: "#/components/schemas/ReportThemeToken" }
+        chart7: { $ref: "#/components/schemas/ReportThemeToken" }
+        chart8: { $ref: "#/components/schemas/ReportThemeToken" }
+        mode: { type: string, enum: [light, dark], default: light }
+    ReportExclusionIds:
+      type: array
+      default: []
+      items: { type: integer, format: int32, minimum: 1, maximum: 2147483647 }
+    ReportTaxProfile:
+      type: object
+      properties:
+        filingStatus: { type: string }
+        region: { type: string }
+        taxYear: { type: integer }
+    ReportPrecomputedPIT:
+      type: object
+      description: Existing frontend-engine amounts; no server-side PIT calculation. Bracket rate uses percent units (25 means 25%).
+      properties:
+        taxableIncome: { type: number }
+        totalTax: { type: number }
+        brackets:
+          type: array
+          items:
+            type: object
+            properties:
+              label: { type: string }
+              rate: { type: number }
+              taxableIncome: { type: number }
+              taxAmount: { type: number }
+    ReportPrecomputedHousehold:
+      type: object
+      description: Frontend-engine per-partner figures. Partner ids must be unique; duplicate ids are rejected with 400.
+      required: [assessmentMode, partners]
+      properties:
+        assessmentMode: { type: string, enum: [single, separate, joint] }
+        legalBasis: { type: string, maxLength: 200 }
+        quotient:
+          type: object
+          required: [applied, transfer, benefit]
+          properties:
+            applied: { type: boolean }
+            transfer: { type: number }
+            fromPartnerId: { type: string, enum: [A, B] }
+            toPartnerId: { type: string, enum: [A, B] }
+            benefit: { type: number }
+        partners:
+          type: array
+          minItems: 1
+          maxItems: 2
+          items:
+            type: object
+            required: [partnerId, grossIncome, taxableIncome, totalPIT]
+            properties:
+              partnerId: { type: string, enum: [A, B] }
+              grossIncome: { type: number }
+              taxableIncome: { type: number }
+              totalPIT: { type: number }
+    ReportRequest:
+      type: object
+      description: >-
+        Shared validated request for all three existing report routes. An empty object is valid.
+        Unknown fields are stripped, including the obsolete top-level start_date/end_date/year;
+        select a window through period instead. Tax context fields are accepted by all routes
+        but forwarded to rendering only for the tax report. Null is not an omitted field.
+      properties:
+        currency: { type: string, pattern: '^[A-Z]{3}$', default: EUR }
+        period: { $ref: "#/components/schemas/ReportPeriod" }
+        sections:
+          type: array
+          default: []
+          items: { type: string }
+          description: Section ids; omitted or empty selects the renderer defaults. The route does not enforce a section-id enum.
+        theme: { $ref: "#/components/schemas/ReportTheme" }
+        excludedCategoryIds: { $ref: "#/components/schemas/ReportExclusionIds" }
+        excludedRecipientIds: { $ref: "#/components/schemas/ReportExclusionIds" }
+        taxProfile: { $ref: "#/components/schemas/ReportTaxProfile" }
+        precomputedPIT: { $ref: "#/components/schemas/ReportPrecomputedPIT" }
+        household: { $ref: "#/components/schemas/BelgianTaxHouseholdInput" }
+        precomputedHousehold: { $ref: "#/components/schemas/ReportPrecomputedHousehold" }
     CsvNumberFormat:
       type: string
       enum: [auto, decimal_dot, decimal_comma]
@@ -14729,41 +14857,34 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                start_date:
-                  type: string
-                  format: date
-                end_date:
-                  type: string
-                  format: date
-                currency:
-                  type: string
-                excludedCategoryIds:
-                  type: array
-                  items:
-                    type: integer
-                    format: int32
-                    minimum: 1
-                    maximum: 2147483647
-                excludedRecipientIds:
-                  type: array
-                  items:
-                    type: integer
-                    format: int32
-                    minimum: 1
-                    maximum: 2147483647
+              $ref: "#/components/schemas/ReportRequest"
       responses:
         "200":
-          description: Report PDF or data
+          description: Raw financial PDF bytes; no JSON envelope.
+          headers:
+            Content-Disposition:
+              description: Attachment filename in the form vision-financial-YYYY-MM-DD.pdf.
+              schema: { type: string }
+            Content-Length:
+              description: PDF byte count.
+              schema: { type: integer, minimum: 0 }
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        "400":
+          description: Invalid JSON body or report field; report validation uses VALIDATION_ERROR.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Envelope"
+        "403":
+          description: Cross-site request rejected by the API CSRF guard.
+        "429":
+          description: Global API rate limit exceeded.
 
   /api/reports/portfolio:
     post:
-      summary: Generate portfolio report
+      summary: Generate portfolio report PDF
       operationId: generatePortfolioReport
       tags: [Reports]
       requestBody:
@@ -14771,35 +14892,34 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                currency:
-                  type: string
-                excludedCategoryIds:
-                  type: array
-                  items:
-                    type: integer
-                    format: int32
-                    minimum: 1
-                    maximum: 2147483647
-                excludedRecipientIds:
-                  type: array
-                  items:
-                    type: integer
-                    format: int32
-                    minimum: 1
-                    maximum: 2147483647
+              $ref: "#/components/schemas/ReportRequest"
       responses:
         "200":
-          description: Portfolio report
+          description: Raw portfolio PDF bytes; no JSON envelope.
+          headers:
+            Content-Disposition:
+              description: Attachment filename in the form vision-portfolio-YYYY-MM-DD.pdf.
+              schema: { type: string }
+            Content-Length:
+              description: PDF byte count.
+              schema: { type: integer, minimum: 0 }
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        "400":
+          description: Invalid JSON body or report field; report validation uses VALIDATION_ERROR.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Envelope"
+        "403":
+          description: Cross-site request rejected by the API CSRF guard.
+        "429":
+          description: Global API rate limit exceeded.
 
   /api/reports/tax:
     post:
-      summary: Generate Belgian tax report
+      summary: Generate tax report PDF
       operationId: generateTaxReport
       tags: [Reports]
       requestBody:
@@ -14807,95 +14927,30 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                year:
-                  type: integer
-                currency:
-                  type: string
-                taxProfile:
-                  type: object
-                  description: Belgian filing context echoed into the Belgian rules section.
-                  properties:
-                    filingStatus: { type: string }
-                    region: { type: string }
-                    taxYear: { type: integer }
-                precomputedPIT:
-                  type: object
-                  description: PIT figures from the frontend engine; bracket `rate` is in percent units.
-                  properties:
-                    taxableIncome: { type: number }
-                    totalTax: { type: number }
-                    brackets:
-                      type: array
-                      items:
-                        type: object
-                        properties:
-                          label: { type: string }
-                          rate: { type: number }
-                          taxableIncome: { type: number }
-                          taxAmount: { type: number }
-                household:
-                  type: object
-                  additionalProperties: true
-                  description: >-
-                    Additive (ADR-201). The year's Belgian tax household, validated like the
-                    `belgian_tax_household_v2` setting; only partner display names are rendered.
-                precomputedHousehold:
-                  type: object
-                  description: >-
-                    Additive (ADR-201). Per-partner result from the frontend household engine.
-                    With two partners the Belgian rules section adds a row per partner, the
-                    household total, the assessment mode and the marital quotient.
-                  required: [assessmentMode, partners]
-                  properties:
-                    assessmentMode:
-                      { type: string, enum: [single, separate, joint] }
-                    legalBasis: { type: string, maxLength: 200 }
-                    quotient:
-                      type: object
-                      required: [applied, transfer, benefit]
-                      properties:
-                        applied: { type: boolean }
-                        transfer: { type: number }
-                        fromPartnerId: { type: string, enum: [A, B] }
-                        toPartnerId: { type: string, enum: [A, B] }
-                        benefit: { type: number }
-                    partners:
-                      type: array
-                      description: One entry per partner; partner ids must be unique.
-                      minItems: 1
-                      maxItems: 2
-                      items:
-                        type: object
-                        required:
-                          [partnerId, grossIncome, taxableIncome, totalPIT]
-                        properties:
-                          partnerId: { type: string, enum: [A, B] }
-                          grossIncome: { type: number }
-                          taxableIncome: { type: number }
-                          totalPIT: { type: number }
-                excludedCategoryIds:
-                  type: array
-                  items:
-                    type: integer
-                    format: int32
-                    minimum: 1
-                    maximum: 2147483647
-                excludedRecipientIds:
-                  type: array
-                  items:
-                    type: integer
-                    format: int32
-                    minimum: 1
-                    maximum: 2147483647
+              $ref: "#/components/schemas/ReportRequest"
       responses:
         "200":
-          description: Tax report
+          description: Raw tax PDF bytes; no JSON envelope.
+          headers:
+            Content-Disposition:
+              description: Attachment filename in the form vision-tax-YYYY-MM-DD.pdf.
+              schema: { type: string }
+            Content-Length:
+              description: PDF byte count.
+              schema: { type: integer, minimum: 0 }
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        "400":
+          description: Invalid JSON body or report field; report validation uses VALIDATION_ERROR.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Envelope"
+        "403":
+          description: Cross-site request rejected by the API CSRF guard.
+        "429":
+          description: Global API rate limit exceeded.
 
   # ─── AI ──────────────────────────────────────────────────────────────────────
   /api/ai/status:

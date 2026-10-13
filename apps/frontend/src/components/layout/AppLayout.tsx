@@ -16,6 +16,7 @@ import { OnboardingWizard } from "@/features/onboarding/OnboardingWizard";
 import { useOnboarding } from "@/features/onboarding/useOnboarding";
 import { PageTransition } from "@/components/layout/PageTransition";
 import { CommandPalette } from "@/components/shared/CommandPalette";
+import { NativePaletteAnswerBridge } from "@/components/shared/NativePaletteAnswerBridge";
 import { PageTitleProvider, usePageTitle } from "@/contexts/PageTitleContext";
 import { ShortcutsOverlay } from "@/components/shared/ShortcutsOverlay";
 import { ShaderAurora } from "@/components/layout/ShaderAurora";
@@ -256,6 +257,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                     onOpenPalette={openPalette}
                 />
                 <VisualEffectsController />
+                <NativePaletteAnswerBridge />
                 <div
                     className="relative min-h-screen flex w-full overflow-x-clip"
                     data-print-report={isPrintReport || undefined}

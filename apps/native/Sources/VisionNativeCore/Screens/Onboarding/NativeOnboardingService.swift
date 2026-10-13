@@ -9,7 +9,10 @@ public protocol NativeOnboardingService: Sendable {
 public struct NativeOnboardingImportReceipt: Decodable, Sendable, Equatable {
     public let outcome: ImportOutcome
     public let reviewRows: Int
-    public init(outcome: ImportOutcome, reviewRows: Int = 0) { self.outcome = outcome; self.reviewRows = reviewRows }
+    public init(outcome: ImportOutcome, reviewRows: Int = 0) {
+        self.outcome = outcome
+        self.reviewRows = reviewRows
+    }
     public init(from decoder: any Decoder) throws {
         outcome = try ImportCsvResponse(from: decoder).outcome
         let raw = try TaxValue(from: decoder)
@@ -43,7 +46,8 @@ public struct NativeOnboardingCategoryRequest: APIOperation {
     public let category: NativeOnboardingCategory
     public init(category: NativeOnboardingCategory) { self.category = category }
     public func encodedBody() throws -> Data? {
-        try JSONEncoder().encode(TaxValue.object(["general": .string(category.general), "detail": .string(category.detail)]))
+        try JSONEncoder().encode(
+            TaxValue.object(["general": .string(category.general), "detail": .string(category.detail)]))
     }
 }
 public struct NativeOnboardingImportRequest: APIOperation {
@@ -56,7 +60,9 @@ public struct NativeOnboardingImportRequest: APIOperation {
     public var contentType: String { form.contentType }
     public init(file: ImportFile, bank: String, boundary: String? = nil) {
         var form = boundary.map { MultipartFormData(boundary: $0) } ?? MultipartFormData()
-        form.append(file: "file", filename: file.name, contentType: file.mimeType ?? "application/octet-stream", data: file.data)
+        form.append(
+            file: "file", filename: file.name, contentType: file.mimeType ?? "application/octet-stream", data: file.data
+        )
         form.append(name: "bank_name", value: bank)
         self.form = form
     }

@@ -303,7 +303,7 @@ package "Retained Zustand settings" {
 }
 package "Native Settings and retained WK state (phase 3o)" {
   class "ShellController" as NativeSettingsHost {
-    +ShellController confirmed restore / reload
+    +ShellController UUID-owned restore / generation reload
   }
   class NativeDataSession <<actor>> {
     +suspendAndDrain(): async

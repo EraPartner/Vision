@@ -26,8 +26,25 @@ public struct NativeCommandPaletteView: View {
                     text: Binding(get: { model.query }, set: { model.query = $0 })
                 ).textFieldStyle(.plain).font(.body).focused($searchFocused)
                     .accessibilityLabel(shell.strings.t("commandPalette.placeholder"))
-                    .onKeyPress(.downArrow) { move(1) }
-                    .onKeyPress(.upArrow) { move(-1) }
+                    .onKeyPress { press in
+                        switch press.key {
+                        case .downArrow: return move(1, modifiers: press.modifiers)
+                        case .upArrow: return move(-1, modifiers: press.modifiers)
+                        case .home:
+                            selectedID = entries.first?.id
+                            return .handled
+                        case .end:
+                            selectedID = entries.last?.id
+                            return .handled
+                        default:
+                            guard press.modifiers.contains(.control) else { return .ignored }
+                            switch press.characters.lowercased() {
+                            case "n", "j": return move(1, modifiers: press.modifiers)
+                            case "p", "k": return move(-1, modifiers: press.modifiers)
+                            default: return .ignored
+                            }
+                        }
+                    }
                     .onKeyPress(.return) {
                         guard let entry = entries.first(where: { $0.id == selectedID }) else { return .ignored }
                         model.activate(entry)
@@ -109,9 +126,7 @@ public struct NativeCommandPaletteView: View {
     private func quoteReadout(_ quote: ResearchQuote) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             if let price = quote.price {
-                Text(
-                    VisionFormat.currency(
-                        price, code: quote.currency, locale: shell.settings.numberFormat.locale, fractionDigits: 2))
+                Text(quotePrice(price, currency: quote.currency))
             }
             if let change = quote.changePercent {
                 Text(
@@ -121,9 +136,32 @@ public struct NativeCommandPaletteView: View {
             }
         }.monospacedDigit()
     }
-    private func move(_ delta: Int) -> KeyPress.Result {
+    private func quotePrice(_ price: Decimal, currency: String) -> String {
+        guard currency.range(of: "^[A-Za-z]{3}$", options: .regularExpression) != nil else {
+            // CommandPalette's fmtSafeCurrency keeps a code-bearing, ungrouped
+            // toFixed(2) fallback when the shared Intl currency guard rejects it.
+            let fixed = price.formatted(
+                Decimal.FormatStyle(locale: Locale(identifier: "en_US"))
+                    .grouping(.never).precision(.fractionLength(2)).rounded(rule: .toNearestOrAwayFromZero))
+            return "\(fixed) \(currency)"
+        }
+        return VisionFormat.currency(
+            price, code: currency, locale: shell.settings.numberFormat.locale, fractionDigits: 2)
+    }
+    private func move(_ delta: Int, modifiers: EventModifiers = []) -> KeyPress.Result {
         let ids = entries.map(\.id)
         guard !ids.isEmpty else { return .ignored }
+        if modifiers.contains(.command) {
+            selectedID = delta > 0 ? ids.last : ids.first
+            return .handled
+        }
+        if modifiers.contains(.option),
+            let currentGroup = groups.firstIndex(where: { $0.entries.contains { $0.id == selectedID } }),
+            groups.indices.contains(currentGroup + delta)
+        {
+            selectedID = groups[currentGroup + delta].entries.first?.id
+            return .handled
+        }
         let current = selectedID.flatMap { ids.firstIndex(of: $0) } ?? (delta > 0 ? -1 : ids.count)
         selectedID = ids[min(max(current + delta, 0), ids.count - 1)]
         return .handled

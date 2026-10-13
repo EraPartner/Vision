@@ -608,6 +608,15 @@ The three generic `/api/admin/database/tables/:table/{schema,rows,mutate}` edito
 
 Server-side PDF generation via Puppeteer headless Chrome (Phase 3). Modular section architecture with theme-aware styling and period filtering. Theme tokens (HSL) and section selections passed in POST body. Phase 5 adds paginated footers. Phase 7 adds filter exclusions with impact comparison. Returns binary stream (`application/pdf`).
 
+The 2026-10-13 OpenAPI correction declares the existing binary PDF response and shared request
+`currency`, `period`, `sections`, `theme`, exclusion IDs and optional tax context. It removes stale
+top-level `start_date`/`end_date`/`year` declarations; the route ignored those fields. No backend
+behavior or endpoint count changes (309 HTTP operations, 336 combined). Successful responses have
+attachment/length headers; invalid fields produce a 400 `VALIDATION_ERROR` JSON envelope. See
+[[docs/api/reports|Reports API]] for exact defaults and validation.
+Generated consumers of the stale response/date declarations need regeneration; this specification
+correction is breaking for them, while runtime-compatible callers retain existing behavior.
+
 | Method | Path                     | Description                                                                                                                                                                                                                                    | Rate Limit | Doc                                                    |
 | ------ | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------ |
 | POST   | `/api/reports/financial` | Generate financial PDF (7 sections: executive summary, cashflow, categories, recipients, bank balances, rolling averages, planned outlook); supports `excludedCategoryIds` and `excludedRecipientIds` for filter impact comparison             | —          | [[docs/features/pdf-report-export\|PDF Report Export]] |

@@ -83,16 +83,21 @@ import Observation
     }
 
     private static func dismissalMilliseconds(_ raw: String) -> Double? {
-        let whitespace = CharacterSet(charactersIn:
-            "\u{0009}\u{000A}\u{000B}\u{000C}\u{000D} \u{00A0}\u{1680}\u{2000}\u{2001}\u{2002}\u{2003}\u{2004}\u{2005}\u{2006}\u{2007}\u{2008}\u{2009}\u{200A}\u{2028}\u{2029}\u{202F}\u{205F}\u{3000}\u{FEFF}")
+        let whitespace = CharacterSet(
+            charactersIn:
+                "\u{0009}\u{000A}\u{000B}\u{000C}\u{000D} \u{00A0}\u{1680}\u{2000}\u{2001}\u{2002}\u{2003}\u{2004}\u{2005}\u{2006}\u{2007}\u{2008}\u{2009}\u{200A}\u{2028}\u{2029}\u{202F}\u{205F}\u{3000}\u{FEFF}"
+        )
         let text = raw.trimmingCharacters(in: whitespace)
         if text.isEmpty { return 0 }
         for (prefix, radix) in [("0x", 16), ("0o", 8), ("0b", 2)] where text.lowercased().hasPrefix(prefix) {
             guard let number = UInt64(text.dropFirst(2), radix: radix) else { return nil }
             return Double(number)
         }
-        guard text.range(of: #"^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$"#,
-            options: .regularExpression) != nil else { return nil }
+        guard
+            text.range(
+                of: #"^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$"#,
+                options: .regularExpression) != nil
+        else { return nil }
         return Double(text)
     }
 
@@ -127,6 +132,7 @@ import Observation
     }
 
     public func dismiss() {
+        guard active else { return }
         dismissed = true
         storageRevision += 1
         let timestamp = String(Int64((now().timeIntervalSince1970 * 1000).rounded(.down)))

@@ -1486,14 +1486,19 @@ writers and constructs fresh models/baselines.
 
 `API/NativeDataSession.swift` supplies `NativeSessionAPITransport` to the shared APIClient's HTTP
 and SSE paths. Confirmed restore pauses new mutation admission, waits for accepted transport writes,
-and stops current chat streams through the SDK. New reads are refused while paused, and a read
+and stops current chat and import streams through the SDK. New reads are refused while paused, and a read
 admission epoch rejects pre-attempt results/read-stream chunks even if the restore fails and resumes
 the original database. A failed restore resumes the same session. Success retires it, rejecting old
 admissions and late HTTP/SSE delivery; a new client uses a fresh session.
 Transport cancellation does not assert that a server write rolled back. The Main fence has focused
 portable gated tests, and the shared transport has 13 focused cases; SDK/macOS verification
-remains unverified at this checkpoint. The common renderer-ready recovery path for other restore entry points is still being
-integrated and is not claimed complete here.
+remains unverified at this checkpoint. The common SDK restore path serves native Settings and retained
+web onboarding. A UUID owns each entered fence, so an overlapping operation cannot resume or retire
+another operation’s session. Main and legacy preference writers drain first, chat/import streams stop,
+and the shared transport drains before the existing Backup service switches the database through its
+unfenced transport. A successful restore marks the old graph for retirement; native reload and the
+renderer-ready path share one generation-checked rebuild task. Fresh models, the API session and
+preference writers replace the old graph once, including when the retained onboarding page reloads.
 
 `Shell/NativeNoticeCenter.swift`, `Components/NativeNoticeHost.swift`, and `ActionToast.swift`
 provide app-lifetime notices and consume captured actions before awaiting them. Transactions,
@@ -1504,8 +1509,8 @@ with their source callbacks/routes. No new retry or confirmation workflow is add
 
 `.github/workflows/native-branch.yml` now verifies `codex/native-phase-*` branch pushes with an
 unsigned Debug macOS app build and Swift package tests. The automated build is not yet green:
-the Home compilation correction passed; the Tax callback and account-picker row-identification
-corrections are checked in for continued automated verification.
+successive builds have exposed SDK compiler issues, and corrections continue through the
+automatic branch workflow. Full app compilation and the following package-test step remain pending.
 Portable source/transport tests and UI syntax checks do not replace macOS SDK or rendered
 VoiceOver/Demo verification. Those checks remain recorded gaps; the user's authorization continues
 later phases without a manual Demo-review intermission. See [[docs/features/settings|Settings]],

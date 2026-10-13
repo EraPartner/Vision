@@ -19,12 +19,18 @@ public struct NativeOnboardingDraft: Equatable, Sendable, Codable {
     public struct Counts: Codable, Equatable, Sendable {
         public var imported: Int
         public var duplicates: Int
-        public init(imported: Int, duplicates: Int) { self.imported = imported; self.duplicates = duplicates }
+        public init(imported: Int, duplicates: Int) {
+            self.imported = imported
+            self.duplicates = duplicates
+        }
     }
     public struct Review: Codable, Equatable, Sendable {
         public var batchId: Int
         public var rows: Int
-        public init(batchId: Int, rows: Int) { self.batchId = batchId; self.rows = rows }
+        public init(batchId: Int, rows: Int) {
+            self.batchId = batchId
+            self.rows = rows
+        }
     }
     public init(categoryCount: Int = NativeOnboardingPreset.categories.count) {
         selectedCategoryIndexes = Array(0..<max(0, categoryCount))
@@ -37,7 +43,9 @@ public struct NativeOnboardingDraft: Equatable, Sendable, Codable {
         else { return fallback }
         draft.selectedBank = draft.selectedBank.trimmingCharacters(in: .whitespacesAndNewlines)
         var seen: Set<Int> = []
-        draft.selectedCategoryIndexes = draft.selectedCategoryIndexes.filter { $0 < categoryCount && seen.insert($0).inserted }
+        draft.selectedCategoryIndexes = draft.selectedCategoryIndexes.filter {
+            $0 < categoryCount && seen.insert($0).inserted
+        }
         return draft
     }
     public func encoded() throws -> Data {
@@ -54,9 +62,14 @@ public struct NativeOnboardingDraft: Equatable, Sendable, Codable {
     }
     private static func valid(_ value: TaxValue) -> Bool {
         guard let object = value.objectValue,
-            Set(object.keys) == ["version", "step", "selectedBank", "selectedCategoryIndexes", "categoriesCreated", "importResult", "reviewBatch"],
-            value["version"] == .number(1), let step = value["step"]?.stringValue, NativeOnboardingStep(rawValue: step) != nil,
-            let bank = value["selectedBank"]?.stringValue, bank.trimmingCharacters(in: .whitespacesAndNewlines).utf16.count <= 128,
+            Set(object.keys) == [
+                "version", "step", "selectedBank", "selectedCategoryIndexes", "categoriesCreated", "importResult",
+                "reviewBatch",
+            ],
+            value["version"] == .number(1), let step = value["step"]?.stringValue,
+            NativeOnboardingStep(rawValue: step) != nil,
+            let bank = value["selectedBank"]?.stringValue,
+            bank.trimmingCharacters(in: .whitespacesAndNewlines).utf16.count <= 128,
             let indexes = value["selectedCategoryIndexes"]?.arrayValue, indexes.count <= 100,
             indexes.allSatisfy({ safeCount($0) != nil }), value["categoriesCreated"]?.boolValue != nil
         else { return false }
@@ -88,8 +101,13 @@ public struct NativeOnboardingDraft: Equatable, Sendable, Codable {
     private let reader: () async throws -> Data?
     private let writer: (Data) async throws -> Void
     private let remover: () async throws -> Void
-    public init(read: @escaping () async throws -> Data?, write: @escaping (Data) async throws -> Void, remove: @escaping () async throws -> Void) {
-        reader = read; writer = write; remover = remove
+    public init(
+        read: @escaping () async throws -> Data?, write: @escaping (Data) async throws -> Void,
+        remove: @escaping () async throws -> Void
+    ) {
+        reader = read
+        writer = write
+        remover = remove
     }
     public func read() async throws -> Data? { try await reader() }
     public func write(_ data: Data) async throws { try await writer(data) }
@@ -103,13 +121,28 @@ public struct NativeOnboardingCategory: Equatable, Sendable {
     public let emoji: String
 }
 public enum NativeOnboardingPreset {
+    public static func bankMonogram(name: String, key: String) -> String {
+        let words = name.components(separatedBy: CharacterSet.alphanumerics.inverted).filter { !$0.isEmpty }
+        let first = words.first ?? ""
+        let second = words.dropFirst().first ?? ""
+        let fromName =
+            first.utf16.count >= 2
+            ? String(decoding: first.utf16.prefix(2), as: UTF16.self)
+            : first + String(decoding: second.utf16.prefix(1), as: UTF16.self)
+        let fromKey = key.unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) }
+        let fallback = String(String.UnicodeScalarView(fromKey))
+        let value = fromName.isEmpty ? String(decoding: fallback.utf16.prefix(2), as: UTF16.self) : fromName
+        return value.isEmpty ? "?" : String(value.prefix(1)).uppercased() + value.dropFirst()
+    }
+
     public static let categories: [NativeOnboardingCategory] = [
         .init(general: "FOOD", detail: "Groceries", detailKey: "onboarding.cat.groceries", emoji: "🛒"),
         .init(general: "FOOD", detail: "Restaurants", detailKey: "onboarding.cat.restaurants", emoji: "🍽️"),
         .init(general: "HOUSING", detail: "Rent", detailKey: "onboarding.cat.rent", emoji: "🏠"),
         .init(general: "HOUSING", detail: "Utilities", detailKey: "onboarding.cat.utilities", emoji: "💡"),
         .init(general: "TRANSPORT", detail: "Fuel", detailKey: "onboarding.cat.fuel", emoji: "⛽"),
-        .init(general: "TRANSPORT", detail: "Public Transport", detailKey: "onboarding.cat.publicTransport", emoji: "🚌"),
+        .init(
+            general: "TRANSPORT", detail: "Public Transport", detailKey: "onboarding.cat.publicTransport", emoji: "🚌"),
         .init(general: "ENTERTAINMENT", detail: "Subscriptions", detailKey: "onboarding.cat.subscriptions", emoji: "📺"),
         .init(general: "ENTERTAINMENT", detail: "Hobbies", detailKey: "onboarding.cat.hobbies", emoji: "🎮"),
         .init(general: "HEALTH", detail: "Insurance", detailKey: "onboarding.cat.insurance", emoji: "🏥"),

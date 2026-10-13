@@ -72,24 +72,7 @@ struct ResearchWatchlistChartSheet: View {
             Label(strings.t("watchlistChart.targetPrice"), systemImage: "scope").font(.caption).foregroundStyle(
                 theme.secondaryLabel)
             if model.isEditingTarget {
-                HStack {
-                    TextField("0", text: Binding(get: { model.targetDraft }, set: { model.targetDraft = $0 }))
-                        .textFieldStyle(.roundedBorder).focused($targetFocused)
-                        .accessibilityLabel(
-                            strings.t("watchlistChart.targetPrice") + ": " + item.name + " (" + (item.symbol ?? "")
-                                + ")"
-                        )
-                        .onSubmit { save() }.disabled(model.isMutating)
-                    Button(action: save) {
-                        if model.isMutating {
-                            ProgressView().controlSize(.small)
-                        } else {
-                            Image(systemName: "checkmark")
-                        }
-                    }.accessibilityLabel(strings.t("common.save")).disabled(model.isMutating)
-                    Button(strings.t("watchlistChart.cancelEdit")) { model.cancelTargetEdit() }.disabled(
-                        model.isMutating)
-                }
+                targetEditor(item)
                 if model.targetValidationFailed {
                     Text(strings.t("watchlistChart.invalidTarget")).font(.caption).foregroundStyle(theme.destructive)
                 }
@@ -108,6 +91,27 @@ struct ResearchWatchlistChartSheet: View {
                     .disabled(model.isMutating)
             }
         }
+    }
+    private func targetEditor(_ item: ResearchWatchlistItem) -> some View {
+        HStack {
+            targetField(item)
+            Button(action: save) {
+                if model.isMutating {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Image(systemName: "checkmark")
+                }
+            }.accessibilityLabel(strings.t("common.save")).disabled(model.isMutating)
+            Button(strings.t("watchlistChart.cancelEdit")) { model.cancelTargetEdit() }.disabled(model.isMutating)
+        }
+    }
+    private func targetField(_ item: ResearchWatchlistItem) -> some View {
+        let label = strings.t("watchlistChart.targetPrice")
+        let identity: String = "\(item.name) (\(item.symbol ?? ""))"
+        return TextField("0", text: Binding<String>(get: { model.targetDraft }, set: { model.targetDraft = $0 }))
+            .textFieldStyle(.roundedBorder).focused($targetFocused)
+            .accessibilityLabel("\(label): \(identity)")
+            .onSubmit { save() }.disabled(model.isMutating)
     }
     private func current(_ item: ResearchWatchlistItem) -> some View {
         ResearchCard {

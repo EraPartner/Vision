@@ -39,6 +39,23 @@ public struct NativeCommandPaletteGroup: Identifiable, Sendable {
 public enum NativeCommandPaletteQueries {
     public static let recentsKey = "vision.palette.recents"
 
+    /// `query.trim()` in CommandPalette.tsx uses ECMAScript whitespace.
+    public static func trim(_ text: String) -> String {
+        let scalars = Array(text.unicodeScalars)
+        var start = 0
+        var end = scalars.count
+        while start < end && isJavaScriptWhitespace(scalars[start].value) { start += 1 }
+        while end > start && isJavaScriptWhitespace(scalars[end - 1].value) { end -= 1 }
+        return String(String.UnicodeScalarView(scalars[start..<end]))
+    }
+
+    private static func isJavaScriptWhitespace(_ code: UInt32) -> Bool {
+        (9...13).contains(code) || code == 32 || code == 160
+            || code == 0x1680 || (0x2000...0x200A).contains(code)
+            || code == 0x2028 || code == 0x2029 || code == 0x202F
+            || code == 0x205F || code == 0x3000 || code == 0xFEFF
+    }
+
     public static func ticker(_ query: String) -> String? {
         if query.range(of: "^\\$[A-Za-z][A-Za-z0-9.-]{0,9}$", options: .regularExpression) != nil {
             return String(query.dropFirst()).uppercased()
@@ -65,16 +82,18 @@ public enum NativeCommandPaletteQueries {
     public static func score(_ value: String, query: String) -> Double {
         let original = Array(value.utf16)
         let abbreviation = Array(query.utf16)
+        // ECMAScript's \s excludes NEL and includes BOM; Foundation's whitespace
+        // character set differs at both boundaries.
+        func isSpace(_ code: UInt16?) -> Bool {
+            guard let code else { return false }
+            return code == 45 || isJavaScriptWhitespace(UInt32(code))
+        }
         func normalize(_ input: String) -> [UInt16] {
-            Array(input.lowercased().replacingOccurrences(of: "[\\s-]", with: " ", options: .regularExpression).utf16)
+            input.lowercased().utf16.map { isSpace($0) ? 32 : $0 }
         }
         let string = normalize(value)
         let search = normalize(query)
         let jumps = Set("\\/_+.#\"@[({&".utf16)
-        func isSpace(_ code: UInt16?) -> Bool {
-            guard let code, let scalar = UnicodeScalar(code) else { return false }
-            return code == 45 || CharacterSet.whitespacesAndNewlines.contains(scalar)
-        }
         func at(_ input: [UInt16], _ index: Int) -> UInt16? {
             input.indices.contains(index) ? input[index] : nil
         }
