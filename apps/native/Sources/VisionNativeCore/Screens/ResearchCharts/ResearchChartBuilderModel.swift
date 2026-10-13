@@ -60,7 +60,7 @@ public enum ResearchChartConfirmation: String, Sendable { case new, share }
         }
     }
     public private(set) var notice: ScreenNotice?
-    public var canUndoDelete: Bool { undoLibrary != nil && undoUntil.map { now() < $0 } == true && !isStorageAction }
+    public var canUndoDelete: Bool { undoLibrary != nil && undoUntil.map { now() <= $0 } == true && !isStorageAction }
     public var shareOrigin: (@MainActor () async throws -> String)?
     public var copyText: (@MainActor (String) async throws -> Void)?
     public var didReplaceRoute: (@MainActor (NativeRoute) -> Void)?
@@ -96,6 +96,8 @@ public enum ResearchChartConfirmation: String, Sendable { case new, share }
     private var undoUntil: Date?
     @ObservationIgnored private var undoTask: Task<Void, Never>?
     @ObservationIgnored private var noticeID = 0
+    @ObservationIgnored private weak var noticeCenter: NativeNoticeCenter?
+    @ObservationIgnored private let noticeSource = UUID()
     public init(
         service: any ResearchChartBuilderService,
         store: any ResearchChartLayoutStore = ResearchChartLayoutMemoryStore(), cache: ResearchReadCache? = nil,
@@ -451,11 +453,12 @@ public enum ResearchChartConfirmation: String, Sendable { case new, share }
             if visit == visitRevision { isStorageLoaded = false }
             return false
         }
-        guard isActive, visit == visitRevision else { return true }
-        let old = state
-        library = next
-        storageStatus = .saved
-        stateChanged(from: old)
+        if isActive, visit == visitRevision {
+            let old = state
+            library = next
+            storageStatus = .saved
+            stateChanged(from: old)
+        }
         undoLibrary = previous
         undoUntil = now().addingTimeInterval(8)
         undoTask?.cancel()
@@ -465,14 +468,25 @@ public enum ResearchChartConfirmation: String, Sendable { case new, share }
             self?.undoUntil = nil
         }
         showNotice("research.builder.layoutDeleted")
+        if let notice {
+            noticeCenter?.publish(
+                notice, source: noticeSource, lifetime: 8, actionTitleKey: "common.undo", isUndo: true,
+                action: { [weak self] in _ = await self?.restoreDeletedLibrary(previous, visit: visit) },
+                clear: { [weak self] in self?.clearNotice(notice.id) })
+        }
         return true
     }
     @discardableResult public func undoDelete() async -> Bool {
         guard canEdit, canUndoDelete, let previous = undoLibrary else { return false }
+        return await restoreDeletedLibrary(previous, visit: visitRevision)
+    }
+    private func restoreDeletedLibrary(_ previous: ResearchChartBuilderLibrary, visit: UUID) async -> Bool {
         isStorageAction = true
         defer { isStorageAction = false }
-        let visit = visitRevision
-        guard await queueWrite(previous).value else {
+        // After navigation the ordinary draft writer is no longer authorized. Read
+        // authority inside the serialized queue before restoring the captured library.
+        let write = isStorageLoaded ? queueWrite(previous) : queueDetachedRestore(previous)
+        guard await write.value else {
             if visit == visitRevision { isStorageLoaded = false }
             return false
         }
@@ -486,6 +500,29 @@ public enum ResearchChartConfirmation: String, Sendable { case new, share }
         stateChanged(from: old)
         return true
     }
+    private func queueDetachedRestore(_ snapshot: ResearchChartBuilderLibrary) -> Task<Bool, Never> {
+        let previous = writeTask
+        writeSequence += 1
+        let sequence = writeSequence
+        let task = Task { [self] in
+            _ = await previous?.value
+            do {
+                guard let data = try await store.read(), let expected = persistedLibrary,
+                    try JSONDecoder().decode(ResearchChartBuilderLibrary.self, from: data) == expected
+                else { throw APIError.invalidRequest("Chart library changed before Undo") }
+                let restored = try ResearchChartLayoutCodec.save(snapshot)
+                let success = await store.write(restored)
+                acknowledgeWrite(snapshot: snapshot, sequence: sequence, success: success)
+                return success
+            } catch {
+                acknowledgeWrite(snapshot: snapshot, sequence: sequence, success: false)
+                return false
+            }
+        }
+        writeTask = task
+        return task
+    }
+    public func attachNotices(_ center: NativeNoticeCenter) { noticeCenter = center }
     public func copyShareLink() async {
         guard isStorageLoaded else { return }
         do {
@@ -503,6 +540,9 @@ public enum ResearchChartConfirmation: String, Sendable { case new, share }
     private func showNotice(_ key: String, kind: ScreenNotice.Kind = .success) {
         noticeID += 1
         notice = .init(id: noticeID, kind: kind, key: key)
+        if let notice {
+            noticeCenter?.publish(notice, source: noticeSource, clear: { [weak self] in self?.clearNotice(notice.id) })
+        }
     }
     public func clearNotice(_ id: Int) { if notice?.id == id { notice = nil } }
     private func stateChanged(from old: ResearchChartBuilderState, schedule: Bool = true) {

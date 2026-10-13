@@ -48,13 +48,21 @@ public struct NativeAppSettings: Equatable, Sendable {
     public var aiDefaultModel: String?
     public var openAiDefaultModel: String?
     public var language: String
+    public var startOfWeek: String
+    public var costBasisMethod: String
+    public var startupSection: String
+    public var autoClearPlannedOnMatch: Bool
+    public var visualEffects: String
+    public var autoAdaptDisplay: Bool
 
     public init(
         defaultCurrency: String = "EUR", dateFormat: AppDateFormat = .dayMonthYearSlash,
         numberFormat: NumberFormat = .eu, showDecimalPlaces: Int = 2, adminMode: Bool = false,
         colorblindGainLoss: Bool = false, defaultPageSize: Int = 50,
         analysisBenchmark: String? = nil, aiAnswerDepth: String = "quick", language: String = "en",
-        aiDefaultModel: String? = nil, openAiDefaultModel: String? = nil
+        aiDefaultModel: String? = nil, openAiDefaultModel: String? = nil,
+        startOfWeek: String = "monday", costBasisMethod: String = "weighted_avg", startupSection: String = "budgeting",
+        autoClearPlannedOnMatch: Bool = true, visualEffects: String = "standard", autoAdaptDisplay: Bool = true
     ) {
         self.defaultCurrency = defaultCurrency
         self.dateFormat = dateFormat
@@ -68,6 +76,12 @@ public struct NativeAppSettings: Equatable, Sendable {
         self.aiDefaultModel = aiDefaultModel
         self.openAiDefaultModel = openAiDefaultModel
         self.language = language
+        self.startOfWeek = startOfWeek
+        self.costBasisMethod = costBasisMethod
+        self.startupSection = startupSection
+        self.autoClearPlannedOnMatch = autoClearPlannedOnMatch
+        self.visualEffects = visualEffects
+        self.autoAdaptDisplay = autoAdaptDisplay
     }
 
     /// `DEFAULT_APP_SETTINGS`.
@@ -107,6 +121,22 @@ public struct NativeAppSettings: Equatable, Sendable {
             settings.openAiDefaultModel = value
         }
         if let value = fields["language"]?.stringValue, ["en", "nl"].contains(value) { settings.language = value }
+        if let value = fields["startOfWeek"]?.stringValue, ["monday", "sunday"].contains(value) {
+            settings.startOfWeek = value
+        }
+        if let value = fields["costBasisMethod"]?.stringValue, ["weighted_avg", "fifo", "lifo"].contains(value) {
+            settings.costBasisMethod = value
+        }
+        if let value = fields["startupSection"]?.stringValue,
+            ["budgeting", "portfolio", "research", "ai-chat", "last"].contains(value)
+        {
+            settings.startupSection = value
+        }
+        if let value = fields["autoClearPlannedOnMatch"]?.boolValue { settings.autoClearPlannedOnMatch = value }
+        if let value = fields["visualEffects"]?.stringValue, ["reduced", "standard", "enhanced"].contains(value) {
+            settings.visualEffects = value
+        }
+        if let value = fields["autoAdaptDisplay"]?.boolValue { settings.autoAdaptDisplay = value }
         return settings
     }
 

@@ -28,8 +28,13 @@ public final class ImportNoticeCenter {
     public private(set) var notices: [ScreenNotice] = []
     public private(set) var actions: [Int: Action] = [:]
     @ObservationIgnored private var counter = NoticeCounter()
+    public var navigateTo: (@MainActor (String) -> Void)?
 
     public init() {}
+
+    public func attachNotices(_ center: NativeNoticeCenter) {
+        counter.attach(center) { [weak self] in self?.clear($0) }
+    }
 
     /// The newest toast.
     public var latest: ScreenNotice? { notices.last }
@@ -41,7 +46,15 @@ public final class ImportNoticeCenter {
     ) -> ScreenNotice {
         let notice = counter.make(kind, key, variables, detail: detail)
         notices.append(notice)
-        if let action { actions[notice.id] = action }
+        if let action {
+            actions[notice.id] = action
+            let duration = action.duration.components
+            let lifetime = Double(duration.seconds) + Double(duration.attoseconds) / 1_000_000_000_000_000_000
+            counter.offerAction(for: notice, titleKey: action.titleKey, lifetime: lifetime, isUndo: false) {
+                [weak self] in
+                self?.navigateTo?(action.route)
+            }
+        }
         while notices.count > Self.maximumShown {
             let dropped = notices.removeFirst()
             actions[dropped.id] = nil

@@ -59,12 +59,8 @@ struct AIChatScreenView: View {
             }
             .onChange(of: scenePhase) { _, phase in
                 screens.investigation.isForeground = phase == .active
-                guard phase == .active, visible, shell.route.path == path else { return }
-                Task {
-                    guard visible, shell.route.path == path else { return }
-                    screens.configure(settings: currentSettings)
-                    await screens.refresh(route: shell.route)
-                }
+                // App.tsx disables query refetchOnWindowFocus globally. A foreground
+                // transition resumes paused work through isForeground, not new reads.
             }
             .onDisappear {
                 visible = false

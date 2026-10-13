@@ -177,6 +177,7 @@ public struct APIClient: Sendable {
     private let baseURL: @Sendable () async -> URL?
     private let adminToken: @Sendable () async -> String?
     private let transport: any APITransport
+    private let sharedAIReadFlights = NativeSettingsAIReadFlights()
     private let streamTransport: any APIStreamTransport
     private let sleep: @Sendable (Duration) async throws -> Void
     private let jitter: @Sendable () -> Double
@@ -244,8 +245,26 @@ public struct APIClient: Sendable {
 
     /// Performs the operation and returns the envelope's `data`. Throws `APIError`, or
     /// `CancellationError` when the task is cancelled.
+    /// Shares only concurrent status/model reads; callers own their source freshness and invalidation.
+    public func coalescedAIRead<Value: Codable & Sendable>(
+        key: String, load: @escaping @Sendable () async throws -> Value
+    ) async throws -> Value {
+        guard let origin = await baseURL() else { throw APIError.backendUnavailable }
+        return try await sharedAIReadFlights.value(origin: origin.absoluteString, key: key, load: load)
+    }
+    public func invalidateSharedAIReads(keys: [String]) async {
+        guard let origin = await baseURL() else { return }
+        await sharedAIReadFlights.invalidate(origin: origin.absoluteString, keys: keys)
+    }
+
     public func send<Operation: APIOperation>(_ operation: Operation) async throws -> Operation.Response {
         try await perform(operation, preservingMeta: false).data
+    }
+
+    /// Source mutations such as conditional Settings PUTs disable retries: a lost
+    /// acknowledgement must not replay a write against a baseline that may be stale.
+    public func send<Operation: APIOperation>(_ operation: Operation, retries: Int) async throws -> Operation.Response {
+        try await perform(operation, preservingMeta: false, retryLimit: retries).data
     }
 
     /// Retains metadata from a success envelope with the same transport, decoding and retry policy.
@@ -255,7 +274,9 @@ public struct APIClient: Sendable {
         try await perform(operation, preservingMeta: true)
     }
 
-    private func perform<Operation: APIOperation>(_ operation: Operation, preservingMeta: Bool) async throws
+    private func perform<Operation: APIOperation>(
+        _ operation: Operation, preservingMeta: Bool, retryLimit: Int? = nil
+    ) async throws
         -> APIDataSnapshot<Operation.Response>
     {
         let method = Operation.method
@@ -273,7 +294,7 @@ public struct APIClient: Sendable {
         // One correlation id for every attempt, like `apiRequest`.
         let headers = await requestHeaders(contentType: operation.contentType)
         let request = APIRequest(method: method, url: url, headers: headers, body: body, timeout: timeout)
-        let retries = method.isIdempotent ? max(0, maxRetries) : 0
+        let retries = method.isIdempotent ? max(0, retryLimit ?? maxRetries) : 0
         var lastError = APIError.network("Request failed")
 
         for attempt in 0...retries {

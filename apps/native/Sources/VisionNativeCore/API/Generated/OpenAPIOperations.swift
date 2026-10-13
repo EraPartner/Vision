@@ -5,7 +5,7 @@ import Foundation
 
 /// One struct per operationId in `apps/native/openapi-operations.txt`, in its order.
 public enum OpenAPIOperations {
-    public static let operationIds = ["getExchangeRates", "refreshExchangeRates", "adminDatabaseStats", "adminProvidersHealth", "adminProviderProbe", "adminMetricsRequests", "adminListEndpoints", "getSetting", "adminDatabaseVacuum", "adminGetTableSchema", "adminGetTableRows", "adminMutateTableRows", "getPlannedTransactions", "createPlannedTransaction", "updatePlannedTransaction", "deletePlannedTransaction", "executePlannedTransaction", "getPlannedMatchSuggestions", "getRecurringPatterns", "getRecipients", "getRecipient", "getAccounts", "getCategoryTree", "getTags", "createTag", "getTransactions", "saveSetting", "getSupportedAdapters", "getCustomParsers", "createCustomParser", "updateCustomParser", "deleteCustomParser", "getImportBatches", "deleteImportBatch", "previewImportBatch", "overrideImportRow", "overrideImportRowCategory", "commitImportBatch", "updateRecipient", "getInfoBanks", "exportTransactionsCsv", "exportTransactionsJson", "getTransaction", "createTransaction", "updateTransaction", "deleteTransaction", "bulkUpdateTransactions", "getTransactionAttachments", "downloadAttachment", "deleteAttachment", "bulkDeleteTransactions", "bulkExportTransactions", "bulkTagTransactions", "markTransfer", "createRecipient", "getSplitsByTransaction", "createSplitBatch", "createBulkSplits", "getSplitsOwed", "getSplitOwedByRecipient", "exportSplitsOwedCsv", "paySplit", "settleSplit", "settleAllSplitsForRecipient", "deleteSplit", "createAccount", "updateAccount", "deleteAccount", "previewAccountPortfolioLots", "closeAccount", "mergeAccounts", "previewAccountMerge", "setAccountOpeningBalance", "reconcileAccount", "setAccountStatementBalance", "bulkRetagPortfolioTransactions", "getPortfolioSummary", "createCategoryNode", "updateCategoryNode", "deleteCategoryNode", "mergeCategoryNode", "deleteRecipient", "mergeRecipient", "unmergeRecipient", "getRecipientPatterns", "createRecipientPattern", "previewRecipientPattern", "updateRecipientPattern", "deleteRecipientPattern", "getMonthlySummary", "getAverageVsCurrent", "getBankBalances", "getNetWorth", "getCashflowForecastMethods", "getCashflowForecastRolling", "getCashflowForecastAccuracy", "getTransactionCount", "getCategories", "getCategoryPivot", "getRecipientInsights", "getRecipientByYear", "getSankey", "getInsightsDigest", "dismissInsight", "getSavedCharts", "createSavedChart", "updateSavedChart", "deleteSavedChart", "getRecipientPivot", "getTagPivot", "computeBelgianTax", "getBelgianTaxOverview", "saveSettings", "getBelgianTaxDashboard", "getDeductionCandidates", "getInvestments", "createInvestment", "updateInvestment", "deleteInvestment", "getInvestment", "getInvestmentTransactions", "createInvestmentTransaction", "updatePortfolioTransaction", "deletePortfolioTransaction", "getPortfolioPerformance", "getPortfolioPerformanceByBroker", "getPortfolioExposure", "upsertPortfolioExposureSources", "refreshInvestmentPrices", "listInvestmentProviders", "getInvestmentPriceHistory", "getInvestmentSummary", "marketQuote", "marketNews", "marketChart", "computeRebalance", "computeCommitmentAwareCash", "getBulkPortfolioTransactions", "getPortfolioParsers", "createPortfolioParser", "updatePortfolioParser", "deletePortfolioParser", "getPortfolioImportBatches", "getPortfolioImportBatch", "deletePortfolioImportBatch", "previewPortfolioImportBatch", "portfolioImportRowInvestmentOverride", "portfolioImportRowsInvestmentOverride", "previewPortfolioImportReconciliation", "commitReviewedPortfolioImports", "commitPortfolioImportBatch", "getBelgianPortfolioTaxDashboard", "getAnalysisCatalog", "executeAnalysis", "cancelAnalysis", "drillAnalysis", "executeAnalysisPivot", "evaluateAnalysisExtension", "listSavedAnalyses", "createSavedAnalysis", "updateSavedAnalysis", "deleteSavedAnalysis", "runSavedAnalysis", "listSavedAnalysisVersions", "restoreSavedAnalysisVersion", "generateAnalysisProposal", "previewAnalysisProposal", "applyAnalysisProposal", "listAnalysisMonitors", "createAnalysisMonitor", "patchAnalysisMonitor", "deleteAnalysisMonitor", "checkAnalysisMonitor", "listAnalysisMonitorObservations", "listAnalysisMonitorNotifications", "readAnalysisMonitorNotification", "listResearchDossiers", "researchSearch", "researchChart", "researchScorecard", "researchAnalyst", "researchNews", "marketSearch", "getWatchlist", "addToWatchlist", "updateWatchlistItem", "deleteWatchlistItem", "researchListMappings", "researchResolveMappings", "researchSaveMappings", "researchDeleteMapping", "researchAuditMappings", "researchPortfolioForecast", "researchMacroSearch", "researchMacroSeries", "createResearchDossier", "getResearchDossier", "updateResearchDossier", "deleteResearchDossier", "listResearchDossierVersions", "restoreResearchDossier", "exportResearchDossiers", "exportResearchDossier", "listAiResearchDocuments", "getAiStatus", "getAiModels", "getAiConversations", "createAiConversation", "getAiConversation", "updateAiConversation", "deleteAiConversation", "getAiResearchStatus", "createAiInvestigation", "getAiInvestigation", "deleteAiInvestigation", "resumeAiInvestigation", "cancelAiInvestigation", "deleteAiResearchDocument", "previewAiDisclosure", "createAiDisclosureGrant", "listAiDisclosureGrants", "revokeAiDisclosureGrant", "listAiDisclosureRecords", "deleteAiDisclosureRecords"]
+    public static let operationIds = ["getExchangeRates", "refreshExchangeRates", "adminDatabaseStats", "adminProvidersHealth", "adminProviderProbe", "adminMetricsRequests", "adminListEndpoints", "getSetting", "getSettings", "researchListProviderKeys", "researchSetProviderKey", "researchClearProviderKey", "getAgentCloakDesktopStatus", "configureAgentCloakDesktop", "adminDatabaseVacuum", "adminGetTableSchema", "adminGetTableRows", "adminMutateTableRows", "getPlannedTransactions", "createPlannedTransaction", "updatePlannedTransaction", "deletePlannedTransaction", "executePlannedTransaction", "getPlannedMatchSuggestions", "getRecurringPatterns", "getRecipients", "getRecipient", "getAccounts", "getCategoryTree", "getTags", "createTag", "getTransactions", "saveSetting", "getSupportedAdapters", "getCustomParsers", "createCustomParser", "updateCustomParser", "deleteCustomParser", "getImportBatches", "deleteImportBatch", "previewImportBatch", "overrideImportRow", "overrideImportRowCategory", "commitImportBatch", "updateRecipient", "getInfoBanks", "exportTransactionsCsv", "exportTransactionsJson", "getTransaction", "createTransaction", "updateTransaction", "deleteTransaction", "bulkUpdateTransactions", "getTransactionAttachments", "downloadAttachment", "deleteAttachment", "bulkDeleteTransactions", "bulkExportTransactions", "bulkTagTransactions", "markTransfer", "createRecipient", "getSplitsByTransaction", "createSplitBatch", "createBulkSplits", "getSplitsOwed", "getSplitOwedByRecipient", "exportSplitsOwedCsv", "paySplit", "settleSplit", "settleAllSplitsForRecipient", "deleteSplit", "createAccount", "updateAccount", "deleteAccount", "previewAccountPortfolioLots", "closeAccount", "mergeAccounts", "previewAccountMerge", "setAccountOpeningBalance", "reconcileAccount", "setAccountStatementBalance", "bulkRetagPortfolioTransactions", "getPortfolioSummary", "createCategoryNode", "updateCategoryNode", "deleteCategoryNode", "mergeCategoryNode", "deleteRecipient", "mergeRecipient", "unmergeRecipient", "getRecipientPatterns", "createRecipientPattern", "previewRecipientPattern", "updateRecipientPattern", "deleteRecipientPattern", "getMonthlySummary", "getAverageVsCurrent", "getBankBalances", "getNetWorth", "getCashflowForecastMethods", "getCashflowForecastRolling", "getCashflowForecastAccuracy", "getTransactionCount", "getCategories", "getCategoryPivot", "getRecipientInsights", "getRecipientByYear", "getSankey", "getInsightsDigest", "dismissInsight", "getSavedCharts", "createSavedChart", "updateSavedChart", "deleteSavedChart", "getRecipientPivot", "getTagPivot", "computeBelgianTax", "getBelgianTaxOverview", "saveSettings", "getBelgianTaxDashboard", "getDeductionCandidates", "getInvestments", "createInvestment", "updateInvestment", "deleteInvestment", "getInvestment", "getInvestmentTransactions", "createInvestmentTransaction", "updatePortfolioTransaction", "deletePortfolioTransaction", "getPortfolioPerformance", "getPortfolioPerformanceByBroker", "getPortfolioExposure", "upsertPortfolioExposureSources", "refreshInvestmentPrices", "listInvestmentProviders", "getInvestmentPriceHistory", "getInvestmentSummary", "marketQuote", "marketNews", "marketChart", "computeRebalance", "computeCommitmentAwareCash", "getBulkPortfolioTransactions", "getPortfolioParsers", "createPortfolioParser", "updatePortfolioParser", "deletePortfolioParser", "getPortfolioImportBatches", "getPortfolioImportBatch", "deletePortfolioImportBatch", "previewPortfolioImportBatch", "portfolioImportRowInvestmentOverride", "portfolioImportRowsInvestmentOverride", "previewPortfolioImportReconciliation", "commitReviewedPortfolioImports", "commitPortfolioImportBatch", "getBelgianPortfolioTaxDashboard", "getAnalysisCatalog", "executeAnalysis", "cancelAnalysis", "drillAnalysis", "executeAnalysisPivot", "evaluateAnalysisExtension", "listSavedAnalyses", "createSavedAnalysis", "updateSavedAnalysis", "deleteSavedAnalysis", "runSavedAnalysis", "listSavedAnalysisVersions", "restoreSavedAnalysisVersion", "generateAnalysisProposal", "previewAnalysisProposal", "applyAnalysisProposal", "listAnalysisMonitors", "createAnalysisMonitor", "patchAnalysisMonitor", "deleteAnalysisMonitor", "checkAnalysisMonitor", "listAnalysisMonitorObservations", "listAnalysisMonitorNotifications", "readAnalysisMonitorNotification", "listResearchDossiers", "researchSearch", "researchChart", "researchScorecard", "researchAnalyst", "researchNews", "marketSearch", "getWatchlist", "addToWatchlist", "updateWatchlistItem", "deleteWatchlistItem", "researchListMappings", "researchResolveMappings", "researchSaveMappings", "researchDeleteMapping", "researchAuditMappings", "researchPortfolioForecast", "researchMacroSearch", "researchMacroSeries", "createResearchDossier", "getResearchDossier", "updateResearchDossier", "deleteResearchDossier", "listResearchDossierVersions", "restoreResearchDossier", "exportResearchDossiers", "exportResearchDossier", "listAiResearchDocuments", "getAiStatus", "getAiModels", "getAiConversations", "createAiConversation", "getAiConversation", "updateAiConversation", "deleteAiConversation", "getAiResearchStatus", "createAiInvestigation", "getAiInvestigation", "deleteAiInvestigation", "resumeAiInvestigation", "cancelAiInvestigation", "deleteAiResearchDocument", "previewAiDisclosure", "createAiDisclosureGrant", "listAiDisclosureGrants", "revokeAiDisclosureGrant", "listAiDisclosureRecords", "deleteAiDisclosureRecords"]
 }
 
 extension OpenAPIOperations {
@@ -123,6 +123,140 @@ extension OpenAPIOperations {
         }
 
         public var path: String { "/api/settings/\(APIPath.segment(APIQuery.value(key)))" }
+    }
+
+    /// GET /api/settings: Get all settings
+    public struct GetSettings: APIOperation {
+        public typealias Response = JSONValue
+        public static let operationId = "getSettings"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/settings"
+
+        /// Return data as {settings, expected} maps from the same database read. Only the literal
+        /// values `true` and `false` are accepted; any other value or a repeated key returns 400.
+        public var withBaselines: Bool?
+
+        public init(withBaselines: Bool? = nil) {
+            self.withBaselines = withBaselines
+        }
+
+        public var path: String { "/api/settings" }
+
+        public var queryItems: [URLQueryItem] {
+            var items: [URLQueryItem] = []
+            if let withBaselines { items.append(URLQueryItem(name: "withBaselines", value: APIQuery.value(withBaselines))) }
+            return items
+        }
+    }
+
+    /// GET /api/research/provider-keys: List keyed-provider API-key statuses (masked; never the full
+    /// key)
+    public struct ResearchListProviderKeys: APIOperation {
+        public typealias Response = OpenAPI.ResearchProviderKeysEnvelope
+        public static let operationId = "researchListProviderKeys"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/research/provider-keys"
+
+        public init() {}
+
+        public var path: String { "/api/research/provider-keys" }
+    }
+
+    /// PUT /api/research/provider-keys/{provider}: Set or replace a provider's API key (takes effect
+    /// immediately)
+    public struct ResearchSetProviderKey: APIOperation {
+        public typealias Response = OpenAPI.ResearchProviderKeysEnvelope
+        public static let operationId = "researchSetProviderKey"
+        public static let method = HTTPMethod.put
+        public static let pathTemplate = "/api/research/provider-keys/{provider}"
+
+        public var provider: String
+        public var body: Body
+
+        public init(provider: String, body: Body) {
+            self.provider = provider
+            self.body = body
+        }
+
+        public var path: String { "/api/research/provider-keys/\(APIPath.segment(APIQuery.value(provider)))" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+
+        public struct Body: Codable, Equatable, Sendable {
+            public let apiKey: String
+
+            public init(apiKey: String) {
+                self.apiKey = apiKey
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case apiKey = "api_key"
+            }
+        }
+    }
+
+    /// DELETE /api/research/provider-keys/{provider}: Clear a provider's stored API key (env fallback
+    /// then applies)
+    public struct ResearchClearProviderKey: APIOperation {
+        public typealias Response = APIEmpty
+        public static let operationId = "researchClearProviderKey"
+        public static let method = HTTPMethod.delete
+        public static let pathTemplate = "/api/research/provider-keys/{provider}"
+
+        public var provider: String
+
+        public init(provider: String) {
+            self.provider = provider
+        }
+
+        public var path: String { "/api/research/provider-keys/\(APIPath.segment(APIQuery.value(provider)))" }
+    }
+
+    /// GET /api/ai-research/agentcloak-desktop: Inspect AgentCloak Desktop availability and protection
+    /// state
+    public struct GetAgentCloakDesktopStatus: APIOperation {
+        public typealias Response = OpenAPI.AgentCloakDesktopStatus
+        public static let operationId = "getAgentCloakDesktopStatus"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/ai-research/agentcloak-desktop"
+
+        public init() {}
+
+        public var path: String { "/api/ai-research/agentcloak-desktop" }
+    }
+
+    /// PUT /api/ai-research/agentcloak-desktop: Enable or disable AgentCloak Desktop protection
+    public struct ConfigureAgentCloakDesktop: APIOperation {
+        public typealias Response = OpenAPI.AgentCloakDesktopStatus
+        public static let operationId = "configureAgentCloakDesktop"
+        public static let method = HTTPMethod.put
+        public static let pathTemplate = "/api/ai-research/agentcloak-desktop"
+
+        public var body: Body
+
+        public init(body: Body) {
+            self.body = body
+        }
+
+        public var path: String { "/api/ai-research/agentcloak-desktop" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+
+        public struct Body: Codable, Equatable, Sendable {
+            public let enabled: Bool
+
+            public init(enabled: Bool) {
+                self.enabled = enabled
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case enabled = "enabled"
+            }
+        }
     }
 
     /// POST /api/admin/database/vacuum: Run VACUUM ANALYZE on database

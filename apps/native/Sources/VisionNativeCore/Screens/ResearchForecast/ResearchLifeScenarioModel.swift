@@ -38,8 +38,10 @@ import Observation
     @ObservationIgnored private var writeTail: Task<Bool, Never>?
     @ObservationIgnored private var pendingWrites = 0
     @ObservationIgnored private var noticeID = 0
+    @ObservationIgnored private weak var noticeCenter: NativeNoticeCenter?
+    @ObservationIgnored private let noticeSource = UUID()
     @ObservationIgnored private var undoState:
-        (previous: TaxValue, removed: ResearchLifeScenario?, expires: Date, notice: Int)?
+        (previous: TaxValue, removed: ResearchLifeScenario?, expires: Date, notice: Int, visit: UUID)?
     private var output: ResearchLifeScenarioComparison?
     private var signature: TaxValue {
         .object(["draft": draft.signature, "forecastInput": forecastInput, "currency": .string(currency)])
@@ -119,31 +121,42 @@ import Observation
         let removed = scenarios.first { $0.id == id }
         let next = scenarios.filter { $0.id != id }
         let token = visit
-        if await persist(.array(next.map(\.raw))), active, token == visit {
-            scenarios = next
-            draft = .init()
-            output = nil
-            error = nil
+        if await persist(.array(next.map(\.raw))) {
+            if active, token == visit {
+                scenarios = next
+                draft = .init()
+                output = nil
+                error = nil
+            }
             noticeID += 1
-            undoState = (previous, removed, now().addingTimeInterval(8), noticeID)
+            undoState = (previous, removed, now().addingTimeInterval(8), noticeID, token)
             undoNotice = .init(id: noticeID, kind: .info, key: "research.lifeScenario.deleted")
+            if let notice = undoNotice {
+                noticeCenter?.publish(
+                    notice, source: noticeSource, lifetime: 8, actionTitleKey: "common.undo", isUndo: true,
+                    action: { [weak self] in await self?.restoreDeleted(previous, removed: removed, visit: token) },
+                    clear: { [weak self] in self?.clearUndoNotice(notice.id) })
+            }
         }
     }
     public func undo() async {
-        guard let state = undoState, now() < state.expires else {
+        guard let state = undoState, now() <= state.expires else {
             if let notice = undoNotice { clearUndoNotice(notice.id) }
             return
         }
-        let token = visit
         // Reserve the single undo action before awaiting the serialized setting queue.
         undoState = nil
         undoNotice = nil
-        if await persist(state.previous), active, token == visit {
-            scenarios = (try? Self.decodeScenarios(state.previous)) ?? scenarios
-            if let removed = state.removed { draft = .init(scenario: removed, numberFormat: settings.numberFormat) }
+        await restoreDeleted(state.previous, removed: state.removed, visit: state.visit)
+    }
+    private func restoreDeleted(_ previous: TaxValue, removed: ResearchLifeScenario?, visit token: UUID) async {
+        if await persist(previous), active, token == visit {
+            scenarios = (try? Self.decodeScenarios(previous)) ?? scenarios
+            if let removed { draft = .init(scenario: removed, numberFormat: settings.numberFormat) }
             error = nil
         }
     }
+    public func attachNotices(_ center: NativeNoticeCenter) { noticeCenter = center }
     public func clearUndoNotice(_ id: Int) {
         guard undoNotice?.id == id else { return }
         undoNotice = nil
@@ -256,7 +269,7 @@ import Observation
         draft = .init()
         output = nil
         error = nil
-        if let notice = undoNotice { clearUndoNotice(notice.id) }
+        // The global toast retains its captured restore payload across navigation.
     }
     static func decodeScenarios(_ value: TaxValue) throws -> [ResearchLifeScenario] {
         // Existing non-array storage is treated as empty by the browser panel.

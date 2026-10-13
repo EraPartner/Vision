@@ -11,6 +11,8 @@ public struct MenuAction: Hashable, Sendable {
     }
 
     public static let openSettings = MenuAction("open-settings")
+    /// The source router decides Back versus query replacement when Settings closes.
+    public static let closeSettings = MenuAction("close-settings")
     public static let openShortcuts = MenuAction("open-shortcuts")
     public static let newTransaction = MenuAction("new-transaction")
     public static let toggleSidebar = MenuAction("toggle-sidebar")

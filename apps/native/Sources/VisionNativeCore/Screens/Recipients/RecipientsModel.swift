@@ -451,9 +451,13 @@ public final class RecipientsModel {
             return
         }
         let notice = notices.make(
-            .success, nextActive ? "recipientsPage.toast.active" : "recipientsPage.toast.inactive", ["name": payee.name])
+            .success, nextActive ? "recipientsPage.toast.active" : "recipientsPage.toast.inactive", ["name": payee.name]
+        )
         self.notice = notice
         pendingAction = (notice.id, .undoStatus(payee, restore: !nextActive))
+        notices.offerAction(for: notice, titleKey: "common.undo", lifetime: 8, isUndo: true) { [weak self] in
+            await self?.restoreStatus(id: payee.id, active: !nextActive)
+        }
         await refreshAfterWrite(touchesTransactions: false)
     }
 
@@ -704,7 +708,9 @@ public final class RecipientsModel {
                     "recipients.createRuleSuggestion",
                     ["pattern": suggestion.pattern, "n": String(suggestion.matchCount)]))
             self.notice = notice
-            pendingAction = (notice.id, .createRule(primaryId: result.primary.id, pattern: suggestion.pattern, kind: kind))
+            pendingAction = (
+                notice.id, .createRule(primaryId: result.primary.id, pattern: suggestion.pattern, kind: kind)
+            )
         } else {
             post(.success, "recipients.merged", variables)
         }
@@ -724,15 +730,7 @@ public final class RecipientsModel {
         if notice?.id == pending.noticeID { notice = nil }
         switch pending.action {
         case .undoStatus(let payee, let restore):
-            isTogglingStatus = true
-            defer { isTogglingStatus = false }
-            do {
-                try await service.updatePayee(id: payee.id, patch: PayeePatch(isActive: restore))
-            } catch {
-                post(.error, "recipientsPage.toggleFailed")
-                return
-            }
-            await refreshAfterWrite(touchesTransactions: false)
+            await restoreStatus(id: payee.id, active: restore)
         case .createRule(let primaryId, let pattern, let kind):
             do {
                 try await service.createMatchRule(
@@ -743,6 +741,22 @@ public final class RecipientsModel {
                 post(.error, "recipientPatterns.toast.error")
             }
         }
+    }
+
+    private func restoreStatus(id: Int, active: Bool) async {
+        isTogglingStatus = true
+        defer { isTogglingStatus = false }
+        do {
+            try await service.updatePayee(id: id, patch: PayeePatch(isActive: active))
+        } catch {
+            post(.error, "recipientsPage.toggleFailed")
+            return
+        }
+        await refreshAfterWrite(touchesTransactions: false)
+    }
+
+    public func attachNotices(_ center: NativeNoticeCenter) {
+        notices.attach(center) { [weak self] in self?.clearNotice($0) }
     }
 
     /// The label of the toast's action.

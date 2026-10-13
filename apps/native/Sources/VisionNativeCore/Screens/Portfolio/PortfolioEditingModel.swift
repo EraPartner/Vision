@@ -44,7 +44,7 @@ public final class PortfolioEditingModel {
     @ObservationIgnored private var investmentBaseline: PortfolioInvestmentDraft?
     @ObservationIgnored private var tradeBaseline: PortfolioTradeDraft?
     @ObservationIgnored private var createdInvestmentId: Int?
-    @ObservationIgnored private var noticeId = 0
+    @ObservationIgnored private var notices = NoticeCounter()
     @ObservationIgnored private var loadedProviders = false
     @ObservationIgnored private var retagKeys: [String: String] = [:]
 
@@ -145,6 +145,10 @@ public final class PortfolioEditingModel {
         issue = nil
         error = nil
     }
+    public func attachNotices(_ center: NativeNoticeCenter) {
+        notices.attach(center) { [weak self] in self?.clearNotice($0) }
+    }
+
     public func clearNotice(_ id: Int) { if notice?.id == id { notice = nil } }
     public func clearIssue() { issue = nil }
     private func open(_ value: PortfolioEditingPresentation) {
@@ -355,8 +359,7 @@ public final class PortfolioEditingModel {
             return true
         } catch {
             self.error = error.localizedDescription
-            noticeId += 1
-            notice = ScreenNotice(id: noticeId, kind: .error, key: "common.error", detail: error.localizedDescription)
+            notice = notices.make(.error, "common.error", detail: error.localizedDescription)
             return false
         }
     }
@@ -389,7 +392,6 @@ public final class PortfolioEditingModel {
         }.map(\.id).sorted()
     }
     private func post(_ key: String, _ variables: [String: String] = [:]) {
-        noticeId += 1
-        notice = ScreenNotice(id: noticeId, kind: .success, key: key, variables: variables)
+        notice = notices.make(.success, key, variables)
     }
 }

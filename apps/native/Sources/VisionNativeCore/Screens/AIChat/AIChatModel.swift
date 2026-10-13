@@ -23,6 +23,45 @@ import Observation
     public private(set) var errors: [String: String] = [:]
     public private(set) var notice: ScreenNotice?
     public let streams: AIChatStreamStore
+    public var didReceiveStatus: (@MainActor (NativeSettingsAIReceipt<AIChatOllamaStatus>) -> Void)?
+    public var didReceiveModels: (@MainActor (NativeSettingsAIReceipt<[AIChatOllamaModel]>) -> Void)?
+    public var didInvalidateSharedReads: (@MainActor ([String]) -> Void)?
+    public var sharedStatusReceipt: NativeSettingsAIReceipt<AIChatOllamaStatus>? {
+        guard let status, let statusDate else { return nil }
+        return .init(value: status, fetchedAt: statusDate)
+    }
+    public var sharedModelsReceipt: NativeSettingsAIReceipt<[AIChatOllamaModel]>? {
+        guard let modelsDate else { return nil }
+        return .init(value: models, fetchedAt: modelsDate)
+    }
+    public func seedSharedStatus(_ value: AIChatOllamaStatus, fetchedAt: Date) {
+        guard statusDate.map({ fetchedAt > $0 }) ?? true else { return }
+        statusRevision = UUID()
+        isLoadingStatus = false
+        status = value
+        statusDate = fetchedAt
+        errors["status"] = nil
+    }
+    public func seedSharedModels(_ value: [AIChatOllamaModel], fetchedAt: Date) {
+        guard modelsDate.map({ fetchedAt > $0 }) ?? true else { return }
+        modelRevision = UUID()
+        isLoadingModels = false
+        models = value
+        modelsDate = fetchedAt
+        errors["models"] = nil
+    }
+    public func invalidateSharedAIReads(_ keys: [String]) {
+        if keys.contains("ollama-status") {
+            statusDate = nil
+            statusRevision = UUID()
+            isLoadingStatus = false
+        }
+        if keys.contains("ollama-models") {
+            modelsDate = nil
+            modelRevision = UUID()
+            isLoadingModels = false
+        }
+    }
     public var didReplaceRoute: (@MainActor (NativeRoute) -> Void)?
     public var detail: AIChatConversationDetail? {
         selectedID.flatMap { streams.details[$0] } ?? (selectedID == nil ? nil : placeholderDetail)
@@ -73,6 +112,8 @@ import Observation
     @ObservationIgnored private var detailRefreshNeeded = false
     @ObservationIgnored private var listRefreshNeeded = false
     @ObservationIgnored private var noticeID = 0
+    @ObservationIgnored private weak var noticeCenter: NativeNoticeCenter?
+    @ObservationIgnored private let noticeSource = UUID()
     public init(
         service: any AIChatService, streams: AIChatStreamStore? = nil, now: @escaping @Sendable () -> Date = { Date() }
     ) {
@@ -156,6 +197,7 @@ import Observation
             guard revision == statusRevision, isActive else { return }
             status = result
             statusDate = now()
+            if let receipt = sharedStatusReceipt { didReceiveStatus?(receipt) }
             errors["status"] = nil
             if result.ok { await loadModels() }
         } catch { if revision == statusRevision, isActive { errors["status"] = error.localizedDescription } }
@@ -173,10 +215,12 @@ import Observation
             guard revision == modelRevision, isActive else { return }
             models = result
             modelsDate = now()
+            if let receipt = sharedModelsReceipt { didReceiveModels?(receipt) }
             errors["models"] = nil
         } catch { if revision == modelRevision, isActive { errors["models"] = error.localizedDescription } }
     }
     public func retryStatus() async {
+        didInvalidateSharedReads?(["ollama-status", "ollama-models"])
         statusDate = nil
         modelsDate = nil
         await loadStatus(force: true)
@@ -418,6 +462,10 @@ import Observation
         noticeID += 1
         notice = .init(
             id: noticeID, kind: error == nil ? .success : .error, key: key, detail: error?.localizedDescription)
+        if let notice {
+            noticeCenter?.publish(notice, source: noticeSource, clear: { [weak self] in self?.clearNotice(notice.id) })
+        }
     }
+    public func attachNotices(_ center: NativeNoticeCenter) { noticeCenter = center }
     public func clearNotice(_ id: Int) { if notice?.id == id { notice = nil } }
 }

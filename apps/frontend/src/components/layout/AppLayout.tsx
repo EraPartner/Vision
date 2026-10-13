@@ -235,6 +235,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             <SidebarProvider defaultOpen={sidebarDefaultOpen}>
                 <ElectronBridge
                     onOpenSettings={openSettingsOnTab}
+                    onCloseSettings={closeSettings}
                     onOpenShortcuts={openShortcuts}
                     onOpenPalette={openPalette}
                 />

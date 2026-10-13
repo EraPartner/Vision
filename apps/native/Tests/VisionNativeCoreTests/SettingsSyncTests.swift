@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import VisionNativeCore
 
 final class FakeSettingsTransport: SettingsTransport, @unchecked Sendable {
@@ -43,12 +44,15 @@ actor MirrorRecorder {
 
     @Test func loadReadsTheDatabaseRecordsTheBaselineAndMirrors() async {
         let transport = FakeSettingsTransport(get: [
-            json(#"{"ok":true,"data":{"key":"services_settings","value":{"keepServicesOnQuit":true},"expected":{"exists":true,"value":{"keepServicesOnQuit":true}}}}"#)
+            json(
+                #"{"ok":true,"data":{"key":"services_settings","value":{"keepServicesOnQuit":true},"expected":{"exists":true,"value":{"keepServicesOnQuit":true}}}}"#
+            )
         ])
         let writer = SettingsWriter(transport: transport)
         let mirror = MirrorRecorder()
         let keep = await ServicesSettings.load(
-            baseURL: base, transport: transport, writer: writer, mirror: { await mirror.record($0) }, fallback: { false })
+            baseURL: base, transport: transport, writer: writer, mirror: { await mirror.record($0) },
+            fallback: { false })
         #expect(keep)
         #expect(await mirror.values == [true])
         #expect(
@@ -88,7 +92,8 @@ actor MirrorRecorder {
         #expect(
             put.1
                 == .object([
-                    "value": .object(["keepServicesOnQuit": .bool(false)]), "expected": .object(["exists": .bool(false)]),
+                    "value": .object(["keepServicesOnQuit": .bool(false)]),
+                    "expected": .object(["exists": .bool(false)]),
                 ]))
         #expect(await mirror.values == [false])
         #expect(
@@ -115,6 +120,42 @@ actor MirrorRecorder {
         await writer.loaded("other", data: .object(["value": .int(1)]))
         #expect(await writer.baseline("other") == nil)
     }
+
+    @Test func failedWritePoisonsOnlyItsKeyWithoutRebasingOrAnotherPut() async {
+        let failure = SettingsWriteError("Setting changed since it was loaded")
+        let transport = FakeSettingsTransport(put: [
+            json(#"{"ok":false,"error":{"message":"Setting changed since it was loaded"}}"#),
+            json(#"{"ok":true,"data":{"key":"other","value":2}}"#),
+        ])
+        let writer = SettingsWriter(transport: transport)
+        let baseline = JSONValue.object(["exists": .bool(false)])
+        await writer.loaded("k", data: .object(["expected": baseline]))
+        await writer.loaded("other", data: .object(["expected": baseline]))
+        await #expect(throws: failure) { try await writer.save("k", value: .int(1), baseURL: base) }
+        // Even a subsequent successful read cannot rebase or revive the rejected queue.
+        await writer.loaded("k", data: .object(["expected": .object(["exists": .bool(true), "value": .int(9)])]))
+        await #expect(throws: failure) { try await writer.save("k", value: .int(2), baseURL: base) }
+        #expect(transport.puts.count == 1)
+        #expect(await writer.baseline("k") == baseline)
+        _ = try? await writer.save("other", value: .int(2), baseURL: base)
+        #expect(transport.puts.count == 2)
+        #expect(await writer.baseline("other") == .object(["exists": .bool(true), "value": .int(2)]))
+    }
+
+    @Test func acknowledgementWithoutDataCannotAuthorizeAnotherWrite() async {
+        let transport = FakeSettingsTransport(put: [json(#"{"ok":true}"#)])
+        let writer = SettingsWriter(transport: transport)
+        let baseline = JSONValue.object(["exists": .bool(false)])
+        await writer.loaded("k", data: .object(["expected": baseline]))
+        await #expect(throws: SettingsWriteError("Could not save settings")) {
+            try await writer.save("k", value: .int(1), baseURL: base)
+        }
+        await #expect(throws: SettingsWriteError("Could not save settings")) {
+            try await writer.save("k", value: .int(2), baseURL: base)
+        }
+        #expect(transport.puts.count == 1)
+        #expect(await writer.baseline("k") == baseline)
+    }
 }
 
 actor BackupMirrorRecorder {
@@ -129,7 +170,9 @@ actor BackupMirrorRecorder {
 
     @Test func loadReadsTheDatabaseMirrorsTheRawValueAndRecordsTheBaseline() async {
         let transport = FakeSettingsTransport(get: [
-            json(#"{"ok":true,"data":{"key":"backup_settings","value":{"backupDir":"  /Volumes/B  ","backupOnQuit":true},"expected":{"exists":true,"value":{"backupDir":"  /Volumes/B  ","backupOnQuit":true}}}}"#)
+            json(
+                #"{"ok":true,"data":{"key":"backup_settings","value":{"backupDir":"  /Volumes/B  ","backupOnQuit":true},"expected":{"exists":true,"value":{"backupDir":"  /Volumes/B  ","backupOnQuit":true}}}}"#
+            )
         ])
         let writer = SettingsWriter(transport: transport)
         let mirror = BackupMirrorRecorder()
@@ -149,7 +192,8 @@ actor BackupMirrorRecorder {
         #expect(settings == BackupSettingsValue(backupDir: "/Volumes/B", backupOnQuit: true))
         // No stored value, no directory and no iCloud Drive: the toggle is off.
         let empty = await BackupSettings.load(
-            baseURL: nil, transport: transport, writer: writer, mirror: { _ in }, fallback: { ["backupOnQuit": .bool(true)] })
+            baseURL: nil, transport: transport, writer: writer, mirror: { _ in },
+            fallback: { ["backupOnQuit": .bool(true)] })
         #expect(empty == BackupSettingsValue(backupDir: "", backupOnQuit: false))
     }
 
@@ -164,7 +208,9 @@ actor BackupMirrorRecorder {
             BackupSettings.resolved(
                 .object(["backupDir": .string("/Volumes/B"), "backupOnQuit": .bool(false)]), defaultDirectory: iCloud)
                 == BackupSettingsValue(backupDir: "/Volumes/B", backupOnQuit: false))
-        #expect(BackupSettings.resolved(nil, defaultDirectory: "") == BackupSettingsValue(backupDir: "", backupOnQuit: false))
+        #expect(
+            BackupSettings.resolved(nil, defaultDirectory: "")
+                == BackupSettingsValue(backupDir: "", backupOnQuit: false))
         let transport = FakeSettingsTransport()
         let loaded = await BackupSettings.load(
             baseURL: nil, transport: transport, writer: SettingsWriter(transport: transport), mirror: { _ in },
@@ -174,7 +220,8 @@ actor BackupMirrorRecorder {
 
     @Test func theQuitPathReadsTheRawDatabaseValueElseTheMirror() async {
         let transport = FakeSettingsTransport(get: [
-            json(#"{"ok":true,"data":{"key":"backup_settings","value":{"backupDir":"/Volumes/B","backupOnQuit":true}}}"#)
+            json(
+                #"{"ok":true,"data":{"key":"backup_settings","value":{"backupDir":"/Volumes/B","backupOnQuit":true}}}"#)
         ])
         let stored = await BackupSettings.rawForQuit(baseURL: base, transport: transport, fallback: { [:] })
         #expect(stored == .object(["backupDir": .string("/Volumes/B"), "backupOnQuit": .bool(true)]))
@@ -185,7 +232,9 @@ actor BackupMirrorRecorder {
 
     @Test func savePutsTheValueWithItsBaselineThenMirrors() async throws {
         let transport = FakeSettingsTransport(put: [
-            json(#"{"ok":true,"data":{"key":"backup_settings","value":{"backupDir":"/Volumes/B","backupOnQuit":false}}}"#)
+            json(
+                #"{"ok":true,"data":{"key":"backup_settings","value":{"backupDir":"/Volumes/B","backupOnQuit":false}}}"#
+            )
         ])
         let writer = SettingsWriter(transport: transport)
         await writer.loaded("backup_settings", data: .object(["expected": .object(["exists": .bool(false)])]))

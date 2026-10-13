@@ -40,7 +40,9 @@ public struct TableRowsQuery: Equatable, Hashable, Sendable {
     public var sort: TableSort?
     public var filters: [TableFilter]
 
-    public init(limit: Int = TableRowsQuery.pageSize, cursor: String? = nil, sort: TableSort? = nil, filters: [TableFilter] = []) {
+    public init(
+        limit: Int = TableRowsQuery.pageSize, cursor: String? = nil, sort: TableSort? = nil, filters: [TableFilter] = []
+    ) {
         self.limit = limit
         self.cursor = cursor
         self.sort = sort
@@ -274,6 +276,10 @@ public final class DatabaseMaintenanceModel {
             notice = notices.make(.error, "dbMaintenance.vacuumFailed", detail: "\(label): \(message)")
             vacuuming = nil
         }
+    }
+
+    public func attachNotices(_ center: NativeNoticeCenter) {
+        notices.attach(center) { [weak self] in self?.clearNotice($0) }
     }
 
     public func clearNotice(_ id: Int) {

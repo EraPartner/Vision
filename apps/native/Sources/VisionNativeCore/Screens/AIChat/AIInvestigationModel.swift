@@ -32,8 +32,32 @@ import Observation
     public private(set) var documents: [AIResearchDocument] = []
     public private(set) var busy = false
     public private(set) var error: String?
-    public var isOnline = true { didSet { if isOnline && !oldValue { refreshStatusSoon() } } }
-    public var isForeground = true { didSet { if isForeground && !oldValue { refreshStatusSoon() } } }
+    public var isOnline = true {
+        didSet { if isOnline && !oldValue { refreshStatusSoon(initialMount: !pausedStatusRead) } }
+    }
+    public var isForeground = true {
+        didSet { if isForeground && !oldValue && pausedStatusRead { refreshStatusSoon() } }
+    }
+    public var didReceiveResearch: (@MainActor (NativeSettingsAIReceipt<AIResearchStatus>) -> Void)?
+    public var sharedResearchReceipt: NativeSettingsAIReceipt<AIResearchStatus>? {
+        guard let status, let statusReadAt else { return nil }
+        return .init(value: status, fetchedAt: statusReadAt)
+    }
+    public func seedSharedResearch(_ value: AIResearchStatus, fetchedAt: Date) {
+        guard statusReadAt.map({ fetchedAt > $0 }) ?? true else { return }
+        let oldModel = openAiModel
+        statusTask?.cancel()
+        statusTask = nil
+        status = value
+        statusReadAt = fetchedAt
+        pausedStatusRead = false
+        if oldModel != openAiModel { clearPreview() }
+    }
+    public func invalidateSharedResearch() {
+        statusTask?.cancel()
+        statusTask = nil
+        statusReadAt = nil
+    }
     public var pickDocument: (@MainActor () async throws -> AIResearchDocumentFile?)?
     @ObservationIgnored private let service: any AIInvestigationService
     @ObservationIgnored private let now: @Sendable () -> Date
@@ -51,6 +75,7 @@ import Observation
     @ObservationIgnored private var loadTask: Task<Void, Never>?
     @ObservationIgnored private var statusTask: Task<Void, Never>?
     @ObservationIgnored private var statusReadAt: Date?
+    @ObservationIgnored private var pausedStatusRead = false
 
     public init(
         service: any AIInvestigationService, pollDelay: Duration = .milliseconds(1200),
@@ -145,12 +170,18 @@ import Observation
     }
     /// Only status uses the source TanStack focus/reconnect policy. The job poll is a manual interval.
     public func refreshStatusIfStale(initialMount: Bool = false) async {
-        guard active, isOnline, initialMount || isForeground else { return }
+        guard active else { return }
         if let statusTask {
             await statusTask.value
             return
         }
         guard statusReadAt.map({ now().timeIntervalSince($0) >= 60 }) ?? true else { return }
+        guard isOnline else {
+            pausedStatusRead = true
+            return
+        }
+        guard initialMount || isForeground else { return }
+        pausedStatusRead = false
         let scope = visit
         let task = Task { [weak self] in
             guard let self, active, visit == scope, !Task.isCancelled else { return }
@@ -160,6 +191,7 @@ import Observation
                 let oldModel = openAiModel
                 status = response
                 statusReadAt = now()
+                if let receipt = sharedResearchReceipt { didReceiveResearch?(receipt) }
                 if oldModel != openAiModel { clearPreview() }
             } catch {
                 // useAiResearchStatus has retry: 0 and no source error banner.
@@ -173,12 +205,12 @@ import Observation
         guard active, visit == scope, !Task.isCancelled else { return nil }
         return try? await service.investigationDocuments()
     }
-    private func refreshStatusSoon() {
+    private func refreshStatusSoon(initialMount: Bool = false) {
         guard active else { return }
         let scope = visit
         Task { [weak self] in
             guard let self, active, visit == scope, !Task.isCancelled else { return }
-            await refreshStatusIfStale()
+            await refreshStatusIfStale(initialMount: initialMount)
         }
     }
     public func didDisappear() {
@@ -193,6 +225,7 @@ import Observation
         loadTask = nil
         statusTask?.cancel()
         statusTask = nil
+        pausedStatusRead = false
         question = ""
         depthOverride = nil
         route = "local"

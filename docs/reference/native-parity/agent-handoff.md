@@ -27,12 +27,28 @@ behaviour, is now in progress. This handoff records intended work; it does not c
 in-progress files compile or that macOS validation has passed. Inspect `git log`,
 `git status` and the actual diff before continuing.
 
-The first phase-3o safety checkpoint includes Settings window primitives, the seven-section
-navigation helper and its tests. They are scaffolding, not a wired Settings screen. The
-primitives passed syntax parsing and formatting; the new navigation tests still await the
-phase harness. It also includes a narrow Chat UI correction: cached status remains visible
-during background status refresh, matching the source's initial-only loading state. That
-file passed syntax/format checks; macOS semantic compilation remains pending.
+The first phase-3o safety checkpoint, **`9a38ffed`**, published the initial handoff and
+Settings scaffolding. The next in-progress checkpoint saves all current task changes and
+introduces `.github/workflows/native-branch.yml`, an automatic macOS app/package check on
+pushes to `codex/native-phase-*`. This is a work-in-progress checkpoint, not a completed
+Settings port. Full integration and combined verification are still required.
+
+Current saved implementation includes raw Settings persistence/model/default migration,
+seven-section native window and General/Appearance/Insights/Behavior/Backup/About UI,
+AI service/model work, the desktop callback interface and private localStorage helper,
+global notice host, six captured Undo adapters, zero-retry Settings client support and
+sticky host settings queues. Root Settings sheet/close-router integration is on disk.
+The desktop SDK factory has **not yet been wired**, so do not claim the Settings screen is
+usable end to end. Raw normal app/dashboard edits preserve unknown fields, required fields
+are migrated exactly as the source, optional presence is retained, and CAS baselines remain
+the original raw value. Theme normal writes reconstruct its four source fields.
+
+Focused checks so far: 21 main Settings Core tests, eight Insights/Behavior helpers, two
+rail navigation tests, four portable storage bridge tests, two Import/global notice tests,
+script behaviour under Bun and workflow admission/policy checks passed. New global Undo,
+API replay and combined checks are in progress. SwiftUI sources passed syntax/format checks
+where reported; macOS semantic build and rendering are not yet verified. The prior phase's
+979-test result applies only to `17158f6d`, not to this unfinished snapshot.
 
 The user requested an immediate handoff, commit and push of **all dirty changes for this
 work** when Codex plan usage reaches 3%. The current tools do not expose remaining plan
@@ -76,6 +92,22 @@ localization catalogs, shell/router/factory, top-level docs and publishing.
 | `tax_profile` | Independent source-parity review and new combined verification harness |
 | Root | Global notices/Undo, six undo adapters, native Settings hosting/navigation, desktop SDK callbacks, shared settings projection/API/catalog, integration and commit/push |
 
+Ownership has expanded after the initial parallel slices:
+
+- `tax_deductions` also owns ordinary-notice attachments and now the sole phase-3o SDK
+  edits in `VisionNative/ShellController.swift` (factory, existing desktop callbacks,
+  safe script evaluator, restore reload, display cadence). Root must not race that file.
+- `tax_charts_ui` also owns `Shell/NativeSettingsStorageBridge.swift`, its synthetic
+  tests and the new branch macOS workflow; these are ready for integration.
+- `tax_charts_backend` owns shared AI status/model read receipts and in-flight deduplication,
+  including narrowly scoped `APIClient.swift` plumbing. Root must coordinate before editing it.
+- `tax_overview_ui` also owns new native appearance resolution and missing typed app-settings
+  projections; the main persistence model has passed its focused checks.
+- `tax_profile` is implementing the frontend native-Settings takeover in addition to review/
+  harness work. The source router must retain Settings history while hidden React Settings
+  panes are suppressed and preference drafts/acknowledgements synchronize without double writes.
+  Root owns `ElectronBridge`'s new `close-settings` action; coordinate frontend files.
+
 Core paths above are relative to `apps/native/Sources/VisionNativeCore`; UI paths are under
 `apps/native/Sources/VisionNativeUI/Screens/Settings`. Existing source
 `apps/frontend/src/features/settings/` defines the parity contract. Settings section IDs are
@@ -111,6 +143,23 @@ Core paths above are relative to `apps/native/Sources/VisionNativeCore`; UI path
    only for existing operations; update parity and affected architecture/flow docs after
    actual implementation stabilizes. Run meaningful persistence/lifecycle/race tests,
    repository checks and a fresh combined Swift proof before a verified checkpoint.
+
+Specific unfinished integration at this snapshot:
+
+- Wire all four Settings models in the actual SDK factory and reuse host backup/service APIs.
+  Rebuild native query models and their CAS writers after confirmed backup restore; the
+  source full reload cannot leave old native IDs or poisoned pre-restore baselines alive.
+- Complete shared AI read receipts/in-flight deduplication, then connect the broker to
+  Settings and Chat/Investigation without fetching fresh shared status twice.
+- Suppress the retained React Settings dialog only under a new native-Settings capability,
+  preserving older native-navigation builds' web fallback. Synchronize live native drafts
+  and acknowledged baselines; web-origin preference changes must be forwarded rather than
+  silently discarded or written by both hydration providers and the native writer.
+- Attach ordinary notice publishers (including dynamic database editors), finish captured
+  Undo cross-route/race tests, protect editable WK controls from the native Cmd-Z shortcut,
+  and wire notice descriptions and source-specific lifetimes.
+- Wire source theme/system-accent/visual-effects/display-cap behaviour and immediate
+  language/format updates, then complete catalogs, parity docs and final checks.
 
 Provider credentials must remain masked. AI provider Save trims and clears the draft
 immediately, including when its write later fails; Clear is allowed only for

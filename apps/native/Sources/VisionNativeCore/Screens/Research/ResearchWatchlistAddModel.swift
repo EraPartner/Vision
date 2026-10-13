@@ -29,7 +29,7 @@ public final class ResearchWatchlistAddModel {
     @ObservationIgnored private var searchTask: Task<Void, Never>?
     @ObservationIgnored private var quoteTask: Task<Void, Never>?
     @ObservationIgnored private var previewTask: Task<Void, Never>?
-    @ObservationIgnored private var noticeID = 0
+    @ObservationIgnored private var notices = NoticeCounter()
 
     public init(service: any ResearchService) { self.service = service }
 
@@ -219,13 +219,15 @@ public final class ResearchWatchlistAddModel {
         if let didMutate { await didMutate() }
         isSubmitting = false
         guard self.scope == scope else { return false }
-        noticeID += 1
-        notice = ScreenNotice(
-            id: noticeID, kind: success ? .success : .error,
-            key: success ? "addWatchlist.success" : "addWatchlist.error",
+        notice = notices.make(
+            success ? .success : .error, success ? "addWatchlist.success" : "addWatchlist.error",
             detail: success ? nil : error)
         if success { close() }
         return success
+    }
+
+    public func attachNotices(_ center: NativeNoticeCenter) {
+        notices.attach(center) { [weak self] in self?.clearNotice($0) }
     }
 
     public func clearNotice(_ id: Int) { if notice?.id == id { notice = nil } }

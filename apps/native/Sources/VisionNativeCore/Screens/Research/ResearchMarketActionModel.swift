@@ -38,7 +38,8 @@ public struct ResearchMarketTradeDraft: Equatable, Sendable {
     public private(set) var errorKey: String?
     public private(set) var noticeKey: String?
     public private(set) var notice: ScreenNotice?
-    @ObservationIgnored private var noticeId = 0
+    public private(set) var globalNoticesAttached = false
+    @ObservationIgnored private var notices = NoticeCounter()
     public var brokerContext: (@MainActor (Int?) async -> ResearchMarketBrokerContext)?
     public var didMutate: (@MainActor () async -> Void)?
     @ObservationIgnored private let service: any ResearchService
@@ -265,10 +266,8 @@ public struct ResearchMarketTradeDraft: Equatable, Sendable {
             await didMutate?()
             guard stamp == context else { return }
             noticeKey = step == "new" ? "addInv.toast.added" : "addPortTxn.toast.recorded"
-            noticeId += 1
-            notice = .init(
-                id: noticeId, kind: .success, key: noticeKey!,
-                variables: ["name": quote?.symbol ?? "", "assetClass": assetClass, "type": trade.type])
+            notice = notices.make(
+                .success, noticeKey!, ["name": quote?.symbol ?? "", "assetClass": assetClass, "type": trade.type])
             discardDrafts()
         } catch {
             if case APIError.client(let client) = error, (400..<500).contains(client.status) {
@@ -281,6 +280,11 @@ public struct ResearchMarketTradeDraft: Equatable, Sendable {
             if stamp == context { self.error = error.localizedDescription }
         }
     }
+    public func attachNotices(_ center: NativeNoticeCenter) {
+        notices.attach(center) { [weak self] in self?.clearNotice($0) }
+        globalNoticesAttached = true
+    }
+
     public func clearNotice(_ id: Int) { if notice?.id == id { notice = nil } }
     public func acknowledgeUncertainWrite() async {
         guard !isSubmitting else { return }

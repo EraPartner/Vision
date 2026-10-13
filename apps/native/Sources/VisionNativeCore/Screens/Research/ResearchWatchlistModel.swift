@@ -39,7 +39,7 @@ public final class ResearchWatchlistModel {
     @ObservationIgnored private var chartQuoteRevision = UUID()
     @ObservationIgnored private var chartMetricsRevision = UUID()
     @ObservationIgnored private var dirty = true
-    @ObservationIgnored private var noticeID = 0
+    @ObservationIgnored private var notices = NoticeCounter()
     @ObservationIgnored private var configuredNumberFormat: NumberFormat = .eu
     @ObservationIgnored private var visitRevision = UUID()
     @ObservationIgnored private var editorRevision = UUID()
@@ -346,10 +346,7 @@ public final class ResearchWatchlistModel {
             isEditingTarget = false
             targetDraft = ""
         }
-        noticeID += 1
-        notice = ScreenNotice(
-            id: noticeID, kind: success ? .success : .error,
-            key: success ? key : failure, detail: failureMessage)
+        notice = notices.make(success ? .success : .error, success ? key : failure, detail: failureMessage)
         return success
     }
 
@@ -357,5 +354,9 @@ public final class ResearchWatchlistModel {
         invalidate()
         await load(force: true)
     }
+    public func attachNotices(_ center: NativeNoticeCenter) {
+        notices.attach(center) { [weak self] in self?.clearNotice($0) }
+    }
+
     public func clearNotice(_ id: Int) { if notice?.id == id { notice = nil } }
 }

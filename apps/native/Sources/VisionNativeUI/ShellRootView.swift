@@ -37,6 +37,28 @@ public struct ShellRootView<WebContent: View>: View {
         }
         .environment(\.visionTheme, theme)
         .environment(\.locale, Locale(identifier: model.strings.language.rawValue))
+        .environment(\.nativeNoticeCenter, model.notices)
+        .overlay(alignment: .bottom) {
+            if !model.isPresentingNativeSettings {
+                NativeNoticeHost(
+                    center: model.notices, strings: model.strings, isWebVisible: model.detail == .web,
+                    isEditingWebText: model.isEditingWebText)
+                    .environment(\.visionTheme, theme)
+            }
+        }
+        .sheet(isPresented: Binding(
+            get: { model.isPresentingNativeSettings },
+            set: { if !$0 { model.closeSettings() } }
+        )) {
+            if let settings = model.nativeSettings, let ai = model.settingsAI,
+                let backup = model.settingsBackup, let about = model.settingsAbout
+            {
+                NativeSettingsScreenView(shell: model, model: settings, ai: ai, backup: backup, about: about)
+                    .environment(\.visionTheme, theme)
+                    .environment(\.colorScheme, theme.colorScheme)
+                    .environment(\.locale, Locale(identifier: model.strings.language.rawValue))
+            }
+        }
         .overlay(alignment: .bottom) {
             if let review = model.portfolioImports?.review {
                 PortfolioImportSuccessToast(model: review, shell: model)

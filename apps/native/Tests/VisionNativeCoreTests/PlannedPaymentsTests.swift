@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import VisionNativeCore
 
 /// A gate a fake call waits on until the test opens it.
@@ -123,7 +124,8 @@ enum PlannedFixture {
             currency: row.currency, categoryId: row.categoryId, categoryName: row.categoryName, comment: row.comment,
             url: row.url, isRecurring: row.isRecurring, recurrencePattern: row.recurrencePattern,
             recurrenceEndDate: row.recurrenceEndDate, maxOccurrences: row.maxOccurrences, isLoan: row.isLoan,
-            loanType: row.loanType, loanPrincipal: row.loanPrincipal, loanAnnualInterestRate: row.loanAnnualInterestRate,
+            loanType: row.loanType, loanPrincipal: row.loanPrincipal,
+            loanAnnualInterestRate: row.loanAnnualInterestRate,
             loanTermMonths: row.loanTermMonths, loanStartDate: row.loanStartDate, loanPaymentDay: row.loanPaymentDay,
             loanRegularPaymentAmount: row.loanRegularPaymentAmount, loanFirstPaymentDate: row.loanFirstPaymentDate,
             loanSchedule: row.loanSchedule, isExecuted: row.isExecuted, lastExecutedDate: row.lastExecutedDate,
@@ -133,7 +135,8 @@ enum PlannedFixture {
     }
 
     static func execution(_ transactionId: Int, _ date: String) -> OpenAPI.PlannedTransactionExecution {
-        OpenAPI.PlannedTransactionExecution(id: transactionId * 10, executedTransactionId: transactionId, executionDate: date)
+        OpenAPI.PlannedTransactionExecution(
+            id: transactionId * 10, executedTransactionId: transactionId, executionDate: date)
     }
 
     static func transaction(
@@ -504,7 +507,8 @@ enum PlannedFixture {
 @MainActor
 @Suite struct PlannedPaymentsModelTests {
     static let rows = [
-        PlannedFixture.row(id: 1, name: "Rent", amount: -1000, category: "Housing", recurring: true, pattern: "monthly"),
+        PlannedFixture.row(
+            id: 1, name: "Rent", amount: -1000, category: "Housing", recurring: true, pattern: "monthly"),
         PlannedFixture.row(id: 2, name: "Gym", amount: -40, category: "Sport", recurring: true, pattern: "monthly"),
         PlannedFixture.row(id: 3, name: "Old plan", amount: -15, isActive: false),
     ]
@@ -583,7 +587,8 @@ enum PlannedFixture {
 
     @Test func theFiguresUseTheSharedRatesAndToday() async {
         let service = FakePlannedService(rows: [
-            PlannedFixture.row(id: 1, date: "2026-10-12", amount: -100, currency: "USD", recurring: true, pattern: "monthly"),
+            PlannedFixture.row(
+                id: 1, date: "2026-10-12", amount: -100, currency: "USD", recurring: true, pattern: "monthly"),
             PlannedFixture.row(id: 2, date: "2026-10-13", amount: -5, currency: "XYZ"),
         ])
         let model = PlannedPaymentsModel(
@@ -652,7 +657,7 @@ enum PlannedFixture {
         #expect(notice.key == "plannedPage.toast.paused")
         #expect(notice.kind == .success)
         #expect(notice.detail == "Rent")
-        #expect(model.undo == PlannedUndo(noticeID: notice.id, paymentID: 1))
+        #expect(model.undo == PlannedUndo(noticeID: notice.id, paymentID: 1, restoreActive: true))
         #expect(model.duration(of: notice) == PlannedPaymentsModel.undoDuration)
         #expect(!model.actionLoading)
         await model.undoToggle()

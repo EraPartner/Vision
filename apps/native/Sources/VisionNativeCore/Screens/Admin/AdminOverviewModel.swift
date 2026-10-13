@@ -217,6 +217,10 @@ public final class AdminOverviewModel {
     }
 
     /// The toast was shown.
+    public func attachNotices(_ center: NativeNoticeCenter) {
+        notices.attach(center) { [weak self] in self?.clearNotice($0) }
+    }
+
     public func clearNotice(_ id: Int) {
         if notice?.id == id { notice = nil }
     }

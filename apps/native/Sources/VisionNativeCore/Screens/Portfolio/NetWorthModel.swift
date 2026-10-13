@@ -16,7 +16,7 @@ public final class NetWorthModel {
     public private(set) var isRefreshingPrices = false
     public private(set) var notice: ScreenNotice?
     public private(set) var priceRefreshResult: PortfolioPriceRefresh?
-    @ObservationIgnored private var noticeId = 0
+    @ObservationIgnored private var notices = NoticeCounter()
     @ObservationIgnored public var pricesDidChange: (@MainActor () -> Void)?
     public private(set) var currency = "EUR"
     public var isOnline = true
@@ -169,16 +169,11 @@ public final class NetWorthModel {
         do {
             let result = try await service.refreshNetWorthPrices()
             priceRefreshResult = result
-            noticeId &+= 1
-            notice = ScreenNotice(
-                id: noticeId, kind: result.staleCount > 0 ? .info : .success,
-                key: "portfolio.refreshedPrices", variables: ["n": String(result.total ?? 0)])
+            notice = notices.make(
+                result.staleCount > 0 ? .info : .success, "portfolio.refreshedPrices", ["n": String(result.total ?? 0)])
         } catch {
             pricesError = error.localizedDescription
-            noticeId &+= 1
-            notice = ScreenNotice(
-                id: noticeId, kind: .error, key: "portfolio.refreshPricesFailedTitle",
-                detail: error.localizedDescription)
+            notice = notices.make(.error, "portfolio.refreshPricesFailedTitle", detail: error.localizedDescription)
         }
         let refreshFailure = notice?.kind == .error ? notice?.detail : nil
         // A missing acknowledgement can follow successful provider writes. Read the
@@ -190,6 +185,10 @@ public final class NetWorthModel {
         await load(currency: currency, pageSize: pageSize, route: refreshedRoute, force: true)
         if let refreshFailure { pricesError = refreshFailure }
     }
+    public func attachNotices(_ center: NativeNoticeCenter) {
+        notices.attach(center) { [weak self] in self?.clearNotice($0) }
+    }
+
     public func clearNotice(_ id: Int) { if notice?.id == id { notice = nil } }
     private func fetchSummary(token: UUID) async {
         do {

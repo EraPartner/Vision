@@ -15,6 +15,14 @@ adminListEndpoints
 
 # App settings (number and date formats, admin mode) for native screens
 getSetting
+# Native Settings reads the whole raw envelope with first-load CAS baselines.
+getSettings
+# Settings AI provider metadata and the existing AgentCloak desktop controls.
+researchListProviderKeys
+researchSetProviderKey
+researchClearProviderKey
+getAgentCloakDesktopStatus
+configureAgentCloakDesktop
 
 # Admin > Database maintenance and the table data editor (ADR-101)
 adminDatabaseVacuum

@@ -242,7 +242,7 @@ struct AIInvestigationTests {
         #expect(await service.documentReads == 1)
         model.didDisappear()
     }
-    @Test func failedStatusRecoversOnFocusWithoutRetryingFailedDocumentMountRead() async throws {
+    @Test func failedStatusRecoversOnReconnectWithoutRetryingFailedDocumentMountRead() async throws {
         let service = InvestigationFixtureService()
         await service.failStatusOnce()
         await service.failDocumentOnce()
@@ -251,6 +251,10 @@ struct AIInvestigationTests {
         #expect(model.status == nil && !model.openAiEnabled && model.error == nil)
         model.isForeground = false
         model.isForeground = true
+        await Task.yield()
+        #expect(await service.statusReads == 1)
+        model.isOnline = false
+        model.isOnline = true
         await model.refreshStatusIfStale()
         #expect(model.openAiEnabled && model.openAiModel == "first")
         #expect(await service.statusReads == 2)
@@ -267,6 +271,10 @@ struct AIInvestigationTests {
         await model.refreshStatusIfStale()
         #expect(await service.statusReads == 1)
         clock.advance(61)
+        model.isForeground = false
+        model.isForeground = true
+        await Task.yield()
+        #expect(await service.statusReads == 1)
         model.isOnline = false
         model.isOnline = true
         await model.refreshStatusIfStale()
@@ -343,6 +351,20 @@ struct AIInvestigationTests {
         await Task.yield()
         await Task.yield()
         #expect(model.job == nil)
+        model.didDisappear()
+    }
+    @Test func staleBackgroundReconnectStartsANewOnlineQueryWithoutFocusRefetch() async throws {
+        let service = InvestigationFixtureService()
+        let clock = InvestigationFixtureClock()
+        let model = AIInvestigationModel(service: service, now: { clock.read() })
+        await model.load()
+        clock.advance(61)
+        model.isForeground = false
+        model.isOnline = false
+        model.isOnline = true
+        await model.refreshStatusIfStale(initialMount: true)
+        #expect(await service.statusReads == 2)
+        #expect(await service.documentReads == 1)
         model.didDisappear()
     }
     private func waitForPublishedState(_ model: AIInvestigationModel, _ state: String) async throws {

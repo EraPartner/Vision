@@ -19,9 +19,10 @@ struct ActionToast: View {
     /// Lifts a stacked toast above the newer ones.
     var bottomPadding: CGFloat = 20
     @Environment(\.visionTheme) var theme
+    @Environment(\.nativeNoticeCenter) private var globalNotices
 
     var body: some View {
-        if let notice {
+        if let notice, globalNotices?.contains(notice) != true {
             let title = strings.t(notice.key, notice.variables)
             HStack(alignment: .center, spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {

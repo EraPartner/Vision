@@ -90,11 +90,12 @@ public actor SettingsWriter {
         baselines[key]
     }
 
-    /// Unlike Electron, a failed write does not make every later write to the key fail.
+    /// A rejected or unacknowledged write poisons this key's queue until app reload,
+    /// matching Electron: a later edit cannot silently retry unknown durable state.
     public func save(_ key: String, value: JSONValue, baseURL: URL) async throws -> JSONValue {
         let previous = pending[key]
         let task = Task {
-            _ = try? await previous?.value
+            _ = try await previous?.value
             return try await self.write(key, value: value, baseURL: baseURL)
         }
         pending[key] = task
@@ -146,7 +147,8 @@ public enum ServicesSettings {
         keepServicesOnQuit: Bool, baseURL: URL?, writer: SettingsWriter, mirror: @Sendable (Bool) async throws -> Void
     ) async throws {
         guard let baseURL else { throw SettingsWriteError("The Vision backend is not running.") }
-        _ = try await writer.save(key, value: .object(["keepServicesOnQuit": .bool(keepServicesOnQuit)]), baseURL: baseURL)
+        _ = try await writer.save(
+            key, value: .object(["keepServicesOnQuit": .bool(keepServicesOnQuit)]), baseURL: baseURL)
         try await mirror(keepServicesOnQuit)
     }
 }

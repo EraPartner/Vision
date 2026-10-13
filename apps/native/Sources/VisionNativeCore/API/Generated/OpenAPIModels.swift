@@ -294,6 +294,31 @@ extension OpenAPI {
         }
     }
 
+    public struct AgentCloakDesktopStatus: Codable, Equatable, Sendable {
+        /// Effective Desktop preference and mode
+        public let enabled: Bool
+        /// Fresh bounded loopback detection probe
+        public let available: Bool
+        /// Valid local reference mapping key exists
+        public let mappingKeyConfigured: Bool
+        /// Effective OpenAI API route availability
+        public let openAiEnabled: Bool
+
+        public init(enabled: Bool, available: Bool, mappingKeyConfigured: Bool, openAiEnabled: Bool) {
+            self.enabled = enabled
+            self.available = available
+            self.mappingKeyConfigured = mappingKeyConfigured
+            self.openAiEnabled = openAiEnabled
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case enabled = "enabled"
+            case available = "available"
+            case mappingKeyConfigured = "mappingKeyConfigured"
+            case openAiEnabled = "openAiEnabled"
+        }
+    }
+
     public struct AiAnalysisEditProposal: Codable, Equatable, Sendable {
         public let schemaVersion: Int
         public let savedAnalysisId: String
@@ -7927,6 +7952,69 @@ extension OpenAPI {
         public let data: OpenAPI.ResearchPortfolioForecastData?
 
         public init(ok: Bool, meta: OpenAPI.ResearchMeta? = nil, error: OpenAPI.ErrorPayload? = nil, data: OpenAPI.ResearchPortfolioForecastData? = nil) {
+            self.ok = ok
+            self.meta = meta
+            self.error = error
+            self.data = data
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case meta = "meta"
+            case error = "error"
+            case data = "data"
+        }
+    }
+
+    public struct ResearchProviderKeyStatus: Codable, Equatable, Sendable {
+        public let provider: String
+        public let label: String
+        public let envVar: String
+        public let configured: Bool
+        public let source: String
+        public let masked: String?
+
+        public init(provider: String, label: String, envVar: String, configured: Bool, source: String, masked: String? = nil) {
+            self.provider = provider
+            self.label = label
+            self.envVar = envVar
+            self.configured = configured
+            self.source = source
+            self.masked = masked
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case provider = "provider"
+            case label = "label"
+            case envVar = "envVar"
+            case configured = "configured"
+            case source = "source"
+            case masked = "masked"
+        }
+    }
+
+    public struct ResearchProviderKeysData: Codable, Equatable, Sendable {
+        public let items: [OpenAPI.ResearchProviderKeyStatus]
+        public let total: Int
+
+        public init(items: [OpenAPI.ResearchProviderKeyStatus], total: Int) {
+            self.items = items
+            self.total = total
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case items = "items"
+            case total = "total"
+        }
+    }
+
+    public struct ResearchProviderKeysEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let meta: OpenAPI.ResearchMeta?
+        public let error: OpenAPI.ErrorPayload?
+        public let data: OpenAPI.ResearchProviderKeysData?
+
+        public init(ok: Bool, meta: OpenAPI.ResearchMeta? = nil, error: OpenAPI.ErrorPayload? = nil, data: OpenAPI.ResearchProviderKeysData? = nil) {
             self.ok = ok
             self.meta = meta
             self.error = error

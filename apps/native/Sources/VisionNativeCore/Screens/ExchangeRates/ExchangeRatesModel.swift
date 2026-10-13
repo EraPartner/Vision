@@ -74,7 +74,7 @@ public final class ExchangeRatesModel {
     @ObservationIgnored private let now: @Sendable () -> Date
     @ObservationIgnored private var fetchedAt: Date?
     @ObservationIgnored private var inFlight: Task<Void, Never>?
-    @ObservationIgnored private var noticeCount = 0
+    @ObservationIgnored private var notices = NoticeCounter()
 
     public init(service: any ExchangeRatesService, now: @escaping @Sendable () -> Date = { Date() }) {
         self.service = service
@@ -127,6 +127,10 @@ public final class ExchangeRatesModel {
     }
 
     /// The toast was shown.
+    public func attachNotices(_ center: NativeNoticeCenter) {
+        notices.attach(center) { [weak self] in self?.clearNotice($0) }
+    }
+
     public func clearNotice(_ id: Int) {
         if notice?.id == id { notice = nil }
     }
@@ -162,7 +166,6 @@ public final class ExchangeRatesModel {
     }
 
     private func post(_ kind: ScreenNotice.Kind, _ key: String) {
-        noticeCount += 1
-        notice = ScreenNotice(id: noticeCount, kind: kind, key: key)
+        notice = notices.make(kind, key)
     }
 }

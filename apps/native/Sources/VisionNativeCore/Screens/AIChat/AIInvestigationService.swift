@@ -23,9 +23,11 @@ private struct AIInvestigationDocuments: Decodable, Sendable {
 }
 extension APIClient: AIInvestigationService {
     public func investigationStatus() async throws -> AIResearchStatus {
-        try await send(
-            ResearchRequest<OpenAPIOperations.GetAiResearchStatus, AIResearchStatus>(
-                OpenAPIOperations.GetAiResearchStatus.self))
+        try await coalescedAIRead(key: "openai-research-status") {
+            try await send(
+                ResearchRequest<OpenAPIOperations.GetAiResearchStatus, AIResearchStatus>(
+                    OpenAPIOperations.GetAiResearchStatus.self))
+        }
     }
     public func investigationCreate(_ input: TaxValue) async throws -> AIInvestigation {
         try await send(

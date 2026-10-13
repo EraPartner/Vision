@@ -1,9 +1,13 @@
 import Testing
+
 @testable import VisionNativeUI
 
 struct NativeSettingsWindowNavigationTests {
     @Test func sectionKeysRetainSourceRoutesAndOrder() {
-        #expect(NativeSettingsWindowSection.allCases.map(\.rawValue) == ["general", "appearance", "statistics", "behavior", "ai", "backup", "about"])
+        #expect(
+            NativeSettingsWindowSection.allCases.map(\.rawValue) == [
+                "general", "appearance", "statistics", "behavior", "ai", "backup", "about",
+            ])
         #expect(NativeSettingsWindowSection(rawValue: "insights") == nil)
         #expect(NativeSettingsWindowSection(rawValue: "statistics")?.titleKey == "settings.section.statistics")
     }

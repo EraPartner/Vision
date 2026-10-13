@@ -11,19 +11,24 @@ public protocol AIChatService: Sendable {
     func chatStream(_ request: AIChatSendRequest, onEvent: @escaping @Sendable (AIChatEvent) async -> Void) async throws
         -> AIChatComplete
 }
-private struct AIChatModelsResponse: Decodable, Sendable {
+private struct AIChatModelsResponse: Codable, Sendable {
     let items: [AIChatOllamaModel]
     let total: Int
 }
 extension APIClient: AIChatService {
     public func chatStatus() async throws -> AIChatOllamaStatus {
-        try await send(
-            ResearchRequest<OpenAPIOperations.GetAiStatus, AIChatOllamaStatus>(OpenAPIOperations.GetAiStatus.self))
+        try await coalescedAIRead(key: "ollama-status") {
+            try await send(
+                ResearchRequest<OpenAPIOperations.GetAiStatus, AIChatOllamaStatus>(OpenAPIOperations.GetAiStatus.self))
+        }
     }
     public func chatModels() async throws -> [AIChatOllamaModel] {
-        try await send(
-            ResearchRequest<OpenAPIOperations.GetAiModels, AIChatModelsResponse>(OpenAPIOperations.GetAiModels.self)
-        ).items
+        let response: AIChatModelsResponse = try await coalescedAIRead(key: "ollama-models") {
+            try await send(
+                ResearchRequest<OpenAPIOperations.GetAiModels, AIChatModelsResponse>(OpenAPIOperations.GetAiModels.self)
+            )
+        }
+        return response.items
     }
     public func chatConversations(offset: Int) async throws -> AIChatConversationPage {
         try await send(

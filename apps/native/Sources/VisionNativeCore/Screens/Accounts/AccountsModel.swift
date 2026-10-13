@@ -504,7 +504,8 @@ public final class AccountsModel {
                 labelKey: "accounts.field.spendable", value: strings.t(account.spendable ? "common.yes" : "common.no")))
         entries.append(
             AccountDetailEntry(
-                labelKey: "accounts.field.inNetWorth", value: strings.t(account.inNetWorth ? "common.yes" : "common.no")))
+                labelKey: "accounts.field.inNetWorth", value: strings.t(account.inNetWorth ? "common.yes" : "common.no")
+            ))
         return entries
     }
 
@@ -652,7 +653,8 @@ public final class AccountsModel {
     public var plannedTruncatedText: String? {
         guard let planned, planned.total > planned.rows.count else { return nil }
         return strings.t(
-            "accounts.detail.upcomingPlannedTruncated", ["shown": String(planned.rows.count), "total": String(planned.total)])
+            "accounts.detail.upcomingPlannedTruncated",
+            ["shown": String(planned.rows.count), "total": String(planned.total)])
     }
 
     // MARK: After a write
@@ -676,6 +678,10 @@ public final class AccountsModel {
     }
 
     // MARK: Toasts
+
+    public func attachNotices(_ center: NativeNoticeCenter) {
+        notices.attach(center) { [weak self] in self?.clearNotice($0) }
+    }
 
     public func clearNotice(_ id: Int) {
         if notice?.id == id { notice = nil }

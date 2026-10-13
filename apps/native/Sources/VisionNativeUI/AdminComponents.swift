@@ -43,7 +43,8 @@ struct AdminCard<Content: View>: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: DesignTokens.Radius.card)
-                    .fill(theme.card))
+                    .fill(theme.card)
+            )
             .overlay(
                 RoundedRectangle(cornerRadius: DesignTokens.Radius.card)
                     .strokeBorder(ring ?? theme.border.opacity(0.6), lineWidth: 1))
@@ -62,7 +63,8 @@ struct AdminIconBadge: View {
             .frame(width: 40, height: 40)
             .background(
                 RoundedRectangle(cornerRadius: DesignTokens.Radius.control)
-                    .fill(theme.primary.opacity(0.12)))
+                    .fill(theme.primary.opacity(0.12))
+            )
             .accessibilityHidden(true)
     }
 }
@@ -116,10 +118,12 @@ struct AdminErrorBanner: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: DesignTokens.Radius.card)
-                .fill(theme.destructive.opacity(0.06)))
+                .fill(theme.destructive.opacity(0.06))
+        )
         .overlay(
             RoundedRectangle(cornerRadius: DesignTokens.Radius.card)
-                .strokeBorder(theme.destructive.opacity(0.4), lineWidth: 1))
+                .strokeBorder(theme.destructive.opacity(0.4), lineWidth: 1)
+        )
         .accessibilityElement(children: .contain)
         .accessibilityAddTraits(.isStaticText)
         // `role="alert"`: the failure is announced when it appears or changes.
@@ -142,13 +146,15 @@ struct NoticeToast: View {
     let strings: any Localizing
     let clear: (Int) -> Void
     @Environment(\.visionTheme) var theme
+    @Environment(\.nativeNoticeCenter) private var globalNotices
 
     var body: some View {
-        if let notice {
+        if let notice, globalNotices?.contains(notice) != true {
             let title = strings.t(notice.key, notice.variables)
             VStack(alignment: .leading, spacing: 2) {
                 Label(
-                    title, systemImage: notice.kind == .success ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                    title,
+                    systemImage: notice.kind == .success ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
                 if let detail = notice.detail, !detail.isEmpty {
                     Text(detail)
                         .font(.footnote)

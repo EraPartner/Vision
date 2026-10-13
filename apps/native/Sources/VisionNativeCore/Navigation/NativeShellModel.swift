@@ -54,6 +54,7 @@ public final class NativeShellModel {
     /// The route a sidebar click or shortcut asked the page for, until the page reports one.
     public private(set) var pendingRoute: NativeRoute?
     public let exchangeRates: ExchangeRatesModel
+    public let notices: NativeNoticeCenter
     /// `/admin`, `/admin/db`, `/admin/db/:table`, `/admin/providers` and `/admin/endpoints`.
     public let admin: AdminScreens
     /// `/planned`.
@@ -81,6 +82,11 @@ public final class NativeShellModel {
     public let researchChartBuilder: ResearchChartBuilderModel?
     public let researchDossiers: ResearchDossiersModel?
     public let aiChat: AIChatScreens?
+    public let nativeSettings: NativeSettingsModel?
+    public let settingsAI: NativeSettingsAIModel?
+    public let settingsBackup: NativeSettingsBackupModel?
+    public let settingsAbout: NativeSettingsAboutModel?
+    public var isEditingWebText: (@MainActor () async -> Bool)?
     /// The navigation the Leave this page? alert holds while it asks (`blocker.location`).
     public private(set) var leaveConfirmation: NativeRoute?
 
@@ -124,6 +130,10 @@ public final class NativeShellModel {
         researchChartBuilder: ResearchChartBuilderModel? = nil,
         researchDossiers: ResearchDossiersModel? = nil,
         aiChat: AIChatScreens? = nil,
+        nativeSettings: NativeSettingsModel? = nil,
+        settingsAI: NativeSettingsAIModel? = nil,
+        settingsBackup: NativeSettingsBackupModel? = nil,
+        settingsAbout: NativeSettingsAboutModel? = nil,
         hiddenSections: [NavSectionID: Bool]? = nil,
         loadSettings: @escaping @Sendable () async throws -> NativeAppSettings,
         saveHiddenSections: @escaping @MainActor ([NavSectionID: Bool]) -> Void = { _ in },
@@ -134,6 +144,7 @@ public final class NativeShellModel {
         self.strings = strings
         self.theme = theme
         self.exchangeRates = exchangeRates
+        self.notices = NativeNoticeCenter()
         self.admin = admin
         self.planned = planned
         self.imports = imports
@@ -153,6 +164,10 @@ public final class NativeShellModel {
         self.researchChartBuilder = researchChartBuilder
         self.researchDossiers = researchDossiers
         self.aiChat = aiChat
+        self.nativeSettings = nativeSettings
+        self.settingsAI = settingsAI
+        self.settingsBackup = settingsBackup
+        self.settingsAbout = settingsAbout
         self.hiddenSections = hiddenSections ?? Self.defaultHiddenSections
         self.loadSettings = loadSettings
         self.saveHiddenSections = saveHiddenSections
@@ -163,6 +178,13 @@ public final class NativeShellModel {
         accounts.attach(self)
         categories.attach(self)
         recipients.attach(self)
+        transactions.attachNotices(notices)
+        recipients.attachNotices(notices)
+        categories.attachNotices(notices)
+        planned.attachNotices(notices)
+        researchForecast?.life.attachNotices(notices)
+        researchChartBuilder?.attachNotices(notices)
+        aiChat?.chat.attachNotices(notices)
     }
 
     /// `DEFAULT_HIDDEN` of useSidebarPreferences.
@@ -438,9 +460,25 @@ public final class NativeShellModel {
         onNavigate(.openSettings)
     }
 
+    public var settingsSection: String? {
+        guard let section = route.value("settings"),
+            ["general", "appearance", "statistics", "behavior", "ai", "backup", "about"].contains(section)
+        else { return nil }
+        return section
+    }
+    public var isPresentingNativeSettings: Bool { nativeSettings != nil && settingsSection != nil }
+    public func selectSettingsSection(_ section: String) {
+        guard isPresentingNativeSettings,
+            ["general", "appearance", "statistics", "behavior", "ai", "backup", "about"].contains(section)
+        else { return }
+        replace(with: route.setting("settings", to: section).string)
+    }
+    public func closeSettings() { onNavigate(.closeSettings) }
+
     /// A menu action is about to reach the page. One that opens a page dialog shows the web
     /// view, since the dialog belongs to the page.
     public func willPresent(_ action: MenuAction) {
+        if action == .openSettings, nativeSettings != nil { return }
         switch action.action {
         case MenuAction.toggleSidebar.action, "navigate", "replace-route", "set-theme", "native-sidebar":
             return
@@ -505,7 +543,9 @@ public final class NativeShellModel {
 
     /// Applies `app_settings`: formats, admin mode and the colorblind skin.
     public func apply(settings next: NativeAppSettings) {
-        if settingsLoaded {
+        // Display formats and language do not change financial query data. Retire
+        // currency-dependent snapshots only when their data dependency changes.
+        if settingsLoaded, next.defaultCurrency != settings.defaultCurrency {
             home?.invalidate()
             statistics?.model.invalidate()
             tax?.invalidate()

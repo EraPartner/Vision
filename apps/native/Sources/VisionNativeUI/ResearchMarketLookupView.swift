@@ -147,6 +147,7 @@ public struct ResearchMarketLookupView: View {
         }
     }
     private var actionNotice: ScreenNotice? {
+        guard !model.action.globalNoticesAttached else { return nil }
         guard let notice = model.action.notice else { return nil }
         var variables = notice.variables
         if let type = variables["type"] { variables["type"] = strings.t("portfolio.txnType." + type) }
