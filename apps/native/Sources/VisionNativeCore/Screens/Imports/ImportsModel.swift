@@ -20,6 +20,8 @@ public final class ImportsModel {
     public nonisolated static let parsersStaleAfter: TimeInterval = 60
     /// `DEFAULT_TTL_MS` of the import handoff.
     public nonisolated static let handoffLifetime: TimeInterval = 30
+    /// How long the Resume review toast of an import that finished off the page stays.
+    public nonisolated static let reviewReadyDuration: Duration = .seconds(10)
 
     /// The Detected columns panel.
     public enum HeadersPanel: Equatable, Sendable {
@@ -130,11 +132,12 @@ public final class ImportsModel {
 
     // MARK: Lifecycle
 
-    /// The page appeared: a handed-off file pre-fills the dropzone, and the adapters, saved
-    /// parsers and Import history load unless a fresh answer is cached.
+    /// The page appeared: a handed-off file pre-fills the dropzone (after a running import
+    /// ends), and the adapters, saved parsers and Import history load unless a fresh answer is
+    /// cached.
     public func appear(strings: any Localizing) async {
         isVisible = true
-        consumeHandoff()
+        if !isImporting { consumeHandoff() }
         await withTaskGroup(of: Void.self) { group in
             group.addTask { await self.loadAdapters(strings: strings) }
             group.addTask { await self.loadParsers() }
@@ -146,6 +149,9 @@ public final class ImportsModel {
     /// and the alerts reset. A running import finishes in the background and keeps its card.
     public func disappear() {
         isVisible = false
+        // A review request the view never performed must not keep bypassing the leave guard.
+        navigationRequest = nil
+        bypassNextNavigation = false
         pendingParserDelete = nil
         pendingRollback = nil
         commitReceipt = nil
@@ -177,21 +183,41 @@ public final class ImportsModel {
         bypassNextNavigation = false
     }
 
+    /// The import parked its batch for review. On the page the review opens; when the import
+    /// finished after the user left `/import`, nothing navigates away from where they are: the
+    /// card resets, Import history goes stale and a toast offers Resume review (the batch is
+    /// also resumable from Import history).
     private func requestReview(_ batchId: Int) {
+        let path = ImportRoutes.reviewPath(batchId)
+        guard isVisible else {
+            resetCard(keepingProgress: false)
+            invalidateHistory()
+            post(
+                .info, "importHistory.status.awaiting_review",
+                action: ImportNoticeCenter.Action(
+                    titleKey: "importHistory.resumeReview", route: path, duration: Self.reviewReadyDuration))
+            return
+        }
         // `bypassNextNavigation()`: the parked import is the outcome, not unsaved work.
         bypassNextNavigation = true
-        navigationRequest = ImportRoutes.reviewPath(batchId)
+        navigationRequest = path
     }
 
     // MARK: Handoff
 
     /// A CSV opened from Finder or the dock, or dropped on another native screen
     /// (`registerPendingImportFile`): it pre-fills the dropzone when the page shows, within
-    /// 30 seconds. The import never starts by itself; the user still picks the bank.
+    /// 30 seconds. The import never starts by itself; the user still picks the bank. While an
+    /// import runs the file waits until it ends, so the running import keeps its card.
     public func handoff(_ file: ImportFile) {
         guard file.isCSV else { return }
         pendingHandoff = (file, now().addingTimeInterval(Self.handoffLifetime))
-        if isVisible { consumeHandoff() }
+        if isVisible && !isImporting { consumeHandoff() }
+    }
+
+    /// The import ended on the page: a file handed off meanwhile pre-fills the card now.
+    private func importDidEnd() {
+        if isVisible && !isImporting { consumeHandoff() }
     }
 
     /// `consumePendingImportFile`.
@@ -212,6 +238,12 @@ public final class ImportsModel {
             return
         }
         setFile(file)
+    }
+
+    /// A dropped or picked file that could not be read (a folder, unreadable, or above
+    /// `CSVHandoff.maximumBytes`): refused like a file that is not a CSV.
+    public func fileUnreadable() {
+        post(.error, "importPage.toast.noFile")
     }
 
     /// The dropzone's Remove: the file goes without opening the picker.
@@ -530,6 +562,7 @@ public final class ImportsModel {
                     .success, "importPage.toast.importSuccess",
                     ["n": String(result.imported), "dups": String(result.duplicates), "total": String(result.total)])
                 resetCard(keepingProgress: true)
+                importDidEnd()
                 await refreshHistory(strings: strings)
             }
         } catch {
@@ -539,6 +572,7 @@ public final class ImportsModel {
             isImporting = false
             post(.error, "importPage.toast.serverError", detail: ImportErrorText.text(error, strings: strings))
             if progress != nil { progress?.phase = "error" }
+            importDidEnd()
         }
     }
 
@@ -557,6 +591,7 @@ public final class ImportsModel {
         isImporting = false
         progress = nil
         post(.info, "importPage.toast.importCancelled")
+        importDidEnd()
     }
 
     /// The card after an import, a discard or leaving: no file, no source, a blank setup.
@@ -675,7 +710,7 @@ public final class ImportsModel {
     }
 
     /// One request per page at a time. A failure toasts `importHistory.loadFailed`; the last
-    /// page stays on screen.
+    /// page stays on screen. `isHistoryFetching` holds while any page loads.
     private func fetchHistory(_ offset: Int, strings: any Localizing) async {
         if let running = historyInFlight[offset] {
             await running.value
@@ -683,7 +718,6 @@ public final class ImportsModel {
         }
         let service = service
         let task = Task {
-            self.isHistoryFetching = true
             do {
                 let page = try await service.importBatches(limit: Self.historyPageSize, offset: offset)
                 self.historyCache[offset] = (page, self.now())
@@ -698,11 +732,12 @@ public final class ImportsModel {
                     self.post(.error, "importHistory.loadFailed", detail: ImportErrorText.text(error, strings: strings))
                 }
             }
-            self.isHistoryFetching = false
         }
         historyInFlight[offset] = task
+        isHistoryFetching = true
         await task.value
-        historyInFlight[offset] = nil
+        if historyInFlight[offset] == task { historyInFlight[offset] = nil }
+        isHistoryFetching = !historyInFlight.isEmpty
     }
 
     /// Roll back: asks first.
@@ -764,9 +799,10 @@ public final class ImportsModel {
     }
 
     private func post(
-        _ kind: ScreenNotice.Kind, _ key: String, _ variables: [String: String] = [:], detail: String? = nil
+        _ kind: ScreenNotice.Kind, _ key: String, _ variables: [String: String] = [:], detail: String? = nil,
+        action: ImportNoticeCenter.Action? = nil
     ) {
-        toasts.post(kind, key, variables, detail: detail)
+        toasts.post(kind, key, variables, detail: detail, action: action)
     }
 }
 

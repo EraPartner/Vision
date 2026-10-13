@@ -516,9 +516,10 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         webShell?.webView.evaluateJavaScript(BridgeDispatcher.eventScript(event, payload: payload), completionHandler: nil)
     }
 
-    /// Finder "Open With" and dock drops of a CSV. Once `/import` draws natively, the native
-    /// import card takes the file (pre-filled, not started); until `app_settings` is read the
-    /// page gets it as `app:csv-opened`, as before.
+    /// Finder "Open With" and dock drops of a CSV. The native import card always gets the
+    /// file (pre-filled, not started); until `app_settings` is read the page also gets it as
+    /// `app:csv-opened` and moves to `/import`, so a cold launch does not lose it whichever
+    /// side draws the page.
     func openFiles(_ urls: [URL]) {
         for url in urls {
             Task { [weak self] in

@@ -528,11 +528,18 @@ public final class ImportReviewModel {
     }
 
     /// The preview, one request per batch at a time; a second caller awaits the first.
-    public func load() async {
+    /// `force` (after overrides) waits for a request already running, which may have started
+    /// before the overrides landed, then fetches again; a fetch another forced caller started
+    /// after that one ended is fresh enough to join.
+    public func load(force: Bool = false) async {
         guard let batchId else { return }
-        if let loading, loading.batchId == batchId {
-            await loading.task.value
-            return
+        if let running = loading, running.batchId == batchId {
+            await running.task.value
+            if !force { return }
+            if let newer = loading, newer.batchId == batchId, newer.task != running.task {
+                await newer.task.value
+                return
+            }
         }
         let service = service
         let task = Task {
@@ -551,7 +558,7 @@ public final class ImportReviewModel {
         }
         loading = (batchId, task)
         await task.value
-        if loading?.batchId == batchId { loading = nil }
+        if loading?.task == task { loading = nil }
     }
 
     /// Retry on the error state.
@@ -642,7 +649,7 @@ public final class ImportReviewModel {
                 }
                 try await tasks.waitForAll()
             }
-            await load()
+            await load(force: true)
             update(group) { $0.recipientSaving = false }
         } catch {
             toasts.post(.error, "importReview.toast.overrideFailed", detail: ImportErrorText.text(error, strings: strings))
@@ -754,6 +761,9 @@ public final class ImportReviewModel {
                         titleKey: "importReview.toast.reviewAccounts", route: Self.accountsRoute,
                         duration: Self.newAccountsDuration))
             }
+            // TODO(native parity): the web also invalidates transactions, planned-payment
+            // suggestions, upcoming payments and account data here; wire those once the
+            // screens that show them are native.
             onHistoryChanged()
             if let receipt = ImportCommitReceipt(
                 imported: result.imported, duplicates: result.duplicates, errors: result.errors,

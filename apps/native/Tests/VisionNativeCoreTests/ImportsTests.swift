@@ -310,6 +310,16 @@ enum ImportFixture {
         #expect(model.file == nil)
     }
 
+    @Test func anUnreadableFileIsRefusedLikeAFileThatIsNotACSV() {
+        let model = ImportFixture.model()
+        model.fileUnreadable()
+        #expect(model.file == nil)
+        #expect(model.notice?.key == "importPage.toast.noFile")
+        model.recipientsCSV.fileUnreadable()
+        #expect(model.recipientsCSV.file == nil)
+        #expect(model.toasts.notices.map { notice in notice.key } == ["importPage.toast.noFile", "importPage.toast.noFile"])
+    }
+
     @Test func aSavedParserLoadsItsSetupAndCustomStartsBlank() async {
         let service = FakeImportService(parsers: [ImportFixture.savedParser])
         let model = ImportFixture.model(service)
@@ -477,6 +487,7 @@ enum ImportFixture {
         let service = FakeImportService()
         await service.scriptStream([], .success(.reviewRequired(batchId: 42)))
         let model = ImportFixture.model(service)
+        await model.appear(strings: ImportFixture.strings)
         model.chooseFile(ImportFixture.file())
         model.selectSource(.adapter("kbc"))
         await model.startImport(strings: ImportFixture.strings)
@@ -485,6 +496,78 @@ enum ImportFixture {
         model.didHandleNavigation()
         #expect(model.navigationRequest == nil)
         #expect(model.hasUnsavedChanges)
+    }
+
+    @Test func aReviewRequestThePageNeverPerformedIsDroppedWhenItGoes() async {
+        let service = FakeImportService()
+        await service.scriptStream([], .success(.reviewRequired(batchId: 42)))
+        let model = ImportFixture.model(service)
+        await model.appear(strings: ImportFixture.strings)
+        model.chooseFile(ImportFixture.file())
+        model.selectSource(.adapter("kbc"))
+        await model.startImport(strings: ImportFixture.strings)
+        #expect(model.navigationRequest == "/import/42/review")
+        // The page went before its view performed the navigation.
+        model.disappear()
+        #expect(model.navigationRequest == nil)
+        await model.appear(strings: ImportFixture.strings)
+        model.chooseFile(ImportFixture.file())
+        #expect(model.hasUnsavedChanges)
+    }
+
+    @Test func aParkedImportThatEndsOffThePageToastsResumeReview() async {
+        let service = FakeImportService()
+        let gate = CallGate()
+        await service.holdStream(gate)
+        await service.scriptStream([ImportProgress(phase: "parsing", percent: 5)], .success(.reviewRequired(batchId: 42)))
+        let model = ImportFixture.model(service)
+        await model.appear(strings: ImportFixture.strings)
+        model.chooseFile(ImportFixture.file())
+        model.selectSource(.adapter("kbc"))
+        let running = Task { await model.startImport(strings: ImportFixture.strings) }
+        while model.progress?.phase != "parsing" { await Task.yield() }
+        // The user leaves `/import` while the import runs.
+        model.disappear()
+        gate.open()
+        await running.value
+        #expect(model.navigationRequest == nil)
+        #expect(!model.isImporting)
+        #expect(model.file == nil)
+        let notice = model.notice
+        #expect(notice?.key == "importHistory.status.awaiting_review")
+        #expect(notice?.kind == .info)
+        let action = notice.flatMap { shown in model.toasts.action(for: shown.id) }
+        #expect(action?.route == "/import/42/review")
+        #expect(action?.titleKey == "importHistory.resumeReview")
+        // Back on the page the leave guard works again.
+        await model.appear(strings: ImportFixture.strings)
+        #expect(!model.hasUnsavedChanges)
+        model.chooseFile(ImportFixture.file())
+        #expect(model.hasUnsavedChanges)
+    }
+
+    @Test func aFileHandedOffDuringAnImportWaitsUntilItEnds() async {
+        let service = FakeImportService()
+        let gate = CallGate()
+        await service.holdStream(gate)
+        await service.scriptStream([ImportProgress(phase: "parsing", percent: 5)], .success(.completed(ImportFixture.completion)))
+        let model = ImportFixture.model(service)
+        await model.appear(strings: ImportFixture.strings)
+        let first = ImportFixture.file()
+        model.chooseFile(first)
+        model.selectSource(.adapter("kbc"))
+        let running = Task { await model.startImport(strings: ImportFixture.strings) }
+        while model.progress?.phase != "parsing" { await Task.yield() }
+        let next = ImportFixture.file("next.csv")
+        model.handoff(next)
+        // The running import keeps its card.
+        #expect(model.file == first)
+        gate.open()
+        await running.value
+        #expect(model.notice?.key == "importPage.toast.importSuccess")
+        #expect(model.source == nil)
+        // The finished import reset the card, then the waiting file pre-filled it.
+        #expect(model.file == next)
     }
 
     @Test func aStreamErrorToastsItsDetailAndKeepsTheFile() async {
@@ -535,6 +618,7 @@ enum ImportFixture {
     @Test func aCustomImportIsOneRequestWithTheSetup() async {
         let service = FakeImportService()
         let model = ImportFixture.model(service)
+        await model.appear(strings: ImportFixture.strings)
         model.chooseFile(ImportFixture.file())
         model.selectSource(.custom)
         model.config = ImportFixture.mapped
@@ -853,6 +937,25 @@ enum ImportFixture {
         #expect(shell.openImportFile(next))
         #expect(recorder.actions == [.navigate("/import")])
         #expect(imports.file == next)
+    }
+
+    @Test func aFinderFileOpenedBeforeSettingsLoadPrefillsTheNativeCard() async throws {
+        let recorder = ShellRecorder()
+        let imports = ImportFixture.model()
+        let shell = makeShell(imports, recorder: recorder)
+        let file = ImportFixture.file()
+        // Cold launch: the web app also takes the file and moves to `/import`.
+        #expect(!shell.openImportFile(file))
+        #expect(recorder.actions.isEmpty)
+        shell.routeDidChange(try #require(NativeRoute("/import")))
+        #expect(shell.detail == .web)
+        // `app_settings` is read: `/import` draws natively and its card has the file.
+        await shell.settingsSettled()
+        #expect(shell.detail == .native(.importExport))
+        await imports.appear(strings: ImportFixture.strings)
+        #expect(imports.file == file)
+        #expect(imports.source == nil)
+        #expect(!imports.isImporting)
     }
 
     @Test func aChosenFileHoldsANavigationUntilStayOrLeave() async throws {

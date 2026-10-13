@@ -186,13 +186,16 @@ public final class NativeShellModel {
     }
 
     /// A CSV opened from Finder or the dock, or dropped on a native screen
-    /// (`registerPendingImportFile` and `navigate("/import")` of `ElectronBridge`): once
-    /// `/import` draws natively, the native import card takes the file, pre-filled but not
-    /// started, and the shell moves there. Returns `false` while the web app has to take it
-    /// (`app_settings` not read yet).
+    /// (`registerPendingImportFile` and `navigate("/import")` of `ElectronBridge`): the native
+    /// import card always gets the file (pre-filled, not started, within the handoff's 30
+    /// seconds), so it is not lost when `/import` turns native after `app_settings` is read.
+    /// Once the settings are read the shell moves to `/import` itself and returns `true`.
+    /// Before that it returns `false`: the web app takes the file too (`app:csv-opened`) and
+    /// navigates, in case `/import` stays a web page.
     public func openImportFile(_ file: ImportFile) -> Bool {
-        guard settingsLoaded, NativeScreen.screen(forPath: ImportRoutes.path) != nil else { return false }
+        guard NativeScreen.screen(forPath: ImportRoutes.path) != nil else { return false }
         imports.handoff(file)
+        guard settingsLoaded else { return false }
         if detail != .native(.importExport) { navigate(to: ImportRoutes.path) }
         return true
     }

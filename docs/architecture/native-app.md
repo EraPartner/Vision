@@ -795,10 +795,13 @@ writes JSON bodies only, so these two and the payee and category imports stay ha
 do the review's preview, override and commit requests (the override body sends an explicit `null`).
 `CSVPreview` reads the detected columns and sample rows from the first 16 KB of the file on the
 Mac, like `useCsvPreview`. A batch that needs review navigates to its review route without the
-Leave this page? alert; a chosen file or an unsaved parser edit otherwise registers the shell's
-leave guard. A CSV opened from Finder or the dock (once `app_settings` is read) or dropped on a
-native screen goes to `NativeShellModel.openImportFile`, which pre-fills the card within 30 seconds
-and moves to `/import`; the import never starts by itself.
+Leave this page? alert; when the import finishes after the user left `/import`, the shell stays
+where it is and an Awaiting review toast offers Resume review instead. A chosen file or an unsaved
+parser edit otherwise registers the shell's leave guard. A CSV opened from Finder or the dock or
+dropped on a native screen goes to `NativeShellModel.openImportFile`, which pre-fills the native
+card within 30 seconds (after a running import ends) and moves to `/import`; before `app_settings`
+is read the web page also gets the file as `app:csv-opened` and does the navigation, so a cold
+launch keeps the file whichever side draws `/import`. The import never starts by itself.
 
 ## CI
 

@@ -8399,7 +8399,7 @@ paths:
             1..2147483647; a malformed element returns 400 VALIDATION_ERROR.
           schema:
             type: string
-            pattern: "^[0-9]+(,[0-9]+)*$"
+            pattern: "^([0-9]+(,[0-9]+)*)?$"
         - in: query
           name: include_balance
           schema:
@@ -8468,7 +8468,7 @@ paths:
             1..2147483647; a malformed element returns 400 VALIDATION_ERROR.
           schema:
             type: string
-            pattern: "^[0-9]+(,[0-9]+)*$"
+            pattern: "^([0-9]+(,[0-9]+)*)?$"
         - in: query
           name: tags
           schema:

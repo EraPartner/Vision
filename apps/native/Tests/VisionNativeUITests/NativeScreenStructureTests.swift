@@ -853,10 +853,15 @@ extension StaticPlannedService: PickerDataService {
         #expect(preview.headers.count == 4)
         #expect(model.canImport)
         #expect(layOutImports(shell).fittingSize.height > 0)
-        // The saved parser's summary, then its editor.
+        // The saved parser's summary, then its editor. Each temporary hosting view may run
+        // `onDisappear` (`model.disappear()`, which resets the card) when it goes, so every
+        // step sets up the file and source it needs again.
+        model.chooseFile(ImportFile(name: "afschrift.csv", data: StaticImportService.csv, mimeType: "text/csv"))
         model.selectSource(.saved(7))
         #expect(model.showsSavedSummary)
         #expect(layOutImports(shell).fittingSize.height > 0)
+        model.chooseFile(ImportFile(name: "afschrift.csv", data: StaticImportService.csv, mimeType: "text/csv"))
+        model.selectSource(.saved(7))
         model.startEditing()
         #expect(model.showsEditor)
         #expect(model.mapperHeaders.count == 4)
@@ -950,6 +955,8 @@ extension StaticPlannedService: PickerDataService {
         #expect(model.isSetupReferenceExpanded)
         model.recipientsCSV.chooseFile(ImportFile(name: "begunstigden.csv", data: StaticImportService.csv, mimeType: "text/csv"))
         #expect(layOutImports(shell).fittingSize.height > 0)
+        // The hosting view's `onDisappear` may have reset the card: choose the file again.
+        model.recipientsCSV.chooseFile(ImportFile(name: "begunstigden.csv", data: StaticImportService.csv, mimeType: "text/csv"))
         await model.recipientsCSV.startImport(strings: shell.strings)
         #expect(model.recipientsCSV.result?.imported == 10)
         model.categoriesCSV.chooseFile(ImportFile(name: "categorieen.csv", data: StaticImportService.csv, mimeType: "text/csv"))

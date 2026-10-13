@@ -11,6 +11,8 @@ struct CSVDropzone: View {
     var compact = false
     let strings: any Localizing
     let choose: @MainActor @Sendable (ImportFile) -> Void
+    /// A dropped or picked file could not be read.
+    let unreadable: @MainActor @Sendable () -> Void
     let remove: () -> Void
     @State private var isTargeted = false
     @State private var isPickerPresented = false
@@ -91,7 +93,10 @@ struct CSVDropzone: View {
         .dropDestination(for: URL.self) { urls, _ in
             guard let url = urls.first, url.isFileURL else { return false }
             Task {
-                guard let file = await ImportFile.read(url) else { return }
+                guard let file = await ImportFile.read(url) else {
+                    unreadable()
+                    return
+                }
                 choose(file)
             }
             return true
@@ -101,7 +106,10 @@ struct CSVDropzone: View {
         .fileImporter(isPresented: $isPickerPresented, allowedContentTypes: [.commaSeparatedText]) { result in
             guard case .success(let url) = result else { return }
             Task {
-                guard let file = await ImportFile.read(url) else { return }
+                guard let file = await ImportFile.read(url) else {
+                    unreadable()
+                    return
+                }
                 choose(file)
             }
         }

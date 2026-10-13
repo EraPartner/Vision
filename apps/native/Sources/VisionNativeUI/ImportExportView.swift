@@ -210,7 +210,8 @@ struct ImportBankCard: View {
                 }
                 CSVDropzone(
                     file: model.file, label: strings.t("importPage.csvFile"), strings: strings,
-                    choose: { model.chooseFile($0) }, remove: { model.removeFile() })
+                    choose: { model.chooseFile($0) }, unreadable: { model.fileUnreadable() },
+                    remove: { model.removeFile() })
                 bankSource
                 if model.isCustomLike {
                     ImportCustomSetup(model: model, strings: strings)

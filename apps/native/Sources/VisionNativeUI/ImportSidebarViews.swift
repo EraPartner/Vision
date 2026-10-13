@@ -305,7 +305,7 @@ struct SimpleCSVImportCard: View {
                 }
                 CSVDropzone(
                     file: model.file, compact: true, strings: strings, choose: { model.chooseFile($0) },
-                    remove: { model.removeFile() })
+                    unreadable: { model.fileUnreadable() }, remove: { model.removeFile() })
                 if let result = model.result, !model.isImporting {
                     HStack(spacing: 10) {
                         Image(systemName: "checkmark.circle.fill").accessibilityHidden(true)

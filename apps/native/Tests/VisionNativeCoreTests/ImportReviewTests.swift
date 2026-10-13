@@ -61,6 +61,7 @@ actor FakeImportReviewService: ImportReviewService {
     private var commitFails = false
     private var discardFails = false
     private var result = ImportCommitResult(imported: 3, duplicates: 1, errors: 0, autoLinkedCount: 0)
+    private var previewGate: CallGate?
 
     init(preview: ImportPreview = ReviewFixture.preview, accounts: [OpenAPI.Account] = ReviewFixture.accounts) {
         self.preview = preview
@@ -74,11 +75,19 @@ actor FakeImportReviewService: ImportReviewService {
     func failCommit(_ fail: Bool) { commitFails = fail }
     func failDiscard(_ fail: Bool) { discardFails = fail }
     func setResult(_ next: ImportCommitResult) { result = next }
+    func setPreview(_ next: ImportPreview) { preview = next }
+    /// Holds the next preview request, which answers with the preview it started with.
+    func holdNextPreview(_ gate: CallGate) { previewGate = gate }
 
     func importPreview(batchId: Int) async throws -> ImportPreview {
         previewLoads.append(batchId)
         if previewFails { throw APIError.client(APIClientError(status: 404, code: .notFound, message: "Batch not found")) }
-        return preview
+        let answer = preview
+        if let gate = previewGate {
+            previewGate = nil
+            await gate.wait()
+        }
+        return answer
     }
 
     func overrideImportRow(batchId: Int, rowId: String, recipientId: Int?) async throws {
@@ -462,6 +471,33 @@ enum ReviewFixture {
         // No payee sends null for each row.
         await review.setRecipient(nil, name: nil, for: ReviewFixture.unknown, strings: ImportFixture.strings)
         #expect(await service.recipientOverrides.suffix(1) == ["201:null"])
+    }
+
+    @Test func aPayeeChangeRefetchesAfterAPreviewRequestAlreadyRunning() async {
+        let service = FakeImportReviewService()
+        let review = ReviewFixture.model(service).review
+        await review.appear(batchId: 42)
+        // A preview request starts before the overrides land and answers with the old groups.
+        let gate = CallGate()
+        await service.holdNextPreview(gate)
+        let stale = Task { await review.load() }
+        while await service.previewLoads.count < 2 { await Task.yield() }
+        let updated = ImportPreview(
+            batchId: 42, groups: [ReviewFixture.unknown, ReviewFixture.landlord],
+            totals: ["exact": 0, "fuzzy": 0, "pattern": 0, "new": 1, "unresolved": 1])
+        await service.setPreview(updated)
+        let picking = Task {
+            await review.setRecipient(77, name: "Bakery & Co", for: ReviewFixture.bakery, strings: ImportFixture.strings)
+        }
+        while await service.recipientOverrides.count < 2 { await Task.yield() }
+        // Let the change reach its refetch, which waits on the held request.
+        for _ in 0..<50 { await Task.yield() }
+        gate.open()
+        await stale.value
+        await picking.value
+        // The change waited for the running request, then asked again.
+        #expect(await service.previewLoads == [42, 42, 42])
+        #expect(review.preview == updated)
     }
 
     @Test func aFailedPayeeChangeToastsAndRevertsTheGroup() async {

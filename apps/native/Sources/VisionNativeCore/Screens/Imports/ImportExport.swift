@@ -424,6 +424,12 @@ public final class SimpleCSVImportModel {
         result = nil
     }
 
+    /// A dropped or picked file that could not be read (a folder, unreadable, or above
+    /// `CSVHandoff.maximumBytes`): refused like a file that is not a CSV.
+    public func fileUnreadable() {
+        toasts.post(.error, "importPage.toast.noFile")
+    }
+
     /// Remove: the file and the last result go.
     public func removeFile() {
         file = nil
