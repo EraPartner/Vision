@@ -169,6 +169,17 @@ See [the architecture page](../../docs/architecture/native-app.md#native-navigat
 - `/owes` is native in every mode: the total outstanding, the people who owe you, and a person's
   splits with Record payment, Mark as settled, Delete split, Settle all, Export CSV through a save
   panel and Recent transactions.
+- `/accounts` and `/accounts/:id` are native in every mode (phase 3f): the hub groups accounts
+  into cash, portfolio, liabilities and archived with converted subtotals and Net cash, drift
+  chips and holdings; the detail shows the balance card with its sparkline, holdings, upcoming
+  planned payments, the ledger with running balances and the `since` banner, and the account
+  details. Add and Edit account, Reconcile, Opening balance, Merge, Close (with portfolio lots),
+  Transfer lots, Reopen and Delete run natively.
+- `/categories` and `/recipients` are native in every mode (phase 3f part B): the category tree
+  with Show inactive, Expand all and the Add / Edit, Merge, status (with Undo) and Delete actions;
+  the payees table with server search and sort, column filters, infinite scroll, inline edit and
+  default category, Add payee, Merge payees (with the rule suggestion), Unmerge, status with Undo,
+  Delete and the Match rules dialog. The tag picker shows a failed tag create inline.
 - To add a screen: list its operations and keys, run `bun run native:generate`, add a model in
   `Sources/VisionNativeCore/Screens/`, a view in `Sources/VisionNativeUI/`, and a `NativeScreen`
   case for its route. Pass the model to `NativeShellModel` in `ShellController.makeShellModel` and

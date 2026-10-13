@@ -93,3 +93,38 @@ paySplit
 settleSplit
 settleAllSplitsForRecipient
 deleteSplit
+# Accounts (/accounts and /accounts/:id, phase 3f part A): the hub, the Add/Edit account
+# sheet, Reconcile, Opening balance, Merge, Close and Delete, and the broker-only Transfer
+# portfolio lots dialog with the lot re-tag preview. The account PATCH's explicit nulls, the
+# re-tag's nullable destination and the portfolio summary's per-account rows are hand-written
+# in Screens/Accounts/AccountsService.swift on top of the generated operation ids.
+createAccount
+updateAccount
+deleteAccount
+previewAccountPortfolioLots
+closeAccount
+mergeAccounts
+previewAccountMerge
+setAccountOpeningBalance
+reconcileAccount
+setAccountStatementBalance
+bulkRetagPortfolioTransactions
+getPortfolioSummary
+# Categories (/categories) and payees (/recipients), phase 3f part B: the category tree's
+# add/edit/merge/delete and status flips, the payee table's add/edit/merge/unmerge/delete and
+# the match-rule dialog. The category body's explicit `parentId: null` / `description: null`,
+# the payee PATCH's `default_category_id: null` and the pattern PATCH's `notes: null` are
+# hand-written in Screens/Categories/CategoriesService.swift and
+# Screens/Recipients/RecipientsService.swift on top of the generated operation ids.
+createCategoryNode
+updateCategoryNode
+deleteCategoryNode
+mergeCategoryNode
+deleteRecipient
+mergeRecipient
+unmergeRecipient
+getRecipientPatterns
+createRecipientPattern
+previewRecipientPattern
+updateRecipientPattern
+deleteRecipientPattern

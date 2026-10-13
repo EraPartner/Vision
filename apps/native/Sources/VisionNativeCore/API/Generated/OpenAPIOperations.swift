@@ -5,7 +5,7 @@ import Foundation
 
 /// One struct per operationId in `apps/native/openapi-operations.txt`, in its order.
 public enum OpenAPIOperations {
-    public static let operationIds = ["getExchangeRates", "refreshExchangeRates", "adminDatabaseStats", "adminProvidersHealth", "adminProviderProbe", "adminMetricsRequests", "adminListEndpoints", "getSetting", "adminDatabaseVacuum", "adminGetTableSchema", "adminGetTableRows", "adminMutateTableRows", "getPlannedTransactions", "createPlannedTransaction", "updatePlannedTransaction", "deletePlannedTransaction", "executePlannedTransaction", "getPlannedMatchSuggestions", "getRecurringPatterns", "getRecipients", "getRecipient", "getAccounts", "getCategoryTree", "getTags", "createTag", "getTransactions", "saveSetting", "getSupportedAdapters", "getCustomParsers", "createCustomParser", "updateCustomParser", "deleteCustomParser", "getImportBatches", "deleteImportBatch", "previewImportBatch", "overrideImportRow", "overrideImportRowCategory", "commitImportBatch", "updateRecipient", "getInfoBanks", "exportTransactionsCsv", "exportTransactionsJson", "getTransaction", "createTransaction", "updateTransaction", "deleteTransaction", "bulkUpdateTransactions", "getTransactionAttachments", "downloadAttachment", "deleteAttachment", "bulkDeleteTransactions", "bulkExportTransactions", "bulkTagTransactions", "markTransfer", "createRecipient", "getSplitsByTransaction", "createSplitBatch", "createBulkSplits", "getSplitsOwed", "getSplitOwedByRecipient", "exportSplitsOwedCsv", "paySplit", "settleSplit", "settleAllSplitsForRecipient", "deleteSplit"]
+    public static let operationIds = ["getExchangeRates", "refreshExchangeRates", "adminDatabaseStats", "adminProvidersHealth", "adminProviderProbe", "adminMetricsRequests", "adminListEndpoints", "getSetting", "adminDatabaseVacuum", "adminGetTableSchema", "adminGetTableRows", "adminMutateTableRows", "getPlannedTransactions", "createPlannedTransaction", "updatePlannedTransaction", "deletePlannedTransaction", "executePlannedTransaction", "getPlannedMatchSuggestions", "getRecurringPatterns", "getRecipients", "getRecipient", "getAccounts", "getCategoryTree", "getTags", "createTag", "getTransactions", "saveSetting", "getSupportedAdapters", "getCustomParsers", "createCustomParser", "updateCustomParser", "deleteCustomParser", "getImportBatches", "deleteImportBatch", "previewImportBatch", "overrideImportRow", "overrideImportRowCategory", "commitImportBatch", "updateRecipient", "getInfoBanks", "exportTransactionsCsv", "exportTransactionsJson", "getTransaction", "createTransaction", "updateTransaction", "deleteTransaction", "bulkUpdateTransactions", "getTransactionAttachments", "downloadAttachment", "deleteAttachment", "bulkDeleteTransactions", "bulkExportTransactions", "bulkTagTransactions", "markTransfer", "createRecipient", "getSplitsByTransaction", "createSplitBatch", "createBulkSplits", "getSplitsOwed", "getSplitOwedByRecipient", "exportSplitsOwedCsv", "paySplit", "settleSplit", "settleAllSplitsForRecipient", "deleteSplit", "createAccount", "updateAccount", "deleteAccount", "previewAccountPortfolioLots", "closeAccount", "mergeAccounts", "previewAccountMerge", "setAccountOpeningBalance", "reconcileAccount", "setAccountStatementBalance", "bulkRetagPortfolioTransactions", "getPortfolioSummary", "createCategoryNode", "updateCategoryNode", "deleteCategoryNode", "mergeCategoryNode", "deleteRecipient", "mergeRecipient", "unmergeRecipient", "getRecipientPatterns", "createRecipientPattern", "previewRecipientPattern", "updateRecipientPattern", "deleteRecipientPattern"]
 }
 
 extension OpenAPIOperations {
@@ -2291,5 +2291,853 @@ extension OpenAPIOperations {
         }
 
         public var path: String { "/api/splits/\(APIPath.segment(APIQuery.value(id)))" }
+    }
+
+    /// POST /api/accounts: Create account
+    public struct CreateAccount: APIOperation {
+        public typealias Response = OpenAPI.Account
+        public static let operationId = "createAccount"
+        public static let method = HTTPMethod.post
+        public static let pathTemplate = "/api/accounts"
+
+        public var body: OpenAPI.AccountCreate
+
+        public init(body: OpenAPI.AccountCreate) {
+            self.body = body
+        }
+
+        public var path: String { "/api/accounts" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+    }
+
+    /// PATCH /api/accounts/{id}: Update account
+    public struct UpdateAccount: APIOperation {
+        public typealias Response = OpenAPI.Account
+        public static let operationId = "updateAccount"
+        public static let method = HTTPMethod.patch
+        public static let pathTemplate = "/api/accounts/{id}"
+
+        public var id: Int
+        public var body: OpenAPI.AccountUpdate
+
+        public init(id: Int, body: OpenAPI.AccountUpdate) {
+            self.id = id
+            self.body = body
+        }
+
+        public var path: String { "/api/accounts/\(APIPath.segment(APIQuery.value(id)))" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+    }
+
+    /// DELETE /api/accounts/{id}: Delete account (409 if still referenced — archive instead)
+    public struct DeleteAccount: APIOperation {
+        public typealias Response = APIEmpty
+        public static let operationId = "deleteAccount"
+        public static let method = HTTPMethod.delete
+        public static let pathTemplate = "/api/accounts/{id}"
+
+        public var id: Int
+
+        public init(id: Int) {
+            self.id = id
+        }
+
+        public var path: String { "/api/accounts/\(APIPath.segment(APIQuery.value(id)))" }
+    }
+
+    /// GET /api/accounts/{id}/portfolio-lot-retag-preview: Preview portfolio lot rows assigned to an
+    /// account
+    public struct PreviewAccountPortfolioLots: APIOperation {
+        public typealias Response = ResponseData
+        public static let operationId = "previewAccountPortfolioLots"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/accounts/{id}/portfolio-lot-retag-preview"
+
+        public var id: Int
+
+        public init(id: Int) {
+            self.id = id
+        }
+
+        public var path: String { "/api/accounts/\(APIPath.segment(APIQuery.value(id)))/portfolio-lot-retag-preview" }
+
+        public struct ResponseData: Codable, Equatable, Sendable {
+            public let accountId: Int
+            public let eligibleCount: Int
+            public let transactionIds: [Int]
+            public let limit: Int
+
+            public init(accountId: Int, eligibleCount: Int, transactionIds: [Int], limit: Int) {
+                self.accountId = accountId
+                self.eligibleCount = eligibleCount
+                self.transactionIds = transactionIds
+                self.limit = limit
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case accountId = "account_id"
+                case eligibleCount = "eligible_count"
+                case transactionIds = "transaction_ids"
+                case limit = "limit"
+            }
+        }
+    }
+
+    /// POST /api/accounts/{id}/close: Close an account, optionally zeroing each currency partition
+    public struct CloseAccount: APIOperation {
+        public typealias Response = JSONValue
+        public static let operationId = "closeAccount"
+        public static let method = HTTPMethod.post
+        public static let pathTemplate = "/api/accounts/{id}/close"
+
+        public var id: Int
+        public var body: Body
+
+        public init(id: Int, body: Body) {
+            self.id = id
+            self.body = body
+        }
+
+        public var path: String { "/api/accounts/\(APIPath.segment(APIQuery.value(id)))/close" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+
+        public struct Body: Codable, Equatable, Sendable {
+            public let balanceHandling: String
+
+            public init(balanceHandling: String) {
+                self.balanceHandling = balanceHandling
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case balanceHandling = "balance_handling"
+            }
+        }
+    }
+
+    /// POST /api/accounts/{id}/merge: Merge source accounts into this (survivor) account
+    public struct MergeAccounts: APIOperation {
+        public typealias Response = JSONValue
+        public static let operationId = "mergeAccounts"
+        public static let method = HTTPMethod.post
+        public static let pathTemplate = "/api/accounts/{id}/merge"
+
+        /// Survivor account id (sources merge into this one)
+        public var id: Int
+        public var body: Body
+
+        public init(id: Int, body: Body) {
+            self.id = id
+            self.body = body
+        }
+
+        public var path: String { "/api/accounts/\(APIPath.segment(APIQuery.value(id)))/merge" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+
+        public struct Body: Codable, Equatable, Sendable {
+            /// Account ids to merge into this account and delete; must not include the survivor id
+            public let sourceIds: [Int]
+
+            public init(sourceIds: [Int]) {
+                self.sourceIds = sourceIds
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case sourceIds = "source_ids"
+            }
+        }
+    }
+
+    /// GET /api/accounts/{id}/merge-preview: Preview merging this account into another (read-only)
+    public struct PreviewAccountMerge: APIOperation {
+        public typealias Response = ResponseData
+        public static let operationId = "previewAccountMerge"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/accounts/{id}/merge-preview"
+
+        /// Source account id (the account that would be merged away)
+        public var id: Int
+        /// Survivor account id (the account {id} would merge into)
+        public var into: Int
+
+        public init(id: Int, into: Int) {
+            self.id = id
+            self.into = into
+        }
+
+        public var path: String { "/api/accounts/\(APIPath.segment(APIQuery.value(id)))/merge-preview" }
+
+        public var queryItems: [URLQueryItem] {
+            var items: [URLQueryItem] = []
+            items.append(URLQueryItem(name: "into", value: APIQuery.value(into)))
+            return items
+        }
+
+        public struct ResponseData: Codable, Equatable, Sendable {
+            /// Survivor account id
+            public let into: Int?
+            /// Source account id
+            public let source: Int?
+            /// Row counts that would move to the survivor
+            public let reassigned: Reassigned?
+            /// Post-merge computed balance — anchor+delta evaluated per currency over the union of both
+            /// accounts' active rows, each currency partition converted at its own current rate into the
+            /// survivor's currency
+            public let projectedBalance: Decimal?
+            /// The survivor's native currency (ISO-4217)
+            public let projectedBalanceCurrency: String?
+            /// Native per-currency balances in the projected merged ledger
+            public let balanceParts: [BalancePartsItem]?
+            /// Whether projectedBalance excludes at least one partition because a conversion rate is
+            /// unavailable
+            public let projectedBalanceIncomplete: Bool?
+            /// Currency codes excluded from projectedBalance because a conversion rate is unavailable
+            public let unconvertedCurrencies: [String]?
+            /// Whether both accounts carry stamped balance histories with overlapping date ranges (the
+            /// merge would clear the survivor's statement anchor)
+            public let stampsInterleaved: Bool?
+            /// Whether both accounts hold an opening balance in the same currency (only one is allowed per
+            /// account and currency, so POST /merge would refuse with a 400 until one is removed)
+            public let openingAnchorCollision: Bool?
+
+            public init(into: Int? = nil, source: Int? = nil, reassigned: Reassigned? = nil, projectedBalance: Decimal? = nil, projectedBalanceCurrency: String? = nil, balanceParts: [BalancePartsItem]? = nil, projectedBalanceIncomplete: Bool? = nil, unconvertedCurrencies: [String]? = nil, stampsInterleaved: Bool? = nil, openingAnchorCollision: Bool? = nil) {
+                self.into = into
+                self.source = source
+                self.reassigned = reassigned
+                self.projectedBalance = projectedBalance
+                self.projectedBalanceCurrency = projectedBalanceCurrency
+                self.balanceParts = balanceParts
+                self.projectedBalanceIncomplete = projectedBalanceIncomplete
+                self.unconvertedCurrencies = unconvertedCurrencies
+                self.stampsInterleaved = stampsInterleaved
+                self.openingAnchorCollision = openingAnchorCollision
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case into = "into"
+                case source = "source"
+                case reassigned = "reassigned"
+                case projectedBalance = "projectedBalance"
+                case projectedBalanceCurrency = "projectedBalanceCurrency"
+                case balanceParts = "balanceParts"
+                case projectedBalanceIncomplete = "projectedBalanceIncomplete"
+                case unconvertedCurrencies = "unconvertedCurrencies"
+                case stampsInterleaved = "stampsInterleaved"
+                case openingAnchorCollision = "openingAnchorCollision"
+            }
+
+            public struct Reassigned: Codable, Equatable, Sendable {
+                public let transactions: Int?
+                public let planned: Int?
+                public let portfolio: Int?
+                public let funding: Int?
+
+                public init(transactions: Int? = nil, planned: Int? = nil, portfolio: Int? = nil, funding: Int? = nil) {
+                    self.transactions = transactions
+                    self.planned = planned
+                    self.portfolio = portfolio
+                    self.funding = funding
+                }
+
+                enum CodingKeys: String, CodingKey {
+                    case transactions = "transactions"
+                    case planned = "planned"
+                    case portfolio = "portfolio"
+                    case funding = "funding"
+                }
+            }
+
+            public struct BalancePartsItem: Codable, Equatable, Sendable {
+                public let currency: String
+                public let balance: Decimal
+
+                public init(currency: String, balance: Decimal) {
+                    self.currency = currency
+                    self.balance = balance
+                }
+
+                enum CodingKeys: String, CodingKey {
+                    case currency = "currency"
+                    case balance = "balance"
+                }
+            }
+        }
+    }
+
+    /// POST /api/accounts/{id}/opening-balance: Set the opening-balance anchor for an account
+    public struct SetAccountOpeningBalance: APIOperation {
+        public typealias Response = JSONValue
+        public static let operationId = "setAccountOpeningBalance"
+        public static let method = HTTPMethod.post
+        public static let pathTemplate = "/api/accounts/{id}/opening-balance"
+
+        /// Account to anchor
+        public var id: Int
+        public var body: Body
+
+        public init(id: Int, body: Body) {
+            self.id = id
+            self.body = body
+        }
+
+        public var path: String { "/api/accounts/\(APIPath.segment(APIQuery.value(id)))/opening-balance" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+
+        public struct Body: Codable, Equatable, Sendable {
+            /// The opening balance to stamp
+            public let balance: Decimal
+            /// As-of date; expected to precede the account's activity
+            public let date: String
+            /// 3-letter ISO code; defaults to the account currency
+            public let currency: String?
+
+            public init(balance: Decimal, date: String, currency: String? = nil) {
+                self.balance = balance
+                self.date = date
+                self.currency = currency
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case balance = "balance"
+                case date = "date"
+                case currency = "currency"
+            }
+        }
+    }
+
+    /// POST /api/accounts/{id}/reconcile: Reconcile an account's drift
+    public struct ReconcileAccount: APIOperation {
+        public typealias Response = JSONValue
+        public static let operationId = "reconcileAccount"
+        public static let method = HTTPMethod.post
+        public static let pathTemplate = "/api/accounts/{id}/reconcile"
+
+        /// Account to reconcile
+        public var id: Int
+        public var body: Body
+
+        public init(id: Int, body: Body) {
+            self.id = id
+            self.body = body
+        }
+
+        public var path: String { "/api/accounts/\(APIPath.segment(APIQuery.value(id)))/reconcile" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+
+        public struct Body: Codable, Equatable, Sendable {
+            /// How to resolve the drift
+            public let mode: String
+            /// Native currency partition to reconcile; defaults to the account currency.
+            public let currency: String?
+
+            public init(mode: String, currency: String? = nil) {
+                self.mode = mode
+                self.currency = currency
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case mode = "mode"
+                case currency = "currency"
+            }
+        }
+    }
+
+    /// PUT /api/accounts/{id}/statement-balances/{currency}: Set a per-currency statement reading
+    public struct SetAccountStatementBalance: APIOperation {
+        public typealias Response = JSONValue
+        public static let operationId = "setAccountStatementBalance"
+        public static let method = HTTPMethod.put
+        public static let pathTemplate = "/api/accounts/{id}/statement-balances/{currency}"
+
+        public var id: Int
+        public var currency: String
+        public var body: Body
+
+        public init(id: Int, currency: String, body: Body) {
+            self.id = id
+            self.currency = currency
+            self.body = body
+        }
+
+        public var path: String { "/api/accounts/\(APIPath.segment(APIQuery.value(id)))/statement-balances/\(APIPath.segment(APIQuery.value(currency)))" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+
+        public struct Body: Codable, Equatable, Sendable {
+            public let balance: Decimal
+            public let date: String
+
+            public init(balance: Decimal, date: String) {
+                self.balance = balance
+                self.date = date
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case balance = "balance"
+                case date = "date"
+            }
+        }
+    }
+
+    /// PUT /api/investments/transactions/broker: Atomically re-tag reviewed portfolio transactions to a
+    /// broker
+    public struct BulkRetagPortfolioTransactions: APIOperation {
+        public typealias Response = OpenAPI.PortfolioBrokerRetagReceipt
+        public static let operationId = "bulkRetagPortfolioTransactions"
+        public static let method = HTTPMethod.put
+        public static let pathTemplate = "/api/investments/transactions/broker"
+
+        public var body: Body
+
+        public init(body: Body) {
+            self.body = body
+        }
+
+        public var path: String { "/api/investments/transactions/broker" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+
+        public struct Body: Codable, Equatable, Sendable {
+            public let transactionIds: [Int]
+            public let fromAccountId: Int?
+            public let toAccountId: Int?
+            public let idempotencyKey: String
+
+            public init(transactionIds: [Int], fromAccountId: Int? = nil, toAccountId: Int? = nil, idempotencyKey: String) {
+                self.transactionIds = transactionIds
+                self.fromAccountId = fromAccountId
+                self.toAccountId = toAccountId
+                self.idempotencyKey = idempotencyKey
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case transactionIds = "transaction_ids"
+                case fromAccountId = "from_account_id"
+                case toAccountId = "to_account_id"
+                case idempotencyKey = "idempotency_key"
+            }
+        }
+    }
+
+    /// GET /api/info/portfolio-summary: Get portfolio summary per investment
+    public struct GetPortfolioSummary: APIOperation {
+        public typealias Response = OpenAPI.PortfolioSummaryEnvelope
+        public static let operationId = "getPortfolioSummary"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/info/portfolio-summary"
+
+        /// Target currency (3-letter code; `target_currency` is an alias). A malformed code falls back
+        /// to EUR. A repeated key returns 400.
+        public var currency: String?
+
+        public init(currency: String? = nil) {
+            self.currency = currency
+        }
+
+        public var path: String { "/api/info/portfolio-summary" }
+
+        public var queryItems: [URLQueryItem] {
+            var items: [URLQueryItem] = []
+            if let currency { items.append(URLQueryItem(name: "currency", value: APIQuery.value(currency))) }
+            return items
+        }
+    }
+
+    /// POST /api/categories/tree: Create a category at any depth
+    public struct CreateCategoryNode: APIOperation {
+        public typealias Response = OpenAPI.CategoryNodeEnvelope
+        public static let operationId = "createCategoryNode"
+        public static let method = HTTPMethod.post
+        public static let pathTemplate = "/api/categories/tree"
+
+        public var body: OpenAPI.CategoryNodeCreate
+
+        public init(body: OpenAPI.CategoryNodeCreate) {
+            self.body = body
+        }
+
+        public var path: String { "/api/categories/tree" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+    }
+
+    /// PATCH /api/categories/tree/{id}: Rename, move, describe, or activate a category node
+    public struct UpdateCategoryNode: APIOperation {
+        public typealias Response = OpenAPI.CategoryNodeEnvelope
+        public static let operationId = "updateCategoryNode"
+        public static let method = HTTPMethod.patch
+        public static let pathTemplate = "/api/categories/tree/{id}"
+
+        public var id: Int
+        public var body: OpenAPI.CategoryNodeUpdate
+
+        public init(id: Int, body: OpenAPI.CategoryNodeUpdate) {
+            self.id = id
+            self.body = body
+        }
+
+        public var path: String { "/api/categories/tree/\(APIPath.segment(APIQuery.value(id)))" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+    }
+
+    /// DELETE /api/categories/tree/{id}: Delete a childless category node
+    public struct DeleteCategoryNode: APIOperation {
+        public typealias Response = APIEmpty
+        public static let operationId = "deleteCategoryNode"
+        public static let method = HTTPMethod.delete
+        public static let pathTemplate = "/api/categories/tree/{id}"
+
+        public var id: Int
+
+        public init(id: Int) {
+            self.id = id
+        }
+
+        public var path: String { "/api/categories/tree/\(APIPath.segment(APIQuery.value(id)))" }
+    }
+
+    /// POST /api/categories/tree/{id}/merge: Merge a category and its children into another active
+    /// category
+    public struct MergeCategoryNode: APIOperation {
+        public typealias Response = OpenAPI.CategoryNodeEnvelope
+        public static let operationId = "mergeCategoryNode"
+        public static let method = HTTPMethod.post
+        public static let pathTemplate = "/api/categories/tree/{id}/merge"
+
+        public var id: Int
+        public var body: Body
+
+        public init(id: Int, body: Body) {
+            self.id = id
+            self.body = body
+        }
+
+        public var path: String { "/api/categories/tree/\(APIPath.segment(APIQuery.value(id)))/merge" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+
+        public struct Body: Codable, Equatable, Sendable {
+            public let targetId: Int
+
+            public init(targetId: Int) {
+                self.targetId = targetId
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case targetId = "targetId"
+            }
+        }
+    }
+
+    /// DELETE /api/recipients/{id}: Delete recipient
+    public struct DeleteRecipient: APIOperation {
+        public typealias Response = APIEmpty
+        public static let operationId = "deleteRecipient"
+        public static let method = HTTPMethod.delete
+        public static let pathTemplate = "/api/recipients/{id}"
+
+        public var id: Int
+
+        public init(id: Int) {
+            self.id = id
+        }
+
+        public var path: String { "/api/recipients/\(APIPath.segment(APIQuery.value(id)))" }
+    }
+
+    /// POST /api/recipients/{id}/merge: Merge aliases into the primary recipient identified by id
+    public struct MergeRecipient: APIOperation {
+        public typealias Response = JSONValue
+        public static let operationId = "mergeRecipient"
+        public static let method = HTTPMethod.post
+        public static let pathTemplate = "/api/recipients/{id}/merge"
+
+        public var id: Int
+        public var body: Body
+
+        public init(id: Int, body: Body) {
+            self.id = id
+            self.body = body
+        }
+
+        public var path: String { "/api/recipients/\(APIPath.segment(APIQuery.value(id)))/merge" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+
+        public struct Body: Codable, Equatable, Sendable {
+            /// Each id is an integer or a digit string.
+            public let aliasIds: [Int]
+
+            public init(aliasIds: [Int]) {
+                self.aliasIds = aliasIds
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case aliasIds = "alias_ids"
+            }
+        }
+    }
+
+    /// POST /api/recipients/{id}/unmerge: Unmerge recipient
+    public struct UnmergeRecipient: APIOperation {
+        public typealias Response = JSONValue
+        public static let operationId = "unmergeRecipient"
+        public static let method = HTTPMethod.post
+        public static let pathTemplate = "/api/recipients/{id}/unmerge"
+
+        public var id: Int
+
+        public init(id: Int) {
+            self.id = id
+        }
+
+        public var path: String { "/api/recipients/\(APIPath.segment(APIQuery.value(id)))/unmerge" }
+    }
+
+    /// GET /api/recipients/{id}/patterns: List auto-assign patterns for recipient
+    public struct GetRecipientPatterns: APIOperation {
+        public typealias Response = ResponseData
+        public static let operationId = "getRecipientPatterns"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/recipients/{id}/patterns"
+
+        public var id: Int
+
+        public init(id: Int) {
+            self.id = id
+        }
+
+        public var path: String { "/api/recipients/\(APIPath.segment(APIQuery.value(id)))/patterns" }
+
+        public struct ResponseData: Codable, Equatable, Sendable {
+            public let items: [OpenAPI.RecipientPattern]
+            public let total: Int
+
+            public init(items: [OpenAPI.RecipientPattern], total: Int) {
+                self.items = items
+                self.total = total
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case items = "items"
+                case total = "total"
+            }
+        }
+    }
+
+    /// POST /api/recipients/{id}/patterns: Create auto-assign pattern
+    public struct CreateRecipientPattern: APIOperation {
+        public typealias Response = ResponseData
+        public static let operationId = "createRecipientPattern"
+        public static let method = HTTPMethod.post
+        public static let pathTemplate = "/api/recipients/{id}/patterns"
+
+        public var id: Int
+        public var body: Body
+
+        public init(id: Int, body: Body) {
+            self.id = id
+            self.body = body
+        }
+
+        public var path: String { "/api/recipients/\(APIPath.segment(APIQuery.value(id)))/patterns" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+
+        public struct ResponseData: Codable, Equatable, Sendable {
+            public let id: Int
+
+            public init(id: Int) {
+                self.id = id
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case id = "id"
+            }
+        }
+
+        public struct Body: Codable, Equatable, Sendable {
+            public let pattern: String
+            public let patternKind: String?
+            public let caseSensitive: Bool?
+            public let priority: Int?
+            public let notes: String?
+
+            public init(pattern: String, patternKind: String? = nil, caseSensitive: Bool? = nil, priority: Int? = nil, notes: String? = nil) {
+                self.pattern = pattern
+                self.patternKind = patternKind
+                self.caseSensitive = caseSensitive
+                self.priority = priority
+                self.notes = notes
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case pattern = "pattern"
+                case patternKind = "pattern_kind"
+                case caseSensitive = "case_sensitive"
+                case priority = "priority"
+                case notes = "notes"
+            }
+        }
+    }
+
+    /// POST /api/recipients/{id}/patterns/preview: Preview pattern match count
+    public struct PreviewRecipientPattern: APIOperation {
+        public typealias Response = ResponseData
+        public static let operationId = "previewRecipientPattern"
+        public static let method = HTTPMethod.post
+        public static let pathTemplate = "/api/recipients/{id}/patterns/preview"
+
+        public var id: Int
+        public var body: Body
+
+        public init(id: Int, body: Body) {
+            self.id = id
+            self.body = body
+        }
+
+        public var path: String { "/api/recipients/\(APIPath.segment(APIQuery.value(id)))/patterns/preview" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+
+        public struct ResponseData: Codable, Equatable, Sendable {
+            public let matchCount: Int
+            public let recipientIds: [Int]
+            /// Only on a `regex` preview.
+            public let truncated: Bool?
+
+            public init(matchCount: Int, recipientIds: [Int], truncated: Bool? = nil) {
+                self.matchCount = matchCount
+                self.recipientIds = recipientIds
+                self.truncated = truncated
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case matchCount = "matchCount"
+                case recipientIds = "recipientIds"
+                case truncated = "truncated"
+            }
+        }
+
+        public struct Body: Codable, Equatable, Sendable {
+            public let pattern: String
+            public let patternKind: String?
+            public let caseSensitive: Bool?
+
+            public init(pattern: String, patternKind: String? = nil, caseSensitive: Bool? = nil) {
+                self.pattern = pattern
+                self.patternKind = patternKind
+                self.caseSensitive = caseSensitive
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case pattern = "pattern"
+                case patternKind = "pattern_kind"
+                case caseSensitive = "case_sensitive"
+            }
+        }
+    }
+
+    /// PATCH /api/recipients/{id}/patterns/{patternId}: Update pattern
+    public struct UpdateRecipientPattern: APIOperation {
+        public typealias Response = JSONValue
+        public static let operationId = "updateRecipientPattern"
+        public static let method = HTTPMethod.patch
+        public static let pathTemplate = "/api/recipients/{id}/patterns/{patternId}"
+
+        public var id: Int
+        public var patternId: Int
+        public var body: Body
+
+        public init(id: Int, patternId: Int, body: Body) {
+            self.id = id
+            self.patternId = patternId
+            self.body = body
+        }
+
+        public var path: String { "/api/recipients/\(APIPath.segment(APIQuery.value(id)))/patterns/\(APIPath.segment(APIQuery.value(patternId)))" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+
+        public struct Body: Codable, Equatable, Sendable {
+            public let pattern: String?
+            public let patternKind: String?
+            public let caseSensitive: Bool?
+            public let priority: Int?
+            public let notes: String?
+            public let isActive: Bool?
+
+            public init(pattern: String? = nil, patternKind: String? = nil, caseSensitive: Bool? = nil, priority: Int? = nil, notes: String? = nil, isActive: Bool? = nil) {
+                self.pattern = pattern
+                self.patternKind = patternKind
+                self.caseSensitive = caseSensitive
+                self.priority = priority
+                self.notes = notes
+                self.isActive = isActive
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case pattern = "pattern"
+                case patternKind = "pattern_kind"
+                case caseSensitive = "case_sensitive"
+                case priority = "priority"
+                case notes = "notes"
+                case isActive = "is_active"
+            }
+        }
+    }
+
+    /// DELETE /api/recipients/{id}/patterns/{patternId}: Delete pattern
+    public struct DeleteRecipientPattern: APIOperation {
+        public typealias Response = APIEmpty
+        public static let operationId = "deleteRecipientPattern"
+        public static let method = HTTPMethod.delete
+        public static let pathTemplate = "/api/recipients/{id}/patterns/{patternId}"
+
+        public var id: Int
+        public var patternId: Int
+
+        public init(id: Int, patternId: Int) {
+            self.id = id
+            self.patternId = patternId
+        }
+
+        public var path: String { "/api/recipients/\(APIPath.segment(APIQuery.value(id)))/patterns/\(APIPath.segment(APIQuery.value(patternId)))" }
     }
 }

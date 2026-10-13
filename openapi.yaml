@@ -4947,15 +4947,43 @@ components:
     # ─── Recipient sub-resources ──────────────────────────────────────────────
     RecipientPattern:
       type: object
-      required: [id, pattern, created_at]
+      description: A `recipient_match_patterns` row as `listPatternsForRecipient` selects it.
+      required:
+        [
+          id,
+          pattern,
+          pattern_kind,
+          case_sensitive,
+          priority,
+          is_active,
+          source,
+          created_at,
+        ]
       properties:
         id:
           type: integer
         pattern:
           type: string
-        is_regex:
+        pattern_kind:
+          type: string
+          enum: [literal_prefix, glob, regex]
+        case_sensitive:
           type: boolean
+        priority:
+          type: integer
+          format: int32
+        is_active:
+          type: boolean
+        source:
+          type: string
+          enum: [user, suggested, system]
+        notes:
+          type: string
+          nullable: true
         created_at:
+          type: string
+          format: date-time
+        updated_at:
           type: string
           format: date-time
 
@@ -8761,9 +8789,15 @@ paths:
                   - type: object
                     properties:
                       data:
-                        type: array
-                        items:
-                          $ref: "#/components/schemas/RecipientPattern"
+                        type: object
+                        required: [items, total]
+                        properties:
+                          items:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/RecipientPattern"
+                          total:
+                            type: integer
     post:
       summary: Create auto-assign pattern
       operationId: createRecipientPattern
@@ -8798,7 +8832,7 @@ paths:
         "400":
           description: "VALIDATION_ERROR: missing pattern, or a field of the wrong type"
         "201":
-          description: Created pattern
+          description: Created pattern (its id)
           content:
             application/json:
               schema:
@@ -8807,7 +8841,11 @@ paths:
                   - type: object
                     properties:
                       data:
-                        $ref: "#/components/schemas/RecipientPattern"
+                        type: object
+                        required: [id]
+                        properties:
+                          id:
+                            type: integer
 
   /api/recipients/{id}/patterns/preview:
     parameters:
@@ -8849,7 +8887,23 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [matchCount, recipientIds]
+                        properties:
+                          matchCount:
+                            type: integer
+                          recipientIds:
+                            type: array
+                            items:
+                              type: integer
+                          truncated:
+                            type: boolean
+                            description: Only on a `regex` preview.
 
   /api/recipients/{id}/patterns/{patternId}:
     parameters:

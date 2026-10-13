@@ -52,27 +52,27 @@ aliases: [vision native, native app, swift app]
 
 ## Layout
 
-| Path                                               | Purpose                                                                                     |
-| -------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `apps/native/project.yml`                          | XcodeGen spec: project `VisionNative`, macOS app target "Vision Native", macOS 26.0         |
-| `apps/native/Config/Signing.xcconfig`              | `DEVELOPMENT_TEAM` from `VISION_NATIVE_TEAM_ID`, optional gitignored `Local.xcconfig`       |
-| `apps/native/VisionNative/`                        | AppKit entry point, window, menus, `WKWebView` shell and the SwiftUI launch state           |
-| `apps/native/Package.swift`                        | SwiftPM package (Swift 6), libraries `VisionNativeCore` and `VisionNativeUI`, no deps       |
-| `apps/native/Sources/VisionNativeCore/`            | `BackendLocator` and `BackendHealth`: non-UI logic, testable without the Xcode UI           |
-| `apps/native/Sources/VisionNativeCore/API/`        | `APIClient` (the Swift `client.ts`) and the generated OpenAPI models and operations         |
-| `apps/native/Sources/VisionNativeCore/Design/`     | Generated design tokens and `ThemeSelection` (variant and appearance of the page)           |
-| `apps/native/Sources/VisionNativeCore/Navigation/` | Generated sidebar registry, routes, shortcuts and the `NativeShellModel` (phase 2)          |
-| `apps/native/Sources/VisionNativeCore/Screens/`    | View models of native screens (Exchange rates, Admin, Planned, Imports, Transactions, Owes) |
-| `apps/native/Sources/VisionNativeUI/`              | SwiftUI shell, native screens and the generated `Localizable.xcstrings` (phase 2)           |
-| `apps/native/openapi-operations.txt`               | The operationIds the Swift client is generated for                                          |
-| `apps/native/i18n-keys.txt`                        | The `i18n/source` keys copied into the String Catalog                                       |
-| `apps/native/Sources/VisionNativeCore/Runtime/`    | Runtime supervisor, PostgreSQL and backend lifecycle, Demo seeding, system seams            |
-| `apps/native/Sources/VisionNativeCore/Shell/`      | Shell logic without AppKit: bridge contract, codec, policy, menu model, window frame        |
-| `apps/native/Sources/VisionNativeCore/Backup/`     | Backup bundles, encryption, restore and the `electronBackup` service (phase 1d)             |
-| `apps/native/Sources/VisionNativeCore/Audit/`      | Audit anchor, Keychain witness, backend audit bridge and `electronAudit` (phase 1e)         |
-| `apps/native/Tests/VisionNativeCoreTests/`         | Swift Testing tests and fixtures (Electron backup bundle, Electron audit anchor)            |
-| `apps/native/Tests/VisionNativeUITests/`           | String Catalog completeness (EN and NL) and SwiftUI layout tests                            |
-| `install-native.sh`                                | Local Release build and install, by default to `/Applications/Vision Native Demo.app`       |
+| Path                                               | Purpose                                                                                                                       |
+| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `apps/native/project.yml`                          | XcodeGen spec: project `VisionNative`, macOS app target "Vision Native", macOS 26.0                                           |
+| `apps/native/Config/Signing.xcconfig`              | `DEVELOPMENT_TEAM` from `VISION_NATIVE_TEAM_ID`, optional gitignored `Local.xcconfig`                                         |
+| `apps/native/VisionNative/`                        | AppKit entry point, window, menus, `WKWebView` shell and the SwiftUI launch state                                             |
+| `apps/native/Package.swift`                        | SwiftPM package (Swift 6), libraries `VisionNativeCore` and `VisionNativeUI`, no deps                                         |
+| `apps/native/Sources/VisionNativeCore/`            | `BackendLocator` and `BackendHealth`: non-UI logic, testable without the Xcode UI                                             |
+| `apps/native/Sources/VisionNativeCore/API/`        | `APIClient` (the Swift `client.ts`) and the generated OpenAPI models and operations                                           |
+| `apps/native/Sources/VisionNativeCore/Design/`     | Generated design tokens and `ThemeSelection` (variant and appearance of the page)                                             |
+| `apps/native/Sources/VisionNativeCore/Navigation/` | Generated sidebar registry, routes, shortcuts and the `NativeShellModel` (phase 2)                                            |
+| `apps/native/Sources/VisionNativeCore/Screens/`    | View models of native screens (Exchange rates, Admin, Planned, Imports, Transactions, Owes, Accounts, Categories, Recipients) |
+| `apps/native/Sources/VisionNativeUI/`              | SwiftUI shell, native screens and the generated `Localizable.xcstrings` (phase 2)                                             |
+| `apps/native/openapi-operations.txt`               | The operationIds the Swift client is generated for                                                                            |
+| `apps/native/i18n-keys.txt`                        | The `i18n/source` keys copied into the String Catalog                                                                         |
+| `apps/native/Sources/VisionNativeCore/Runtime/`    | Runtime supervisor, PostgreSQL and backend lifecycle, Demo seeding, system seams                                              |
+| `apps/native/Sources/VisionNativeCore/Shell/`      | Shell logic without AppKit: bridge contract, codec, policy, menu model, window frame                                          |
+| `apps/native/Sources/VisionNativeCore/Backup/`     | Backup bundles, encryption, restore and the `electronBackup` service (phase 1d)                                               |
+| `apps/native/Sources/VisionNativeCore/Audit/`      | Audit anchor, Keychain witness, backend audit bridge and `electronAudit` (phase 1e)                                           |
+| `apps/native/Tests/VisionNativeCoreTests/`         | Swift Testing tests and fixtures (Electron backup bundle, Electron audit anchor)                                              |
+| `apps/native/Tests/VisionNativeUITests/`           | String Catalog completeness (EN and NL) and SwiftUI layout tests                                                              |
+| `install-native.sh`                                | Local Release build and install, by default to `/Applications/Vision Native Demo.app`                                         |
 
 The generated `apps/native/VisionNative.xcodeproj`, its `Info.plist`, `apps/native/build/` and
 the SwiftPM state are gitignored. The app target uses Swift 6 with complete strict concurrency,
@@ -680,7 +680,8 @@ that way. Every native screen waits for the first `app_settings` answer and show
 then. The native shell never redirects: an admin route shows a native screen only while
 `app_settings` says admin mode is on, and otherwise the web view, where `RequireAdmin` redirects and
 reports the new route. Screens outside the admin section (`/planned`, `/import`,
-`/import/:batchId/review`, `/transactions`, `/owes`) are native in
+`/import/:batchId/review`, `/transactions`, `/owes`, `/accounts`, `/accounts/:id`, `/categories`,
+`/recipients`) are native in
 either mode. The page's topbar keeps its traffic-light inset only while the native sidebar is
 hidden (`native-sidebar`).
 
@@ -841,6 +842,27 @@ outstanding and the people, and a person's detail records payments, settles, set
 splits, exports CSV through the save panel and lists Recent transactions in a local table. Scroll
 restore on back and forward stays web-only: the shell gets route reports without a history-entry
 key, so it cannot tell a back navigation from a new one.
+
+### Categories and payees (phase 3f part B)
+
+`/categories` and `/recipients` are native without admin mode
+([[docs/reference/native-parity/accounts-categories-recipients|accounts, categories and payees parity]],
+[[docs/api/categories|categories API]], [[docs/api/recipients|recipients API]]). `CategoriesModel`
+builds the tree from `GET /api/categories/tree` (inactive ancestors of active nodes stay as
+context) and keeps `show_all` and the repeated `expanded` parameter in the route. The category
+dialog sends `parentId: null` and `description: null` explicitly, and a status flip offers Undo for
+8 seconds. The spec names the tree response by `$ref` to its envelope, which the generator reads
+as the unwrapped data, so `CategoryTreeRequest` decodes `{ items }` by hand; the shared pickers
+use it too. `RecipientsModel` pages the payees by `defaultPageSize` with the gated server search
+(three characters), the server sort in `sort_key` / `sort_dir`, client-side column filters over the
+loaded rows and a load-more Retry. Rows edit inline (double-click or Edit), and the default
+category is patched at once (`default_category_id: null` clears it). Merge payees
+(`PayeeMergeState`) loads every payee in pages of 1000 and keeps its selection when dismissed;
+while a selection exists the leave guard asks first. A merge with a rule suggestion shows one
+toast with a Create rule action for 10 seconds. Match rules (`MatchRulesState`) previews a pattern
+before saving and drops a preview for a superseded draft. A category write invalidates Transactions,
+Planned and the shared pickers; a payee write resets the pickers, and a merge or unmerge also
+invalidates Transactions and Planned.
 
 ## CI
 

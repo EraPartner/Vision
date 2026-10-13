@@ -42,6 +42,10 @@ struct LocalDataTable<Row: Identifiable, Empty: View>: View {
     var hasMore = false
     /// A row was drawn (the infinite scroll's trigger).
     var onRowAppear: ((Row.ID) -> Void)?
+    /// A row was double-clicked (the inline edit's trigger).
+    var onRowDoubleClick: ((Row) -> Void)?
+    /// The search field's placeholder; `table.searchAllColumns` when `nil`.
+    var searchPrompt: String?
     @State private var openFilter: String?
     @State private var widths: [String: CGFloat] = [:]
     @State private var hoveredHeader: String?
@@ -74,9 +78,24 @@ struct LocalDataTable<Row: Identifiable, Empty: View>: View {
         return copy
     }
 
+    /// A double-click on a row starts its inline edit.
+    func rowDoubleClicked(_ action: @escaping (Row) -> Void) -> Self {
+        var copy = self
+        copy.onRowDoubleClick = action
+        return copy
+    }
+
+    /// A server search names what it looks through (`serverMode.search.placeholder`).
+    func searchPlaceholder(_ text: String) -> Self {
+        var copy = self
+        copy.searchPrompt = text
+        return copy
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            heading
+            // A page whose header already names the table passes no title.
+            if !title.isEmpty || !subtitle.isEmpty { heading }
             toolbar
             if !query.filters.isEmpty { chips }
             ScrollView(.horizontal) {
@@ -139,9 +158,9 @@ struct LocalDataTable<Row: Identifiable, Empty: View>: View {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(theme.tertiaryLabel)
                     .accessibilityHidden(true)
-                TextField(strings.t("table.searchAllColumns"), text: $query.search)
+                TextField(searchPrompt ?? strings.t("table.searchAllColumns"), text: $query.search)
                     .textFieldStyle(.plain)
-                    .accessibilityLabel(strings.t("table.searchAllColumns"))
+                    .accessibilityLabel(searchPrompt ?? strings.t("table.searchAllColumns"))
                 if !query.search.isEmpty {
                     Button {
                         query.search = ""
@@ -179,6 +198,7 @@ struct LocalDataTable<Row: Identifiable, Empty: View>: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 16)
+        .padding(.top, title.isEmpty && subtitle.isEmpty ? 16 : 0)
         .padding(.bottom, 10)
     }
 
@@ -345,6 +365,11 @@ struct LocalDataTable<Row: Identifiable, Empty: View>: View {
         }
         .padding(.horizontal, 16)
         .frame(minHeight: 44)
+        .contentShape(Rectangle())
+        .simultaneousGesture(
+            TapGesture(count: 2).onEnded { onRowDoubleClick?(row) },
+            including: onRowDoubleClick == nil ? .subviews : .all
+        )
         .accessibilityElement(children: .contain)
     }
 

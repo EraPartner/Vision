@@ -32,7 +32,9 @@ extension APIClient: PickerDataService {
     }
 
     public func categories() async throws -> [OpenAPI.CategoryNode] {
-        try await send(OpenAPIOperations.GetCategoryTree()).data?.items ?? []
+        // The generated `GetCategoryTree` decodes `data` as the whole envelope (see
+        // `CategoryTreeRequest`), so the tree is read through the hand-written request.
+        try await send(CategoryTreeRequest()).items
     }
 
     public func tags() async throws -> [OpenAPI.Tag] {
@@ -258,13 +260,20 @@ public final class PickerDataModel {
         slugs.contains(slug) ? slugs.filter { $0 != slug } : slugs + [slug]
     }
 
-    /// `createTag`, then the tag list again. A failure (the tag may already exist) is ignored,
-    /// as the web adds the slug regardless.
-    public func createTag(slug: String, color: String?) async {
-        try? await service.createTag(slug: slug, color: color)
+    /// `createTag`, then the tag list again. A failure (the tag may already exist) does not
+    /// stop the caller adding the slug, as on the web; it is returned for `tags.createFailed`.
+    @discardableResult
+    public func createTag(slug: String, color: String?) async -> APIError? {
+        var failure: APIError?
+        do {
+            try await service.createTag(slug: slug, color: color)
+        } catch {
+            failure = APIError.wrapping(error)
+        }
         if let refreshed = try? await service.tags() {
             tags = refreshed
         }
+        return failure
     }
 }
 

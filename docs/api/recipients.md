@@ -4,8 +4,8 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/recipients
 description: Recipient (payee/payer) management with atomic merge and normalization-based matching
-date: 2026-10-11
-updated: 2026-10-11
+date: 2026-10-13
+updated: 2026-10-13
 tags: [api, recipients, payees, merge, atomic, phase-6, recipient-clusters]
 status: active
 aliases: [recipients-api, payee, payer, counterparty, recipient-management]
@@ -331,17 +331,22 @@ List all matching patterns for a recipient.
   "items": [
     {
       "id": 1,
-      "recipient_id": 5,
       "pattern": "SUPERMARKET",
       "pattern_kind": "literal_prefix",
       "case_sensitive": false,
-      "priority": 0,
-      "notes": null
+      "priority": 100,
+      "is_active": true,
+      "source": "user",
+      "notes": null,
+      "created_at": "2026-10-01T09:00:00.000Z",
+      "updated_at": "2026-10-01T09:00:00.000Z"
     }
   ],
   "total": 1
 }
 ```
+
+Rules come in priority order, then by id.
 
 ### POST /api/recipients/:id/patterns
 
@@ -367,18 +372,10 @@ Create a new matching pattern for a recipient.
 
 **Required Fields:** `pattern`
 
-**Response:** `201 Created`
+**Response:** `201 Created`, with the new pattern's id:
 
 ```json
-{
-  "id": 1,
-  "recipient_id": 5,
-  "pattern": "SUPERMARKET",
-  "pattern_kind": "literal_prefix",
-  "case_sensitive": false,
-  "priority": 0,
-  "notes": "Matches all supermarket transactions"
-}
+{ "id": 1 }
 ```
 
 An omitted `pattern_kind` is stored and validated as `literal_prefix`. A `regex` pattern that does not
@@ -404,7 +401,7 @@ type returns `400 VALIDATION_ERROR` naming the field.
 
 ### POST /api/recipients/:id/patterns/preview
 
-Preview which existing transactions would match a given pattern before saving it.
+Preview which existing payees would match a given pattern before saving it.
 
 **Path Parameters:**
 
@@ -430,17 +427,14 @@ Preview which existing transactions would match a given pattern before saving it
 
 ```json
 {
-  "matchCount": 14,
-  "matches": [
-    {
-      "id": 101,
-      "description": "SUPERMARKET ABC",
-      "date": "2026-05-01",
-      "amount": -45.0
-    }
-  ]
+  "matchCount": 2,
+  "recipientIds": [12, 40],
+  "truncated": false
 }
 ```
+
+Only active payees are counted. `truncated` comes only with a `regex` preview, which scans at most
+10,000 payees; `true` means it stopped at that cap and `matchCount` counts only the payees scanned.
 
 ### PATCH /api/recipients/:id/patterns/:patternId
 

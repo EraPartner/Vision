@@ -171,6 +171,54 @@ extension OpenAPI {
         }
     }
 
+    public struct AccountCreate: Codable, Equatable, Sendable {
+        public let name: String
+        public let displayName: String?
+        public let institution: String?
+        public let currency: String?
+        public let type: String?
+        public let liquidityClass: String?
+        public let spendable: Bool?
+        public let inNetWorth: Bool?
+        public let taxWrapper: String?
+        public let owner: String?
+        public let multiCurrencyCash: Bool?
+        public let hasCashSleeve: Bool?
+        public let fundingAccountId: Int?
+
+        public init(name: String, displayName: String? = nil, institution: String? = nil, currency: String? = nil, type: String? = nil, liquidityClass: String? = nil, spendable: Bool? = nil, inNetWorth: Bool? = nil, taxWrapper: String? = nil, owner: String? = nil, multiCurrencyCash: Bool? = nil, hasCashSleeve: Bool? = nil, fundingAccountId: Int? = nil) {
+            self.name = name
+            self.displayName = displayName
+            self.institution = institution
+            self.currency = currency
+            self.type = type
+            self.liquidityClass = liquidityClass
+            self.spendable = spendable
+            self.inNetWorth = inNetWorth
+            self.taxWrapper = taxWrapper
+            self.owner = owner
+            self.multiCurrencyCash = multiCurrencyCash
+            self.hasCashSleeve = hasCashSleeve
+            self.fundingAccountId = fundingAccountId
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case name = "name"
+            case displayName = "display_name"
+            case institution = "institution"
+            case currency = "currency"
+            case type = "type"
+            case liquidityClass = "liquidity_class"
+            case spendable = "spendable"
+            case inNetWorth = "in_net_worth"
+            case taxWrapper = "tax_wrapper"
+            case owner = "owner"
+            case multiCurrencyCash = "multi_currency_cash"
+            case hasCashSleeve = "has_cash_sleeve"
+            case fundingAccountId = "funding_account_id"
+        }
+    }
+
     public struct AccountList: Codable, Equatable, Sendable {
         public let total: Int
         public let limit: Int?
@@ -192,6 +240,57 @@ extension OpenAPI {
             case offset = "offset"
             case items = "items"
             case links = "links"
+        }
+    }
+
+    public struct AccountUpdate: Codable, Equatable, Sendable {
+        public let name: String?
+        public let displayName: String?
+        public let institution: String?
+        public let currency: String?
+        public let type: String?
+        public let liquidityClass: String?
+        public let spendable: Bool?
+        public let inNetWorth: Bool?
+        public let taxWrapper: String?
+        public let owner: String?
+        public let multiCurrencyCash: Bool?
+        public let hasCashSleeve: Bool?
+        public let fundingAccountId: Int?
+        public let isActive: Bool?
+
+        public init(name: String? = nil, displayName: String? = nil, institution: String? = nil, currency: String? = nil, type: String? = nil, liquidityClass: String? = nil, spendable: Bool? = nil, inNetWorth: Bool? = nil, taxWrapper: String? = nil, owner: String? = nil, multiCurrencyCash: Bool? = nil, hasCashSleeve: Bool? = nil, fundingAccountId: Int? = nil, isActive: Bool? = nil) {
+            self.name = name
+            self.displayName = displayName
+            self.institution = institution
+            self.currency = currency
+            self.type = type
+            self.liquidityClass = liquidityClass
+            self.spendable = spendable
+            self.inNetWorth = inNetWorth
+            self.taxWrapper = taxWrapper
+            self.owner = owner
+            self.multiCurrencyCash = multiCurrencyCash
+            self.hasCashSleeve = hasCashSleeve
+            self.fundingAccountId = fundingAccountId
+            self.isActive = isActive
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case name = "name"
+            case displayName = "display_name"
+            case institution = "institution"
+            case currency = "currency"
+            case type = "type"
+            case liquidityClass = "liquidity_class"
+            case spendable = "spendable"
+            case inNetWorth = "in_net_worth"
+            case taxWrapper = "tax_wrapper"
+            case owner = "owner"
+            case multiCurrencyCash = "multi_currency_cash"
+            case hasCashSleeve = "has_cash_sleeve"
+            case fundingAccountId = "funding_account_id"
+            case isActive = "is_active"
         }
     }
 
@@ -334,6 +433,63 @@ extension OpenAPI {
             case isActive = "is_active"
             case hierarchyOnly = "hierarchyOnly"
             case legacyCompatible = "legacyCompatible"
+        }
+    }
+
+    public struct CategoryNodeCreate: Codable, Equatable, Sendable {
+        public let name: String
+        public let parentId: Int?
+        public let description: String?
+
+        public init(name: String, parentId: Int? = nil, description: String? = nil) {
+            self.name = name
+            self.parentId = parentId
+            self.description = description
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case name = "name"
+            case parentId = "parentId"
+            case description = "description"
+        }
+    }
+
+    public struct CategoryNodeEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let data: OpenAPI.CategoryNode?
+        public let error: OpenAPI.ErrorPayload?
+
+        public init(ok: Bool, data: OpenAPI.CategoryNode? = nil, error: OpenAPI.ErrorPayload? = nil) {
+            self.ok = ok
+            self.data = data
+            self.error = error
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case data = "data"
+            case error = "error"
+        }
+    }
+
+    public struct CategoryNodeUpdate: Codable, Equatable, Sendable {
+        public let name: String?
+        public let parentId: Int?
+        public let description: String?
+        public let isActive: Bool?
+
+        public init(name: String? = nil, parentId: Int? = nil, description: String? = nil, isActive: Bool? = nil) {
+            self.name = name
+            self.parentId = parentId
+            self.description = description
+            self.isActive = isActive
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case name = "name"
+            case parentId = "parentId"
+            case description = "description"
+            case isActive = "is_active"
         }
     }
 
@@ -1107,6 +1263,261 @@ extension OpenAPI {
         }
     }
 
+    public struct PortfolioBrokerRetagReceipt: Codable, Equatable, Sendable {
+        public let receiptId: Int
+        public let idempotencyKey: String
+        public let fromAccountId: Int?
+        public let toAccountId: Int?
+        public let transactionIds: [Int]
+        public let previousAssignments: [PreviousAssignmentsItem]
+        public let selectedCount: Int
+        public let changedCount: Int
+        public let createdAt: String
+        public let replayed: Bool
+
+        public init(receiptId: Int, idempotencyKey: String, fromAccountId: Int? = nil, toAccountId: Int? = nil, transactionIds: [Int], previousAssignments: [PreviousAssignmentsItem], selectedCount: Int, changedCount: Int, createdAt: String, replayed: Bool) {
+            self.receiptId = receiptId
+            self.idempotencyKey = idempotencyKey
+            self.fromAccountId = fromAccountId
+            self.toAccountId = toAccountId
+            self.transactionIds = transactionIds
+            self.previousAssignments = previousAssignments
+            self.selectedCount = selectedCount
+            self.changedCount = changedCount
+            self.createdAt = createdAt
+            self.replayed = replayed
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case receiptId = "receipt_id"
+            case idempotencyKey = "idempotency_key"
+            case fromAccountId = "from_account_id"
+            case toAccountId = "to_account_id"
+            case transactionIds = "transaction_ids"
+            case previousAssignments = "previous_assignments"
+            case selectedCount = "selected_count"
+            case changedCount = "changed_count"
+            case createdAt = "created_at"
+            case replayed = "replayed"
+        }
+
+        public struct PreviousAssignmentsItem: Codable, Equatable, Sendable {
+            public let transactionId: Int
+            public let accountId: Int?
+
+            public init(transactionId: Int, accountId: Int? = nil) {
+                self.transactionId = transactionId
+                self.accountId = accountId
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case transactionId = "transaction_id"
+                case accountId = "account_id"
+            }
+        }
+    }
+
+    public struct PortfolioSummaryByAccountItem: Codable, Equatable, Sendable {
+        public let accountId: Int?
+        /// Stable machine-readable identity for accountless contributions.
+        public let assignment: String
+        /// Lot-bearing position result or standalone income/adjustment partition.
+        public let contributionKind: String
+        public let oversold: Bool
+        public let currentValue: Decimal
+        public let totalInvested: Decimal
+        public let realizedGain: Decimal
+        public let unrealizedGain: Decimal
+        public let gainLoss: Decimal
+
+        public init(accountId: Int? = nil, assignment: String, contributionKind: String, oversold: Bool, currentValue: Decimal, totalInvested: Decimal, realizedGain: Decimal, unrealizedGain: Decimal, gainLoss: Decimal) {
+            self.accountId = accountId
+            self.assignment = assignment
+            self.contributionKind = contributionKind
+            self.oversold = oversold
+            self.currentValue = currentValue
+            self.totalInvested = totalInvested
+            self.realizedGain = realizedGain
+            self.unrealizedGain = unrealizedGain
+            self.gainLoss = gainLoss
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case accountId = "account_id"
+            case assignment = "assignment"
+            case contributionKind = "contribution_kind"
+            case oversold = "oversold"
+            case currentValue = "currentValue"
+            case totalInvested = "totalInvested"
+            case realizedGain = "realizedGain"
+            case unrealizedGain = "unrealizedGain"
+            case gainLoss = "gainLoss"
+        }
+    }
+
+    public struct PortfolioSummaryData: Codable, Equatable, Sendable {
+        public let currency: String
+        public let computedAt: String
+        public let totals: Totals
+        public let summaries: [OpenAPI.PortfolioSummaryItem]
+        public let byAccount: [OpenAPI.PortfolioSummaryByAccountItem]
+        /// Imported, source-owned account fees without an instrument, converted at transaction-date
+        /// rates and counted once per canonical cash transaction. Separate from investment totals, cost
+        /// basis and return series. Optional for compatibility with older responses; absence means
+        /// unavailable.
+        public let brokerageCashFees: BrokerageCashFees?
+        /// Separate archived holding income subtotals, converted from each literal income currency at
+        /// its transaction date to the response currency. Always present on current responses, empty
+        /// when none; optional for older-reader compatibility. Absence means unknown, not a
+        /// current-rate conversion. Active totals and archived ordinary units, basis, gains and income
+        /// remain unchanged.
+        public let archivedInKindIncome: [ArchivedInKindIncomeItem]?
+
+        public init(currency: String, computedAt: String, totals: Totals, summaries: [OpenAPI.PortfolioSummaryItem], byAccount: [OpenAPI.PortfolioSummaryByAccountItem], brokerageCashFees: BrokerageCashFees? = nil, archivedInKindIncome: [ArchivedInKindIncomeItem]? = nil) {
+            self.currency = currency
+            self.computedAt = computedAt
+            self.totals = totals
+            self.summaries = summaries
+            self.byAccount = byAccount
+            self.brokerageCashFees = brokerageCashFees
+            self.archivedInKindIncome = archivedInKindIncome
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case currency = "currency"
+            case computedAt = "computed_at"
+            case totals = "totals"
+            case summaries = "summaries"
+            case byAccount = "byAccount"
+            case brokerageCashFees = "brokerageCashFees"
+            case archivedInKindIncome = "archivedInKindIncome"
+        }
+
+        public struct Totals: Codable, Equatable, Sendable {
+            /// Dividend share of ordinary income summed across active holdings, at transaction-date FX.
+            /// Excludes in-kind income.
+            public let totalDividends: Decimal?
+            /// Sum of active holdings' in-kind income, excluded from ordinary income and gains. Absence in
+            /// an older response means zero.
+            public let totalInKindIncome: Decimal?
+
+            public init(totalDividends: Decimal? = nil, totalInKindIncome: Decimal? = nil) {
+                self.totalDividends = totalDividends
+                self.totalInKindIncome = totalInKindIncome
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case totalDividends = "totalDividends"
+                case totalInKindIncome = "totalInKindIncome"
+            }
+        }
+
+        public struct BrokerageCashFees: Codable, Equatable, Sendable {
+            public let total: Decimal
+            /// totals.totalGainLoss minus this account fee subtotal.
+            public let gainAfterFees: Decimal
+            /// A missing historical fee rate required a current-rate fallback.
+            public let usedFallbackRate: Bool
+            public let byAccount: [ByAccountItem]
+
+            public init(total: Decimal, gainAfterFees: Decimal, usedFallbackRate: Bool, byAccount: [ByAccountItem]) {
+                self.total = total
+                self.gainAfterFees = gainAfterFees
+                self.usedFallbackRate = usedFallbackRate
+                self.byAccount = byAccount
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case total = "total"
+                case gainAfterFees = "gainAfterFees"
+                case usedFallbackRate = "usedFallbackRate"
+                case byAccount = "byAccount"
+            }
+
+            public struct ByAccountItem: Codable, Equatable, Sendable {
+                public let accountId: Int
+                public let total: Decimal
+
+                public init(accountId: Int, total: Decimal) {
+                    self.accountId = accountId
+                    self.total = total
+                }
+
+                enum CodingKeys: String, CodingKey {
+                    case accountId = "account_id"
+                    case total = "total"
+                }
+            }
+        }
+
+        public struct ArchivedInKindIncomeItem: Codable, Equatable, Sendable {
+            public let id: Int
+            public let totalInKindIncome: Decimal
+
+            public init(id: Int, totalInKindIncome: Decimal) {
+                self.id = id
+                self.totalInKindIncome = totalInKindIncome
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case id = "id"
+                case totalInKindIncome = "totalInKindIncome"
+            }
+        }
+    }
+
+    public struct PortfolioSummaryEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let data: OpenAPI.PortfolioSummaryData?
+        public let error: OpenAPI.ErrorPayload?
+
+        public init(ok: Bool, data: OpenAPI.PortfolioSummaryData? = nil, error: OpenAPI.ErrorPayload? = nil) {
+            self.ok = ok
+            self.data = data
+            self.error = error
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case data = "data"
+            case error = "error"
+        }
+    }
+
+    public struct PortfolioSummaryItem: Codable, Equatable, Sendable {
+        public let id: Int
+        /// Current units including custody fees and unit adjustments, rounded to eight decimal places.
+        public let totalUnits: Decimal?
+        /// Literal income already represented by acquired units, converted to the response currency.
+        /// Separate from ordinary totalDividends/totalIncome and never added to gain again. Absence in
+        /// an older response means zero.
+        public let totalInKindIncome: Decimal?
+        /// False while any unit transaction remains unassigned to a broker account.
+        public let fullyAssigned: Bool
+        /// True when at least one assigned broker partition sold more units than its lots provide.
+        public let oversold: Bool
+        /// Exact current holdings and profit/loss partitions for this investment.
+        public let byAccount: [OpenAPI.PortfolioSummaryByAccountItem]
+
+        public init(id: Int, totalUnits: Decimal? = nil, totalInKindIncome: Decimal? = nil, fullyAssigned: Bool, oversold: Bool, byAccount: [OpenAPI.PortfolioSummaryByAccountItem]) {
+            self.id = id
+            self.totalUnits = totalUnits
+            self.totalInKindIncome = totalInKindIncome
+            self.fullyAssigned = fullyAssigned
+            self.oversold = oversold
+            self.byAccount = byAccount
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case totalUnits = "totalUnits"
+            case totalInKindIncome = "totalInKindIncome"
+            case fullyAssigned = "fullyAssigned"
+            case oversold = "oversold"
+            case byAccount = "byAccount"
+        }
+    }
+
     public struct ProbeResult: Codable, Equatable, Sendable {
         public let ok: Bool
         public let provider: OpenAPI.ProviderHealth
@@ -1262,6 +1673,46 @@ extension OpenAPI {
             case offset = "offset"
             case items = "items"
             case links = "links"
+        }
+    }
+
+    /// A `recipient_match_patterns` row as `listPatternsForRecipient` selects it.
+    public struct RecipientPattern: Codable, Equatable, Sendable {
+        public let id: Int
+        public let pattern: String
+        public let patternKind: String
+        public let caseSensitive: Bool
+        public let priority: Int
+        public let isActive: Bool
+        public let source: String
+        public let notes: String?
+        public let createdAt: String
+        public let updatedAt: String?
+
+        public init(id: Int, pattern: String, patternKind: String, caseSensitive: Bool, priority: Int, isActive: Bool, source: String, notes: String? = nil, createdAt: String, updatedAt: String? = nil) {
+            self.id = id
+            self.pattern = pattern
+            self.patternKind = patternKind
+            self.caseSensitive = caseSensitive
+            self.priority = priority
+            self.isActive = isActive
+            self.source = source
+            self.notes = notes
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case pattern = "pattern"
+            case patternKind = "pattern_kind"
+            case caseSensitive = "case_sensitive"
+            case priority = "priority"
+            case isActive = "is_active"
+            case source = "source"
+            case notes = "notes"
+            case createdAt = "created_at"
+            case updatedAt = "updated_at"
         }
     }
 

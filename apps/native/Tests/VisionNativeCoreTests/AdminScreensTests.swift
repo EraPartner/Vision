@@ -836,7 +836,9 @@ enum AuditCardFixture {
             strings: DictionaryStrings(language: .en, table: [:]), theme: ThemeSelection(appearance: .light),
             exchangeRates: ExchangeRatesModel(service: FakeExchangeRatesService()), admin: AdminFixture.screens(),
             planned: PlannedFixture.idleModel(), imports: ImportFixture.idleModel(),
-            transactions: TransactionsFixture.idleModel(), loadSettings: { NativeAppSettings(adminMode: true) },
+            transactions: TransactionsFixture.idleModel(), accounts: AccountsFixture.idleModel(),
+            categories: CategoriesFixture.idleModel(), recipients: RecipientsFixture.idleModel(),
+            loadSettings: { NativeAppSettings(adminMode: true) },
             onNavigate: { recorder.actions.append($0) })
         model.routeDidChange(try #require(NativeRoute("/admin")))
         #expect(model.detail == .web)

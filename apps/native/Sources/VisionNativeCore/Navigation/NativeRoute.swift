@@ -112,11 +112,19 @@ public enum NativeScreen: Equatable, Hashable, Sendable {
     case transactions
     /// `/owes`, Who owes you.
     case owes
+    /// `/accounts`, the accounts hub (phase 3f).
+    case accounts
+    /// `/accounts/:id`, one account's ledger; `0` for an id that is not a positive whole number.
+    case accountDetail(id: Int)
+    /// `/categories`, the category tree (phase 3f part B).
+    case categories
+    /// `/recipients`, the payees table (phase 3f part B).
+    case recipients
 
     /// The screens at a fixed path.
     public static let fixedScreens: [NativeScreen] = [
         .adminOverview, .databaseMaintenance, .providerHealth, .endpointLiveness, .exchangeRates, .plannedPayments,
-        .importExport, .transactions,
+        .importExport, .transactions, .accounts, .categories, .recipients,
     ]
 
     /// The route path it replaces.
@@ -133,6 +141,10 @@ public enum NativeScreen: Equatable, Hashable, Sendable {
         case .importReview(let batchId): return ImportRoutes.reviewPath(batchId)
         case .transactions: return TransactionsRoutes.path
         case .owes: return TransactionsRoutes.owesPath
+        case .accounts: return AccountsRoutes.path
+        case .accountDetail(let id): return AccountsRoutes.detailPath(id)
+        case .categories: return CategoriesRoutes.path
+        case .recipients: return RecipientsRoutes.path
         }
     }
 
@@ -144,6 +156,7 @@ public enum NativeScreen: Equatable, Hashable, Sendable {
     public static func screen(forPath path: String) -> NativeScreen? {
         if let screen = fixedScreens.first(where: { $0.path == path }) { return screen }
         if TransactionsRoutes.owesIsNative && path == TransactionsRoutes.owesPath { return .owes }
+        if let id = AccountsRoutes.detailId(forPath: path) { return .accountDetail(id: id) }
         if ImportRoutes.reviewIsNative, let batchId = ImportRoutes.reviewBatchId(forPath: path) {
             return .importReview(batchId: batchId)
         }
