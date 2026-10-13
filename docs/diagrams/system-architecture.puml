@@ -9,7 +9,7 @@ skinparam ranksep 70
 actor "User" as User
 
 package "Client" {
-  node "Vision Native (synthetic Demo)\nSwiftUI Tax + Decimal display / CSV" as NativeTax
+  node "Vision Native (synthetic Demo)\nSwiftUI Tax, Portfolio + wealth tools\nDecimal display / native drafts" as NativeTax
 
   rectangle "Browser  /  Electron Renderer" {
     node "React 19 + TypeScript" as ReactApp
@@ -72,7 +72,7 @@ cloud "Build & Distribution" as DevToolsCloud {
 package "Client to Server" {
   User --> ReactApp : HTTPS
   ReactApp --> Proxy : REST API
-  NativeTax --> Express : loopback OpenAPI Tax + settings CAS
+  NativeTax --> Express : loopback OpenAPI financial reads + writes
   NativeTax --> ReactApp : retained PDF dialog overlay
   Proxy --> Express : Forward
 }

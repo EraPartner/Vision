@@ -175,7 +175,9 @@ struct NativeSidebar: View {
         .buttonStyle(.plain)
         .background(
             RoundedRectangle(cornerRadius: DesignTokens.Radius.chip)
-                .fill(isActive ? Color(token: theme.glass.selection, opacity: theme.glass.selectionOpacity) : Color.clear))
+                .fill(
+                    isActive ? Color(token: theme.glass.selection, opacity: theme.glass.selectionOpacity) : Color.clear)
+        )
         .accessibilityAddTraits(isActive ? .isSelected : [])
     }
 }
@@ -224,6 +226,28 @@ struct NativeScreenContainer: View {
             if let statistics = model.statistics { StatisticsView(screens: statistics, shell: model) }
         case .tax:
             if let tax = model.tax { TaxOverviewView(screens: tax, shell: model) }
+        case .portfolio:
+            if let portfolio = model.portfolio { PortfolioScreenView(screens: portfolio, shell: model) }
+        case .portfolioHoldings(let assetClass):
+            if let portfolio = model.portfolio {
+                PortfolioScreenView(screens: portfolio, shell: model, assetClass: assetClass)
+            }
+        case .rebalance:
+            if let portfolio = model.portfolio {
+                RebalanceView(model: portfolio.rebalance, shell: model)
+                    .task(id: portfolio.dataRevision) {
+                        await portfolio.rebalance.load(route: model.route, settings: model.settings)
+                    }
+            }
+        case .netWorth:
+            if let portfolio = model.portfolio {
+                NetWorthView(model: portfolio.netWorth, shell: model)
+                    .task(id: portfolio.dataRevision) {
+                        await portfolio.netWorth.load(
+                            currency: model.settings.defaultCurrency, pageSize: model.settings.defaultPageSize,
+                            route: model.route)
+                    }
+            }
         case .adminOverview:
             AdminOverviewView(model: model.admin.overview, shell: model)
         case .databaseMaintenance:

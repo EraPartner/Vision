@@ -72,6 +72,7 @@ public final class NativeShellModel {
     public let home: HomeModel?
     public let statistics: StatisticsScreens?
     public let tax: TaxScreens?
+    public let portfolio: PortfolioScreens?
     /// The navigation the Leave this page? alert holds while it asks (`blocker.location`).
     public private(set) var leaveConfirmation: NativeRoute?
 
@@ -106,6 +107,7 @@ public final class NativeShellModel {
         home: HomeModel? = nil,
         statistics: StatisticsScreens? = nil,
         tax: TaxScreens? = nil,
+        portfolio: PortfolioScreens? = nil,
         hiddenSections: [NavSectionID: Bool]? = nil,
         loadSettings: @escaping @Sendable () async throws -> NativeAppSettings,
         saveHiddenSections: @escaping @MainActor ([NavSectionID: Bool]) -> Void = { _ in },
@@ -126,6 +128,7 @@ public final class NativeShellModel {
         self.home = home
         self.statistics = statistics
         self.tax = tax
+        self.portfolio = portfolio
         self.hiddenSections = hiddenSections ?? Self.defaultHiddenSections
         self.loadSettings = loadSettings
         self.saveHiddenSections = saveHiddenSections
@@ -159,6 +162,9 @@ public final class NativeShellModel {
         if screen == .home && home == nil { return .web }
         if screen == .statistics && (statistics == nil || route.value("export") == "pdf") { return .web }
         if screen == .tax && (tax == nil || route.value("export") == "pdf") { return .web }
+        if screen.path == "/portfolio" || screen.path.hasPrefix("/portfolio/") {
+            if portfolio == nil || route.value("export") == "pdf" { return .web }
+        }
         return .native(screen)
     }
 
@@ -201,6 +207,7 @@ public final class NativeShellModel {
         if pathChanged && next.path == InsightsRoutes.home { home?.invalidate() }
         if settingsClosed || pathChanged && next.path == InsightsRoutes.statistics { statistics?.model.invalidate() }
         if settingsClosed || pathChanged && next.path == "/tax" { tax?.invalidate() }
+        if settingsClosed || pathChanged && (next.path == "/portfolio" || next.path.hasPrefix("/portfolio/")) { portfolio?.invalidate() }
     }
 
     /// A sidebar click, a menu or shortcut navigation, or another native link. The page moves
@@ -232,6 +239,15 @@ public final class NativeShellModel {
 
     public func openTaxReport() {
         guard route.path == "/tax" else { return }
+        isPresentingWeb = true
+        replace(with: route.setting("export", to: "pdf").string)
+    }
+
+    public func openPortfolioReport() {
+        switch NativeScreen.screen(forPath: route.path) {
+        case .portfolio, .portfolioHoldings: break
+        default: return
+        }
         isPresentingWeb = true
         replace(with: route.setting("export", to: "pdf").string)
     }
@@ -391,7 +407,7 @@ public final class NativeShellModel {
 
     /// Applies `app_settings`: formats, admin mode and the colorblind skin.
     public func apply(settings next: NativeAppSettings) {
-        if settingsLoaded { home?.invalidate(); statistics?.model.invalidate(); tax?.invalidate() }
+        if settingsLoaded { home?.invalidate(); statistics?.model.invalidate(); tax?.invalidate(); portfolio?.invalidate() }
         settings = next
         settingsLoaded = true
         settingsRevision &+= 1

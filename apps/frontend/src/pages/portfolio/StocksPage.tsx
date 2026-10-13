@@ -57,6 +57,8 @@ import { DeltaPill } from "@/components/shared/DeltaPill";
 import { FxPnlCell } from "@/features/portfolio/FxPnlCell";
 import { Money } from "@/components/shared/Money";
 import { PageShell } from "@/components/shared/PageShell";
+import { ExportDialog } from "@/features/reports/ExportDialog";
+import { useReportDialogState } from "@/features/reports/useReportDialogState";
 import { TextLink } from "@/components/shared/TextLink";
 import { PortfolioOversoldBadge } from "@/features/portfolio/PortfolioOversoldBadge";
 import { addAll, subtract, toNumber } from "@vision/shared-utils/money";
@@ -316,8 +318,19 @@ export default function StocksPage({
         />
     );
 
+    const { exportOpen, setExportOpen } = useReportDialogState();
+    const exportDialog = (
+        <ExportDialog
+            defaultType="portfolio"
+            trigger={null}
+            open={exportOpen}
+            onOpenChange={setExportOpen}
+        />
+    );
+
     const headerActions = (
         <AssetPageActions
+            onExport={() => setExportOpen(true)}
             allowedAssetClasses={allowedAddAssetClasses}
             showExport={showEmptyStateExport}
         />
@@ -325,49 +338,60 @@ export default function StocksPage({
 
     if (isLoading) {
         return (
-            <PageShell {...loadingSurfaceProps} className="">
-                <PageHeader title={t(titleKey)} icon={PageIcon} />
-                <Skeleton className="h-40 w-full rounded-card" />
-                <Skeleton className="h-64 w-full rounded-card" />
-            </PageShell>
+            <>
+                {exportDialog}
+                <PageShell {...loadingSurfaceProps} className="">
+                    <PageHeader title={t(titleKey)} icon={PageIcon} />
+                    <Skeleton className="h-40 w-full rounded-card" />
+                    <Skeleton className="h-64 w-full rounded-card" />
+                </PageShell>
+            </>
         );
     }
     if (isError) {
         return (
-            <PageShell className="">
-                <PageHeader title={t(titleKey)} icon={PageIcon} />
-                <PageError
-                    title={t(errorTitleKey)}
-                    message={error?.message ?? t("common.error")}
-                    onRetry={() => refetch()}
-                />
-            </PageShell>
+            <>
+                {exportDialog}
+                <PageShell className="">
+                    <PageHeader title={t(titleKey)} icon={PageIcon} />
+                    <PageError
+                        title={t(errorTitleKey)}
+                        message={error?.message ?? t("common.error")}
+                        onRetry={() => refetch()}
+                    />
+                </PageShell>
+            </>
         );
     }
 
     if (holdings.length === 0) {
         return (
-            <PageShell className="">
-                <PageHeader
-                    title={t(titleKey)}
-                    icon={PageIcon}
-                    actions={headerActions}
-                />
-                <Card>
-                    <CardContent variant="state">
-                        <EmptyState
-                            icon={PageIcon}
-                            title={t(emptyTitleKey)}
-                            description={t(emptyDescriptionKey)}
-                            action={
-                                <AddInvestmentDialog
-                                    allowedAssetClasses={allowedAddAssetClasses}
-                                />
-                            }
-                        />
-                    </CardContent>
-                </Card>
-            </PageShell>
+            <>
+                {exportDialog}
+                <PageShell className="">
+                    <PageHeader
+                        title={t(titleKey)}
+                        icon={PageIcon}
+                        actions={headerActions}
+                    />
+                    <Card>
+                        <CardContent variant="state">
+                            <EmptyState
+                                icon={PageIcon}
+                                title={t(emptyTitleKey)}
+                                description={t(emptyDescriptionKey)}
+                                action={
+                                    <AddInvestmentDialog
+                                        allowedAssetClasses={
+                                            allowedAddAssetClasses
+                                        }
+                                    />
+                                }
+                            />
+                        </CardContent>
+                    </Card>
+                </PageShell>
+            </>
         );
     }
 
@@ -379,6 +403,7 @@ export default function StocksPage({
 
     return (
         <>
+            {exportDialog}
             <PageShell className="">
                 <PageHeader
                     title={t(titleKey)}

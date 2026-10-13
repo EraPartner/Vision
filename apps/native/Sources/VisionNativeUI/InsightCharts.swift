@@ -16,6 +16,10 @@ struct InsightTimelineChart: View {
     var rangeComparison = true
     var height: CGFloat = 240
     var customColors: [String: Color] = [:]
+    var areaSeries: Set<String>? = nil
+    var rangePercent = false
+    var formatPeriod: ((String) -> String)? = nil
+    var formatTick: ((String) -> String)? = nil
     @Binding var selection: String?
     @Binding var rangeStart: String?
     @FocusState private var focused: Bool
@@ -46,7 +50,7 @@ struct InsightTimelineChart: View {
                                     .foregroundStyle(by: .value(title, line.label))
                                     .position(by: .value(title, line.label))
                             }
-                        } else if areas
+                        } else if areas && (areaSeries?.contains(line.id) ?? true)
                             && (!stackedAreas || !series.contains(where: { $0.points.contains { $0.value < 0 } }))
                         {
                             AreaMark(
@@ -54,6 +58,15 @@ struct InsightTimelineChart: View {
                                 stacking: stackedAreas ? .standard : .unstacked
                             )
                             .foregroundStyle(by: .value(title, line.label))
+                            .opacity(areaSeries == nil ? 1 : 0.12)
+                            if areaSeries != nil {
+                                LineMark(
+                                    x: .value(title, point.key), y: .value(line.label, coordinate(point.value)),
+                                    series: .value(title, line.id)
+                                )
+                                .foregroundStyle(by: .value(title, line.label))
+                                .lineStyle(StrokeStyle(lineWidth: 2.5))
+                            }
                         } else {
                             LineMark(
                                 x: .value(title, point.key), y: .value(line.label, coordinate(point.value)),
@@ -87,7 +100,7 @@ struct InsightTimelineChart: View {
                 AxisMarks(values: .automatic(desiredCount: 6)) { value in
                     AxisGridLine()
                     AxisValueLabel {
-                        if let key = value.as(String.self) { Text(periodLabel(key)) }
+                        if let key = value.as(String.self) { Text(formatTick?(key) ?? periodLabel(key)) }
                     }
                 }
             }
@@ -157,7 +170,19 @@ struct InsightTimelineChart: View {
                                     let start = line.points.first(where: { $0.key == rangeStart })?.value
                                 {
                                     Text("Δ").accessibilityHidden(true)
-                                    MoneyText(amount: value - start, currency: currency, settings: settings)
+                                    if rangePercent {
+                                        Text(MoneyText.text(value - start, currency: currency, settings: settings))
+                                            .monospacedDigit().foregroundStyle(value < start ? theme.loss : theme.gain)
+                                    } else {
+                                        MoneyText(amount: value - start, currency: currency, settings: settings)
+                                    }
+                                    if rangePercent, start != 0 {
+                                        Text(
+                                            ((value - start) > 0 ? "+" : "")
+                                                + VisionFormat.percent(
+                                                    (value - start) / abs(start) * 100,
+                                                    locale: settings.numberFormat.locale))
+                                    }
                                 }
                             }.font(.caption)
                         }
@@ -172,6 +197,7 @@ struct InsightTimelineChart: View {
     }
 
     private func periodLabel(_ key: String) -> String {
+        if let formatPeriod { return formatPeriod(key) }
         let parts = key.split(separator: "-")
         guard parts.count == 2, let year = Int(parts[0]), let month = Int(parts[1]),
             let date = Calendar.current.date(from: DateComponents(year: year, month: month, day: 1))

@@ -101,6 +101,10 @@ public enum NativeScreen: Equatable, Hashable, Sendable {
     case statistics
     /// `/tax`, Belgian tax (phase 3h).
     case tax
+    case portfolio
+    case portfolioHoldings(assetClass: String)
+    case rebalance
+    case netWorth
     case adminOverview
     case databaseMaintenance
     /// `/admin/db/:table`, with the decoded table name.
@@ -132,6 +136,9 @@ public enum NativeScreen: Equatable, Hashable, Sendable {
         .home,
         .statistics,
         .tax,
+        .portfolio, .portfolioHoldings(assetClass: "stock"), .portfolioHoldings(assetClass: "crypto"),
+        .portfolioHoldings(assetClass: "metals"), .portfolioHoldings(assetClass: "real_estate"),
+        .portfolioHoldings(assetClass: "savings"), .rebalance, .netWorth,
         .adminOverview, .databaseMaintenance, .providerHealth, .endpointLiveness, .exchangeRates, .plannedPayments,
         .importExport, .transactions, .accounts, .categories, .recipients,
     ]
@@ -142,6 +149,11 @@ public enum NativeScreen: Equatable, Hashable, Sendable {
         case .home: return InsightsRoutes.home
         case .statistics: return InsightsRoutes.statistics
         case .tax: return "/tax"
+        case .portfolio: return "/portfolio"
+        case .portfolioHoldings(let assetClass):
+            return "/portfolio/" + (assetClass == "real_estate" ? "real-estate" : assetClass == "stock" ? "stocks" : assetClass)
+        case .rebalance: return "/portfolio/rebalance"
+        case .netWorth: return "/portfolio/net-worth"
         case .adminOverview: return "/admin"
         case .databaseMaintenance: return TableEditorRoute.maintenancePath
         case .tableEditor(let table): return TableEditorRoute.path(for: table)

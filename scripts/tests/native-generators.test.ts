@@ -161,6 +161,22 @@ test("an unknown operationId or an empty allow-list fails", () => {
   assert.throws(() => generateAPI(SPEC, "# nothing\n"), /lists no operations/);
 });
 
+test("compatibility field aliases retain separate wire keys and Swift members", () => {
+  const spec = SPEC.replace(
+    "amount: { type: number }",
+    "amount: { type: number }\n        asset_class: { type: string }\n        assetClass: { type: string }",
+  );
+  const generated = generateAPI(spec, "getItem\n");
+  assert.match(generated.models, /public let asset_class: String\?/);
+  assert.match(generated.models, /public let assetClass: String\?/);
+  assert.match(generated.models, /case asset_class = "asset_class"/);
+  assert.match(generated.models, /case assetClass = "assetClass"/);
+  assert.doesNotMatch(
+    generated.models,
+    /assetClass: String\? = nil, assetClass:/,
+  );
+});
+
 const TOKENS_CSS = `
 @layer base {
   :root {

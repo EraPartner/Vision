@@ -154,6 +154,16 @@ See [the architecture page](../../docs/architecture/native-app.md#native-navigat
   sheet, snapshot/freeze/filing/history actions, and CSV export. Tax formulas remain shared
   TypeScript behind the compute/overview/dashboard operations; Swift decodes money as Decimal.
   PDF export opens the shared web dialog with `?export=pdf`, retaining the selected year.
+- `/portfolio` and the five asset pages are native (phase 3i): canonical server totals and
+  chart data, broker-filtered holdings, ticker/news/exposure, configurable widgets, read-only
+  archived details, investment/trade forms, and confirmed lot assignment with complete history.
+  Native editors preserve explicit null clears and ambiguous-write retry identities. PDF actions
+  retain the shared web dialog on the current route via `?export=pdf`.
+- `/portfolio/rebalance` uses the existing TypeScript commitment-aware cash and rebalance
+  operations with URL drafts, custom/preset targets, caps, and conditional saved-plan writes.
+- `/portfolio/net-worth` renders full daily chart history, account reconciliation and a separate
+  newest-first paginated table. Period changes retain the full chart series; stale currency reads
+  cannot replace the current values. Full macOS compilation and Demo review remain pending.
 - `/admin`, `/admin/providers`, `/admin/endpoints` and `/admin/exchange-rates` are native, in
   admin mode only, and so are `/admin/db` and `/admin/db/:table`; the table editor holds
   navigation and Quit behind a native Leave this page? alert while it has pending changes. The admin token card writes the page's
@@ -424,3 +434,15 @@ Profile and year actions use existing atomic settings writes with original CAS b
 profile sheet previews unsaved inputs through the backend and persists edits as they are made;
 closing flushes pending writes. CSV is native; the PDF dialog remains web. Full macOS build and
 Demo visual/keyboard checks remain pending.
+
+23. **Portfolio and asset pages (phase 3i, pending Mac review).** Open the overview and all five
+    asset pages in EN/NL and each number/date format. Inspect every widget, broker filter,
+    disclosure, ticker pause/offline behavior, exposure import, and chart hover/range/keyboard
+    interaction. Open active and archived details, edit/add a trade, test Cancel versus Escape,
+    assign unassigned lots after complete history loads, and check ambiguous retry recovery.
+    PDF must open on the current route and preserve its parameters when closed.
+24. **Rebalance and Net Worth (phase 3i, pending Mac review).** Reload custom/preset/saved
+    target URLs, verify commitment-aware caps and CAS conflict handling, and inspect Net Worth
+    account totals, full daily series, each period and newest-first table pagination. Change
+    currency during a read and period during price refresh; old values must not reappear under
+    new labels. Verify offline refresh, fallback notices and retained web printing.

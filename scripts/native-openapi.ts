@@ -211,9 +211,25 @@ class Generator {
     description: string | undefined,
   ): string {
     const nested: string[] = [];
+    const nameCounts = new Map<string, number>();
+    for (const wire of Object.keys(properties)) {
+      const name = camelCase(wire);
+      nameCounts.set(name, (nameCounts.get(name) ?? 0) + 1);
+    }
+    const usedNames = new Set<string>();
     const fields = Object.entries(properties).map(([wire, raw]) => {
       const schema = isObject(raw) ? raw : {};
-      const swiftName = swiftIdentifier(camelCase(wire));
+      const camel = camelCase(wire);
+      // Some compatibility responses carry both snake_case and camelCase aliases.
+      // Retain each wire spelling when camelization would collapse two real fields.
+      const name = (nameCounts.get(camel) ?? 0) > 1 ? wire : camel;
+      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name) || usedNames.has(name)) {
+        throw new Error(
+          `${name}: response field names cannot be represented uniquely in Swift.`,
+        );
+      }
+      usedNames.add(name);
+      const swiftName = swiftIdentifier(name);
       const base = this.typeFor(schema, wire, nested);
       const optional = !required.includes(wire) || schema.nullable === true;
       return {

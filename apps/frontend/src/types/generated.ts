@@ -2432,7 +2432,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List portfolio transactions across all investments */
+        /**
+         * List portfolio transactions across all investments
+         * @description Ordinary portfolio transaction rows across the requested investments, ranked newest first per investment and then globally by date/id descending. This operation excludes custody and asset-adjustment events, which have separate APIs. total counts matching ordinary rows before per-investment and global limits; response limit is the requested global cap or the returned item count when omitted.
+         */
         get: operations["getBulkPortfolioTransactions"];
         put?: never;
         post?: never;
@@ -5806,6 +5809,48 @@ export interface components {
         PortfolioSummaryItem: {
             /** Format: int32 */
             id: number;
+            name?: string;
+            symbol?: string | null;
+            asset_class?: string;
+            assetClass?: string;
+            currency?: string;
+            originalCurrency?: string;
+            summarySource?: string;
+            is_active?: boolean;
+            usedFallbackRate?: boolean;
+            gainLossPercent?: number;
+            interestRate?: number;
+            /** @description Ordinary history count on archivedPresentation; at most 1000 as in the existing web archive. */
+            transactionCount?: number;
+            currentPrice?: number;
+            currentValue?: number;
+            totalInvested?: number;
+            totalBuyCost?: number;
+            totalSellProceeds?: number;
+            totalFees?: number;
+            totalTaxes?: number;
+            totalDividends?: number;
+            totalIncome?: number;
+            avgCostBasis?: number;
+            realizedGain?: number;
+            unrealizedGain?: number;
+            totalGain?: number;
+            gainLoss?: number;
+            assetGain?: number;
+            fxGain?: number;
+            nativeCurrentValue?: number;
+            accruedInterest?: number;
+            projectedAnnualInterest?: number;
+            totalAppreciation?: number;
+            nativeCurrentPrice?: number;
+            nativeAvgCostBasis?: number;
+            unrealizedGainPercent?: number;
+            /** @description Latest ordinary rent amount displayed by the current RealEstatePage; retains its existing raw-amount interpretation rather than applying an additional FX conversion. */
+            estimatedMonthlyRent?: number;
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: date-time */
+            updated_at?: string;
             /** @description Current units including custody fees and unit adjustments, rounded to eight decimal places. */
             totalUnits?: number;
             /** @description Literal income already represented by acquired units, converted to the response currency. Separate from ordinary totalDividends/totalIncome and never added to gain again. Absence in an older response means zero. */
@@ -5839,18 +5884,35 @@ export interface components {
             unrealizedGain: number;
             gainLoss: number;
         };
+        PortfolioSummaryTotals: {
+            totalPortfolioValue: number;
+            totalInvested: number;
+            totalGainLoss: number;
+            totalRealizedGain: number;
+            totalUnrealizedGain: number;
+            totalGain: number;
+            totalIncome: number;
+            totalDividends: number;
+            totalInKindIncome: number;
+            totalFees: number;
+            totalTaxes: number;
+            totalAssetGain: number;
+            totalFxGain: number;
+            totalReturnPct: number;
+            usedFallbackRate: boolean;
+        };
         PortfolioSummaryData: {
             currency: string;
             /** Format: date-time */
             computed_at: string;
-            totals: {
-                /** @description Dividend share of ordinary income summed across active holdings, at transaction-date FX. Excludes in-kind income. */
-                totalDividends?: number;
-                /** @description Sum of active holdings' in-kind income, excluded from ordinary income and gains. Absence in an older response means zero. */
-                totalInKindIncome?: number;
-            } & {
-                [key: string]: number;
-            };
+            /**
+             * Format: date
+             * @description Earliest ordinary transaction on active investments, independent of selected performance chart period and investment creation dates. Custody/adjustment event dates and inactive investments are excluded. Omitted when no qualifying transaction exists.
+             */
+            firstInvestmentDate?: string;
+            totals: components["schemas"]["PortfolioSummaryTotals"];
+            /** @description Inactive-only presentation matching the web archive's ordinary CRUD replay and current quote FX. Supplied when active=false, separate from canonical dated-FX summaries/totals. In-kind income remains canonical dated data; broker byAccount remains a separate canonical snapshot. */
+            archivedPresentation?: components["schemas"]["PortfolioSummaryItem"][];
             summaries: components["schemas"]["PortfolioSummaryItem"][];
             byAccount: components["schemas"]["PortfolioSummaryByAccountItem"][];
             /** @description Imported, source-owned account fees without an instrument, converted at transaction-date rates and counted once per canonical cash transaction. Separate from investment totals, cost basis and return series. Optional for compatibility with older responses; absence means unavailable. */
@@ -6760,35 +6822,95 @@ export interface components {
         Investment: {
             id: number;
             name: string;
-            symbol?: string;
+            symbol?: string | null;
             asset_class: components["schemas"]["AssetClass"];
             currency: string;
-            current_price?: number;
-            interest_rate?: number;
+            current_price?: number | null;
+            interest_rate?: number | null;
             /** Format: date */
-            maturity_date?: string;
-            location?: string;
-            municipality?: string;
-            cadastral_income?: number;
-            municipality_tax_rate?: number;
-            notes?: string;
+            maturity_date?: string | null;
+            location?: string | null;
+            municipality?: string | null;
+            cadastral_income?: number | null;
+            municipality_tax_rate?: number | null;
+            notes?: string | null;
             price_provider: components["schemas"]["PriceProvider"];
-            price_provider_id?: string;
-            price_provider_url?: string;
-            price_provider_latest_url?: string;
-            price_provider_latest_path?: string;
-            price_provider_history_url?: string;
-            price_provider_history_path?: string;
-            price_provider_history_ts_path?: string;
-            price_provider_history_price_path?: string;
+            price_provider_id?: string | null;
+            price_provider_url?: string | null;
+            price_provider_latest_url?: string | null;
+            price_provider_latest_path?: string | null;
+            price_provider_history_url?: string | null;
+            price_provider_history_path?: string | null;
+            price_provider_history_ts_path?: string | null;
+            price_provider_history_price_path?: string | null;
             /** Format: date-time */
-            price_updated_at?: string;
+            price_updated_at?: string | null;
             is_active: boolean;
             show_in_ticker: boolean;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
             updated_at: string;
+        };
+        InvestmentCreateRequest: {
+            name: string;
+            symbol?: string | null;
+            /** @description Asset class is immutable on updates; the existing value may be resubmitted. */
+            asset_class: string;
+            /** @description Trimmed and normalized uppercase. Omit on create for EUR; cannot be cleared. */
+            currency?: string;
+            current_price?: number | null;
+            interest_rate?: number | null;
+            cadastral_income?: number | null;
+            municipality_tax_rate?: number | null;
+            /** Format: date */
+            maturity_date?: string | null;
+            location?: string | null;
+            municipality?: string | null;
+            notes?: string | null;
+            price_provider?: string | null;
+            price_provider_id?: string | null;
+            price_provider_url?: string | null;
+            price_provider_latest_url?: string | null;
+            price_provider_latest_path?: string | null;
+            price_provider_history_url?: string | null;
+            price_provider_history_path?: string | null;
+            price_provider_history_ts_path?: string | null;
+            price_provider_history_price_path?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        InvestmentUpdateRequest: {
+            name?: string;
+            symbol?: string | null;
+            /** @description Asset class is immutable on updates; the existing value may be resubmitted. */
+            asset_class?: components["schemas"]["AssetClass"];
+            /** @description Trimmed and normalized uppercase. Omit on create for EUR; cannot be cleared. */
+            currency?: string;
+            current_price?: number | null;
+            interest_rate?: number | null;
+            cadastral_income?: number | null;
+            municipality_tax_rate?: number | null;
+            /** Format: date */
+            maturity_date?: string | null;
+            location?: string | null;
+            municipality?: string | null;
+            notes?: string | null;
+            price_provider?: string | null;
+            price_provider_id?: string | null;
+            price_provider_url?: string | null;
+            price_provider_latest_url?: string | null;
+            price_provider_latest_path?: string | null;
+            price_provider_history_url?: string | null;
+            price_provider_history_path?: string | null;
+            price_provider_history_ts_path?: string | null;
+            price_provider_history_price_path?: string | null;
+            is_active?: boolean;
+            show_in_ticker?: boolean;
+            /** Format: date-time */
+            price_updated_at?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         InvestmentList: components["schemas"]["PaginationFields"] & {
             items: components["schemas"]["Investment"][];
@@ -11257,7 +11379,15 @@ export interface operations {
     };
     getInvestments: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Filter one exact asset class. */
+                asset_class?: "stock" | "etf" | "crypto" | "metals" | "real_estate" | "savings" | "bond";
+                /** @description true restricts to active investments; false returns active and inactive investments. */
+                active?: boolean;
+                /** @description Lenient pagination parser defaults invalid limits and clamps at 1000. */
+                limit?: number;
+                offset?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -11286,24 +11416,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    name: string;
-                    symbol?: string;
-                    asset_class: string;
-                    /** @description Three-letter ISO currency code; trimmed and normalized to uppercase. Omit to default to EUR. */
-                    currency?: string;
-                    current_price?: number;
-                    interest_rate?: number;
-                    /** Format: date */
-                    maturity_date?: string;
-                    location?: string;
-                    municipality?: string;
-                    cadastral_income?: number;
-                    municipality_tax_rate?: number;
-                    notes?: string;
-                    price_provider?: string;
-                    price_provider_id?: string;
-                };
+                "application/json": components["schemas"]["InvestmentCreateRequest"];
             };
         };
         responses: {
@@ -13112,6 +13225,8 @@ export interface operations {
             query?: {
                 /** @description Target currency (3-letter code; `target_currency` is an alias). A malformed code falls back to EUR. A repeated key returns 400. */
                 currency?: string;
+                /** @description Optional scope. true (default) retains active-only summaries/totals and the existing cache. false includes all holdings canonically plus an inactive-only archivedPresentation matching the existing web archive. Only literal true/false accepted; repeated keys return 400. Scope and currency have separate cache entries. */
+                active?: boolean;
             };
             header?: never;
             path?: never;
@@ -13637,9 +13752,15 @@ export interface operations {
     getBulkPortfolioTransactions: {
         parameters: {
             query: {
-                /** @description Comma-separated investment ids (`1,2,3`), the shape the frontend's `ids.join(',')` builder emits. Every element must be a positive int32; one malformed element rejects the whole request. */
+                /** @description Comma-separated investment ids (`1,2,3`), the shape the frontend's `ids.join(',')` builder emits. Every element must be a positive int32; one malformed element rejects the whole request. Repeated occurrences are also accepted by the route; generated clients use the comma-joined string. */
                 investment_ids: string;
+                /** @description Optional exact ordinary transaction type filter. */
+                type?: string;
+                /** @description Maximum newest rows per investment. Defaults invalid/non-positive values to 1000 and clamps values over 5000; native editing uses 1000, matching the web bulk loader. */
+                per_investment_limit?: number;
+                /** @description Optional global cap after per-investment ranking. Omit or leave empty for no global cap. Invalid/non-positive explicit values default to 1; positive values clamp at 200000. */
                 limit?: number;
+                /** @description Global offset after ranking and descending date/id order. Invalid/negative values fall back to zero. */
                 offset?: number;
             };
             header?: never;
@@ -13648,7 +13769,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Bulk transaction list */
+            /** @description Ordinary transaction items plus full matching total, numeric effective limit, numeric offset, and links. total can exceed items even without a global limit because of per-investment caps. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -13658,6 +13779,13 @@ export interface operations {
                         data?: components["schemas"]["PortfolioTransactionList"];
                     };
                 };
+            };
+            /** @description Missing or malformed investment_ids, or repeated/non-scalar type filter. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -13862,15 +13990,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    name?: string;
-                    symbol?: string;
-                    asset_class?: components["schemas"]["AssetClass"];
-                    /** @description Three-letter ISO currency code; normalized to uppercase and cannot be cleared. */
-                    currency?: string;
-                    is_active?: boolean;
-                    show_in_ticker?: boolean;
-                };
+                "application/json": components["schemas"]["InvestmentUpdateRequest"];
             };
         };
         responses: {

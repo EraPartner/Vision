@@ -32,6 +32,8 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { DeltaPill } from "@/components/shared/DeltaPill";
 import { Money } from "@/components/shared/Money";
 import { PageShell } from "@/components/shared/PageShell";
+import { ExportDialog } from "@/features/reports/ExportDialog";
+import { useReportDialogState } from "@/features/reports/useReportDialogState";
 
 const PageIcon = PAGE_ICONS["/portfolio/real-estate"];
 
@@ -42,8 +44,7 @@ export default function RealEstatePage() {
     const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings.numberFormat);
     const targetCurrency = appSettings.defaultCurrency || "EUR";
-    const { byAssetClass, isLoading, isError, error, refetch } =
-        usePortfolio();
+    const { byAssetClass, isLoading, isError, error, refetch } = usePortfolio();
     const { dialogs, renderMenu } = useHoldingActions({
         deleteTitleKey: "realestate.deleteProperty",
         deleteDescriptionKey: "realestate.deletePropertyDesc",
@@ -110,60 +111,83 @@ export default function RealEstatePage() {
         totalAppreciation + totalRentIncome - totalFees - totalTaxes;
     const roi = totalCost > 0 ? (totalReturn / totalCost) * 100 : 0;
 
+    const { exportOpen, setExportOpen } = useReportDialogState();
+    const exportDialog = (
+        <ExportDialog
+            defaultType="portfolio"
+            trigger={null}
+            open={exportOpen}
+            onOpenChange={setExportOpen}
+        />
+    );
+
     const headerActions = (
-        <AssetPageActions allowedAssetClasses={["real_estate"]} />
+        <AssetPageActions
+            onExport={() => setExportOpen(true)}
+            allowedAssetClasses={["real_estate"]}
+        />
     );
 
     if (isLoading) {
         return (
-            <PageShell {...loadingSurfaceProps} className="">
-                <PageHeader title={t("realestate.title")} icon={PageIcon} />
-                <Skeleton className="h-40 w-full rounded-card" />
-                <Skeleton className="h-64 w-full rounded-card" />
-            </PageShell>
+            <>
+                {exportDialog}
+                <PageShell {...loadingSurfaceProps} className="">
+                    <PageHeader title={t("realestate.title")} icon={PageIcon} />
+                    <Skeleton className="h-40 w-full rounded-card" />
+                    <Skeleton className="h-64 w-full rounded-card" />
+                </PageShell>
+            </>
         );
     }
     if (isError) {
         return (
-            <PageShell className="">
-                <PageHeader title={t("realestate.title")} icon={PageIcon} />
-                <PageError
-                    title={t("realestate.pageErrorTitle")}
-                    message={error?.message ?? t("common.error")}
-                    onRetry={() => refetch()}
-                />
-            </PageShell>
+            <>
+                {exportDialog}
+                <PageShell className="">
+                    <PageHeader title={t("realestate.title")} icon={PageIcon} />
+                    <PageError
+                        title={t("realestate.pageErrorTitle")}
+                        message={error?.message ?? t("common.error")}
+                        onRetry={() => refetch()}
+                    />
+                </PageShell>
+            </>
         );
     }
 
     if (properties.length === 0) {
         return (
-            <PageShell className="">
-                <PageHeader
-                    title={t("realestate.title")}
-                    icon={PageIcon}
-                    actions={headerActions}
-                />
-                <Card>
-                    <CardContent variant="state">
-                        <EmptyState
-                            icon={PageIcon}
-                            title={t("realestate.noProperties")}
-                            description={t("realestate.noPropertiesDesc")}
-                            action={
-                                <AddInvestmentDialog
-                                    allowedAssetClasses={["real_estate"]}
-                                />
-                            }
-                        />
-                    </CardContent>
-                </Card>
-            </PageShell>
+            <>
+                {exportDialog}
+                <PageShell className="">
+                    <PageHeader
+                        title={t("realestate.title")}
+                        icon={PageIcon}
+                        actions={headerActions}
+                    />
+                    <Card>
+                        <CardContent variant="state">
+                            <EmptyState
+                                icon={PageIcon}
+                                title={t("realestate.noProperties")}
+                                description={t("realestate.noPropertiesDesc")}
+                                action={
+                                    <AddInvestmentDialog
+                                        allowedAssetClasses={["real_estate"]}
+                                    />
+                                }
+                            />
+                        </CardContent>
+                    </Card>
+                </PageShell>
+            </>
         );
     }
 
     return (
         <>
+            {exportDialog}
             <PageShell className="">
                 <PageHeader
                     title={t("realestate.title")}
@@ -358,7 +382,9 @@ export default function RealEstatePage() {
                                             </p>
                                             <p className="type-title-2 tabular-nums text-primary">
                                                 <Money
-                                                    amount={currentValueInTarget}
+                                                    amount={
+                                                        currentValueInTarget
+                                                    }
                                                     currency={targetCurrency}
                                                 />
                                             </p>

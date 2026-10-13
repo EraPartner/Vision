@@ -33,6 +33,8 @@ import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { Money } from "@/components/shared/Money";
 import { PageShell } from "@/components/shared/PageShell";
+import { ExportDialog } from "@/features/reports/ExportDialog";
+import { useReportDialogState } from "@/features/reports/useReportDialogState";
 
 const PageIcon = PAGE_ICONS["/portfolio/savings"];
 const ALLOWED_ASSET_CLASSES = ["savings", "bond"] as const;
@@ -48,8 +50,7 @@ export default function SavingsPage() {
     const loadingSurfaceProps = useLoadingSurfaceProps();
     const { appSettings } = useAppSettings();
     const targetCurrency = appSettings.defaultCurrency || "EUR";
-    const { byAssetClass, isLoading, isError, error, refetch } =
-        usePortfolio();
+    const { byAssetClass, isLoading, isError, error, refetch } = usePortfolio();
     const { dialogs, renderMenu } = useHoldingActions({
         deleteTitleKey: "savings.deleteAccount",
         deleteDescriptionKey: "savings.deleteAccountDesc",
@@ -85,62 +86,85 @@ export default function SavingsPage() {
               ) / totalBalance
             : 0;
 
+    const { exportOpen, setExportOpen } = useReportDialogState();
+    const exportDialog = (
+        <ExportDialog
+            defaultType="portfolio"
+            trigger={null}
+            open={exportOpen}
+            onOpenChange={setExportOpen}
+        />
+    );
+
     const headerActions = (
-        <AssetPageActions allowedAssetClasses={[...ALLOWED_ASSET_CLASSES]} />
+        <AssetPageActions
+            onExport={() => setExportOpen(true)}
+            allowedAssetClasses={[...ALLOWED_ASSET_CLASSES]}
+        />
     );
 
     if (isLoading) {
         return (
-            <PageShell {...loadingSurfaceProps} className="">
-                <PageHeader title={t("savings.title")} icon={PageIcon} />
-                <Skeleton className="h-40 w-full rounded-card" />
-                <Skeleton className="h-64 w-full rounded-card" />
-            </PageShell>
+            <>
+                {exportDialog}
+                <PageShell {...loadingSurfaceProps} className="">
+                    <PageHeader title={t("savings.title")} icon={PageIcon} />
+                    <Skeleton className="h-40 w-full rounded-card" />
+                    <Skeleton className="h-64 w-full rounded-card" />
+                </PageShell>
+            </>
         );
     }
     if (isError) {
         return (
-            <PageShell className="">
-                <PageHeader title={t("savings.title")} icon={PageIcon} />
-                <PageError
-                    title={t("savings.pageErrorTitle")}
-                    message={error?.message ?? t("common.error")}
-                    onRetry={() => refetch()}
-                />
-            </PageShell>
+            <>
+                {exportDialog}
+                <PageShell className="">
+                    <PageHeader title={t("savings.title")} icon={PageIcon} />
+                    <PageError
+                        title={t("savings.pageErrorTitle")}
+                        message={error?.message ?? t("common.error")}
+                        onRetry={() => refetch()}
+                    />
+                </PageShell>
+            </>
         );
     }
 
     if (accounts.length === 0) {
         return (
-            <PageShell className="">
-                <PageHeader
-                    title={t("savings.title")}
-                    icon={PageIcon}
-                    actions={headerActions}
-                />
-                <Card>
-                    <CardContent variant="state">
-                        <EmptyState
-                            icon={PageIcon}
-                            title={t("savings.noAccounts")}
-                            description={t("savings.noAccountsDesc")}
-                            action={
-                                <AddInvestmentDialog
-                                    allowedAssetClasses={[
-                                        ...ALLOWED_ASSET_CLASSES,
-                                    ]}
-                                />
-                            }
-                        />
-                    </CardContent>
-                </Card>
-            </PageShell>
+            <>
+                {exportDialog}
+                <PageShell className="">
+                    <PageHeader
+                        title={t("savings.title")}
+                        icon={PageIcon}
+                        actions={headerActions}
+                    />
+                    <Card>
+                        <CardContent variant="state">
+                            <EmptyState
+                                icon={PageIcon}
+                                title={t("savings.noAccounts")}
+                                description={t("savings.noAccountsDesc")}
+                                action={
+                                    <AddInvestmentDialog
+                                        allowedAssetClasses={[
+                                            ...ALLOWED_ASSET_CLASSES,
+                                        ]}
+                                    />
+                                }
+                            />
+                        </CardContent>
+                    </Card>
+                </PageShell>
+            </>
         );
     }
 
     return (
         <>
+            {exportDialog}
             <PageShell className="">
                 <PageHeader
                     title={t("savings.title")}
@@ -266,7 +290,10 @@ export default function SavingsPage() {
                                                 </Badge>
                                                 {a.interestRate ? (
                                                     <span className="tabular-nums text-accent">
-                                                        {formatPercent(a.interestRate, { digits: 2 })}{" "}
+                                                        {formatPercent(
+                                                            a.interestRate,
+                                                            { digits: 2 },
+                                                        )}{" "}
                                                         {t("savings.pa")}
                                                     </span>
                                                 ) : null}
@@ -313,7 +340,7 @@ export default function SavingsPage() {
 
                                     {(Boolean(
                                         a.interestRate &&
-                                            a.projectedAnnualInterest > 0,
+                                        a.projectedAnnualInterest > 0,
                                     ) ||
                                         a.maturityDate ||
                                         a.totalFees > 0 ||

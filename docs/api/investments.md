@@ -4,13 +4,44 @@ type: endpoint
 method: GET, POST, PUT, PATCH, DELETE
 path: /api/investments
 description: Investment portfolio management (stocks, crypto, real estate, savings)
-date: 2026-10-08
-last_modified: 2026-10-08
-updated: 2026-10-08
-tags: [api, investments, portfolio, stocks, crypto, metals, phase-9, decimal, money, offline-fallback, per-account, adr-091, show-in-ticker, portfolio-ticker]
+date: 2026-10-13
+last_modified: 2026-10-13
+updated: 2026-10-13
+tags:
+  [
+    api,
+    investments,
+    portfolio,
+    stocks,
+    crypto,
+    metals,
+    phase-9,
+    decimal,
+    money,
+    offline-fallback,
+    per-account,
+    adr-091,
+    show-in-ticker,
+    portfolio-ticker,
+  ]
 status: active
-aliases: [investments-api, portfolio-api, holdings, stocks, crypto, real-estate, savings, bonds, metals]
-related_code: ["apps/node-backend/src/routes/investments.ts", "apps/node-backend/src/repositories/investmentRepository.ts"]
+aliases:
+  [
+    investments-api,
+    portfolio-api,
+    holdings,
+    stocks,
+    crypto,
+    real-estate,
+    savings,
+    bonds,
+    metals,
+  ]
+related_code:
+  [
+    "apps/node-backend/src/routes/investments.ts",
+    "apps/node-backend/src/repositories/investmentRepository.ts",
+  ]
 ---
 
 # Investments API
@@ -57,12 +88,12 @@ Retrieve a list of investments.
 
 **Query Parameters:**
 
-| Parameter   | Type    | Default | Description           |
-| ----------- | ------- | ------- | --------------------- |
-| limit       | integer | 200     | Max items (max 1000)  |
-| offset      | integer | 0       | Items to skip         |
-| asset_class | string  | null    | Filter by asset class |
-| active      | boolean | true    | Show active/inactive  |
+| Parameter   | Type    | Default | Description                                   |
+| ----------- | ------- | ------- | --------------------------------------------- |
+| limit       | integer | 200     | Max items (max 1000)                          |
+| offset      | integer | 0       | Items to skip                                 |
+| asset_class | string  | null    | Filter by asset class                         |
+| active      | boolean | true    | true: active only; false: active and inactive |
 
 **Asset Class Values:** stock, etf, crypto, metals, real_estate, savings, bond
 
@@ -289,6 +320,17 @@ Create a new investment.
 }
 ```
 
+Create/update request schemas now declare the existing price, interest, property, provider and
+custom path fields for generated clients; this documents current behavior without changing
+writes. Numeric bounds: `current_price` and `cadastral_income` 0–1e12, `interest_rate` −100–100,
+`municipality_tax_rate` 0–100. Explicit null/empty numeric values clear optional storage fields.
+Currency cannot be cleared. Name/symbol/location/municipality bounds are 200/20/300/200
+characters; provider IDs are 200, URLs 500 and JSON paths 300. Provider URLs must be public
+HTTP(S) targets and retain the existing server checks. Update also supports `is_active`,
+`show_in_ticker` and `price_updated_at`; asset class remains immutable. Optional response metadata
+and price/property fields remain nullable. See [[docs/api/portfolio-summary|summary scopes]] for
+canonical all-investment and retained archive presentation reads.
+
 Custom provider path configuration fields:
 
 - `price_provider_latest_url`: endpoint used to resolve current/refresh price.
@@ -375,16 +417,19 @@ This endpoint is intended for portfolio pages that need to load many holdings at
 | ---------------------- | ------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `investment_ids`       | string  | required | Comma-separated investment IDs (e.g. `1,2,5`). Every element must be a plain base-10 integer in 1..2,147,483,647 — one malformed element rejects the whole request |
 | `type`                 | string  | null     | Optional transaction type filter                                                                                                                                   |
-| `per_investment_limit` | integer | 1000     | Max rows per investment (clamped 1..5000)                                                                                                                          |
-| `limit`                | integer | null     | Optional global cap after per-investment limiting (clamped 1..200000)                                                                                              |
+| `per_investment_limit` | integer | 1000     | Newest rows per investment; invalid/non-positive values default to 1000, positive values cap at 5000                                                               |
+| `limit`                | integer | null     | Optional global cap after ranking; omitted/empty means none, explicit invalid/non-positive defaults to 1, max 200000                                               |
 | `offset`               | integer | 0        | Global offset after ordering                                                                                                                                       |
 
 **Behavior notes:**
 
 - Repository uses per-investment ranking (`ROW_NUMBER() OVER (PARTITION BY investment_id ORDER BY date DESC, id DESC)`) so each investment contributes at most `per_investment_limit` rows.
 - Final result is globally ordered by `date DESC, id DESC`.
-- `total` is computed with the same `investment_ids` + `type` filter (before global `limit/offset`).
-- Route cache key for bulk transactions now includes `limit` to prevent collisions between requests that differ only by limit value.
+- `total` is computed with the same `investment_ids` + `type` filter before **both** per-investment and global limits. A total greater than the returned count does not imply that offset paging can access rows beyond the per-investment cap.
+- The response uses `PortfolioTransactionList`: `items`, `total`, `limit`, `offset`, and `links`. `limit` is numeric, never null: it is the explicit global cap or `items.length` when no cap was requested; an empty unbounded result therefore has `limit: 0`.
+- This is the ordinary CRUD transaction table, excluding separate custody and asset-adjustment events. Native editing requests `per_investment_limit=1000`, matching the web loader, and decodes monetary fields directly as Decimal.
+- The route also accepts repeated `investment_ids` occurrences; generated clients keep the existing comma-joined string form.
+- The route cache key includes investment IDs, type, per-investment limit, global limit, and offset, so differently capped requests do not share a cached page.
 
 ### PUT /api/investments/transactions/broker
 

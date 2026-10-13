@@ -2775,6 +2775,50 @@ components:
       additionalProperties: true
       properties:
         id: { type: integer, format: int32 }
+        name: { type: string }
+        symbol: { type: string, nullable: true }
+        asset_class: { type: string }
+        assetClass: { type: string }
+        currency: { type: string }
+        originalCurrency: { type: string }
+        summarySource: { type: string }
+        is_active: { type: boolean }
+        usedFallbackRate: { type: boolean }
+        gainLossPercent: { type: number }
+        interestRate: { type: number }
+        transactionCount:
+          {
+            type: integer,
+            description: Ordinary history count on archivedPresentation; at most 1000 as in the existing web archive.,
+          }
+        currentPrice: { type: number }
+        currentValue: { type: number }
+        totalInvested: { type: number }
+        totalBuyCost: { type: number }
+        totalSellProceeds: { type: number }
+        totalFees: { type: number }
+        totalTaxes: { type: number }
+        totalDividends: { type: number }
+        totalIncome: { type: number }
+        avgCostBasis: { type: number }
+        realizedGain: { type: number }
+        unrealizedGain: { type: number }
+        totalGain: { type: number }
+        gainLoss: { type: number }
+        assetGain: { type: number }
+        fxGain: { type: number }
+        nativeCurrentValue: { type: number }
+        accruedInterest: { type: number }
+        projectedAnnualInterest: { type: number }
+        totalAppreciation: { type: number }
+        nativeCurrentPrice: { type: number }
+        nativeAvgCostBasis: { type: number }
+        unrealizedGainPercent: { type: number }
+        estimatedMonthlyRent:
+          type: number
+          description: Latest ordinary rent amount displayed by the current RealEstatePage; retains its existing raw-amount interpretation rather than applying an additional FX conversion.
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
         totalUnits:
           type: number
           description: Current units including custody fees and unit adjustments, rounded to eight decimal places.
@@ -2823,22 +2867,59 @@ components:
         unrealizedGain: { type: number }
         gainLoss: { type: number }
 
+    PortfolioSummaryTotals:
+      type: object
+      required:
+        [
+          totalPortfolioValue,
+          totalInvested,
+          totalGainLoss,
+          totalRealizedGain,
+          totalUnrealizedGain,
+          totalGain,
+          totalIncome,
+          totalDividends,
+          totalInKindIncome,
+          totalFees,
+          totalTaxes,
+          totalAssetGain,
+          totalFxGain,
+          totalReturnPct,
+          usedFallbackRate,
+        ]
+      properties:
+        totalPortfolioValue: { type: number }
+        totalInvested: { type: number }
+        totalGainLoss: { type: number }
+        totalRealizedGain: { type: number }
+        totalUnrealizedGain: { type: number }
+        totalGain: { type: number }
+        totalIncome: { type: number }
+        totalDividends: { type: number }
+        totalInKindIncome: { type: number }
+        totalFees: { type: number }
+        totalTaxes: { type: number }
+        totalAssetGain: { type: number }
+        totalFxGain: { type: number }
+        totalReturnPct: { type: number }
+        usedFallbackRate: { type: boolean }
+
     PortfolioSummaryData:
       type: object
       required: [currency, computed_at, totals, summaries, byAccount]
       properties:
         currency: { type: string }
         computed_at: { type: string, format: date-time }
+        firstInvestmentDate:
+          type: string
+          format: date
+          description: Earliest ordinary transaction on active investments, independent of selected performance chart period and investment creation dates. Custody/adjustment event dates and inactive investments are excluded. Omitted when no qualifying transaction exists.
         totals:
-          type: object
-          additionalProperties: { type: number }
-          properties:
-            totalDividends:
-              type: number
-              description: Dividend share of ordinary income summed across active holdings, at transaction-date FX. Excludes in-kind income.
-            totalInKindIncome:
-              type: number
-              description: Sum of active holdings' in-kind income, excluded from ordinary income and gains. Absence in an older response means zero.
+          $ref: "#/components/schemas/PortfolioSummaryTotals"
+        archivedPresentation:
+          type: array
+          description: Inactive-only presentation matching the web archive's ordinary CRUD replay and current quote FX. Supplied when active=false, separate from canonical dated-FX summaries/totals. In-kind income remains canonical dated data; broker byAccount remains a separate canonical snapshot.
+          items: { $ref: "#/components/schemas/PortfolioSummaryItem" }
         summaries:
           type: array
           items: { $ref: "#/components/schemas/PortfolioSummaryItem" }
@@ -4738,47 +4819,66 @@ components:
         name:
           type: string
         symbol:
+          nullable: true
           type: string
         asset_class:
           $ref: "#/components/schemas/AssetClass"
         currency:
           type: string
         current_price:
+          nullable: true
           type: number
         interest_rate:
+          nullable: true
           type: number
         maturity_date:
+          nullable: true
           type: string
           format: date
         location:
+          nullable: true
           type: string
         municipality:
+          nullable: true
           type: string
         cadastral_income:
+          nullable: true
           type: number
         municipality_tax_rate:
+          nullable: true
           type: number
         notes:
+          nullable: true
           type: string
         price_provider:
+          nullable: true
           $ref: "#/components/schemas/PriceProvider"
         price_provider_id:
+          nullable: true
           type: string
         price_provider_url:
+          nullable: true
           type: string
         price_provider_latest_url:
+          nullable: true
           type: string
         price_provider_latest_path:
+          nullable: true
           type: string
         price_provider_history_url:
+          nullable: true
           type: string
         price_provider_history_path:
+          nullable: true
           type: string
         price_provider_history_ts_path:
+          nullable: true
           type: string
         price_provider_history_price_path:
+          nullable: true
           type: string
         price_updated_at:
+          nullable: true
           type: string
           format: date-time
         is_active:
@@ -4791,6 +4891,100 @@ components:
         updated_at:
           type: string
           format: date-time
+
+    InvestmentCreateRequest:
+      type: object
+      additionalProperties: true
+      required: [name, asset_class]
+      properties:
+        name: { type: string, maxLength: 200 }
+        symbol: { type: string, nullable: true, maxLength: 20 }
+        asset_class:
+          {
+            type: string,
+            description: Asset class is immutable on updates; the existing value may be resubmitted.,
+          }
+        currency:
+          {
+            type: string,
+            pattern: '^\s*[A-Za-z]{3}\s*$',
+            description: Trimmed and normalized uppercase. Omit on create for EUR; cannot be cleared.,
+          }
+        current_price:
+          { type: number, nullable: true, minimum: 0, maximum: 1000000000000 }
+        interest_rate:
+          { type: number, nullable: true, minimum: -100, maximum: 100 }
+        cadastral_income:
+          { type: number, nullable: true, minimum: 0, maximum: 1000000000000 }
+        municipality_tax_rate:
+          { type: number, nullable: true, minimum: 0, maximum: 100 }
+        maturity_date: { type: string, format: date, nullable: true }
+        location: { type: string, nullable: true, maxLength: 300 }
+        municipality: { type: string, nullable: true, maxLength: 200 }
+        notes: { type: string, nullable: true }
+        price_provider: { type: string, nullable: true }
+        price_provider_id: { type: string, nullable: true, maxLength: 200 }
+        price_provider_url: { type: string, nullable: true, maxLength: 500 }
+        price_provider_latest_url:
+          { type: string, nullable: true, maxLength: 500 }
+        price_provider_latest_path:
+          { type: string, nullable: true, maxLength: 300 }
+        price_provider_history_url:
+          { type: string, nullable: true, maxLength: 500 }
+        price_provider_history_path:
+          { type: string, nullable: true, maxLength: 300 }
+        price_provider_history_ts_path:
+          { type: string, nullable: true, maxLength: 300 }
+        price_provider_history_price_path:
+          { type: string, nullable: true, maxLength: 300 }
+
+    InvestmentUpdateRequest:
+      type: object
+      additionalProperties: true
+      properties:
+        name: { type: string, maxLength: 200 }
+        symbol: { type: string, nullable: true, maxLength: 20 }
+        asset_class:
+          {
+            $ref: "#/components/schemas/AssetClass",
+            description: Asset class is immutable on updates; the existing value may be resubmitted.,
+          }
+        currency:
+          {
+            type: string,
+            pattern: '^\s*[A-Za-z]{3}\s*$',
+            description: Trimmed and normalized uppercase. Omit on create for EUR; cannot be cleared.,
+          }
+        current_price:
+          { type: number, nullable: true, minimum: 0, maximum: 1000000000000 }
+        interest_rate:
+          { type: number, nullable: true, minimum: -100, maximum: 100 }
+        cadastral_income:
+          { type: number, nullable: true, minimum: 0, maximum: 1000000000000 }
+        municipality_tax_rate:
+          { type: number, nullable: true, minimum: 0, maximum: 100 }
+        maturity_date: { type: string, format: date, nullable: true }
+        location: { type: string, nullable: true, maxLength: 300 }
+        municipality: { type: string, nullable: true, maxLength: 200 }
+        notes: { type: string, nullable: true }
+        price_provider: { type: string, nullable: true }
+        price_provider_id: { type: string, nullable: true, maxLength: 200 }
+        price_provider_url: { type: string, nullable: true, maxLength: 500 }
+        price_provider_latest_url:
+          { type: string, nullable: true, maxLength: 500 }
+        price_provider_latest_path:
+          { type: string, nullable: true, maxLength: 300 }
+        price_provider_history_url:
+          { type: string, nullable: true, maxLength: 500 }
+        price_provider_history_path:
+          { type: string, nullable: true, maxLength: 300 }
+        price_provider_history_ts_path:
+          { type: string, nullable: true, maxLength: 300 }
+        price_provider_history_price_path:
+          { type: string, nullable: true, maxLength: 300 }
+        is_active: { type: boolean }
+        show_in_ticker: { type: boolean }
+        price_updated_at: { type: string, format: date-time, nullable: true }
 
     InvestmentList:
       allOf:
@@ -9521,6 +9715,34 @@ paths:
       summary: List investments
       operationId: getInvestments
       tags: [Portfolio]
+      parameters:
+        - {
+            in: query,
+            name: asset_class,
+            schema:
+              {
+                type: string,
+                enum: [stock, etf, crypto, metals, real_estate, savings, bond],
+              },
+            description: Filter one exact asset class.,
+          }
+        - {
+            in: query,
+            name: active,
+            schema: { type: boolean, default: true },
+            description: true restricts to active investments; false returns active and inactive investments.,
+          }
+        - {
+            in: query,
+            name: limit,
+            schema: { type: integer, default: 200, minimum: 1, maximum: 1000 },
+            description: Lenient pagination parser defaults invalid limits and clamps at 1000.,
+          }
+        - {
+            in: query,
+            name: offset,
+            schema: { type: integer, default: 0, minimum: 0 },
+          }
       responses:
         "200":
           description: Investment list
@@ -9542,40 +9764,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [name, asset_class]
-              properties:
-                name:
-                  type: string
-                symbol:
-                  type: string
-                asset_class:
-                  type: string
-                currency:
-                  type: string
-                  pattern: '^\s*[A-Za-z]{3}\s*$'
-                  description: Three-letter ISO currency code; trimmed and normalized to uppercase. Omit to default to EUR.
-                current_price:
-                  type: number
-                interest_rate:
-                  type: number
-                maturity_date:
-                  type: string
-                  format: date
-                location:
-                  type: string
-                municipality:
-                  type: string
-                cadastral_income:
-                  type: number
-                municipality_tax_rate:
-                  type: number
-                notes:
-                  type: string
-                price_provider:
-                  type: string
-                price_provider_id:
-                  type: string
+              $ref: "#/components/schemas/InvestmentCreateRequest"
       responses:
         "201":
           description: Created investment
@@ -11516,6 +11705,10 @@ paths:
           description: Target currency (3-letter code; `target_currency` is an alias). A malformed code falls back to EUR. A repeated key returns 400.
           schema:
             type: string
+        - in: query
+          name: active
+          description: Optional scope. true (default) retains active-only summaries/totals and the existing cache. false includes all holdings canonically plus an inactive-only archivedPresentation matching the existing web archive. Only literal true/false accepted; repeated keys return 400. Scope and currency have separate cache entries.
+          schema: { type: boolean, default: true }
       responses:
         "400":
           description: "VALIDATION_ERROR: currency must be a single value"
@@ -12093,6 +12286,7 @@ paths:
       summary: List portfolio transactions across all investments
       operationId: getBulkPortfolioTransactions
       tags: [Portfolio]
+      description: Ordinary portfolio transaction rows across the requested investments, ranked newest first per investment and then globally by date/id descending. This operation excludes custody and asset-adjustment events, which have separate APIs. total counts matching ordinary rows before per-investment and global limits; response limit is the requested global cap or the returned item count when omitted.
       parameters:
         # Documented as `investment_id` (singular, optional) until 2026-08-11;
         # the route has only ever read `investment_ids`, and 400s without it.
@@ -12102,21 +12296,39 @@ paths:
           description: >-
             Comma-separated investment ids (`1,2,3`), the shape the frontend's
             `ids.join(',')` builder emits. Every element must be a positive
-            int32; one malformed element rejects the whole request.
+            int32; one malformed element rejects the whole request. Repeated
+            occurrences are also accepted by the route; generated clients use the
+            comma-joined string.
           schema:
             type: string
             pattern: "^[0-9]+(,[0-9]+)*$"
         - in: query
+          name: type
+          description: Optional exact ordinary transaction type filter.
+          schema: { type: string }
+        - in: query
+          name: per_investment_limit
+          description: Maximum newest rows per investment. Defaults invalid/non-positive values to 1000 and clamps values over 5000; native editing uses 1000, matching the web bulk loader.
+          schema: { type: integer, default: 1000, minimum: 1, maximum: 5000 }
+        - in: query
           name: limit
+          description: Optional global cap after per-investment ranking. Omit or leave empty for no global cap. Invalid/non-positive explicit values default to 1; positive values clamp at 200000.
           schema:
             type: integer
+            minimum: 1
+            maximum: 200000
         - in: query
           name: offset
+          description: Global offset after ranking and descending date/id order. Invalid/negative values fall back to zero.
           schema:
             type: integer
+            default: 0
+            minimum: 0
       responses:
+        "400":
+          description: Missing or malformed investment_ids, or repeated/non-scalar type filter.
         "200":
-          description: Bulk transaction list
+          description: Ordinary transaction items plus full matching total, numeric effective limit, numeric offset, and links. total can exceed items even without a global limit because of per-investment caps.
           content:
             application/json:
               schema:
@@ -12320,22 +12532,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                name:
-                  type: string
-                symbol:
-                  type: string
-                asset_class:
-                  $ref: "#/components/schemas/AssetClass"
-                currency:
-                  type: string
-                  pattern: '^\s*[A-Za-z]{3}\s*$'
-                  description: Three-letter ISO currency code; normalized to uppercase and cannot be cleared.
-                is_active:
-                  type: boolean
-                show_in_ticker:
-                  type: boolean
+              $ref: "#/components/schemas/InvestmentUpdateRequest"
       responses:
         "200":
           description: Updated investment

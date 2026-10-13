@@ -101,6 +101,7 @@ import { Money } from "@/components/shared/Money";
 import { TouchDisclosure } from "@/components/shared/TouchDisclosure";
 import { WidgetVisibilityDialog } from "@/components/shared/WidgetVisibilityDialog";
 import { ExportDialog } from "@/features/reports/ExportDialog";
+import { useReportDialogState } from "@/features/reports/useReportDialogState";
 import { AddInvestmentDialog } from "@/features/portfolio/AddInvestmentDialog";
 import { AddPortfolioTxnDialog } from "@/features/portfolio/AddPortfolioTxnDialog";
 import { InvestmentDetailDialog } from "@/features/portfolio/InvestmentDetailDialog";
@@ -266,7 +267,7 @@ export default function PortfolioPage() {
 
     const [brokerFilter, setBrokerFilter] = useState("all");
     const [sortBy, setSortBy] = useState<HoldingsSort>("value");
-    const [exportOpen, setExportOpen] = useState(false);
+    const { exportOpen, setExportOpen } = useReportDialogState();
     const [customizeOpen, setCustomizeOpen] = useState(false);
     const [detailId, setDetailId] = useState<number>();
     const [detailOpen, setDetailOpen] = useState(false);
@@ -631,10 +632,19 @@ export default function PortfolioPage() {
     const subtitle = [tc("portfolio.investments", summaries.length), priceLabel]
         .filter(Boolean)
         .join(" · ");
+    const exportDialog = (
+        <ExportDialog
+            defaultType="portfolio"
+            trigger={null}
+            open={exportOpen}
+            onOpenChange={setExportOpen}
+        />
+    );
 
     if (isLoading) {
         return (
             <PageShell {...loadingSurfaceProps}>
+                {exportDialog}
                 <PageHeader title={title} icon={PAGE_ICONS["/portfolio"]} />
                 <Skeleton className="h-64 w-full" />
                 <Skeleton className="h-24 w-full" />
@@ -645,6 +655,7 @@ export default function PortfolioPage() {
     if (isError) {
         return (
             <PageShell>
+                {exportDialog}
                 <PageHeader title={title} icon={PAGE_ICONS["/portfolio"]} />
                 <PageError
                     title={t("stocks.pageErrorTitle")}
@@ -762,9 +773,10 @@ export default function PortfolioPage() {
                       value: brokerageCashFees.gainAfterFees,
                       tone: toneClass(brokerageCashFees.gainAfterFees),
                       signed: true,
-                      warning: fxRateFellBack || brokerageCashFees.usedFallbackRate
-                          ? t("portfolio.fxFallbackNote")
-                          : undefined,
+                      warning:
+                          fxRateFellBack || brokerageCashFees.usedFallbackRate
+                              ? t("portfolio.fxFallbackNote")
+                              : undefined,
                   },
               ]
             : []),
@@ -772,6 +784,7 @@ export default function PortfolioPage() {
 
     return (
         <PageShell className="">
+            {exportDialog}
             <PageHeader
                 title={title}
                 subtitle={isEmpty ? undefined : subtitle}
@@ -825,12 +838,6 @@ export default function PortfolioPage() {
                                 {t("nav.portfolioImport")}
                             </DropdownMenuItem>
                         </RowMenu>
-                        <ExportDialog
-                            defaultType="portfolio"
-                            trigger={null}
-                            open={exportOpen}
-                            onOpenChange={setExportOpen}
-                        />
                         <WidgetVisibilityDialog
                             open={customizeOpen}
                             onOpenChange={setCustomizeOpen}

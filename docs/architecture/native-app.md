@@ -31,7 +31,7 @@ tags:
     string-catalog,
     navigation,
   ]
-description: "Vision Native is the Swift macOS app under apps/native/ that replaces the Electron shell in phases (ADR-204). Covers the directory layout, the runtime supervisor that starts its own PostgreSQL 18 cluster and backend on synthetic Demo data, payload discovery, the phase 1c shell (window, launch state, preload bridge, web view navigation and download policy, menus, dock and vibrancy), phase 1d backup and restore (bundle format compatibility, Keychain passphrase, restore allow-list, quit-time backup), the phase 1e audit anchor and Keychain witness with restore continuity, the standard and Demo variants of one build, the Debug-only backend override, the phase 2 foundations (generated OpenAPI client, design tokens, String Catalog and sidebar registry, the native NavigationSplitView shell with the shell:route-changed bridge message, and the native Exchange rates screen), the Native (macOS) CI job with the backup and audit interop job, screen ports through phase 3h Tax (TypeScript fiscal results, atomic settings CAS, native CSV and retained web PDF), and install-native.sh."
+description: "Vision Native is the Swift macOS app under apps/native/ that replaces the Electron shell in phases (ADR-204). Covers the directory layout, the runtime supervisor that starts its own PostgreSQL 18 cluster and backend on synthetic Demo data, payload discovery, the phase 1c shell (window, launch state, preload bridge, web view navigation and download policy, menus, dock and vibrancy), phase 1d backup and restore (bundle format compatibility, Keychain passphrase, restore allow-list, quit-time backup), the phase 1e audit anchor and Keychain witness with restore continuity, the standard and Demo variants of one build, the Debug-only backend override, the phase 2 foundations (generated OpenAPI client, design tokens, String Catalog and sidebar registry, the native NavigationSplitView shell with the shell:route-changed bridge message, and the native Exchange rates screen), the Native (macOS) CI job with the backup and audit interop job, screen ports through phase 3i Portfolio, holdings, Rebalance and Net Worth (server financial results, guarded native edits, settings CAS and retained web PDF), and install-native.sh."
 aliases: [vision native, native app, swift app]
 ---
 
@@ -681,7 +681,8 @@ then. The native shell never redirects: an admin route shows a native screen onl
 `app_settings` says admin mode is on, and otherwise the web view, where `RequireAdmin` redirects and
 reports the new route. Screens outside the admin section (`/planned`, `/import`,
 `/import/:batchId/review`, `/transactions`, `/owes`, `/accounts`, `/accounts/:id`, `/categories`,
-`/recipients`, `/`, `/statistics`, `/tax`) are native in
+`/recipients`, `/`, `/statistics`, `/tax`, `/portfolio`, its five asset pages,
+`/portfolio/rebalance`, `/portfolio/net-worth`) are native in
 either mode. The page's topbar keeps its traffic-light inset only while the native sidebar is
 hidden (`native-sidebar`).
 
@@ -1031,6 +1032,63 @@ The cloud checks cover portable models, API adapters, generated outputs, and the
 The full macOS app/package build and the owner's Demo visual pass have not run in this workspace.
 See [[docs/reference/native-parity/home-and-statistics|the action mapping]] and
 [[docs/features/statistics|Statistics]] for the remaining review surface.
+
+### Portfolio, holdings and wealth tools (phase 3i)
+
+`PortfolioScreens` composes shared read models, retained editor drafts, Rebalance and Net Worth.
+`PortfolioScreenView` owns the root detail sheet and the editing presentation. Nested editors
+present above the detail without losing its selection; closing a successful archive/delete closes
+an active detail. Dirty drafts register the native leave/quit guard. Explicit Cancel resets the
+form; Escape or the sheet close keeps applicable edit/trade drafts, matching the web.
+
+`PortfolioModel` consumes typed Decimal responses for canonical active summaries, performance,
+broker partitions, exposure and prices. Currency/period revisions reject late reads. The eleven
+widget choices preserve other pages and forward the complete original CAS baseline. Portfolio
+transaction histories page until complete; incomplete or oversized histories cannot enable a lot
+assignment. Ambiguous retag retries retain their UUID per request fingerprint. Broker defaults
+use instrument history, then the latest global manual trade, then an active account.
+
+The additive `portfolio-summary?active=false` scope provides canonical all-holding data and an
+explicit `archivedPresentation`. The latter retains the existing web archive's ordinary-history
+and current-FX presentation, plus its dated in-kind income bridge. Native archive views consume
+that presentation rather than substituting the active canonical calculation. Default active totals
+and their cache remain unchanged; scope and currency use separate cache entries. See
+[[docs/api/portfolio-summary|the summary contract]]. Raw quote amounts seed edit fields; display
+columns retain the canonical response currency. Optional unavailable FX decomposition is shown as
+unavailable. The OpenAPI generator keeps snake_case/camelCase compatibility aliases as distinct
+Swift members when ordinary camelization would collide.
+
+Ticker queries are restricted to Yahoo-provider identities, including the existing configured-id
+or symbol fallback. Polling stops while hidden, inactive or offline; reduced motion and hover stop
+animation. News displays six articles and validates external HTTP(S) links. Exposure imports retain
+the existing typed server contract and 1 MB limit. The five asset pages reuse guarded histories,
+price disclosures and native forms while retaining their distinct layouts.
+
+`RebalanceModel` sends targets and reserve floor to the existing TypeScript operations. It first
+loads commitment-aware candidate cash, applies the custom cap, then asks for the plan. Fiscal,
+valuation, FIFO and deployment engines remain in TypeScript. URL drafts, saved plans and CAS
+conflicts preserve the web's input behavior. No trades are executed by this screen.
+
+`NetWorthModel` reads the full daily chart series independently of newest-first table pages,
+deduplicates table dates and uses raw page counts for offsets. Its period window uses Gregorian
+calendar days in the local timezone and anchors to the latest snapshot. Account rows combine
+server broker partitions and guarded stored-rate conversions, excluding cash from holdings-only
+wallets. Reconciliation remains visible when those totals differ from the headline. Refreshes
+cannot leave an older pagination spinner active or restore a period selected before an awaited
+price refresh. Cached/historical quote notices retain the refresh metadata.
+
+Completed price refreshes invalidate the other wealth screens through the shared coordinator's
+data revision, including when navigation happens during the request. A lost acknowledgement
+still triggers authoritative reads and retains the request error; cached values cannot imply
+that the mutation succeeded.
+
+The shared PDF dialog remains in React on overview and asset routes. `export=pdf` preserves all
+other parameters, and closing removes only that key with replace. The legacy performance redirect
+remains owned by the web router, which reports the resulting native Portfolio route. Browser print,
+full macOS compilation and the owner's synthetic Demo visual/keyboard review remain open gates;
+see [[docs/reference/native-parity/portfolio-holdings|Portfolio parity]] and
+[[docs/reference/native-parity/portfolio-wealth-tools|Wealth tools parity]]. Portfolio import and
+Portfolio Tax remain web surfaces at this checkpoint.
 
 ## Install
 

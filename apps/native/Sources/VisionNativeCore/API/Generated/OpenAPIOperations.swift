@@ -5,7 +5,7 @@ import Foundation
 
 /// One struct per operationId in `apps/native/openapi-operations.txt`, in its order.
 public enum OpenAPIOperations {
-    public static let operationIds = ["getExchangeRates", "refreshExchangeRates", "adminDatabaseStats", "adminProvidersHealth", "adminProviderProbe", "adminMetricsRequests", "adminListEndpoints", "getSetting", "adminDatabaseVacuum", "adminGetTableSchema", "adminGetTableRows", "adminMutateTableRows", "getPlannedTransactions", "createPlannedTransaction", "updatePlannedTransaction", "deletePlannedTransaction", "executePlannedTransaction", "getPlannedMatchSuggestions", "getRecurringPatterns", "getRecipients", "getRecipient", "getAccounts", "getCategoryTree", "getTags", "createTag", "getTransactions", "saveSetting", "getSupportedAdapters", "getCustomParsers", "createCustomParser", "updateCustomParser", "deleteCustomParser", "getImportBatches", "deleteImportBatch", "previewImportBatch", "overrideImportRow", "overrideImportRowCategory", "commitImportBatch", "updateRecipient", "getInfoBanks", "exportTransactionsCsv", "exportTransactionsJson", "getTransaction", "createTransaction", "updateTransaction", "deleteTransaction", "bulkUpdateTransactions", "getTransactionAttachments", "downloadAttachment", "deleteAttachment", "bulkDeleteTransactions", "bulkExportTransactions", "bulkTagTransactions", "markTransfer", "createRecipient", "getSplitsByTransaction", "createSplitBatch", "createBulkSplits", "getSplitsOwed", "getSplitOwedByRecipient", "exportSplitsOwedCsv", "paySplit", "settleSplit", "settleAllSplitsForRecipient", "deleteSplit", "createAccount", "updateAccount", "deleteAccount", "previewAccountPortfolioLots", "closeAccount", "mergeAccounts", "previewAccountMerge", "setAccountOpeningBalance", "reconcileAccount", "setAccountStatementBalance", "bulkRetagPortfolioTransactions", "getPortfolioSummary", "createCategoryNode", "updateCategoryNode", "deleteCategoryNode", "mergeCategoryNode", "deleteRecipient", "mergeRecipient", "unmergeRecipient", "getRecipientPatterns", "createRecipientPattern", "previewRecipientPattern", "updateRecipientPattern", "deleteRecipientPattern", "getMonthlySummary", "getAverageVsCurrent", "getBankBalances", "getNetWorth", "getCashflowForecastMethods", "getCashflowForecastRolling", "getCashflowForecastAccuracy", "getTransactionCount", "getCategories", "getCategoryPivot", "getRecipientInsights", "getRecipientByYear", "getSankey", "getInsightsDigest", "dismissInsight", "getSavedCharts", "createSavedChart", "updateSavedChart", "deleteSavedChart", "getRecipientPivot", "getTagPivot", "computeBelgianTax", "getBelgianTaxOverview", "saveSettings", "getBelgianTaxDashboard", "getDeductionCandidates"]
+    public static let operationIds = ["getExchangeRates", "refreshExchangeRates", "adminDatabaseStats", "adminProvidersHealth", "adminProviderProbe", "adminMetricsRequests", "adminListEndpoints", "getSetting", "adminDatabaseVacuum", "adminGetTableSchema", "adminGetTableRows", "adminMutateTableRows", "getPlannedTransactions", "createPlannedTransaction", "updatePlannedTransaction", "deletePlannedTransaction", "executePlannedTransaction", "getPlannedMatchSuggestions", "getRecurringPatterns", "getRecipients", "getRecipient", "getAccounts", "getCategoryTree", "getTags", "createTag", "getTransactions", "saveSetting", "getSupportedAdapters", "getCustomParsers", "createCustomParser", "updateCustomParser", "deleteCustomParser", "getImportBatches", "deleteImportBatch", "previewImportBatch", "overrideImportRow", "overrideImportRowCategory", "commitImportBatch", "updateRecipient", "getInfoBanks", "exportTransactionsCsv", "exportTransactionsJson", "getTransaction", "createTransaction", "updateTransaction", "deleteTransaction", "bulkUpdateTransactions", "getTransactionAttachments", "downloadAttachment", "deleteAttachment", "bulkDeleteTransactions", "bulkExportTransactions", "bulkTagTransactions", "markTransfer", "createRecipient", "getSplitsByTransaction", "createSplitBatch", "createBulkSplits", "getSplitsOwed", "getSplitOwedByRecipient", "exportSplitsOwedCsv", "paySplit", "settleSplit", "settleAllSplitsForRecipient", "deleteSplit", "createAccount", "updateAccount", "deleteAccount", "previewAccountPortfolioLots", "closeAccount", "mergeAccounts", "previewAccountMerge", "setAccountOpeningBalance", "reconcileAccount", "setAccountStatementBalance", "bulkRetagPortfolioTransactions", "getPortfolioSummary", "createCategoryNode", "updateCategoryNode", "deleteCategoryNode", "mergeCategoryNode", "deleteRecipient", "mergeRecipient", "unmergeRecipient", "getRecipientPatterns", "createRecipientPattern", "previewRecipientPattern", "updateRecipientPattern", "deleteRecipientPattern", "getMonthlySummary", "getAverageVsCurrent", "getBankBalances", "getNetWorth", "getCashflowForecastMethods", "getCashflowForecastRolling", "getCashflowForecastAccuracy", "getTransactionCount", "getCategories", "getCategoryPivot", "getRecipientInsights", "getRecipientByYear", "getSankey", "getInsightsDigest", "dismissInsight", "getSavedCharts", "createSavedChart", "updateSavedChart", "deleteSavedChart", "getRecipientPivot", "getTagPivot", "computeBelgianTax", "getBelgianTaxOverview", "saveSettings", "getBelgianTaxDashboard", "getDeductionCandidates", "getInvestments", "createInvestment", "updateInvestment", "deleteInvestment", "getInvestment", "getInvestmentTransactions", "createInvestmentTransaction", "updatePortfolioTransaction", "deletePortfolioTransaction", "getPortfolioPerformance", "getPortfolioPerformanceByBroker", "getPortfolioExposure", "upsertPortfolioExposureSources", "refreshInvestmentPrices", "listInvestmentProviders", "getInvestmentPriceHistory", "getInvestmentSummary", "marketQuote", "marketNews", "marketChart", "computeRebalance", "computeCommitmentAwareCash", "getBulkPortfolioTransactions"]
 }
 
 extension OpenAPIOperations {
@@ -2750,9 +2750,15 @@ extension OpenAPIOperations {
         /// Target currency (3-letter code; `target_currency` is an alias). A malformed code falls back
         /// to EUR. A repeated key returns 400.
         public var currency: String?
+        /// Optional scope. true (default) retains active-only summaries/totals and the existing cache.
+        /// false includes all holdings canonically plus an inactive-only archivedPresentation matching
+        /// the existing web archive. Only literal true/false accepted; repeated keys return 400. Scope
+        /// and currency have separate cache entries.
+        public var active: Bool?
 
-        public init(currency: String? = nil) {
+        public init(currency: String? = nil, active: Bool? = nil) {
             self.currency = currency
+            self.active = active
         }
 
         public var path: String { "/api/info/portfolio-summary" }
@@ -2760,6 +2766,7 @@ extension OpenAPIOperations {
         public var queryItems: [URLQueryItem] {
             var items: [URLQueryItem] = []
             if let currency { items.append(URLQueryItem(name: "currency", value: APIQuery.value(currency))) }
+            if let active { items.append(URLQueryItem(name: "active", value: APIQuery.value(active))) }
             return items
         }
     }
@@ -4079,6 +4086,857 @@ extension OpenAPIOperations {
                     }
                 }
             }
+        }
+    }
+
+    /// GET /api/investments: List investments
+    public struct GetInvestments: APIOperation {
+        public typealias Response = OpenAPI.InvestmentList
+        public static let operationId = "getInvestments"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/investments"
+
+        /// Filter one exact asset class.
+        public var assetClass: String?
+        /// true restricts to active investments; false returns active and inactive investments.
+        public var active: Bool?
+        /// Lenient pagination parser defaults invalid limits and clamps at 1000.
+        public var limit: Int?
+        public var offset: Int?
+
+        public init(assetClass: String? = nil, active: Bool? = nil, limit: Int? = nil, offset: Int? = nil) {
+            self.assetClass = assetClass
+            self.active = active
+            self.limit = limit
+            self.offset = offset
+        }
+
+        public var path: String { "/api/investments" }
+
+        public var queryItems: [URLQueryItem] {
+            var items: [URLQueryItem] = []
+            if let assetClass { items.append(URLQueryItem(name: "asset_class", value: APIQuery.value(assetClass))) }
+            if let active { items.append(URLQueryItem(name: "active", value: APIQuery.value(active))) }
+            if let limit { items.append(URLQueryItem(name: "limit", value: APIQuery.value(limit))) }
+            if let offset { items.append(URLQueryItem(name: "offset", value: APIQuery.value(offset))) }
+            return items
+        }
+    }
+
+    /// POST /api/investments: Create an investment
+    public struct CreateInvestment: APIOperation {
+        public typealias Response = OpenAPI.Investment
+        public static let operationId = "createInvestment"
+        public static let method = HTTPMethod.post
+        public static let pathTemplate = "/api/investments"
+
+        public var body: OpenAPI.InvestmentCreateRequest
+
+        public init(body: OpenAPI.InvestmentCreateRequest) {
+            self.body = body
+        }
+
+        public var path: String { "/api/investments" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+    }
+
+    /// PATCH /api/investments/{id}: Update investment
+    public struct UpdateInvestment: APIOperation {
+        public typealias Response = OpenAPI.Investment
+        public static let operationId = "updateInvestment"
+        public static let method = HTTPMethod.patch
+        public static let pathTemplate = "/api/investments/{id}"
+
+        public var id: Int
+        public var body: OpenAPI.InvestmentUpdateRequest
+
+        public init(id: Int, body: OpenAPI.InvestmentUpdateRequest) {
+            self.id = id
+            self.body = body
+        }
+
+        public var path: String { "/api/investments/\(APIPath.segment(APIQuery.value(id)))" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+    }
+
+    /// DELETE /api/investments/{id}: Delete investment
+    public struct DeleteInvestment: APIOperation {
+        public typealias Response = APIEmpty
+        public static let operationId = "deleteInvestment"
+        public static let method = HTTPMethod.delete
+        public static let pathTemplate = "/api/investments/{id}"
+
+        public var id: Int
+
+        public init(id: Int) {
+            self.id = id
+        }
+
+        public var path: String { "/api/investments/\(APIPath.segment(APIQuery.value(id)))" }
+    }
+
+    /// GET /api/investments/{id}: Get investment
+    public struct GetInvestment: APIOperation {
+        public typealias Response = OpenAPI.Investment
+        public static let operationId = "getInvestment"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/investments/{id}"
+
+        public var id: Int
+
+        public init(id: Int) {
+            self.id = id
+        }
+
+        public var path: String { "/api/investments/\(APIPath.segment(APIQuery.value(id)))" }
+    }
+
+    /// GET /api/investments/{id}/transactions: List transactions for investment
+    public struct GetInvestmentTransactions: APIOperation {
+        public typealias Response = OpenAPI.PortfolioTransactionList
+        public static let operationId = "getInvestmentTransactions"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/investments/{id}/transactions"
+
+        public var id: Int
+        public var limit: Int?
+        public var offset: Int?
+
+        public init(id: Int, limit: Int? = nil, offset: Int? = nil) {
+            self.id = id
+            self.limit = limit
+            self.offset = offset
+        }
+
+        public var path: String { "/api/investments/\(APIPath.segment(APIQuery.value(id)))/transactions" }
+
+        public var queryItems: [URLQueryItem] {
+            var items: [URLQueryItem] = []
+            if let limit { items.append(URLQueryItem(name: "limit", value: APIQuery.value(limit))) }
+            if let offset { items.append(URLQueryItem(name: "offset", value: APIQuery.value(offset))) }
+            return items
+        }
+    }
+
+    /// POST /api/investments/{id}/transactions: Create transaction for investment
+    public struct CreateInvestmentTransaction: APIOperation {
+        public typealias Response = OpenAPI.PortfolioTransaction
+        public static let operationId = "createInvestmentTransaction"
+        public static let method = HTTPMethod.post
+        public static let pathTemplate = "/api/investments/{id}/transactions"
+
+        public var id: Int
+        public var body: Body
+
+        public init(id: Int, body: Body) {
+            self.id = id
+            self.body = body
+        }
+
+        public var path: String { "/api/investments/\(APIPath.segment(APIQuery.value(id)))/transactions" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+
+        public struct Body: Codable, Equatable, Sendable {
+            public let type: OpenAPI.PortfolioTxnType
+            public let date: String
+            public let amount: Decimal?
+            public let units: Decimal?
+            public let pricePerUnit: Decimal?
+            public let fees: Decimal?
+            public let taxes: Decimal?
+            /// Only meaningful for dividend transactions
+            public let dividendAmountConvention: String?
+            public let currency: String?
+            public let note: String?
+            public let isRecurring: Bool?
+            public let recurrenceInterval: RecurrenceInterval?
+            public let recurrenceEndDate: String?
+            /// Explicit EUR conversion rate; absent/null is resolved automatically
+            public let fxRateToEur: Decimal?
+            /// Owning account for the lot (ADR-091); absent or null leaves it unassigned. Accepted and
+            /// applied by this operation all along — it was simply undocumented.
+            public let accountId: Int?
+
+            public init(type: OpenAPI.PortfolioTxnType, date: String, amount: Decimal? = nil, units: Decimal? = nil, pricePerUnit: Decimal? = nil, fees: Decimal? = nil, taxes: Decimal? = nil, dividendAmountConvention: String? = nil, currency: String? = nil, note: String? = nil, isRecurring: Bool? = nil, recurrenceInterval: RecurrenceInterval? = nil, recurrenceEndDate: String? = nil, fxRateToEur: Decimal? = nil, accountId: Int? = nil) {
+                self.type = type
+                self.date = date
+                self.amount = amount
+                self.units = units
+                self.pricePerUnit = pricePerUnit
+                self.fees = fees
+                self.taxes = taxes
+                self.dividendAmountConvention = dividendAmountConvention
+                self.currency = currency
+                self.note = note
+                self.isRecurring = isRecurring
+                self.recurrenceInterval = recurrenceInterval
+                self.recurrenceEndDate = recurrenceEndDate
+                self.fxRateToEur = fxRateToEur
+                self.accountId = accountId
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case type = "type"
+                case date = "date"
+                case amount = "amount"
+                case units = "units"
+                case pricePerUnit = "price_per_unit"
+                case fees = "fees"
+                case taxes = "taxes"
+                case dividendAmountConvention = "dividend_amount_convention"
+                case currency = "currency"
+                case note = "note"
+                case isRecurring = "is_recurring"
+                case recurrenceInterval = "recurrence_interval"
+                case recurrenceEndDate = "recurrence_end_date"
+                case fxRateToEur = "fx_rate_to_eur"
+                case accountId = "account_id"
+            }
+
+            public struct RecurrenceInterval: Codable, Equatable, Sendable {
+                public init() {
+                }
+            }
+        }
+    }
+
+    /// PATCH /api/investments/transactions/{txnId}: Update portfolio transaction
+    public struct UpdatePortfolioTransaction: APIOperation {
+        public typealias Response = OpenAPI.PortfolioTransaction
+        public static let operationId = "updatePortfolioTransaction"
+        public static let method = HTTPMethod.patch
+        public static let pathTemplate = "/api/investments/transactions/{txnId}"
+
+        public var txnId: Int
+        public var body: Body
+
+        public init(txnId: Int, body: Body) {
+            self.txnId = txnId
+            self.body = body
+        }
+
+        public var path: String { "/api/investments/transactions/\(APIPath.segment(APIQuery.value(txnId)))" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+
+        public struct Body: Codable, Equatable, Sendable {
+            public let type: OpenAPI.PortfolioTxnType?
+            public let date: String?
+            public let amount: Decimal?
+            public let units: Decimal?
+            public let pricePerUnit: Decimal?
+            public let fees: Decimal?
+            public let taxes: Decimal?
+            /// Only meaningful for dividend transactions
+            public let dividendAmountConvention: String?
+            public let currency: String?
+            /// Explicit EUR conversion rate; null clears it
+            public let fxRateToEur: Decimal?
+            /// Owning account for the lot (ADR-091); null = unassigned
+            public let accountId: Int?
+            /// Free-text note; null clears it
+            public let note: String?
+            public let isRecurring: Bool?
+            public let recurrenceInterval: RecurrenceInterval?
+            public let recurrenceEndDate: String?
+
+            public init(type: OpenAPI.PortfolioTxnType? = nil, date: String? = nil, amount: Decimal? = nil, units: Decimal? = nil, pricePerUnit: Decimal? = nil, fees: Decimal? = nil, taxes: Decimal? = nil, dividendAmountConvention: String? = nil, currency: String? = nil, fxRateToEur: Decimal? = nil, accountId: Int? = nil, note: String? = nil, isRecurring: Bool? = nil, recurrenceInterval: RecurrenceInterval? = nil, recurrenceEndDate: String? = nil) {
+                self.type = type
+                self.date = date
+                self.amount = amount
+                self.units = units
+                self.pricePerUnit = pricePerUnit
+                self.fees = fees
+                self.taxes = taxes
+                self.dividendAmountConvention = dividendAmountConvention
+                self.currency = currency
+                self.fxRateToEur = fxRateToEur
+                self.accountId = accountId
+                self.note = note
+                self.isRecurring = isRecurring
+                self.recurrenceInterval = recurrenceInterval
+                self.recurrenceEndDate = recurrenceEndDate
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case type = "type"
+                case date = "date"
+                case amount = "amount"
+                case units = "units"
+                case pricePerUnit = "price_per_unit"
+                case fees = "fees"
+                case taxes = "taxes"
+                case dividendAmountConvention = "dividend_amount_convention"
+                case currency = "currency"
+                case fxRateToEur = "fx_rate_to_eur"
+                case accountId = "account_id"
+                case note = "note"
+                case isRecurring = "is_recurring"
+                case recurrenceInterval = "recurrence_interval"
+                case recurrenceEndDate = "recurrence_end_date"
+            }
+
+            public struct RecurrenceInterval: Codable, Equatable, Sendable {
+                public init() {
+                }
+            }
+        }
+    }
+
+    /// DELETE /api/investments/transactions/{txnId}: Delete portfolio transaction
+    public struct DeletePortfolioTransaction: APIOperation {
+        public typealias Response = APIEmpty
+        public static let operationId = "deletePortfolioTransaction"
+        public static let method = HTTPMethod.delete
+        public static let pathTemplate = "/api/investments/transactions/{txnId}"
+
+        public var txnId: Int
+
+        public init(txnId: Int) {
+            self.txnId = txnId
+        }
+
+        public var path: String { "/api/investments/transactions/\(APIPath.segment(APIQuery.value(txnId)))" }
+    }
+
+    /// GET /api/info/portfolio-performance: Get portfolio performance snapshots
+    public struct GetPortfolioPerformance: APIOperation {
+        public typealias Response = JSONValue
+        public static let operationId = "getPortfolioPerformance"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/info/portfolio-performance"
+
+        /// Target currency (3-letter code; `target_currency` is an alias). A malformed code falls back
+        /// to EUR. A repeated key returns 400.
+        public var currency: String?
+        /// Chart window. Absent or empty means `all`. An unknown value or a repeated key returns 400.
+        public var period: String?
+
+        public init(currency: String? = nil, period: String? = nil) {
+            self.currency = currency
+            self.period = period
+        }
+
+        public var path: String { "/api/info/portfolio-performance" }
+
+        public var queryItems: [URLQueryItem] {
+            var items: [URLQueryItem] = []
+            if let currency { items.append(URLQueryItem(name: "currency", value: APIQuery.value(currency))) }
+            if let period { items.append(URLQueryItem(name: "period", value: APIQuery.value(period))) }
+            return items
+        }
+    }
+
+    /// GET /api/info/portfolio-performance/by-broker: Get forward-only per-broker portfolio snapshots
+    public struct GetPortfolioPerformanceByBroker: APIOperation {
+        public typealias Response = JSONValue
+        public static let operationId = "getPortfolioPerformanceByBroker"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/info/portfolio-performance/by-broker"
+
+        /// Target currency (3-letter code; `target_currency` is an alias). A malformed code falls back
+        /// to EUR. A repeated key returns 400.
+        public var currency: String?
+        /// Calendar date; defaults to 2000-01-01 when absent or empty. Any other non-date value returns
+        /// 400.
+        public var from: String?
+        /// Calendar date; defaults to today when absent or empty. Any other non-date value returns 400.
+        public var to: String?
+
+        public init(currency: String? = nil, from: String? = nil, to: String? = nil) {
+            self.currency = currency
+            self.from = from
+            self.to = to
+        }
+
+        public var path: String { "/api/info/portfolio-performance/by-broker" }
+
+        public var queryItems: [URLQueryItem] {
+            var items: [URLQueryItem] = []
+            if let currency { items.append(URLQueryItem(name: "currency", value: APIQuery.value(currency))) }
+            if let from { items.append(URLQueryItem(name: "from", value: APIQuery.value(from))) }
+            if let to { items.append(URLQueryItem(name: "to", value: APIQuery.value(to))) }
+            return items
+        }
+    }
+
+    /// GET /api/investments/exposure: Aggregate direct and supported fund holdings by issuer, sector,
+    /// and issuer country
+    public struct GetPortfolioExposure: APIOperation {
+        public typealias Response = OpenAPI.PortfolioExposure
+        public static let operationId = "getPortfolioExposure"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/investments/exposure"
+
+        public var currency: String?
+
+        public init(currency: String? = nil) {
+            self.currency = currency
+        }
+
+        public var path: String { "/api/investments/exposure" }
+
+        public var queryItems: [URLQueryItem] {
+            var items: [URLQueryItem] = []
+            if let currency { items.append(URLQueryItem(name: "currency", value: APIQuery.value(currency))) }
+            return items
+        }
+    }
+
+    /// PUT /api/investments/exposure/sources: Add or update explicit portfolio classifications and
+    /// fund-holdings documents
+    public struct UpsertPortfolioExposureSources: APIOperation {
+        public typealias Response = JSONValue
+        public static let operationId = "upsertPortfolioExposureSources"
+        public static let method = HTTPMethod.put
+        public static let pathTemplate = "/api/investments/exposure/sources"
+
+        public var body: OpenAPI.PortfolioExposureBundle
+
+        public init(body: OpenAPI.PortfolioExposureBundle) {
+            self.body = body
+        }
+
+        public var path: String { "/api/investments/exposure/sources" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+    }
+
+    /// POST /api/investments/refresh-prices: Refresh current prices for all investments
+    public struct RefreshInvestmentPrices: APIOperation {
+        public typealias Response = JSONValue
+        public static let operationId = "refreshInvestmentPrices"
+        public static let method = HTTPMethod.post
+        public static let pathTemplate = "/api/investments/refresh-prices"
+
+        public init() {}
+
+        public var path: String { "/api/investments/refresh-prices" }
+    }
+
+    /// GET /api/investments/providers: List supported price providers
+    public struct ListInvestmentProviders: APIOperation {
+        public typealias Response = JSONValue
+        public static let operationId = "listInvestmentProviders"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/investments/providers"
+
+        public init() {}
+
+        public var path: String { "/api/investments/providers" }
+    }
+
+    /// GET /api/investments/{id}/price-history: Get price history for investment
+    public struct GetInvestmentPriceHistory: APIOperation {
+        public typealias Response = JSONValue
+        public static let operationId = "getInvestmentPriceHistory"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/investments/{id}/price-history"
+
+        public var id: Int
+        public var startDate: String?
+        public var endDate: String?
+
+        public init(id: Int, startDate: String? = nil, endDate: String? = nil) {
+            self.id = id
+            self.startDate = startDate
+            self.endDate = endDate
+        }
+
+        public var path: String { "/api/investments/\(APIPath.segment(APIQuery.value(id)))/price-history" }
+
+        public var queryItems: [URLQueryItem] {
+            var items: [URLQueryItem] = []
+            if let startDate { items.append(URLQueryItem(name: "start_date", value: APIQuery.value(startDate))) }
+            if let endDate { items.append(URLQueryItem(name: "end_date", value: APIQuery.value(endDate))) }
+            return items
+        }
+    }
+
+    /// GET /api/investments/{id}/summary: Get investment summary (current value, P&L, units)
+    public struct GetInvestmentSummary: APIOperation {
+        public typealias Response = JSONValue
+        public static let operationId = "getInvestmentSummary"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/investments/{id}/summary"
+
+        public var id: Int
+        public var currency: String?
+
+        public init(id: Int, currency: String? = nil) {
+            self.id = id
+            self.currency = currency
+        }
+
+        public var path: String { "/api/investments/\(APIPath.segment(APIQuery.value(id)))/summary" }
+
+        public var queryItems: [URLQueryItem] {
+            var items: [URLQueryItem] = []
+            if let currency { items.append(URLQueryItem(name: "currency", value: APIQuery.value(currency))) }
+            return items
+        }
+    }
+
+    /// GET /api/market/quote: Get real-time quotes for one or more symbols
+    public struct MarketQuote: APIOperation {
+        public typealias Response = ResponseData
+        public static let operationId = "marketQuote"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/market/quote"
+
+        /// Comma-separated list of symbols (e.g. `AAPL,MSFT`). A repeated key is joined with commas.
+        public var symbols: String
+        /// `basic` returns price fields only; any other single value (default full) also fetches
+        /// fundamentals/analyst data. A repeated key returns 400.
+        public var detail: String?
+
+        public init(symbols: String, detail: String? = nil) {
+            self.symbols = symbols
+            self.detail = detail
+        }
+
+        public var path: String { "/api/market/quote" }
+
+        public var queryItems: [URLQueryItem] {
+            var items: [URLQueryItem] = []
+            items.append(URLQueryItem(name: "symbols", value: APIQuery.value(symbols)))
+            if let detail { items.append(URLQueryItem(name: "detail", value: APIQuery.value(detail))) }
+            return items
+        }
+
+        public struct ResponseData: Codable, Equatable, Sendable {
+            public let items: [JSONValue]
+            public let total: Int
+
+            public init(items: [JSONValue], total: Int) {
+                self.items = items
+                self.total = total
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case items = "items"
+                case total = "total"
+            }
+        }
+    }
+
+    /// GET /api/market/news: Get news for symbol
+    public struct MarketNews: APIOperation {
+        public typealias Response = ResponseData
+        public static let operationId = "marketNews"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/market/news"
+
+        /// Comma-separated symbols; the first 10 are used. Defaults to `SPY,QQQ,DIA`. A repeated key is
+        /// joined with commas.
+        public var symbols: String?
+        /// Articles per symbol (max 50). A non-numeric value falls back to 20. A repeated key returns
+        /// 400.
+        public var count: Int?
+
+        public init(symbols: String? = nil, count: Int? = nil) {
+            self.symbols = symbols
+            self.count = count
+        }
+
+        public var path: String { "/api/market/news" }
+
+        public var queryItems: [URLQueryItem] {
+            var items: [URLQueryItem] = []
+            if let symbols { items.append(URLQueryItem(name: "symbols", value: APIQuery.value(symbols))) }
+            if let count { items.append(URLQueryItem(name: "count", value: APIQuery.value(count))) }
+            return items
+        }
+
+        public struct ResponseData: Codable, Equatable, Sendable {
+            public let items: [JSONValue]
+            public let total: Int
+
+            public init(items: [JSONValue], total: Int) {
+                self.items = items
+                self.total = total
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case items = "items"
+                case total = "total"
+            }
+        }
+    }
+
+    /// GET /api/market/chart: Get historical chart data for symbol
+    public struct MarketChart: APIOperation {
+        public typealias Response = ResponseData
+        public static let operationId = "marketChart"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/market/chart"
+
+        public var symbol: String
+        /// Lookback window. An unknown value falls back to `1mo`.
+        public var range: String?
+        public var interval: String?
+
+        public init(symbol: String, range: String? = nil, interval: String? = nil) {
+            self.symbol = symbol
+            self.range = range
+            self.interval = interval
+        }
+
+        public var path: String { "/api/market/chart" }
+
+        public var queryItems: [URLQueryItem] {
+            var items: [URLQueryItem] = []
+            items.append(URLQueryItem(name: "symbol", value: APIQuery.value(symbol)))
+            if let range { items.append(URLQueryItem(name: "range", value: APIQuery.value(range))) }
+            if let interval { items.append(URLQueryItem(name: "interval", value: APIQuery.value(interval))) }
+            return items
+        }
+
+        public struct ResponseData: Codable, Equatable, Sendable {
+            public let symbol: String?
+            public let currency: String?
+            public let items: [ItemsItem]
+            public let total: Int
+
+            public init(symbol: String? = nil, currency: String? = nil, items: [ItemsItem], total: Int) {
+                self.symbol = symbol
+                self.currency = currency
+                self.items = items
+                self.total = total
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case symbol = "symbol"
+                case currency = "currency"
+                case items = "items"
+                case total = "total"
+            }
+
+            public struct ItemsItem: Codable, Equatable, Sendable {
+                public let time: Decimal?
+                public let close: Decimal?
+                public let high: Decimal?
+                public let low: Decimal?
+                public let volume: Decimal?
+
+                public init(time: Decimal? = nil, close: Decimal? = nil, high: Decimal? = nil, low: Decimal? = nil, volume: Decimal? = nil) {
+                    self.time = time
+                    self.close = close
+                    self.high = high
+                    self.low = low
+                    self.volume = volume
+                }
+
+                enum CodingKeys: String, CodingKey {
+                    case time = "time"
+                    case close = "close"
+                    case high = "high"
+                    case low = "low"
+                    case volume = "volume"
+                }
+            }
+        }
+    }
+
+    /// POST /api/cross-workspace/rebalance: Cash-aware rebalancing plan (ADR-098)
+    public struct ComputeRebalance: APIOperation {
+        public typealias Response = JSONValue
+        public static let operationId = "computeRebalance"
+        public static let method = HTTPMethod.post
+        public static let pathTemplate = "/api/cross-workspace/rebalance"
+
+        public var body: Body
+
+        public init(body: Body) {
+            self.body = body
+        }
+
+        public var path: String { "/api/cross-workspace/rebalance" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+
+        public struct Body: Codable, Equatable, Sendable {
+            public let currency: String?
+            public let model: String?
+            public let targetWeights: [String: Decimal]?
+            /// Optional cash cap. A non-numeric value is ignored.
+            public let availableCash: Decimal?
+
+            public init(currency: String? = nil, model: String? = nil, targetWeights: [String: Decimal]? = nil, availableCash: Decimal? = nil) {
+                self.currency = currency
+                self.model = model
+                self.targetWeights = targetWeights
+                self.availableCash = availableCash
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case currency = "currency"
+                case model = "model"
+                case targetWeights = "targetWeights"
+                case availableCash = "availableCash"
+            }
+        }
+    }
+
+    /// POST /api/cross-workspace/commitment-aware-cash: Estimate a 90-day candidate cash cap after
+    /// planned commitments
+    public struct ComputeCommitmentAwareCash: APIOperation {
+        public typealias Response = ResponseData
+        public static let operationId = "computeCommitmentAwareCash"
+        public static let method = HTTPMethod.post
+        public static let pathTemplate = "/api/cross-workspace/commitment-aware-cash"
+
+        public var body: Body
+
+        public init(body: Body) {
+            self.body = body
+        }
+
+        public var path: String { "/api/cross-workspace/commitment-aware-cash" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+
+        public struct ResponseData: Codable, Equatable, Sendable {
+            public let currency: String
+            public let today: String
+            public let horizonEnd: String
+            public let horizonDays: Int
+            public let currentCash: Decimal
+            public let reserveFloor: Decimal
+            public let minimumProjectedBalance: Decimal
+            public let minimumDate: String
+            public let candidateCashCap: Decimal
+            public let occurrenceCount: Int
+            public let assumptions: Assumptions
+
+            public init(currency: String, today: String, horizonEnd: String, horizonDays: Int, currentCash: Decimal, reserveFloor: Decimal, minimumProjectedBalance: Decimal, minimumDate: String, candidateCashCap: Decimal, occurrenceCount: Int, assumptions: Assumptions) {
+                self.currency = currency
+                self.today = today
+                self.horizonEnd = horizonEnd
+                self.horizonDays = horizonDays
+                self.currentCash = currentCash
+                self.reserveFloor = reserveFloor
+                self.minimumProjectedBalance = minimumProjectedBalance
+                self.minimumDate = minimumDate
+                self.candidateCashCap = candidateCashCap
+                self.occurrenceCount = occurrenceCount
+                self.assumptions = assumptions
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case currency = "currency"
+                case today = "today"
+                case horizonEnd = "horizonEnd"
+                case horizonDays = "horizonDays"
+                case currentCash = "currentCash"
+                case reserveFloor = "reserveFloor"
+                case minimumProjectedBalance = "minimumProjectedBalance"
+                case minimumDate = "minimumDate"
+                case candidateCashCap = "candidateCashCap"
+                case occurrenceCount = "occurrenceCount"
+                case assumptions = "assumptions"
+            }
+
+            public struct Assumptions: Codable, Equatable, Sendable {
+                public let plannedOnly: Bool
+                public let excludesStatisticalForecast: Bool
+                public let excludesFutureIncome: Bool
+                public let excludesUnplannedExpenses: Bool
+                public let currencyConversionAtRecentRates: Bool
+
+                public init(plannedOnly: Bool, excludesStatisticalForecast: Bool, excludesFutureIncome: Bool, excludesUnplannedExpenses: Bool, currencyConversionAtRecentRates: Bool) {
+                    self.plannedOnly = plannedOnly
+                    self.excludesStatisticalForecast = excludesStatisticalForecast
+                    self.excludesFutureIncome = excludesFutureIncome
+                    self.excludesUnplannedExpenses = excludesUnplannedExpenses
+                    self.currencyConversionAtRecentRates = currencyConversionAtRecentRates
+                }
+
+                enum CodingKeys: String, CodingKey {
+                    case plannedOnly = "plannedOnly"
+                    case excludesStatisticalForecast = "excludesStatisticalForecast"
+                    case excludesFutureIncome = "excludesFutureIncome"
+                    case excludesUnplannedExpenses = "excludesUnplannedExpenses"
+                    case currencyConversionAtRecentRates = "currencyConversionAtRecentRates"
+                }
+            }
+        }
+
+        public struct Body: Codable, Equatable, Sendable {
+            public let currency: String?
+            public let reserveFloor: Decimal?
+
+            public init(currency: String? = nil, reserveFloor: Decimal? = nil) {
+                self.currency = currency
+                self.reserveFloor = reserveFloor
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case currency = "currency"
+                case reserveFloor = "reserveFloor"
+            }
+        }
+    }
+
+    /// GET /api/investments/transactions: List portfolio transactions across all investments
+    public struct GetBulkPortfolioTransactions: APIOperation {
+        public typealias Response = OpenAPI.PortfolioTransactionList
+        public static let operationId = "getBulkPortfolioTransactions"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/investments/transactions"
+
+        /// Comma-separated investment ids (`1,2,3`), the shape the frontend's `ids.join(',')` builder
+        /// emits. Every element must be a positive int32; one malformed element rejects the whole
+        /// request. Repeated occurrences are also accepted by the route; generated clients use the
+        /// comma-joined string.
+        public var investmentIds: String
+        /// Optional exact ordinary transaction type filter.
+        public var type: String?
+        /// Maximum newest rows per investment. Defaults invalid/non-positive values to 1000 and clamps
+        /// values over 5000; native editing uses 1000, matching the web bulk loader.
+        public var perInvestmentLimit: Int?
+        /// Optional global cap after per-investment ranking. Omit or leave empty for no global cap.
+        /// Invalid/non-positive explicit values default to 1; positive values clamp at 200000.
+        public var limit: Int?
+        /// Global offset after ranking and descending date/id order. Invalid/negative values fall back
+        /// to zero.
+        public var offset: Int?
+
+        public init(investmentIds: String, type: String? = nil, perInvestmentLimit: Int? = nil, limit: Int? = nil, offset: Int? = nil) {
+            self.investmentIds = investmentIds
+            self.type = type
+            self.perInvestmentLimit = perInvestmentLimit
+            self.limit = limit
+            self.offset = offset
+        }
+
+        public var path: String { "/api/investments/transactions" }
+
+        public var queryItems: [URLQueryItem] {
+            var items: [URLQueryItem] = []
+            items.append(URLQueryItem(name: "investment_ids", value: APIQuery.value(investmentIds)))
+            if let type { items.append(URLQueryItem(name: "type", value: APIQuery.value(type))) }
+            if let perInvestmentLimit { items.append(URLQueryItem(name: "per_investment_limit", value: APIQuery.value(perInvestmentLimit))) }
+            if let limit { items.append(URLQueryItem(name: "limit", value: APIQuery.value(limit))) }
+            if let offset { items.append(URLQueryItem(name: "offset", value: APIQuery.value(offset))) }
+            return items
         }
     }
 }

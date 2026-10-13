@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import VisionNativeCore
 
 /// A rates service that answers from a script and counts calls.
@@ -56,7 +57,7 @@ final class ShellRecorder {
 @Suite struct NativeShellModelTests {
     func makeModel(
         settings: NativeAppSettings = NativeAppSettings(adminMode: true), recorder: ShellRecorder,
-        hidden: [NavSectionID: Bool]? = nil
+        hidden: [NavSectionID: Bool]? = nil, portfolio: PortfolioScreens? = nil
     ) -> NativeShellModel {
         NativeShellModel(
             strings: DictionaryStrings(language: .en, table: [:]),
@@ -67,6 +68,7 @@ final class ShellRecorder {
             transactions: TransactionsFixture.idleModel(),
             accounts: AccountsFixture.idleModel(),
             categories: CategoriesFixture.idleModel(), recipients: RecipientsFixture.idleModel(),
+            portfolio: portfolio,
             hiddenSections: hidden,
             loadSettings: { settings },
             saveHiddenSections: { recorder.saved.append($0) },
@@ -110,6 +112,28 @@ final class ShellRecorder {
         #expect(!model.isPresentingWeb)
         #expect(model.route.value("year") == "2024")
         #expect(NativeScreen.screen(forPath: "/tax") == .tax)
+    }
+
+    @Test(arguments: [
+        "/portfolio", "/portfolio/stocks", "/portfolio/crypto", "/portfolio/metals", "/portfolio/real-estate",
+        "/portfolio/savings",
+    ])
+    func portfolioReportPreservesItsOriginAndQueryAndReturnsToNative(path: String) async throws {
+        let recorder = ShellRecorder()
+        let screens = PortfolioScreens(client: APIClient(baseURL: { nil }, adminToken: { nil }))
+        let model = makeModel(recorder: recorder, portfolio: screens)
+        let original = try #require(NativeRoute(path + "?period=1y&fx_neutral=true"))
+        model.routeDidChange(original)
+        await model.settingsSettled()
+        #expect(model.detail == .native(try #require(NativeScreen.screen(forPath: path))))
+        model.openPortfolioReport()
+        #expect(recorder.actions.last == .replaceRoute(original.setting("export", to: "pdf").string))
+        model.routeDidChange(original.setting("export", to: "pdf"))
+        #expect(model.detail == .web)
+        model.routeDidChange(original)
+        #expect(!model.isPresentingWeb)
+        #expect(model.detail == .native(try #require(NativeScreen.screen(forPath: path))))
+        #expect(model.route.value("period") == "1y" && model.route.value("fx_neutral") == "true")
     }
 
     @Test func theExchangeRatesScreenIsNativeOnlyInAdminMode() async throws {
@@ -193,7 +217,9 @@ final class ShellRecorder {
         model.replaceQuery("tab", with: ExchangeRatesTab.fallback.rawValue)
         #expect(ExchangeRatesTab(route: model.route) == .fallback)
         #expect(recorder.actions == [.replaceRoute("/admin/exchange-rates?tab=fallback")])
-        #expect(ExchangeRatesTab(route: NativeRoute(path: "/x", query: [URLQueryItem(name: "tab", value: "bogus")])) == .live)
+        #expect(
+            ExchangeRatesTab(route: NativeRoute(path: "/x", query: [URLQueryItem(name: "tab", value: "bogus")]))
+                == .live)
     }
 
     @Test func pageDialogsShowTheWebViewUntilTheRouteMoves() async throws {

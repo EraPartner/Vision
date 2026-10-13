@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
-import { screen, within, waitFor } from "@testing-library/react";
+import { screen, within, waitFor, act } from "@testing-library/react";
+import { useLocation } from "react-router";
 import userEvent from "@testing-library/user-event";
 import { http } from "msw";
 import { toast } from "sonner";
@@ -31,6 +32,28 @@ import type { InvestmentSummary } from "@/types/portfolio";
 import { accountListItem, accountsBody } from "@/test/msw/rowFixtures";
 
 const API_BASE = "http://localhost:3002";
+
+function LocationProbe() {
+    const location = useLocation();
+    return (
+        <output data-testid="handoff-location">
+            {location.pathname}
+            {location.search}
+        </output>
+    );
+}
+
+const HANDOFF_PAGES = [
+    { name: "Stocks", path: "/portfolio/stocks", Page: StocksPage },
+    { name: "Crypto", path: "/portfolio/crypto", Page: CryptoPage },
+    { name: "Metals", path: "/portfolio/metals", Page: MetalsPage },
+    {
+        name: "Real estate",
+        path: "/portfolio/real-estate",
+        Page: RealEstatePage,
+    },
+    { name: "Savings", path: "/portfolio/savings", Page: SavingsPage },
+];
 
 const PORTFOLIO_INVESTMENT: InvestmentSummary = {
     id: 1,
@@ -64,6 +87,103 @@ const PORTFOLIO_INVESTMENT: InvestmentSummary = {
 };
 
 describe("Portfolio pages (integration)", () => {
+    it.each(HANDOFF_PAGES)(
+        "$name opens its native PDF handoff and retains the asset route/query when closing",
+        async ({ Page, path }) => {
+            const user = userEvent.setup();
+            renderWithApp(
+                <>
+                    <Page />
+                    <LocationProbe />
+                </>,
+                {
+                    initialEntries: [
+                        `${path}?period=1y&fx_neutral=true&source=native&export=pdf`,
+                    ],
+                },
+            );
+            const dialog = await screen.findByRole("dialog");
+            expect(
+                within(dialog).getByRole("heading", {
+                    name: /export pdf report/i,
+                }),
+            ).toBeInTheDocument();
+            await user.click(
+                within(dialog).getByRole("button", { name: /^cancel$/i }),
+            );
+            await waitFor(() => {
+                expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+                expect(
+                    screen.getByTestId("handoff-location"),
+                ).toHaveTextContent(
+                    `${path}?period=1y&fx_neutral=true&source=native`,
+                );
+            });
+        },
+    );
+    it.each(HANDOFF_PAGES)(
+        "$name keeps report configuration while investment loading becomes an error and then succeeds",
+        async ({ Page, path }) => {
+            const user = userEvent.setup();
+            let release!: () => void;
+            const pending = new Promise<void>((resolve) => {
+                release = resolve;
+            });
+            let fail = true;
+            server.use(
+                http.get(`${API_BASE}/api/investments`, async () => {
+                    await pending;
+                    return fail
+                        ? err(500, "Synthetic holdings read failed")
+                        : ok({
+                              items: [],
+                              total: 0,
+                              limit: 500,
+                              offset: 0,
+                              links: [],
+                          });
+                }),
+            );
+            try {
+                const { queryClient } = renderWithApp(<Page />, {
+                    initialEntries: [`${path}?export=pdf`],
+                });
+                const dialog = await screen.findByRole("dialog");
+                await user.click(
+                    within(dialog).getByRole("radio", {
+                        name: "Last 3 months",
+                    }),
+                );
+                release();
+                expect(
+                    await screen.findByText("Synthetic holdings read failed"),
+                ).toBeInTheDocument();
+                expect(
+                    within(screen.getByRole("dialog")).getByRole("radio", {
+                        name: "Last 3 months",
+                    }),
+                ).toBeChecked();
+                fail = false;
+                await act(async () => {
+                    await queryClient.refetchQueries({
+                        queryKey: ["investments"],
+                    });
+                });
+                await waitFor(() =>
+                    expect(
+                        screen.queryByText("Synthetic holdings read failed"),
+                    ).not.toBeInTheDocument(),
+                );
+                expect(
+                    within(screen.getByRole("dialog")).getByRole("radio", {
+                        name: "Last 3 months",
+                    }),
+                ).toBeChecked();
+            } finally {
+                release();
+            }
+        },
+    );
     // ─── StocksPage ───────────────────────────────────────────────────────────
     it("StocksPage renders heading", async () => {
         renderWithApp(<StocksPage />);

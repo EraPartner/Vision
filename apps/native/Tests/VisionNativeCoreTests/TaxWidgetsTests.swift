@@ -56,6 +56,21 @@ struct TaxWidgetsTests {
         #expect(model.error != nil)
     }
 
+    @Test func revivedLegacyPreferencesKeepTheirRawStringConcurrencyToken() async {
+        let value: JSONValue = .object(["budgetTax": .object(["trendStrip": .bool(false)])])
+        let expected: JSONValue = .object([
+            "exists": .bool(true), "value": .string("{\"budgetTax\":{\"trendStrip\":false}}"),
+        ])
+        let service = TaxWidgetFixtureService(value: value, expected: expected)
+        let model = TaxWidgetsModel(service: service)
+        await model.load()
+        #expect(model.isLoaded)
+        #expect(!model.isVisible("trendStrip"))
+        await model.setVisible("incomeBreakdown", false)
+        #expect(await service.writes.first?.expected == expected)
+        #expect(model.error == nil)
+    }
+
     @Test func individualAndBulkEditsPreserveOtherPagesAndFutureKeysAndResetClearsOnlyTaxPage() async {
         let raw: JSONValue = .object([
             "dashboard": .object(["hero": .bool(false)]),
@@ -161,10 +176,11 @@ private actor TaxWidgetFixtureService: TaxWidgetSettingsService {
     private(set) var writes: [Write] = []
     private(set) var readCount = 0
 
-    init(value: JSONValue? = nil) {
+    init(value: JSONValue? = nil, expected: JSONValue? = nil) {
         record = OpenAPI.Setting(
             key: "widget_visibility", value: value ?? .object([:]),
-            expected: value.map { .object(["exists": .bool(true), "value": $0]) } ?? .object(["exists": .bool(false)]))
+            expected: expected ?? value.map { .object(["exists": .bool(true), "value": $0]) }
+                ?? .object(["exists": .bool(false)]))
     }
     func failReads() { readsFail = true }
     func failNextSave() { nextSaveFails = true }

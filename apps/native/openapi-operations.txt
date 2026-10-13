@@ -160,3 +160,27 @@ saveSettings
 getBelgianTaxDashboard
 
 getDeductionCandidates
+
+getInvestments
+createInvestment
+updateInvestment
+deleteInvestment
+getInvestment
+getInvestmentTransactions
+createInvestmentTransaction
+updatePortfolioTransaction
+deletePortfolioTransaction
+getPortfolioPerformance
+getPortfolioPerformanceByBroker
+getPortfolioExposure
+upsertPortfolioExposureSources
+refreshInvestmentPrices
+listInvestmentProviders
+getInvestmentPriceHistory
+getInvestmentSummary
+marketQuote
+marketNews
+marketChart
+computeRebalance
+computeCommitmentAwareCash
+getBulkPortfolioTransactions

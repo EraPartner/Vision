@@ -123,6 +123,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
                 writeLocal: { [weak self] key, value in _ = await self?.homeLocalStorage(key: key, value: value) }),
             statistics: StatisticsScreens(client: client),
             tax: tax,
+            portfolio: PortfolioScreens(client: client),
             hiddenSections: Self.loadHiddenSections(),
             loadSettings: { try await client.appSettings() },
             saveHiddenSections: { Self.saveHiddenSections($0) },

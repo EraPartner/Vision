@@ -10,6 +10,7 @@ import { getPortfolioSummary } from "../../services/portfolio/portfolioSummarySe
 import { rateLimiter } from "../../middleware/rateLimiter.ts";
 import { targetCurrencyQuerySchema } from "./_queryParams.ts";
 import { parseInput } from "../../lib/zodInput.ts";
+import { z } from "zod";
 import {
   portfolioSummaryCache,
   PORTFOLIO_SUMMARY_CACHE_TTL_MS,
@@ -23,14 +24,25 @@ router.get(
   rateLimiter({ windowMs: 60_000, maxRequests: 60 }),
   async (req, res) => {
     const { targetCurrency } = parseInput(targetCurrencyQuerySchema, req.query);
-    const cacheKey = targetCurrency;
+    const { active } = parseInput(
+      z.object({ active: z.enum(["true", "false"]).default("true") }),
+      req.query,
+    );
+    const cacheKey =
+      active === "false" ? `all:${targetCurrency}` : targetCurrency;
 
     const data = await resolveCacheWithInflight(
       portfolioSummaryCache,
       cacheKey,
       {
         ttlMs: PORTFOLIO_SUMMARY_CACHE_TTL_MS,
-        loader: () => getPortfolioSummary(targetCurrency),
+        loader: () =>
+          active === "false"
+            ? getPortfolioSummary(targetCurrency, {
+                activeInvestmentsOnly: false,
+                includeArchivedPresentation: true,
+              })
+            : getPortfolioSummary(targetCurrency),
       },
     );
     res.ok(data);

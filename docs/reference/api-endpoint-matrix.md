@@ -656,6 +656,12 @@ Aggregation routes removed in Phase 9 as migration to `/api/aggregations/*` is c
 | GET    | `/api/info/portfolio-performance/by-broker` | Forward-only daily account partitions with frozen names and an explicit unassigned series; no historical backfill (ADR-143)                                                                                                                                                                           | 30 req/min | [[docs/api/info\|Info]]                           |
 | GET    | `/api/info/portfolio-summary`               | Realtime portfolio totals and active holdings (eight-decimal units; canonical custody/adjustments). ADR-074: transaction-date FX attribution. ADR-108: partitioned `byAccount` P&L with machine-readable assignment identity and oversold repair state; per-investment `fullyAssigned` and `oversold` | 60 req/min | [[docs/api/portfolio-summary\|Portfolio Summary]] |
 
+The additive `active=false` scope on `portfolio-summary` includes all canonical holdings and
+an inactive-only `archivedPresentation` retaining the web's ordinary-history/current-FX display.
+The default active response is unchanged; scope and currency have separate cache entries and
+share mutation invalidation. This adds no operation (304 API operations, Belgian Tax 3,
+overall 331 including health/IPC). See [[docs/api/portfolio-summary|the full contract]].
+
 `portfolio-summary` also returns optional additive `brokerageCashFees` (dated source-owned cash costs,
 `gainAfterFees` and account subtotals). Existing investment totals and return series keep their scope.
 

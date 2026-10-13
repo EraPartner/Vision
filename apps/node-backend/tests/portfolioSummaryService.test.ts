@@ -41,6 +41,7 @@ import { __storeCurrentBrokerSnapshot } from "../src/services/portfolioPerforman
 import { query as rawQuery } from "../src/database/connection.ts";
 import type { PgQueryResult } from "../src/database/connection.ts";
 import { settingsRepository as rawSettingsRepository } from "../src/repositories/settingsRepository.ts";
+import { listLatestStoredRates } from "../src/services/currency/currencyConversionService.ts";
 import {
   getPortfolioSummary,
   getBreakdownSummary,
@@ -102,6 +103,80 @@ describe("getPortfolioSummary", () => {
   beforeEach(() => {
     query.mockReset();
     query.mockResolvedValue({ rows: [] });
+  });
+  it("keeps inactive canonical dated-FX results separate from the requested web archive presentation", async () => {
+    query
+      .mockResolvedValueOnce({
+        rows: [investmentRow({ is_active: false, current_price: 200 })],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          txnRow({ amount: 100, units: 1, fx_rate_to_eur: 0.5, account_id: 7 }),
+        ],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          { currency_code: "USD", rate_date: "2026-01-01", rate_to_eur: "0.5" },
+        ],
+      });
+    vi.mocked(listLatestStoredRates).mockResolvedValueOnce({
+      rows: [
+        {
+          currency_code: "USD",
+          rate_to_eur: "0.9",
+          rate_date: "2026-06-01",
+          fetched_at: "2026-06-01T10:00:00Z",
+        },
+      ] as never,
+    });
+    const response = await getPortfolioSummary("EUR", {
+      activeInvestmentsOnly: false,
+      includeArchivedPresentation: true,
+    });
+    expect(response.summaries[0]?.totalBuyCost).toBe(50);
+    expect(response.archivedPresentation?.[0]?.totalBuyCost).toBe(90);
+    expect(response.archivedPresentation?.[0]?.currentValue).toBe(180);
+    expect(response.archivedPresentation?.[0]?.gainLoss).toBe(90);
+    expect(response.totals.totalPortfolioValue).toBe(180);
+    expect(response.archivedPresentation?.[0]?.assetGain).toBeUndefined();
+    expect(String(query.mock.calls[0]?.[0])).not.toContain(
+      "WHERE i.is_active = true",
+    );
+  });
+
+  it("exposes the earliest active ordinary transaction independently of display periods and creation dates", async () => {
+    query
+      .mockResolvedValueOnce({
+        rows: [investmentRow({ currency: "EUR", created_at: "2026-01-01" })],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          txnRow({
+            currency: "EUR",
+            date: "2025-01-01",
+            type: "buy",
+            amount: 100,
+            units: 1,
+          }),
+          txnRow({
+            currency: "EUR",
+            date: "2024-02-03",
+            type: "fee",
+            amount: 2,
+            units: 0,
+          }),
+          txnRow({
+            currency: "EUR",
+            date: "2023-01-01",
+            investment_id: 999,
+            type: "buy",
+            amount: 100,
+            units: 1,
+          }),
+        ],
+      });
+    const summary = await getPortfolioSummary("EUR");
+    expect(summary.firstInvestmentDate).toBe("2024-02-03");
   });
 
   it.each(["weighted_avg", "fifo", "lifo"])(
