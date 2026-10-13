@@ -60,7 +60,8 @@ final class ShellRecorder {
         hidden: [NavSectionID: Bool]? = nil, portfolio: PortfolioScreens? = nil,
         portfolioImports: PortfolioImportScreens? = nil, tax: TaxScreens? = nil,
         analysis: AnalysisScreens? = nil, analysisMonitors: AnalysisMonitorsModel? = nil,
-        research: ResearchScreens? = nil
+        research: ResearchScreens? = nil, researchForecast: ResearchForecastScreens? = nil,
+        researchChartBuilder: ResearchChartBuilderModel? = nil
     ) -> NativeShellModel {
         NativeShellModel(
             strings: DictionaryStrings(language: .en, table: [:]),
@@ -77,6 +78,8 @@ final class ShellRecorder {
             analysis: analysis,
             analysisMonitors: analysisMonitors,
             research: research,
+            researchForecast: researchForecast,
+            researchChartBuilder: researchChartBuilder,
             hiddenSections: hidden,
             loadSettings: { settings },
             saveHiddenSections: { recorder.saved.append($0) },
@@ -190,12 +193,14 @@ final class ShellRecorder {
 
     @Test(arguments: [
         "/research", "/research/markets", "/research/market", "/research/watchlist", "/research/compare",
+        "/research/forecast", "/research/charts",
     ])
     func researchScreensPreserveDeepLinksWithoutAdminModeAndFallbackWhenOmitted(path: String) async throws {
         let client = APIClient(baseURL: { nil }, adminToken: { nil })
         let model = makeModel(
             settings: NativeAppSettings(adminMode: false), recorder: ShellRecorder(),
-            research: ResearchScreens(client: client))
+            research: ResearchScreens(client: client), researchForecast: ResearchForecastScreens(client: client),
+            researchChartBuilder: ResearchChartBuilderModel(client: client, store: ResearchChartLayoutMemoryStore()))
         let route = try #require(NativeRoute(path + "?symbol=AAPL&symbol=MSFT&tab=analyst&unrelated=keep"))
         model.routeDidChange(route)
         await model.settingsSettled()
@@ -207,6 +212,45 @@ final class ShellRecorder {
         legacy.routeDidChange(route)
         await legacy.settingsSettled()
         #expect(legacy.detail == .web)
+    }
+
+    @Test func coveredForecastRetainsInputsAndActualRouteExitResetsTheVisit() async throws {
+        let screens = ResearchForecastScreens(client: APIClient(baseURL: { nil }))
+        let model = makeModel(recorder: ShellRecorder(), researchForecast: screens)
+        let route = NativeRoute(path: "/research/forecast")
+        model.routeDidChange(route)
+        await model.settingsSettled()
+        await screens.didAppear(route: route)
+        screens.model.contributionText = "250"
+        model.openSettings()
+        model.routeDidChange(route.setting("settings", to: "general"))
+        #expect(model.isTemporarilyCovered(route.path))
+        #expect(screens.model.contributionText == "250")
+        model.routeDidChange(NativeRoute(path: "/research/charts"))
+        #expect(screens.model.contributionText.isEmpty)
+        #expect(!model.isTemporarilyCovered(route.path))
+    }
+
+    @Test func chartLibrarySurvivesExitAndSharedQueryReplacementKeepsOtherParameters() async throws {
+        let recorder = ShellRecorder()
+        let charts = ResearchChartBuilderModel(
+            client: APIClient(baseURL: { nil }), store: ResearchChartLayoutMemoryStore())
+        let model = makeModel(recorder: recorder, researchChartBuilder: charts)
+        let route = try #require(NativeRoute("/research/charts?chart=invalid&unrelated=keep"))
+        model.routeDidChange(route)
+        await model.settingsSettled()
+        charts.didReplaceRoute = { model.replaceQuery($0.query) }
+        await charts.load(route: route)
+        #expect(recorder.actions.last == .replaceRoute("/research/charts?unrelated=keep"))
+        charts.addSeries(symbol: "AAPL")
+        await charts.flushStorage()
+        let savedState = charts.state
+        model.openSettings()
+        #expect(model.isTemporarilyCovered(route.path))
+        #expect(charts.state == savedState)
+        model.routeDidChange(NativeRoute(path: "/research"))
+        #expect(charts.state == savedState)
+        #expect(!charts.isSearchOpen)
     }
 
     @Test func webSettingsAndPaletteCoveragePreserveAnalysisDraftUntilARealRouteExit() async throws {

@@ -190,7 +190,17 @@ See [the architecture page](../../docs/architecture/native-app.md#native-navigat
   the submitted-data endpoint makes no provider requests. Quotes/news retain source polling and
   fresh caches; late replies cannot replace another symbol, range, editor or route. Market lookup's
   retained Add to portfolio drafts use the existing leave guard and broker-history defaults.
-  Forecast, Chart Builder, Dossiers and AI chat remain web. Mac/Demo review is pending.
+  Dossiers and AI chat remain web. Mac/Demo review is pending.
+- `/research/forecast` and `/research/charts` are native (phase 3m). Forecast retains its
+  debounced controls, cached authoritative simulations and independent Life scenario comparisons.
+  Saved scenarios use the existing `life_scenarios` settings CAS contract, with delete/Undo.
+  Chart Builder keeps the original v2 localStorage library, presets, series/indicators, dual axes,
+  saved layouts and share links. Failed storage reads block writes until authority is restored;
+  late provider, storage and presentation replies cannot apply to an obsolete visit. Financial
+  schedules, comparison gaps, indicators and chart projection remain shared TypeScript.
+  Settings coverage preserves drafts; leaving resets Forecast and retains Chart Builder metadata.
+  Full macOS build, native chart interaction and synthetic Demo review remain pending. Cross-route
+  Undo availability remains a shared shell parity gap for the later shell/Settings pass.
 - `/admin`, `/admin/providers`, `/admin/endpoints` and `/admin/exchange-rates` are native, in
   admin mode only, and so are `/admin/db` and `/admin/db/:table`; the table editor holds
   navigation and Quit behind a native Leave this page? alert while it has pending changes. The admin token card writes the page's
@@ -509,3 +519,11 @@ Demo visual/keyboard checks remain pending.
     hidden screens must not start provider reads. Open Settings or the command palette during a
     draft; the draft and its leave guard must survive coverage. Review chart focus/tooltips and
     VoiceOver on Mac.
+
+30. **Forecast and Chart Builder (phase 3m, pending Mac review).** Exercise every horizon, return
+    source, method, path count, currency and localized money input. Check stale-input rendering,
+    unavailable simulations, independent Life inputs, calendar months, saved scenario CAS conflicts,
+    deletion and eight-second Undo. On Charts, compare presets, price/OHLC and macro data, dual axes,
+    logarithmic fallback, indicators and tooltips. Test saved layouts across route changes, failed
+    storage reads/writes and retries, malformed/oversized shared charts and preserved URL parameters.
+    Verify Settings and palette coverage, text-field Cmd-Z, chart keyboard focus, EN/NL and VoiceOver.

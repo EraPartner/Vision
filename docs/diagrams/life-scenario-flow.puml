@@ -1,7 +1,8 @@
 @startuml Life Scenario Flow
 title Saved three-month income interruption scenario
 actor User
-participant "LifeScenarioPanel" as Panel
+participant "LifeScenarioPanel / native Life Scenario" as Panel
+participant "Shared TypeScript / native presentation API" as Helpers
 participant "Settings API" as Settings
 database "user_settings" as DB
 participant "Research forecast API" as Forecast
@@ -12,20 +13,24 @@ Panel -> Settings: PUT /api/settings/life_scenarios {value: definitions}
 Settings -> DB: Validate and store JSONB settings
 DB --> Panel: Saved definition
 User -> Panel: Run comparison
+Panel -> Helpers: Prepare baseline / interruption inputs
+Helpers --> Panel: Same seed, reduced contribution and monthly deficit
 Panel -> Forecast: POST baseline {monthly_contribution, goal_month?, seed}
 Panel -> Forecast: POST interruption {monthly_contribution_schedule: [reduced x 3], same seed}
 Forecast -> Projection: Simulate each request with live portfolio inputs
 Projection --> Panel: Two distributions and optional goal probabilities
-Panel -> Panel: Compare returned inputs; hide result if draft changes
+Panel -> Helpers: Compare exactly five market-input fields and known medians
+Helpers --> Panel: Comparison or inputsChanged / invalid numeric result
+Panel -> Panel: Hide result if draft / input / currency signature changes
 Panel --> User: Approximate median difference and goal probability
 
 group Delete a saved scenario (ADR-187)
   User -> Panel: Delete (no confirmation)
-  Panel -> Settings: PUT /api/settings/life_scenarios {value: list without the scenario}
+  Panel -> Settings: Existing setting write (native atomic CAS): list without scenario
   Settings -> DB: Validate and store JSONB settings
   Panel --> User: Undo toast
   User -> Panel: Undo (optional)
-  Panel -> Settings: PUT /api/settings/life_scenarios {value: previous list kept in memory}
+  Panel -> Settings: Existing setting write (native atomic CAS): previous list kept in memory
   Panel --> User: Scenario restored in the editor
 end
 @enduml

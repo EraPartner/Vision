@@ -3597,6 +3597,88 @@ components:
         providedCount: { type: integer, minimum: 0, maximum: 3 }
         isConsistent: { type: boolean }
 
+    ResearchLifeScenario:
+      type: object
+      additionalProperties: true
+      required:
+        [
+          id,
+          interruptionMonths,
+          monthlySurplus,
+          monthlyIncomeLoss,
+          monthlyContribution,
+        ]
+      properties:
+        id: { type: string, minLength: 1 }
+        kind: { type: string, enum: [income_interruption] }
+        interruptionMonths: { type: integer, enum: [3] }
+        monthlySurplus: { type: number, minimum: 0 }
+        monthlyIncomeLoss: { type: number, minimum: 0 }
+        monthlyContribution: { type: number, minimum: 0 }
+        goalValue: { type: number, exclusiveMinimum: 0 }
+        name: { type: string }
+        goalDate: { type: string }
+
+    ResearchLifeScenarioForecastInput:
+      type: object
+      additionalProperties: true
+      required: [horizonMonths]
+      description: >-
+        Immediate camelCase forecast input. Only horizon is validated here.
+        monthlyContribution, targetValue, goalMonth and seed are overwritten from
+        the scenario, so malformed discarded main money values do not block a
+        valid scenario. Other fields pass through unchanged; the existing forecast
+        request adapter/route retains its own normalization and validation.
+      properties:
+        horizonMonths: { type: integer, minimum: 1, maximum: 600 }
+
+    ResearchLifeScenarioPreparedInput:
+      type: object
+      additionalProperties: true
+      required: [horizonMonths, monthlyContribution, seed]
+      properties:
+        horizonMonths: { type: integer, minimum: 1, maximum: 600 }
+        monthlyContribution: { type: number, minimum: 0 }
+        targetValue: { type: number, exclusiveMinimum: 0 }
+        goalMonth: { type: integer, minimum: 1, maximum: 600 }
+        seed: { type: string }
+
+    ResearchLifeScenarioPrepareResult:
+      type: object
+      required:
+        [baselineInput, interruptedInput, reducedContribution, monthlyDeficit]
+      properties:
+        baselineInput:
+          { $ref: "#/components/schemas/ResearchLifeScenarioPreparedInput" }
+        interruptedInput:
+          allOf:
+            - $ref: "#/components/schemas/ResearchLifeScenarioPreparedInput"
+            - type: object
+              required: [monthlyContributionSchedule]
+              properties:
+                monthlyContributionSchedule:
+                  type: array
+                  minItems: 3
+                  maxItems: 3
+                  items: { type: number, minimum: 0 }
+        goalMonth: { type: integer, minimum: 1, maximum: 600 }
+        reducedContribution: { type: number, minimum: 0 }
+        monthlyDeficit: { type: number, minimum: 0 }
+
+    ResearchLifeScenarioCompareResult:
+      type: object
+      required: [comparable, available, medianGap, errorKey]
+      properties:
+        comparable: { type: boolean }
+        available: { type: boolean }
+        medianGap: { type: number, nullable: true }
+        errorKey:
+          {
+            type: string,
+            nullable: true,
+            enum: [research.lifeScenario.inputsChanged],
+          }
+
     ResearchPresentationSnapshot:
       type: object
       required: [kind]
@@ -3610,7 +3692,12 @@ components:
         providerQuote requires points and investment{name,currency,symbol?,priceProvider?},
         with optional selectedSymbol. analyst requires nullable consensus with all five
         numeric count fields. marketAdd accepts positive amount/units/price and optional
-        derive (default true). Points require time, with optional nullable numeric
+        derive (default true). lifeScenarioPrepare requires scenario, forecastInput
+        and optional nullable goalMonth; contribution must not exceed surplus, and
+        a dated goal pairs a positive goalValue with goalMonth within horizon.
+        lifeScenarioCompare requires baseline/interrupted raw forecasts and checks
+        exactly five market-input fields with strict missing/null semantics.
+        Points require time, with optional nullable numeric
         close/high/low/volume. There is no point-count truncation; transport is bounded.
       properties:
         kind:
@@ -3625,8 +3712,17 @@ components:
                 providerQuote,
                 analyst,
                 marketAdd,
+                lifeScenarioPrepare,
+                lifeScenarioCompare,
               ],
           }
+        scenario: { $ref: "#/components/schemas/ResearchLifeScenario" }
+        forecastInput:
+          { $ref: "#/components/schemas/ResearchLifeScenarioForecastInput" }
+        goalMonth: { type: integer, minimum: 1, maximum: 600, nullable: true }
+        baseline: { $ref: "#/components/schemas/ResearchPortfolioForecastData" }
+        interrupted:
+          { $ref: "#/components/schemas/ResearchPortfolioForecastData" }
         series:
           type: array
           items:
@@ -3706,6 +3802,8 @@ components:
                 providerQuote,
                 analyst,
                 marketAdd,
+                lifeScenarioPrepare,
+                lifeScenarioCompare,
               ],
           }
         result:
@@ -3718,6 +3816,8 @@ components:
             - $ref: "#/components/schemas/ResearchPresentationProviderQuoteResult"
             - $ref: "#/components/schemas/ResearchPresentationAnalystResult"
             - $ref: "#/components/schemas/ResearchPresentationMarketAddResult"
+            - $ref: "#/components/schemas/ResearchLifeScenarioPrepareResult"
+            - $ref: "#/components/schemas/ResearchLifeScenarioCompareResult"
 
     ResearchMeta:
       type: object
@@ -4075,12 +4175,12 @@ components:
       properties:
         monthIndex: { type: integer }
         date: { type: string }
-        netInvested: { type: number }
-        p10: { type: number }
-        p25: { type: number }
-        p50: { type: number }
-        p75: { type: number }
-        p90: { type: number }
+        netInvested: { type: number, nullable: true }
+        p10: { type: number, nullable: true }
+        p25: { type: number, nullable: true }
+        p50: { type: number, nullable: true }
+        p75: { type: number, nullable: true }
+        p90: { type: number, nullable: true }
 
     ResearchForecastForwardHolding:
       type: object
@@ -4095,16 +4195,21 @@ components:
       type: object
       required: [mean, p10, p25, p50, p75, p90]
       properties:
-        mean: { type: number }
-        p10: { type: number }
-        p25: { type: number }
-        p50: { type: number }
-        p75: { type: number }
-        p90: { type: number }
+        mean: { type: number, nullable: true }
+        p10: { type: number, nullable: true }
+        p25: { type: number, nullable: true }
+        p50: { type: number, nullable: true }
+        p75: { type: number, nullable: true }
+        p90: { type: number, nullable: true }
 
     ResearchPortfolioForecastData:
       type: object
       required: [available]
+      description: >-
+        available=false contains a reason and optional historyDays. Computed monetary
+        fields can serialize null on numeric overflow. Such an available response is
+        rejected by the maintained PortfolioForecastSchema/native client validity guard;
+        nullable wire representation never authorizes invented zero values or a comparison.
       properties:
         available: { type: boolean }
         reason: { type: string, enum: [no_holdings, insufficient_history] }
@@ -4118,14 +4223,14 @@ components:
         lowConfidence: { type: boolean }
         startValue: { type: number }
         startInvested: { type: number }
-        monthlyContribution: { type: number }
+        monthlyContribution: { type: number, nullable: true }
         goalMonth:
           {
             type: integer,
             description: "Month at which target probability is evaluated",
           }
-        totalContributions: { type: number }
-        netInvested: { type: number }
+        totalContributions: { type: number, nullable: true }
+        netInvested: { type: number, nullable: true }
         expectedAnnualReturn: { type: number }
         historicalAnnualReturn: { type: number }
         annualVolatility: { type: number }
@@ -17338,7 +17443,7 @@ paths:
       description: >-
         Stateless shared TypeScript transformations for Compare, Chart Builder,
         watchlist list/chart/add previews, provider-history quotes, analyst consensus
-        and market-add two-of-three previews. No provider, database, settings or FX
+        market-add two-of-three previews and Life Scenario preparation/comparison. No provider, database, settings or FX
         lookup. Original source ordering, warmups, thresholds and currency semantics
         are retained. Submit one UTF-8 JSON snapshot file; the 64 MiB scoped multipart
         limit bypasses the global JSON-body size limit without silently truncating history.

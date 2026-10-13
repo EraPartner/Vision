@@ -77,6 +77,8 @@ public final class NativeShellModel {
     public let analysis: AnalysisScreens?
     public let analysisMonitors: AnalysisMonitorsModel?
     public let research: ResearchScreens?
+    public let researchForecast: ResearchForecastScreens?
+    public let researchChartBuilder: ResearchChartBuilderModel?
     /// The navigation the Leave this page? alert holds while it asks (`blocker.location`).
     public private(set) var leaveConfirmation: NativeRoute?
 
@@ -116,6 +118,8 @@ public final class NativeShellModel {
         analysis: AnalysisScreens? = nil,
         analysisMonitors: AnalysisMonitorsModel? = nil,
         research: ResearchScreens? = nil,
+        researchForecast: ResearchForecastScreens? = nil,
+        researchChartBuilder: ResearchChartBuilderModel? = nil,
         hiddenSections: [NavSectionID: Bool]? = nil,
         loadSettings: @escaping @Sendable () async throws -> NativeAppSettings,
         saveHiddenSections: @escaping @MainActor ([NavSectionID: Bool]) -> Void = { _ in },
@@ -141,6 +145,8 @@ public final class NativeShellModel {
         self.analysis = analysis
         self.analysisMonitors = analysisMonitors
         self.research = research
+        self.researchForecast = researchForecast
+        self.researchChartBuilder = researchChartBuilder
         self.hiddenSections = hiddenSections ?? Self.defaultHiddenSections
         self.loadSettings = loadSettings
         self.saveHiddenSections = saveHiddenSections
@@ -182,6 +188,8 @@ public final class NativeShellModel {
         if case .portfolioImportReview = screen, portfolioImports == nil { return .web }
         if screen == .analysis && analysis == nil { return .web }
         if screen == .analysisMonitors && analysisMonitors == nil { return .web }
+        if screen == .researchForecast && researchForecast == nil { return .web }
+        if screen == .researchChartBuilder && researchChartBuilder == nil { return .web }
         if [.researchHome, .researchMarkets, .researchMarketLookup, .researchWatchlist, .researchCompare].contains(
             screen),
             research == nil
@@ -211,6 +219,8 @@ public final class NativeShellModel {
         if pathChanged {
             if route.path == "/analysis" { analysis?.didDisappear() }
             research?.didDisappear(route: route)
+            if route.path == "/research/forecast" { researchForecast?.didDisappear() }
+            if route.path == "/research/charts" { researchChartBuilder?.didDisappear() }
             if route.path == "/research/market" { removeLeaveGuard(id: route.path) }
         }
         let settingsClosed = route.value("settings") != nil && next.value("settings") == nil
@@ -336,6 +346,7 @@ public final class NativeShellModel {
     /// Portfolio/import/research writes retire sibling reads even when their acknowledgement is lost.
     public func portfolioDataDidMutate() async {
         research?.portfolioDataDidChange()
+        researchForecast?.portfolioDataDidChange()
         home?.invalidate()
         statistics?.model.invalidate()
         tax?.invalidate()
@@ -360,6 +371,9 @@ public final class NativeShellModel {
             await accounts.load(force: true)
         case .tax:
             _ = await tax?.loadRoute(route: currentRoute, currency: currentSettings.defaultCurrency, force: true)
+        case .researchForecast:
+            researchForecast?.configure(settings: currentSettings)
+            await researchForecast?.load(force: true)
         default:
             break
         }

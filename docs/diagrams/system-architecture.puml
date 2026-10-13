@@ -11,6 +11,7 @@ actor "User" as User
 package "Client" {
   node "Vision Native (synthetic Demo)\nSwiftUI Tax, Portfolio + wealth tools\nDecimal display / native drafts" as NativeTax
   node "Native Portfolio Import\nprobe · parser · staged session\nreview · history · fingerprint commit" as NativeImport
+  node "Native Research charts / forecast\nlocal layout storage + clipboard sharing\nexisting projections + paired Life scenarios" as NativeResearchTools
   node "Native Research (five routes)\nHome · Markets · Lookup\nWatchlist · Compare / lossless reads" as NativeResearch
   node "Native Analysis workspace\nquery / SQL · results · workbench\nversioned definitions + interchange" as NativeAnalysis
   node "Native Analysis Monitors\nrules · observations · inbox\nexact drafts / guarded reads" as NativeMonitors
@@ -82,6 +83,8 @@ package "Client to Server" {
   NativeTax --> Express : loopback OpenAPI financial reads + writes
   NativeImport --> Express : readonly probe + existing import/review operations
   NativePortfolioTax --> Express : portfolio-dashboard + settings CAS
+  NativeResearchTools --> Express : chart / Life presentation + existing forecasts\nsettings CAS
+  NativeResearchTools --> ReactApp : same WK localStorage layout key
   NativeResearch --> Express : existing scoped reads / guarded writes\nstateless submitted presentation
   NativeAnalysis --> Express : existing restricted execution + versions\nreadonly multipart interchange
   NativeMonitors --> Express : existing monitor reads + explicit writes
@@ -225,7 +228,17 @@ note right of NativeResearch
   Current-scope cache, late-read guards and visible polling stay native.
   Financial transformations and two-of-three previews stay TypeScript.
   Source currency conventions remain unchanged.
-  Chart Builder / remaining Research and AI routes still use the web view.
+  Chart Builder / Forecast have a separate native client node.
+  Remaining Research and AI routes still use the web view.
+  macOS package and Demo parity review remain pending.
+end note
+
+note right of NativeResearchTools
+  Chart indicators / rebasing and Life preparation / comparison stay TypeScript.
+  Native forwards two existing Life forecasts with one paired seed.
+  Unknown / overflowed available bands fail the canonical numeric guard.
+  Layout writes share the original WK localStorage library and schema.
+  Scenario writes retain serialized raw settings CAS baselines.
   macOS package and Demo parity review remain pending.
 end note
 

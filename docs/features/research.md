@@ -403,3 +403,16 @@ source order, null warmups, currency conventions and provider quota. Swift rende
 and edits structural configuration; the endpoint does not fetch, persist, or invent provenance.
 The native macOS/Demo visual and keyboard checks remain pending; see
 [[docs/reference/native-parity/research-and-ai-chat|Research parity]].
+
+## Shared Life Scenario calculations (native phase 3m)
+
+`packages/shared-utils/src/research/forecastScenario.ts` now supplies the existing web Life Scenario
+preparation, five-field comparability check and median difference. Native clients use the two
+additive Life Scenario kinds of [[docs/api/research#POST /api/research/presentation|the same stateless
+presentation API]], then make the same two existing seeded forecasts. Scenario inputs override
+immediate main contribution/goal/seed fields; other assumptions and the fixed three-month schedule
+retain the source behavior. The service performs no simulation, provider request or settings write.
+Missing values remain unavailable, and a numerically overflowed forecast retains the existing
+client error boundary. Names, local goal-month resolution, fresh unsaved IDs, saved IDs and result
+signature guards remain with the caller. Saved definitions still use the existing `life_scenarios`
+Settings contract, with its 50-record limit. The new kinds add no API operation or migration.

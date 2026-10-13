@@ -84,7 +84,7 @@ aliases: [diagram index, UML diagrams, plantuml diagrams]
 A standalone HTML companion to these PlantUML diagrams. Journey view shows ordered handoffs; Architecture map shows the full system. Select a learning path, step through a flow, and expand payload/source details when needed.
 
 - **File:** `docs/flow-visualizer.html` — open it directly in any browser (no build step, no network calls).
-- **Coverage:** 92 components / 63 flows. New journeys cover page requests, dashboard totals, desktop startup, shared expenses, internal transfers, planned-payment execution and selected-evidence cloud disclosure. Existing import, recurring, performance, backup, admin-auth and Ollama journeys reflect current source.
+- **Coverage:** 94 components / 66 flows. New journeys cover page requests, dashboard totals, desktop startup, shared expenses, internal transfers, planned-payment execution and selected-evidence cloud disclosure. Existing import, recurring, performance, backup, admin-auth and Ollama journeys reflect current source.
 - **Start here:** [[docs/guides/visual-learning|Understand Vision Visually]] has five learning paths and compact conceptual diagrams.
 - **Deep links:** use `flow-visualizer.html#flow-id`, for example [planned payment completion](../flow-visualizer.html#planned-payment-completion).
 - **Extending:** edit the embedded JSON (schema documented inline), then run `bun test scripts/tests/flow-visualizer.test.ts`.

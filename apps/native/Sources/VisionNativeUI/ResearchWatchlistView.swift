@@ -214,12 +214,12 @@ private struct ResearchWatchlistRow: View {
 
 enum ResearchWatchlistUI {
     static func name(_ item: ResearchWatchlistItem) -> String { item.name.isEmpty ? item.symbol ?? "" : item.name }
-    static func money(_ value: Decimal, currency: String, shell: NativeShellModel) -> String {
+    @MainActor static func money(_ value: Decimal, currency: String, shell: NativeShellModel) -> String {
         VisionFormat.currency(
             value, code: currency, locale: shell.settings.numberFormat.locale,
             fractionDigits: shell.settings.showDecimalPlaces)
     }
-    static func percent(_ value: Decimal, digits: Int, shell: NativeShellModel) -> String {
+    @MainActor static func percent(_ value: Decimal, digits: Int, shell: NativeShellModel) -> String {
         VisionFormat.percent(value, digits: digits, locale: shell.settings.numberFormat.locale)
     }
 }

@@ -252,6 +252,10 @@ struct NativeScreenContainer: View {
             if let research = model.research {
                 ResearchScreenView(screens: research, shell: model, screen: screen).id(screen.path)
             }
+        case .researchForecast:
+            if let forecast = model.researchForecast { ResearchForecastScreenView(screens: forecast, shell: model) }
+        case .researchChartBuilder:
+            if let charts = model.researchChartBuilder { ResearchChartBuilderScreenView(model: charts, shell: model) }
         case .portfolio:
             if let portfolio = model.portfolio { PortfolioScreenView(screens: portfolio, shell: model) }
         case .portfolioHoldings(let assetClass):

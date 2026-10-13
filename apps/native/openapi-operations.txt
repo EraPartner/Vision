@@ -250,3 +250,8 @@ researchSaveMappings
 researchDeleteMapping
 researchAuditMappings
 # computeResearchPresentation uses a handwritten submitted-data multipart operation.
+
+# Research Forecast and Chart Builder (phase 3m). Calculations remain TypeScript-owned.
+researchPortfolioForecast
+researchMacroSearch
+researchMacroSeries

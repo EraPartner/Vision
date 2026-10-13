@@ -5,7 +5,7 @@ import Foundation
 
 /// One struct per operationId in `apps/native/openapi-operations.txt`, in its order.
 public enum OpenAPIOperations {
-    public static let operationIds = ["getExchangeRates", "refreshExchangeRates", "adminDatabaseStats", "adminProvidersHealth", "adminProviderProbe", "adminMetricsRequests", "adminListEndpoints", "getSetting", "adminDatabaseVacuum", "adminGetTableSchema", "adminGetTableRows", "adminMutateTableRows", "getPlannedTransactions", "createPlannedTransaction", "updatePlannedTransaction", "deletePlannedTransaction", "executePlannedTransaction", "getPlannedMatchSuggestions", "getRecurringPatterns", "getRecipients", "getRecipient", "getAccounts", "getCategoryTree", "getTags", "createTag", "getTransactions", "saveSetting", "getSupportedAdapters", "getCustomParsers", "createCustomParser", "updateCustomParser", "deleteCustomParser", "getImportBatches", "deleteImportBatch", "previewImportBatch", "overrideImportRow", "overrideImportRowCategory", "commitImportBatch", "updateRecipient", "getInfoBanks", "exportTransactionsCsv", "exportTransactionsJson", "getTransaction", "createTransaction", "updateTransaction", "deleteTransaction", "bulkUpdateTransactions", "getTransactionAttachments", "downloadAttachment", "deleteAttachment", "bulkDeleteTransactions", "bulkExportTransactions", "bulkTagTransactions", "markTransfer", "createRecipient", "getSplitsByTransaction", "createSplitBatch", "createBulkSplits", "getSplitsOwed", "getSplitOwedByRecipient", "exportSplitsOwedCsv", "paySplit", "settleSplit", "settleAllSplitsForRecipient", "deleteSplit", "createAccount", "updateAccount", "deleteAccount", "previewAccountPortfolioLots", "closeAccount", "mergeAccounts", "previewAccountMerge", "setAccountOpeningBalance", "reconcileAccount", "setAccountStatementBalance", "bulkRetagPortfolioTransactions", "getPortfolioSummary", "createCategoryNode", "updateCategoryNode", "deleteCategoryNode", "mergeCategoryNode", "deleteRecipient", "mergeRecipient", "unmergeRecipient", "getRecipientPatterns", "createRecipientPattern", "previewRecipientPattern", "updateRecipientPattern", "deleteRecipientPattern", "getMonthlySummary", "getAverageVsCurrent", "getBankBalances", "getNetWorth", "getCashflowForecastMethods", "getCashflowForecastRolling", "getCashflowForecastAccuracy", "getTransactionCount", "getCategories", "getCategoryPivot", "getRecipientInsights", "getRecipientByYear", "getSankey", "getInsightsDigest", "dismissInsight", "getSavedCharts", "createSavedChart", "updateSavedChart", "deleteSavedChart", "getRecipientPivot", "getTagPivot", "computeBelgianTax", "getBelgianTaxOverview", "saveSettings", "getBelgianTaxDashboard", "getDeductionCandidates", "getInvestments", "createInvestment", "updateInvestment", "deleteInvestment", "getInvestment", "getInvestmentTransactions", "createInvestmentTransaction", "updatePortfolioTransaction", "deletePortfolioTransaction", "getPortfolioPerformance", "getPortfolioPerformanceByBroker", "getPortfolioExposure", "upsertPortfolioExposureSources", "refreshInvestmentPrices", "listInvestmentProviders", "getInvestmentPriceHistory", "getInvestmentSummary", "marketQuote", "marketNews", "marketChart", "computeRebalance", "computeCommitmentAwareCash", "getBulkPortfolioTransactions", "getPortfolioParsers", "createPortfolioParser", "updatePortfolioParser", "deletePortfolioParser", "getPortfolioImportBatches", "getPortfolioImportBatch", "deletePortfolioImportBatch", "previewPortfolioImportBatch", "portfolioImportRowInvestmentOverride", "portfolioImportRowsInvestmentOverride", "previewPortfolioImportReconciliation", "commitReviewedPortfolioImports", "commitPortfolioImportBatch", "getBelgianPortfolioTaxDashboard", "getAnalysisCatalog", "executeAnalysis", "cancelAnalysis", "drillAnalysis", "executeAnalysisPivot", "evaluateAnalysisExtension", "listSavedAnalyses", "createSavedAnalysis", "updateSavedAnalysis", "deleteSavedAnalysis", "runSavedAnalysis", "listSavedAnalysisVersions", "restoreSavedAnalysisVersion", "generateAnalysisProposal", "previewAnalysisProposal", "applyAnalysisProposal", "listAnalysisMonitors", "createAnalysisMonitor", "patchAnalysisMonitor", "deleteAnalysisMonitor", "checkAnalysisMonitor", "listAnalysisMonitorObservations", "listAnalysisMonitorNotifications", "readAnalysisMonitorNotification", "listResearchDossiers", "researchSearch", "researchChart", "researchScorecard", "researchAnalyst", "researchNews", "marketSearch", "getWatchlist", "addToWatchlist", "updateWatchlistItem", "deleteWatchlistItem", "researchListMappings", "researchResolveMappings", "researchSaveMappings", "researchDeleteMapping", "researchAuditMappings"]
+    public static let operationIds = ["getExchangeRates", "refreshExchangeRates", "adminDatabaseStats", "adminProvidersHealth", "adminProviderProbe", "adminMetricsRequests", "adminListEndpoints", "getSetting", "adminDatabaseVacuum", "adminGetTableSchema", "adminGetTableRows", "adminMutateTableRows", "getPlannedTransactions", "createPlannedTransaction", "updatePlannedTransaction", "deletePlannedTransaction", "executePlannedTransaction", "getPlannedMatchSuggestions", "getRecurringPatterns", "getRecipients", "getRecipient", "getAccounts", "getCategoryTree", "getTags", "createTag", "getTransactions", "saveSetting", "getSupportedAdapters", "getCustomParsers", "createCustomParser", "updateCustomParser", "deleteCustomParser", "getImportBatches", "deleteImportBatch", "previewImportBatch", "overrideImportRow", "overrideImportRowCategory", "commitImportBatch", "updateRecipient", "getInfoBanks", "exportTransactionsCsv", "exportTransactionsJson", "getTransaction", "createTransaction", "updateTransaction", "deleteTransaction", "bulkUpdateTransactions", "getTransactionAttachments", "downloadAttachment", "deleteAttachment", "bulkDeleteTransactions", "bulkExportTransactions", "bulkTagTransactions", "markTransfer", "createRecipient", "getSplitsByTransaction", "createSplitBatch", "createBulkSplits", "getSplitsOwed", "getSplitOwedByRecipient", "exportSplitsOwedCsv", "paySplit", "settleSplit", "settleAllSplitsForRecipient", "deleteSplit", "createAccount", "updateAccount", "deleteAccount", "previewAccountPortfolioLots", "closeAccount", "mergeAccounts", "previewAccountMerge", "setAccountOpeningBalance", "reconcileAccount", "setAccountStatementBalance", "bulkRetagPortfolioTransactions", "getPortfolioSummary", "createCategoryNode", "updateCategoryNode", "deleteCategoryNode", "mergeCategoryNode", "deleteRecipient", "mergeRecipient", "unmergeRecipient", "getRecipientPatterns", "createRecipientPattern", "previewRecipientPattern", "updateRecipientPattern", "deleteRecipientPattern", "getMonthlySummary", "getAverageVsCurrent", "getBankBalances", "getNetWorth", "getCashflowForecastMethods", "getCashflowForecastRolling", "getCashflowForecastAccuracy", "getTransactionCount", "getCategories", "getCategoryPivot", "getRecipientInsights", "getRecipientByYear", "getSankey", "getInsightsDigest", "dismissInsight", "getSavedCharts", "createSavedChart", "updateSavedChart", "deleteSavedChart", "getRecipientPivot", "getTagPivot", "computeBelgianTax", "getBelgianTaxOverview", "saveSettings", "getBelgianTaxDashboard", "getDeductionCandidates", "getInvestments", "createInvestment", "updateInvestment", "deleteInvestment", "getInvestment", "getInvestmentTransactions", "createInvestmentTransaction", "updatePortfolioTransaction", "deletePortfolioTransaction", "getPortfolioPerformance", "getPortfolioPerformanceByBroker", "getPortfolioExposure", "upsertPortfolioExposureSources", "refreshInvestmentPrices", "listInvestmentProviders", "getInvestmentPriceHistory", "getInvestmentSummary", "marketQuote", "marketNews", "marketChart", "computeRebalance", "computeCommitmentAwareCash", "getBulkPortfolioTransactions", "getPortfolioParsers", "createPortfolioParser", "updatePortfolioParser", "deletePortfolioParser", "getPortfolioImportBatches", "getPortfolioImportBatch", "deletePortfolioImportBatch", "previewPortfolioImportBatch", "portfolioImportRowInvestmentOverride", "portfolioImportRowsInvestmentOverride", "previewPortfolioImportReconciliation", "commitReviewedPortfolioImports", "commitPortfolioImportBatch", "getBelgianPortfolioTaxDashboard", "getAnalysisCatalog", "executeAnalysis", "cancelAnalysis", "drillAnalysis", "executeAnalysisPivot", "evaluateAnalysisExtension", "listSavedAnalyses", "createSavedAnalysis", "updateSavedAnalysis", "deleteSavedAnalysis", "runSavedAnalysis", "listSavedAnalysisVersions", "restoreSavedAnalysisVersion", "generateAnalysisProposal", "previewAnalysisProposal", "applyAnalysisProposal", "listAnalysisMonitors", "createAnalysisMonitor", "patchAnalysisMonitor", "deleteAnalysisMonitor", "checkAnalysisMonitor", "listAnalysisMonitorObservations", "listAnalysisMonitorNotifications", "readAnalysisMonitorNotification", "listResearchDossiers", "researchSearch", "researchChart", "researchScorecard", "researchAnalyst", "researchNews", "marketSearch", "getWatchlist", "addToWatchlist", "updateWatchlistItem", "deleteWatchlistItem", "researchListMappings", "researchResolveMappings", "researchSaveMappings", "researchDeleteMapping", "researchAuditMappings", "researchPortfolioForecast", "researchMacroSearch", "researchMacroSeries"]
 }
 
 extension OpenAPIOperations {
@@ -6690,6 +6690,123 @@ extension OpenAPIOperations {
                 case instrumentKey = "instrument_key"
                 case keyType = "key_type"
             }
+        }
+    }
+
+    /// POST /api/research/portfolio-forecast: Monte-Carlo projection of portfolio value (on-demand, not
+    /// persisted)
+    public struct ResearchPortfolioForecast: APIOperation {
+        public typealias Response = OpenAPI.ResearchPortfolioForecastEnvelope
+        public static let operationId = "researchPortfolioForecast"
+        public static let method = HTTPMethod.post
+        public static let pathTemplate = "/api/research/portfolio-forecast"
+
+        public var body: Body?
+
+        public init(body: Body? = nil) {
+            self.body = body
+        }
+
+        public var path: String { "/api/research/portfolio-forecast" }
+
+        public func encodedBody() throws -> Data? {
+            try body.map { try APIBody.encode($0) }
+        }
+
+        public struct Body: Codable, Equatable, Sendable {
+            public let horizonMonths: Int?
+            public let monthlyContribution: Decimal?
+            /// Per-month contributions; omitted trailing months use monthly_contribution
+            public let monthlyContributionSchedule: [Decimal]?
+            public let paths: Int?
+            /// 0 = historical drift, 1 = forward
+            public let forwardBlend: Decimal?
+            public let method: String?
+            public let targetValue: Decimal?
+            /// Must not exceed horizon_months and requires target_value
+            public let goalMonth: Int?
+            public let currency: String?
+            public let seed: String?
+
+            public init(horizonMonths: Int? = nil, monthlyContribution: Decimal? = nil, monthlyContributionSchedule: [Decimal]? = nil, paths: Int? = nil, forwardBlend: Decimal? = nil, method: String? = nil, targetValue: Decimal? = nil, goalMonth: Int? = nil, currency: String? = nil, seed: String? = nil) {
+                self.horizonMonths = horizonMonths
+                self.monthlyContribution = monthlyContribution
+                self.monthlyContributionSchedule = monthlyContributionSchedule
+                self.paths = paths
+                self.forwardBlend = forwardBlend
+                self.method = method
+                self.targetValue = targetValue
+                self.goalMonth = goalMonth
+                self.currency = currency
+                self.seed = seed
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case horizonMonths = "horizon_months"
+                case monthlyContribution = "monthly_contribution"
+                case monthlyContributionSchedule = "monthly_contribution_schedule"
+                case paths = "paths"
+                case forwardBlend = "forward_blend"
+                case method = "method"
+                case targetValue = "target_value"
+                case goalMonth = "goal_month"
+                case currency = "currency"
+                case seed = "seed"
+            }
+        }
+    }
+
+    /// GET /api/research/macro/search: Search macroeconomic series (CPI, rates, unemployment, …) across
+    /// macro providers
+    public struct ResearchMacroSearch: APIOperation {
+        public typealias Response = OpenAPI.ResearchMacroSearchEnvelope
+        public static let operationId = "researchMacroSearch"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/research/macro/search"
+
+        public var q: String
+
+        public init(q: String) {
+            self.q = q
+        }
+
+        public var path: String { "/api/research/macro/search" }
+
+        public var queryItems: [URLQueryItem] {
+            var items: [URLQueryItem] = []
+            items.append(URLQueryItem(name: "q", value: APIQuery.value(q)))
+            return items
+        }
+    }
+
+    /// GET /api/research/macro/series: Observations for one provider-pinned macro series (value→close
+    /// chart points)
+    public struct ResearchMacroSeries: APIOperation {
+        public typealias Response = OpenAPI.ResearchMacroSeriesEnvelope
+        public static let operationId = "researchMacroSeries"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/research/macro/series"
+
+        public var provider: String
+        /// Provider-native id (FRED CPIAUCSL; Eurostat `<dataset>?<dims>`; DBnomics
+        /// `provider/dataset/series`)
+        public var seriesId: String
+        public var range: String?
+
+        public init(provider: String, seriesId: String, range: String? = nil) {
+            self.provider = provider
+            self.seriesId = seriesId
+            self.range = range
+        }
+
+        public var path: String { "/api/research/macro/series" }
+
+        public var queryItems: [URLQueryItem] {
+            var items: [URLQueryItem] = []
+            items.append(URLQueryItem(name: "provider", value: APIQuery.value(provider)))
+            items.append(URLQueryItem(name: "series_id", value: APIQuery.value(seriesId)))
+            if let range { items.append(URLQueryItem(name: "range", value: APIQuery.value(range))) }
+            return items
         }
     }
 }

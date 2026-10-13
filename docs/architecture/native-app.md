@@ -31,7 +31,7 @@ tags:
     string-catalog,
     navigation,
   ]
-description: "Vision Native is the Swift macOS app under apps/native/ that replaces the Electron shell in phases (ADR-204). Covers the directory layout, the runtime supervisor that starts its own PostgreSQL 18 cluster and backend on synthetic Demo data, payload discovery, the phase 1c shell (window, launch state, preload bridge, web view navigation and download policy, menus, dock and vibrancy), phase 1d backup and restore (bundle format compatibility, Keychain passphrase, restore allow-list, quit-time backup), the phase 1e audit anchor and Keychain witness with restore continuity, the standard and Demo variants of one build, the Debug-only backend override, the phase 2 foundations (generated OpenAPI client, design tokens, String Catalog and sidebar registry, the native NavigationSplitView shell with the shell:route-changed bridge message, and the native Exchange rates screen), the Native (macOS) CI job with the backup and audit interop job, screen ports through phase 3l Research Home, Markets, Lookup, Watchlist and Compare (lossless provider data, shared TypeScript presentation, guarded local drafts/cache, and earlier Analysis/Portfolio/Tax/import screens), and install-native.sh."
+description: "Vision Native is the Swift macOS app under apps/native/ that replaces the Electron shell in phases (ADR-204). Covers the directory layout, the runtime supervisor that starts its own PostgreSQL 18 cluster and backend on synthetic Demo data, payload discovery, the phase 1c shell (window, launch state, preload bridge, web view navigation and download policy, menus, dock and vibrancy), phase 1d backup and restore (bundle format compatibility, Keychain passphrase, restore allow-list, quit-time backup), the phase 1e audit anchor and Keychain witness with restore continuity, the standard and Demo variants of one build, the Debug-only backend override, the phase 2 foundations (generated OpenAPI client, design tokens, String Catalog and sidebar registry, the native NavigationSplitView shell with the shell:route-changed bridge message, and the native Exchange rates screen), the Native (macOS) CI job with the backup and audit interop job, screen ports through phase 3m Research Home, Markets, Lookup, Watchlist, Compare, Forecast and Chart Builder (lossless provider data, shared TypeScript presentation, guarded local drafts/cache, and earlier Analysis/Portfolio/Tax/import screens), and install-native.sh."
 aliases: [vision native, native app, swift app]
 ---
 
@@ -49,9 +49,9 @@ aliases: [vision native, native app, swift app]
 > settings action to its Swift code. Phase 2 adds a native sidebar around the web view and the
 > first native screen, Exchange rates (see
 > [[docs/architecture/native-app#Native navigation and screens (phase 2)|phase 2]]). Phase 3 now includes
-> native Research Home, Markets, Lookup, Watchlist and Compare, alongside Analysis, Portfolio
+> native Research Home, Markets, Lookup, Watchlist, Compare, Forecast and Chart Builder, alongside Analysis, Portfolio
 > Import/review and Portfolio Tax. TypeScript retains financial calculations, restricted execution
-> and import writers; Chart Builder and the remaining Research/AI routes still use the web view. macOS build and synthetic Demo visual/keyboard review remain pending.
+> and import writers; Dossiers, AI chat and Settings still use the web view. macOS build and synthetic Demo visual/keyboard review remain pending.
 
 ## Layout
 
@@ -1285,6 +1285,66 @@ comparison against the pre-extraction source. The full macOS package build and s
 visual/keyboard checks remain pending. [[docs/reference/native-parity/research-and-ai-chat|Research
 parity]] records action coverage; [[docs/features/research|Research]] and
 [[docs/flow-visualizer.html|the flow visualizer]] retain the shared processing boundaries.
+
+### Research Chart Builder and Forecast/Life Scenario (phase 3m)
+
+`ResearchChartBuilderScreenView` mounts `/research/charts`; `ResearchForecastScreenView` mounts
+`/research/forecast` with Life Scenario embedded in the same page. These extend the five native
+Research routes from phase 3l. Other Research/AI routes retain their web implementation.
+
+`ResearchChartBuilderModel` owns series, provider-pinned macro search, indicators/oscillators,
+local layouts and clipboard sharing of portable chart URLs. Ticker/macro reads retain
+source scopes and provider metadata. One existing `computeResearchPresentation` chart request
+returns aligned price/volume/OHLC, rebasing, SMA/EMA/Bollinger and raw-close RSI/MACD rows; native
+charts convert coordinates and edit structural settings without moving numerical transformations
+to Swift. Late state/range responses lose their generation authority. Empty/unavailable series and
+warmups remain explicit. Presets, axes, log/rebase controls and series/indicator limits retain the
+source behavior. See [[docs/api/research#POST /api/research/presentation|the chart presentation contract]].
+
+`ResearchChartLayoutStore` reads and serializes the same
+`vision.research.chartBuilder.layouts.v2` localStorage key through the retained WK page. It restores
+the complete library before editing, queues writes, reports storage failures and retains the
+portable version/state format. Limits remain 20 layouts, five series, 20 indicators, periods
+1..500, 250,000 UTF-8 bytes on save and the source UTF-16 read bound. Shared URLs use the same
+versioned base64url state and 20,000-character cap; a valid share is consumed through the existing
+route update. Copy Share encodes the current structural state, resolves the retained page origin
+and copies the resulting URL to the clipboard, with a visible success or failure notice. No
+financial data or simulation result is persisted by the stateless presentation service.
+
+`ResearchForecastScreens` coordinates `ResearchForecastModel` and `ResearchLifeScenarioModel`.
+Main Forecast keeps its 450 ms debounce, five-minute cache and source defaults, calls the existing
+TypeScript projection API and rejects stale input/generation/visit results. Invalid or still-pending
+main input hides prior output. Custom DTOs retain raw Decimal bands, metadata, absent values and
+unavailable extensions. Native rendering uses the six returned percentile/capital series; no
+simulation, drift, probability or contribution arithmetic is recreated in Swift. Required numeric
+available-result fields retain the canonical client guard even where OpenAPI records nullable
+wire overflow. An overflow is an error rather than a zero projection.
+
+Life Scenario receives the immediate main input independently of whether that main forecast can
+run. `lifeScenarioPrepare` overwrites discarded main contribution/goal/seed fields and returns
+baseline/interrupted requests, the reduced contribution and monthly deficit. Native forwards two
+existing forecast requests concurrently with the same returned seed, then submits their raw replies
+to `lifeScenarioCompare`. The shared TypeScript helper retains the fixed first three reduced months,
+trailing planned contributions, exactly five market-input comparisons and a median gap only when
+known. Null available medians are rejected at the existing client-validity boundary. No additional
+provider, database or FX call accompanies these preparation/comparison kinds. New unsaved runs use
+a fresh source ID; saved definitions keep their ID/seed. Local goal-month resolution is structural.
+Draft/input/currency signatures retire obsolete preparation, projection and comparison replies.
+
+Saved `life_scenarios` definitions use the existing settings CAS, with a first-read pinned raw
+baseline and serialized acknowledgements. Rejected/lost receipts retain recovery state rather than
+blindly replaying a write; only an acknowledged save advances the baseline. Delete retains the
+source bounded Undo action. Reads cannot replace pending mutation authority; a late acknowledgement
+after leave updates the baseline without restoring a departed draft. A real route exit resets
+controls and retires previews, while temporary native overlays retain their screen instance.
+There is no added polling or leave guard. See [[docs/features/research|Research]],
+[[docs/api/settings|Settings API]] and [[docs/diagrams/life-scenario-flow.puml|Life Scenario Flow]].
+
+Shared/backend tests and immutable frontend goldens verify monetary preparation, comparability,
+missing values, overflow/client rejection and unchanged projection behavior. Native Core/UI owners
+have separate focused transport/state checks. Full macOS package, responsive drawing, VoiceOver,
+keyboard and synthetic Vision Demo review remain pending; code coverage in
+[[docs/reference/native-parity/research-and-ai-chat|Research parity]] is not a rendered verification.
 
 ## Install
 

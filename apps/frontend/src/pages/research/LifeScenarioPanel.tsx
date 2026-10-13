@@ -1,3 +1,8 @@
+import {
+    prepareLifeScenario,
+    areLifeScenarioForecastsComparable,
+    compareLifeScenarioForecasts,
+} from "@vision/shared-utils/research/forecastScenario";
 import { useEffect, useState } from "react";
 import { AlertTriangle, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -306,46 +311,25 @@ export default function LifeScenarioPanel({
         const parsed = readScenario();
         if (!parsed) return;
         const { scenario, goalMonth } = parsed;
-        const reducedContribution = Math.max(
-            0,
-            Math.min(
-                scenario.monthlyContribution,
-                scenario.monthlySurplus - scenario.monthlyIncomeLoss,
-            ),
-        );
-        const seed = `life-scenario:${scenario.id}`;
+        const {
+            baselineInput: common,
+            interruptedInput,
+            reducedContribution,
+            monthlyDeficit,
+        } = prepareLifeScenario(scenario, forecastInput, goalMonth);
         const signature = JSON.stringify({ draft, forecastInput, currency });
-        const common: PortfolioForecastInput = {
-            ...forecastInput,
-            monthlyContribution: scenario.monthlyContribution,
-            targetValue: scenario.goalValue,
-            goalMonth,
-            seed,
-        };
         setRunning(true);
         setError(null);
         setComparison(null);
         try {
             const [baseline, interrupted] = await Promise.all([
                 getPortfolioForecast(common),
-                getPortfolioForecast({
-                    ...common,
-                    monthlyContributionSchedule: Array.from(
-                        { length: scenario.interruptionMonths },
-                        () => reducedContribution,
-                    ),
-                }),
+                getPortfolioForecast(interruptedInput),
             ]);
-            const comparableInputs = [
-                "startValue",
-                "historyDays",
-                "expectedAnnualReturn",
-                "annualVolatility",
-                "forwardBlend",
-            ] as const;
             if (
-                comparableInputs.some(
-                    (field) => baseline.data[field] !== interrupted.data[field],
+                !areLifeScenarioForecastsComparable(
+                    baseline.data,
+                    interrupted.data,
                 )
             ) {
                 throw new Error(t("research.lifeScenario.inputsChanged"));
@@ -355,10 +339,7 @@ export default function LifeScenarioPanel({
                 interrupted: interrupted.data,
                 goalMonth,
                 reducedContribution,
-                monthlyDeficit: Math.max(
-                    0,
-                    scenario.monthlyIncomeLoss - scenario.monthlySurplus,
-                ),
+                monthlyDeficit,
                 signature,
             });
         } catch (reason) {
@@ -387,13 +368,12 @@ export default function LifeScenarioPanel({
     const available =
         visibleComparison?.baseline.available &&
         visibleComparison.interrupted.available;
-    const medianGap =
-        available &&
-        visibleComparison.interrupted.projected?.p50 !== undefined &&
-        visibleComparison.baseline.projected?.p50 !== undefined
-            ? visibleComparison.interrupted.projected.p50 -
-              visibleComparison.baseline.projected.p50
-            : undefined;
+    const medianGap = visibleComparison
+        ? (compareLifeScenarioForecasts(
+              visibleComparison.baseline,
+              visibleComparison.interrupted,
+          ).medianGap ?? undefined)
+        : undefined;
 
     return (
         <Card>

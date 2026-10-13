@@ -85,8 +85,10 @@ The existing providers, caches and rate limits remain authoritative; native read
 cache metadata and nullable values. Submitted snapshots use shared TypeScript presentation for
 comparison statistics, chart indicators, target/return metrics and trade previews. Lookup's symbol,
 range and tab and Compare's repeated symbols, range, tab and sort preserve unrelated query values.
-Market lookup's Add to portfolio form retains its unsaved-work guard and broker defaults. Forecast,
-Chart Builder and Dossiers remain web. Full Mac/Demo review is pending; see
+Market lookup's Add to portfolio form retains its unsaved-work guard and broker defaults. Phase 3m
+also draws Forecast and Chart Builder natively, including Life scenario comparisons and the existing
+saved-layout/share format. Settings coverage preserves their drafts; actual exits reset Forecast
+and retain Chart Builder metadata. Dossiers remain web. Full Mac/Demo review is pending; see
 [[docs/reference/native-parity/research-and-ai-chat|Research parity]].
 
 ## Admin Routes

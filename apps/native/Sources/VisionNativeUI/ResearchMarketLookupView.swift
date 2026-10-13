@@ -244,17 +244,19 @@ public struct ResearchMarketLookupView: View {
 }
 
 enum ResearchMarketDisplay {
-    static func money(_ value: Decimal, currency: String, shell: NativeShellModel, digits: Int? = nil) -> String {
+    @MainActor static func money(_ value: Decimal, currency: String, shell: NativeShellModel, digits: Int? = nil)
+        -> String
+    {
         VisionFormat.currency(
             value, code: currency, locale: shell.settings.numberFormat.locale,
             fractionDigits: digits ?? shell.settings.showDecimalPlaces)
     }
-    static func number(_ value: Decimal, shell: NativeShellModel, digits: Int? = nil) -> String {
+    @MainActor static func number(_ value: Decimal, shell: NativeShellModel, digits: Int? = nil) -> String {
         value.formatted(
             Decimal.FormatStyle(locale: shell.settings.numberFormat.locale).precision(
                 .fractionLength(0...(digits ?? shell.settings.showDecimalPlaces))))
     }
-    static func compact(_ value: Decimal, shell: NativeShellModel) -> String {
+    @MainActor static func compact(_ value: Decimal, shell: NativeShellModel) -> String {
         value.formatted(
             Decimal.FormatStyle(locale: shell.settings.numberFormat.locale).notation(.compactName).precision(
                 .fractionLength(0...shell.settings.showDecimalPlaces)))

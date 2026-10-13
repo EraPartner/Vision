@@ -1951,7 +1951,7 @@
             "x": 620,
             "y": 1240,
             "path": "apps/native/Sources/VisionNativeCore/Screens/Research/ResearchScreens.swift",
-            "desc": "Home, Markets, Lookup, Watchlist and Compare retain scoped caches, provenance, structural controls and guarded write acknowledgements. Chart Builder and remaining Research/AI routes still use the web view."
+            "desc": "Home, Markets, Lookup, Watchlist and Compare retain scoped caches, provenance, structural controls and guarded write acknowledgements. Separate native Chart Builder/Forecast nodes cover phase 3m; remaining Research/AI routes still use the web view."
           },
           {
             "id": "sv.researchpresentation",
@@ -1961,7 +1961,7 @@
             "x": 800,
             "y": 1240,
             "path": "apps/node-backend/src/services/research/presentationService.ts",
-            "desc": "Stateless Compare/chart/watchlist/provider-quote/analyst/market-add transformations reuse pure web helpers. Scoped 64 MiB multipart transport never silently truncates; no extra provider, database, settings or FX calls."
+            "desc": "Stateless Compare/chart/watchlist/provider-quote/analyst/market-add and Life Scenario preparation/comparison transformations reuse pure web helpers. Scoped 64 MiB multipart transport never silently truncates; no extra provider, database, settings or FX calls."
           },
           {
             "id": "sv.marketlookup",
@@ -1972,6 +1972,26 @@
             "y": 1240,
             "path": "apps/node-backend/src/services/marketLookupService.ts",
             "desc": "Existing Yahoo-backed basic/full quote batches, symbol search, chart and news reads serve native Home/Markets/Lookup/Watchlist with unchanged cache, quota and source currency behavior."
+          },
+          {
+            "id": "native.researchcharts",
+            "label": "Native Chart Builder",
+            "sub": "WK layouts · shared TS rows",
+            "kind": "client",
+            "x": 20,
+            "y": 1340,
+            "path": "apps/native/Sources/VisionNativeCore/Screens/ResearchCharts/ResearchChartBuilderModel.swift",
+            "desc": "Scoped series/macro readers submit chart transforms to shared TypeScript; native geometry and structural controls retain exact local library formats and clipboard sharing of portable chart URLs."
+          },
+          {
+            "id": "native.researchforecast",
+            "label": "Native Forecast / Life",
+            "sub": "projections · exact TS scenarios",
+            "kind": "client",
+            "x": 220,
+            "y": 1340,
+            "path": "apps/native/Sources/VisionNativeCore/Screens/ResearchForecast/ResearchForecastScreens.swift",
+            "desc": "Main debounced projection and embedded Life Scenario reuse existing forecasts, paired TS preparation/comparison and serialized original settings CAS. No native monetary engine or invented missing values."
           }
         ],
         "baseEdges": [
@@ -2486,6 +2506,18 @@
           [
             "sv.marketlookup",
             "ex.yahoo"
+          ],
+          [
+            "native.researchcharts",
+            "be.routes"
+          ],
+          [
+            "native.researchcharts",
+            "fe.pages"
+          ],
+          [
+            "native.researchforecast",
+            "be.routes"
           ]
         ],
         "flows": [
@@ -7029,6 +7061,192 @@
               {
                 "path": "features/research.md",
                 "label": "Research comparison"
+              }
+            ]
+          },
+          {
+            "id": "native-research-chart-evaluate",
+            "name": "Render native Chart Builder through shared TypeScript",
+            "category": "Native migration",
+            "summary": "Provider-scoped ticker/macro series retain their original data; one stateless chart transformation returns aligned rows and indicator/oscillator warmups without a native financial engine.",
+            "steps": [
+              {
+                "from": "native.researchcharts",
+                "to": "be.routes",
+                "payload": "Existing Research/macro search and scoped chart/series reads",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/ResearchCharts/ResearchChartBuilderService.swift reuses existing operation metadata and provider provenance. apps/native/Sources/VisionNativeCore/Screens/ResearchCharts/ResearchChartBuilderModel.swift binds ticker/provider or macro/provider/series identity plus range."
+              },
+              {
+                "from": "be.routes",
+                "to": "sv.research",
+                "payload": "Original provider history or pinned macro observations",
+                "annotation": "apps/node-backend/src/services/research/researchAggregator.ts retains provider quota/cache/storage behavior; the new numerical presentation does not refetch a source."
+              },
+              {
+                "from": "native.researchcharts",
+                "to": "sv.researchpresentation",
+                "payload": "kind chart with exact source rows, five-series configuration and up to 20 indicators",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/ResearchCharts/ResearchChartBuilderModel.swift submits current state and raw values, guards request scope/generation and rejects late range/config replies."
+              },
+              {
+                "from": "sv.researchpresentation",
+                "to": "pkg.shared-utils",
+                "payload": "Aligned rebasing/OHLC fallback, SMA/EMA/Bollinger and raw-close RSI/MACD",
+                "annotation": "packages/shared-utils/src/research/presentation.ts and packages/shared-utils/src/research/indicators.ts retain the original web algorithms and null warmups. No extra provider/database/FX request accompanies computeResearchPresentation."
+              },
+              {
+                "from": "sv.researchpresentation",
+                "to": "native.researchcharts",
+                "payload": "Returned rows/oscillatorRows and source metadata for native drawing",
+                "annotation": "apps/native/Sources/VisionNativeUI/ResearchChartBuilderChart.swift and apps/native/Sources/VisionNativeUI/ResearchChartBuilderGeometry.swift use drawing coordinates only. apps/native/Sources/VisionNativeUI/ResearchChartBuilderView.swift retains presets, axes, log/rebase and structural controls; macOS/Demo review remains pending."
+              }
+            ],
+            "docs": [
+              {
+                "path": "architecture/native-app.md",
+                "label": "Native architecture"
+              },
+              {
+                "path": "reference/native-parity/research-and-ai-chat.md",
+                "label": "Research parity"
+              },
+              {
+                "path": "api/research.md",
+                "label": "Research API"
+              },
+              {
+                "path": "features/research.md",
+                "label": "Research"
+              }
+            ]
+          },
+          {
+            "id": "native-research-chart-layouts",
+            "name": "Restore native Chart Builder layouts and copy a share link",
+            "category": "Native migration",
+            "summary": "The native editor shares the web localStorage key, queues guarded layout metadata writes, and copies a portable chart-state URL to the clipboard.",
+            "steps": [
+              {
+                "from": "native.researchcharts",
+                "to": "fe.pages",
+                "payload": "Async read of vision.research.chartBuilder.layouts.v2 before library edits",
+                "annotation": "apps/native/Sources/VisionNativeCore/Shell/ResearchChartStorageBridge.swift reads the retained WK page; apps/native/Sources/VisionNativeCore/Screens/ResearchCharts/ResearchChartLayoutStore.swift preserves the source version/state format and UTF-16 read bound."
+              },
+              {
+                "from": "fe.pages",
+                "to": "native.researchcharts",
+                "payload": "Complete valid library or explicit transport/storage failure",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/ResearchCharts/ResearchChartBuilderModel.swift restores authority before editing and keeps failed reads distinct from a missing key. Layouts retain source limits and shared URL consumption."
+              },
+              {
+                "from": "native.researchcharts",
+                "to": "fe.pages",
+                "payload": "Serialized local library writes, at most 250,000 UTF-8 bytes; create/duplicate/delete/Undo metadata",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/ResearchCharts/ResearchChartLayoutStore.swift validates 20 layouts, five series and 20 indicators. apps/native/Sources/VisionNativeCore/Screens/ResearchCharts/ResearchChartBuilderModel.swift queues writes and exposes failed acknowledgements; no market values are persisted."
+              },
+              {
+                "from": "native.researchcharts",
+                "to": "native.researchcharts",
+                "payload": "Encode structural chart state as the versioned base64url chart parameter, at most 20,000 characters",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/ResearchCharts/ResearchChartBuilderModel.swift copyShareLink resolves the retained page origin and constructs a valid HTTP(S) share URL. apps/native/Sources/VisionNativeCore/Screens/ResearchCharts/ResearchChartBuilderData.swift preserves the source portable state codec."
+              },
+              {
+                "from": "native.researchcharts",
+                "to": "native.researchcharts",
+                "payload": "Copy share URL to the clipboard and display success or failure",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/ResearchCharts/ResearchChartBuilderModel.swift awaits the injected copyText action and reports shareCopied or shareFailed. Local layout authority stays separate from clipboard sharing."
+              }
+            ],
+            "docs": [
+              {
+                "path": "architecture/native-app.md",
+                "label": "Native architecture"
+              },
+              {
+                "path": "reference/native-parity/research-and-ai-chat.md",
+                "label": "Research parity"
+              },
+              {
+                "path": "api/research.md",
+                "label": "Research API"
+              },
+              {
+                "path": "features/research.md",
+                "label": "Research"
+              }
+            ]
+          },
+          {
+            "id": "native-research-forecast-life",
+            "name": "Project native Forecast and compare a three-month income interruption",
+            "category": "Native migration",
+            "summary": "Main Forecast and embedded Life Scenario retain independent current-input authority; TypeScript prepares matched requests and compares exact market inputs, while native settings writes retain original CAS baselines.",
+            "steps": [
+              {
+                "from": "native.researchforecast",
+                "to": "be.routes",
+                "payload": "Existing portfolio-forecast with current main controls after 450 ms debounce",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/ResearchForecast/ResearchForecastModel.swift retains five-minute cache, valid-input/visit/generation guards and source defaults. Pending/invalid input hides old results; native never simulates financial paths."
+              },
+              {
+                "from": "be.routes",
+                "to": "sv.research",
+                "payload": "Existing TypeScript seeded parametric/bootstrap projection and authoritative bands",
+                "annotation": "apps/node-backend/src/services/research/projection/portfolioProjection.ts computes the unchanged portfolio projection. apps/native/Sources/VisionNativeCore/Screens/ResearchForecast/ResearchForecastData.swift retains Decimal values and rejects numeric-null available bands at the canonical client boundary."
+              },
+              {
+                "from": "native.researchforecast",
+                "to": "sv.researchpresentation",
+                "payload": "kind lifeScenarioPrepare with scenario, immediate main input and structural goal month",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/ResearchForecast/ResearchLifeScenarioModel.swift guards draft/input/currency signatures. packages/shared-utils/src/research/forecastScenario.ts overrides discarded main money/goal/seed fields and returns reduced contribution, monthly deficit and identical paired seed."
+              },
+              {
+                "from": "native.researchforecast",
+                "to": "sv.research",
+                "payload": "Two existing forecast requests in parallel; interruption schedule is exactly three reduced months",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/ResearchForecast/ResearchForecastService.swift forwards prepared camel inputs through the existing snake-case forecast API. Unsaved runs use a fresh ID, saved runs retain their ID, and no additional simulation/provider/FX call is introduced."
+              },
+              {
+                "from": "native.researchforecast",
+                "to": "sv.researchpresentation",
+                "payload": "kind lifeScenarioCompare with both captured raw forecasts",
+                "annotation": "packages/shared-utils/src/research/forecastScenario.ts compares exactly startValue/historyDays/expectedAnnualReturn/annualVolatility/forwardBlend with strict undefined semantics. apps/node-backend/src/services/research/presentationService.ts rejects available null medians rather than allowing null-to-zero coercion."
+              },
+              {
+                "from": "sv.researchpresentation",
+                "to": "native.researchforecast",
+                "payload": "Comparable known median gap or explicit inputsChanged/unavailable result",
+                "annotation": "apps/native/Sources/VisionNativeUI/ResearchForecastView.swift and apps/native/Sources/VisionNativeUI/ResearchLifeScenarioViews.swift render returned amounts and probabilities. apps/native/Sources/VisionNativeUI/ResearchForecastChart.swift draws six server percentile/capital series with original Decimal readouts."
+              },
+              {
+                "from": "native.researchforecast",
+                "to": "be.routes",
+                "payload": "Existing life_scenarios settings CAS for Save/Delete/bounded Undo",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/ResearchForecast/ResearchLifeScenarioModel.swift pins first-read raw baselines and serializes receipts. Failed/lost acknowledgements retain recovery state; only acknowledged writes advance authority."
+              },
+              {
+                "from": "be.routes",
+                "to": "native.researchforecast",
+                "payload": "Acknowledged baseline update and generation-safe screen lifecycle",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/ResearchForecast/ResearchForecastScreens.swift resets real exits while parent wrappers retain temporary overlays. Late write acknowledgements can update baselines without restoring departed drafts; no new polling/leave guard is added."
+              }
+            ],
+            "docs": [
+              {
+                "path": "architecture/native-app.md",
+                "label": "Native architecture"
+              },
+              {
+                "path": "reference/native-parity/research-and-ai-chat.md",
+                "label": "Research parity"
+              },
+              {
+                "path": "api/research.md",
+                "label": "Research API"
+              },
+              {
+                "path": "features/research.md",
+                "label": "Research"
               }
             ]
           }

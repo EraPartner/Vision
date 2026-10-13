@@ -105,6 +105,37 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             })
         let analysisMonitors = AnalysisMonitorsModel(service: client)
         let research = ResearchScreens(client: client)
+        let researchForecast = ResearchForecastScreens(client: client)
+        let researchCharts = ResearchChartBuilderModel(
+            client: client,
+            store: ResearchChartLayoutClosureStore(
+                read: { [weak self] in
+                    guard let self else { throw APIError.backendUnavailable }
+                    return try await self.readChartLayouts()
+                },
+                write: { [weak self] data in await self?.writeChartLayouts(data) ?? false }))
+        researchCharts.shareOrigin = { [weak self] in
+            guard let url = self?.appURL, var origin = URLComponents(url: url, resolvingAgainstBaseURL: false),
+                origin.scheme != nil, origin.host != nil
+            else { throw APIError.backendUnavailable }
+            origin.path = ""
+            origin.query = nil
+            origin.fragment = nil
+            origin.user = nil
+            origin.password = nil
+            guard let value = origin.string else { throw APIError.backendUnavailable }
+            return value
+        }
+        researchCharts.copyText = { value in
+            NSPasteboard.general.clearContents()
+            guard NSPasteboard.general.setString(value, forType: .string) else {
+                throw APIError.invalidRequest("Clipboard write failed")
+            }
+        }
+        researchCharts.didReplaceRoute = { [weak self] route in
+            guard let self, self.shellModel.route.path == route.path else { return }
+            self.shellModel.replaceQuery(route.query)
+        }
         research.didMutatePortfolio = { [weak self] in await self?.shellModel.portfolioDataDidMutate() }
         analysis.workspace.saveExport = { [weak self] data, name in
             guard let self else { return false }
@@ -187,6 +218,8 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             analysis: analysis,
             analysisMonitors: analysisMonitors,
             research: research,
+            researchForecast: researchForecast,
+            researchChartBuilder: researchCharts,
             hiddenSections: Self.loadHiddenSections(),
             loadSettings: { try await client.appSettings() },
             saveHiddenSections: { Self.saveHiddenSections($0) },
@@ -255,6 +288,48 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     /// accessible, and every argument goes through WebKit's argument binding.
     private func homeLocalStorage(key: String, value: JSONValue? = nil) async -> JSONValue? {
         await webStorage(key: key, value: value, session: false)
+    }
+
+    private func readChartLayouts() async throws -> Data? {
+        try await chartLayoutStorage(writing: nil).map { Data($0.utf8) }
+    }
+
+    private func writeChartLayouts(_ data: Data) async -> Bool {
+        do {
+            let value = try ResearchChartStorageBridge.writeValue(data)
+            return try await chartLayoutStorage(writing: value) == value
+        } catch { return false }
+    }
+
+    private func chartLayoutStorage(writing value: String?) async throws -> String? {
+        guard queue.isReady, let webView = webShell?.webView else { throw APIError.backendUnavailable }
+        return try await withCheckedThrowingContinuation {
+            (continuation: CheckedContinuation<String?, any Error>) in
+            let pending = OSAllocatedUnfairLock<CheckedContinuation<String?, any Error>?>(initialState: continuation)
+            let resume: @Sendable (Result<String?, any Error>) -> Void = { result in
+                let waiting = pending.withLock { state -> CheckedContinuation<String?, any Error>? in
+                    defer { state = nil }
+                    return state
+                }
+                waiting?.resume(with: result)
+            }
+            let timeout = Task {
+                try? await Task.sleep(for: Self.adminTokenTimeout)
+                resume(.failure(APIError.backendUnavailable))
+            }
+            webView.callAsyncJavaScript(
+                ResearchChartStorageBridge.script,
+                arguments: [
+                    "key": ResearchChartStorageBridge.key, "value": value ?? "", "writing": value != nil,
+                ], in: nil, in: .page
+            ) { result in
+                do {
+                    guard let text = try result.get() as? String else { throw APIError.backendUnavailable }
+                    resume(.success(try ResearchChartStorageBridge.readReply(text)))
+                } catch { resume(.failure(error)) }
+                timeout.cancel()
+            }
+        }
     }
 
     /// Import checkpoints share the retained web page's session and contain metadata only.

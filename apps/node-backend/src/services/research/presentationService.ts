@@ -10,6 +10,11 @@ import {
 } from "@vision/shared-utils/research/presentation";
 import { deriveUnitMath } from "@vision/shared-utils/research/unitMath";
 
+import {
+  prepareLifeScenario,
+  compareLifeScenarioForecasts,
+} from "@vision/shared-utils/research/forecastScenario";
+
 export const RESEARCH_PRESENTATION_MAX_BYTES = 64 * 1024 * 1024;
 const point = z.object({
   time: z.number(),
@@ -67,7 +72,72 @@ const chart = z
           message: "Indicator source must exist",
         });
   });
+const lifeScenarioPrepare = z
+  .object({
+    kind: z.literal("lifeScenarioPrepare"),
+    scenario: z.looseObject({
+      id: z.string().min(1),
+      kind: z.literal("income_interruption").optional(),
+      interruptionMonths: z.literal(3),
+      monthlySurplus: z.number().min(0),
+      monthlyIncomeLoss: z.number().min(0),
+      monthlyContribution: z.number().min(0),
+      goalValue: z.number().positive().optional(),
+    }),
+    forecastInput: z.looseObject({
+      horizonMonths: z.number().int().min(1).max(600),
+    }),
+    goalMonth: z.number().int().positive().nullable().optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.scenario.monthlyContribution > value.scenario.monthlySurplus)
+      ctx.addIssue({
+        code: "custom",
+        message: "research.lifeScenario.invalid",
+      });
+    if (
+      (value.goalMonth != null) !== (value.scenario.goalValue !== undefined) ||
+      (value.goalMonth != null &&
+        value.goalMonth > value.forecastInput.horizonMonths)
+    )
+      ctx.addIssue({
+        code: "custom",
+        message: "research.lifeScenario.invalid",
+      });
+  });
+const forecastComparisonInput = z.looseObject({
+  available: z.boolean(),
+  startValue: z.number().nullable().optional(),
+  historyDays: z.number().nullable().optional(),
+  expectedAnnualReturn: z.number().nullable().optional(),
+  annualVolatility: z.number().nullable().optional(),
+  forwardBlend: z.number().nullable().optional(),
+  projected: z
+    .looseObject({ p50: z.number().nullable().optional() })
+    .nullable()
+    .optional(),
+});
 const schema = z.discriminatedUnion("kind", [
+  lifeScenarioPrepare,
+  z
+    .object({
+      kind: z.literal("lifeScenarioCompare"),
+      baseline: forecastComparisonInput,
+      interrupted: forecastComparisonInput,
+    })
+    .superRefine((value, ctx) => {
+      // The maintained forecast client rejects available numeric-null projections.
+      // Do not let JS null coercion manufacture a median difference for that failure.
+      if (
+        [value.baseline, value.interrupted].some(
+          (result) => result.available && result.projected?.p50 === null,
+        )
+      )
+        ctx.addIssue({
+          code: "custom",
+          message: "Available forecast median must be numeric",
+        });
+    }),
   z.object({
     kind: z.literal("compare"),
     series: z
@@ -129,6 +199,20 @@ const schema = z.discriminatedUnion("kind", [
 export function computeResearchPresentation(input: unknown) {
   const value = parseInput(schema, input);
   switch (value.kind) {
+    case "lifeScenarioPrepare":
+      return {
+        kind: value.kind,
+        result: prepareLifeScenario(
+          value.scenario,
+          value.forecastInput,
+          value.goalMonth ?? undefined,
+        ),
+      };
+    case "lifeScenarioCompare":
+      return {
+        kind: value.kind,
+        result: compareLifeScenarioForecasts(value.baseline, value.interrupted),
+      };
     case "compare":
       return { kind: value.kind, result: comparePresentation(value.series) };
     case "chart":

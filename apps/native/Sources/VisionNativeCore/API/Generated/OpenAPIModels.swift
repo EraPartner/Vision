@@ -6596,6 +6596,87 @@ extension OpenAPI {
         }
     }
 
+    public struct ResearchForecastForwardHolding: Codable, Equatable, Sendable {
+        public let symbol: String
+        public let expectedAnnual: Decimal
+        public let growth: Decimal
+        public let dividendYield: Decimal?
+
+        public init(symbol: String, expectedAnnual: Decimal, growth: Decimal, dividendYield: Decimal? = nil) {
+            self.symbol = symbol
+            self.expectedAnnual = expectedAnnual
+            self.growth = growth
+            self.dividendYield = dividendYield
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case symbol = "symbol"
+            case expectedAnnual = "expectedAnnual"
+            case growth = "growth"
+            case dividendYield = "dividendYield"
+        }
+    }
+
+    public struct ResearchForecastPoint: Codable, Equatable, Sendable {
+        public let monthIndex: Int
+        public let date: String
+        public let netInvested: Decimal?
+        public let p10: Decimal?
+        public let p25: Decimal?
+        public let p50: Decimal?
+        public let p75: Decimal?
+        public let p90: Decimal?
+
+        public init(monthIndex: Int, date: String, netInvested: Decimal? = nil, p10: Decimal? = nil, p25: Decimal? = nil, p50: Decimal? = nil, p75: Decimal? = nil, p90: Decimal? = nil) {
+            self.monthIndex = monthIndex
+            self.date = date
+            self.netInvested = netInvested
+            self.p10 = p10
+            self.p25 = p25
+            self.p50 = p50
+            self.p75 = p75
+            self.p90 = p90
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case monthIndex = "monthIndex"
+            case date = "date"
+            case netInvested = "netInvested"
+            case p10 = "p10"
+            case p25 = "p25"
+            case p50 = "p50"
+            case p75 = "p75"
+            case p90 = "p90"
+        }
+    }
+
+    public struct ResearchForecastProjected: Codable, Equatable, Sendable {
+        public let mean: Decimal?
+        public let p10: Decimal?
+        public let p25: Decimal?
+        public let p50: Decimal?
+        public let p75: Decimal?
+        public let p90: Decimal?
+
+        public init(mean: Decimal? = nil, p10: Decimal? = nil, p25: Decimal? = nil, p50: Decimal? = nil, p75: Decimal? = nil, p90: Decimal? = nil) {
+            self.mean = mean
+            self.p10 = p10
+            self.p25 = p25
+            self.p50 = p50
+            self.p75 = p75
+            self.p90 = p90
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case mean = "mean"
+            case p10 = "p10"
+            case p25 = "p25"
+            case p50 = "p50"
+            case p75 = "p75"
+            case p90 = "p90"
+        }
+    }
+
     public struct ResearchFundamentals: Codable, Equatable, Sendable {
         public let symbol: String?
         public let name: String?
@@ -6680,6 +6761,117 @@ extension OpenAPI {
             case interestCoverage = "interestCoverage"
             case freeCashFlow = "freeCashFlow"
             case fcfYield = "fcfYield"
+        }
+    }
+
+    public struct ResearchMacroSearchData: Codable, Equatable, Sendable {
+        public let items: [OpenAPI.ResearchMacroSeriesItem]
+
+        public init(items: [OpenAPI.ResearchMacroSeriesItem]) {
+            self.items = items
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case items = "items"
+        }
+    }
+
+    public struct ResearchMacroSearchEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let meta: OpenAPI.ResearchMeta?
+        public let error: OpenAPI.ErrorPayload?
+        public let data: OpenAPI.ResearchMacroSearchData?
+
+        public init(ok: Bool, meta: OpenAPI.ResearchMeta? = nil, error: OpenAPI.ErrorPayload? = nil, data: OpenAPI.ResearchMacroSearchData? = nil) {
+            self.ok = ok
+            self.meta = meta
+            self.error = error
+            self.data = data
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case meta = "meta"
+            case error = "error"
+            case data = "data"
+        }
+    }
+
+    public struct ResearchMacroSeriesData: Codable, Equatable, Sendable {
+        public let provider: String
+        public let seriesId: String
+        public let title: String?
+        public let units: String?
+        public let frequency: String?
+        public let points: [OpenAPI.ResearchChartPoint]
+
+        public init(provider: String, seriesId: String, title: String? = nil, units: String? = nil, frequency: String? = nil, points: [OpenAPI.ResearchChartPoint]) {
+            self.provider = provider
+            self.seriesId = seriesId
+            self.title = title
+            self.units = units
+            self.frequency = frequency
+            self.points = points
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case provider = "provider"
+            case seriesId = "seriesId"
+            case title = "title"
+            case units = "units"
+            case frequency = "frequency"
+            case points = "points"
+        }
+    }
+
+    public struct ResearchMacroSeriesEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let meta: OpenAPI.ResearchMeta?
+        public let error: OpenAPI.ErrorPayload?
+        public let data: OpenAPI.ResearchMacroSeriesData?
+
+        public init(ok: Bool, meta: OpenAPI.ResearchMeta? = nil, error: OpenAPI.ErrorPayload? = nil, data: OpenAPI.ResearchMacroSeriesData? = nil) {
+            self.ok = ok
+            self.meta = meta
+            self.error = error
+            self.data = data
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case meta = "meta"
+            case error = "error"
+            case data = "data"
+        }
+    }
+
+    public struct ResearchMacroSeriesItem: Codable, Equatable, Sendable {
+        public let provider: String
+        public let seriesId: String
+        public let title: String?
+        public let region: String?
+        public let units: String?
+        public let frequency: String?
+        public let source: String?
+
+        public init(provider: String, seriesId: String, title: String? = nil, region: String? = nil, units: String? = nil, frequency: String? = nil, source: String? = nil) {
+            self.provider = provider
+            self.seriesId = seriesId
+            self.title = title
+            self.region = region
+            self.units = units
+            self.frequency = frequency
+            self.source = source
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case provider = "provider"
+            case seriesId = "seriesId"
+            case title = "title"
+            case region = "region"
+            case units = "units"
+            case frequency = "frequency"
+            case source = "source"
         }
     }
 
@@ -6930,6 +7122,122 @@ extension OpenAPI {
         public let data: OpenAPI.ResearchNewsData?
 
         public init(ok: Bool, meta: OpenAPI.ResearchMeta? = nil, error: OpenAPI.ErrorPayload? = nil, data: OpenAPI.ResearchNewsData? = nil) {
+            self.ok = ok
+            self.meta = meta
+            self.error = error
+            self.data = data
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case meta = "meta"
+            case error = "error"
+            case data = "data"
+        }
+    }
+
+    /// available=false contains a reason and optional historyDays. Computed monetary fields can
+    /// serialize null on numeric overflow. Such an available response is rejected by the maintained
+    /// PortfolioForecastSchema/native client validity guard; nullable wire representation never
+    /// authorizes invented zero values or a comparison.
+    public struct ResearchPortfolioForecastData: Codable, Equatable, Sendable {
+        public let available: Bool
+        public let reason: String?
+        public let currency: String?
+        public let method: String?
+        public let horizonMonths: Int?
+        public let paths: Int?
+        public let seed: String?
+        public let historyDays: Int?
+        public let flowArtifactDays: Int?
+        public let lowConfidence: Bool?
+        public let startValue: Decimal?
+        public let startInvested: Decimal?
+        public let monthlyContribution: Decimal?
+        /// Month at which target probability is evaluated
+        public let goalMonth: Int?
+        public let totalContributions: Decimal?
+        public let netInvested: Decimal?
+        public let expectedAnnualReturn: Decimal?
+        public let historicalAnnualReturn: Decimal?
+        public let annualVolatility: Decimal?
+        public let forwardBlend: Decimal?
+        public let usedForward: Bool?
+        public let forwardHoldings: [OpenAPI.ResearchForecastForwardHolding]?
+        public let projected: OpenAPI.ResearchForecastProjected?
+        public let probBelowInvested: Decimal?
+        public let targetValue: Decimal?
+        public let probTarget: Decimal?
+        public let points: [OpenAPI.ResearchForecastPoint]?
+
+        public init(available: Bool, reason: String? = nil, currency: String? = nil, method: String? = nil, horizonMonths: Int? = nil, paths: Int? = nil, seed: String? = nil, historyDays: Int? = nil, flowArtifactDays: Int? = nil, lowConfidence: Bool? = nil, startValue: Decimal? = nil, startInvested: Decimal? = nil, monthlyContribution: Decimal? = nil, goalMonth: Int? = nil, totalContributions: Decimal? = nil, netInvested: Decimal? = nil, expectedAnnualReturn: Decimal? = nil, historicalAnnualReturn: Decimal? = nil, annualVolatility: Decimal? = nil, forwardBlend: Decimal? = nil, usedForward: Bool? = nil, forwardHoldings: [OpenAPI.ResearchForecastForwardHolding]? = nil, projected: OpenAPI.ResearchForecastProjected? = nil, probBelowInvested: Decimal? = nil, targetValue: Decimal? = nil, probTarget: Decimal? = nil, points: [OpenAPI.ResearchForecastPoint]? = nil) {
+            self.available = available
+            self.reason = reason
+            self.currency = currency
+            self.method = method
+            self.horizonMonths = horizonMonths
+            self.paths = paths
+            self.seed = seed
+            self.historyDays = historyDays
+            self.flowArtifactDays = flowArtifactDays
+            self.lowConfidence = lowConfidence
+            self.startValue = startValue
+            self.startInvested = startInvested
+            self.monthlyContribution = monthlyContribution
+            self.goalMonth = goalMonth
+            self.totalContributions = totalContributions
+            self.netInvested = netInvested
+            self.expectedAnnualReturn = expectedAnnualReturn
+            self.historicalAnnualReturn = historicalAnnualReturn
+            self.annualVolatility = annualVolatility
+            self.forwardBlend = forwardBlend
+            self.usedForward = usedForward
+            self.forwardHoldings = forwardHoldings
+            self.projected = projected
+            self.probBelowInvested = probBelowInvested
+            self.targetValue = targetValue
+            self.probTarget = probTarget
+            self.points = points
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case available = "available"
+            case reason = "reason"
+            case currency = "currency"
+            case method = "method"
+            case horizonMonths = "horizonMonths"
+            case paths = "paths"
+            case seed = "seed"
+            case historyDays = "historyDays"
+            case flowArtifactDays = "flowArtifactDays"
+            case lowConfidence = "lowConfidence"
+            case startValue = "startValue"
+            case startInvested = "startInvested"
+            case monthlyContribution = "monthlyContribution"
+            case goalMonth = "goalMonth"
+            case totalContributions = "totalContributions"
+            case netInvested = "netInvested"
+            case expectedAnnualReturn = "expectedAnnualReturn"
+            case historicalAnnualReturn = "historicalAnnualReturn"
+            case annualVolatility = "annualVolatility"
+            case forwardBlend = "forwardBlend"
+            case usedForward = "usedForward"
+            case forwardHoldings = "forwardHoldings"
+            case projected = "projected"
+            case probBelowInvested = "probBelowInvested"
+            case targetValue = "targetValue"
+            case probTarget = "probTarget"
+            case points = "points"
+        }
+    }
+
+    public struct ResearchPortfolioForecastEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let meta: OpenAPI.ResearchMeta?
+        public let error: OpenAPI.ErrorPayload?
+        public let data: OpenAPI.ResearchPortfolioForecastData?
+
+        public init(ok: Bool, meta: OpenAPI.ResearchMeta? = nil, error: OpenAPI.ErrorPayload? = nil, data: OpenAPI.ResearchPortfolioForecastData? = nil) {
             self.ok = ok
             self.meta = meta
             self.error = error
