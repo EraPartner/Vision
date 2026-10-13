@@ -2,8 +2,8 @@
 title: Vision Native App Architecture
 type: architecture-doc
 status: active
-date: 2026-10-12
-updated: 2026-10-12
+date: 2026-10-13
+updated: 2026-10-13
 tags:
   [
     architecture,
@@ -62,7 +62,7 @@ aliases: [vision native, native app, swift app]
 | `apps/native/Sources/VisionNativeCore/API/`        | `APIClient` (the Swift `client.ts`) and the generated OpenAPI models and operations   |
 | `apps/native/Sources/VisionNativeCore/Design/`     | Generated design tokens and `ThemeSelection` (variant and appearance of the page)     |
 | `apps/native/Sources/VisionNativeCore/Navigation/` | Generated sidebar registry, routes, shortcuts and the `NativeShellModel` (phase 2)    |
-| `apps/native/Sources/VisionNativeCore/Screens/`    | View models and presentation of native screens (Exchange rates, Admin, Planned)       |
+| `apps/native/Sources/VisionNativeCore/Screens/`    | View models of native screens (Exchange rates, Admin, Planned, Imports)               |
 | `apps/native/Sources/VisionNativeUI/`              | SwiftUI shell, native screens and the generated `Localizable.xcstrings` (phase 2)     |
 | `apps/native/openapi-operations.txt`               | The operationIds the Swift client is generated for                                    |
 | `apps/native/i18n-keys.txt`                        | The `i18n/source` keys copied into the String Catalog                                 |
@@ -298,7 +298,8 @@ mirror.
 leaves out its own sidebar and reports `pathname + search` with `routeChanged` (see
 [[docs/architecture/native-app#Native navigation and screens (phase 2)|phase 2]]).
 
-Events: `menu:action`, `app:csv-opened` (a CSV opened with the app, at most 25 MiB),
+Events: `menu:action`, `app:csv-opened` (a CSV opened with the app, at most 25 MiB, while
+`app_settings` is not read yet; afterwards the native Import & export card takes it),
 `window:fullscreen` and `app:accent-color-changed` (on `AppleColorPreferencesChangedNotification`)
 are sent. `backend:lost` and `backend:restored` can be subscribed to but never fire, because the
 health watchdog is not ported yet.
@@ -678,9 +679,10 @@ removes the parameter, like `useSearchParamState` writing its default.
 that way. Every native screen waits for the first `app_settings` answer and shows the web view until
 then. The native shell never redirects: an admin route shows a native screen only while
 `app_settings` says admin mode is on, and otherwise the web view, where `RequireAdmin` redirects and
-reports the new route. Screens outside the admin section (`/planned`) are native in either mode. The
-page's topbar keeps its traffic-light inset only while the native sidebar is hidden
-(`native-sidebar`).
+reports the new route. Screens outside the admin section (`/planned`, `/import`,
+`/import/:batchId/review`) are native in
+either mode. The page's topbar keeps its traffic-light inset only while the native sidebar is
+hidden (`native-sidebar`).
 
 The command palette and the shortcuts stay the page's. On a native screen, which takes the key
 events, `NativeShortcuts` handles the same keys: ⌘K sends `open-palette`, `?` opens the shortcuts
@@ -771,6 +773,35 @@ baseline of its last read. Track creates the planned payment directly. The share
 `VisionNativeUI/Components` over `PickerDataModel`: `VisionDateField` (typed date, calendar, Clear),
 `RecipientPicker`, `CategoryPicker`, `AccountPicker` and `TagField`. Every model that a view's
 `.task` loads shares one request in flight, so a second caller waits for the first.
+
+### Import & export (phase 3d)
+
+`/import` and `/import/:batchId/review` are native without admin mode
+([[docs/reference/native-parity/imports|imports parity]], [[docs/api/imports|imports API]]): the
+commit receipt, the bank import card, Import history, the export card, Setup and reference and the
+Review import screen (`ImportRoutes.reviewIsNative`). The export card downloads the raw body through
+`APIClient.download` and hands it to `TransactionExportModel.save`, which the app target implements
+with an `NSSavePanel`. The review model (`ImportReviewModel`) sends one override request per row
+when a group's payee or category changes, then reloads the preview; Commit and Discard replace the
+route with `/import` (`NativeShellModel.replace(with:)`) and the commit hands its receipt to
+`ImportsModel.showCommitReceipt`. One `ImportNoticeCenter` stacks the toasts of both pages. `ImportsModel` loads the built-in adapters once, the saved
+parsers (one-minute stale time) and the history pages (ten per page, 30-second stale time), each
+with one request in flight. A built-in bank streams `POST /api/import/csv/stream` through
+`APIClient.streamEvents`: a hand-written `multipart/form-data` body (`MultipartFormData`), the
+response read as Server-Sent Events (`ServerSentEventParser`, the web's `readSseFrames`) over the
+`APIStreamTransport` seam, and Cancel cancels the task, which closes the connection. A custom or
+saved parser posts one `POST /api/import/csv/custom` (`ImportCsvCustomRequest`). The generator
+writes JSON bodies only, so these two and the payee and category imports stay hand-written, as
+do the review's preview, override and commit requests (the override body sends an explicit `null`).
+`CSVPreview` reads the detected columns and sample rows from the first 16 KB of the file on the
+Mac, like `useCsvPreview`. A batch that needs review navigates to its review route without the
+Leave this page? alert; when the import finishes after the user left `/import`, the shell stays
+where it is and an Awaiting review toast offers Resume review instead. A chosen file or an unsaved
+parser edit otherwise registers the shell's leave guard. A CSV opened from Finder or the dock or
+dropped on a native screen goes to `NativeShellModel.openImportFile`, which pre-fills the native
+card within 30 seconds (after a running import ends) and moves to `/import`; before `app_settings`
+is read the web page also gets the file as `app:csv-opened` and does the navigation, so a cold
+launch keeps the file whichever side draws `/import`. The import never starts by itself.
 
 ## CI
 

@@ -2599,6 +2599,37 @@ components:
                 type: string
             - type: string
 
+    # The transaction parser setup a saved custom parser stores (`parserConfigSchema`
+    # in lib/parserConfigSchema.ts, camelCase keys plus `number_format`). The server
+    # fills absent keys with their defaults on save; older rows may lack some.
+    TransactionParserConfig:
+      type: object
+      additionalProperties: true
+      properties:
+        dateColumn:
+          type: string
+        recipientColumn:
+          type: string
+        amountColumn:
+          type: string
+        memoColumn:
+          type: string
+        dateFormat:
+          type: string
+          description: strptime-style date format, default `%Y-%m-%d`.
+        separator:
+          type: string
+          description: CSV delimiter, default ','
+        encoding:
+          type: string
+          description: UTF-8, Latin-1 (latin1, latin-1, iso-8859-1), or windows-1252.
+        skipRows:
+          type: integer
+          minimum: 0
+          description: Physical leading lines before the CSV header.
+        number_format:
+          $ref: "#/components/schemas/CsvNumberFormat"
+
     CustomParserConfig:
       type: object
       required: [id, name, config]
@@ -2608,11 +2639,7 @@ components:
         name:
           type: string
         config:
-          type: object
-          additionalProperties: true
-          properties:
-            number_format:
-              $ref: "#/components/schemas/CsvNumberFormat"
+          $ref: "#/components/schemas/TransactionParserConfig"
         created_at:
           type: string
           format: date-time
@@ -8359,6 +8386,21 @@ paths:
           schema:
             type: string
         - in: query
+          name: bank_accounts
+          description: >-
+            Comma-separated account labels (legacy escape hatch next to account_ids); blank
+            entries are dropped and the list is capped at 50 entries.
+          schema:
+            type: string
+        - in: query
+          name: category_ids
+          description: >-
+            Comma-separated category ids. Every element must be a plain base-10 integer in
+            1..2147483647; a malformed element returns 400 VALIDATION_ERROR.
+          schema:
+            type: string
+            pattern: "^([0-9]+(,[0-9]+)*)?$"
+        - in: query
           name: include_balance
           schema:
             type: boolean
@@ -8412,6 +8454,21 @@ paths:
           name: bank_account
           schema:
             type: string
+        - in: query
+          name: bank_accounts
+          description: >-
+            Comma-separated account labels (legacy escape hatch next to account_ids); blank
+            entries are dropped and the list is capped at 50 entries.
+          schema:
+            type: string
+        - in: query
+          name: category_ids
+          description: >-
+            Comma-separated category ids. Every element must be a plain base-10 integer in
+            1..2147483647; a malformed element returns 400 VALIDATION_ERROR.
+          schema:
+            type: string
+            pattern: "^([0-9]+(,[0-9]+)*)?$"
         - in: query
           name: tags
           schema:
@@ -12234,11 +12291,7 @@ paths:
                 name:
                   type: string
                 config:
-                  type: object
-                  additionalProperties: true
-                  properties:
-                    number_format:
-                      $ref: "#/components/schemas/CsvNumberFormat"
+                  $ref: "#/components/schemas/TransactionParserConfig"
       responses:
         "201":
           description: Created parser config
@@ -12277,11 +12330,7 @@ paths:
                 name:
                   type: string
                 config:
-                  type: object
-                  additionalProperties: true
-                  properties:
-                    number_format:
-                      $ref: "#/components/schemas/CsvNumberFormat"
+                  $ref: "#/components/schemas/TransactionParserConfig"
       responses:
         "200":
           description: Updated parser config
@@ -12380,7 +12429,20 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [deleted, recipientsRemoved]
+                        properties:
+                          deleted:
+                            type: integer
+                            description: Committed transactions removed.
+                          recipientsRemoved:
+                            type: integer
+                            description: Payees the batch created that no longer have transactions.
 
   /api/import/batches/{id}/preview:
     parameters:

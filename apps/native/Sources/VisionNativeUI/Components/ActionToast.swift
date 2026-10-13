@@ -14,6 +14,10 @@ struct ActionToast: View {
     let duration: Duration
     let action: () -> Void
     let clear: (Int) -> Void
+    /// ⌘Z runs the action (an Undo); off for an action that is not one.
+    var bindsUndoShortcut = true
+    /// Lifts a stacked toast above the newer ones.
+    var bottomPadding: CGFloat = 20
     @Environment(\.visionTheme) var theme
 
     var body: some View {
@@ -21,9 +25,7 @@ struct ActionToast: View {
             let title = strings.t(notice.key, notice.variables)
             HStack(alignment: .center, spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Label(
-                        title,
-                        systemImage: notice.kind == .success ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                    Label(title, systemImage: Self.symbol(notice.kind))
                     if let detail = notice.detail, !detail.isEmpty {
                         Text(detail)
                             .font(.footnote)
@@ -38,20 +40,22 @@ struct ActionToast: View {
                         .background {
                             // The shortcut lives on its own invisible button so a click on Undo
                             // still acts while a field keeps focus; only the key checks typing.
-                            Button("", action: undoShortcut)
-                                .keyboardShortcut("z", modifiers: .command)
-                                .opacity(0)
-                                .frame(width: 0, height: 0)
-                                .accessibilityHidden(true)
+                            if bindsUndoShortcut {
+                                Button("", action: undoShortcut)
+                                    .keyboardShortcut("z", modifiers: .command)
+                                    .opacity(0)
+                                    .frame(width: 0, height: 0)
+                                    .accessibilityHidden(true)
+                            }
                         }
                 }
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.card))
-            .foregroundStyle(notice.kind == .success ? theme.foreground : theme.destructive)
+            .foregroundStyle(notice.kind == .error ? theme.destructive : theme.foreground)
             .frame(maxWidth: 560)
-            .padding(.bottom, 20)
+            .padding(.bottom, bottomPadding)
             .transition(.move(edge: .bottom).combined(with: .opacity))
             .accessibilityElement(children: .contain)
             .task(id: notice.id) {
@@ -60,6 +64,15 @@ struct ActionToast: View {
                 guard !Task.isCancelled else { return }
                 clear(notice.id)
             }
+        }
+    }
+
+    /// The toast's icon: success, error or `toast.info`.
+    static func symbol(_ kind: ScreenNotice.Kind) -> String {
+        switch kind {
+        case .success: return "checkmark.circle.fill"
+        case .error: return "exclamationmark.circle.fill"
+        case .info: return "info.circle.fill"
         }
     }
 

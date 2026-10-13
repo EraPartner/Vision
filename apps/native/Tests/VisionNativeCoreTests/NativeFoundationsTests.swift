@@ -118,7 +118,7 @@ import Testing
         #expect(NativeScreen.screen(forPath: "/admin/endpoints") == .endpointLiveness)
         #expect(NativeScreen.screen(forPath: "/admin/db") == .databaseMaintenance)
         #expect(NativeScreen.screen(forPath: "/admin/db/transactions") == NativeScreen.tableEditor(table: "transactions"))
-        let adminScreens = NativeScreen.fixedScreens.filter { $0 != .plannedPayments }
+        let adminScreens = NativeScreen.fixedScreens.filter { $0 != .plannedPayments && $0 != .importExport }
         #expect(adminScreens.allSatisfy { screen in screen.requiresAdmin })
         #expect(NativeScreen.tableEditor(table: "x").requiresAdmin)
         #expect(NativeScreen.screen(forPath: "/planned") == .plannedPayments)

@@ -55,6 +55,8 @@ public final class NativeShellModel {
     public let admin: AdminScreens
     /// `/planned`.
     public let planned: PlannedPaymentsModel
+    /// `/import`.
+    public let imports: ImportsModel
     /// The navigation the Leave this page? alert holds while it asks (`blocker.location`).
     public private(set) var leaveConfirmation: NativeRoute?
 
@@ -81,6 +83,7 @@ public final class NativeShellModel {
         exchangeRates: ExchangeRatesModel,
         admin: AdminScreens,
         planned: PlannedPaymentsModel,
+        imports: ImportsModel,
         hiddenSections: [NavSectionID: Bool]? = nil,
         loadSettings: @escaping @Sendable () async throws -> NativeAppSettings,
         saveHiddenSections: @escaping @MainActor ([NavSectionID: Bool]) -> Void = { _ in },
@@ -93,6 +96,7 @@ public final class NativeShellModel {
         self.exchangeRates = exchangeRates
         self.admin = admin
         self.planned = planned
+        self.imports = imports
         self.hiddenSections = hiddenSections ?? Self.defaultHiddenSections
         self.loadSettings = loadSettings
         self.saveHiddenSections = saveHiddenSections
@@ -168,9 +172,32 @@ public final class NativeShellModel {
         send(next)
     }
 
+    /// `navigate(url, { replace: true })` from a native screen (Review import's Commit and
+    /// Discard): the page replaces its history entry and reports the new route.
+    public func replace(with url: String) {
+        guard let next = NativeRoute(url) else { return }
+        pendingRoute = next
+        onNavigate(.replaceRoute(next.string))
+    }
+
     private func send(_ next: NativeRoute) {
         pendingRoute = next
         onNavigate(.navigate(next.string))
+    }
+
+    /// A CSV opened from Finder or the dock, or dropped on a native screen
+    /// (`registerPendingImportFile` and `navigate("/import")` of `ElectronBridge`): the native
+    /// import card always gets the file (pre-filled, not started, within the handoff's 30
+    /// seconds), so it is not lost when `/import` turns native after `app_settings` is read.
+    /// Once the settings are read the shell moves to `/import` itself and returns `true`.
+    /// Before that it returns `false`: the web app takes the file too (`app:csv-opened`) and
+    /// navigates, in case `/import` stays a web page.
+    public func openImportFile(_ file: ImportFile) -> Bool {
+        guard NativeScreen.screen(forPath: ImportRoutes.path) != nil else { return false }
+        imports.handoff(file)
+        guard settingsLoaded else { return false }
+        if detail != .native(.importExport) { navigate(to: ImportRoutes.path) }
+        return true
     }
 
     /// A native screen with unsaved work registers its hook while it is shown.

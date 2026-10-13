@@ -71,6 +71,12 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         // The rates page and the planned payments page share one rates cache, like the web's
         // shared query key.
         let rates = ExchangeRatesModel(service: client)
+        let imports = ImportsModel(service: client, exports: client, review: client, pickers: client)
+        // `downloadBlob`: the export asks where to save, under the web's file name.
+        imports.export.save = { [weak self] data, name in
+            guard let self else { return false }
+            return try await self.saveExport(data, suggestedName: name)
+        }
         return NativeShellModel(
             strings: CatalogStrings(language: strings.language),
             theme: ThemeSelection.resolve(
@@ -79,6 +85,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             admin: AdminScreens.make(
                 service: client, database: client, token: makeAdminTokenAccess(), audit: auditChannels),
             planned: PlannedPaymentsModel(service: client, editing: client, pickers: client, rates: rates),
+            imports: imports,
             hiddenSections: Self.loadHiddenSections(),
             loadSettings: { try await client.appSettings() },
             saveHiddenSections: { Self.saveHiddenSections($0) },
@@ -509,16 +516,23 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         webShell?.webView.evaluateJavaScript(BridgeDispatcher.eventScript(event, payload: payload), completionHandler: nil)
     }
 
+    /// Finder "Open With" and dock drops of a CSV. The native import card always gets the
+    /// file (pre-filled, not started); until `app_settings` is read the page also gets it as
+    /// `app:csv-opened` and moves to `/import`, so a cold launch does not lose it whichever
+    /// side draws the page.
     func openFiles(_ urls: [URL]) {
         for url in urls {
             Task { [weak self] in
-                guard let payload = await ShellController.readCSV(url) else { return }
-                self?.sendToApp(.csvOpened, payload)
+                guard let data = await ShellController.readCSV(url), let self else { return }
+                let name = url.lastPathComponent
+                self.showWindow()
+                if self.shellModel.openImportFile(ImportFile(name: name, data: data, mimeType: "text/csv")) { return }
+                self.sendToApp(.csvOpened, CSVHandoff.payload(name: name, data: data))
             }
         }
     }
 
-    private nonisolated static func readCSV(_ url: URL) async -> JSONValue? {
+    private nonisolated static func readCSV(_ url: URL) async -> Data? {
         let values = try? url.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
         guard
             CSVHandoff.accepts(
@@ -527,7 +541,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         else {
             return nil
         }
-        return CSVHandoff.payload(name: url.lastPathComponent, data: data)
+        return data
     }
 
     // MARK: - Menus
@@ -855,6 +869,19 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             response = alert.runModal()
         }
         return response == .alertFirstButtonReturn
+    }
+
+    /// The export card's file: a Save panel with the suggested name, then the bytes are
+    /// written. `false` when the user cancels.
+    private func saveExport(_ data: Data, suggestedName: String) async throws -> Bool {
+        let panel = NSSavePanel()
+        panel.canCreateDirectories = true
+        panel.nameFieldStringValue = suggestedName
+        let fileExtension = (suggestedName as NSString).pathExtension
+        if let type = UTType(filenameExtension: fileExtension) { panel.allowedContentTypes = [type] }
+        guard await runPanel(panel) == .OK, let url = panel.url else { return false }
+        try data.write(to: url, options: .atomic)
+        return true
     }
 
     /// `dialog.showSaveDialog`.
