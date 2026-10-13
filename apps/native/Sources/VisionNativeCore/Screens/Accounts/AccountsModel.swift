@@ -94,6 +94,8 @@ public final class AccountsModel {
     public internal(set) var isSavingForm = false
     /// The field the sheet focuses after a failed submit.
     public internal(set) var formFocus: AccountFormFocus?
+    /// Bumped by every failed submit, so a repeated failure refocuses the same field.
+    public internal(set) var formFocusRequest = 0
     public var reconcile: ReconcileDraft?
     public var opening: OpeningBalanceDraft?
     public var merge: MergeDraft?

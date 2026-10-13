@@ -984,7 +984,7 @@ struct MatchRuleFormCard: View {
                         }
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(!form.canSave || state.isSaving)
+                    .disabled(!form.canSave || !form.priorityIsValid || state.isSaving)
                 }
             }
         }

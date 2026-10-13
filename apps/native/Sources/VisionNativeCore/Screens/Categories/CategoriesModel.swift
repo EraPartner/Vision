@@ -118,7 +118,7 @@ public final class CategoriesModel {
     @ObservationIgnored let service: any CategoriesService
     @ObservationIgnored weak var shell: NativeShellModel?
     @ObservationIgnored var notices = NoticeCounter()
-    @ObservationIgnored private(set) var visible = false
+    private(set) var visible = false
     @ObservationIgnored let now: @Sendable () -> Date
     @ObservationIgnored private var fetchedAt: Date?
     @ObservationIgnored private var inFlight: Task<Void, Never>?

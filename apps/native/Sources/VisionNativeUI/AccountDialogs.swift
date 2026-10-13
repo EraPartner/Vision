@@ -219,8 +219,8 @@ struct AccountFormSheet: View {
             }
             .frame(minHeight: 560)
             .onAppear { focus = .name }
-            .onChange(of: model.formFocus) { _, next in
-                if next == .openingBalance { focus = .openingBalance }
+            .onChange(of: model.formFocusRequest) { _, _ in
+                if model.formFocus == .openingBalance { focus = .openingBalance }
             }
         }
     }

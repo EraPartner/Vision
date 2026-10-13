@@ -32,20 +32,22 @@ extension AccountsModel {
             return
         case .openingInvalid:
             formFocus = .openingBalance
+            formFocusRequest += 1
             return
         case .openingDateMissing:
             formFocus = .openingDate
+            formFocusRequest += 1
             return
         case .ready:
             formFocus = nil
         }
         isSavingForm = true
-        defer { isSavingForm = false }
         switch draft.mode {
         case .create:
             await create(draft)
         case .edit(let id):
             await saveEdit(draft, id: id)
+            isSavingForm = false
         }
     }
 
@@ -55,11 +57,14 @@ extension AccountsModel {
         do {
             created = try await service.createAccount(draft.createBody)
         } catch {
+            isSavingForm = false
             post(.error, "accounts.createFailedTitle", detail: errorText(error))
             return
         }
         post(.success, "accounts.created")
         if form?.mode == .create { closeForm() }
+        // The sheet is gone: a new one must not wait on the opening balance and the refresh.
+        isSavingForm = false
         if let stamp {
             await stampOpeningBalance(
                 id: created, balance: stamp.balance, date: stamp.date, currency: draft.normalizedCurrency)

@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 import Testing
 
 @testable import VisionNativeCore
@@ -395,5 +396,19 @@ enum CategoriesFixture {
         #expect(model.form == nil)
         #expect(model.merge == nil)
         #expect(model.pendingDelete == nil)
+    }
+
+    @Test func aRevisitWithAFreshTreeRedrawsFromTheRoute() async throws {
+        let (model, shell) = try await CategoriesFixture.opened(
+            FakeCategoriesService(nodes: CategoriesFixture.tree()), route: "/categories?show_all=true")
+        defer { withExtendedLifetime(shell) {} }
+        model.disappear()
+        // Hidden, the body reads no route; the revisit reuses the tree, so only `visible` changes.
+        final class Changed: @unchecked Sendable { var fired = false }
+        let changed = Changed()
+        withObservationTracking { _ = model.showAll } onChange: { changed.fired = true }
+        await model.appear()
+        #expect(changed.fired)
+        #expect(model.showAll)
     }
 }

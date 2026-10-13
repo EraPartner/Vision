@@ -237,10 +237,15 @@ public struct MatchRuleForm: Equatable, Sendable {
         !pattern.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    /// The web input's `min={1} max={999}`: the browser blocks a submit outside that range.
+    public var priorityIsValid: Bool {
+        (1...999).contains(priority)
+    }
+
     /// `{ pattern: trimmed, pattern_kind, case_sensitive, priority, notes: notes || null }`.
     public var body: MatchRuleBody? {
         let trimmed = pattern.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
+        guard !trimmed.isEmpty, priorityIsValid else { return nil }
         return MatchRuleBody(
             pattern: trimmed, kind: kind, caseSensitive: caseSensitive, priority: priority,
             notes: notes.isEmpty ? nil : notes)
@@ -249,6 +254,9 @@ public struct MatchRuleForm: Equatable, Sendable {
 
 /// The Match rules dialog (`RecipientPatternsDialog`) of one payee.
 public struct MatchRulesState: Equatable, Sendable {
+    /// Identifies this opening of the dialog, so an answer that lands after it was closed and
+    /// reopened is dropped.
+    let session = UUID()
     public let recipientId: Int
     public let recipientName: String
     /// The rules; `nil` while loading.

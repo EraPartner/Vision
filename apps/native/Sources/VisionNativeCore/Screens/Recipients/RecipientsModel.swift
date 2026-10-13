@@ -601,13 +601,19 @@ public final class RecipientsModel {
         do {
             let count = try await service.previewMatchRule(
                 recipientId: state.recipientId, pattern: pattern, kind: form.kind, caseSensitive: form.caseSensitive)
-            guard rules?.previewVersion == version else { return }
+            guard isCurrent(state, version: version) else { return }
             rules?.previewCount = count
         } catch {
-            guard rules?.previewVersion == version else { return }
+            guard isCurrent(state, version: version) else { return }
             post(.error, "recipientPatterns.toast.error")
         }
-        if rules?.previewVersion == version { rules?.isPreviewing = false }
+        if isCurrent(state, version: version) { rules?.isPreviewing = false }
+    }
+
+    /// The dialog is still the one `state` came from and, with `version`, has the same draft.
+    private func isCurrent(_ state: MatchRulesState, version: Int? = nil) -> Bool {
+        guard let rules, rules.session == state.session else { return false }
+        return version.map { rules.previewVersion == $0 } ?? true
     }
 
     /// Save (button or Return): create, or update the rule being edited.
@@ -624,10 +630,11 @@ public final class RecipientsModel {
                 post(.success, "recipientPatterns.toast.created")
             }
         } catch {
-            rules?.isSaving = false
+            if isCurrent(state) { rules?.isSaving = false }
             post(.error, "recipientPatterns.toast.error")
             return
         }
+        guard isCurrent(state) else { return }
         rules?.isSaving = false
         rules?.resetForm()
         await reloadRules()
@@ -641,12 +648,13 @@ public final class RecipientsModel {
             try await service.updateMatchRule(
                 recipientId: state.recipientId, patternId: rule.id, patch: .active(!rule.isActive))
         } catch {
-            rules?.isSaving = false
+            if isCurrent(state) { rules?.isSaving = false }
             post(.error, "recipientPatterns.toast.error")
             return
         }
-        rules?.isSaving = false
         post(.success, "recipientPatterns.toast.updated")
+        guard isCurrent(state) else { return }
+        rules?.isSaving = false
         rules?.resetForm()
         await reloadRules()
     }
@@ -668,12 +676,13 @@ public final class RecipientsModel {
         do {
             try await service.deleteMatchRule(recipientId: state.recipientId, patternId: rule.id)
         } catch {
-            rules?.isDeleting = false
+            if isCurrent(state) { rules?.isDeleting = false }
             post(.error, "recipientPatterns.toast.error")
             return
         }
-        rules?.isDeleting = false
         post(.success, "recipientPatterns.toast.deleted")
+        guard isCurrent(state) else { return }
+        rules?.isDeleting = false
         await reloadRules()
     }
 

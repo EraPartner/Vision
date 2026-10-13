@@ -16,6 +16,8 @@ actor FakeRecipientsService: RecipientsService {
     var mergeResult = PayeeMergeResult(primary: .init(id: 1, name: "KBC"), mergedIds: [2, 3])
     var rules: [OpenAPI.RecipientPattern] = []
     var previewCount = 3
+    private var previewGate: CallGate?
+    private var ruleWriteGate: CallGate?
     private(set) var queries: [PayeePageQuery] = []
     private(set) var pages: [String] = []
     private(set) var log: [String] = []
@@ -31,6 +33,8 @@ actor FakeRecipientsService: RecipientsService {
     func set(createdNew: Bool) { self.createdNew = createdNew }
     func set(mergeResult: PayeeMergeResult) { self.mergeResult = mergeResult }
     func set(rules: [OpenAPI.RecipientPattern]) { self.rules = rules }
+    func holdNextPreview(_ gate: CallGate) { previewGate = gate }
+    func holdNextRuleWrite(_ gate: CallGate) { ruleWriteGate = gate }
 
     func payeePage(_ query: PayeePageQuery, offset: Int, limit: Int) async throws -> PayeePage {
         queries.append(query)
@@ -77,6 +81,10 @@ actor FakeRecipientsService: RecipientsService {
 
     func createMatchRule(recipientId: Int, body: MatchRuleBody) async throws {
         log.append("create rule \(recipientId)")
+        if let gate = ruleWriteGate {
+            ruleWriteGate = nil
+            await gate.wait()
+        }
         if let writeFailure { throw writeFailure }
         bodies.append(String(decoding: try APIBody.encode(body), as: UTF8.self))
     }
@@ -96,7 +104,12 @@ actor FakeRecipientsService: RecipientsService {
         async throws -> Int
     {
         log.append("preview \(recipientId) \(pattern) \(kind.rawValue) \(caseSensitive)")
-        return previewCount
+        let answer = previewCount
+        if let gate = previewGate {
+            previewGate = nil
+            await gate.wait()
+        }
+        return answer
     }
 }
 
@@ -262,6 +275,22 @@ enum RecipientsFixture {
         form.pattern = "  "
         #expect(!form.canSave)
         #expect(form.body == nil)
+    }
+
+    @Test func thePriorityMustBeBetweenOneAnd999() {
+        var form = MatchRuleForm()
+        form.pattern = "KBC"
+        form.priorityText = "-3"
+        #expect(!form.priorityIsValid)
+        #expect(form.body == nil)
+        form.priorityText = "1000"
+        #expect(!form.priorityIsValid)
+        #expect(form.body == nil)
+        form.priorityText = "999"
+        #expect(form.priorityIsValid)
+        #expect(form.body?.priority == 999)
+        form.priorityText = "1"
+        #expect(form.body?.priority == 1)
     }
 }
 
@@ -599,6 +628,56 @@ enum RecipientsFixture {
         #expect(model.notice?.key == "recipientPatterns.toast.deleted")
         model.closeRules()
         #expect(model.rules == nil)
+    }
+
+    @Test func aPreviewFromAClosedDialogDoesNotReachTheNextOne() async throws {
+        let service = FakeRecipientsService(payees: RecipientsFixture.payees())
+        let (model, shell) = try await RecipientsFixture.opened(service)
+        defer { withExtendedLifetime(shell) {} }
+        let kbc = try #require(model.rows?.first)
+        let kbcBank = try #require(model.rows?.last)
+        await model.openRules(kbc)
+        model.startNewRule()
+        model.rules?.setPattern("KBC")
+        let gate = CallGate()
+        await service.holdNextPreview(gate)
+        let stale = Task { await model.previewRule() }
+        while !(await service.log.contains("preview 1 KBC literal_prefix false")) { await Task.yield() }
+
+        // The same edits on another payee reach the same preview version.
+        model.closeRules()
+        await model.openRules(kbcBank)
+        model.startNewRule()
+        model.rules?.setPattern("Bank")
+        gate.open()
+        await stale.value
+        #expect(model.rules?.recipientId == 2)
+        #expect(model.rules?.previewCount == nil)
+        #expect(model.rules?.isPreviewing == false)
+    }
+
+    @Test func aSaveFromAClosedDialogLeavesTheNextFormOpen() async throws {
+        let service = FakeRecipientsService(payees: RecipientsFixture.payees())
+        let (model, shell) = try await RecipientsFixture.opened(service)
+        defer { withExtendedLifetime(shell) {} }
+        let kbc = try #require(model.rows?.first)
+        await model.openRules(kbc)
+        model.startNewRule()
+        model.rules?.setPattern("KBC")
+        let gate = CallGate()
+        await service.holdNextRuleWrite(gate)
+        let stale = Task { await model.saveRule() }
+        while !(await service.log.contains("create rule 1")) { await Task.yield() }
+
+        model.closeRules()
+        await model.openRules(kbc)
+        model.startNewRule()
+        model.rules?.setPattern("KBC NV")
+        gate.open()
+        await stale.value
+        #expect(model.notice?.key == "recipientPatterns.toast.created")
+        #expect(model.rules?.form?.pattern == "KBC NV")
+        #expect(model.rules?.isSaving == false)
     }
 
     @Test func disappearClosesTheDialogsButKeepsTheMergeSelection() async throws {

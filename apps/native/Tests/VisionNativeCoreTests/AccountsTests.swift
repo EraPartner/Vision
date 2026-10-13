@@ -30,6 +30,7 @@ actor FakeAccountsService: AccountsService {
     var lots: Result<AccountLotPreview, APIError> = .success(
         AccountLotPreview(accountId: 0, eligibleCount: 0, transactionIds: [], limit: 500))
     var retagFailure: APIError?
+    private var openingGate: CallGate?
 
     private(set) var log: [String] = []
     private(set) var created: [OpenAPI.AccountCreate] = []
@@ -56,6 +57,7 @@ actor FakeAccountsService: AccountsService {
     func set(updateFailure: APIError?) { self.updateFailure = updateFailure }
     func set(deleteFailure: APIError?) { self.deleteFailure = deleteFailure }
     func set(openingWarning: String?) { self.openingWarning = openingWarning }
+    func holdNextOpening(_ gate: CallGate) { openingGate = gate }
     func set(reconcileFailure: APIError?) { self.reconcileFailure = reconcileFailure }
     func set(preview: Result<AccountMergePreview, APIError>?) { self.preview = preview }
     func set(closeFailures: [APIError]) { self.closeFailures = closeFailures }
@@ -106,6 +108,10 @@ actor FakeAccountsService: AccountsService {
 
     func setOpeningBalance(id: Int, balance: Decimal, date: String, currency: String) async throws -> String? {
         log.append("opening \(id) \(balance) \(date) \(currency)")
+        if let gate = openingGate {
+            openingGate = nil
+            await gate.wait()
+        }
         if let openingFailure { throw openingFailure }
         return openingWarning
     }
@@ -578,6 +584,37 @@ enum AccountsFixture {
         #expect(model.notice?.kind == .info)
         #expect(model.notice?.detail == "Anchor is inert")
         #expect(await service.created.first?.currency == "USD")
+    }
+
+    @Test func aNewSheetDoesNotWaitOnTheLastCreate() async throws {
+        let service = FakeAccountsService()
+        let (model, shell) = try await AccountsFixture.opened(service)
+        defer { withExtendedLifetime(shell) {} }
+        model.openCreate()
+        model.form?.setName("New")
+        model.form?.setOpeningBalance("250,75")
+        let gate = CallGate()
+        await service.holdNextOpening(gate)
+        let creating = Task { await model.submitForm() }
+        while !(await service.log.contains(where: { $0.hasPrefix("opening 99") })) { await Task.yield() }
+        #expect(model.form == nil)
+        #expect(!model.isSavingForm)
+        gate.open()
+        await creating.value
+        #expect(!model.isSavingForm)
+    }
+
+    @Test func everyFailedSubmitAsksForFocusAgain() async throws {
+        let (model, shell) = try await AccountsFixture.opened(FakeAccountsService())
+        defer { withExtendedLifetime(shell) {} }
+        model.openCreate()
+        model.form?.setName("New")
+        model.form?.setOpeningBalance("abc")
+        await model.submitForm()
+        #expect(model.formFocus == .openingBalance)
+        #expect(model.formFocusRequest == 1)
+        await model.submitForm()
+        #expect(model.formFocusRequest == 2)
     }
 
     @Test func aFailedCreateKeepsTheSheet() async throws {
