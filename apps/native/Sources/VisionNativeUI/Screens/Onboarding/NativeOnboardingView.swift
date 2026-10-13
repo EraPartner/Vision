@@ -69,6 +69,7 @@ public struct NativeOnboardingView: View {
                     Image(systemName: "xmark")
                 }
                 .buttonStyle(.plain).accessibilityLabel(strings.t("aria.close"))
+                .keyboardShortcut(.cancelAction).help(strings.t("aria.close"))
             }
             ProgressView(value: Double(model.stepIndex + 1), total: 7)
                 .accessibilityLabel(

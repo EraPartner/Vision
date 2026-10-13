@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import VisionNativeCore
 
 @Suite struct ApplicationMenuTests {
@@ -38,9 +39,13 @@ import Testing
     }
 
     @Test func appMenuHasSettingsAndNoUpdateCheck() {
-        let app = items(submenu(ApplicationMenu.build(appName: "Vision Native", strings: Self.english), "Vision Native"))
+        let app = items(
+            submenu(ApplicationMenu.build(appName: "Vision Native", strings: Self.english), "Vision Native"))
         #expect(
-            app.map(\.title) == ["About Vision Native", "Settings…", "Hide Vision Native", "Hide Others", "Show All", "Quit Vision Native"])
+            app.map(\.title) == [
+                "About Vision Native", "Settings…", "Hide Vision Native", "Hide Others", "Show All",
+                "Quit Vision Native",
+            ])
         #expect(app[1].command == .renderer(.openSettings))
         #expect(app[1].keyEquivalent == KeyEquivalent(","))
         #expect(!app.contains { $0.title.localizedCaseInsensitiveContains("update") })
@@ -49,18 +54,25 @@ import Testing
     @Test func rendererItemsCarryElectronsActionsAndShortcuts() {
         let menu = ApplicationMenu.build(appName: "Vision Native", strings: Self.english)
         let file = items(submenu(menu, "File"))
-        #expect(file.map(\.command) == [.renderer(.newTransaction), .renderer(.navigate("/import")), .closeWindow])
-        #expect(file.map(\.keyEquivalent) == [KeyEquivalent("n"), KeyEquivalent("i", [.command, .shift]), KeyEquivalent("w")])
+        #expect(
+            file.map(\.command) == [.renderer(.newTransaction), .renderer(.navigate("/import")), .print, .closeWindow])
+        #expect(
+            file.map(\.keyEquivalent) == [
+                KeyEquivalent("n"), KeyEquivalent("i", [.command, .shift]), KeyEquivalent("p"), KeyEquivalent("w"),
+            ])
         let view = items(submenu(menu, "View"))
         #expect(view.first?.command == .renderer(.toggleSidebar))
         #expect(view.first?.keyEquivalent == KeyEquivalent("s", [.command, .control]))
         let appearance = items(submenu(submenu(menu, "View"), "Appearance"))
-        #expect(appearance.map(\.command) == ["light", "dark", "system", "schedule"].map { MenuCommand.renderer(.setTheme($0)) })
+        #expect(
+            appearance.map(\.command)
+                == ["light", "dark", "system", "schedule"].map { MenuCommand.renderer(.setTheme($0)) })
         #expect(appearance.first?.title == "Light")
         let help = items(submenu(menu, "Help"))
         #expect(
             help.map(\.command) == [
-                .renderer(.openShortcuts), .openExternal(ShellLinks.repository), .openExternal(ShellLinks.documentation),
+                .renderer(.openShortcuts), .openExternal(ShellLinks.repository),
+                .openExternal(ShellLinks.documentation),
             ])
     }
 
@@ -83,13 +95,16 @@ import Testing
     }
 
     @Test func keyEquivalentsAreUnique() {
-        let keys = ApplicationMenu.keyEquivalents(ApplicationMenu.build(appName: "Vision Native", strings: Self.english))
+        let keys = ApplicationMenu.keyEquivalents(
+            ApplicationMenu.build(appName: "Vision Native", strings: Self.english))
         #expect(Set(keys.map(\.key)).count == keys.count)
-        #expect(keys.contains { $0.key == KeyEquivalent("f", [.command, .control]) && $0.title == "Toggle Full Screen" })
+        #expect(
+            keys.contains { $0.key == KeyEquivalent("f", [.command, .control]) && $0.title == "Toggle Full Screen" })
     }
 
     @Test func dutchLabelsComeFromTheSameKeys() {
-        let dutch = ShellStrings(language: .nl, table: ["menu.file": "Archief", "menu.newTransaction": "Nieuwe transactie"])
+        let dutch = ShellStrings(
+            language: .nl, table: ["menu.file": "Archief", "menu.newTransaction": "Nieuwe transactie"])
         let menu = ApplicationMenu.build(appName: "Vision Native", strings: dutch)
         #expect(items(submenu(menu, "Archief")).first?.title == "Nieuwe transactie")
         // Role items keep Electron's English labels.
@@ -120,7 +135,8 @@ import Testing
     }
 
     @Test func loadsTheRequestedLanguageElseEnglish() throws {
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("shell-strings-\(UUID().uuidString)")
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "shell-strings-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
         try Data(#"{"menu.file":"File","count":3}"#.utf8).write(to: directory.appendingPathComponent("en.json"))

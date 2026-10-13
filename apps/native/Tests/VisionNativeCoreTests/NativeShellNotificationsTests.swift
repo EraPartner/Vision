@@ -5,6 +5,29 @@ import Testing
 
 @Suite("App-lifetime shell banners and occurrence dismissals") @MainActor
 struct NativeShellNotificationsTests {
+    @Test func refreshReceiptReplacesAnOlderPendingStatusReadWithoutRepeatingTheProviderPost() async {
+        let service = BannerService()
+        let model = ShellFXStatusModel(service: service)
+        await model.load()
+        await service.pauseNextFXRead()
+        let older = Task { await model.load(force: true) }
+        await service.waitForFXRead()
+        var receiptSeen = false
+        model.didRefreshRates = {
+            await service.setFXSource("database")
+            receiptSeen = true
+        }
+        let refreshing = Task { await model.refresh() }
+        while !receiptSeen { await Task.yield() }
+        #expect(model.data?.source == "fallback")
+        await service.releaseFXRead()
+        await older.value
+        await refreshing.value
+        #expect(model.data?.source == "database" && !model.shouldShow)
+        #expect(await service.fxReads == 3)
+        #expect(await service.refreshes == 1)
+    }
+
     @Test func passiveFXReadUsesOnlyStoredRatesAndDoesNotRetry() async {
         let transport = FakeTransport([.response(503, ""), .response(200, APIClientTests.ratesBody)])
         let client = APIClient(baseURL: { APIClientTests.base }, transport: transport, sleep: { _ in })
@@ -315,6 +338,10 @@ private actor BannerService: ShellNotificationsService {
     private var pauseRefresh = false
     private var pauseUpcoming = false
     private var cancelRefresh = false
+    private var pauseFX = false
+    private var fxSource = "fallback"
+    private var fxGate: CheckedContinuation<Void, Never>?
+    private var fxWaiter: CheckedContinuation<Void, Never>?
     private var refreshGate: CheckedContinuation<Void, Never>?
     private var refreshWaiter: CheckedContinuation<Void, Never>?
     private var upcomingGate: CheckedContinuation<Void, Never>?
@@ -324,13 +351,31 @@ private actor BannerService: ShellNotificationsService {
     func pauseNextRefresh() { pauseRefresh = true }
     func pauseNextUpcoming() { pauseUpcoming = true }
     func cancelNextRefresh() { cancelRefresh = true }
+    func pauseNextFXRead() { pauseFX = true }
+    func setFXSource(_ source: String) { fxSource = source }
+    func waitForFXRead() async {
+        if fxGate == nil { await withCheckedContinuation { fxWaiter = $0 } }
+    }
+    func releaseFXRead() {
+        fxGate?.resume()
+        fxGate = nil
+    }
     func notificationExchangeRates() async throws -> OpenAPI.ExchangeRates {
         fxReads += 1
         if failFX {
             failFX = false
             throw APIError.network("Synthetic read failure")
         }
-        return .init(totalRates: 0, rates: [], fallbackRates: [:], source: "fallback", isStale: false)
+        let source = fxSource
+        if pauseFX {
+            pauseFX = false
+            await withCheckedContinuation {
+                fxGate = $0
+                fxWaiter?.resume()
+                fxWaiter = nil
+            }
+        }
+        return .init(totalRates: 0, rates: [], fallbackRates: [:], source: source, isStale: false)
     }
     func notificationRefreshExchangeRates() async throws {
         refreshes += 1

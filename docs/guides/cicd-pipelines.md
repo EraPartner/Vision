@@ -44,10 +44,11 @@ stage and keeps a stable branch-protection name. A skipped path-filtered job is 
 an absent or failed required result is not treated as green.
 
 The frontend build is followed by `size:check`. Its reviewed gzip limits are 475 KB for the
-initial preload graph and 1373 KB for all route assets. The 2026-10-13 native Settings and fixed
-shell bridge preparation measures 474.14 KB and 1372.29 KB respectively; the shell takeover adds
-1.20 KB to preload and 1.94 KB overall compared with checkpoint `b0623fef`. The household schema,
-migration, and engine remain lazy as required by [[docs/adr/200-belgian-tax-household-model|ADR-200]].
+initial preload graph and 1374 KB for all route assets. The 2026-10-13 native Settings and fixed
+shell bridge preparation, including the read-only extreme-year report context, measures
+474.69 KB and 1373.85 KB respectively. The extreme-year helper adds 0.55 KB to preload and
+1.56 KB overall over the preceding 474.14 KB / 1372.29 KB build. The household schema, migration,
+and engine remain lazy as required by [[docs/adr/200-belgian-tax-household-model|ADR-200]].
 The checker reads the generated `index.html` and assets to catch new eager imports and total
 bundle growth.
 

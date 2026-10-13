@@ -63,6 +63,52 @@ writers, collect their exact state, update this note, stage all task changes (in
 files), commit and push this branch. Label incomplete work and failed or pending checks
 explicitly. Do not leave the handoff or unfinished task files only in the workspace.
 
+## Current continuation work
+
+Latest remote checkpoint: **`106774f2`**, pushed and verified after **`c188f14b`**.
+The next full save must include all subsequent dirty/new task files, this handoff and
+the current printing/readiness work. Root owns publication; never wait for manual owner
+verification or a Demo intermission to proceed.
+
+The definitive phase-3p Foundation proof passes **1,271 tests in 161 suites**, with zero
+source drift: 239 actual production sources (229 exact, ten documented platform
+extracts/adapters), 86 permanent test files (84 exact, two adaptations), retaining every
+predecessor file from the 1,173-test phase-3o proof. Manifest SHA
+`bb19da749c03df558f0e0ed5b342697aba016117b43d0c4b34a283867f599f35`, artifacts
+`/workspace/vision-shell-overlays-combined-check/{final.log,verification.json,SHA-manifest.json}`.
+**Keep this proof immutable.** It includes the Print menu and restricted storage-key
+fixture, but excludes subsequent Tax printable-page preparation, SDK and rendered UI.
+
+Remaining phase-3p work, in priority order:
+
+1. Follow automatic macOS app/package builds and repair actual compiler diagnostics.
+   The latest repair is StatisticsView's escaping content closure; no full macOS build
+   has passed. Keep SDK runtime/PDFKit/crypto/VoiceOver claims explicitly unverified.
+2. Finish SDK shared Home upcoming/dismissal wiring, false/true renderer-ready transitions
+   and distinct native-owned versus legacy-web restore reload paths. Native backup must
+   settle frontend state/fresh onboarding ACK before its delayed reload; legacy web
+   restore applies state and reloads itself. Neither path may leave fresh startup stranded.
+3. Finish immutable loaded Tax-page print rendering and actual File Print/Cmd-P dispatch
+   and availability. Preserve selected year and visible widgets, without new fiscal queries
+   or calculations. Inspect current-view printing on Statistics and Net worth as well;
+   a generic PDF export is a separate workflow.
+4. Complete bidirectional FX cache refresh: banner refresh updates an active rates page;
+   rates-page refresh invalidates/refetches the global warning using stored rates only.
+   Forced status reads must replace older passive reads without repeating the provider POST.
+5. Complete overlay keyboard/focus restoration and scoped parity/structural docs, then
+   verify new source outside the immutable proof with distinct artifacts and run macOS
+   tests. Frontend fiscal fallback tests/typecheck/build passed, with all fiscal modules
+   lazy; actual measured gzip totals are 474.69 KB preload/1,373.85 KB total and the
+   reviewed final budgets are 475/1,374 KB.
+6. Proceed autonomously to phase 4's new ADR and staged native web-presentation retirement,
+   preserving financial computations, navigation/history, storage/restore and active drafts.
+
+Current owners: `palette_cont` SDK; `palette_ts_cont` frontend/shared-source bridges;
+`docs_reports_cont` Reports/print/parity/diagrams; `onboarding_cont` Onboarding/overlay UI;
+`banners_cont` Home/rates/notifications; `verify_cont` proofs and read-only phase-4 dependency
+audit; Root shared Core/menu/tests/catalogs/handoff/commits/pushes. Below is historical
+checkpoint context; this section and current source override older unfinished assignments.
+
 ## Completed checkpoints
 
 | Commit | Work |
@@ -266,7 +312,7 @@ The final documentation snapshot describes 100 flow components and 74 flows. Fiv
 tests and structural/link checks passed. Final combined Swift proof, full macOS app build
 and package tests remain pending; the earlier 979-test proof is preserved unchanged.
 
-## Active phase 3o ownership
+## Historical phase-3o ownership
 
 Agents share a filesystem. Assign disjoint files and coordinate public interfaces before
 editing another owner's files. Root alone integrates shared APIs, generated files,
@@ -303,7 +349,7 @@ Core paths above are relative to `apps/native/Sources/VisionNativeCore`; UI path
 `apps/frontend/src/features/settings/` defines the parity contract. Settings section IDs are
 `general`, `appearance`, `statistics`, `behavior`, `ai`, `backup`, `about`.
 
-## What remains in this phase
+## Historical phase-3o task list
 
 1. Implement and integrate native Settings without serializing a lossy typed read projection
    back over the raw saved objects. Preserve unknown app/dashboard fields and absent values;
@@ -506,6 +552,37 @@ Onboarding/overlay UI `onboarding_cont`, banners/Home/rates `banners_cont`, veri
 then autonomously prepare phase 4's new ADR and remove native dependence on web presentation
 without losing source fiscal computations, route/state semantics or backup compatibility.
 No manual owner verification or phase-start intermission is required.
+
+## Full work checkpoint (2026-10-13 23:31 UTC)
+
+`106774f2` is pushed and verified. Its macOS build passed the prior UI compiler stage and
+reported six SDK errors: three invalid JSONValue number cases, unsupported PDF scaling case,
+and two off-actor generation checks. The snapshot repairs those with integer JSON cases,
+`pageScaleDownToFit` and a MainActor token-read helper. The actual next macOS app/package
+build remains required; `/workspace/vision-native-macos-twelfth-build.log` holds the evidence.
+
+This save includes every current task file: Print menu/validation/SDK dispatch and pagination,
+immutable Tax print snapshot/presentation/document scaffolding, shared Home upcoming mirrors,
+native-versus-legacy restore reload ownership and proper readiness reset, overlay Escape/focus
+restoration with four macOS-only tests, forced FX status read generation and successful
+rates-refresh callback, strict six-key fixture, reviewed frontend budgets/docs and this handoff.
+Source parsing/format checks pass where reported; printing and responder tests require Mac
+semantic/runtime validation. Tax chart/disclosure local presentation state needs a follow-up
+capture audit; native Statistics/Net-worth print snapshots are not implemented yet.
+
+The immutable 1,271-test proof passed before the newest FX callback/forced-read changes and
+Tax print scaffolding. Separate new proof is pending. Onboarding's 20 focused tests pass;
+notification lifecycle/rates had 52 passing cases before its two additional cases. Reports
+context has 35 passing focused cases. Frontend final regression has 179 cases in 16 files plus
+three print-contract checks; full typecheck, lint (zero errors, 35 existing warnings), build
+and actual 475/1,374 KB guard pass, with the fiscal modules still lazy.
+
+After pushing, resume source printing/parity docs and the SDK's reverse FX refresh binding.
+Cmd-R must deliberately rebuild native models/authority with unsaved-work confirmation and
+accepted-write draining; current menu reload only refreshes the web document. Zoom likewise
+must affect native detail content using the existing bounded PageZoom factors. Phase-4
+dependency audit is read-only preparation while these phase-3 gaps and automated Mac checks
+are completed. Continue without an owner intermission.
 
 ## Tooling and safety for continuation
 

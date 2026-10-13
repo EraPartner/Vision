@@ -70,6 +70,8 @@ public final class ExchangeRatesModel {
     /// The refresh call is in flight (`refreshMutation.isPending`).
     public private(set) var isRefreshPending = false
     public private(set) var notice: ScreenNotice?
+    /// A successful provider receipt invalidates other mounted stored-rate consumers.
+    @ObservationIgnored public var didRefreshRates: (@MainActor () async -> Void)?
 
     @ObservationIgnored private let service: any ExchangeRatesService
     @ObservationIgnored private let now: @Sendable () -> Date
@@ -128,6 +130,8 @@ public final class ExchangeRatesModel {
         do {
             _ = try await service.refreshExchangeRates()
             post(.success, "exchangeRates.refreshSuccess")
+            invalidate()
+            await didRefreshRates?()
             isRefreshPending = false
             await fetch()
         } catch {

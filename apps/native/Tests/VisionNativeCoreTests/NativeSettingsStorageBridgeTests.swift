@@ -54,6 +54,7 @@ import Testing
                 == Set([
                     "vision.backup.passphrase.reminder.dismissed", "vision.onboarding.draft.v1",
                     "dismissed_recurring_patterns",
+                    "vision.palette.recents", "fx-status-banner-dismissed-at", "dismissed_upcoming_planned_payments",
                 ]))
         #expect(
             NativeSettingsStorageBridge.arguments(for: .reminder, value: "1") == [

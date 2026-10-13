@@ -44,6 +44,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     private var pendingRestoreReload: UUID?
     private var onboardingRestoreIntent: UUID?
     private var nativeSettingsRebuildTask: Task<Void, any Error>?
+    private var isPrintingCurrentPage = false
     /// The sidebar, route and settings state of the native navigation shell.
     private lazy var shellModel = makeShellModel()
     /// `ALLOWED_RESTORE_PATHS`: only paths the restore picker returned may be restored.
@@ -143,7 +144,8 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
                 remove: { [weak self] in
                     guard let self else { throw APIError.backendUnavailable }
                     try await self.writeNativeLocalValue(nil, key: .onboardingDraft, generation: settingsGeneration)
-                }), desktop: desktopSettings)
+                }), desktop: makeNativeSettingsDesktopCallbacks(generation: settingsGeneration, onboardingRestore: true)
+        )
         onboarding.completeAfterRestore = { [weak self] in
             guard let self else { throw APIError.backendUnavailable }
             try await self.completeNativeOnboardingAfterRestore(generation: settingsGeneration)
@@ -466,12 +468,22 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             return (try? await self.nativeSettingsScript(NativeSettingsStorageBridge.editingScript))?.boolValue ?? true
         }
         model.isRendererReady = queue.isReady
+        model.home?.useSharedUpcoming()
+        notifications.upcoming.didLoadUpcoming = { [weak model] rows in
+            model?.home?.applySharedUpcoming(rows)
+        }
+        notifications.upcoming.didChangeDismissals = { [weak model] keys in
+            model?.home?.applyUpcomingDismissals(keys)
+        }
+        if let rows = notifications.upcoming.upcoming { model.home?.applySharedUpcoming(rows) }
+        model.home?.applyUpcomingDismissals(notifications.upcoming.dismissalKeys)
         notifications.upcoming.didChangeDockBadge = { [weak self] count in
             guard let self, self.nativeSettingsGeneration == settingsGeneration else { return }
             self.setDockBadge(count)
         }
         notifications.fx.didRefreshRates = { [weak model] in
             model?.exchangeRatesDidRefresh()
+            if let model, model.route.path == "/admin/exchange-rates" { await model.exchangeRates.retry() }
         }
         onboarding.requestDashboardArrival = { [weak self] in
             guard let self, self.nativeSettingsGeneration == settingsGeneration else { return }
@@ -580,7 +592,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             """,
             arguments: [
                 "query": .string(query), "numberFormat": .string(format.rawValue), "currency": .string(currency),
-                "decimals": .number(Double(decimals)),
+                "decimals": .int(decimals),
             ])
         try requireNativeGeneration(generation)
         if reply == .null { return nil }
@@ -623,7 +635,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
                     """
                     if (typeof window.__visionNativeTaxReportProfile !== 'function') throw new Error('Tax report profile unavailable');
                     return await window.__visionNativeTaxReportProfile(householdJSON, year);
-                    """, arguments: ["householdJSON": .string(householdJSON), "year": .number(Double(year))])
+                    """, arguments: ["householdJSON": .string(householdJSON), "year": .int(year)])
                 try self.requireNativeGeneration(generation)
                 return try JSONDecoder().decode(TaxValue.self, from: JSONEncoder().encode(reply))
             },
@@ -635,7 +647,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
                     """
                     if (typeof window.__visionNativeTaxReportContext !== 'function') throw new Error('Tax report context unavailable');
                     return await window.__visionNativeTaxReportContext(settingsJSON, year);
-                    """, arguments: ["settingsJSON": .string(settingsJSON), "year": .number(Double(year))])
+                    """, arguments: ["settingsJSON": .string(settingsJSON), "year": .int(year)])
                 try self.requireNativeGeneration(generation)
                 return try JSONDecoder().decode(TaxValue.self, from: JSONEncoder().encode(reply))
             })
@@ -647,7 +659,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     private func printNativeReport(_ data: Data, name: String) -> Bool {
         guard let document = PDFDocument(data: data),
             let operation = document.printOperation(
-                for: NSPrintInfo.shared, scalingMode: .pageScaleDown, autoRotate: true)
+                for: NSPrintInfo.shared, scalingMode: .pageScaleDownToFit, autoRotate: true)
         else { return false }
         operation.jobTitle = name
         operation.showsPrintPanel = true
@@ -723,7 +735,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     }
 
     private func makeNativeSettingsDesktopCallbacks(
-        generation: UUID, restoreReload: Bool = true
+        generation: UUID, restoreReload: Bool = true, onboardingRestore: Bool = false
     ) -> NativeSettingsDesktopCallbacks {
         NativeSettingsDesktopCallbacks(
             loadBackupSettings: { [weak self] in
@@ -749,7 +761,8 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             isBackupEncrypted: { [weak self] path in await self?.isBackupEncrypted(path) ?? false },
             restoreBackup: { [weak self] path, passphrase in
                 guard let self else { return nil }
-                return await self.restoreBackup(path, passphrase: passphrase)
+                return await self.restoreNativeBackup(
+                    path, passphrase: passphrase, onboardingRestore: onboardingRestore, nativeReloadOwned: true)
             },
             applyRestoredFrontendState: { [weak self] state in
                 guard let self else { throw APIError.backendUnavailable }
@@ -996,6 +1009,8 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             return
         }
         guard let webView = webShell?.webView else { throw APIError.backendUnavailable }
+        queue.documentChanged()
+        shellModel.isRendererReady = false
         try await rebuildNativeSettingsGraph(expectedGeneration: expectedGeneration)
         if pendingRestoreReload == expectedGeneration { pendingRestoreReload = nil }
         webView.reload()
@@ -1045,6 +1060,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             "ollama-status", "ollama-models", "openai-research-status", "provider-keys", "agentcloak-desktop",
         ])
         nativeSettingsDrafts = [:]
+        onboardingRestoreIntent = nil
         dataSession = NativeDataSession()
         localStateSession = NativeLocalStateSession()
         apiClient = makeAPIClient()
@@ -1241,13 +1257,15 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     /// The admin token card's access to the page's `sessionStorage`.
     private func makeAdminTokenAccess(generation: UUID) -> AdminTokenAccess {
         AdminTokenAccess(
-            read: { [weak self] in
-                guard let self, (try? self.requireNativeGeneration(generation)) != nil else { return nil }
-                let token = await self.adminToken()
-                guard (try? self.requireNativeGeneration(generation)) != nil else { return nil }
-                return token
-            },
+            read: { [weak self] in await self?.adminToken(generation: generation) },
             write: { [weak self] token in await self?.writeAdminToken(token, generation: generation) ?? false })
+    }
+
+    private func adminToken(generation: UUID) async -> String? {
+        guard (try? requireNativeGeneration(generation)) != nil else { return nil }
+        let token = await adminToken()
+        guard (try? requireNativeGeneration(generation)) != nil else { return nil }
+        return token
     }
 
     /// `setAdminToken(token)` in the page: the trimmed token, or removal for a blank one. The
@@ -1262,7 +1280,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             await session.finishWrite(writeToken)
             return false
         }
-        return await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
+        let stored = await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
             let pending = OSAllocatedUnfairLock<CheckedContinuation<Bool, Never>?>(initialState: continuation)
             let resume: @Sendable (Bool) -> Void = { stored in
                 let waiting = pending.withLock { state -> CheckedContinuation<Bool, Never>? in
@@ -1285,6 +1303,8 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
                 timeout.cancel()
             }
         }
+        guard (try? requireNativeGeneration(generation)) != nil else { return false }
+        return stored
     }
 
     private static var localeDirectory: String? {
@@ -1378,6 +1398,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             let shell = webShell ?? makeWebShell()
             shellHost?.isHidden = true
             queue.documentChanged()
+            shellModel.isRendererReady = false
             // `loadApplicationPage`: the audit session is established before the page
             // loads; the closure timer then runs while the page is up.
             pageLoadTask?.cancel()
@@ -1582,6 +1603,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
 
     func documentDidCommit() {
         queue.documentChanged()
+        shellModel.isRendererReady = false
     }
 
     func documentDidFinish() {
@@ -1661,8 +1683,59 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         menuController.makeMenu(title: "", entries: ApplicationMenu.dock(strings: strings))
     }
 
+    var canPrintCurrentPage: Bool {
+        guard !isPrintingCurrentPage, !restoreFenceEntered, pendingRestoreReload == nil,
+            restoredNativeGeneration == nil, shellModel.nativeSettings?.isSuspendedForRestore != true,
+            !shellModel.isPresentingNativeOverlay, queue.isReady
+        else { return false }
+        if shellModel.detail == .web { return webShell?.webView != nil }
+        return (try? NativeTaxPrintSnapshot.capture(shell: shellModel)) != nil
+    }
+
+    private func printCurrentPage() {
+        guard canPrintCurrentPage else { return }
+        if shellModel.detail == .web {
+            let operation = webShell?.webView.printOperation(with: NSPrintInfo.shared)
+            operation?.showsPrintPanel = true
+            operation?.showsProgressPanel = true
+            operation?.run()
+            return
+        }
+        guard let snapshot = try? NativeTaxPrintSnapshot.capture(shell: shellModel) else { return }
+        let generation = nativeSettingsGeneration
+        let route = shellModel.route.string
+        isPrintingCurrentPage = true
+        Task { [weak self] in
+            guard let self else { return }
+            defer { self.isPrintingCurrentPage = false }
+            do {
+                let presentation = try await NativeTaxPrintPresentation.prepare(snapshot)
+                try self.requireNativeGeneration(generation)
+                guard self.shellModel.route.string == route, !self.restoreFenceEntered,
+                    self.pendingRestoreReload == nil, !self.shellModel.isPresentingNativeOverlay,
+                    self.shellModel.nativeSettings?.isSuspendedForRestore != true
+                else { return }
+                let info = (NSPrintInfo.shared.copy() as? NSPrintInfo) ?? NSPrintInfo.shared
+                let pages = NativeTaxPrintPagesView(presentation: presentation, printInfo: info)
+                let operation = NSPrintOperation(view: pages, printInfo: info)
+                operation.jobTitle = snapshot.strings.t("tax.page.title") + " · " + String(snapshot.year)
+                operation.showsPrintPanel = true
+                operation.showsProgressPanel = true
+                operation.run()
+            } catch is CancellationError {
+                return
+            } catch {
+                guard (try? self.requireNativeGeneration(generation)) != nil else { return }
+                self.shellModel.notices.publish(
+                    .init(id: 0, kind: .error, key: "common.error", detail: error.localizedDescription), source: UUID())
+            }
+        }
+    }
+
     func run(_ command: MenuCommand) {
         switch command {
+        case .print:
+            printCurrentPage()
         case .renderer(let action) where action == .toggleSidebar:
             // The sidebar is native from phase 2.
             shellModel.toggleSidebar()
@@ -1953,6 +2026,12 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     /// `backup:restore`: the localized confirmation, then the restore, which stops and
     /// restarts the backend itself.
     func restoreBackup(_ path: String, passphrase: String?) async -> JSONValue {
+        await restoreNativeBackup(path, passphrase: passphrase, onboardingRestore: false, nativeReloadOwned: false)
+    }
+
+    private func restoreNativeBackup(
+        _ path: String, passphrase: String?, onboardingRestore: Bool, nativeReloadOwned: Bool
+    ) async -> JSONValue {
         guard !restoreFenceEntered, pendingRestoreReload == nil else {
             return .object(["success": .bool(false), "error": .string("A restore is already in progress")])
         }
@@ -1972,9 +2051,11 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         if restoreFenceEntered, restoreFenceOwner == operation {
             if result["success"] == .bool(true) {
                 restoredNativeGeneration = nativeSettingsGeneration
-                pendingRestoreReload = nativeSettingsGeneration
+                if nativeReloadOwned { pendingRestoreReload = nativeSettingsGeneration }
                 await localStateSession.retireForReload()
-                if shellModel.onboarding?.isPresented == true { onboardingRestoreIntent = nativeSettingsGeneration }
+                if onboardingRestore, shellModel.onboarding?.isPresented == true {
+                    onboardingRestoreIntent = nativeSettingsGeneration
+                }
                 shellModel.commandPalette?.retireForReload()
                 shellModel.shellNotifications?.didDisappear()
                 shellModel.reports?.retireForReload()
@@ -2260,6 +2341,52 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         case .minimize: window.performMiniaturize(nil)
         case .none: break
         }
+    }
+}
+
+/// Frozen Tax sections laid out in source order. Short sections begin on a fresh page
+/// when needed; sections taller than the paper continue on the following page.
+@MainActor
+private final class NativeTaxPrintPagesView: NSView {
+    private let pageHeight: CGFloat
+    private let pageCount: Int
+    override var isFlipped: Bool { true }
+
+    init(presentation: NativeTaxPrintPresentation, printInfo: NSPrintInfo) {
+        let width = max(1, printInfo.paperSize.width - printInfo.leftMargin - printInfo.rightMargin)
+        let heightPerPage = max(1, printInfo.paperSize.height - printInfo.topMargin - printInfo.bottomMargin)
+        var blocks: [(NSView, CGFloat, CGFloat)] = []
+        var offset: CGFloat = 0
+        for section in presentation.snapshot.sections {
+            let block = NSHostingView(
+                rootView: NativeTaxPrintDocument(presentation: presentation, sections: [section]).frame(width: width))
+            block.setFrameSize(NSSize(width: width, height: 1))
+            block.layoutSubtreeIfNeeded()
+            let height = max(1, block.fittingSize.height)
+            let remaining = heightPerPage - offset.truncatingRemainder(dividingBy: heightPerPage)
+            if height <= heightPerPage, height > remaining { offset += remaining }
+            blocks.append((block, offset, height))
+            offset += height + 16
+        }
+        let count = max(1, Int(ceil(max(1, offset - 16) / heightPerPage)))
+        pageHeight = heightPerPage
+        pageCount = count
+        super.init(frame: NSRect(x: 0, y: 0, width: width, height: CGFloat(count) * heightPerPage))
+        for (block, offset, height) in blocks {
+            block.frame = NSRect(x: 0, y: offset, width: width, height: height)
+            addSubview(block)
+        }
+    }
+
+    required init?(coder: NSCoder) { nil }
+
+    override func knowsPageRange(_ range: NSRangePointer) -> Bool {
+        range.pointee = NSRange(location: 1, length: pageCount)
+        return true
+    }
+
+    override func rectForPage(_ page: Int) -> NSRect {
+        NSRect(x: 0, y: CGFloat(page - 1) * pageHeight, width: bounds.width, height: pageHeight)
     }
 }
 

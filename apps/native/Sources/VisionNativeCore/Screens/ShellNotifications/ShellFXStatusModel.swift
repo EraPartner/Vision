@@ -31,6 +31,9 @@ import Observation
     @ObservationIgnored private var storageRevision = 0
     @ObservationIgnored private var fetchedAt: Date?
     @ObservationIgnored private var readTask: Task<Void, Never>?
+    @ObservationIgnored private var readTaskID: UUID?
+    @ObservationIgnored private var readTaskRevision: UUID?
+    @ObservationIgnored private var rateReadRevision = UUID()
     @ObservationIgnored private var storageTask: Task<Void, Never>?
     @ObservationIgnored private var writeTask: Task<Void, Never>?
     @ObservationIgnored private var pendingRefresh = false
@@ -57,7 +60,10 @@ import Observation
         _ = await (stored, rates)
     }
     public func refreshIfStale() async { await load() }
-    public func invalidate() { fetchedAt = nil }
+    public func invalidate() {
+        fetchedAt = nil
+        rateReadRevision = UUID()
+    }
 
     private func restoreDismissal() async {
         guard active else { return }
@@ -110,34 +116,48 @@ import Observation
 
     private func loadRates(force: Bool) async {
         guard active, isOnline else { return }
+        if force { invalidate() }
+        let lifetime = revision
         if let readTask {
+            let id = readTaskID
+            let token = readTaskRevision
             await readTask.value
+            clearRateRead(id)
+            if active, lifetime == revision, token != rateReadRevision { await loadRates(force: false) }
             return
         }
         if !force, let fetchedAt, now().timeIntervalSince(fetchedAt) < 60 { return }
         let token = revision
+        let rateToken = rateReadRevision
+        let id = UUID()
         isFetching = true
         let task = Task { [weak self] in
-            guard let self, active, token == revision, !Task.isCancelled else { return }
+            guard let self, active, token == revision, rateToken == rateReadRevision, !Task.isCancelled else { return }
             do {
                 let value = try await service.notificationExchangeRates()
-                guard active, token == revision, !Task.isCancelled else { return }
+                guard active, token == revision, rateToken == rateReadRevision, !Task.isCancelled else { return }
                 data = value
                 readError = nil
                 fetchedAt = now()
             } catch is CancellationError {
                 return
             } catch {
-                guard active, token == revision, !Task.isCancelled else { return }
+                guard active, token == revision, rateToken == rateReadRevision, !Task.isCancelled else { return }
                 readError = error.localizedDescription
             }
         }
         readTask = task
+        readTaskID = id
+        readTaskRevision = rateToken
         await task.value
-        if token == revision {
-            readTask = nil
-            isFetching = false
-        }
+        clearRateRead(id)
+    }
+    private func clearRateRead(_ id: UUID?) {
+        guard readTaskID == id else { return }
+        readTask = nil
+        readTaskID = nil
+        readTaskRevision = nil
+        isFetching = false
     }
 
     public func dismiss() {
@@ -166,7 +186,7 @@ import Observation
         defer { isRefreshing = false }
         do {
             try await service.notificationRefreshExchangeRates()
-            fetchedAt = nil
+            invalidate()
             await didRefreshRates?()
             // The mutation itself survives route changes; a retired shell starts no new read.
             if active { await loadRates(force: true) }
@@ -184,6 +204,8 @@ import Observation
         revision = UUID()
         readTask?.cancel()
         readTask = nil
+        readTaskID = nil
+        readTaskRevision = nil
         storageTask?.cancel()
         storageTask = nil
         isFetching = false

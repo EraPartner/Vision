@@ -49,6 +49,7 @@ public enum MenuCommand: Hashable, Sendable {
     case copy
     case paste
     case selectAll
+    case print
     case reload
     case resetZoom
     case zoomIn
@@ -156,6 +157,8 @@ public enum ApplicationMenu {
                 MenuItemModel(
                     t("menu.importCsv"), .renderer(.navigate("/import")), KeyEquivalent("i", [.command, .shift]))),
             .separator,
+            .item(MenuItemModel("Print…", .print, KeyEquivalent("p"))),
+            .separator,
             .item(MenuItemModel("Close Window", .closeWindow, KeyEquivalent("w"))),
         ]
         let edit: [MenuEntry] = [
@@ -174,7 +177,8 @@ public enum ApplicationMenu {
         // Vision Native are inspectable from Safari's Develop menu instead.
         let view: [MenuEntry] = [
             .item(
-                MenuItemModel(t("menu.toggleSidebar"), .renderer(.toggleSidebar), KeyEquivalent("s", [.command, .control]))
+                MenuItemModel(
+                    t("menu.toggleSidebar"), .renderer(.toggleSidebar), KeyEquivalent("s", [.command, .control]))
             ),
             .submenu(title: t("menu.appearance"), role: .plain, entries: appearance),
             .separator,
