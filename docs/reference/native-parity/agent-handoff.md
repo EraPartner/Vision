@@ -453,6 +453,12 @@ required. Keep publishing unfinished checkpoints as well as verified milestones.
 
 ## Restore and source parity checkpoint (2026-10-13 23:20 UTC)
 
+`c188f14b` saved all 28 dirty/new task files and is pushed and verified. Its macOS build
+passed the bound-setter compiler workarounds and next reported StatisticsView's card
+helper capturing a non-escaping content closure in an escaping view builder. The
+follow-up annotates the content closure `@escaping`; the next app/package run is required.
+New native File Print/Cmd-P plumbing and immutable Tax page printing are in progress.
+
 `7f11b123` is pushed and verified after `fcd7ee95`. Its macOS build passed the AI Chat
 picker workaround, then crashed on the same actor-bound String setter in
 AnalysisMonitorsCreationView. The next snapshot saves explicit closure workarounds for

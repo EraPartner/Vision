@@ -532,7 +532,9 @@ public struct StatisticsView: View {
             }
         }.frame(maxWidth: 180)
     }
-    private func card<Content: View>(_ title: String, graph: String? = nil, @ViewBuilder content: () -> Content)
+    private func card<Content: View>(
+        _ title: String, graph: String? = nil, @ViewBuilder content: @escaping () -> Content
+    )
         -> some View
     {
         AdminCard {
