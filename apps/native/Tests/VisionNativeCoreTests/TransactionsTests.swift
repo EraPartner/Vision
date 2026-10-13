@@ -748,7 +748,8 @@ extension TransactionPatch {
         await model.alwaysUse()
         #expect(await service.defaults == ["4:9"])
         #expect(model.notice?.key == "recipients.updated")
-        let ruled = try #require(inspector.tips(for: try #require(model.row(1)), labels: model.labels))
+        let firstRow = try #require(model.row(1))
+        let ruled = try #require(inspector.tips(for: firstRow, labels: model.labels))
         #expect(ruled.ruleApplies)
         #expect(!ruled.canSetUsual)
     }
