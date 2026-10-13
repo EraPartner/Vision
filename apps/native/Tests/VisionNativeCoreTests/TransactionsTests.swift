@@ -535,7 +535,8 @@ extension TransactionPatch {
 @Suite struct TransactionsModelTests {
     @Test func syncLoadsTheFirstPageAndReusesAFreshAnswer() async throws {
         let service = FakeTransactionsService(rows: TxFixture.rows(5))
-        let (model, _) = try await TxFixture.opened(service, route: "/transactions?recipient_id=1")
+        let (model, shell) = try await TxFixture.opened(service, route: "/transactions?recipient_id=1")
+        defer { withExtendedLifetime(shell) {} }
         #expect(model.rows?.map(\.id) == [1, 3, 5])
         #expect(model.total == 3)
         #expect(!model.hasMore)
@@ -550,7 +551,8 @@ extension TransactionPatch {
 
     @Test func scrollingLoadsTheNextPageAndAFailureOffersRetry() async throws {
         let service = FakeTransactionsService(rows: TxFixture.rows(120))
-        let (model, _) = try await TxFixture.opened(service)
+        let (model, shell) = try await TxFixture.opened(service)
+        defer { withExtendedLifetime(shell) {} }
         #expect(model.rows?.count == 50)
         #expect(model.hasMore)
         #expect(model.footer() == "50 of 120 loaded · Scroll for more")
@@ -621,7 +623,8 @@ extension TransactionPatch {
     @Test func aCategoryChangeShowsAtOnceAndRollsBackOnFailure() async throws {
         let service = FakeTransactionsService(rows: TxFixture.rows(3))
         await service.setCategoryNames([9: "Transport"])
-        let (model, _) = try await TxFixture.opened(service)
+        let (model, shell) = try await TxFixture.opened(service)
+        defer { withExtendedLifetime(shell) {} }
         let row = try #require(model.row(3))
         let gate = CallGate()
         await service.holdUpdates(gate)
@@ -645,7 +648,8 @@ extension TransactionPatch {
 
     @Test func excludingARowDropsItUnlessExcludedRowsShow() async throws {
         let service = FakeTransactionsService(rows: TxFixture.rows(3))
-        let (model, _) = try await TxFixture.opened(service)
+        let (model, shell) = try await TxFixture.opened(service)
+        defer { withExtendedLifetime(shell) {} }
         await model.toggleActive(try #require(model.row(2)))
         #expect(model.row(2) == nil)
         #expect(model.total == 2)
@@ -658,7 +662,8 @@ extension TransactionPatch {
 
     @Test func deleteOffersAnUndoThatRecreatesTheRow() async throws {
         let service = FakeTransactionsService(rows: TxFixture.rows(3))
-        let (model, _) = try await TxFixture.opened(service)
+        let (model, shell) = try await TxFixture.opened(service)
+        defer { withExtendedLifetime(shell) {} }
         model.select(2)
         #expect(model.inspector?.id == 2)
         model.requestDelete(try #require(model.row(2)))
@@ -685,7 +690,8 @@ extension TransactionPatch {
 
     @Test func aRowWithoutAnAccountIsDeletedWithoutUndo() async throws {
         let service = FakeTransactionsService(rows: [TxFixture.wire(id: 1, accountId: nil)])
-        let (model, _) = try await TxFixture.opened(service)
+        let (model, shell) = try await TxFixture.opened(service)
+        defer { withExtendedLifetime(shell) {} }
         model.requestDelete(try #require(model.row(1)))
         await model.confirmDelete()
         #expect(model.notice?.key == "transactions.deleted")
@@ -695,7 +701,8 @@ extension TransactionPatch {
 
     @Test func theInspectorFollowsTheSelectionAndFocusReturns() async throws {
         let service = FakeTransactionsService(rows: TxFixture.rows(4))
-        let (model, _) = try await TxFixture.opened(service)
+        let (model, shell) = try await TxFixture.opened(service)
+        defer { withExtendedLifetime(shell) {} }
         model.rowFocused(3)
         #expect(model.selectedId == 3)
         #expect(model.handleRowKey(.down, from: 3) == 4)
@@ -730,7 +737,8 @@ extension TransactionPatch {
         let service = FakeTransactionsService(rows: rows)
         await service.setRecipients([TxFixture.recipient(4, "Garage")])
         await service.setCategoryNames([9: "Transport"])
-        let (model, _) = try await TxFixture.opened(service)
+        let (model, shell) = try await TxFixture.opened(service)
+        defer { withExtendedLifetime(shell) {} }
         model.select(1)
         let inspector = try #require(model.inspector)
         await inspector.load(recipientId: 4)
@@ -756,7 +764,8 @@ extension TransactionPatch {
 
     @Test func detailEditsAndTagsPatchTheRow() async throws {
         let service = FakeTransactionsService(rows: TxFixture.rows(2))
-        let (model, _) = try await TxFixture.opened(service)
+        let (model, shell) = try await TxFixture.opened(service)
+        defer { withExtendedLifetime(shell) {} }
         model.select(1)
         let inspector = try #require(model.inspector)
         let row = try #require(model.row(1))
@@ -784,7 +793,8 @@ extension TransactionPatch {
 
     @Test func theInlineEditorSavesDateAndAmount() async throws {
         let service = FakeTransactionsService(rows: TxFixture.rows(2))
-        let (model, _) = try await TxFixture.opened(service)
+        let (model, shell) = try await TxFixture.opened(service)
+        defer { withExtendedLifetime(shell) {} }
         model.startEditing(try #require(model.row(2)))
         model.rowEditor?.amountText = "12,x"
         #expect(model.rowEditor?.amountInvalid(format: .eu) == true)
@@ -802,7 +812,8 @@ extension TransactionPatch {
 
     @Test func columnChoicesSaveAgainstTheBaseline() async throws {
         let service = FakeTransactionsService(rows: TxFixture.rows(1))
-        let (model, _) = try await TxFixture.opened(service)
+        let (model, shell) = try await TxFixture.opened(service)
+        defer { withExtendedLifetime(shell) {} }
         await model.loadColumnVisibility()
         model.setColumn(.tags, visible: true)
         await model.settleColumns()
@@ -853,8 +864,9 @@ extension TransactionPatch {
 
     @Test func theBannerExportsUnderItsFileName() async throws {
         let service = FakeTransactionsService(rows: TxFixture.rows(2))
-        let (model, _) = try await TxFixture.opened(
+        let (model, shell) = try await TxFixture.opened(
             service, route: "/transactions?recipient_id=1&filter_label=Bakery&tags=x")
+        defer { withExtendedLifetime(shell) {} }
         var saved: [String] = []
         model.save = { _, name in
             saved.append(name)
@@ -871,7 +883,8 @@ extension TransactionPatch {
     @Test func attachmentsUploadPreviewAndDelete() async throws {
         let service = FakeTransactionsService(rows: TxFixture.rows(1))
         await service.setAttachments([TxFixture.attachment("41", transactionId: 1, name: "receipt.pdf")])
-        let (model, _) = try await TxFixture.opened(service)
+        let (model, shell) = try await TxFixture.opened(service)
+        defer { withExtendedLifetime(shell) {} }
         model.select(1)
         let attachments = try #require(model.inspector?.attachments)
         #expect(attachments.isLoading)
