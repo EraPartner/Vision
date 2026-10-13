@@ -283,6 +283,6 @@ import Observation
         }
     }
     private func show(_ kind: ScreenNotice.Kind, _ key: String, _ variables: [String: String] = [:]) {
-        notice = notices.make(kind, key, variables: variables)
+        notice = notices.make(kind, key, variables)
     }
 }

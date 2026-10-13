@@ -63,8 +63,8 @@ public struct NativeOnboardingImportRequest: APIOperation {
         form.append(
             file: "file", filename: file.name, contentType: file.mimeType ?? "application/octet-stream", data: file.data
         )
-        form.append(name: "bank_name", value: bank)
+        form.append("bank_name", bank)
         self.form = form
     }
-    public func encodedBody() throws -> Data? { form.data }
+    public func encodedBody() throws -> Data? { form.encoded() }
 }
