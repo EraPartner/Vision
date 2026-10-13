@@ -5535,8 +5535,38 @@
             "id": "native-tax-computation",
             "name": "Preview Belgian household tax through the backend",
             "category": "Native migration",
-            "summary": "The native adapter sends a complete v2 household to the shared TypeScript engine. This computation boundary is implemented; native Tax UI is pending.",
+            "summary": "The native model reads a normalized live or historical household with frozen-result precedence, and the adapter can preview unsaved edits through the shared TypeScript engine. Native Tax UI and writes are pending.",
             "steps": [
+              {
+                "from": "native.taxclient",
+                "to": "be.routes",
+                "payload": "GET /api/belgian-tax/overview?year=2025",
+                "annotation": "TaxOverviewModel loads the selected year and rejects stale responses; routes/belgianTax.ts validates the query."
+              },
+              {
+                "from": "be.routes",
+                "to": "be.repos",
+                "payload": "settingsService.getAllWithBaselines()",
+                "annotation": "services/tax/overviewService.ts reads settings and CAS baselines together, without any writes."
+              },
+              {
+                "from": "be.repos",
+                "to": "db.postgres",
+                "payload": "SELECT key, value FROM user_settings ORDER BY key",
+                "annotation": "repositories/settingsRepository.ts preserves absent rows, JSON null, and original legacy JSON-string baselines."
+              },
+              {
+                "from": "be.routes",
+                "to": "pkg.shared-utils",
+                "payload": "loadHouseholdSettings; select year; prefer frozen values",
+                "annotation": "Shared schema, migration, and defaults preserve web hydration. Fully frozen records never invoke the current engine."
+              },
+              {
+                "from": "be.routes",
+                "to": "native.taxclient",
+                "payload": "overview, source flags, warnings, original setting records",
+                "annotation": "Generated Decimal fields retain stored amounts; missing legacy fields remain unavailable. Rendering, edits, and filing actions are pending."
+              },
               {
                 "to": "be.routes",
                 "payload": "POST /api/belgian-tax/compute { household }",

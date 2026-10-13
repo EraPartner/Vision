@@ -80,6 +80,7 @@ package "Frontend" {
 
 package "Backend (Node.js)" {
   class "POST /api/belgian-tax/compute" as BelgianTaxCompute
+  class "GET /api/belgian-tax/overview" as BelgianTaxOverview
   class RESTEndpoints
   class ExpressRoutes
   class Repositories
@@ -100,6 +101,9 @@ package "External Services" {
   class "Statbel (Belgian Inflation)" as Statbel
 }
 
+NativeTax --> BelgianTaxOverview : selected year / frozen sources
+BelgianTaxOverview --> Repositories : one settings snapshot; no writes
+BelgianTaxOverview --> SharedBelgianTax : shared hydration; compute only unfrozen values
 NativeTax --> BelgianTaxCompute : typed household / Decimal results
 BelgianTaxCompute --> SharedBelgianTax : stateless preview
 Pages --> SharedBelgianTax : existing lazy-loaded web tax store

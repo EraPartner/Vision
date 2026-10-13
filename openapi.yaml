@@ -1336,6 +1336,244 @@ components:
         - unmappedFields
       additionalProperties: {}
 
+    BelgianTaxHistoricalCalculation:
+      type: object
+      required:
+        - totalPIT
+      properties:
+        grossIncome:
+          type: number
+          description: The taxpayer's own gross income (salary + other taxable income).
+        spouseProfessionalIncome:
+          type: number
+          description:
+            "Spouse's professional income counted under a joint assessment (0 otherwise).
+
+            `totalPIT` and the special social security contribution cover both spouses, so
+
+            `householdGrossIncome`, `netTakeHome` and `effectiveRate` include it."
+        householdGrossIncome:
+          type: number
+          description: "`grossIncome + spouseProfessionalIncome`; the base of `netTakeHome` and `effectiveRate`."
+        employeeSocialSecurity:
+          type: number
+        specialSocialSecurityContribution:
+          type: number
+        personalExemptionAmount:
+          type: number
+        netIncomeAfterSS:
+          type: number
+        professionalExpenses:
+          type: number
+        otherDeductionsTotal:
+          type: number
+        deductions:
+          type: object
+          additionalProperties:
+            type: number
+        taxableIncome:
+          type: number
+        federalPITBracket1:
+          type: number
+        federalPITBracket2:
+          type: number
+        federalPITBracket3:
+          type: number
+        federalPITBracket4:
+          type: number
+        federalPITBeforeExemption:
+          type: number
+          description: Federal PIT before any reduction (exemption, credits).
+        personalExemptionBenefit:
+          type: number
+        federalTaxCredits:
+          type: number
+        ownHomeCreditRegime:
+          type: string
+          enum:
+            - none
+            - flemish_woonbonus
+            - walloon_cheque_habitat
+          description: Regime applied for own-home credit, if any.
+        ownHomeCredit:
+          type: number
+          description: Estimated regional own-home tax credit (Flemish woonbonus / Walloon chèque habitat).
+        taxReductions:
+          type: number
+          description: Sum of reductions actually applied to PIT (clamped — never exceeds gross PIT).
+        pensionReduction:
+          type: number
+          description:
+            "Reduction for pensions (WIB 92 arts 147-153), part of `federalTaxCredits`. Absent on
+
+            calculations frozen before 2026-10-11."
+        federalPITAfterReductions:
+          type: number
+        communalSurcharge:
+          type: number
+        totalPIT:
+          type: number
+          description: Federal PIT after reductions + communal surcharge (income tax only).
+        totalTaxBurden:
+          type: number
+          description: Income tax + social security + special SS contribution + property tax estimate.
+        effectiveRate:
+          type: number
+        marginalRate:
+          type: number
+        netTakeHome:
+          type: number
+        monthlyTaxReserve:
+          type: number
+        propertyTaxEstimate:
+          type: number
+        dividendWhtReclaim:
+          type: number
+          description: Estimated dividend WHT reclaimable through the tax return (first €X of dividends).
+        savingsInterestTax:
+          type: number
+          description: Estimated savings deposit interest non-recoverable tax (15% above exemption).
+        maritalQuotientTransfer:
+          type: number
+          description:
+            "Income transferred to the non-earning / lower-earning spouse under the marital quotient.
+
+            0 when filing status is single or when both spouses earn comparably."
+        maritalQuotientBenefit:
+          type: number
+          description: Estimated tax reduction attributable to the marital quotient (informational).
+        serviceVoucherCredit:
+          type: number
+          description: Estimated service-voucher regional credit (after marital quotient).
+        breakdown:
+          type: array
+          items:
+            type: object
+            required:
+              - label
+              - amount
+            properties:
+              label:
+                type: string
+                description:
+                  "English calculation-side label. Not a display string: the on-screen
+
+                  PIT table renders its own translated rows (`tax.pit.row.*`). Consumers
+
+                  that do surface a row translate it themselves."
+              amount:
+                type: number
+              rate:
+                type: number
+              bracket:
+                type: string
+              bracketNumber:
+                type: number
+                description:
+                  "1-based bracket ordinal, present only on progressive-bracket rows.
+
+                  Carried explicitly because empty brackets are omitted from the array,
+
+                  so position does not imply the bracket number. Maps to the
+
+                  `tax.pit.row.bracket{n}` translation keys."
+      description: "Display calculation: current results contain every field. Frozen legacy calculations are returned verbatim and may lack fields introduced later; omitted figures must remain unavailable, never silently recomputed or filled with zero."
+    BelgianTaxSettingsWarning:
+      type: object
+      required:
+        - key
+        - kind
+        - issues
+      properties:
+        key:
+          type: string
+        kind:
+          type: string
+          enum:
+            - invalid_stored
+            - invalid_upgrade
+        issues:
+          type: array
+          items:
+            type: string
+    BelgianTaxOverview:
+      type: object
+      required:
+        - year
+        - liveYear
+        - isHistorical
+        - hasSnapshot
+        - hasProfile
+        - household
+        - liveHousehold
+        - householdSnapshots
+        - snapshotMetas
+        - metadata
+        - calculation
+        - result
+        - calculationSource
+        - householdResultSource
+        - householdMigrationNeeded
+        - snapshotsMigrationNeeded
+        - storedValueInvalid
+        - warnings
+        - records
+      properties:
+        year:
+          type: integer
+        liveYear:
+          type: integer
+        isHistorical:
+          type: boolean
+        hasSnapshot:
+          type: boolean
+        hasProfile:
+          type: boolean
+        householdMigrationNeeded:
+          type: boolean
+        snapshotsMigrationNeeded:
+          type: boolean
+        storedValueInvalid:
+          type: boolean
+        household:
+          $ref: "#/components/schemas/BelgianTaxHouseholdInput"
+        liveHousehold:
+          $ref: "#/components/schemas/BelgianTaxHouseholdInput"
+        householdSnapshots:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/BelgianTaxHouseholdInput"
+        snapshotMetas:
+          type: object
+          additionalProperties:
+            type: object
+            additionalProperties: true
+        metadata:
+          type: object
+          additionalProperties: true
+        calculation:
+          $ref: "#/components/schemas/BelgianTaxHistoricalCalculation"
+        result:
+          $ref: "#/components/schemas/BelgianTaxHouseholdTaxResult"
+        calculationSource:
+          type: string
+          enum:
+            - frozen
+            - computed
+        householdResultSource:
+          type: string
+          enum:
+            - frozen
+            - computed
+        warnings:
+          type: array
+          items:
+            $ref: "#/components/schemas/BelgianTaxSettingsWarning"
+        records:
+          type: array
+          items:
+            $ref: "#/components/schemas/Setting"
+
     # ADR-026 API envelope
     Envelope:
       type: object
@@ -12963,6 +13201,43 @@ paths:
           description: No Content
 
   # ─── Reports ─────────────────────────────────────────────────────────────────
+  /api/belgian-tax/overview:
+    get:
+      operationId: getBelgianTaxOverview
+      summary: Read live or historical Belgian tax overview with frozen-result precedence
+      tags:
+        - Belgian Tax
+      description: Reads settings and baselines in one snapshot, runs the same v1/v2 hydration as the web provider, and selects the requested year. Frozen figures remain verbatim; fully frozen records do not invoke the engine. No settings or filing writes. Invalid stored v2 settings produce the existing fallback and warnings, without overwriting the stored values.
+      parameters:
+        - name: year
+          in: query
+          required: false
+          description: Four-digit income year, 1900 through 2200. Omit to select the live household year. A missing historical snapshot uses a year-pinned live estimate without creating a snapshot.
+          schema:
+            type: integer
+            minimum: 1900
+            maximum: 2200
+      responses:
+        "200":
+          description: Normalized overview, frozen/current sources, original CAS setting baselines, and safe migration warnings.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    required:
+                      - data
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/BelgianTaxOverview"
+        "400":
+          description: Malformed, repeated, or out-of-range year.
+        "429":
+          description: API or aggregation rate limit exceeded.
+        "500":
+          description: Settings read or internal computation failed; never an empty success.
+
   /api/belgian-tax/compute:
     post:
       summary: Compute Belgian household tax without saving the profile

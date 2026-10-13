@@ -91,8 +91,9 @@ category matches remain suggestions requiring confirmation; category text does n
 The PIT and household calculation engine lives in `packages/shared-utils/src/belgianTax/`,
 exported through `@vision/shared-utils/belgian-tax/*`. The original frontend module paths are
 compatibility exports, so lazy loading, store behavior, and existing callers retain their behavior.
-Frontend-only settings hydration, migration, portfolio tax, attribution, and CSV helpers remain in
-`apps/frontend/src/lib/belgianTax/`.
+The shared package also owns v1/v2 migration, settings validation/loading, and profile defaults.
+React provider/store orchestration, portfolio tax, attribution, and CSV helpers remain in the
+frontend. `householdRuntime` still loads on demand and re-exports the shared hydration helpers.
 
 `POST /api/belgian-tax/compute` exposes the same engine to Vision Native (ADR-204). It accepts a
 complete v2 household and returns `result` (assessment, partner/activity breakdowns, quotient,
@@ -100,6 +101,12 @@ CSSS, totals, and issues) plus `calculation` (the legacy-compatible PIT presenta
 stateless preview: it does not select a live or historical profile, persist edits, create snapshots,
 or mark a year filed. Callers must retain the existing frozen-result precedence. Existing report
 requests and frontend calculations are unchanged. See [[docs/api/belgian-tax|the API contract]].
+
+`GET /api/belgian-tax/overview` reads a normalized live or historical overview using those same
+hydration routines. It preserves frozen PIT and household results verbatim and returns original
+settings baselines. A fully frozen filing never calls the current engine. Legacy frozen PIT without
+a household breakdown retains its PIT while obtaining that missing breakdown from the engine,
+as the web store does. A read does not write an upgrade, create a snapshot, or file a year.
 
 Modules are split by concern:
 
@@ -121,6 +128,8 @@ Modules are split by concern:
 | `household.ts`          | `computeHouseholdTax`, `toBelgianTaxCalculation`                                                                                                         |
 | `householdOwnHome.ts`   | Own-home credit of the household: one borrower, or a basket per borrower (ADR-202)                                                                       |
 | `householdMigration.ts` | v1 profile ↔ v2 household upgrade, projection and patching                                                                                               |
+| `settings.ts`           | Shared v1/v2 settings hydration and upgrade decisions                                                                                                    |
+| `profileDefaults.ts`    | Shared v1 defaults and meaningful-profile detection                                                                                                      |
 | `householdSchema.ts`    | zod schemas for the v2 setting values                                                                                                                    |
 | `householdRuntime.ts`   | Lazily loaded engine entry for the store: settings load/upgrade, projections, household diff                                                             |
 | `index.ts`              | Explicit supported public re-exports; year-table internals stay private                                                                                  |

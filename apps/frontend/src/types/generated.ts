@@ -2946,6 +2946,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/belgian-tax/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read live or historical Belgian tax overview with frozen-result precedence
+         * @description Reads settings and baselines in one snapshot, runs the same v1/v2 hydration as the web provider, and selects the requested year. Frozen figures remain verbatim; fully frozen records do not invoke the engine. No settings or filing writes. Invalid stored v2 settings produce the existing fallback and warnings, without overwriting the stored values.
+         */
+        get: operations["getBelgianTaxOverview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/belgian-tax/compute": {
         parameters: {
             query?: never;
@@ -4915,6 +4935,130 @@ export interface components {
             unmappedFields: components["schemas"]["BelgianTaxInputMigratedFromUnmappedField"][];
         } & {
             [key: string]: unknown;
+        };
+        /** @description Display calculation: current results contain every field. Frozen legacy calculations are returned verbatim and may lack fields introduced later; omitted figures must remain unavailable, never silently recomputed or filled with zero. */
+        BelgianTaxHistoricalCalculation: {
+            /** @description The taxpayer's own gross income (salary + other taxable income). */
+            grossIncome?: number;
+            /**
+             * @description Spouse's professional income counted under a joint assessment (0 otherwise).
+             *     `totalPIT` and the special social security contribution cover both spouses, so
+             *     `householdGrossIncome`, `netTakeHome` and `effectiveRate` include it.
+             */
+            spouseProfessionalIncome?: number;
+            /** @description `grossIncome + spouseProfessionalIncome`; the base of `netTakeHome` and `effectiveRate`. */
+            householdGrossIncome?: number;
+            employeeSocialSecurity?: number;
+            specialSocialSecurityContribution?: number;
+            personalExemptionAmount?: number;
+            netIncomeAfterSS?: number;
+            professionalExpenses?: number;
+            otherDeductionsTotal?: number;
+            deductions?: {
+                [key: string]: number;
+            };
+            taxableIncome?: number;
+            federalPITBracket1?: number;
+            federalPITBracket2?: number;
+            federalPITBracket3?: number;
+            federalPITBracket4?: number;
+            /** @description Federal PIT before any reduction (exemption, credits). */
+            federalPITBeforeExemption?: number;
+            personalExemptionBenefit?: number;
+            federalTaxCredits?: number;
+            /**
+             * @description Regime applied for own-home credit, if any.
+             * @enum {string}
+             */
+            ownHomeCreditRegime?: "none" | "flemish_woonbonus" | "walloon_cheque_habitat";
+            /** @description Estimated regional own-home tax credit (Flemish woonbonus / Walloon chèque habitat). */
+            ownHomeCredit?: number;
+            /** @description Sum of reductions actually applied to PIT (clamped — never exceeds gross PIT). */
+            taxReductions?: number;
+            /**
+             * @description Reduction for pensions (WIB 92 arts 147-153), part of `federalTaxCredits`. Absent on
+             *     calculations frozen before 2026-10-11.
+             */
+            pensionReduction?: number;
+            federalPITAfterReductions?: number;
+            communalSurcharge?: number;
+            /** @description Federal PIT after reductions + communal surcharge (income tax only). */
+            totalPIT: number;
+            /** @description Income tax + social security + special SS contribution + property tax estimate. */
+            totalTaxBurden?: number;
+            effectiveRate?: number;
+            marginalRate?: number;
+            netTakeHome?: number;
+            monthlyTaxReserve?: number;
+            propertyTaxEstimate?: number;
+            /** @description Estimated dividend WHT reclaimable through the tax return (first €X of dividends). */
+            dividendWhtReclaim?: number;
+            /** @description Estimated savings deposit interest non-recoverable tax (15% above exemption). */
+            savingsInterestTax?: number;
+            /**
+             * @description Income transferred to the non-earning / lower-earning spouse under the marital quotient.
+             *     0 when filing status is single or when both spouses earn comparably.
+             */
+            maritalQuotientTransfer?: number;
+            /** @description Estimated tax reduction attributable to the marital quotient (informational). */
+            maritalQuotientBenefit?: number;
+            /** @description Estimated service-voucher regional credit (after marital quotient). */
+            serviceVoucherCredit?: number;
+            breakdown?: {
+                /**
+                 * @description English calculation-side label. Not a display string: the on-screen
+                 *     PIT table renders its own translated rows (`tax.pit.row.*`). Consumers
+                 *     that do surface a row translate it themselves.
+                 */
+                label: string;
+                amount: number;
+                rate?: number;
+                bracket?: string;
+                /**
+                 * @description 1-based bracket ordinal, present only on progressive-bracket rows.
+                 *     Carried explicitly because empty brackets are omitted from the array,
+                 *     so position does not imply the bracket number. Maps to the
+                 *     `tax.pit.row.bracket{n}` translation keys.
+                 */
+                bracketNumber?: number;
+            }[];
+        };
+        BelgianTaxSettingsWarning: {
+            key: string;
+            /** @enum {string} */
+            kind: "invalid_stored" | "invalid_upgrade";
+            issues: string[];
+        };
+        BelgianTaxOverview: {
+            year: number;
+            liveYear: number;
+            isHistorical: boolean;
+            hasSnapshot: boolean;
+            hasProfile: boolean;
+            householdMigrationNeeded: boolean;
+            snapshotsMigrationNeeded: boolean;
+            storedValueInvalid: boolean;
+            household: components["schemas"]["BelgianTaxHouseholdInput"];
+            liveHousehold: components["schemas"]["BelgianTaxHouseholdInput"];
+            householdSnapshots: {
+                [key: string]: components["schemas"]["BelgianTaxHouseholdInput"];
+            };
+            snapshotMetas: {
+                [key: string]: {
+                    [key: string]: unknown;
+                };
+            };
+            metadata: {
+                [key: string]: unknown;
+            };
+            calculation: components["schemas"]["BelgianTaxHistoricalCalculation"];
+            result: components["schemas"]["BelgianTaxHouseholdTaxResult"];
+            /** @enum {string} */
+            calculationSource: "frozen" | "computed";
+            /** @enum {string} */
+            householdResultSource: "frozen" | "computed";
+            warnings: components["schemas"]["BelgianTaxSettingsWarning"][];
+            records: components["schemas"]["Setting"][];
         };
         Envelope: {
             ok: boolean;
@@ -14559,6 +14703,52 @@ export interface operations {
         responses: {
             /** @description No Content */
             204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getBelgianTaxOverview: {
+        parameters: {
+            query?: {
+                /** @description Four-digit income year, 1900 through 2200. Omit to select the live household year. A missing historical snapshot uses a year-pinned live estimate without creating a snapshot. */
+                year?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Normalized overview, frozen/current sources, original CAS setting baselines, and safe migration warnings. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data: components["schemas"]["BelgianTaxOverview"];
+                    };
+                };
+            };
+            /** @description Malformed, repeated, or out-of-range year. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description API or aggregation rate limit exceeded. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Settings read or internal computation failed; never an empty success. */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };

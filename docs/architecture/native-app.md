@@ -978,8 +978,14 @@ or filing records. Unknown-year approximation and issue codes retain the engine'
 `TaxComputationService` uses the generated `computeBelgianTax` operation. Generated monetary
 and rate fields decode as `Decimal`; Swift does not calculate taxes. The existing tax scenarios
 and golden parity tests exercise the moved engine, and HTTP/native-adapter tests cover the new
-boundary. Native Tax UI, settings hydration, frozen-result precedence, profile editing, and filing
-remain pending; see [[docs/reference/native-parity/tax|Tax parity]].
+boundary. `GET /api/belgian-tax/overview` now handles read-only v1/v2 hydration and live/historical selection,
+returning frozen figures and original CAS baselines. Fully frozen records skip computation; legacy
+frozen PIT with no household result retains its PIT while deriving that missing breakdown. Missing
+legacy fields stay unavailable. The native `TaxOverviewModel` caches the selected year, clears
+amounts on a failed year change, and guards against older requests replacing a newer selection.
+Shared schema/migration/default modules keep React's existing behavior and lazy loading.
+
+Native Tax UI, profile editing, snapshot/freeze/file actions, and their persistence remain pending; see [[docs/reference/native-parity/tax|Tax parity]].
 
 The cloud checks cover portable models, API adapters, generated outputs, and the web handoff.
 The full macOS app/package build and the owner's Demo visual pass have not run in this workspace.

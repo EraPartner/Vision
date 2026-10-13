@@ -407,5 +407,6 @@ open --env VISION_NATIVE_RUNTIME_DIR="$PWD/apps/native/build/payload/native-runt
 
 The Belgian tax computation prerequisite is available through `TaxComputationService` and the
 OpenAPI `computeBelgianTax` operation (`POST /api/belgian-tax/compute`). The TypeScript engine
-is shared with the web app; Swift only decodes its results as `Decimal`. Tax screens, profile
-workflows, and frozen-result handling remain web until their native implementation is complete.
+is shared with the web app; Swift only decodes its results as `Decimal`. `TaxOverviewModel` reads the live/historical overview and preserves frozen results through
+`GET /api/belgian-tax/overview`. Tax rendering, profile edits, and snapshot/filing actions remain
+web until their native implementation is complete.

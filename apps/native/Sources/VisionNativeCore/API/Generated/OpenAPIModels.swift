@@ -664,6 +664,178 @@ extension OpenAPI {
         }
     }
 
+    /// Display calculation: current results contain every field. Frozen legacy calculations are
+    /// returned verbatim and may lack fields introduced later; omitted figures must remain unavailable,
+    /// never silently recomputed or filled with zero.
+    public struct BelgianTaxHistoricalCalculation: Codable, Equatable, Sendable {
+        /// The taxpayer's own gross income (salary + other taxable income).
+        public let grossIncome: Decimal?
+        /// Spouse's professional income counted under a joint assessment (0 otherwise). `totalPIT` and
+        /// the special social security contribution cover both spouses, so `householdGrossIncome`,
+        /// `netTakeHome` and `effectiveRate` include it.
+        public let spouseProfessionalIncome: Decimal?
+        /// `grossIncome + spouseProfessionalIncome`; the base of `netTakeHome` and `effectiveRate`.
+        public let householdGrossIncome: Decimal?
+        public let employeeSocialSecurity: Decimal?
+        public let specialSocialSecurityContribution: Decimal?
+        public let personalExemptionAmount: Decimal?
+        public let netIncomeAfterSS: Decimal?
+        public let professionalExpenses: Decimal?
+        public let otherDeductionsTotal: Decimal?
+        public let deductions: [String: Decimal]?
+        public let taxableIncome: Decimal?
+        public let federalPITBracket1: Decimal?
+        public let federalPITBracket2: Decimal?
+        public let federalPITBracket3: Decimal?
+        public let federalPITBracket4: Decimal?
+        /// Federal PIT before any reduction (exemption, credits).
+        public let federalPITBeforeExemption: Decimal?
+        public let personalExemptionBenefit: Decimal?
+        public let federalTaxCredits: Decimal?
+        /// Regime applied for own-home credit, if any.
+        public let ownHomeCreditRegime: String?
+        /// Estimated regional own-home tax credit (Flemish woonbonus / Walloon chèque habitat).
+        public let ownHomeCredit: Decimal?
+        /// Sum of reductions actually applied to PIT (clamped — never exceeds gross PIT).
+        public let taxReductions: Decimal?
+        /// Reduction for pensions (WIB 92 arts 147-153), part of `federalTaxCredits`. Absent on
+        /// calculations frozen before 2026-10-11.
+        public let pensionReduction: Decimal?
+        public let federalPITAfterReductions: Decimal?
+        public let communalSurcharge: Decimal?
+        /// Federal PIT after reductions + communal surcharge (income tax only).
+        public let totalPIT: Decimal
+        /// Income tax + social security + special SS contribution + property tax estimate.
+        public let totalTaxBurden: Decimal?
+        public let effectiveRate: Decimal?
+        public let marginalRate: Decimal?
+        public let netTakeHome: Decimal?
+        public let monthlyTaxReserve: Decimal?
+        public let propertyTaxEstimate: Decimal?
+        /// Estimated dividend WHT reclaimable through the tax return (first €X of dividends).
+        public let dividendWhtReclaim: Decimal?
+        /// Estimated savings deposit interest non-recoverable tax (15% above exemption).
+        public let savingsInterestTax: Decimal?
+        /// Income transferred to the non-earning / lower-earning spouse under the marital quotient. 0
+        /// when filing status is single or when both spouses earn comparably.
+        public let maritalQuotientTransfer: Decimal?
+        /// Estimated tax reduction attributable to the marital quotient (informational).
+        public let maritalQuotientBenefit: Decimal?
+        /// Estimated service-voucher regional credit (after marital quotient).
+        public let serviceVoucherCredit: Decimal?
+        public let breakdown: [BreakdownItem]?
+
+        public init(grossIncome: Decimal? = nil, spouseProfessionalIncome: Decimal? = nil, householdGrossIncome: Decimal? = nil, employeeSocialSecurity: Decimal? = nil, specialSocialSecurityContribution: Decimal? = nil, personalExemptionAmount: Decimal? = nil, netIncomeAfterSS: Decimal? = nil, professionalExpenses: Decimal? = nil, otherDeductionsTotal: Decimal? = nil, deductions: [String: Decimal]? = nil, taxableIncome: Decimal? = nil, federalPITBracket1: Decimal? = nil, federalPITBracket2: Decimal? = nil, federalPITBracket3: Decimal? = nil, federalPITBracket4: Decimal? = nil, federalPITBeforeExemption: Decimal? = nil, personalExemptionBenefit: Decimal? = nil, federalTaxCredits: Decimal? = nil, ownHomeCreditRegime: String? = nil, ownHomeCredit: Decimal? = nil, taxReductions: Decimal? = nil, pensionReduction: Decimal? = nil, federalPITAfterReductions: Decimal? = nil, communalSurcharge: Decimal? = nil, totalPIT: Decimal, totalTaxBurden: Decimal? = nil, effectiveRate: Decimal? = nil, marginalRate: Decimal? = nil, netTakeHome: Decimal? = nil, monthlyTaxReserve: Decimal? = nil, propertyTaxEstimate: Decimal? = nil, dividendWhtReclaim: Decimal? = nil, savingsInterestTax: Decimal? = nil, maritalQuotientTransfer: Decimal? = nil, maritalQuotientBenefit: Decimal? = nil, serviceVoucherCredit: Decimal? = nil, breakdown: [BreakdownItem]? = nil) {
+            self.grossIncome = grossIncome
+            self.spouseProfessionalIncome = spouseProfessionalIncome
+            self.householdGrossIncome = householdGrossIncome
+            self.employeeSocialSecurity = employeeSocialSecurity
+            self.specialSocialSecurityContribution = specialSocialSecurityContribution
+            self.personalExemptionAmount = personalExemptionAmount
+            self.netIncomeAfterSS = netIncomeAfterSS
+            self.professionalExpenses = professionalExpenses
+            self.otherDeductionsTotal = otherDeductionsTotal
+            self.deductions = deductions
+            self.taxableIncome = taxableIncome
+            self.federalPITBracket1 = federalPITBracket1
+            self.federalPITBracket2 = federalPITBracket2
+            self.federalPITBracket3 = federalPITBracket3
+            self.federalPITBracket4 = federalPITBracket4
+            self.federalPITBeforeExemption = federalPITBeforeExemption
+            self.personalExemptionBenefit = personalExemptionBenefit
+            self.federalTaxCredits = federalTaxCredits
+            self.ownHomeCreditRegime = ownHomeCreditRegime
+            self.ownHomeCredit = ownHomeCredit
+            self.taxReductions = taxReductions
+            self.pensionReduction = pensionReduction
+            self.federalPITAfterReductions = federalPITAfterReductions
+            self.communalSurcharge = communalSurcharge
+            self.totalPIT = totalPIT
+            self.totalTaxBurden = totalTaxBurden
+            self.effectiveRate = effectiveRate
+            self.marginalRate = marginalRate
+            self.netTakeHome = netTakeHome
+            self.monthlyTaxReserve = monthlyTaxReserve
+            self.propertyTaxEstimate = propertyTaxEstimate
+            self.dividendWhtReclaim = dividendWhtReclaim
+            self.savingsInterestTax = savingsInterestTax
+            self.maritalQuotientTransfer = maritalQuotientTransfer
+            self.maritalQuotientBenefit = maritalQuotientBenefit
+            self.serviceVoucherCredit = serviceVoucherCredit
+            self.breakdown = breakdown
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case grossIncome = "grossIncome"
+            case spouseProfessionalIncome = "spouseProfessionalIncome"
+            case householdGrossIncome = "householdGrossIncome"
+            case employeeSocialSecurity = "employeeSocialSecurity"
+            case specialSocialSecurityContribution = "specialSocialSecurityContribution"
+            case personalExemptionAmount = "personalExemptionAmount"
+            case netIncomeAfterSS = "netIncomeAfterSS"
+            case professionalExpenses = "professionalExpenses"
+            case otherDeductionsTotal = "otherDeductionsTotal"
+            case deductions = "deductions"
+            case taxableIncome = "taxableIncome"
+            case federalPITBracket1 = "federalPITBracket1"
+            case federalPITBracket2 = "federalPITBracket2"
+            case federalPITBracket3 = "federalPITBracket3"
+            case federalPITBracket4 = "federalPITBracket4"
+            case federalPITBeforeExemption = "federalPITBeforeExemption"
+            case personalExemptionBenefit = "personalExemptionBenefit"
+            case federalTaxCredits = "federalTaxCredits"
+            case ownHomeCreditRegime = "ownHomeCreditRegime"
+            case ownHomeCredit = "ownHomeCredit"
+            case taxReductions = "taxReductions"
+            case pensionReduction = "pensionReduction"
+            case federalPITAfterReductions = "federalPITAfterReductions"
+            case communalSurcharge = "communalSurcharge"
+            case totalPIT = "totalPIT"
+            case totalTaxBurden = "totalTaxBurden"
+            case effectiveRate = "effectiveRate"
+            case marginalRate = "marginalRate"
+            case netTakeHome = "netTakeHome"
+            case monthlyTaxReserve = "monthlyTaxReserve"
+            case propertyTaxEstimate = "propertyTaxEstimate"
+            case dividendWhtReclaim = "dividendWhtReclaim"
+            case savingsInterestTax = "savingsInterestTax"
+            case maritalQuotientTransfer = "maritalQuotientTransfer"
+            case maritalQuotientBenefit = "maritalQuotientBenefit"
+            case serviceVoucherCredit = "serviceVoucherCredit"
+            case breakdown = "breakdown"
+        }
+
+        public struct BreakdownItem: Codable, Equatable, Sendable {
+            /// English calculation-side label. Not a display string: the on-screen PIT table renders its
+            /// own translated rows (`tax.pit.row.*`). Consumers that do surface a row translate it
+            /// themselves.
+            public let label: String
+            public let amount: Decimal
+            public let rate: Decimal?
+            public let bracket: String?
+            /// 1-based bracket ordinal, present only on progressive-bracket rows. Carried explicitly
+            /// because empty brackets are omitted from the array, so position does not imply the bracket
+            /// number. Maps to the `tax.pit.row.bracket{n}` translation keys.
+            public let bracketNumber: Decimal?
+
+            public init(label: String, amount: Decimal, rate: Decimal? = nil, bracket: String? = nil, bracketNumber: Decimal? = nil) {
+                self.label = label
+                self.amount = amount
+                self.rate = rate
+                self.bracket = bracket
+                self.bracketNumber = bracketNumber
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case label = "label"
+                case amount = "amount"
+                case rate = "rate"
+                case bracket = "bracket"
+                case bracketNumber = "bracketNumber"
+            }
+        }
+    }
+
     public struct BelgianTaxHouseholdCsssResult: Codable, Equatable, Sendable {
         public let scale: String
         /// Household base under joint assessment, otherwise the sum of each subject partner's base.
@@ -1227,6 +1399,72 @@ extension OpenAPI {
         }
     }
 
+    public struct BelgianTaxOverview: Codable, Equatable, Sendable {
+        public let year: Int
+        public let liveYear: Int
+        public let isHistorical: Bool
+        public let hasSnapshot: Bool
+        public let hasProfile: Bool
+        public let householdMigrationNeeded: Bool
+        public let snapshotsMigrationNeeded: Bool
+        public let storedValueInvalid: Bool
+        public let household: OpenAPI.BelgianTaxHouseholdInput
+        public let liveHousehold: OpenAPI.BelgianTaxHouseholdInput
+        public let householdSnapshots: [String: OpenAPI.BelgianTaxHouseholdInput]
+        public let snapshotMetas: [String: JSONValue]
+        public let metadata: JSONValue
+        public let calculation: OpenAPI.BelgianTaxHistoricalCalculation
+        public let result: OpenAPI.BelgianTaxHouseholdTaxResult
+        public let calculationSource: String
+        public let householdResultSource: String
+        public let warnings: [OpenAPI.BelgianTaxSettingsWarning]
+        public let records: [OpenAPI.Setting]
+
+        public init(year: Int, liveYear: Int, isHistorical: Bool, hasSnapshot: Bool, hasProfile: Bool, householdMigrationNeeded: Bool, snapshotsMigrationNeeded: Bool, storedValueInvalid: Bool, household: OpenAPI.BelgianTaxHouseholdInput, liveHousehold: OpenAPI.BelgianTaxHouseholdInput, householdSnapshots: [String: OpenAPI.BelgianTaxHouseholdInput], snapshotMetas: [String: JSONValue], metadata: JSONValue, calculation: OpenAPI.BelgianTaxHistoricalCalculation, result: OpenAPI.BelgianTaxHouseholdTaxResult, calculationSource: String, householdResultSource: String, warnings: [OpenAPI.BelgianTaxSettingsWarning], records: [OpenAPI.Setting]) {
+            self.year = year
+            self.liveYear = liveYear
+            self.isHistorical = isHistorical
+            self.hasSnapshot = hasSnapshot
+            self.hasProfile = hasProfile
+            self.householdMigrationNeeded = householdMigrationNeeded
+            self.snapshotsMigrationNeeded = snapshotsMigrationNeeded
+            self.storedValueInvalid = storedValueInvalid
+            self.household = household
+            self.liveHousehold = liveHousehold
+            self.householdSnapshots = householdSnapshots
+            self.snapshotMetas = snapshotMetas
+            self.metadata = metadata
+            self.calculation = calculation
+            self.result = result
+            self.calculationSource = calculationSource
+            self.householdResultSource = householdResultSource
+            self.warnings = warnings
+            self.records = records
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case year = "year"
+            case liveYear = "liveYear"
+            case isHistorical = "isHistorical"
+            case hasSnapshot = "hasSnapshot"
+            case hasProfile = "hasProfile"
+            case householdMigrationNeeded = "householdMigrationNeeded"
+            case snapshotsMigrationNeeded = "snapshotsMigrationNeeded"
+            case storedValueInvalid = "storedValueInvalid"
+            case household = "household"
+            case liveHousehold = "liveHousehold"
+            case householdSnapshots = "householdSnapshots"
+            case snapshotMetas = "snapshotMetas"
+            case metadata = "metadata"
+            case calculation = "calculation"
+            case result = "result"
+            case calculationSource = "calculationSource"
+            case householdResultSource = "householdResultSource"
+            case warnings = "warnings"
+            case records = "records"
+        }
+    }
+
     public struct BelgianTaxPartnerTaxResult: Codable, Equatable, Sendable {
         public let partnerId: String
         public let activities: [OpenAPI.BelgianTaxActivityTaxResult]
@@ -1329,6 +1567,24 @@ extension OpenAPI {
             case dividendWhtReclaim = "dividendWhtReclaim"
             case savingsInterestTax = "savingsInterestTax"
             case marginalRate = "marginalRate"
+        }
+    }
+
+    public struct BelgianTaxSettingsWarning: Codable, Equatable, Sendable {
+        public let key: String
+        public let kind: String
+        public let issues: [String]
+
+        public init(key: String, kind: String, issues: [String]) {
+            self.key = key
+            self.kind = kind
+            self.issues = issues
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case key = "key"
+            case kind = "kind"
+            case issues = "issues"
         }
     }
 

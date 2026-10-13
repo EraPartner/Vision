@@ -74,7 +74,7 @@ SORT path ASC
 | Analysis workspace            | `/api/analysis`                     | GET, POST, PUT, DELETE   | [[docs/api/analysis\|Analysis API]]                             |
 | Research dossiers             | `/api/research-dossiers`            | GET, POST, PUT, DELETE   | [[docs/api/research-dossiers\|Research Dossiers API]]           |
 | Analysis monitors             | `/api/analysis/monitors`            | GET, POST, PATCH, DELETE | [[docs/api/analysis-monitors\|Analysis Monitors API]]           |
-| Belgian Tax                   | `/api/belgian-tax`                  | POST                     | [[docs/api/belgian-tax\|Belgian Tax API]]                       |
+| Belgian Tax                   | `/api/belgian-tax`                  | GET, POST                | [[docs/api/belgian-tax\|Belgian Tax API]]                       |
 | Transactions                  | `/api/transactions`                 | GET, POST, PATCH, DELETE | [[docs/api/transactions\|Transactions API]]                     |
 | Categories                    | `/api/categories`                   | GET, POST, PATCH, DELETE | [[docs/api/categories\|Categories API]]                         |
 | Recipients                    | `/api/recipients`                   | GET, POST, PATCH, DELETE | [[docs/api/recipients\|Recipients API]]                         |

@@ -4,7 +4,6 @@ import type { SettingsStore } from "@/stores/settingsStore";
 // the household engine, and a boot-path import of it pulls that engine into the boot chunk
 // once the lazily loaded householdRuntime uses it (see scripts/check-bundle-size.ts).
 import { computeBelgianPIT } from "@/lib/belgianTax/pit";
-import { LATEST_TAX_YEAR } from "@/lib/belgianTax/constants";
 import type {
     BelgianTaxCalculation,
     BelgianTaxHouseholdSnapshotsV2,
@@ -27,70 +26,11 @@ export type { HouseholdUpdate };
 
 const MAX_HISTORY_ENTRIES_PER_YEAR = 200;
 
-export const DEFAULT_BELGIAN_TAX_PROFILE: BelgianTaxProfile = {
-    profileConfigured: false,
-    employmentType: "employee",
-    grossAnnualIncome: 0,
-    professionalExpenseMethod: "lump_sum",
-    actualProfessionalExpenses: 0,
-    communalSurchargePercent: 7,
-    region: "flanders",
-    dependentChildren: 0,
-    dependentChildrenUnder3: 0,
-    dependentChildrenDisabled: 0,
-    dependentOtherPersons: 0,
-    dependentOtherPersonsDisabled: 0,
-    isDisabled: false,
-    isSpouseDisabled: false,
-    isIsolatedParent: false,
-    cadastralIncome: 0,
-    additionalResidences: [],
-    otherTaxableIncome: 0,
-    alimonyPaid: 0,
-    personalPensionContributions: 0,
-    pensionScheme: "1050",
-    pensionEligible: false,
-    lifeInsurancePremiums: 0,
-    lifeInsuranceEligible: false,
-    mortgageInterestPaid: 0,
-    mortgageCapitalRepaid: 0,
-    mortgageStartYear: undefined,
-    mortgageRegion: undefined,
-    mortgageIsPrimaryResidence: false,
-    charitableDonations: 0,
-    charitableDonationsEligible: false,
-    childcareCosts: 0,
-    childcareEligibleDays: 0,
-    childcareEligible: false,
-    employeeGroupInsuranceContributions: 0,
-    employeeGroupInsuranceEligible: false,
-    unionDues: 0,
-    medicalExpenses: 0,
-    domesticHelpCosts: 0,
-    domesticHelpEligible: false,
-    serviceVoucherCount: 0,
-    serviceVoucherEligible: false,
-    filingStatus: "single",
-    spouseProfessionalIncome: 0,
-    annualDividendIncome: 0,
-    annualSavingsInterest: 0,
-    taxIncomeCategoryIds: [],
-    taxYear: LATEST_TAX_YEAR,
-};
-
-export function hasMeaningfulBelgianTaxData(
-    profile: BelgianTaxProfile,
-): boolean {
-    return (
-        profile.profileConfigured === true ||
-        (profile.grossAnnualIncome ?? 0) > 0 ||
-        (profile.otherTaxableIncome ?? 0) > 0 ||
-        (profile.cadastralIncome ?? 0) > 0 ||
-        (profile.dependentChildren ?? 0) > 0 ||
-        (profile.dependentOtherPersons ?? 0) > 0 ||
-        (profile.actualProfessionalExpenses ?? 0) > 0
-    );
-}
+import { DEFAULT_BELGIAN_TAX_PROFILE } from "@vision/shared-utils/belgian-tax/profileDefaults";
+export {
+    DEFAULT_BELGIAN_TAX_PROFILE,
+    hasMeaningfulBelgianTaxData,
+} from "@vision/shared-utils/belgian-tax/profileDefaults";
 
 /**
  * Household engine handed over by `_hydrate`. Until the provider has loaded it, the year
@@ -263,7 +203,8 @@ export function resolveBelgianTaxCalculation(
  * until the provider has loaded the engine.
  */
 export function resolveBelgianTaxHouseholdResult(
-    state: YearState & Pick<BelgianTaxSlice, "snapshotMetas" | "householdResult">,
+    state: YearState &
+        Pick<BelgianTaxSlice, "snapshotMetas" | "householdResult">,
     year: number,
 ): HouseholdTaxResult | null {
     const frozen = state.snapshotMetas[year]?.frozenHouseholdResult;
@@ -340,7 +281,9 @@ export const createBelgianTaxSlice: StateCreator<
             const current = state.household;
             if (!runtime || !current) return state;
             const next = runtime.applyHouseholdUpdate(current, update);
-            return next ? commitLiveHousehold(runtime, state, current, next) : state;
+            return next
+                ? commitLiveHousehold(runtime, state, current, next)
+                : state;
         }),
     resetProfile: () =>
         set((state) => {

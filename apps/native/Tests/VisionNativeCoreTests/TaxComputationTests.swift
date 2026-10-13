@@ -5,6 +5,21 @@ import Testing
 
 @Suite("TypeScript tax engine API")
 struct TaxComputationTests {
+    @Test func overviewReadsRequestedYearAndPreservesLegacyFrozenAmounts() async throws {
+        let fixture = try taxOverviewFixture(year: 2024, frozen: true)
+        let data = try APIBody.encode(fixture)
+        let transport = TaxFixtureTransport(body: "{\"ok\":true,\"data\":\(String(decoding: data, as: UTF8.self))}")
+        let client = APIClient(baseURL: { URL(string: "http://127.0.0.1:3002") }, transport: transport, maxRetries: 0)
+        let result = try await client.taxOverview(year: 2024)
+        #expect(result.calculation.totalPIT == Decimal(string: "123.4567"))
+        #expect(result.calculation.grossIncome == nil)
+        #expect(result.calculationSource == "frozen")
+        #expect(result.householdResultSource == "computed")
+        let request = try #require(await transport.requests.first)
+        #expect(request.method == .get)
+        #expect(request.url.path == "/api/belgian-tax/overview")
+        #expect(URLComponents(url: request.url, resolvingAgainstBaseURL: false)?.queryItems?.first?.value == "2024")
+    }
     @Test func computationPreservesDecimalFiguresAndTheCompleteHouseholdRequest() async throws {
         let household = try JSONDecoder().decode(
             OpenAPI.BelgianTaxHouseholdInput.self, from: Data(taxHouseholdFixture.utf8))
@@ -39,6 +54,108 @@ struct TaxComputationTests {
                 return
             }
         }
+    }
+}
+
+@MainActor
+@Suite("Native Tax year selection")
+struct TaxOverviewModelTests {
+    @Test func freshLoadsReuseTheSameYearAndInvalidationRefreshesIt() async {
+        let service = TaxOverviewFixtureService()
+        let model = TaxOverviewModel(service: service)
+        await model.load(year: 2025)
+        await model.load(year: 2025)
+        #expect(await service.years.count == 1)
+        model.invalidate()
+        await model.load(year: 2025)
+        #expect(await service.years.count == 2)
+    }
+
+    @Test func failedYearChangeCannotDisplayThePreviousYearsAmounts() async {
+        let service = TaxOverviewFixtureService()
+        let model = TaxOverviewModel(service: service)
+        await model.load(year: 2025)
+        #expect(model.overview?.year == 2025)
+        await service.fail()
+        await model.load(year: 2024)
+        #expect(model.overview == nil)
+        #expect(model.error != nil)
+        #expect(!model.isFetching)
+    }
+
+    @Test func sameYearFailureKeepsThePriorSnapshotAndReportsTheFailure() async {
+        let service = TaxOverviewFixtureService()
+        let model = TaxOverviewModel(service: service)
+        await model.load(year: 2025)
+        await service.fail()
+        await model.load(year: 2025, force: true)
+        #expect(model.overview?.year == 2025)
+        #expect(model.error != nil)
+    }
+
+    @Test func lateResponseFromAnOlderYearCannotReplaceTheSelectedYear() async {
+        let service = TaxOverviewFixtureService()
+        await service.pauseFirst()
+        let model = TaxOverviewModel(service: service)
+        let old = Task { await model.load(year: 2025) }
+        await service.waitForPause()
+        await model.load(year: 2024)
+        #expect(model.overview?.year == 2024)
+        await service.release()
+        await old.value
+        #expect(model.overview?.year == 2024)
+        #expect(!model.isFetching)
+    }
+}
+
+private func taxOverviewFixture(year: Int, frozen: Bool = false) throws -> OpenAPI.BelgianTaxOverview {
+    let engine = try JSONDecoder().decode(JSONValue.self, from: Data(taxComputationFixture.utf8))["data"]!
+    var household = try JSONDecoder().decode(JSONValue.self, from: Data(taxHouseholdFixture.utf8)).objectValue!
+    household["taxYear"] = .int(year)
+    let value: JSONValue = .object([
+        "year": .int(year), "liveYear": .int(2025), "isHistorical": .bool(year != 2025),
+        "hasSnapshot": .bool(false), "hasProfile": .bool(true),
+        "household": .object(household), "liveHousehold": .object(household), "householdSnapshots": .object([:]),
+        "snapshotMetas": .object([:]), "metadata": .object([:]),
+        "calculation": frozen ? .object(["totalPIT": .double(123.4567)]) : engine["calculation"]!,
+        "result": engine["result"]!, "calculationSource": .string(frozen ? "frozen" : "computed"),
+        "householdResultSource": .string("computed"), "householdMigrationNeeded": .bool(false),
+        "snapshotsMigrationNeeded": .bool(false), "storedValueInvalid": .bool(false),
+        "warnings": .array([]), "records": .array([]),
+    ])
+    return try JSONDecoder().decode(OpenAPI.BelgianTaxOverview.self, from: APIBody.encode(value))
+}
+
+private actor TaxOverviewFixtureService: TaxComputationService {
+    var years: [Int?] = []
+    private var fails = false
+    private var paused = false
+    private var held: CheckedContinuation<Void, Never>?
+    private var entered: CheckedContinuation<Void, Never>?
+    func fail() { fails = true }
+    func pauseFirst() { paused = true }
+    func waitForPause() async {
+        if held != nil { return }
+        await withCheckedContinuation { entered = $0 }
+    }
+    func release() {
+        held?.resume()
+        held = nil
+    }
+    func computeTax(household: OpenAPI.BelgianTaxHouseholdInput) async throws -> OpenAPI.BelgianTaxComputation {
+        throw APIError.invalidRequest("Unused fixture operation")
+    }
+    func taxOverview(year: Int?) async throws -> OpenAPI.BelgianTaxOverview {
+        years.append(year)
+        if paused, years.count == 1 {
+            await withCheckedContinuation { continuation in
+                held = continuation
+                entered?.resume()
+                entered = nil
+            }
+        }
+        if fails { throw APIError.network("Synthetic fixture failure") }
+        return try taxOverviewFixture(year: year ?? 2025)
     }
 }
 
