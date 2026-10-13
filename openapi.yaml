@@ -6853,12 +6853,63 @@ components:
           type: object
           additionalProperties: true
           nullable: true
+        toolPresentation:
+          $ref: "#/components/schemas/AiToolPresentation"
         status:
           type: string
           enum: [complete, streaming, aborted, error]
         createdAt:
           type: string
           format: date-time
+
+    AiToolPresentation:
+      type: object
+      description: Additive outgoing-message metadata inferred by shared TypeScript from the original JSON tool result; stored results and provider prompts remain unchanged. Nested array rows and first-row ordered keys retain the existing web behavior.
+      required:
+        [renderAs, rows, columns, xKey, yKeys, rowCount, pieRenderable, pieRows]
+      properties:
+        renderAs:
+          type: string
+        rows:
+          type: array
+          items: {}
+        columns:
+          type: array
+          items:
+            type: string
+        xKey:
+          type: string
+        yKeys:
+          type: array
+          items:
+            type: string
+        rowCount:
+          type: integer
+          minimum: 0
+        pieRenderable:
+          type: boolean
+        pieRows:
+          type: array
+          description: Empty when the first y key is unavailable or the source numeric sum is not positive; otherwise retains negative values and Recharts default sector composition.
+          items:
+            type: object
+            required: [name, value, percent, labelPercent, startAngle, endAngle]
+            properties:
+              name:
+                type: string
+              value:
+                type: number
+                x-swift-type: Decimal
+              percent:
+                type: number
+                x-swift-type: Decimal
+              labelPercent:
+                type: number
+                x-swift-type: Decimal
+              startAngle:
+                type: number
+              endAngle:
+                type: number
 
     # Usage counters forwarded from the Ollama response; null until the first
     # model reply lands, or when the provider omits the counter.

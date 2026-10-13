@@ -79,6 +79,8 @@ public final class NativeShellModel {
     public let research: ResearchScreens?
     public let researchForecast: ResearchForecastScreens?
     public let researchChartBuilder: ResearchChartBuilderModel?
+    public let researchDossiers: ResearchDossiersModel?
+    public let aiChat: AIChatScreens?
     /// The navigation the Leave this page? alert holds while it asks (`blocker.location`).
     public private(set) var leaveConfirmation: NativeRoute?
 
@@ -120,6 +122,8 @@ public final class NativeShellModel {
         research: ResearchScreens? = nil,
         researchForecast: ResearchForecastScreens? = nil,
         researchChartBuilder: ResearchChartBuilderModel? = nil,
+        researchDossiers: ResearchDossiersModel? = nil,
+        aiChat: AIChatScreens? = nil,
         hiddenSections: [NavSectionID: Bool]? = nil,
         loadSettings: @escaping @Sendable () async throws -> NativeAppSettings,
         saveHiddenSections: @escaping @MainActor ([NavSectionID: Bool]) -> Void = { _ in },
@@ -147,6 +151,8 @@ public final class NativeShellModel {
         self.research = research
         self.researchForecast = researchForecast
         self.researchChartBuilder = researchChartBuilder
+        self.researchDossiers = researchDossiers
+        self.aiChat = aiChat
         self.hiddenSections = hiddenSections ?? Self.defaultHiddenSections
         self.loadSettings = loadSettings
         self.saveHiddenSections = saveHiddenSections
@@ -190,6 +196,8 @@ public final class NativeShellModel {
         if screen == .analysisMonitors && analysisMonitors == nil { return .web }
         if screen == .researchForecast && researchForecast == nil { return .web }
         if screen == .researchChartBuilder && researchChartBuilder == nil { return .web }
+        if screen == .researchDossiers && researchDossiers == nil { return .web }
+        if screen == .aiChat && aiChat == nil { return .web }
         if [.researchHome, .researchMarkets, .researchMarketLookup, .researchWatchlist, .researchCompare].contains(
             screen),
             research == nil
@@ -221,6 +229,8 @@ public final class NativeShellModel {
             research?.didDisappear(route: route)
             if route.path == "/research/forecast" { researchForecast?.didDisappear() }
             if route.path == "/research/charts" { researchChartBuilder?.didDisappear() }
+            if route.path == "/research/dossiers" { researchDossiers?.didDisappear() }
+            if route.path == "/ai-chat" { aiChat?.didDisappear() }
             if route.path == "/research/market" { removeLeaveGuard(id: route.path) }
         }
         let settingsClosed = route.value("settings") != nil && next.value("settings") == nil

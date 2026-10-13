@@ -1332,7 +1332,9 @@
             "sub": "services/aiChat  · tool loop",
             "kind": "service",
             "x": 940,
-            "y": 448
+            "y": 448,
+            "path": "apps/node-backend/src/services/aiChatService.ts",
+            "desc": " Outgoing tool messages add shared TS ordered presentation metadata without changing stored results or provider context."
           },
           {
             "id": "sv.recurring",
@@ -1951,7 +1953,7 @@
             "x": 620,
             "y": 1240,
             "path": "apps/native/Sources/VisionNativeCore/Screens/Research/ResearchScreens.swift",
-            "desc": "Home, Markets, Lookup, Watchlist and Compare retain scoped caches, provenance, structural controls and guarded write acknowledgements. Separate native Chart Builder/Forecast nodes cover phase 3m; remaining Research/AI routes still use the web view."
+            "desc": "Home, Markets, Lookup, Watchlist and Compare retain scoped caches, provenance, structural controls and guarded write acknowledgements. Separate native Chart Builder/Forecast nodes cover phase 3m; separate Dossiers/AI nodes cover phase 3n."
           },
           {
             "id": "sv.researchpresentation",
@@ -1992,6 +1994,36 @@
             "y": 1340,
             "path": "apps/native/Sources/VisionNativeCore/Screens/ResearchForecast/ResearchForecastScreens.swift",
             "desc": "Main debounced projection and embedded Life Scenario reuse existing forecasts, paired TS preparation/comparison and serialized original settings CAS. No native monetary engine or invented missing values."
+          },
+          {
+            "id": "native.aichat",
+            "label": "Native AI Chat",
+            "sub": "SSE · partial turns · ordered tools",
+            "kind": "client",
+            "x": 420,
+            "y": 1340,
+            "path": "apps/native/Sources/VisionNativeCore/Screens/AIChat/AIChatModel.swift",
+            "desc": "Mounted workflow state and per-conversation streams retain existing CRUD/SSE/stop/retry controls; additive TS tool metadata preserves raw results and ordered chart/table inference."
+          },
+          {
+            "id": "native.investigation",
+            "label": "Native Investigation",
+            "sub": "preview · grant · jobs · documents",
+            "kind": "client",
+            "x": 592,
+            "y": 1340,
+            "path": "apps/native/Sources/VisionNativeCore/Screens/AIChat/AIInvestigationModel.swift",
+            "desc": "Exact frozen preview/grant requests, manual mounted job polling, status-only focus/reconnect freshness, documents and disclosure history retain source privacy controls and guarded visits."
+          },
+          {
+            "id": "native.dossiers",
+            "label": "Native Research Dossiers",
+            "sub": "drafts · version CAS · JSON export",
+            "kind": "client",
+            "x": 20,
+            "y": 852,
+            "path": "apps/native/Sources/VisionNativeCore/Screens/ResearchDossiers/ResearchDossiersModel.swift",
+            "desc": "Paged current links, explicit evidence drafts, document anchors, immutable versions/conflicts and existing server JSON exports retain selection/visit authority."
           }
         ],
         "baseEdges": [
@@ -2518,6 +2550,22 @@
           [
             "native.researchforecast",
             "be.routes"
+          ],
+          [
+            "native.aichat",
+            "be.routes"
+          ],
+          [
+            "native.investigation",
+            "be.routes"
+          ],
+          [
+            "native.dossiers",
+            "be.routes"
+          ],
+          [
+            "sv.aichat",
+            "pkg.shared-utils"
           ]
         ],
         "flows": [
@@ -7247,6 +7295,202 @@
               {
                 "path": "features/research.md",
                 "label": "Research"
+              }
+            ]
+          },
+          {
+            "id": "native-ai-chat-stream",
+            "name": "Stream native AI Chat and retain partial turns",
+            "category": "Native migration",
+            "summary": "Per-conversation streams stay independent of page reads; TypeScript adds ordered tool presentation without modifying raw results or provider prompts.",
+            "steps": [
+              {
+                "from": "native.aichat",
+                "to": "be.routes",
+                "payload": "Existing conversation reads/CRUD and explicit chat SSE request with selected model/tools/retry controls",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/AIChat/AIChatService.swift; apps/native/Sources/VisionNativeCore/Screens/AIChat/AIChatModel.swift retain source parameters and scoped read caches."
+              },
+              {
+                "from": "be.routes",
+                "to": "sv.aichat",
+                "payload": "Validated local Ollama turn and unchanged tool dispatch",
+                "annotation": "apps/node-backend/src/routes/ai.ts uses the existing JSON/SSE operations; apps/node-backend/src/services/aiChatService.ts persists messages and keeps model context separate from outgoing presentation."
+              },
+              {
+                "from": "sv.aichat",
+                "to": "pkg.shared-utils",
+                "payload": "Wire-normalized raw tool result, first-row ordered columns/axes and source signed pie sectors",
+                "annotation": "packages/shared-utils/src/ai-chat/toolPresentation.ts retains nested arrays, explicit empty x keys, preferred metadata and no sectors for a nonpositive source sum. No extra provider/tool request or financial transformation moves into Swift."
+              },
+              {
+                "from": "sv.aichat",
+                "to": "native.aichat",
+                "payload": "Tokens, raw tool messages plus toolPresentation sibling, and required canonical terminal receipt",
+                "annotation": "apps/node-backend/src/services/aiChatService.ts enriches SSE/JSON/history outputs without changing stored results or prompt inputs. apps/native/Sources/VisionNativeCore/Screens/AIChat/AIChatStreamStore.swift guards conversation generations and retains partial output."
+              },
+              {
+                "from": "native.aichat",
+                "to": "native.aichat",
+                "payload": "Draw returned tools, Stop or explicitly Retry Last Turn; mode changes preserve both workflows",
+                "annotation": "apps/native/Sources/VisionNativeUI/AIChatToolResultCard.swift; apps/native/Sources/VisionNativeUI/AIChatToolChart.swift; apps/native/Sources/VisionNativeCore/Screens/AIChat/AIChatScreens.swift retain raw Decimal display and separate stream/page lifetimes. Real route exit retires local page reads without implicitly stopping a turn."
+              }
+            ],
+            "docs": [
+              {
+                "path": "api/ai.md",
+                "label": "AI Chat API"
+              },
+              {
+                "path": "architecture/native-app.md",
+                "label": "Native architecture"
+              }
+            ]
+          },
+          {
+            "id": "native-investigation-consent-job",
+            "name": "Run native Investigation through exact preview and consent",
+            "category": "Native migration",
+            "summary": "Local requests remain local by default; cloud consent binds the inspected payload and frozen outbound request, while existing jobs supply structured evidence.",
+            "steps": [
+              {
+                "from": "native.investigation",
+                "to": "be.routes",
+                "payload": "Current question/preferences/scope and separately authored public or selected inputs",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/AIChat/AIInvestigationModel.swift preserves source fallback/trim/public-symbol rules and retires preview authority when form or resolved context changes."
+              },
+              {
+                "from": "be.routes",
+                "to": "sv.airesearch",
+                "payload": "Existing exact disclosure preview, digest, field manifest and tokenized outbound request for cloud mode",
+                "annotation": "apps/node-backend/src/routes/aiResearch.ts keeps the existing consent/provider boundary. apps/native/Sources/VisionNativeCore/Screens/AIChat/AIInvestigationData.swift retains raw reference/preflight metadata and inspected payload."
+              },
+              {
+                "from": "native.investigation",
+                "to": "be.routes",
+                "payload": "Second consent action creates the existing grant then submits frozen preview.outboundRequest + grantId",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/AIChat/AIInvestigationModel.swift binds previewHash/allowedFields and source caps/expiry. Cloud submission does not reinterpret live form fields after the grant returns."
+              },
+              {
+                "from": "be.routes",
+                "to": "sv.airesearch",
+                "payload": "Existing local/cloud orchestration, scoped jobs and evidence checkpoints",
+                "annotation": "apps/node-backend/src/services/aiInvestigationService.ts owns planning/tools/synthesis and consent enforcement. This port adds no new model route or provider request."
+              },
+              {
+                "from": "native.investigation",
+                "to": "be.routes",
+                "payload": "Manual mounted job poll every 1.2 seconds until terminal or waiting; existing resume/cancel/delete",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/AIChat/AIInvestigationModel.swift preserves source manual polling across hidden mode/offline/background, with silent poll failures. Status alone follows 60-second focus/reconnect freshness; reads are visit-guarded."
+              },
+              {
+                "from": "sv.airesearch",
+                "to": "native.investigation",
+                "payload": "Structured facts/calculations/interpretations, evidence locators and saved-analysis reference",
+                "annotation": "apps/native/Sources/VisionNativeUI/AIInvestigationAnswerView.swift presents existing evidence and analysis navigation. Real route exit resets local job/forms without deleting the backend job or inventing recovery navigation."
+              }
+            ],
+            "docs": [
+              {
+                "path": "api/ai-research.md",
+                "label": "AI Research API"
+              },
+              {
+                "path": "features/ai-chat.md",
+                "label": "AI Chat controls"
+              }
+            ]
+          },
+          {
+            "id": "native-investigation-documents-history",
+            "name": "Manage native Investigation documents and disclosure history",
+            "category": "Native migration",
+            "summary": "Original document bytes and exact record/grant history use existing endpoints; only document deletion retains its source confirmation.",
+            "steps": [
+              {
+                "from": "native.investigation",
+                "to": "be.routes",
+                "payload": "Mount-only document list; chosen text/Markdown/HTML uploaded as original multipart file bytes",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/AIChat/AIInvestigationService.swift uses handwritten createAiResearchDocument metadata and the file field. apps/native/Sources/VisionNativeUI/AIInvestigationDocumentsView.swift retains the document-delete confirmation."
+              },
+              {
+                "from": "be.routes",
+                "to": "sv.airesearch",
+                "payload": "Existing bounded document ingestion and unchanged disclosure record/grant operations",
+                "annotation": "apps/node-backend/src/routes/aiResearchDocuments.ts retains the 5 MiB limit and existing ingestion service. apps/node-backend/src/routes/aiResearch.ts owns record/grant inspection/deletion/revoke."
+              },
+              {
+                "from": "native.investigation",
+                "to": "be.routes",
+                "payload": "Explicit inspect records+grants, revoke active/history grant, delete disclosure history or confirmed document",
+                "annotation": "apps/native/Sources/VisionNativeUI/AIInvestigationHistoryView.swift retains source secondary actions without a global busy disable. apps/native/Sources/VisionNativeCore/Screens/AIChat/AIInvestigationModel.swift distinguishes footer grant clearing from history row stamping."
+              },
+              {
+                "from": "be.routes",
+                "to": "native.investigation",
+                "payload": "Original history BIGINT strings/raw metadata and document receipt, guarded against stale write reads",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/AIChat/AIInvestigationData.swift retains raw JSON/Decimal values. apps/native/Sources/VisionNativeCore/Screens/AIChat/AIInvestigationModel.swift resets read authority around mutations and rejects departed visit responses."
+              }
+            ],
+            "docs": [
+              {
+                "path": "api/ai-research.md",
+                "label": "AI Research API"
+              },
+              {
+                "path": "reference/native-parity/research-and-ai-chat.md",
+                "label": "Native parity"
+              }
+            ]
+          },
+          {
+            "id": "native-dossier-versioned-editor",
+            "name": "Edit native Research Dossiers with version authority",
+            "category": "Native migration",
+            "summary": "Explicit drafts, evidence anchors and linked context use current server versions; existing JSON exports capture one/all dossiers and their immutable history.",
+            "steps": [
+              {
+                "from": "native.dossiers",
+                "to": "be.routes",
+                "payload": "Existing 500-row list page, selected dossier/history and bounded current link/document readers",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/ResearchDossiers/ResearchDossierService.swift; apps/native/Sources/VisionNativeCore/Screens/ResearchDossiers/ResearchDossiersModel.swift guard page/selection/visit scope and keep literal draft data."
+              },
+              {
+                "from": "be.routes",
+                "to": "sv.dossiers",
+                "payload": "Current summary/content, immutable history, saved labels for unavailable links and document provenance",
+                "annotation": "apps/node-backend/src/services/researchDossierService.ts retains the existing server dossier validation/version/provenance contract."
+              },
+              {
+                "from": "native.dossiers",
+                "to": "native.dossiers",
+                "payload": "Explicit evidence edits; changed document clears four anchors; dirty New/switch retains discard review",
+                "annotation": "apps/native/Sources/VisionNativeUI/ResearchDossierEditorView.swift; apps/native/Sources/VisionNativeUI/ResearchDossierEvidenceView.swift; apps/native/Sources/VisionNativeCore/Screens/ResearchDossiers/ResearchDossiersModel.swift only fills a literally empty source title and preserves the current selected draft."
+              },
+              {
+                "from": "native.dossiers",
+                "to": "sv.dossiers",
+                "payload": "Explicit create/update with captured expectedVersion or confirmed restore/delete/reload",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/ResearchDossiers/ResearchDossiersModel.swift retains source confirmations and write receipts. apps/native/Sources/VisionNativeUI/ResearchDossierConfirmationView.swift presents the requested review, without an invented Undo flow."
+              },
+              {
+                "from": "sv.dossiers",
+                "to": "native.dossiers",
+                "payload": "New immutable version or conflict; existing export one/all JSON saved through the native panel",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/ResearchDossiers/ResearchDossierService.swift calls existing export endpoints. apps/native/Sources/VisionNativeCore/Screens/ResearchDossiers/ResearchDossiersModel.swift saves the captured server response; no import or financial transformation is added."
+              }
+            ],
+            "docs": [
+              {
+                "path": "features/research-dossiers.md",
+                "label": "Research Dossiers"
+              },
+              {
+                "path": "api/research-dossiers.md",
+                "label": "Dossiers API"
+              },
+              {
+                "path": "architecture/native-app.md",
+                "label": "Native architecture"
               }
             ]
           }

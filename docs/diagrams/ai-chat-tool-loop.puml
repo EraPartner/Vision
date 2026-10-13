@@ -7,12 +7,13 @@ skinparam participantPadding 15
 skinparam sequenceMessageAlign center
 
 actor User
-participant "AIChatPage\naiChatStreamStore + lib/api/ai.ts" as Frontend
-participant "routes/ai.js" as Route
+participant "Chat client\nReact background store / native AIChatStreamStore" as Frontend
+participant "routes/ai.ts" as Route
 participant "aiChatService" as Chat
-participant "Ollama client\nintegrations/ollama/client.js" as Client
+participant "Ollama client\nintegrations/ollama/client.ts" as Client
 participant "Configured Ollama endpoint" as Ollama
-participant "Tool registry\naiChat/tools/index.js" as Tools
+participant "Tool registry\naiChat/tools/index.ts" as Tools
+participant "Shared TypeScript\nai-chat/toolPresentation.ts" as Presentation
 database "PostgreSQL\naiChatRepository + application data" as DB
 
 group 1. Start and persist the turn
@@ -43,7 +44,9 @@ loop Until final answer, at most MAX_TOOL_ITERATIONS = 6 model calls
       DB --> Tools : Application data
       Tools --> Chat : Validated args + result or structured error
       Chat -> DB : Append tool message with args and result
-      Chat --> Route : tool_result event
+      Chat -> Presentation : Infer ordered columns / axes and signed pie composition\nfrom outgoing JSON; leave raw result unchanged
+      Presentation --> Chat : toolPresentation message sibling
+      Chat --> Route : tool_result event with raw result + presentation
       Route --> Frontend : Show result card
       Chat -> Chat : Append bounded tool result to model context
     end
@@ -79,10 +82,17 @@ note over Frontend, Route
   stream headers have been written.
 end note
 
+note over Chat, Presentation
+  JSON turns and historical message reads use the same outgoing enrichment.
+  Stored results and provider prompts stay unchanged.
+  Native only draws / formats returned data; macOS Demo review remains pending.
+end note
+
 legend bottom
-  Sources: lib/aiChatStreamStore.ts; lib/api/ai.ts;
-  routes/ai.js; services/aiChatService.js; services/aiChat/tools/;
-  integrations/ollama/client.js; config/config.js.
+  Sources: apps/frontend/src/lib/aiChatStreamStore.ts; apps/frontend/src/lib/api/ai.ts;
+  apps/node-backend/src/routes/ai.ts; apps/node-backend/src/services/aiChatService.ts;
+  packages/shared-utils/src/ai-chat/toolPresentation.ts;
+  apps/native/Sources/VisionNativeCore/Screens/AIChat/AIChatStreamStore.swift.
 endlegend
 
 @enduml

@@ -31,7 +31,7 @@ tags:
     string-catalog,
     navigation,
   ]
-description: "Vision Native is the Swift macOS app under apps/native/ that replaces the Electron shell in phases (ADR-204). Covers the directory layout, the runtime supervisor that starts its own PostgreSQL 18 cluster and backend on synthetic Demo data, payload discovery, the phase 1c shell (window, launch state, preload bridge, web view navigation and download policy, menus, dock and vibrancy), phase 1d backup and restore (bundle format compatibility, Keychain passphrase, restore allow-list, quit-time backup), the phase 1e audit anchor and Keychain witness with restore continuity, the standard and Demo variants of one build, the Debug-only backend override, the phase 2 foundations (generated OpenAPI client, design tokens, String Catalog and sidebar registry, the native NavigationSplitView shell with the shell:route-changed bridge message, and the native Exchange rates screen), the Native (macOS) CI job with the backup and audit interop job, screen ports through phase 3m Research Home, Markets, Lookup, Watchlist, Compare, Forecast and Chart Builder (lossless provider data, shared TypeScript presentation, guarded local drafts/cache, and earlier Analysis/Portfolio/Tax/import screens), and install-native.sh."
+description: "Vision Native is the Swift macOS app under apps/native/ that replaces the Electron shell in phases (ADR-204). Covers the directory layout, the runtime supervisor that starts its own PostgreSQL 18 cluster and backend on synthetic Demo data, payload discovery, the phase 1c shell (window, launch state, preload bridge, web view navigation and download policy, menus, dock and vibrancy), phase 1d backup and restore (bundle format compatibility, Keychain passphrase, restore allow-list, quit-time backup), the phase 1e audit anchor and Keychain witness with restore continuity, the standard and Demo variants of one build, the Debug-only backend override, the phase 2 foundations (generated OpenAPI client, design tokens, String Catalog and sidebar registry, the native NavigationSplitView shell with the shell:route-changed bridge message, and the native Exchange rates screen), the Native (macOS) CI job with the backup and audit interop job, screen ports through phase 3n Research Home, Markets, Lookup, Watchlist, Compare, Forecast, Chart Builder, Dossiers and AI chat/Investigation (lossless provider data, shared TypeScript presentation, guarded local drafts/cache, and earlier Analysis/Portfolio/Tax/import screens), and install-native.sh."
 aliases: [vision native, native app, swift app]
 ---
 
@@ -51,7 +51,8 @@ aliases: [vision native, native app, swift app]
 > [[docs/architecture/native-app#Native navigation and screens (phase 2)|phase 2]]). Phase 3 now includes
 > native Research Home, Markets, Lookup, Watchlist, Compare, Forecast and Chart Builder, alongside Analysis, Portfolio
 > Import/review and Portfolio Tax. TypeScript retains financial calculations, restricted execution
-> and import writers; Dossiers, AI chat and Settings still use the web view. macOS build and synthetic Demo visual/keyboard review remain pending.
+> and import writers; Settings and global overlays still use the web view. Dossiers and AI chat/Investigation
+> are native in phase 3n. macOS build and synthetic Demo visual/keyboard review remain pending.
 
 ## Layout
 
@@ -1229,8 +1230,8 @@ interchange and monitor journeys.
 `ResearchMarketsView` reuse the maintained catalog, paged watchlist/holding metadata, quote batches,
 news links and native search. `ResearchMarketLookupView`, `ResearchWatchlistView` and
 `ResearchCompareView` retain the source query parameters, dialogs, filters, provenance and explicit
-error/unavailable states. Chart Builder remains in the web view this checkpoint, along with the
-remaining Research/AI screens; extracting its calculations does not mark that UI as ported.
+error/unavailable states. At phase 3l, Chart Builder and the remaining Research/AI screens
+retained their web implementation. Native phases 3m and 3n below cover those later ports.
 
 `ResearchService` reuses existing Research/Market/Watchlist/mapping/investment operations with
 custom lossless DTOs. `APIClient.sendWithMeta` exposes the same validated data plus retained metadata
@@ -1290,7 +1291,8 @@ parity]] records action coverage; [[docs/features/research|Research]] and
 
 `ResearchChartBuilderScreenView` mounts `/research/charts`; `ResearchForecastScreenView` mounts
 `/research/forecast` with Life Scenario embedded in the same page. These extend the five native
-Research routes from phase 3l. Other Research/AI routes retain their web implementation.
+Research routes from phase 3l. Dossiers and AI Chat/Investigation now use the native phase 3n
+implementation below.
 
 `ResearchChartBuilderModel` owns series, provider-pinned macro search, indicators/oscillators,
 local layouts and clipboard sharing of portable chart URLs. Ticker/macro reads retain
@@ -1345,6 +1347,73 @@ missing values, overflow/client rejection and unchanged projection behavior. Nat
 have separate focused transport/state checks. Full macOS package, responsive drawing, VoiceOver,
 keyboard and synthetic Vision Demo review remain pending; code coverage in
 [[docs/reference/native-parity/research-and-ai-chat|Research parity]] is not a rendered verification.
+
+### AI Chat, Investigation and Research Dossiers (phase 3n)
+
+`AIChatScreenView` mounts `/ai-chat`; `ResearchDossiersScreenView` mounts `/research/dossiers`.
+`AIChatScreens` keeps Chat and Investigation mounted through mode changes. The `mode` and `c`
+query parameters retain source selection, and the Ollama banner and conversation rail belong only
+to Chat. Same-visit mode/conversation updates do not independently refetch stale page-wide provider
+queries. Native overlays retain the screen; a real route exit retires page reads and resets local
+drafts. Full macOS package and synthetic Demo review remain pending.
+
+`AIChatModel`, `AIChatService` and `AIChatStreamStore` retain conversation paging, explicit
+create/rename/delete, the composer model/tools controls and existing JSON/SSE operations. Each
+conversation’s stream generation protects tokens, tool messages and terminal receipts; the stream
+store remains separate from page-read lifetime. Leaving the page does not implicitly stop an
+ongoing chat turn. Stop keeps partial output, and Retry Last Turn remains explicit rather than
+replaying a failed POST automatically. Typed raw DTOs retain Decimal tool values, usage, message
+status and unknown provider/result fields. Existing source completeness and streaming states remain
+visible; no new tool, model route or financial engine is introduced.
+
+Outgoing tool messages receive a `toolPresentation` sibling without changing `toolResult`.
+Shared `packages/shared-utils/src/ai-chat/toolPresentation.ts` derives ordered first-row columns,
+axes and source pie proportions before Swift loses JSON member order. It retains explicit empty
+x keys, nested-array rows, ignored legacy axis metadata and Recharts default signed sector
+composition, including no sectors for a nonpositive sum. Native charts draw returned geometry and
+format retained values; stored results and model prompts stay unchanged. SSE, JSON turns and
+historical conversation reads use the same enrichment. See [[docs/api/ai|AI Chat API]].
+
+`AIInvestigationModel` uses the existing jobs, status, documents and disclosure endpoints. Form
+preferences retain exact currency/benchmark/depth/model fallback rules and EN/NL language. Public
+symbols and web queries remain separately authored; selected evidence remains the inspected text.
+Cloud Run first produces the exact preview; the next consent action creates its digest-bound grant
+and submits the preview's frozen `outboundRequest` with that grant ID. Form or resolved-context
+changes retire obsolete previews. Native rendering retains capability/reference/preflight metadata,
+facts, calculations, interpretations, evidence locators and the existing saved-analysis link.
+
+Status alone follows the source 60-second TanStack freshness and focus/reconnect policy. It uses
+online gating on initial mount and foreground guards on subsequent refresh, with no automatic
+retry loop. An online initial mount still reads status when backgrounded. Documents remain a
+mount-only manual read.
+The current job uses the source manual 1.2-second polling policy while the page remains mounted,
+including hidden mode and offline/background intervals; failed polls are silent. A slow GET does
+not postpone later interval ticks; published snapshots restart the interval and retire older read
+authority. Polling stops at
+completed, failed, cancelled, partial or waiting. Resume uses the current scope and the source
+clarification. Cancel leaves local job state to any already-active poll. Document upload sends original
+multipart bytes; document deletion retains its confirmation. Job/history deletion and grant
+revocation keep their immediate source actions. Footer revoke clears the active grant control;
+history revoke stamps only that history row. Visit/write guards prevent late reads restoring deleted
+or departed state. No job recovery browser or additional provider request is added. See
+[[docs/api/ai-research|AI Research API]] and [[docs/features/ai-chat|AI Chat]].
+
+`ResearchDossiersModel` retains the source 500-row list pages, explicit editor drafts, current links,
+evidence/document anchors, immutable versions, conflicts and server JSON exports. Saving sends the
+captured expected version; a stale editor gets a conflict rather than overwriting newer content.
+Restore creates a new version. New/switch with unsaved edits and delete/restore/reload retain their
+source confirmations; selecting the current dossier preserves the draft. Changing a linked document
+clears its four citation anchors, and only a literally empty source title is filled automatically.
+Deleted links retain their saved labels. Export one/all reads the existing server export operation
+and saves its captured JSON; there is no dossier import or financial transformation in Swift.
+Selection/visit guards and write acknowledgements protect newer drafts from stale reads. See
+[[docs/features/research-dossiers|Research Dossiers]] and [[docs/api/research-dossiers|its API]].
+
+Focused Foundation transport/state tests and TypeScript inference/Recharts tests cover these
+contracts. The native parity inventory records code coverage; responsive rendering, VoiceOver,
+keyboard behavior and Vision Demo acceptance still require macOS. The architecture/flow catalogue
+shows native clients calling existing backend services, with tool presentation staying in shared
+TypeScript and provider disclosure remaining behind the existing consent boundary.
 
 ## Install
 

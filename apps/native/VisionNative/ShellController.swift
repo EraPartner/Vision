@@ -136,6 +136,24 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             guard let self, self.shellModel.route.path == route.path else { return }
             self.shellModel.replaceQuery(route.query)
         }
+        let dossiers = ResearchDossiersModel(client: client)
+        dossiers.saveExport = { [weak self] data, name in
+            guard let self else { return false }
+            return try await self.saveExport(data, suggestedName: name)
+        }
+        dossiers.didMutate = { [weak self, weak analysisMonitors] in
+            analysisMonitors?.invalidate()
+            if self?.shellModel.route.path == "/analysis/monitors" { await analysisMonitors?.load(force: true) }
+        }
+        let aiChat = AIChatScreens(client: client)
+        aiChat.chat.didReplaceRoute = { [weak self] route in
+            guard let self, self.shellModel.route.path == route.path else { return }
+            self.shellModel.replaceQuery(route.query)
+        }
+        aiChat.investigation.pickDocument = { [weak self] in
+            guard let self else { return nil }
+            return try await self.pickResearchDocument()
+        }
         research.didMutatePortfolio = { [weak self] in await self?.shellModel.portfolioDataDidMutate() }
         analysis.workspace.saveExport = { [weak self] data, name in
             guard let self else { return false }
@@ -220,6 +238,8 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             research: research,
             researchForecast: researchForecast,
             researchChartBuilder: researchCharts,
+            researchDossiers: dossiers,
+            aiChat: aiChat,
             hiddenSections: Self.loadHiddenSections(),
             loadSettings: { try await client.appSettings() },
             saveHiddenSections: { Self.saveHiddenSections($0) },
@@ -1118,6 +1138,28 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         guard await runPanel(panel) == .OK, let url = panel.url else { return false }
         try data.write(to: url, options: .atomic)
         return true
+    }
+
+    private func pickResearchDocument() async throws -> AIResearchDocumentFile? {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [.plainText, .html] + [UTType(filenameExtension: "md")].compactMap { $0 }
+        guard await runPanel(panel) == .OK, let url = panel.url else { return nil }
+        let accessing = url.startAccessingSecurityScopedResource()
+        defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+        let values = try url.resourceValues(forKeys: [.fileSizeKey, .contentTypeKey])
+        let maximumBytes = 5 * 1024 * 1024
+        guard (values.fileSize ?? 0) <= maximumBytes else {
+            throw APIError.invalidRequest("Document exceeds the 5 MiB upload limit")
+        }
+        let data = try Data(contentsOf: url, options: .mappedIfSafe)
+        guard data.count <= maximumBytes else {
+            throw APIError.invalidRequest("Document exceeds the 5 MiB upload limit")
+        }
+        return AIResearchDocumentFile(
+            name: url.lastPathComponent, contentType: values.contentType?.preferredMIMEType ?? "text/plain", data: data)
     }
 
     /// `dialog.showSaveDialog`.

@@ -336,6 +336,246 @@ extension OpenAPI {
         }
     }
 
+    public struct AiConversation: Codable, Equatable, Sendable {
+        public let id: String
+        public let title: String
+        public let model: String
+        public let createdAt: String
+        public let updatedAt: String
+
+        public init(id: String, title: String, model: String, createdAt: String, updatedAt: String) {
+            self.id = id
+            self.title = title
+            self.model = model
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case title = "title"
+            case model = "model"
+            case createdAt = "createdAt"
+            case updatedAt = "updatedAt"
+        }
+    }
+
+    public struct AiConversationDetail: Codable, Equatable, Sendable {
+        public let conversation: OpenAPI.AiConversation
+        public let messages: [OpenAPI.AiMessage]
+
+        public init(conversation: OpenAPI.AiConversation, messages: [OpenAPI.AiMessage]) {
+            self.conversation = conversation
+            self.messages = messages
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case conversation = "conversation"
+            case messages = "messages"
+        }
+    }
+
+    public struct AiInvestigationRequest: Codable, Equatable, Sendable {
+        public let question: String
+        public let route: String?
+        public let researchMode: String?
+        /// Separately authored public-only cloud planning question; never derived from question.
+        public let publicQuestion: String?
+        /// Explicit public-only search text; never derived from question.
+        public let publicWebQuery: String?
+        public let publicSymbols: [String]?
+        public let publicMacroQueries: [String]?
+        public let clarification: String?
+        /// OpenAI model selected from the server-configured allowlist, or the configured default when
+        /// omitted.
+        public let model: String?
+        public let depth: String?
+        public let language: String?
+        public let scope: Scope
+        public let grantId: String?
+        public let selectedSummary: String?
+        /// Exact manually selected task and evidence for consent-bound cloud final synthesis; never
+        /// populated from local records by the server.
+        public let selectedEvidence: String?
+        /// One-use local scope returned by disclosure preview for typed reversible references.
+        public let referenceScopeId: String?
+        public let savedAnalysisId: String?
+
+        public init(question: String, route: String? = nil, researchMode: String? = nil, publicQuestion: String? = nil, publicWebQuery: String? = nil, publicSymbols: [String]? = nil, publicMacroQueries: [String]? = nil, clarification: String? = nil, model: String? = nil, depth: String? = nil, language: String? = nil, scope: Scope, grantId: String? = nil, selectedSummary: String? = nil, selectedEvidence: String? = nil, referenceScopeId: String? = nil, savedAnalysisId: String? = nil) {
+            self.question = question
+            self.route = route
+            self.researchMode = researchMode
+            self.publicQuestion = publicQuestion
+            self.publicWebQuery = publicWebQuery
+            self.publicSymbols = publicSymbols
+            self.publicMacroQueries = publicMacroQueries
+            self.clarification = clarification
+            self.model = model
+            self.depth = depth
+            self.language = language
+            self.scope = scope
+            self.grantId = grantId
+            self.selectedSummary = selectedSummary
+            self.selectedEvidence = selectedEvidence
+            self.referenceScopeId = referenceScopeId
+            self.savedAnalysisId = savedAnalysisId
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case question = "question"
+            case route = "route"
+            case researchMode = "researchMode"
+            case publicQuestion = "publicQuestion"
+            case publicWebQuery = "publicWebQuery"
+            case publicSymbols = "publicSymbols"
+            case publicMacroQueries = "publicMacroQueries"
+            case clarification = "clarification"
+            case model = "model"
+            case depth = "depth"
+            case language = "language"
+            case scope = "scope"
+            case grantId = "grantId"
+            case selectedSummary = "selectedSummary"
+            case selectedEvidence = "selectedEvidence"
+            case referenceScopeId = "referenceScopeId"
+            case savedAnalysisId = "savedAnalysisId"
+        }
+
+        public struct Scope: Codable, Equatable, Sendable {
+            public let workspaces: [String]
+            public let accountIds: [Int]?
+            public let investmentIds: [Int]?
+            public let dateFrom: String?
+            public let dateTo: String?
+            public let currency: String?
+            public let constraints: [String]?
+
+            public init(workspaces: [String], accountIds: [Int]? = nil, investmentIds: [Int]? = nil, dateFrom: String? = nil, dateTo: String? = nil, currency: String? = nil, constraints: [String]? = nil) {
+                self.workspaces = workspaces
+                self.accountIds = accountIds
+                self.investmentIds = investmentIds
+                self.dateFrom = dateFrom
+                self.dateTo = dateTo
+                self.currency = currency
+                self.constraints = constraints
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case workspaces = "workspaces"
+                case accountIds = "accountIds"
+                case investmentIds = "investmentIds"
+                case dateFrom = "dateFrom"
+                case dateTo = "dateTo"
+                case currency = "currency"
+                case constraints = "constraints"
+            }
+        }
+    }
+
+    public struct AiMessage: Codable, Equatable, Sendable {
+        public let id: String
+        public let conversationId: String
+        public let role: String
+        public let content: String?
+        public let toolName: String?
+        public let toolArgs: JSONValue?
+        public let toolResult: JSONValue?
+        public let toolPresentation: OpenAPI.AiToolPresentation?
+        public let status: String
+        public let createdAt: String
+
+        public init(id: String, conversationId: String, role: String, content: String? = nil, toolName: String? = nil, toolArgs: JSONValue? = nil, toolResult: JSONValue? = nil, toolPresentation: OpenAPI.AiToolPresentation? = nil, status: String, createdAt: String) {
+            self.id = id
+            self.conversationId = conversationId
+            self.role = role
+            self.content = content
+            self.toolName = toolName
+            self.toolArgs = toolArgs
+            self.toolResult = toolResult
+            self.toolPresentation = toolPresentation
+            self.status = status
+            self.createdAt = createdAt
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case conversationId = "conversationId"
+            case role = "role"
+            case content = "content"
+            case toolName = "toolName"
+            case toolArgs = "toolArgs"
+            case toolResult = "toolResult"
+            case toolPresentation = "toolPresentation"
+            case status = "status"
+            case createdAt = "createdAt"
+        }
+    }
+
+    /// Additive outgoing-message metadata inferred by shared TypeScript from the original JSON tool
+    /// result; stored results and provider prompts remain unchanged. Nested array rows and first-row
+    /// ordered keys retain the existing web behavior.
+    public struct AiToolPresentation: Codable, Equatable, Sendable {
+        public let renderAs: String
+        public let rows: [JSONValue]
+        public let columns: [String]
+        public let xKey: String
+        public let yKeys: [String]
+        public let rowCount: Int
+        public let pieRenderable: Bool
+        /// Empty when the first y key is unavailable or the source numeric sum is not positive;
+        /// otherwise retains negative values and Recharts default sector composition.
+        public let pieRows: [PieRowsItem]
+
+        public init(renderAs: String, rows: [JSONValue], columns: [String], xKey: String, yKeys: [String], rowCount: Int, pieRenderable: Bool, pieRows: [PieRowsItem]) {
+            self.renderAs = renderAs
+            self.rows = rows
+            self.columns = columns
+            self.xKey = xKey
+            self.yKeys = yKeys
+            self.rowCount = rowCount
+            self.pieRenderable = pieRenderable
+            self.pieRows = pieRows
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case renderAs = "renderAs"
+            case rows = "rows"
+            case columns = "columns"
+            case xKey = "xKey"
+            case yKeys = "yKeys"
+            case rowCount = "rowCount"
+            case pieRenderable = "pieRenderable"
+            case pieRows = "pieRows"
+        }
+
+        public struct PieRowsItem: Codable, Equatable, Sendable {
+            public let name: String
+            public let value: Decimal
+            public let percent: Decimal
+            public let labelPercent: Decimal
+            public let startAngle: Decimal
+            public let endAngle: Decimal
+
+            public init(name: String, value: Decimal, percent: Decimal, labelPercent: Decimal, startAngle: Decimal, endAngle: Decimal) {
+                self.name = name
+                self.value = value
+                self.percent = percent
+                self.labelPercent = labelPercent
+                self.startAngle = startAngle
+                self.endAngle = endAngle
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case name = "name"
+                case value = "value"
+                case percent = "percent"
+                case labelPercent = "labelPercent"
+                case startAngle = "startAngle"
+                case endAngle = "endAngle"
+            }
+        }
+    }
+
     public struct AnalysisColumnRef: Codable, Equatable, Sendable {
         public let id: String
 
@@ -4490,6 +4730,69 @@ extension OpenAPI {
         }
     }
 
+    public struct OllamaModel: Codable, Equatable, Sendable {
+        public let name: String
+        public let size: Int?
+        public let family: String?
+        public let parameterSize: String?
+        public let quantization: String?
+        public let modifiedAt: String?
+
+        public init(name: String, size: Int? = nil, family: String? = nil, parameterSize: String? = nil, quantization: String? = nil, modifiedAt: String? = nil) {
+            self.name = name
+            self.size = size
+            self.family = family
+            self.parameterSize = parameterSize
+            self.quantization = quantization
+            self.modifiedAt = modifiedAt
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case name = "name"
+            case size = "size"
+            case family = "family"
+            case parameterSize = "parameterSize"
+            case quantization = "quantization"
+            case modifiedAt = "modifiedAt"
+        }
+    }
+
+    public struct OllamaStatus: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let baseUrl: String
+        public let displayUrl: String
+        public let modelCount: Int
+        public let error: String?
+        public let code: String?
+        public let hint: String?
+        public let defaultModel: String
+        public let enabled: Bool
+
+        public init(ok: Bool, baseUrl: String, displayUrl: String, modelCount: Int, error: String? = nil, code: String? = nil, hint: String? = nil, defaultModel: String, enabled: Bool) {
+            self.ok = ok
+            self.baseUrl = baseUrl
+            self.displayUrl = displayUrl
+            self.modelCount = modelCount
+            self.error = error
+            self.code = code
+            self.hint = hint
+            self.defaultModel = defaultModel
+            self.enabled = enabled
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case baseUrl = "baseUrl"
+            case displayUrl = "displayUrl"
+            case modelCount = "modelCount"
+            case error = "error"
+            case code = "code"
+            case hint = "hint"
+            case defaultModel = "defaultModel"
+            case enabled = "enabled"
+        }
+    }
+
     public struct PlannedLoanScheduleEntry: Codable, Equatable, Sendable {
         public let installmentNumber: Int
         public let dueDate: String
@@ -6524,6 +6827,309 @@ extension OpenAPI {
         }
     }
 
+    public struct ResearchDossier: Codable, Equatable, Sendable {
+        public let title: String
+        public let workspace: String
+        public let question: String
+        public let userThesis: String?
+        public let assumptions: [String]?
+        public let openQuestions: [String]?
+        public let conclusion: String?
+        public let reviewDate: String?
+        public let evidence: [OpenAPI.ResearchDossierEvidence]?
+        public let links: OpenAPI.ResearchDossierLinks?
+        public let id: String
+        public let version: Int
+        public let linkDetails: [LinkDetailsItem]
+        public let createdAt: String
+        public let updatedAt: String
+
+        public init(title: String, workspace: String, question: String, userThesis: String? = nil, assumptions: [String]? = nil, openQuestions: [String]? = nil, conclusion: String? = nil, reviewDate: String? = nil, evidence: [OpenAPI.ResearchDossierEvidence]? = nil, links: OpenAPI.ResearchDossierLinks? = nil, id: String, version: Int, linkDetails: [LinkDetailsItem], createdAt: String, updatedAt: String) {
+            self.title = title
+            self.workspace = workspace
+            self.question = question
+            self.userThesis = userThesis
+            self.assumptions = assumptions
+            self.openQuestions = openQuestions
+            self.conclusion = conclusion
+            self.reviewDate = reviewDate
+            self.evidence = evidence
+            self.links = links
+            self.id = id
+            self.version = version
+            self.linkDetails = linkDetails
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case title = "title"
+            case workspace = "workspace"
+            case question = "question"
+            case userThesis = "userThesis"
+            case assumptions = "assumptions"
+            case openQuestions = "openQuestions"
+            case conclusion = "conclusion"
+            case reviewDate = "reviewDate"
+            case evidence = "evidence"
+            case links = "links"
+            case id = "id"
+            case version = "version"
+            case linkDetails = "linkDetails"
+            case createdAt = "createdAt"
+            case updatedAt = "updatedAt"
+        }
+
+        public struct LinkDetailsItem: Codable, Equatable, Sendable {
+            public let kind: String
+            public let historicalId: String
+            public let labelSnapshot: String
+            /// Integer for category/investment, string for saved analysis; null after deletion.
+            public let liveId: JSONValue?
+            public let status: String
+
+            public init(kind: String, historicalId: String, labelSnapshot: String, liveId: JSONValue? = nil, status: String) {
+                self.kind = kind
+                self.historicalId = historicalId
+                self.labelSnapshot = labelSnapshot
+                self.liveId = liveId
+                self.status = status
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case kind = "kind"
+                case historicalId = "historicalId"
+                case labelSnapshot = "labelSnapshot"
+                case liveId = "liveId"
+                case status = "status"
+            }
+        }
+    }
+
+    /// User-authored research record. Optional arrays, strings and links receive empty defaults;
+    /// evidence id may be omitted on input and is generated on save. The server rejects unknown request
+    /// properties; this reusable content schema also describes version snapshots.
+    public struct ResearchDossierContent: Codable, Equatable, Sendable {
+        public let title: String
+        public let workspace: String
+        public let question: String
+        public let userThesis: String?
+        public let assumptions: [String]?
+        public let openQuestions: [String]?
+        public let conclusion: String?
+        public let reviewDate: String?
+        public let evidence: [OpenAPI.ResearchDossierEvidence]?
+        public let links: OpenAPI.ResearchDossierLinks?
+
+        public init(title: String, workspace: String, question: String, userThesis: String? = nil, assumptions: [String]? = nil, openQuestions: [String]? = nil, conclusion: String? = nil, reviewDate: String? = nil, evidence: [OpenAPI.ResearchDossierEvidence]? = nil, links: OpenAPI.ResearchDossierLinks? = nil) {
+            self.title = title
+            self.workspace = workspace
+            self.question = question
+            self.userThesis = userThesis
+            self.assumptions = assumptions
+            self.openQuestions = openQuestions
+            self.conclusion = conclusion
+            self.reviewDate = reviewDate
+            self.evidence = evidence
+            self.links = links
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case title = "title"
+            case workspace = "workspace"
+            case question = "question"
+            case userThesis = "userThesis"
+            case assumptions = "assumptions"
+            case openQuestions = "openQuestions"
+            case conclusion = "conclusion"
+            case reviewDate = "reviewDate"
+            case evidence = "evidence"
+            case links = "links"
+        }
+    }
+
+    public struct ResearchDossierEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let data: OpenAPI.ResearchDossier?
+        public let error: OpenAPI.ErrorPayload?
+
+        public init(ok: Bool, data: OpenAPI.ResearchDossier? = nil, error: OpenAPI.ErrorPayload? = nil) {
+            self.ok = ok
+            self.data = data
+            self.error = error
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case data = "data"
+            case error = "error"
+        }
+    }
+
+    public struct ResearchDossierEvidence: Codable, Equatable, Sendable {
+        public let id: String?
+        public let stance: String
+        public let origin: String
+        public let claim: String
+        public let source: OpenAPI.ResearchDossierSource
+        public let notes: String?
+
+        public init(id: String? = nil, stance: String, origin: String, claim: String, source: OpenAPI.ResearchDossierSource, notes: String? = nil) {
+            self.id = id
+            self.stance = stance
+            self.origin = origin
+            self.claim = claim
+            self.source = source
+            self.notes = notes
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case stance = "stance"
+            case origin = "origin"
+            case claim = "claim"
+            case source = "source"
+            case notes = "notes"
+        }
+    }
+
+    public struct ResearchDossierExport: Codable, Equatable, Sendable {
+        public let schemaVersion: Int
+        public let exportedAt: String
+        public let dossiers: [DossiersItem]
+
+        public init(schemaVersion: Int, exportedAt: String, dossiers: [DossiersItem]) {
+            self.schemaVersion = schemaVersion
+            self.exportedAt = exportedAt
+            self.dossiers = dossiers
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case schemaVersion = "schemaVersion"
+            case exportedAt = "exportedAt"
+            case dossiers = "dossiers"
+        }
+
+        public struct DossiersItem: Codable, Equatable, Sendable {
+            public let title: String
+            public let workspace: String
+            public let question: String
+            public let userThesis: String?
+            public let assumptions: [String]?
+            public let openQuestions: [String]?
+            public let conclusion: String?
+            public let reviewDate: String?
+            public let evidence: [OpenAPI.ResearchDossierEvidence]?
+            public let links: OpenAPI.ResearchDossierLinks?
+            public let id: String
+            public let version: Int
+            public let linkDetails: [LinkDetailsItem]
+            public let createdAt: String
+            public let updatedAt: String
+            public let versions: [OpenAPI.ResearchDossierVersion]
+
+            public init(title: String, workspace: String, question: String, userThesis: String? = nil, assumptions: [String]? = nil, openQuestions: [String]? = nil, conclusion: String? = nil, reviewDate: String? = nil, evidence: [OpenAPI.ResearchDossierEvidence]? = nil, links: OpenAPI.ResearchDossierLinks? = nil, id: String, version: Int, linkDetails: [LinkDetailsItem], createdAt: String, updatedAt: String, versions: [OpenAPI.ResearchDossierVersion]) {
+                self.title = title
+                self.workspace = workspace
+                self.question = question
+                self.userThesis = userThesis
+                self.assumptions = assumptions
+                self.openQuestions = openQuestions
+                self.conclusion = conclusion
+                self.reviewDate = reviewDate
+                self.evidence = evidence
+                self.links = links
+                self.id = id
+                self.version = version
+                self.linkDetails = linkDetails
+                self.createdAt = createdAt
+                self.updatedAt = updatedAt
+                self.versions = versions
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case title = "title"
+                case workspace = "workspace"
+                case question = "question"
+                case userThesis = "userThesis"
+                case assumptions = "assumptions"
+                case openQuestions = "openQuestions"
+                case conclusion = "conclusion"
+                case reviewDate = "reviewDate"
+                case evidence = "evidence"
+                case links = "links"
+                case id = "id"
+                case version = "version"
+                case linkDetails = "linkDetails"
+                case createdAt = "createdAt"
+                case updatedAt = "updatedAt"
+                case versions = "versions"
+            }
+
+            public struct LinkDetailsItem: Codable, Equatable, Sendable {
+                public let kind: String
+                public let historicalId: String
+                public let labelSnapshot: String
+                /// Integer for category/investment, string for saved analysis; null after deletion.
+                public let liveId: JSONValue?
+                public let status: String
+
+                public init(kind: String, historicalId: String, labelSnapshot: String, liveId: JSONValue? = nil, status: String) {
+                    self.kind = kind
+                    self.historicalId = historicalId
+                    self.labelSnapshot = labelSnapshot
+                    self.liveId = liveId
+                    self.status = status
+                }
+
+                enum CodingKeys: String, CodingKey {
+                    case kind = "kind"
+                    case historicalId = "historicalId"
+                    case labelSnapshot = "labelSnapshot"
+                    case liveId = "liveId"
+                    case status = "status"
+                }
+            }
+        }
+    }
+
+    public struct ResearchDossierExportEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let data: OpenAPI.ResearchDossierExport?
+        public let error: OpenAPI.ErrorPayload?
+
+        public init(ok: Bool, data: OpenAPI.ResearchDossierExport? = nil, error: OpenAPI.ErrorPayload? = nil) {
+            self.ok = ok
+            self.data = data
+            self.error = error
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case data = "data"
+            case error = "error"
+        }
+    }
+
+    /// Current live links only; deleted targets appear in linkDetails instead.
+    public struct ResearchDossierLinks: Codable, Equatable, Sendable {
+        public let categoryIds: [Int]
+        public let investmentIds: [Int]
+        public let savedAnalysisIds: [String]
+
+        public init(categoryIds: [Int], investmentIds: [Int], savedAnalysisIds: [String]) {
+            self.categoryIds = categoryIds
+            self.investmentIds = investmentIds
+            self.savedAnalysisIds = savedAnalysisIds
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case categoryIds = "categoryIds"
+            case investmentIds = "investmentIds"
+            case savedAnalysisIds = "savedAnalysisIds"
+        }
+    }
+
     public struct ResearchDossierListEnvelope: Codable, Equatable, Sendable {
         public let ok: Bool
         public let data: Data?
@@ -6563,6 +7169,41 @@ extension OpenAPI {
         }
     }
 
+    /// Citation snapshot. Document metadata is optional, but requires documentId when present; the
+    /// server pins document version and digest on save. The snapshot remains after source deletion.
+    public struct ResearchDossierSource: Codable, Equatable, Sendable {
+        public let title: String
+        public let reference: String
+        public let sourceDate: String?
+        public let accessedAt: String?
+        public let documentId: String?
+        public let documentVersion: Int?
+        public let passageOrdinal: Int?
+        public let contentSha256: String?
+
+        public init(title: String, reference: String, sourceDate: String? = nil, accessedAt: String? = nil, documentId: String? = nil, documentVersion: Int? = nil, passageOrdinal: Int? = nil, contentSha256: String? = nil) {
+            self.title = title
+            self.reference = reference
+            self.sourceDate = sourceDate
+            self.accessedAt = accessedAt
+            self.documentId = documentId
+            self.documentVersion = documentVersion
+            self.passageOrdinal = passageOrdinal
+            self.contentSha256 = contentSha256
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case title = "title"
+            case reference = "reference"
+            case sourceDate = "sourceDate"
+            case accessedAt = "accessedAt"
+            case documentId = "documentId"
+            case documentVersion = "documentVersion"
+            case passageOrdinal = "passageOrdinal"
+            case contentSha256 = "contentSha256"
+        }
+    }
+
     public struct ResearchDossierSummary: Codable, Equatable, Sendable {
         public let id: String
         public let title: String
@@ -6593,6 +7234,54 @@ extension OpenAPI {
             case reviewDate = "reviewDate"
             case createdAt = "createdAt"
             case updatedAt = "updatedAt"
+        }
+    }
+
+    public struct ResearchDossierVersion: Codable, Equatable, Sendable {
+        public let version: Int
+        public let snapshot: OpenAPI.ResearchDossierContent
+        public let createdAt: String
+
+        public init(version: Int, snapshot: OpenAPI.ResearchDossierContent, createdAt: String) {
+            self.version = version
+            self.snapshot = snapshot
+            self.createdAt = createdAt
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case version = "version"
+            case snapshot = "snapshot"
+            case createdAt = "createdAt"
+        }
+    }
+
+    public struct ResearchDossierVersionsEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let data: Data?
+        public let error: OpenAPI.ErrorPayload?
+
+        public init(ok: Bool, data: Data? = nil, error: OpenAPI.ErrorPayload? = nil) {
+            self.ok = ok
+            self.data = data
+            self.error = error
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case data = "data"
+            case error = "error"
+        }
+
+        public struct Data: Codable, Equatable, Sendable {
+            public let items: [OpenAPI.ResearchDossierVersion]
+
+            public init(items: [OpenAPI.ResearchDossierVersion]) {
+                self.items = items
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case items = "items"
+            }
         }
     }
 

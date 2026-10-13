@@ -45,13 +45,16 @@ public struct NativeAppSettings: Equatable, Sendable {
     /// Application defaults participate below explicit run and saved-analysis preferences.
     public var analysisBenchmark: String?
     public var aiAnswerDepth: String
+    public var aiDefaultModel: String?
+    public var openAiDefaultModel: String?
     public var language: String
 
     public init(
         defaultCurrency: String = "EUR", dateFormat: AppDateFormat = .dayMonthYearSlash,
         numberFormat: NumberFormat = .eu, showDecimalPlaces: Int = 2, adminMode: Bool = false,
         colorblindGainLoss: Bool = false, defaultPageSize: Int = 50,
-        analysisBenchmark: String? = nil, aiAnswerDepth: String = "quick", language: String = "en"
+        analysisBenchmark: String? = nil, aiAnswerDepth: String = "quick", language: String = "en",
+        aiDefaultModel: String? = nil, openAiDefaultModel: String? = nil
     ) {
         self.defaultCurrency = defaultCurrency
         self.dateFormat = dateFormat
@@ -62,6 +65,8 @@ public struct NativeAppSettings: Equatable, Sendable {
         self.defaultPageSize = defaultPageSize
         self.analysisBenchmark = analysisBenchmark
         self.aiAnswerDepth = aiAnswerDepth
+        self.aiDefaultModel = aiDefaultModel
+        self.openAiDefaultModel = openAiDefaultModel
         self.language = language
     }
 
@@ -96,6 +101,10 @@ public struct NativeAppSettings: Equatable, Sendable {
         }
         if let value = fields["aiAnswerDepth"]?.stringValue, ["quick", "detailed"].contains(value) {
             settings.aiAnswerDepth = value
+        }
+        settings.aiDefaultModel = fields["aiDefaultModel"]?.stringValue
+        if let value = fields["openAiDefaultModel"]?.stringValue, (1...200).contains(value.utf16.count) {
+            settings.openAiDefaultModel = value
         }
         if let value = fields["language"]?.stringValue, ["en", "nl"].contains(value) { settings.language = value }
         return settings

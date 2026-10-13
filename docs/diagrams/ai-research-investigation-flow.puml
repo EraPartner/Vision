@@ -3,7 +3,7 @@ title Bounded AI Research Investigation
 
 actor User
 participant "AI settings" as SettingsUI
-participant "Investigation panel" as UI
+participant "Investigation client\nReact panel / native AIInvestigationModel" as UI
 participant "AI research routes" as API
 participant "AgentCloak Desktop setup\n(Vision service)" as Setup
 participant "Investigation service\n(serial queue)" as Orchestrator
@@ -37,6 +37,7 @@ User -> UI: Select scope, depth, language,\nresearch mode, route, and approved A
 opt Selected summary or evidence contains explicit private literals
   User -> UI: Wrap literals as\n[[vision-ref:type|value]]
 end
+opt Cloud route selected; first Run inspects the preview
 UI -> API: POST /disclosures/preview\nwith full investigation request
 opt Selected text has markers or Desktop mode is enabled
   API -> References: Parse supported typed markers
@@ -66,30 +67,29 @@ opt AgentCloak preflight enabled
   end
 end
 API --> UI: Exact tokenized payload, digest,\nreference warning, and preflight status
-UI -> API: POST /investigations\nwith preview outboundRequest
+User -> UI: Consent to the inspected cloud payload
+UI -> API: POST /disclosures/grants\npreviewHash, allowed fields, source caps and expiry
+API -> DB: Persist digest-bound grant
+API --> UI: Grant id
+end
+UI -> API: POST /investigations\nlocal request or frozen preview.outboundRequest + grantId
 API -> Orchestrator: Strict typed request
 Orchestrator -> DB: Persist queued job
 opt Request has a reference scope
   Orchestrator -> References: Validate every token; claim scope
   References -> DB: Bind scope atomically to one job;\nset 30-day expiry
 end
+API --> UI: Queued job id / state; orchestration continues locally
 alt Material ambiguity
   Orchestrator -> DB: Persist waiting plan
   UI --> User: Request clarification and typed date scope
 else Scope is sufficient
   alt Selected-evidence cloud synthesis
-    User -> UI: Enter exact task and evidence
-    User -> UI: Inspect exact synthesis payload
-    UI -> API: Create dedicated digest-bound grant
-    API -> DB: Create digest-bound grant
     Orchestrator -> DB: Checkpoint selected evidence
   else Local planning
     Orchestrator -> Ollama: Candidate step identifiers
     Ollama --> Orchestrator: Prioritized identifiers
   else Opt-in OpenAI planning
-    User -> UI: Inspect exact outbound planning payload
-    UI -> API: Create digest-bound grant
-    API -> DB: Create digest-bound grant
     opt AgentCloak preflight enabled, for each send attempt
       Orchestrator -> Preflight: Check canonical user-authored cloud text
       Preflight -> AgentCloak: Desktop /detect or MCP cloak on token-safe text
@@ -149,7 +149,12 @@ else Safe local answer
 end
 Orchestrator -> Orchestrator: Validate citations and answer schema
 Orchestrator -> DB: Complete, partial, failed, or cancelled
-API --> UI: Facts, calculations, interpretations,\ngaps, conflicts, and evidence
+loop Mounted pending job; manual 1.2-second interval
+  UI -> API: GET /investigations/:id
+  API -> DB: Read current persisted job and steps
+  DB --> API: Snapshot / structured answer
+  API --> UI: Status, facts, calculations, interpretations,\ngaps, conflicts, and evidence
+end
 UI --> User: Inspectable evidence-backed answer
 
 note right of Orchestrator
@@ -169,6 +174,19 @@ It never rewrites the digest-bound OpenAI payload. Local chat is untouched.
 The AES-256-GCM key is installation state outside PostgreSQL and database backup.
 Restart validates the provider-form checkpoint and restores locally without another model call.
 Job deletion cascades to its claimed scope and encrypted entries.
+end note
+
+note over UI, API
+  Native /ai-chat mode switches retain both workflows.
+  Form / resolved-context changes retire obsolete previews.
+  Consent submits the frozen inspected request, not changed live fields.
+  Manual job polls can overlap slow reads; current snapshots retire older replies.
+  Polling stops on completed, failed, cancelled, partial or waiting.
+  Status alone uses 60-second focus / reconnect freshness:
+  online initial mount runs even in background; later refresh is foreground-gated.
+  Documents are mount-only reads; uploads keep original multipart file bytes.
+  Real route exit clears local job/forms without deleting the backend job.
+  macOS package and Demo parity review remain pending.
 end note
 
 @enduml

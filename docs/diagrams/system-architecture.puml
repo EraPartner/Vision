@@ -11,6 +11,9 @@ actor "User" as User
 package "Client" {
   node "Vision Native (synthetic Demo)\nSwiftUI Tax, Portfolio + wealth tools\nDecimal display / native drafts" as NativeTax
   node "Native Portfolio Import\nprobe · parser · staged session\nreview · history · fingerprint commit" as NativeImport
+  node "Native AI Chat\nconversation streams + partial retries\nTS tool-message presentation" as NativeAIChat
+  node "Native Investigation\nexact preview + consent grants\njobs / documents / disclosure history" as NativeInvestigation
+  node "Native Research Dossiers\nexplicit drafts + version CAS\nevidence / immutable history / JSON export" as NativeDossiers
   node "Native Research charts / forecast\nlocal layout storage + clipboard sharing\nexisting projections + paired Life scenarios" as NativeResearchTools
   node "Native Research (five routes)\nHome · Markets · Lookup\nWatchlist · Compare / lossless reads" as NativeResearch
   node "Native Analysis workspace\nquery / SQL · results · workbench\nversioned definitions + interchange" as NativeAnalysis
@@ -83,6 +86,10 @@ package "Client to Server" {
   NativeTax --> Express : loopback OpenAPI financial reads + writes
   NativeImport --> Express : readonly probe + existing import/review operations
   NativePortfolioTax --> Express : portfolio-dashboard + settings CAS
+  NativeAIChat --> Express : existing conversation CRUD / JSON SSE\nordered toolPresentation sibling
+  NativeInvestigation --> Express : existing status / jobs / documents\npreview / digest-bound grants / history
+  NativeDossiers --> Express : existing paged reads / expected-version writes\nimmutable restore / JSON export
+  NativeAIChat .. NativeInvestigation : same mounted /ai-chat coordinator
   NativeResearchTools --> Express : chart / Life presentation + existing forecasts\nsettings CAS
   NativeResearchTools --> ReactApp : same WK localStorage layout key
   NativeResearch --> Express : existing scoped reads / guarded writes\nstateless submitted presentation
@@ -229,7 +236,7 @@ note right of NativeResearch
   Financial transformations and two-of-three previews stay TypeScript.
   Source currency conventions remain unchanged.
   Chart Builder / Forecast have a separate native client node.
-  Remaining Research and AI routes still use the web view.
+  Dossiers and AI clients have separate native nodes.
   macOS package and Demo parity review remain pending.
 end note
 
@@ -239,6 +246,30 @@ note right of NativeResearchTools
   Unknown / overflowed available bands fail the canonical numeric guard.
   Layout writes share the original WK localStorage library and schema.
   Scenario writes retain serialized raw settings CAS baselines.
+  macOS package and Demo parity review remain pending.
+end note
+
+note right of NativeAIChat
+  Stream lifetime is distinct from page-read lifetime.
+  Shared TypeScript derives ordered axes / pie composition before wire encoding.
+  Raw stored tool results and model prompts stay unchanged.
+  Native only draws and formats returned data.
+  macOS package and Demo parity review remain pending.
+end note
+
+note right of NativeInvestigation
+  Form changes retire obsolete previews.
+  Consented sends use the frozen preview request and its digest-bound grant.
+  Status focus / reconnect policy is separate from manual job polling.
+  Documents remain mount-only reads; original upload bytes reach the backend.
+  Real route exit resets local job state without deleting the remote job.
+  macOS package and Demo parity review remain pending.
+end note
+
+note right of NativeDossiers
+  Explicit expected-version saves and immutable restore remain server-owned.
+  Current selection / visit guards protect drafts and source anchors.
+  Existing JSON exports are captured server snapshots, not an import format.
   macOS package and Demo parity review remain pending.
 end note
 

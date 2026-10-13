@@ -7931,10 +7931,30 @@ export interface components {
             toolResult?: {
                 [key: string]: unknown;
             } | null;
+            toolPresentation?: components["schemas"]["AiToolPresentation"];
             /** @enum {string} */
             status: "complete" | "streaming" | "aborted" | "error";
             /** Format: date-time */
             createdAt: string;
+        };
+        /** @description Additive outgoing-message metadata inferred by shared TypeScript from the original JSON tool result; stored results and provider prompts remain unchanged. Nested array rows and first-row ordered keys retain the existing web behavior. */
+        AiToolPresentation: {
+            renderAs: string;
+            rows: unknown[];
+            columns: string[];
+            xKey: string;
+            yKeys: string[];
+            rowCount: number;
+            pieRenderable: boolean;
+            /** @description Empty when the first y key is unavailable or the source numeric sum is not positive; otherwise retains negative values and Recharts default sector composition. */
+            pieRows: {
+                name: string;
+                value: number;
+                percent: number;
+                labelPercent: number;
+                startAngle: number;
+                endAngle: number;
+            }[];
         };
         AiTokenUsage: {
             evalCount: number | null;

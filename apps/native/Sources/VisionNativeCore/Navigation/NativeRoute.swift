@@ -121,6 +121,8 @@ public enum NativeScreen: Equatable, Hashable, Sendable {
     case researchCompare
     case researchForecast
     case researchChartBuilder
+    case researchDossiers
+    case aiChat
     case adminOverview
     case databaseMaintenance
     /// `/admin/db/:table`, with the decoded table name.
@@ -158,6 +160,7 @@ public enum NativeScreen: Equatable, Hashable, Sendable {
         .analysis, .analysisMonitors,
         .researchHome, .researchMarkets, .researchMarketLookup, .researchWatchlist, .researchCompare,
         .researchForecast, .researchChartBuilder,
+        .researchDossiers, .aiChat,
         .adminOverview, .databaseMaintenance, .providerHealth, .endpointLiveness, .exchangeRates, .plannedPayments,
         .importExport, .transactions, .accounts, .categories, .recipients,
     ]
@@ -186,6 +189,8 @@ public enum NativeScreen: Equatable, Hashable, Sendable {
         case .researchCompare: return "/research/compare"
         case .researchForecast: return "/research/forecast"
         case .researchChartBuilder: return "/research/charts"
+        case .researchDossiers: return "/research/dossiers"
+        case .aiChat: return "/ai-chat"
         case .adminOverview: return "/admin"
         case .databaseMaintenance: return TableEditorRoute.maintenancePath
         case .tableEditor(let table): return TableEditorRoute.path(for: table)

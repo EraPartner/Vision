@@ -275,4 +275,21 @@ actor SleepRecorder {
         #expect(!settings.colorblindGainLoss)
         #expect(await transport.requests.first?.url.path == "/api/settings/app_settings")
     }
+
+    @Test func modelDefaultsRetainTheDistinctWebMigrationRules() {
+        let raw = NativeAppSettings.migrate(
+            .object([
+                "aiDefaultModel": .string(""), "openAiDefaultModel": .string(String(repeating: "😀", count: 100)),
+            ]))
+        #expect(raw.aiDefaultModel == "")
+        #expect(raw.openAiDefaultModel == String(repeating: "😀", count: 100))
+        let invalid = NativeAppSettings.migrate(
+            .object([
+                "aiDefaultModel": .int(123), "openAiDefaultModel": .string(String(repeating: "😀", count: 101)),
+            ]))
+        #expect(invalid.aiDefaultModel == nil)
+        #expect(invalid.openAiDefaultModel == nil)
+        #expect(NativeAppSettings.migrate(.object(["openAiDefaultModel": .string("")])).openAiDefaultModel == nil)
+        #expect(NativeAppSettings.defaults.aiDefaultModel == nil)
+    }
 }

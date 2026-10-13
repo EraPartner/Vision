@@ -341,6 +341,12 @@ struct ResearchChartBuilderTests {
         model.state = state
         await model.loadSeries()
         #expect(await transport.chartReads == before)
+        // Style changes also queue a projection; that task can retire the projection
+        // awaited by loadSeries. Wait for the current-input presentation to publish.
+        for _ in 0..<2000 {
+            if model.presentation != nil { break }
+            try await Task.sleep(for: .milliseconds(1))
+        }
         #expect(model.presentation?.raw["result"]?["rows"]?.arrayValue?[0][model.state.series[0].id] == .number(77))
     }
     @Test func duplicateDisplaySeriesDoNotRefetchAnExpiredProviderCacheUntilActualReentry() async throws {

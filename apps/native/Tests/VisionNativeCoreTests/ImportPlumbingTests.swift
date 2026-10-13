@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import VisionNativeCore
 
 /// Hands each scripted chunk of a 2xx answer to the reader, or returns a failure body; with
@@ -107,7 +108,10 @@ enum PlumbingFixture {
     @Test func oneChunkWithTwoFramesYieldsBothEvents() {
         var parser = ServerSentEventParser()
         let events = parser.feed(Data("event: progress\ndata: {\"a\":1}\n\nevent: complete\ndata: {}\n\n".utf8))
-        #expect(events == [ServerSentEvent(event: "progress", data: "{\"a\":1}"), ServerSentEvent(event: "complete", data: "{}")])
+        #expect(
+            events == [
+                ServerSentEvent(event: "progress", data: "{\"a\":1}"), ServerSentEvent(event: "complete", data: "{}"),
+            ])
         #expect(parser.finish().isEmpty)
     }
 
@@ -130,7 +134,11 @@ enum PlumbingFixture {
     @Test func carriageReturnLineEndsAreAccepted() {
         var parser = ServerSentEventParser()
         let events = parser.feed(Data("event: error\r\ndata: {\"detail\":\"x\"}\r\n\r\ndata: y\r\n\n".utf8))
-        #expect(events == [ServerSentEvent(event: "error", data: "{\"detail\":\"x\"}"), ServerSentEvent(event: "message", data: "y")])
+        #expect(
+            events == [
+                ServerSentEvent(event: "error", data: "{\"detail\":\"x\"}"),
+                ServerSentEvent(event: "message", data: "y"),
+            ])
     }
 
     @Test func commentsAndKeepAlivesYieldNothing() {
@@ -139,7 +147,9 @@ enum PlumbingFixture {
     }
 
     @Test func dataLinesJoinWithLineBreaksAndLoseLeadingSpace() {
-        #expect(ServerSentEventParser.parseFrame("data:  one\ndata:two") == ServerSentEvent(event: "message", data: "one\ntwo"))
+        #expect(
+            ServerSentEventParser.parseFrame("data:  one\ndata:two")
+                == ServerSentEvent(event: "message", data: "one\ntwo"))
         #expect(ServerSentEventParser.parseFrame("event:   \ndata: x") == ServerSentEvent(event: "message", data: "x"))
     }
 
@@ -148,6 +158,63 @@ enum PlumbingFixture {
         #expect(parser.feed(Data("event: complete\ndata: {}\n".utf8)).isEmpty)
         #expect(parser.finish() == [ServerSentEvent(event: "complete", data: "{}")])
         #expect(parser.finish().isEmpty)
+    }
+}
+
+@Suite struct JSONStreamTests {
+    @Test func chatJSONUsesExactBytesAndSharedHeadersAndForwardsUndecodableDataFrames() async throws {
+        let stream = FakeStreamTransport(chunks: [
+            ": keepalive\n\n", "event: token\ndata: {not-json}\n\n",
+            "event: complete\ndata: {\"text\":\"é\"}",
+        ])
+        let body = Data(#"{"message":"Synthetic € input","useTools":false}"#.utf8)
+        let collected = EventLog()
+        try await PlumbingFixture.client(stream: stream).streamJSONEvents(
+            path: "/api/ai/chat/stream", body: body, fallbackMessage: "Chat stream failed"
+        ) { event in await collected.append(event) }
+        #expect(
+            await collected.items == [
+                ServerSentEvent(event: "token", data: "{not-json}"),
+                ServerSentEvent(event: "complete", data: #"{"text":"é"}"#),
+            ])
+        let request = try #require(stream.requests.first)
+        #expect(request.url.path == "/api/ai/chat/stream")
+        #expect(request.method == .post)
+        #expect(request.body == body)
+        #expect(request.headers["Content-Type"] == "application/json")
+        #expect(request.headers["Accept"] == "text/event-stream")
+        #expect(request.headers["Authorization"] == "Bearer secret")
+        #expect(request.headers["X-Request-Id"] == "req-1")
+        #expect(stream.requests.count == 1)
+    }
+
+    @Test func failedJSONStreamsUseFailureEnvelopesWithoutRetrying() async {
+        let stream = FakeStreamTransport(
+            status: 502,
+            failureBody:
+                #"{"ok":false,"error":{"code":"BAD_GATEWAY","message":"Synthetic failure"},"meta":{"requestId":"failure-id"}}"#
+        )
+        await #expect(
+            throws: APIError.client(
+                .init(
+                    status: 502, code: .badGateway, message: "Synthetic failure", requestId: "failure-id"))
+        ) {
+            try await PlumbingFixture.client(stream: stream).streamJSONEvents(
+                path: "/api/ai/chat/stream", body: Data("{}".utf8), fallbackMessage: "Chat stream failed"
+            ) { _ in Issue.record("A failure envelope must not become a data event") }
+        }
+        #expect(stream.requests.count == 1)
+    }
+
+    @Test func aConsumerErrorEndsJSONDeliveryWithoutWrappingOrRetrying() async {
+        enum ConsumerFailure: Error { case stopped }
+        let stream = FakeStreamTransport(chunks: ["data: first\n\n", "data: second\n\n"])
+        await #expect(throws: ConsumerFailure.stopped) {
+            try await PlumbingFixture.client(stream: stream).streamJSONEvents(
+                path: "/api/ai/chat/stream", body: Data("{}".utf8), fallbackMessage: "Chat stream failed"
+            ) { _ in throw ConsumerFailure.stopped }
+        }
+        #expect(stream.requests.count == 1)
     }
 }
 
@@ -160,7 +227,10 @@ enum PlumbingFixture {
         try await PlumbingFixture.client(stream: stream).streamEvents(
             path: "/api/import/csv/stream", body: form, fallbackMessage: "Import failed"
         ) { event in await collected.append(event) }
-        #expect(await collected.items == [ServerSentEvent(event: "message", data: "one"), ServerSentEvent(event: "two", data: "2")])
+        #expect(
+            await collected.items == [
+                ServerSentEvent(event: "message", data: "one"), ServerSentEvent(event: "two", data: "2"),
+            ])
         let request = try #require(stream.requests.first)
         #expect(request.method == .post)
         #expect(request.url.absoluteString == "http://127.0.0.1:54331/api/import/csv/stream")
@@ -175,13 +245,18 @@ enum PlumbingFixture {
     @Test func aFailedAnswerThrowsItsEnvelope() async {
         let stream = FakeStreamTransport(
             status: 400, failureBody: #"{"ok":false,"error":{"code":"VALIDATION_ERROR","message":"Unknown bank"}}"#)
-        await #expect(throws: APIError.client(APIClientError(status: 400, code: .validationError, message: "Unknown bank"))) {
+        await #expect(
+            throws: APIError.client(APIClientError(status: 400, code: .validationError, message: "Unknown bank"))
+        ) {
             try await PlumbingFixture.client(stream: stream).streamEvents(
                 path: "/api/import/csv/stream", body: MultipartFormData(boundary: "B"), fallbackMessage: "Import failed"
             ) { _ in }
         }
         let plain = FakeStreamTransport(status: 502, failureBody: "Bad gateway")
-        await #expect(throws: APIError.client(APIClientError(status: 502, code: .badGateway, message: "Import failed (status 502)"))) {
+        await #expect(
+            throws: APIError.client(
+                APIClientError(status: 502, code: .badGateway, message: "Import failed (status 502)"))
+        ) {
             try await PlumbingFixture.client(stream: plain).streamEvents(
                 path: "/api/import/csv/stream", body: MultipartFormData(boundary: "B"), fallbackMessage: "Import failed"
             ) { _ in }
@@ -211,13 +286,15 @@ enum PlumbingFixture {
     @Test func aParkedImportEndsInItsReview() async throws {
         let review = FakeStreamTransport(chunks: ["event: review_required\ndata: {\"batch_id\":42,\"rows\":3}\n\n"])
         let first = try await PlumbingFixture.client(stream: review).importStream(
-            file: PlumbingFixture.file, bankName: "kbc") { _ in }
+            file: PlumbingFixture.file, bankName: "kbc"
+        ) { _ in }
         #expect(first == .reviewRequired(batchId: 42))
         let flagged = FakeStreamTransport(chunks: [
             "event: complete\ndata: {\"total_processed\":3,\"imported\":0,\"duplicates\":0,\"errors\":0,\"batch_id\":9,\"requires_review\":true}\n\n"
         ])
         let second = try await PlumbingFixture.client(stream: flagged).importStream(
-            file: PlumbingFixture.file, bankName: "kbc") { _ in }
+            file: PlumbingFixture.file, bankName: "kbc"
+        ) { _ in }
         #expect(second == .reviewRequired(batchId: 9))
     }
 
@@ -267,9 +344,13 @@ enum PlumbingFixture {
         let progress = try ImportStreamEvents.handle(
             ServerSentEvent(
                 event: "progress",
-                data: "{\"phase\":\"importing\",\"current\":2.0,\"total\":4,\"imported\":1,\"duplicates\":1,\"errors\":0,\"percent\":50}"))
+                data:
+                    "{\"phase\":\"importing\",\"current\":2.0,\"total\":4,\"imported\":1,\"duplicates\":1,\"errors\":0,\"percent\":50}"
+            ))
         #expect(
-            progress == .progress(ImportProgress(phase: "importing", current: 2, total: 4, imported: 1, duplicates: 1, percent: 50)))
+            progress
+                == .progress(
+                    ImportProgress(phase: "importing", current: 2, total: 4, imported: 1, duplicates: 1, percent: 50)))
     }
 }
 
@@ -298,10 +379,11 @@ actor EventLog {
             file: ImportFile(name: "export.csv", data: Data("x".utf8)), bankName: "My bank", config: Self.config,
             boundary: "B")
         #expect(request.contentType == "multipart/form-data; boundary=B")
-        #expect(request.form.parts.map { part in part.name } == [
-            "file", "bank_name", "date_format", "date_column", "recipient_column", "amount_column", "separator",
-            "encoding", "skip_rows", "number_format",
-        ])
+        #expect(
+            request.form.parts.map { part in part.name } == [
+                "file", "bank_name", "date_format", "date_column", "recipient_column", "amount_column", "separator",
+                "encoding", "skip_rows", "number_format",
+            ])
         let values = request.form.parts.dropFirst().map { part in String(decoding: part.data, as: UTF8.self) }
         #expect(values == ["My bank", "%d/%m/%Y", "Datum", "Naam", "Bedrag", ";", "latin1", "2", "decimal_comma"])
         #expect(request.form.parts.first?.contentType == "application/octet-stream")
@@ -319,7 +401,8 @@ actor EventLog {
             .response(202, #"{"ok":true,"data":{"requires_review":true,"batch_id":8,"rows":5}}"#),
         ])
         let client = PlumbingFixture.client(transport: transport)
-        let committed = try await client.importCustom(file: PlumbingFixture.file, bankName: "generic", config: Self.config)
+        let committed = try await client.importCustom(
+            file: PlumbingFixture.file, bankName: "generic", config: Self.config)
         #expect(committed == .completed(ImportCompletion(total: 5, imported: 4, duplicates: 1, errors: 0, batchId: 3)))
         let parked = try await client.importCustom(file: PlumbingFixture.file, bankName: "generic", config: Self.config)
         #expect(parked == .reviewRequired(batchId: 8))
@@ -331,20 +414,26 @@ actor EventLog {
 
     @Test func theTypedOperationsUseTheirPaths() async throws {
         let transport = FakeTransport([
-            .response(200, #"{"ok":true,"data":{"items":[{"key":"kbc","name":"KBC","adapter_class":"KbcAdapter"}],"total":1}}"#),
+            .response(
+                200,
+                #"{"ok":true,"data":{"items":[{"key":"kbc","name":"KBC","adapter_class":"KbcAdapter"}],"total":1}}"#),
             .response(200, #"{"ok":true,"data":{"deleted":4,"recipientsRemoved":1}}"#),
             .response(200, #"{"ok":true,"data":{"total":0,"limit":10,"offset":20,"items":[]}}"#),
         ])
         let client = PlumbingFixture.client(transport: transport)
-        #expect(try await client.supportedAdapters() == [ImportAdapter(key: "kbc", name: "KBC", adapterClass: "KbcAdapter")])
+        #expect(
+            try await client.supportedAdapters() == [ImportAdapter(key: "kbc", name: "KBC", adapterClass: "KbcAdapter")]
+        )
         #expect(try await client.rollbackImportBatch(id: 12) == 4)
         let page: ImportBatchPage = try await client.importBatches(limit: 10, offset: 20)
         #expect(page.offset == 20)
-        let urls = await transport.requests.map { request in request.method.rawValue + " " + request.url.absoluteString }
-        #expect(urls == [
-            "GET http://127.0.0.1:54331/api/info/supported-adapters",
-            "DELETE http://127.0.0.1:54331/api/import/batches/12",
-            "GET http://127.0.0.1:54331/api/import/batches?limit=10&offset=20",
-        ])
+        let urls = await transport.requests.map { request in request.method.rawValue + " " + request.url.absoluteString
+        }
+        #expect(
+            urls == [
+                "GET http://127.0.0.1:54331/api/info/supported-adapters",
+                "DELETE http://127.0.0.1:54331/api/import/batches/12",
+                "GET http://127.0.0.1:54331/api/import/batches?limit=10&offset=20",
+            ])
     }
 }

@@ -190,7 +190,7 @@ See [the architecture page](../../docs/architecture/native-app.md#native-navigat
   the submitted-data endpoint makes no provider requests. Quotes/news retain source polling and
   fresh caches; late replies cannot replace another symbol, range, editor or route. Market lookup's
   retained Add to portfolio drafts use the existing leave guard and broker-history defaults.
-  Dossiers and AI chat remain web. Mac/Demo review is pending.
+  Dossiers and AI chat are ported in phase 3n below. Mac/Demo review is pending.
 - `/research/forecast` and `/research/charts` are native (phase 3m). Forecast retains its
   debounced controls, cached authoritative simulations and independent Life scenario comparisons.
   Saved scenarios use the existing `life_scenarios` settings CAS contract, with delete/Undo.
@@ -201,6 +201,19 @@ See [the architecture page](../../docs/architecture/native-app.md#native-navigat
   Settings coverage preserves drafts; leaving resets Forecast and retains Chart Builder metadata.
   Full macOS build, native chart interaction and synthetic Demo review remain pending. Cross-route
   Undo availability remains a shared shell parity gap for the later shell/Settings pass.
+- `/research/dossiers` and `/ai-chat` are native (phase 3n). Dossiers keeps lists of 500 records,
+  linked records, evidence pins, immutable versions, version CAS, confirmations and captured JSON
+  exports. Dirty drafts keep their acknowledged version even after a background read; late writes
+  cannot retarget another editor. New/selection use the source discard prompt, without a route guard.
+- AI chat retains conversation paging, model/tool controls, literal messages and per-conversation
+  streams across navigation. JSON SSE uses the shared native HTTP transport, source 120-second
+  stall policy, completion/error handling and explicit Stop/retry. Both Chat and Investigation
+  remain mounted across mode changes. Investigation retains its inspected disclosure/grant flow,
+  documents, evidence answers, clarification and manual job polling every 1.2 seconds.
+  Status alone follows its source freshness/online policy. Text/Markdown/HTML uploads retain the 5 MiB backend limit.
+  Tool tables/charts consume additive TypeScript presentation metadata for original member order,
+  axes and pie values; raw tool results and model prompts remain unchanged. Full macOS/VoiceOver/
+  Demo verification and the shared global notice/Undo host remain pending.
 - `/admin`, `/admin/providers`, `/admin/endpoints` and `/admin/exchange-rates` are native, in
   admin mode only, and so are `/admin/db` and `/admin/db/:table`; the table editor holds
   navigation and Quit behind a native Leave this page? alert while it has pending changes. The admin token card writes the page's
@@ -527,3 +540,12 @@ Demo visual/keyboard checks remain pending.
     logarithmic fallback, indicators and tooltips. Test saved layouts across route changes, failed
     storage reads/writes and retries, malformed/oversized shared charts and preserved URL parameters.
     Verify Settings and palette coverage, text-field Cmd-Z, chart keyboard focus, EN/NL and VoiceOver.
+
+31. **Dossiers and AI chat (phase 3n, pending Mac review).** Exercise dossier paging, dirty selection,
+    deleted links, evidence anchors, CAS conflicts, newer writes arriving during reads, restore and
+    captured full-history exports. Check both retained AI modes, literal transcripts, model/tool
+    states, Enter/Shift-Enter, UTF16 limits, partial Stop/retry, unknown SSE frames, terminal errors
+    and active streams through navigation. Compare tool tables/axes/pie against the existing app.
+    Test stale status focus/reconnect, exact consent preview and grants, 5 MiB text uploads, selected
+    artifacts, waiting/partial job clarification, cancellation, record/grant controls and safe evidence
+    links. Confirm EN/NL, focus, VoiceOver and synthetic Demo rendering on Mac.

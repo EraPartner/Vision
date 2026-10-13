@@ -256,6 +256,10 @@ struct NativeScreenContainer: View {
             if let forecast = model.researchForecast { ResearchForecastScreenView(screens: forecast, shell: model) }
         case .researchChartBuilder:
             if let charts = model.researchChartBuilder { ResearchChartBuilderScreenView(model: charts, shell: model) }
+        case .researchDossiers:
+            if let dossiers = model.researchDossiers { ResearchDossiersScreenView(model: dossiers, shell: model) }
+        case .aiChat:
+            if let aiChat = model.aiChat { AIChatScreenView(screens: aiChat, shell: model) }
         case .portfolio:
             if let portfolio = model.portfolio { PortfolioScreenView(screens: portfolio, shell: model) }
         case .portfolioHoldings(let assetClass):

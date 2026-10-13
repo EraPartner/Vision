@@ -88,7 +88,9 @@ range and tab and Compare's repeated symbols, range, tab and sort preserve unrel
 Market lookup's Add to portfolio form retains its unsaved-work guard and broker defaults. Phase 3m
 also draws Forecast and Chart Builder natively, including Life scenario comparisons and the existing
 saved-layout/share format. Settings coverage preserves their drafts; actual exits reset Forecast
-and retain Chart Builder metadata. Dossiers remain web. Full Mac/Demo review is pending; see
+and retain Chart Builder metadata. phase 3n also mounts Dossiers and AI chat, including immutable
+dossier versions, JSON exports, app-lifetime Chat streams and the retained Investigation workflow.
+Settings and other global web overlays remain for the shared shell pass. Full Mac/Demo review is pending; see
 [[docs/reference/native-parity/research-and-ai-chat|Research parity]].
 
 ## Admin Routes

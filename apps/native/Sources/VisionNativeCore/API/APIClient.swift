@@ -366,13 +366,33 @@ public struct APIClient: Sendable {
         path: String, body: MultipartFormData, fallbackMessage: String,
         onEvent: (ServerSentEvent) async throws -> Void
     ) async throws {
+        try await streamResponse(
+            path: path, body: body.encoded(), contentType: body.contentType,
+            fallbackMessage: fallbackMessage, onEvent: onEvent)
+    }
+
+    /// Chat sends JSON while file staging sends multipart; both retain the same SSE transport
+    /// and failure envelope. A POST stream has one attempt, including ambiguous failures.
+    public func streamJSONEvents(
+        path: String, body: Data, fallbackMessage: String,
+        onEvent: (ServerSentEvent) async throws -> Void
+    ) async throws {
+        try await streamResponse(
+            path: path, body: body, contentType: "application/json",
+            fallbackMessage: fallbackMessage, onEvent: onEvent)
+    }
+
+    private func streamResponse(
+        path: String, body: Data, contentType: String, fallbackMessage: String,
+        onEvent: (ServerSentEvent) async throws -> Void
+    ) async throws {
         let label = "POST \(path)"
         guard let base = await baseURL() else { throw APIError.backendUnavailable }
         guard let url = Self.url(base: base, path: path, queryItems: []) else { throw APIError.invalidRequest(label) }
-        var headers = await requestHeaders(contentType: body.contentType)
+        var headers = await requestHeaders(contentType: contentType)
         headers["Accept"] = "text/event-stream"
         let request = APIRequest(
-            method: .post, url: url, headers: headers, body: body.encoded(), timeout: Self.streamTimeout)
+            method: .post, url: url, headers: headers, body: body, timeout: Self.streamTimeout)
         var parser = ServerSentEventParser()
         // The transport maps its own failures to `APIError` or `CancellationError`; an error
         // `onEvent` throws passes through.

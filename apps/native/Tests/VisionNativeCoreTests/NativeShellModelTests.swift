@@ -61,7 +61,8 @@ final class ShellRecorder {
         portfolioImports: PortfolioImportScreens? = nil, tax: TaxScreens? = nil,
         analysis: AnalysisScreens? = nil, analysisMonitors: AnalysisMonitorsModel? = nil,
         research: ResearchScreens? = nil, researchForecast: ResearchForecastScreens? = nil,
-        researchChartBuilder: ResearchChartBuilderModel? = nil
+        researchChartBuilder: ResearchChartBuilderModel? = nil, researchDossiers: ResearchDossiersModel? = nil,
+        aiChat: AIChatScreens? = nil
     ) -> NativeShellModel {
         NativeShellModel(
             strings: DictionaryStrings(language: .en, table: [:]),
@@ -80,6 +81,8 @@ final class ShellRecorder {
             research: research,
             researchForecast: researchForecast,
             researchChartBuilder: researchChartBuilder,
+            researchDossiers: researchDossiers,
+            aiChat: aiChat,
             hiddenSections: hidden,
             loadSettings: { settings },
             saveHiddenSections: { recorder.saved.append($0) },
@@ -194,13 +197,15 @@ final class ShellRecorder {
     @Test(arguments: [
         "/research", "/research/markets", "/research/market", "/research/watchlist", "/research/compare",
         "/research/forecast", "/research/charts",
+        "/research/dossiers", "/ai-chat",
     ])
     func researchScreensPreserveDeepLinksWithoutAdminModeAndFallbackWhenOmitted(path: String) async throws {
         let client = APIClient(baseURL: { nil }, adminToken: { nil })
         let model = makeModel(
             settings: NativeAppSettings(adminMode: false), recorder: ShellRecorder(),
             research: ResearchScreens(client: client), researchForecast: ResearchForecastScreens(client: client),
-            researchChartBuilder: ResearchChartBuilderModel(client: client, store: ResearchChartLayoutMemoryStore()))
+            researchChartBuilder: ResearchChartBuilderModel(client: client, store: ResearchChartLayoutMemoryStore()),
+            researchDossiers: ResearchDossiersModel(client: client), aiChat: AIChatScreens(client: client))
         let route = try #require(NativeRoute(path + "?symbol=AAPL&symbol=MSFT&tab=analyst&unrelated=keep"))
         model.routeDidChange(route)
         await model.settingsSettled()
@@ -212,6 +217,47 @@ final class ShellRecorder {
         legacy.routeDidChange(route)
         await legacy.settingsSettled()
         #expect(legacy.detail == .web)
+    }
+
+    @Test func coveredAIKeepsBothWorkflowDraftsAndActualExitRetiresPageState() async throws {
+        let screens = AIChatScreens(client: APIClient(baseURL: { nil }))
+        let model = makeModel(recorder: ShellRecorder(), aiChat: screens)
+        let route = try #require(NativeRoute("/ai-chat?mode=investigation&unrelated=keep"))
+        model.routeDidChange(route)
+        await model.settingsSettled()
+        await screens.didAppear(route: route)
+        let retainedStreams = screens.chat.streams
+        screens.chat.draft = "Synthetic unsent chat"
+        screens.investigation.question = "Synthetic investigation"
+        model.openSettings()
+        model.routeDidChange(route.setting("settings", to: "general"))
+        #expect(model.isTemporarilyCovered(route.path))
+        #expect(screens.chat.draft == "Synthetic unsent chat")
+        #expect(screens.investigation.question == "Synthetic investigation")
+        model.routeDidChange(NativeRoute(path: "/research/dossiers"))
+        #expect(screens.chat.draft.isEmpty)
+        #expect(screens.investigation.question.isEmpty)
+        #expect(screens.chat.streams === retainedStreams)
+    }
+
+    @Test func coveredDossierRetainsItsEditorWithoutAddingARouteLeaveGuard() async throws {
+        let dossiers = ResearchDossiersModel(client: APIClient(baseURL: { nil }))
+        let model = makeModel(recorder: ShellRecorder(), researchDossiers: dossiers)
+        let route = NativeRoute(path: "/research/dossiers")
+        model.routeDidChange(route)
+        await model.settingsSettled()
+        await dossiers.didAppear(route: route)
+        dossiers.requestNew()
+        dossiers.draft?.title = "Synthetic draft"
+        #expect(dossiers.hasUnsavedChanges)
+        #expect(!model.hasGuardedUnsavedChanges)
+        model.openSettings()
+        model.routeDidChange(route.setting("settings", to: "general"))
+        #expect(model.isTemporarilyCovered(route.path))
+        #expect(dossiers.draft?.title == "Synthetic draft")
+        model.routeDidChange(NativeRoute(path: "/ai-chat"))
+        #expect(dossiers.draft == nil)
+        #expect(!model.hasGuardedUnsavedChanges)
     }
 
     @Test func coveredForecastRetainsInputsAndActualRouteExitResetsTheVisit() async throws {

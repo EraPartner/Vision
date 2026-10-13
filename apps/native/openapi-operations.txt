@@ -255,3 +255,36 @@ researchAuditMappings
 researchPortfolioForecast
 researchMacroSearch
 researchMacroSeries
+
+# Phase 3n: Research Dossiers and AI chat/investigation.
+createResearchDossier
+getResearchDossier
+updateResearchDossier
+deleteResearchDossier
+listResearchDossierVersions
+restoreResearchDossier
+exportResearchDossiers
+exportResearchDossier
+listAiResearchDocuments
+getAiStatus
+getAiModels
+getAiConversations
+createAiConversation
+getAiConversation
+updateAiConversation
+deleteAiConversation
+getAiResearchStatus
+createAiInvestigation
+getAiInvestigation
+deleteAiInvestigation
+resumeAiInvestigation
+cancelAiInvestigation
+deleteAiResearchDocument
+previewAiDisclosure
+createAiDisclosureGrant
+listAiDisclosureGrants
+revokeAiDisclosureGrant
+listAiDisclosureRecords
+deleteAiDisclosureRecords
+
+# aiChatStream uses the JSON SSE adapter; createAiResearchDocument uses MultipartFormData.
