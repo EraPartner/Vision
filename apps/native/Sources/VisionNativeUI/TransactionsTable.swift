@@ -458,7 +458,7 @@ struct TransactionRowView: View {
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
-    static func rowKey(_ key: KeyEquivalent) -> TransactionRowKey? {
+    static func rowKey(_ key: SwiftUI.KeyEquivalent) -> TransactionRowKey? {
         if key == .upArrow { return .up }
         if key == .downArrow { return .down }
         if key == .return { return .open }
