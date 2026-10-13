@@ -189,6 +189,13 @@ included in this snapshot. Structural flow docs/tests pass at 101 components/74 
 
 ## Full integration checkpoint (2026-10-13 23:07 UTC)
 
+`fcd7ee95` saved all 48 task files and is pushed and verified on the remote branch.
+Parallel work continues on restore coordination, source report edge cases and verification.
+The ninth macOS build passed the earlier Research/Onboarding diagnostics, then Xcode
+crashed in AIChatView IR generation when adapting an actor-bound enum setter to Binding.
+The follow-up uses an explicit closure, as with the earlier Analysis compiler workaround.
+The next automatic app/package build must confirm it; no full macOS build has passed yet.
+
 `b0623fef` saved all 44 files from the previous snapshot; `3d7e3997` fixed the Onboarding
 multipart/notice API labels. Both are pushed, with remote `3d7e3997` verified. This next
 safety checkpoint saves every current tracked/new task file, including unfinished SDK

@@ -28,7 +28,10 @@ public struct AIChatView: View {
                 title: strings.t("aiChat.title"),
                 subtitle: strings.t(isChat ? "aiChat.mode.chatHint" : "aiChat.mode.investigationHint"),
                 symbol: "bubble.left.and.bubble.right")
-            Picker(strings.t("aiChat.mode.label"), selection: Binding(get: { model.mode }, set: model.setMode)) {
+            Picker(
+                strings.t("aiChat.mode.label"),
+                selection: Binding(get: { model.mode }, set: { value in model.setMode(value) })
+            ) {
                 Text(strings.t("aiChat.mode.chat")).tag(AIChatMode.chat)
                 Text(strings.t("aiChat.mode.investigation")).tag(AIChatMode.investigation)
             }.pickerStyle(.segmented).frame(maxWidth: 360)
