@@ -82,6 +82,7 @@ const REJECTED = {
   // as `active: true`.
   active: [0, 1, "yes", "TRUE", {}],
   amount_signed: [0, 1, "yes", {}],
+  uncategorised: [0, 1, "yes", {}],
   // Non-strings reached the ILIKE as '[object Object]' / 'a,b'.
   search: [7, {}, ["a"], true],
   bank_account: [7, {}, true],
@@ -111,6 +112,7 @@ const UNSET_FORMS = {
   search: [undefined, null, ""],
   bank_account: [undefined, null, ""],
   recipient_name: [undefined, null, ""],
+  uncategorised: [undefined, null, ""],
 };
 
 describe("normalizeBulkFilter — rejects instead of silently ignoring", () => {
@@ -296,5 +298,63 @@ describe("resolveBulkSelection — a malformed filter never reaches the database
       ).rejects.toThrow(ValidationError);
     }
     expect(dbQuery).not.toHaveBeenCalled();
+  });
+});
+
+describe("the uncategorised queue filter", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  // Regression: the Transactions page sends `uncategorised: true` in its bulk
+  // filter while the uncategorised view is open, and the accept-list did not
+  // know the key, so "Select all N matching" answered 400 on every bulk action.
+  it("accepts the flag and mirrors the list view: active rows, no category filter", () => {
+    const out = normalizeBulkFilter({
+      uncategorised: true,
+      category_id: 4,
+      category_ids: [5],
+      active: false,
+      recipient_id: 9,
+    });
+    expect(out.uncategorised).toBe(true);
+    expect(out.active).toBe(true);
+    expect(out.categoryId).toBeNull();
+    expect(out.categoryIds).toBeNull();
+    expect(out.recipientId).toBe(9);
+    expect(normalizeBulkFilter({ uncategorised: "true" }).uncategorised).toBe(
+      true,
+    );
+    expect(normalizeBulkFilter({ uncategorised: false })).not.toHaveProperty(
+      "uncategorised",
+    );
+  });
+
+  it("narrows the count and the id selection to the effective-category NULL rows", async () => {
+    dbQuery
+      .mockResolvedValueOnce({ rows: [{ n: 1 }] })
+      .mockResolvedValueOnce({ rows: [{ id: 21 }] });
+    expect(
+      await resolveBulkSelection({
+        filter: { uncategorised: true, active: true },
+      }),
+    ).toEqual([21]);
+    expect(dbQuery).toHaveBeenCalledTimes(2);
+    for (const [sql] of dbQuery.mock.calls) {
+      expect(sql).toContain(
+        "COALESCE(t.category_id, r.default_category_id, pr.default_category_id) IS NULL",
+      );
+      expect(sql).toContain("LEFT JOIN recipients pr");
+    }
+  });
+
+  it("adds no queue predicate when the flag is off", async () => {
+    dbQuery
+      .mockResolvedValueOnce({ rows: [{ n: 1 }] })
+      .mockResolvedValueOnce({ rows: [{ id: 21 }] });
+    await resolveBulkSelection({
+      filter: { uncategorised: false, active: true },
+    });
+    for (const [sql] of dbQuery.mock.calls) {
+      expect(sql).not.toContain("default_category_id) IS NULL");
+    }
   });
 });

@@ -5806,6 +5806,8 @@ export interface components {
             category_id?: number;
             /** @description Must be an array of integers, not a comma string. */
             category_ids?: number[];
+            /** @description Defaults to false. When true, selects the uncategorised queue the list endpoint's `uncategorised=true` returns: active rows whose effective category is empty. `active`, `category_id` and `category_ids` are then ignored. */
+            uncategorised?: boolean;
             recipient_id?: number;
             recipient_group_id?: number;
             recipient_name?: string;

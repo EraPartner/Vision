@@ -207,17 +207,22 @@ public final class NativeShellModel {
 
     /// ⌘N, the dock menu's New transaction and the `N` shortcut (`/transactions?new=1`): while
     /// `/transactions` is native, the Add transaction sheet opens on the native screen, at once
-    /// when it is already shown, otherwise through `new=1`. Returns `false` when the page
-    /// handles it.
+    /// when it is already shown, otherwise once the shell arrives at `/transactions`. The
+    /// navigation leaves out `new=1`: the page behind the native screen would open its own
+    /// sheet for it too. Returns `false` when the page handles it.
     public func newTransaction() -> Bool {
         guard settingsLoaded, NativeScreen.screen(forPath: TransactionsRoutes.path) != nil else { return false }
         if detail == .native(.transactions) {
             transactions.requestAdd()
         } else {
-            navigate(to: TransactionsRoutes.newTransactionRoute)
+            transactions.requestAddOnArrival()
+            navigate(to: TransactionsRoutes.path)
         }
         return true
     }
+
+    /// `/owes`.
+    public var owes: OwesModel { transactions.owes }
 
     /// A native screen with unsaved work registers its hook while it is shown.
     public func setLeaveGuard(_ hook: NativeLeaveGuard) {
@@ -235,6 +240,7 @@ public final class NativeShellModel {
     /// Stay on page (`blocker.reset`): the navigation is cancelled.
     public func stayOnPage() {
         leaveConfirmation = nil
+        transactions.cancelAddOnArrival()
     }
 
     /// Leave and discard (`blocker.proceed`): the unsaved work is dropped and the navigation

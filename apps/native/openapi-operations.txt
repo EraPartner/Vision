@@ -73,3 +73,23 @@ bulkUpdateTransactions
 getTransactionAttachments
 downloadAttachment
 deleteAttachment
+# Transactions part B (/transactions bulk actions, the Add transaction sheet, the Split
+# transaction dialog) and Who owes you (/owes). The bulk selectors (`ids` or `filter` with
+# `expected_count`), the bulk export's file answer and the split batch rows are hand-written
+# in Screens/Transactions/TransactionBulkService.swift and Screens/Owes/SplitsService.swift
+# on top of the generated operation ids.
+bulkDeleteTransactions
+bulkExportTransactions
+bulkTagTransactions
+markTransfer
+createRecipient
+getSplitsByTransaction
+createSplitBatch
+createBulkSplits
+getSplitsOwed
+getSplitOwedByRecipient
+exportSplitsOwedCsv
+paySplit
+settleSplit
+settleAllSplitsForRecipient
+deleteSplit

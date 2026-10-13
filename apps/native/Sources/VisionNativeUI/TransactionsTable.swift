@@ -133,6 +133,9 @@ struct TransactionsTableCard: View {
                 .buttonStyle(.borderless)
             }
             Spacer(minLength: 0)
+            if model.showsBulkBar {
+                TransactionBulkBar(model: model, shell: shell)
+            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)

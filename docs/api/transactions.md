@@ -419,7 +419,14 @@ spellings at once:
 
 `transaction_id`, `start_date`, `end_date`, `account_id`, `bank_account`, `bank_accounts`,
 `category_id`, `category_ids`, `recipient_id`, `recipient_group_id`, `recipient_name`, `search`,
-`active`, `transaction_type`, `amount_min`, `amount_max`, `amount_signed`, `tags`.
+`active`, `transaction_type`, `amount_min`, `amount_max`, `amount_signed`, `tags`, `uncategorised`.
+
+`uncategorised: true` selects the same queue as `GET /api/transactions?uncategorised=true`: active
+rows whose transaction, recipient and primary-recipient category are all NULL. `active`,
+`category_id` and `category_ids` are then ignored. Before 2026-10-13 the key was missing from the
+accept-list, so "Select all N matching" in the uncategorised view answered `400` on every bulk
+action (non-breaking fix; regression tests in
+[[apps/node-backend/tests/services/bulkSelectionFilter.test.ts]]).
 
 Field semantics match [[#GET /api/transactions]], with these wire-shape differences: `category_ids`
 and `bank_accounts` must be **arrays** (the list endpoint takes comma strings; here a string is a

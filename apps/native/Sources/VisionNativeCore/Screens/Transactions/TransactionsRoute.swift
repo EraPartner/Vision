@@ -5,9 +5,8 @@ import Foundation
 public enum TransactionsRoutes {
     public static let path = "/transactions"
     public static let owesPath = "/owes"
-    /// `/owes` draws natively with phase 3e part B. TODO(3e part B): set to `true` with the
-    /// Who owes you screen.
-    public static let owesIsNative = false
+    /// `/owes` draws natively (`OwesModel`).
+    public static let owesIsNative = true
 
     /// `new=1`: opens the Add transaction sheet, then is removed with replace.
     public static let newParameter = "new"

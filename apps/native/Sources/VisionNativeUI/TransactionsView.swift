@@ -49,7 +49,11 @@ public struct TransactionsView: View {
             guard !Task.isCancelled else { return }
             await model.commitSearch()
         }
-        .onDisappear { model.disappear() }
+        .onAppear { shell.setLeaveGuard(model.leaveGuard) }
+        .onDisappear {
+            model.disappear()
+            shell.removeLeaveGuard(id: TransactionsRoutes.path)
+        }
         .overlay(alignment: .bottom) {
             ActionToast(
                 notice: model.notice, strings: strings,
@@ -78,7 +82,20 @@ public struct TransactionsView: View {
                     if !presented { model.dismissAdd() }
                 })
         ) {
-            TransactionAddSheet(strings: strings, close: { model.dismissAdd() })
+            if let form = model.addForm {
+                TransactionAddSheet(model: model, form: form, shell: shell)
+                    .environment(\.visionTheme, theme)
+                    .environment(\.colorScheme, theme.colorScheme)
+            }
+        }
+        .sheet(
+            item: Binding(
+                get: { model.splitForm.map { SplitSheetItem(form: $0) } },
+                set: { item in
+                    if item == nil { model.dismissSplit() }
+                })
+        ) { item in
+            TransactionSplitSheet(model: model, form: item.form, shell: shell)
                 .environment(\.visionTheme, theme)
                 .environment(\.colorScheme, theme.colorScheme)
         }
@@ -517,26 +534,10 @@ struct TransactionFilterBanner: View {
 
 // MARK: - Sheets
 
-/// The Add transaction sheet's place until phase 3e part B draws `AddTransactionSheet`.
-/// TODO(3e part B): the form.
-struct TransactionAddSheet: View {
-    let strings: any Localizing
-    let close: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(strings.t("form.addTransaction.title"))
-                .font(.title2.weight(.semibold))
-                .accessibilityAddTraits(.isHeader)
-            HStack {
-                Spacer()
-                Button(strings.t("common.cancel"), action: close)
-                    .keyboardShortcut(.cancelAction)
-            }
-        }
-        .padding(24)
-        .frame(minWidth: 420)
-    }
+/// The Split transaction dialog's sheet item: one per opened dialog.
+struct SplitSheetItem: Identifiable {
+    let form: SplitDialogModel
+    var id: ObjectIdentifier { ObjectIdentifier(form) }
 }
 
 /// `TransactionQuickLook`: the amount, payee, date and account, the category, the status,

@@ -77,9 +77,16 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             guard let self else { return false }
             return try await self.saveExport(data, suggestedName: name)
         }
-        let transactions = TransactionsModel(service: client, attachments: client, pickers: client)
-        // The filter banner's exports and the attachment downloads ask where to save.
+        let transactions = TransactionsModel(
+            service: client, attachments: client, pickers: client, bulk: client, splits: client)
+        // The filter banner's and the bulk bar's exports and the attachment downloads ask
+        // where to save.
         transactions.save = { [weak self] data, name in
+            guard let self else { return false }
+            return try await self.saveExport(data, suggestedName: name)
+        }
+        // `/owes`' Export CSV.
+        transactions.owes.save = { [weak self] data, name in
             guard let self else { return false }
             return try await self.saveExport(data, suggestedName: name)
         }

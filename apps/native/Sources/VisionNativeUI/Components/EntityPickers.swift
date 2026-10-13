@@ -9,6 +9,8 @@ struct PickerOption: Identifiable {
     var isSelected = false
     /// The italic "none" row.
     var isNone = false
+    /// A leading symbol in the accent colour in place of the check mark (a create row).
+    var symbol: String?
     let pick: () -> Void
 }
 
@@ -106,13 +108,15 @@ struct PickerList: View {
     private func row(_ option: PickerOption) -> some View {
         Button(action: option.pick) {
             HStack(spacing: 8) {
-                Image(systemName: "checkmark")
+                Image(systemName: option.symbol ?? "checkmark")
                     .imageScale(.small)
-                    .opacity(option.isSelected ? 1 : 0)
+                    .foregroundStyle(option.symbol == nil ? theme.foreground : theme.primary)
+                    .opacity(option.isSelected || option.symbol != nil ? 1 : 0)
                     .accessibilityHidden(true)
                 Text(option.title)
                     .italic(option.isNone)
-                    .foregroundStyle(option.isNone ? theme.secondaryLabel : theme.foreground)
+                    .foregroundStyle(
+                        option.symbol != nil ? theme.primary : option.isNone ? theme.secondaryLabel : theme.foreground)
                     .lineLimit(1)
                 if let detail = option.detail {
                     Text(detail)
@@ -134,21 +138,27 @@ struct PickerList: View {
     }
 }
 
-/// `RecipientCombobox` (select-only): "No payee" and the include-inactive recipients, the
-/// first page unsearched and a server search (debounced) while typing.
+/// `RecipientCombobox`: "No payee" and the include-inactive recipients (or only the active
+/// ones), the first page unsearched and a server search (debounced) while typing. With
+/// `onCreate` (`allowCreate`), a typed name no listed payee has offers "Add {name}" first.
 struct RecipientPicker: View {
     let pickers: PickerDataModel
     let value: Int?
     var disabled = false
+    var invalid = false
+    /// `active`: only the active payees.
+    var activeOnly = false
     let strings: any Localizing
     let onSelect: (Int?) -> Void
+    /// The create row's action, with the trimmed name.
+    var onCreate: ((String) -> Void)?
     @State var isOpen = false
     @State var search = ""
 
     var body: some View {
         PickerButton(
             label: pickers.recipientName(value), placeholder: strings.t("combobox.recipient.placeholder"),
-            disabled: disabled, isOpen: $isOpen
+            invalid: invalid, disabled: disabled, isOpen: $isOpen
         ) {
             PickerList(
                 search: $search, searchPlaceholder: strings.t("combobox.recipient.search"), emptyText: nil,
@@ -166,13 +176,27 @@ struct RecipientPicker: View {
         }
     }
 
+    private var listed: [OpenAPI.Recipient] {
+        activeOnly ? pickers.activeRecipients(matching: search) : pickers.recipients(matching: search)
+    }
+
     private var options: [PickerOption] {
-        var options = [
+        let shown = listed
+        var options: [PickerOption] = []
+        if let onCreate, let name = PickerDataModel.creatableName(search, listed: shown) {
+            options.append(
+                PickerOption(
+                    id: "create", title: strings.t("combobox.recipient.create", ["name": name]), symbol: "plus"
+                ) {
+                    isOpen = false
+                    onCreate(name)
+                })
+        }
+        options.append(
             PickerOption(id: "none", title: strings.t("combobox.recipient.none"), isSelected: value == nil, isNone: true) {
                 pick(nil)
-            }
-        ]
-        for recipient in pickers.recipients(matching: search) {
+            })
+        for recipient in shown {
             options.append(
                 PickerOption(id: String(recipient.id), title: recipient.name, isSelected: recipient.id == value) {
                     pick(recipient.id)

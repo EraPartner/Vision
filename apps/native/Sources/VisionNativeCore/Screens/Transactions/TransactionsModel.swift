@@ -93,9 +93,8 @@ public final class TransactionsModel {
     /// The inspector docks beside the list from this width (`lg`), otherwise it is a sheet.
     public nonisolated static let dockedInspectorWidth: Double = 1024
     public nonisolated static let inspectorWidth: Double = 332
-    /// The Split transaction dialog draws natively with phase 3e part B. TODO(3e part B): set
-    /// to `true` with `SplitTransactionDialog`.
-    public nonisolated static let splitIsNative = false
+    /// The Split transaction dialog draws natively (`SplitDialogModel`).
+    public nonisolated static let splitIsNative = true
 
     // MARK: List state
 
@@ -134,19 +133,31 @@ public final class TransactionsModel {
     /// The row focus returns to after the inspector or Quick Look closes; a row gaining focus
     /// this way is not selected again.
     public private(set) var focusRequest: Int?
-    /// The checkbox selection the bulk bar acts on (phase 3e part B).
-    public private(set) var selection = ServerTableSelection()
+    /// The checkbox selection the bulk bar acts on.
+    public internal(set) var selection = ServerTableSelection()
     /// The row being edited inline.
     public var rowEditor: TransactionRowEditor?
     /// The row the Quick Look dialog shows.
     public private(set) var quickLookId: Int?
     /// The row the Delete transaction alert asks about.
     public private(set) var pendingDelete: TransactionRow?
-    /// The Add transaction sheet (a stand-in until phase 3e part B).
+    /// The Add transaction sheet.
     public private(set) var isAddPresented = false
-    /// The Split transaction dialog's row (phase 3e part B).
+    /// The Add transaction sheet's form; it stays when the sheet closes without adding.
+    public internal(set) var addForm: AddTransactionModel?
+    /// The Split transaction dialog's row.
     public private(set) var splitRequest: TransactionRow?
-    public private(set) var notice: ScreenNotice?
+    /// The Split transaction dialog's state.
+    public private(set) var splitForm: SplitDialogModel?
+    /// The bulk dialog on screen.
+    public internal(set) var bulkDialog: TransactionBulkDialog?
+    /// The bulk alert on screen.
+    public internal(set) var bulkConfirmation: TransactionBulkConfirmation?
+    /// A bulk request is running (`anyBusy`).
+    public internal(set) var bulkBusy = false
+    /// What the bulk dialogs hold between openings.
+    public internal(set) var bulkDrafts = TransactionBulkDrafts()
+    public internal(set) var notice: ScreenNotice?
     public private(set) var pendingAction: TransactionPendingAction?
     public private(set) var deletePending = false
     /// Updates in flight (`updateMutation.isPending`): the Status toggles wait.
@@ -158,19 +169,26 @@ public final class TransactionsModel {
     /// target sets it; exports and attachment downloads use it.
     @ObservationIgnored public var save: @MainActor (Data, String) async throws -> Bool = { _, _ in false }
 
-    @ObservationIgnored private let service: any TransactionsService
+    /// `/owes`, which shares the split calls.
+    public let owes: OwesModel
+
+    @ObservationIgnored let service: any TransactionsService
     @ObservationIgnored private let attachmentService: any TransactionAttachmentsService
-    @ObservationIgnored private weak var shell: NativeShellModel?
-    @ObservationIgnored private let now: @Sendable () -> Date
+    @ObservationIgnored let bulkService: any TransactionBulkService
+    @ObservationIgnored let splitsService: any SplitsService
+    @ObservationIgnored weak var shell: NativeShellModel?
+    @ObservationIgnored let now: @Sendable () -> Date
     @ObservationIgnored public let calendar: Calendar
-    @ObservationIgnored private var fetchedAt: Date?
+    @ObservationIgnored var fetchedAt: Date?
+    /// ⌘N from another screen: the sheet opens once the native screen syncs.
+    @ObservationIgnored var addOnArrival = false
     @ObservationIgnored private var loadedOffset = 0
     @ObservationIgnored private var listVersion = 0
     @ObservationIgnored private var inFlight: (query: TransactionListQuery, task: Task<Void, Never>)?
     /// The `?search=` value last read or written, so only a new value from the route
     /// replaces the typed search (a palette search while the page is open).
     @ObservationIgnored private var lastSearchParam: String?
-    @ObservationIgnored private var notices = NoticeCounter()
+    @ObservationIgnored var notices = NoticeCounter()
     @ObservationIgnored private var visibilitySetting: JSONValue?
     @ObservationIgnored private var visibilityBaseline: JSONValue?
     @ObservationIgnored private var visibilityLoaded = false
@@ -182,12 +200,15 @@ public final class TransactionsModel {
 
     public init(
         service: any TransactionsService, attachments: any TransactionAttachmentsService,
-        pickers: any PickerDataService, calendar: Calendar = PlannedDates.local,
-        now: @escaping @Sendable () -> Date = { Date() }
+        pickers: any PickerDataService, bulk: any TransactionBulkService, splits: any SplitsService,
+        calendar: Calendar = PlannedDates.local, now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.service = service
         attachmentService = attachments
+        bulkService = bulk
+        splitsService = splits
         self.pickers = PickerDataModel(service: pickers)
+        owes = OwesModel(service: splits, calendar: calendar, now: now)
         self.calendar = calendar
         self.now = now
     }
@@ -196,10 +217,11 @@ public final class TransactionsModel {
     /// through. `NativeShellModel` attaches itself.
     func attach(_ shell: NativeShellModel) {
         self.shell = shell
+        owes.attach(shell)
     }
 
-    private var strings: any Localizing { shell?.strings ?? DictionaryStrings(language: .en, table: [:]) }
-    private var settings: NativeAppSettings { shell?.settings ?? .defaults }
+    var strings: any Localizing { shell?.strings ?? DictionaryStrings(language: .en, table: [:]) }
+    var settings: NativeAppSettings { shell?.settings ?? .defaults }
 
     /// The fallbacks for a missing category or payee in the current language.
     public var labels: TransactionLabels { TransactionLabels(strings: strings) }
@@ -235,6 +257,10 @@ public final class TransactionsModel {
         if TransactionsRoutes.wantsNewTransaction(shell.route) {
             requestAdd()
             shell.replaceQuery(TransactionsRoutes.newParameter, with: nil)
+        }
+        if addOnArrival {
+            addOnArrival = false
+            requestAdd()
         }
         if shell.route.value(TransactionsRoutes.selectParameter) != nil {
             if let id = TransactionsRoutes.selectedId(shell.route) { select(id) }
@@ -901,7 +927,7 @@ public final class TransactionsModel {
         rows?[index] = restored
     }
 
-    private func removeRow(_ id: Int) {
+    func removeRow(_ id: Int) {
         guard let index = rows?.firstIndex(where: { $0.id == id }) else { return }
         rows?.remove(at: index)
         total = max(0, total - 1)
@@ -1141,23 +1167,67 @@ public final class TransactionsModel {
 
     // MARK: Sheets
 
-    /// Add transaction (`new=1`, ⌘N, the header button).
+    /// Add transaction (`new=1`, ⌘N, the header button): the kept form, or a fresh one.
     public func requestAdd() {
+        if addForm == nil {
+            let days = calendar
+            let clock = now
+            addForm = AddTransactionModel(
+                defaultCurrency: settings.defaultCurrency, pickers: pickers, calendar: days,
+                today: { PlannedDay(clock(), calendar: days) })
+        }
         isAddPresented = true
     }
 
+    /// ⌘N from another screen: the shell moves to `/transactions` without `new=1` (the page
+    /// would open its own sheet too), and the sheet opens on the next sync.
+    func requestAddOnArrival() {
+        addOnArrival = true
+    }
+
+    /// The navigation that would have opened the sheet was cancelled.
+    func cancelAddOnArrival() {
+        addOnArrival = false
+    }
+
+    /// Cancel, Escape or the close button: the form stays for next time.
     public func dismissAdd() {
         isAddPresented = false
     }
 
-    /// Split transaction (phase 3e part B).
+    /// Split transaction: the dialog for the row, its existing splits loading.
     public func requestSplit(_ row: TransactionRow) {
         guard Self.splitIsNative else { return }
         splitRequest = row
+        splitForm = SplitDialogModel(row: row, service: splitsService)
     }
 
     public func dismissSplit() {
         splitRequest = nil
+        splitForm = nil
+    }
+
+    /// The Add sheet's or the Bulk tag dialog's unsaved work (`useUnsavedChanges`) holds a
+    /// navigation to another page behind the Leave this page? alert.
+    public var leaveGuard: NativeLeaveGuard {
+        NativeLeaveGuard(
+            id: TransactionsRoutes.path,
+            hasUnsavedChanges: { [weak self] in self?.hasUnsavedChanges ?? false },
+            discard: { [weak self] in self?.discardUnsavedChanges() })
+    }
+
+    public var hasUnsavedChanges: Bool {
+        if isAddPresented, addForm?.isDirty == true { return true }
+        if bulkDialog == .tag, !bulkDrafts.tagsEmpty { return true }
+        return false
+    }
+
+    private func discardUnsavedChanges() {
+        isAddPresented = false
+        addForm = nil
+        if bulkDialog == .tag { bulkDialog = nil }
+        bulkDrafts.tagsToAdd = []
+        bulkDrafts.tagsToRemove = []
     }
 
     // MARK: Toasts
@@ -1174,11 +1244,11 @@ public final class TransactionsModel {
         return Self.noticeDuration
     }
 
-    private func post(_ kind: ScreenNotice.Kind, _ key: String, detail: String? = nil) {
-        notice = notices.make(kind, key, detail: detail)
+    func post(_ kind: ScreenNotice.Kind, _ key: String, _ variables: [String: String] = [:], detail: String? = nil) {
+        notice = notices.make(kind, key, variables, detail: detail)
     }
 
-    private func errorText(_ error: any Error) -> String {
+    func errorText(_ error: any Error) -> String {
         APIErrorMessage.text(APIError.wrapping(error), strings: strings)
     }
 
@@ -1189,7 +1259,13 @@ public final class TransactionsModel {
         rowEditor = nil
         quickLookId = nil
         isAddPresented = false
+        addForm = nil
+        addOnArrival = false
         splitRequest = nil
+        splitForm = nil
+        bulkDialog = nil
+        bulkConfirmation = nil
+        bulkDrafts = TransactionBulkDrafts()
         selectedId = nil
         inspector = nil
         focusRequest = nil

@@ -39,6 +39,8 @@ public struct TransactionRow: Equatable, Sendable, Identifiable {
     /// `is_active ?? true`: an excluded row is struck through.
     public var isActive: Bool
     public var tags: [OpenAPI.TransactionTagRef]
+    /// `transfer_peer_id`: the paired leg, once linked as an internal transfer.
+    public var transferPeerId: Int?
 
     public init(_ wire: OpenAPI.Transaction) {
         id = wire.id
@@ -57,6 +59,7 @@ public struct TransactionRow: Equatable, Sendable, Identifiable {
         comment = wire.comment
         isActive = wire.isActive ?? true
         tags = wire.tags ?? []
+        transferPeerId = wire.transferPeerId
     }
 
     /// `applyTransactionLocalPatch` with the server's answer to a PATCH. The running balance
@@ -76,6 +79,7 @@ public struct TransactionRow: Equatable, Sendable, Identifiable {
         comment = wire.comment
         if let active = wire.isActive { isActive = active }
         if let tags = wire.tags { self.tags = tags }
+        transferPeerId = wire.transferPeerId
     }
 
     /// The date part of `transaction_date`.

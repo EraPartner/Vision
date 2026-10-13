@@ -158,14 +158,17 @@ See [the architecture page](../../docs/architecture/native-app.md#native-navigat
   every row of a group, and commits or discards the batch. A CSV opened from Finder or the dock, or
   dropped on a native screen, pre-fills the card. A chosen file or an unsaved parser edit holds
   navigation and Quit behind the Leave this page? alert.
-- `/transactions` is native in every mode once `app_settings` has loaded (phase 3e part A): the
+- `/transactions` is native in every mode once `app_settings` has loaded (phase 3e): the
   filter toolbar (account, category, date, type, Needs category, View), the filter banner with
   Export CSV or JSON, search with its suggestions, server sort, column filters, resizable columns,
   infinite scroll, inline row editing, the Status toggle, the row context menu, delete with an
   8-second Undo toast (`⌘Z`), the inspector (docked from 1024 points, a sheet below) with its
-  category tips, details, tags and attachments, and Quick Look (Space). The Add transaction sheet,
-  Split, the bulk actions and `/owes` follow in part B: Add opens a placeholder sheet and `/owes`
-  stays on the web view.
+  category tips, details, tags and attachments, Quick Look (Space), the Add transaction sheet
+  (expense, income, transfer), the Split dialog, and the bulk bar with its dialogs (category,
+  payee, export, tags, split), mark as internal transfer, include, exclude and delete.
+- `/owes` is native in every mode: the total outstanding, the people who owe you, and a person's
+  splits with Record payment, Mark as settled, Delete split, Settle all, Export CSV through a save
+  panel and Recent transactions.
 - To add a screen: list its operations and keys, run `bun run native:generate`, add a model in
   `Sources/VisionNativeCore/Screens/`, a view in `Sources/VisionNativeUI/`, and a `NativeScreen`
   case for its route. Pass the model to `NativeShellModel` in `ShellController.makeShellModel` and

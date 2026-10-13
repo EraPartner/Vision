@@ -583,6 +583,102 @@ actor StaticTransactionsService: TransactionsService, TransactionAttachmentsServ
     func deleteAttachment(id: Int) async throws {}
 }
 
+/// The bulk and split calls with fixed answers: two open splits owed by Anna and three
+/// recent transactions; `failing` fails the summary.
+actor StaticSplitsService: TransactionBulkService, SplitsService {
+    let failing: Bool
+    let owedSplits: [OpenAPI.SplitOwedDetail]
+
+    init(failing: Bool = false, owed: [OpenAPI.SplitOwedDetail] = StaticSplitsService.sample) {
+        self.failing = failing
+        owedSplits = owed
+    }
+
+    static let sample: [OpenAPI.SplitOwedDetail] = [
+        OpenAPI.SplitOwedDetail(
+            id: 1, transactionId: 3, recipientId: 4, recipientName: "Anna", amount: Decimal(string: "20.00")!,
+            amountPaid: Decimal(string: "5.00")!, note: "Half", isSettled: false, createdAt: "2026-10-01",
+            updatedAt: "2026-10-01", transactionDate: "2026-10-09", transactionMemo: "Dinner",
+            transactionAmount: Decimal(string: "-40.00")!, transactionCurrency: "EUR",
+            transactionRecipientName: "Bistro", remaining: Decimal(string: "15.00")!),
+        OpenAPI.SplitOwedDetail(
+            id: 2, transactionId: 2, recipientId: 4, recipientName: "Anna", amount: Decimal(string: "6.50")!,
+            amountPaid: 0, note: nil, isSettled: false, createdAt: "2026-10-05", updatedAt: "2026-10-05",
+            transactionDate: "2026-10-05", transactionMemo: nil, transactionAmount: Decimal(string: "-12.99")!,
+            transactionCurrency: "EUR", transactionRecipientName: "Streaming service",
+            remaining: Decimal(string: "6.50")!),
+    ]
+
+    func bulkUpdate(_ selector: BulkSelector, fields: BulkUpdateFields) async throws -> BulkUpdateResult {
+        BulkUpdateResult(updated: selector.count, requested: selector.count, matched: selector.count)
+    }
+
+    func bulkDelete(_ selector: BulkSelector) async throws -> BulkDeleteResult {
+        BulkDeleteResult(deleted: selector.count, requested: selector.count, matched: selector.count)
+    }
+
+    func bulkExport(_ selector: BulkSelector, format: ExportFormat) async throws -> BulkExportFile {
+        BulkExportFile(data: Data("id\n".utf8), exportedCount: selector.count)
+    }
+
+    func bulkTag(ids: [Int], add: [String], remove: [String]) async throws -> OpenAPI.BulkTagResult {
+        OpenAPI.BulkTagResult(added: add.count, removed: remove.count, transactionsAffected: ids.count)
+    }
+
+    func markTransfer(_ first: Int, _ second: Int) async throws {}
+
+    func createRecipient(name: String) async throws -> CreatedRecipient {
+        CreatedRecipient(id: 9, name: name, isActive: true, createdAt: "2026-10-09", links: [], created: true)
+    }
+
+    func splits(transactionId: Int) async throws -> [OpenAPI.Split] {
+        [
+            OpenAPI.Split(
+                id: 1, transactionId: transactionId, recipientId: 4, recipientName: "Anna",
+                amount: Decimal(string: "20.00")!, amountPaid: 0, isSettled: false, createdAt: "2026-10-01",
+                updatedAt: "2026-10-01")
+        ]
+    }
+
+    func createSplits(transactionId: Int, shares: [SplitShare]) async throws {}
+
+    func bulkSplit(transactionIds: [Int], recipientId: Int, mode: BulkSplitMode) async throws
+        -> OpenAPI.BulkSplitResult
+    {
+        OpenAPI.BulkSplitResult(
+            requested: transactionIds.count, split: transactionIds.count, skippedAlreadySplit: 0, skippedZeroAmount: 0,
+            skippedMissing: 0, items: [])
+    }
+
+    func owedSummary() async throws -> [OpenAPI.SplitOwed] {
+        if failing { throw APIError.network("The network connection was lost.") }
+        guard !owedSplits.isEmpty else { return [] }
+        let total = owedSplits.reduce(Decimal(0)) { sum, split in sum + split.amount }
+        let paid = owedSplits.reduce(Decimal(0)) { sum, split in sum + split.amountPaid }
+        return [
+            OpenAPI.SplitOwed(
+                recipientId: 4, recipientName: "Anna", totalOwed: total, totalPaid: paid, remaining: total - paid,
+                splitCount: owedSplits.count)
+        ]
+    }
+
+    func owed(recipientId: Int) async throws -> [OpenAPI.SplitOwedDetail] { owedSplits }
+
+    func exportOwedCsv(recipientId: Int) async throws -> Data { Data("date,amount\n".utf8) }
+
+    func recordPayment(splitId: Int, amount: Decimal) async throws {}
+
+    func settle(splitId: Int) async throws {}
+
+    func settleAll(recipientId: Int) async throws -> Int { owedSplits.count }
+
+    func deleteSplit(id: Int) async throws {}
+
+    func recipientTransactions(groupId: Int, offset: Int, limit: Int) async throws -> TransactionPage {
+        TransactionPage(items: offset == 0 ? StaticTransactionsService.sample : [], total: StaticTransactionsService.sample.count)
+    }
+}
+
 /// The SwiftUI screens build and lay out in both languages and appearances.
 @MainActor
 @Suite struct NativeScreenStructureTests {
@@ -601,7 +697,8 @@ actor StaticTransactionsService: TransactionsService, TransactionAttachmentsServ
         database: StaticDatabaseService = StaticDatabaseService(),
         planned: StaticPlannedService = StaticPlannedService(), adminMode: Bool = true,
         imports: StaticImportService = StaticImportService(),
-        transactions: StaticTransactionsService = StaticTransactionsService()
+        transactions: StaticTransactionsService = StaticTransactionsService(),
+        splits: StaticSplitsService = StaticSplitsService()
     ) -> NativeShellModel {
         let rates = ExchangeRatesModel(service: StaticRatesService(Self.rates))
         return NativeShellModel(
@@ -614,7 +711,8 @@ actor StaticTransactionsService: TransactionsService, TransactionAttachmentsServ
             planned: PlannedPaymentsModel(
                 service: planned, editing: planned, pickers: planned, rates: rates, dismissals: .memory()),
             imports: ImportsModel(service: imports, exports: imports, review: imports, pickers: planned),
-            transactions: TransactionsModel(service: transactions, attachments: transactions, pickers: planned),
+            transactions: TransactionsModel(
+                service: transactions, attachments: transactions, pickers: planned, bulk: splits, splits: splits),
             loadSettings: { NativeAppSettings(adminMode: adminMode) },
             onNavigate: { _ in })
     }
@@ -900,8 +998,15 @@ actor StaticTransactionsService: TransactionsService, TransactionAttachmentsServ
         #expect(layOut(TransactionInspectorView(model: model, inspector: inspector, row: first, shell: shell, docked: false).environment(\.visionTheme, theme)).fittingSize.height > 0)
         #expect(layOut(TransactionAttachmentsPanel(model: model, attachments: inspector.attachments, strings: shell.strings).environment(\.visionTheme, theme)).fittingSize.height > 0)
         #expect(layOutTransactions(shell).fittingSize.height > 0)
-        // The Add sheet stub.
-        #expect(layOut(TransactionAddSheet(strings: shell.strings, close: {}).environment(\.visionTheme, theme)).fittingSize.height > 0)
+        // The Add sheet, as an expense and as a transfer with its errors revealed.
+        model.requestAdd()
+        let form = try #require(model.addForm)
+        #expect(layOut(TransactionAddSheet(model: model, form: form, shell: shell).environment(\.visionTheme, theme)).fittingSize.height > 0)
+        form.setKind(.transfer)
+        await model.submitAdd()
+        #expect(form.errorsRevealed)
+        #expect(layOut(TransactionAddSheet(model: model, form: form, shell: shell).environment(\.visionTheme, theme)).fittingSize.height > 0)
+        model.dismissAdd()
         // A payee filter with its banner.
         shell.routeDidChange(try #require(NativeRoute("/transactions?recipient_id=1&uncategorised=true")))
         await model.sync()
@@ -920,6 +1025,106 @@ actor StaticTransactionsService: TransactionsService, TransactionAttachmentsServ
         await failing.transactions.sync()
         #expect(failing.transactions.error != nil)
         #expect(layOutTransactions(failing).fittingSize.height > 0)
+    }
+
+    @Test(arguments: [NativeLanguage.en, .nl], [ThemeAppearance.light, .dark])
+    func theSplitSheetBulkBarAndDialogsLayOut(_ language: NativeLanguage, _ appearance: ThemeAppearance)
+        async throws
+    {
+        let shell = makeShell(language: language, appearance: appearance)
+        let theme = VisionTheme(selection: shell.theme)
+        let model = shell.transactions
+        shell.routeDidChange(try #require(NativeRoute("/transactions")))
+        await shell.settingsSettled()
+        await model.sync()
+        let rows = try #require(model.rows)
+        #expect(rows.count == 2)
+        // The Split dialog with the existing split loaded, then as custom amounts.
+        model.requestSplit(rows[0])
+        let split = try #require(model.splitForm)
+        await split.load()
+        #expect(split.existing.count == 1)
+        #expect(layOut(TransactionSplitSheet(model: model, form: split, shell: shell).environment(\.visionTheme, theme)).fittingSize.height > 0)
+        split.setSplitType(.custom)
+        split.addEntry()
+        #expect(split.entries.count == 2)
+        #expect(layOut(TransactionSplitSheet(model: model, form: split, shell: shell).environment(\.visionTheme, theme)).fittingSize.height > 0)
+        model.dismissSplit()
+        // The bulk bar in the toolbar, and each bulk dialog.
+        model.toggleSelection(rows[0].id)
+        model.toggleSelection(rows[1].id)
+        #expect(model.showsBulkBar)
+        #expect(layOut(TransactionBulkBar(model: model, shell: shell).environment(\.visionTheme, theme)).fittingSize.width > 0)
+        #expect(layOutTransactions(shell).fittingSize.height > 0)
+        for dialog in [TransactionBulkDialog.recategorize, .recipient, .export, .tag, .split] {
+            model.openBulkDialog(dialog)
+            #expect(model.bulkDialog == dialog)
+            #expect(layOut(TransactionBulkDialogView(model: model, dialog: dialog, shell: shell).environment(\.visionTheme, theme)).fittingSize.height > 0)
+            model.closeBulkDialog()
+        }
+        // The tags multi-select, empty and with a selection.
+        #expect(layOut(TagMultiSelect(pickers: model.pickers, selected: [], strings: shell.strings) { _ in }.environment(\.visionTheme, theme)).fittingSize.width > 0)
+        #expect(layOut(TagMultiSelect(pickers: model.pickers, selected: ["fixed-costs"], strings: shell.strings) { _ in }.environment(\.visionTheme, theme)).fittingSize.width > 0)
+        model.clearBulkSelection()
+        #expect(!model.showsBulkBar)
+    }
+
+    func layOutOwes(_ shell: NativeShellModel) -> NSHostingView<some View> {
+        layOut(
+            OwesView(model: shell.owes, shell: shell)
+                .environment(\.visionTheme, VisionTheme(selection: shell.theme)))
+    }
+
+    @Test(arguments: [NativeLanguage.en, .nl], [ThemeAppearance.light, .dark])
+    func theOwesScreenLaysOutInEveryState(_ language: NativeLanguage, _ appearance: ThemeAppearance) async throws {
+        let shell = makeShell(language: language, appearance: appearance)
+        let theme = VisionTheme(selection: shell.theme)
+        let model = shell.owes
+        shell.routeDidChange(try #require(NativeRoute("/owes")))
+        await shell.settingsSettled()
+        // Loading, then the totals and the people list.
+        #expect(model.isLoadingSummary)
+        #expect(layOutOwes(shell).fittingSize.width > 0)
+        await model.appear()
+        #expect(model.summary?.count == 1)
+        #expect(model.totalOutstanding == Decimal(string: "21.50"))
+        #expect(layOutOwes(shell).fittingSize.height > 0)
+        // The person detail with its splits and Recent transactions.
+        await model.open(try #require(model.summary?.first))
+        await model.loadRecent()
+        #expect(model.splits?.count == 2)
+        #expect(model.recentRows.count == 3)
+        #expect(layOutOwes(shell).fittingSize.height > 0)
+        // Record payment.
+        model.openPayment(try #require(model.splits?.first))
+        #expect(model.payment != nil)
+        #expect(layOut(OwesPaymentSheet(model: model, shell: shell).environment(\.visionTheme, theme)).fittingSize.height > 0)
+        model.closePayment()
+        model.back()
+        model.disappear()
+        // Nobody owes you, and the error card.
+        let empty = makeShell(language: language, appearance: appearance, splits: StaticSplitsService(owed: []))
+        empty.routeDidChange(try #require(NativeRoute("/owes")))
+        await empty.settingsSettled()
+        await empty.owes.appear()
+        #expect(empty.owes.summary?.isEmpty == true)
+        #expect(layOutOwes(empty).fittingSize.height > 0)
+        let failing = makeShell(language: language, appearance: appearance, splits: StaticSplitsService(failing: true))
+        failing.routeDidChange(try #require(NativeRoute("/owes")))
+        await failing.settingsSettled()
+        await failing.owes.appear()
+        #expect(failing.owes.summaryError != nil)
+        #expect(layOutOwes(failing).fittingSize.height > 0)
+    }
+
+    @Test func theShellShowsTheOwesScreen() async throws {
+        let shell = makeShell(language: .en, appearance: .light, adminMode: false)
+        let host = layOut(ShellRootView(model: shell) { hidden in Color.clear.accessibilityHidden(hidden) })
+        shell.routeDidChange(try #require(NativeRoute("/owes")))
+        await shell.settingsSettled()
+        #expect(shell.detail == .native(.owes))
+        host.layoutSubtreeIfNeeded()
+        #expect(!host.subviews.isEmpty)
     }
 
     @Test func theShellShowsTheTransactionsScreen() async throws {

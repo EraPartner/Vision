@@ -110,7 +110,7 @@ public enum NativeScreen: Equatable, Hashable, Sendable {
     case importReview(batchId: Int)
     /// `/transactions` (phase 3e).
     case transactions
-    /// `/owes`, Who owes you (phase 3e part B; `TransactionsRoutes.owesIsNative`).
+    /// `/owes`, Who owes you.
     case owes
 
     /// The screens at a fixed path.

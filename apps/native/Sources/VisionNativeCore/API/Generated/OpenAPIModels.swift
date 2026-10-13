@@ -226,6 +226,74 @@ extension OpenAPI {
         }
     }
 
+    /// Selects transactions to act on. Explicit-id mode accepts only `ids`. Filter mode requires both
+    /// `filter` and the `expected_count` shown when the user confirmed the action.
+    /// A oneOf/anyOf schema, decoded as plain JSON.
+    public typealias BulkSelection = JSONValue
+
+    public struct BulkSplitResult: Codable, Equatable, Sendable {
+        public let requested: Int
+        public let split: Int
+        public let skippedAlreadySplit: Int
+        public let skippedZeroAmount: Int
+        public let skippedMissing: Int
+        public let items: [OpenAPI.Split]
+
+        public init(requested: Int, split: Int, skippedAlreadySplit: Int, skippedZeroAmount: Int, skippedMissing: Int, items: [OpenAPI.Split]) {
+            self.requested = requested
+            self.split = split
+            self.skippedAlreadySplit = skippedAlreadySplit
+            self.skippedZeroAmount = skippedZeroAmount
+            self.skippedMissing = skippedMissing
+            self.items = items
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case requested = "requested"
+            case split = "split"
+            case skippedAlreadySplit = "skipped_already_split"
+            case skippedZeroAmount = "skipped_zero_amount"
+            case skippedMissing = "skipped_missing"
+            case items = "items"
+        }
+    }
+
+    public struct BulkTagRequest: Codable, Equatable, Sendable {
+        public let transactionIds: [Int]
+        public let addSlugs: [String]?
+        public let removeSlugs: [String]?
+
+        public init(transactionIds: [Int], addSlugs: [String]? = nil, removeSlugs: [String]? = nil) {
+            self.transactionIds = transactionIds
+            self.addSlugs = addSlugs
+            self.removeSlugs = removeSlugs
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case transactionIds = "transaction_ids"
+            case addSlugs = "add_slugs"
+            case removeSlugs = "remove_slugs"
+        }
+    }
+
+    public struct BulkTagResult: Codable, Equatable, Sendable {
+        public let added: Int
+        public let removed: Int
+        public let transactionsAffected: Int
+
+        public init(added: Int, removed: Int, transactionsAffected: Int) {
+            self.added = added
+            self.removed = removed
+            self.transactionsAffected = transactionsAffected
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case added = "added"
+            case removed = "removed"
+            case transactionsAffected = "transactions_affected"
+        }
+    }
+
     public struct CategoryNode: Codable, Equatable, Sendable {
         public let id: Int
         public let name: String
@@ -1155,6 +1223,24 @@ extension OpenAPI {
         }
     }
 
+    public struct RecipientCreate: Codable, Equatable, Sendable {
+        public let name: String
+        public let defaultCategoryId: Int?
+        public let notes: String?
+
+        public init(name: String, defaultCategoryId: Int? = nil, notes: String? = nil) {
+            self.name = name
+            self.defaultCategoryId = defaultCategoryId
+            self.notes = notes
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case name = "name"
+            case defaultCategoryId = "default_category_id"
+            case notes = "notes"
+        }
+    }
+
     public struct RecipientList: Codable, Equatable, Sendable {
         public let total: Int
         public let limit: Int
@@ -1276,6 +1362,180 @@ extension OpenAPI {
     /// Persisted JSON from the read that produced the edit. Absence is distinct from JSON null.
     /// A oneOf/anyOf schema, decoded as plain JSON.
     public typealias SettingBaseline = JSONValue
+
+    public struct Split: Codable, Equatable, Sendable {
+        public let id: Int
+        public let transactionId: Int
+        public let recipientId: Int
+        public let recipientName: String?
+        public let amount: Decimal
+        public let amountPaid: Decimal
+        public let note: String?
+        public let isSettled: Bool
+        public let createdAt: String
+        public let updatedAt: String
+
+        public init(id: Int, transactionId: Int, recipientId: Int, recipientName: String? = nil, amount: Decimal, amountPaid: Decimal, note: String? = nil, isSettled: Bool, createdAt: String, updatedAt: String) {
+            self.id = id
+            self.transactionId = transactionId
+            self.recipientId = recipientId
+            self.recipientName = recipientName
+            self.amount = amount
+            self.amountPaid = amountPaid
+            self.note = note
+            self.isSettled = isSettled
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case transactionId = "transaction_id"
+            case recipientId = "recipient_id"
+            case recipientName = "recipient_name"
+            case amount = "amount"
+            case amountPaid = "amount_paid"
+            case note = "note"
+            case isSettled = "is_settled"
+            case createdAt = "created_at"
+            case updatedAt = "updated_at"
+        }
+    }
+
+    public struct SplitList: Codable, Equatable, Sendable {
+        public let total: Int
+        public let limit: Int?
+        public let offset: Int?
+        public let items: [OpenAPI.Split]
+
+        public init(total: Int, limit: Int? = nil, offset: Int? = nil, items: [OpenAPI.Split]) {
+            self.total = total
+            self.limit = limit
+            self.offset = offset
+            self.items = items
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case total = "total"
+            case limit = "limit"
+            case offset = "offset"
+            case items = "items"
+        }
+    }
+
+    public struct SplitOwed: Codable, Equatable, Sendable {
+        public let recipientId: Int
+        public let recipientName: String
+        public let totalOwed: Decimal
+        public let totalPaid: Decimal
+        public let remaining: Decimal
+        public let splitCount: Int
+
+        public init(recipientId: Int, recipientName: String, totalOwed: Decimal, totalPaid: Decimal, remaining: Decimal, splitCount: Int) {
+            self.recipientId = recipientId
+            self.recipientName = recipientName
+            self.totalOwed = totalOwed
+            self.totalPaid = totalPaid
+            self.remaining = remaining
+            self.splitCount = splitCount
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case recipientId = "recipient_id"
+            case recipientName = "recipient_name"
+            case totalOwed = "total_owed"
+            case totalPaid = "total_paid"
+            case remaining = "remaining"
+            case splitCount = "split_count"
+        }
+    }
+
+    public struct SplitOwedDetail: Codable, Equatable, Sendable {
+        public let id: Int
+        public let transactionId: Int
+        public let recipientId: Int
+        public let recipientName: String?
+        public let amount: Decimal
+        public let amountPaid: Decimal
+        public let note: String?
+        public let isSettled: Bool
+        public let createdAt: String
+        public let updatedAt: String
+        public let transactionDate: String
+        public let transactionMemo: String?
+        public let transactionAmount: Decimal
+        public let transactionCurrency: String
+        public let bankAccount: String?
+        public let transactionRecipientName: String?
+        public let remaining: Decimal
+
+        public init(id: Int, transactionId: Int, recipientId: Int, recipientName: String? = nil, amount: Decimal, amountPaid: Decimal, note: String? = nil, isSettled: Bool, createdAt: String, updatedAt: String, transactionDate: String, transactionMemo: String? = nil, transactionAmount: Decimal, transactionCurrency: String, bankAccount: String? = nil, transactionRecipientName: String? = nil, remaining: Decimal) {
+            self.id = id
+            self.transactionId = transactionId
+            self.recipientId = recipientId
+            self.recipientName = recipientName
+            self.amount = amount
+            self.amountPaid = amountPaid
+            self.note = note
+            self.isSettled = isSettled
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
+            self.transactionDate = transactionDate
+            self.transactionMemo = transactionMemo
+            self.transactionAmount = transactionAmount
+            self.transactionCurrency = transactionCurrency
+            self.bankAccount = bankAccount
+            self.transactionRecipientName = transactionRecipientName
+            self.remaining = remaining
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case transactionId = "transaction_id"
+            case recipientId = "recipient_id"
+            case recipientName = "recipient_name"
+            case amount = "amount"
+            case amountPaid = "amount_paid"
+            case note = "note"
+            case isSettled = "is_settled"
+            case createdAt = "created_at"
+            case updatedAt = "updated_at"
+            case transactionDate = "transaction_date"
+            case transactionMemo = "transaction_memo"
+            case transactionAmount = "transaction_amount"
+            case transactionCurrency = "transaction_currency"
+            case bankAccount = "bank_account"
+            case transactionRecipientName = "transaction_recipient_name"
+            case remaining = "remaining"
+        }
+    }
+
+    public struct SplitPayment: Codable, Equatable, Sendable {
+        public let id: Int
+        public let splitId: Int
+        public let amount: Decimal
+        public let note: String?
+        public let paidAt: String
+        public let createdAt: String
+
+        public init(id: Int, splitId: Int, amount: Decimal, note: String? = nil, paidAt: String, createdAt: String) {
+            self.id = id
+            self.splitId = splitId
+            self.amount = amount
+            self.note = note
+            self.paidAt = paidAt
+            self.createdAt = createdAt
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case splitId = "split_id"
+            case amount = "amount"
+            case note = "note"
+            case paidAt = "paid_at"
+            case createdAt = "created_at"
+        }
+    }
 
     public struct Tag: Codable, Equatable, Sendable {
         public let id: Int

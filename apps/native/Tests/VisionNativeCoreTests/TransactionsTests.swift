@@ -30,6 +30,8 @@ actor FakeTransactionsService: TransactionsService, TransactionAttachmentsServic
     private var stored: OpenAPI.Setting?
     private var updateGate: CallGate?
     private var nextId = 1000
+    private var createConflicts = false
+    private var createFails = false
 
     init(rows: [OpenAPI.Transaction] = []) {
         self.rows = rows
@@ -40,6 +42,9 @@ actor FakeTransactionsService: TransactionsService, TransactionAttachmentsServic
     func failDeletes(_ fail: Bool) { deleteFails = fail }
     func failAttachmentDeletes(_ fail: Bool) { deleteAttachmentFails = fail }
     func holdUpdates(_ gate: CallGate?) { updateGate = gate }
+    /// A create without `allow_duplicate` answers 409.
+    func conflictCreates(_ conflict: Bool) { createConflicts = conflict }
+    func failCreates(_ fail: Bool) { createFails = fail }
     func setRecipients(_ list: [OpenAPI.Recipient]) {
         recipients = Dictionary(uniqueKeysWithValues: list.map { recipient in (recipient.id, recipient) })
     }
@@ -103,6 +108,10 @@ actor FakeTransactionsService: TransactionsService, TransactionAttachmentsServic
 
     func createTransaction(_ body: OpenAPI.TransactionCreate) async throws -> OpenAPI.Transaction {
         created.append(body)
+        if createFails { throw APIError.network("offline") }
+        if createConflicts && body.allowDuplicate != true {
+            throw APIError.client(APIClientError(status: 409, code: .conflict, message: "Duplicate"))
+        }
         nextId += 1
         let row = TxFixture.wire(
             id: nextId, date: body.transactionDate, recipientId: body.recipientId,
@@ -247,12 +256,13 @@ enum TxFixture {
     }
 
     @MainActor
-    static func model(_ service: FakeTransactionsService, pickers: FakePickerService = FakePickerService())
-        -> TransactionsModel
-    {
+    static func model(
+        _ service: FakeTransactionsService, pickers: FakePickerService = FakePickerService(),
+        bulk: FakeTransactionBulkService = FakeTransactionBulkService(), splits: FakeSplitsService = FakeSplitsService()
+    ) -> TransactionsModel {
         TransactionsModel(
-            service: service, attachments: service, pickers: pickers, calendar: PlannedFixture.calendar,
-            now: { PlannedFixture.today })
+            service: service, attachments: service, pickers: pickers, bulk: bulk, splits: splits,
+            calendar: PlannedFixture.calendar, now: { PlannedFixture.today })
     }
 
     @MainActor
@@ -270,9 +280,10 @@ enum TxFixture {
     @MainActor
     static func opened(
         _ service: FakeTransactionsService, route: String = "/transactions", recorder: ShellRecorder = ShellRecorder(),
-        settings: NativeAppSettings = NativeAppSettings(), pickers: FakePickerService = FakePickerService()
+        settings: NativeAppSettings = NativeAppSettings(), pickers: FakePickerService = FakePickerService(),
+        bulk: FakeTransactionBulkService = FakeTransactionBulkService(), splits: FakeSplitsService = FakeSplitsService()
     ) async throws -> (TransactionsModel, NativeShellModel) {
-        let model = model(service, pickers: pickers)
+        let model = model(service, pickers: pickers, bulk: bulk, splits: splits)
         let shell = shell(model, recorder: recorder, settings: settings)
         shell.routeDidChange(try #require(NativeRoute(route)))
         await shell.settingsSettled()
@@ -856,10 +867,19 @@ extension TransactionPatch {
         #expect(!shell.newTransaction())
         shell.routeDidChange(try #require(NativeRoute("/planned")))
         await shell.settingsSettled()
+        // The page is sent to `/transactions` without `new=1`, so its own sheet stays shut;
+        // the native sheet opens once the screen syncs there.
         #expect(shell.newTransaction())
-        #expect(recorder.actions.last == .navigate("/transactions?new=1"))
+        #expect(recorder.actions.last == .navigate("/transactions"))
         #expect(shell.handleKey("n"))
-        #expect(recorder.actions.last == .navigate("/transactions?new=1"))
+        #expect(recorder.actions.last == .navigate("/transactions"))
+        #expect(!model.isAddPresented)
+        shell.routeDidChange(try #require(NativeRoute("/transactions")))
+        await model.sync()
+        #expect(model.isAddPresented)
+        model.dismissAdd()
+        await model.sync()
+        #expect(!model.isAddPresented)
     }
 
     @Test func theBannerExportsUnderItsFileName() async throws {

@@ -5,7 +5,7 @@ import Foundation
 
 /// One struct per operationId in `apps/native/openapi-operations.txt`, in its order.
 public enum OpenAPIOperations {
-    public static let operationIds = ["getExchangeRates", "refreshExchangeRates", "adminDatabaseStats", "adminProvidersHealth", "adminProviderProbe", "adminMetricsRequests", "adminListEndpoints", "getSetting", "adminDatabaseVacuum", "adminGetTableSchema", "adminGetTableRows", "adminMutateTableRows", "getPlannedTransactions", "createPlannedTransaction", "updatePlannedTransaction", "deletePlannedTransaction", "executePlannedTransaction", "getPlannedMatchSuggestions", "getRecurringPatterns", "getRecipients", "getRecipient", "getAccounts", "getCategoryTree", "getTags", "createTag", "getTransactions", "saveSetting", "getSupportedAdapters", "getCustomParsers", "createCustomParser", "updateCustomParser", "deleteCustomParser", "getImportBatches", "deleteImportBatch", "previewImportBatch", "overrideImportRow", "overrideImportRowCategory", "commitImportBatch", "updateRecipient", "getInfoBanks", "exportTransactionsCsv", "exportTransactionsJson", "getTransaction", "createTransaction", "updateTransaction", "deleteTransaction", "bulkUpdateTransactions", "getTransactionAttachments", "downloadAttachment", "deleteAttachment"]
+    public static let operationIds = ["getExchangeRates", "refreshExchangeRates", "adminDatabaseStats", "adminProvidersHealth", "adminProviderProbe", "adminMetricsRequests", "adminListEndpoints", "getSetting", "adminDatabaseVacuum", "adminGetTableSchema", "adminGetTableRows", "adminMutateTableRows", "getPlannedTransactions", "createPlannedTransaction", "updatePlannedTransaction", "deletePlannedTransaction", "executePlannedTransaction", "getPlannedMatchSuggestions", "getRecurringPatterns", "getRecipients", "getRecipient", "getAccounts", "getCategoryTree", "getTags", "createTag", "getTransactions", "saveSetting", "getSupportedAdapters", "getCustomParsers", "createCustomParser", "updateCustomParser", "deleteCustomParser", "getImportBatches", "deleteImportBatch", "previewImportBatch", "overrideImportRow", "overrideImportRowCategory", "commitImportBatch", "updateRecipient", "getInfoBanks", "exportTransactionsCsv", "exportTransactionsJson", "getTransaction", "createTransaction", "updateTransaction", "deleteTransaction", "bulkUpdateTransactions", "getTransactionAttachments", "downloadAttachment", "deleteAttachment", "bulkDeleteTransactions", "bulkExportTransactions", "bulkTagTransactions", "markTransfer", "createRecipient", "getSplitsByTransaction", "createSplitBatch", "createBulkSplits", "getSplitsOwed", "getSplitOwedByRecipient", "exportSplitsOwedCsv", "paySplit", "settleSplit", "settleAllSplitsForRecipient", "deleteSplit"]
 }
 
 extension OpenAPIOperations {
@@ -1764,5 +1764,532 @@ extension OpenAPIOperations {
         }
 
         public var path: String { "/api/attachments/\(APIPath.segment(APIQuery.value(id)))" }
+    }
+
+    /// POST /api/transactions/bulk-delete: Bulk-delete transactions selected by ids or filter
+    public struct BulkDeleteTransactions: APIOperation {
+        public typealias Response = ResponseData
+        public static let operationId = "bulkDeleteTransactions"
+        public static let method = HTTPMethod.post
+        public static let pathTemplate = "/api/transactions/bulk-delete"
+
+        public var body: OpenAPI.BulkSelection
+
+        public init(body: OpenAPI.BulkSelection) {
+            self.body = body
+        }
+
+        public var path: String { "/api/transactions/bulk-delete" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+
+        public struct ResponseData: Codable, Equatable, Sendable {
+            public let deleted: Int
+            public let requested: Int
+            public let matched: Int
+
+            public init(deleted: Int, requested: Int, matched: Int) {
+                self.deleted = deleted
+                self.requested = requested
+                self.matched = matched
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case deleted = "deleted"
+                case requested = "requested"
+                case matched = "matched"
+            }
+        }
+    }
+
+    /// POST /api/transactions/bulk-export: Export transactions selected by ids or filter (CSV or NDJSON
+    /// stream)
+    public struct BulkExportTransactions: APIOperation {
+        public typealias Response = APIEmpty
+        public static let operationId = "bulkExportTransactions"
+        public static let method = HTTPMethod.post
+        public static let pathTemplate = "/api/transactions/bulk-export"
+
+        public var body: Body
+
+        public init(body: Body) {
+            self.body = body
+        }
+
+        public var path: String { "/api/transactions/bulk-export" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+
+        public struct Body: Codable, Equatable, Sendable {
+            public let format: String?
+            public let includeBalance: Bool?
+
+            public init(format: String? = nil, includeBalance: Bool? = nil) {
+                self.format = format
+                self.includeBalance = includeBalance
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case format = "format"
+                case includeBalance = "include_balance"
+            }
+        }
+    }
+
+    /// POST /api/transactions/bulk-tag: Bulk add/remove tags across multiple transactions
+    public struct BulkTagTransactions: APIOperation {
+        public typealias Response = OpenAPI.BulkTagResult
+        public static let operationId = "bulkTagTransactions"
+        public static let method = HTTPMethod.post
+        public static let pathTemplate = "/api/transactions/bulk-tag"
+
+        public var body: OpenAPI.BulkTagRequest
+
+        public init(body: OpenAPI.BulkTagRequest) {
+            self.body = body
+        }
+
+        public var path: String { "/api/transactions/bulk-tag" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+    }
+
+    /// POST /api/transactions/transfers: Manually confirm an internal-transfer pair (ADR-083)
+    public struct MarkTransfer: APIOperation {
+        public typealias Response = JSONValue
+        public static let operationId = "markTransfer"
+        public static let method = HTTPMethod.post
+        public static let pathTemplate = "/api/transactions/transfers"
+
+        public var body: Body
+
+        public init(body: Body) {
+            self.body = body
+        }
+
+        public var path: String { "/api/transactions/transfers" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+
+        public struct Body: Codable, Equatable, Sendable {
+            public let aId: Int
+            public let bId: Int
+
+            public init(aId: Int, bId: Int) {
+                self.aId = aId
+                self.bId = bId
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case aId = "aId"
+                case bId = "bId"
+            }
+        }
+    }
+
+    /// POST /api/recipients: Create or get existing recipient
+    public struct CreateRecipient: APIOperation {
+        public typealias Response = ResponseData
+        public static let operationId = "createRecipient"
+        public static let method = HTTPMethod.post
+        public static let pathTemplate = "/api/recipients"
+
+        public var body: OpenAPI.RecipientCreate
+
+        public init(body: OpenAPI.RecipientCreate) {
+            self.body = body
+        }
+
+        public var path: String { "/api/recipients" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+
+        public struct ResponseData: Codable, Equatable, Sendable {
+            public let id: Int
+            public let name: String
+            public let primaryBankAccount: String?
+            public let defaultCategoryId: Int?
+            public let defaultCategoryName: String?
+            public let primaryRecipientId: Int?
+            public let primaryRecipientName: String?
+            public let aliasCount: Int?
+            public let notes: String?
+            public let isActive: Bool
+            public let createdAt: String
+            public let updatedAt: String?
+            public let links: [OpenAPI.Link]
+            public let created: Bool
+
+            public init(id: Int, name: String, primaryBankAccount: String? = nil, defaultCategoryId: Int? = nil, defaultCategoryName: String? = nil, primaryRecipientId: Int? = nil, primaryRecipientName: String? = nil, aliasCount: Int? = nil, notes: String? = nil, isActive: Bool, createdAt: String, updatedAt: String? = nil, links: [OpenAPI.Link], created: Bool) {
+                self.id = id
+                self.name = name
+                self.primaryBankAccount = primaryBankAccount
+                self.defaultCategoryId = defaultCategoryId
+                self.defaultCategoryName = defaultCategoryName
+                self.primaryRecipientId = primaryRecipientId
+                self.primaryRecipientName = primaryRecipientName
+                self.aliasCount = aliasCount
+                self.notes = notes
+                self.isActive = isActive
+                self.createdAt = createdAt
+                self.updatedAt = updatedAt
+                self.links = links
+                self.created = created
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case id = "id"
+                case name = "name"
+                case primaryBankAccount = "primary_bank_account"
+                case defaultCategoryId = "default_category_id"
+                case defaultCategoryName = "default_category_name"
+                case primaryRecipientId = "primary_recipient_id"
+                case primaryRecipientName = "primary_recipient_name"
+                case aliasCount = "alias_count"
+                case notes = "notes"
+                case isActive = "is_active"
+                case createdAt = "created_at"
+                case updatedAt = "updated_at"
+                case links = "links"
+                case created = "created"
+            }
+        }
+    }
+
+    /// GET /api/splits/transaction/{id}: Get splits for a transaction
+    public struct GetSplitsByTransaction: APIOperation {
+        public typealias Response = OpenAPI.SplitList
+        public static let operationId = "getSplitsByTransaction"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/splits/transaction/{id}"
+
+        public var id: Int
+        /// Page size. Omit (together with offset) to receive the whole collection. Values above the
+        /// endpoint's cap are clamped.
+        public var limit: Int?
+        /// Rows to skip. Omit (together with limit) to receive the whole collection.
+        public var offset: Int?
+
+        public init(id: Int, limit: Int? = nil, offset: Int? = nil) {
+            self.id = id
+            self.limit = limit
+            self.offset = offset
+        }
+
+        public var path: String { "/api/splits/transaction/\(APIPath.segment(APIQuery.value(id)))" }
+
+        public var queryItems: [URLQueryItem] {
+            var items: [URLQueryItem] = []
+            if let limit { items.append(URLQueryItem(name: "limit", value: APIQuery.value(limit))) }
+            if let offset { items.append(URLQueryItem(name: "offset", value: APIQuery.value(offset))) }
+            return items
+        }
+    }
+
+    /// POST /api/splits/batch: Create multiple splits in one request
+    public struct CreateSplitBatch: APIOperation {
+        public typealias Response = OpenAPI.SplitList
+        public static let operationId = "createSplitBatch"
+        public static let method = HTTPMethod.post
+        public static let pathTemplate = "/api/splits/batch"
+
+        public var body: Body
+
+        public init(body: Body) {
+            self.body = body
+        }
+
+        public var path: String { "/api/splits/batch" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+
+        public struct Body: Codable, Equatable, Sendable {
+            public let transactionId: Int
+            public let splits: [SplitsItem]
+
+            public init(transactionId: Int, splits: [SplitsItem]) {
+                self.transactionId = transactionId
+                self.splits = splits
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case transactionId = "transaction_id"
+                case splits = "splits"
+            }
+
+            public struct SplitsItem: Codable, Equatable, Sendable {
+                public let recipientId: Int
+                public let amount: Decimal
+                public let note: String?
+
+                public init(recipientId: Int, amount: Decimal, note: String? = nil) {
+                    self.recipientId = recipientId
+                    self.amount = amount
+                    self.note = note
+                }
+
+                enum CodingKeys: String, CodingKey {
+                    case recipientId = "recipient_id"
+                    case amount = "amount"
+                    case note = "note"
+                }
+            }
+        }
+    }
+
+    /// POST /api/splits/bulk: Give one payee a preset share of many transactions (bulk split)
+    public struct CreateBulkSplits: APIOperation {
+        public typealias Response = OpenAPI.BulkSplitResult
+        public static let operationId = "createBulkSplits"
+        public static let method = HTTPMethod.post
+        public static let pathTemplate = "/api/splits/bulk"
+
+        public var body: Body
+
+        public init(body: Body) {
+            self.body = body
+        }
+
+        public var path: String { "/api/splits/bulk" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+
+        public struct Body: Codable, Equatable, Sendable {
+            public let transactionIds: [Int]
+            public let recipientId: Int
+            /// `equal` — the payee owes half of each transaction (50/50). `full` — the payee owes the whole
+            /// amount (0/100).
+            public let mode: String
+            public let note: String?
+
+            public init(transactionIds: [Int], recipientId: Int, mode: String, note: String? = nil) {
+                self.transactionIds = transactionIds
+                self.recipientId = recipientId
+                self.mode = mode
+                self.note = note
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case transactionIds = "transaction_ids"
+                case recipientId = "recipient_id"
+                case mode = "mode"
+                case note = "note"
+            }
+        }
+    }
+
+    /// GET /api/splits/owed: List split amounts owed per recipient
+    public struct GetSplitsOwed: APIOperation {
+        public typealias Response = ResponseData
+        public static let operationId = "getSplitsOwed"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/splits/owed"
+
+        /// Page size. Omit (together with offset) to receive the whole collection. Values above the
+        /// endpoint's cap are clamped.
+        public var limit: Int?
+        /// Rows to skip. Omit (together with limit) to receive the whole collection.
+        public var offset: Int?
+
+        public init(limit: Int? = nil, offset: Int? = nil) {
+            self.limit = limit
+            self.offset = offset
+        }
+
+        public var path: String { "/api/splits/owed" }
+
+        public var queryItems: [URLQueryItem] {
+            var items: [URLQueryItem] = []
+            if let limit { items.append(URLQueryItem(name: "limit", value: APIQuery.value(limit))) }
+            if let offset { items.append(URLQueryItem(name: "offset", value: APIQuery.value(offset))) }
+            return items
+        }
+
+        public struct ResponseData: Codable, Equatable, Sendable {
+            public let total: Int
+            public let limit: Int?
+            public let offset: Int?
+            public let items: [OpenAPI.SplitOwed]
+
+            public init(total: Int, limit: Int? = nil, offset: Int? = nil, items: [OpenAPI.SplitOwed]) {
+                self.total = total
+                self.limit = limit
+                self.offset = offset
+                self.items = items
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case total = "total"
+                case limit = "limit"
+                case offset = "offset"
+                case items = "items"
+            }
+        }
+    }
+
+    /// GET /api/splits/owed/{id}: Get owed detail for recipient
+    public struct GetSplitOwedByRecipient: APIOperation {
+        public typealias Response = ResponseData
+        public static let operationId = "getSplitOwedByRecipient"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/splits/owed/{id}"
+
+        public var id: Int
+        /// Page size. Omit (together with offset) to receive the whole collection. Values above the
+        /// endpoint's cap are clamped.
+        public var limit: Int?
+        /// Rows to skip. Omit (together with limit) to receive the whole collection.
+        public var offset: Int?
+
+        public init(id: Int, limit: Int? = nil, offset: Int? = nil) {
+            self.id = id
+            self.limit = limit
+            self.offset = offset
+        }
+
+        public var path: String { "/api/splits/owed/\(APIPath.segment(APIQuery.value(id)))" }
+
+        public var queryItems: [URLQueryItem] {
+            var items: [URLQueryItem] = []
+            if let limit { items.append(URLQueryItem(name: "limit", value: APIQuery.value(limit))) }
+            if let offset { items.append(URLQueryItem(name: "offset", value: APIQuery.value(offset))) }
+            return items
+        }
+
+        public struct ResponseData: Codable, Equatable, Sendable {
+            public let total: Int
+            public let limit: Int?
+            public let offset: Int?
+            public let items: [OpenAPI.SplitOwedDetail]
+
+            public init(total: Int, limit: Int? = nil, offset: Int? = nil, items: [OpenAPI.SplitOwedDetail]) {
+                self.total = total
+                self.limit = limit
+                self.offset = offset
+                self.items = items
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case total = "total"
+                case limit = "limit"
+                case offset = "offset"
+                case items = "items"
+            }
+        }
+    }
+
+    /// GET /api/splits/owed/{id}/export/csv: Export owed splits as CSV
+    public struct ExportSplitsOwedCsv: APIOperation {
+        public typealias Response = APIEmpty
+        public static let operationId = "exportSplitsOwedCsv"
+        public static let method = HTTPMethod.get
+        public static let pathTemplate = "/api/splits/owed/{id}/export/csv"
+
+        public var id: Int
+
+        public init(id: Int) {
+            self.id = id
+        }
+
+        public var path: String { "/api/splits/owed/\(APIPath.segment(APIQuery.value(id)))/export/csv" }
+    }
+
+    /// POST /api/splits/{id}/pay: Record a payment against a split share
+    public struct PaySplit: APIOperation {
+        public typealias Response = OpenAPI.SplitPayment
+        public static let operationId = "paySplit"
+        public static let method = HTTPMethod.post
+        public static let pathTemplate = "/api/splits/{id}/pay"
+
+        public var id: Int
+        public var body: Body
+
+        public init(id: Int, body: Body) {
+            self.id = id
+            self.body = body
+        }
+
+        public var path: String { "/api/splits/\(APIPath.segment(APIQuery.value(id)))/pay" }
+
+        public func encodedBody() throws -> Data? {
+            try APIBody.encode(body)
+        }
+
+        public struct Body: Codable, Equatable, Sendable {
+            public let amount: Decimal
+            public let paymentDate: String?
+
+            public init(amount: Decimal, paymentDate: String? = nil) {
+                self.amount = amount
+                self.paymentDate = paymentDate
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case amount = "amount"
+                case paymentDate = "payment_date"
+            }
+        }
+    }
+
+    /// POST /api/splits/{id}/settle: Mark split as fully settled
+    public struct SettleSplit: APIOperation {
+        public typealias Response = JSONValue
+        public static let operationId = "settleSplit"
+        public static let method = HTTPMethod.post
+        public static let pathTemplate = "/api/splits/{id}/settle"
+
+        public var id: Int
+
+        public init(id: Int) {
+            self.id = id
+        }
+
+        public var path: String { "/api/splits/\(APIPath.segment(APIQuery.value(id)))/settle" }
+    }
+
+    /// POST /api/splits/owed/{id}/settle-all: Settle all open splits for a recipient
+    public struct SettleAllSplitsForRecipient: APIOperation {
+        public typealias Response = JSONValue
+        public static let operationId = "settleAllSplitsForRecipient"
+        public static let method = HTTPMethod.post
+        public static let pathTemplate = "/api/splits/owed/{id}/settle-all"
+
+        public var id: Int
+
+        public init(id: Int) {
+            self.id = id
+        }
+
+        public var path: String { "/api/splits/owed/\(APIPath.segment(APIQuery.value(id)))/settle-all" }
+    }
+
+    /// DELETE /api/splits/{id}: Delete split
+    public struct DeleteSplit: APIOperation {
+        public typealias Response = APIEmpty
+        public static let operationId = "deleteSplit"
+        public static let method = HTTPMethod.delete
+        public static let pathTemplate = "/api/splits/{id}"
+
+        public var id: Int
+
+        public init(id: Int) {
+            self.id = id
+        }
+
+        public var path: String { "/api/splits/\(APIPath.segment(APIQuery.value(id)))" }
     }
 }

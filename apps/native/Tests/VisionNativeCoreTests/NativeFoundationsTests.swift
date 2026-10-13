@@ -128,8 +128,8 @@ import Testing
         #expect(NativeScreen.screen(forPath: "/planned/x") == nil)
         #expect(NativeScreen.screen(forPath: "/transactions") == .transactions)
         #expect(!NativeScreen.transactions.requiresAdmin)
-        // `/owes` stays on the web until phase 3e part B.
-        #expect(NativeScreen.screen(forPath: "/owes") == (TransactionsRoutes.owesIsNative ? .owes : nil))
+        #expect(NativeScreen.screen(forPath: "/owes") == .owes)
+        #expect(!NativeScreen.owes.requiresAdmin)
     }
 }
 

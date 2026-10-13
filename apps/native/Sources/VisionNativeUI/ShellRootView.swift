@@ -242,8 +242,7 @@ struct NativeScreenContainer: View {
         case .transactions:
             TransactionsView(model: model.transactions, shell: model)
         case .owes:
-            // TODO(3e part B): `OwesView`; `TransactionsRoutes.owesIsNative` keeps `/owes` on the web.
-            EmptyView()
+            OwesView(model: model.owes, shell: model)
         }
     }
 }
