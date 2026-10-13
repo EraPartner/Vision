@@ -201,6 +201,19 @@ provided the actual status and compiler errors.
 
 ## Latest integration checkpoint
 
+**`86c34c71`** published all 89 current integration files and this handoff. Its automatic
+macOS run `https://github.com/EraPartner/Vision/actions/runs/38473045992` passed the Tax
+callback stage and found five Portfolio account-picker `ForEach` identity errors. The
+follow-up fix supplies the existing account primary key explicitly at those five sites;
+no account data or selection behaviour changes. The new runner logs are saved at
+`/workspace/vision-native-macos-third-build.log`. Full native build/test still has not passed.
+
+The phase-3o frontend/backend/package type checks, frontend build, locale validation,
+endpoint matrix and package boundaries passed at this checkpoint. Frontend/backend lint
+passed with existing warnings. The documentation visualizer now has 100 components and
+74 flows; five flow tests and geometry/ID validation passed after the saved WIP layout was
+corrected. Final combined Swift and restore-lifetime tests remain pending.
+
 `7e023475` published the Home date-overload fix. The next automatic run,
 `https://github.com/EraPartner/Vision/actions/runs/38462560168`, passed that compiler stage
 and failed on Tax Overview's missing `try` in a deduction callback. The current checkpoint

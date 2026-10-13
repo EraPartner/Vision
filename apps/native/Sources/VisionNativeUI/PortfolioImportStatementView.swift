@@ -81,7 +81,7 @@ struct PortfolioImportStatementView: View {
                                     ? "portfolioImport.session.custodyUnassigned"
                                     : "portfolioImport.session.transferUnassigned")
                         ).tag(Optional<Int>.none)
-                        ForEach(model.brokerAccounts.filter { $0.id != statement.accountId }) { account in
+                        ForEach(model.brokerAccounts.filter { $0.id != statement.accountId }, id: \.id) { account in
                             Text(verbatim: account.displayName ?? account.name).tag(Optional(account.id))
                         }
                     }.disabled(readOnly)
@@ -167,7 +167,7 @@ struct PortfolioImportStatementView: View {
                     get: { statement.accountId }, set: { model.setAccount(id: statement.id, accountId: $0) })
             ) {
                 Text(strings.t("addPortTxn.broker.unassigned")).tag(Optional<Int>.none)
-                ForEach(model.brokerAccounts) { account in
+                ForEach(model.brokerAccounts, id: \.id) { account in
                     Text(verbatim: account.displayName ?? account.name).tag(Optional(account.id))
                 }
             }.disabled(readOnly)

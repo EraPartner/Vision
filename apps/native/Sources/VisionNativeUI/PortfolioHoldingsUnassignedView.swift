@@ -49,7 +49,9 @@ struct PortfolioHoldingsUnassignedView: View {
                                     strings.t("portfolio.assignLotsBroker"),
                                     selection: Binding(get: { effectiveBroker }, set: { brokerId = $0 })
                                 ) {
-                                    ForEach(editing.brokers) { broker in Text(broker.name).tag(Optional(broker.id)) }
+                                    ForEach(editing.brokers, id: \.id) { broker in
+                                        Text(broker.name).tag(Optional(broker.id))
+                                    }
                                 }.frame(maxWidth: 280)
                                 Button(strings.t("portfolio.assignLots")) { confirming = true }
                                     .disabled(

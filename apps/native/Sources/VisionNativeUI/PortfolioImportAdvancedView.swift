@@ -160,7 +160,8 @@ struct PortfolioImportAdvancedView: View {
             selection: Binding(get: { model.config.accountId }, set: { model.setAccount($0) })
         ) {
             Text(strings.t("addPortTxn.broker.unassigned")).tag(Optional<Int>.none)
-            ForEach(model.brokerAccounts) { account in Text(verbatim: account.name).tag(Optional(account.id)) }
+            ForEach(model.brokerAccounts, id: \.id) { account in Text(verbatim: account.name).tag(Optional(account.id))
+            }
         }.frame(maxWidth: 420).disabled(model.isBusy || isLocked)
     }
 }

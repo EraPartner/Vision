@@ -84,7 +84,7 @@ public struct PortfolioImportReviewView: View {
                             get: { model.selectedRepairBrokerId }, set: { model.selectedRepairBrokerId = $0 })
                     ) {
                         Text(strings.t("addPortTxn.broker.unassigned")).tag(Optional<Int>.none)
-                        ForEach(model.brokerAccounts) { account in
+                        ForEach(model.brokerAccounts, id: \.id) { account in
                             Text(verbatim: account.displayName ?? account.name).tag(Optional(account.id))
                         }
                     }.disabled(model.isBusy)
