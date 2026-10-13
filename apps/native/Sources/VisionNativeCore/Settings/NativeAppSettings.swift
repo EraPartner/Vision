@@ -42,11 +42,16 @@ public struct NativeAppSettings: Equatable, Sendable {
     public var colorblindGainLoss: Bool
     /// `defaultPageSize`: the page size of server-paged tables such as `/transactions`.
     public var defaultPageSize: Int
+    /// Application defaults participate below explicit run and saved-analysis preferences.
+    public var analysisBenchmark: String?
+    public var aiAnswerDepth: String
+    public var language: String
 
     public init(
         defaultCurrency: String = "EUR", dateFormat: AppDateFormat = .dayMonthYearSlash,
         numberFormat: NumberFormat = .eu, showDecimalPlaces: Int = 2, adminMode: Bool = false,
-        colorblindGainLoss: Bool = false, defaultPageSize: Int = 50
+        colorblindGainLoss: Bool = false, defaultPageSize: Int = 50,
+        analysisBenchmark: String? = nil, aiAnswerDepth: String = "quick", language: String = "en"
     ) {
         self.defaultCurrency = defaultCurrency
         self.dateFormat = dateFormat
@@ -55,6 +60,9 @@ public struct NativeAppSettings: Equatable, Sendable {
         self.adminMode = adminMode
         self.colorblindGainLoss = colorblindGainLoss
         self.defaultPageSize = defaultPageSize
+        self.analysisBenchmark = analysisBenchmark
+        self.aiAnswerDepth = aiAnswerDepth
+        self.language = language
     }
 
     /// `DEFAULT_APP_SETTINGS`.
@@ -80,6 +88,16 @@ public struct NativeAppSettings: Equatable, Sendable {
         if let value = fields["adminMode"]?.boolValue { settings.adminMode = value }
         if let value = fields["colorblindGainLoss"]?.boolValue { settings.colorblindGainLoss = value }
         if let value = fields["defaultPageSize"]?.intValue, value > 0 { settings.defaultPageSize = value }
+        if let value = fields["analysisBenchmark"]?.stringValue {
+            let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            if normalized.range(of: "^[A-Z0-9][A-Z0-9._:-]{0,31}$", options: .regularExpression) != nil {
+                settings.analysisBenchmark = normalized
+            }
+        }
+        if let value = fields["aiAnswerDepth"]?.stringValue, ["quick", "detailed"].contains(value) {
+            settings.aiAnswerDepth = value
+        }
+        if let value = fields["language"]?.stringValue, ["en", "nl"].contains(value) { settings.language = value }
         return settings
     }
 

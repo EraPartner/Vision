@@ -1,7 +1,40 @@
 import { describe, expect, it, vi } from "vitest";
 import { analysisResultCsv, parseScenarioCsv } from "./analysisInterchange";
+import { parse as parseNodeCsv } from "csv-parse/sync";
+import { parseScenarioCsvText } from "@vision/shared-utils/analysis/interchange";
 
 describe("analysis CSV interchange", () => {
+    it("keeps browser and Node CSV adapters identical for typed and unsafe-ID golden inputs", async () => {
+        vi.stubGlobal("crypto", {
+            subtle: {
+                digest: vi
+                    .fn()
+                    .mockResolvedValue(new Uint8Array(32).fill(1).buffer),
+            },
+        });
+        try {
+            for (const text of [
+                "Plan,Cost,Enabled\nA,40.500,true\nB,,false\n",
+                "Account,Date\n9007199254740993,2026-10-13\n",
+            ]) {
+                const browser = await parseScenarioCsv(
+                    new File([text], "golden.csv"),
+                );
+                const server = await parseScenarioCsvText({
+                    text,
+                    fileName: "golden.csv",
+                    size: new TextEncoder().encode(text).length,
+                    importedAt: browser.importedAt,
+                    parse: (input, options) =>
+                        parseNodeCsv(input, options) as string[][],
+                    sha256: async () => "01".repeat(32),
+                });
+                expect(server).toEqual(browser);
+            }
+        } finally {
+            vi.unstubAllGlobals();
+        }
+    });
     it("exports reproducibility metadata and neutralizes formula payloads", () => {
         const csv = analysisResultCsv(
             {

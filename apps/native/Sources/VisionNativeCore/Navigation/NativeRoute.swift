@@ -108,6 +108,8 @@ public enum NativeScreen: Equatable, Hashable, Sendable {
     case portfolioTax
     case portfolioImport
     case portfolioImportReview(batchId: String)
+    case analysis
+    case analysisMonitors
     case adminOverview
     case databaseMaintenance
     /// `/admin/db/:table`, with the decoded table name.
@@ -142,6 +144,7 @@ public enum NativeScreen: Equatable, Hashable, Sendable {
         .portfolio, .portfolioHoldings(assetClass: "stock"), .portfolioHoldings(assetClass: "crypto"),
         .portfolioHoldings(assetClass: "metals"), .portfolioHoldings(assetClass: "real_estate"),
         .portfolioHoldings(assetClass: "savings"), .rebalance, .netWorth, .portfolioTax, .portfolioImport,
+        .analysis, .analysisMonitors,
         .adminOverview, .databaseMaintenance, .providerHealth, .endpointLiveness, .exchangeRates, .plannedPayments,
         .importExport, .transactions, .accounts, .categories, .recipients,
     ]
@@ -161,6 +164,8 @@ public enum NativeScreen: Equatable, Hashable, Sendable {
         case .portfolioTax: return "/portfolio/tax"
         case .portfolioImport: return "/portfolio/import"
         case .portfolioImportReview(let batchId): return "/portfolio/import/\(batchId)/review"
+        case .analysis: return "/analysis"
+        case .analysisMonitors: return "/analysis/monitors"
         case .adminOverview: return "/admin"
         case .databaseMaintenance: return TableEditorRoute.maintenancePath
         case .tableEditor(let table): return TableEditorRoute.path(for: table)

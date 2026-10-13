@@ -58,7 +58,8 @@ final class ShellRecorder {
     func makeModel(
         settings: NativeAppSettings = NativeAppSettings(adminMode: true), recorder: ShellRecorder,
         hidden: [NavSectionID: Bool]? = nil, portfolio: PortfolioScreens? = nil,
-        portfolioImports: PortfolioImportScreens? = nil, tax: TaxScreens? = nil
+        portfolioImports: PortfolioImportScreens? = nil, tax: TaxScreens? = nil,
+        analysis: AnalysisScreens? = nil, analysisMonitors: AnalysisMonitorsModel? = nil
     ) -> NativeShellModel {
         NativeShellModel(
             strings: DictionaryStrings(language: .en, table: [:]),
@@ -72,6 +73,8 @@ final class ShellRecorder {
             tax: tax,
             portfolio: portfolio,
             portfolioImports: portfolioImports,
+            analysis: analysis,
+            analysisMonitors: analysisMonitors,
             hiddenSections: hidden,
             loadSettings: { settings },
             saveHiddenSections: { recorder.saved.append($0) },
@@ -164,6 +167,23 @@ final class ShellRecorder {
         model.openPortfolioReport()
         #expect(recorder.actions.isEmpty)
         #expect(model.detail == .native(.portfolioTax))
+    }
+
+    @Test(arguments: ["/analysis", "/analysis/monitors"])
+    func analysisScreensAreNativeWithoutAdminModeAndFallbackWhenOmitted(path: String) async throws {
+        let client = APIClient(baseURL: { nil }, adminToken: { nil })
+        let model = makeModel(
+            settings: NativeAppSettings(adminMode: false), recorder: ShellRecorder(),
+            analysis: AnalysisScreens(client: client), analysisMonitors: AnalysisMonitorsModel(service: client))
+        model.routeDidChange(try #require(NativeRoute(path + "?savedAnalysis=synthetic")))
+        await model.settingsSettled()
+        #expect(model.detail == .native(try #require(NativeScreen.screen(forPath: path))))
+        #expect(model.route.value("savedAnalysis") == "synthetic")
+
+        let legacy = makeModel(settings: NativeAppSettings(adminMode: false), recorder: ShellRecorder())
+        legacy.routeDidChange(try #require(NativeRoute(path)))
+        await legacy.settingsSettled()
+        #expect(legacy.detail == .web)
     }
 
     @Test func theExchangeRatesScreenIsNativeOnlyInAdminMode() async throws {

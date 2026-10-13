@@ -338,7 +338,8 @@ actor EventLog {
         let client = PlumbingFixture.client(transport: transport)
         #expect(try await client.supportedAdapters() == [ImportAdapter(key: "kbc", name: "KBC", adapterClass: "KbcAdapter")])
         #expect(try await client.rollbackImportBatch(id: 12) == 4)
-        #expect(try await client.importBatches(limit: 10, offset: 20).offset == 20)
+        let page: ImportBatchPage = try await client.importBatches(limit: 10, offset: 20)
+        #expect(page.offset == 20)
         let urls = await transport.requests.map { request in request.method.rawValue + " " + request.url.absoluteString }
         #expect(urls == [
             "GET http://127.0.0.1:54331/api/info/supported-adapters",

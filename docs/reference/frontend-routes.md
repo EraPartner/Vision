@@ -101,6 +101,13 @@ Admin routes appear in the sidebar's Admin section, shown only when admin mode i
 | `/ai-chat`           | `AIChatPage`            | AppLayout | Local AI chat for natural-language queries                | [[apps/frontend/src/pages/AIChatPage.tsx\|AIChatPage.tsx]]                       |
 | `/analysis/monitors` | `AnalysisMonitorsPage`  | AppLayout | Saved-analysis monitors with an unread badge              | [[apps/frontend/src/pages/AnalysisMonitorsPage.tsx\|AnalysisMonitorsPage.tsx]]   |
 
+The Swift shell draws both Analysis routes in phase 3k, independently of admin mode. Query,
+pivot, workbench, saved-analysis/proposal and monitor evaluation remain TypeScript-owned.
+CSV/XLSX interchange uses shared server operations; captured exports retain their result window
+and provenance. Page drafts reset on leaving, while the existing ten-entry SQL history is shared
+through `vision.analysis.sqlHistory` localStorage. Full Mac/Demo parity review is pending; see
+[[docs/reference/native-parity/analysis|Analysis parity]].
+
 > Settings is no longer a route — it is rendered as `DashboardSettingsDialog` opened from the layout. See [[apps/frontend/src/features/settings/DashboardSettingsDialog.tsx\|DashboardSettingsDialog.tsx]] and [[docs/features/settings|Settings Feature]].
 
 ## Unsupported Former Routes
@@ -178,7 +185,8 @@ Tax retains the selected `year` during the handoff; its menu defaults to the tax
 Portfolio and asset pages retain their current route, `period`, `fx_neutral` and unrelated query
 values. The controlled dialog stays mounted through loading/error/content transitions so report
 configuration is retained during data failures and retries. Rebalance and Net Worth are also
-native; Portfolio Import and Portfolio Tax remain web at phase 3i.
+native. Portfolio Import and Portfolio Tax are native in phase 3j; Portfolio Tax has no PDF action
+in the existing app.
 The tax calculation backend prerequisite is recorded in [[docs/adr/204-vision-native-swift-app-target|ADR-204]];
 see [[docs/architecture/native-app|the native architecture]] and
 [[docs/reference/native-parity/home-and-statistics|Home and Insights parity]] and

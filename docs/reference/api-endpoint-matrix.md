@@ -8,7 +8,7 @@ last_modified: 2026-10-13
 adr-reference: 026
 # Authoritative HTTP-operation count from openapi.yaml. The CI checker also
 # compares every method/path pair; update concrete resource rows when routes change.
-api_operation_count: 306
+api_operation_count: 308
 tags:
   [
     reference,
@@ -220,7 +220,7 @@ Kinesis cash still requires its confirmed bounded review. No operation or scope 
 | POST   | `/api/cross-workspace/rebalance`             | Cash-aware rebalancing: deploy spendable cash into underweight sleeves toward a target allocation, no sells; supports Awesome's five 20% sleeves (ADR-098) | —          | [[docs/features/portfolio\|Portfolio]] |
 | POST   | `/api/cross-workspace/commitment-aware-cash` | Estimate a 90-day candidate cash cap from spendable balances, pending planned and recurring items, and an editable reserve floor                           | —          | [[docs/features/portfolio\|Portfolio]] |
 
-## Analysis Workspace (17 operations — ADR-144)
+## Analysis Workspace (21 operations — ADR-144)
 
 | Method           | Path                                  | Description                                                | Rate Limit  | Doc                             |
 | ---------------- | ------------------------------------- | ---------------------------------------------------------- | ----------- | ------------------------------- |
@@ -228,6 +228,8 @@ Kinesis cash still requires its confirmed bounded review. No operation or scope 
 | POST             | `/api/analysis/extensions/evaluate`   | Preparation, calendar comparisons, scenarios and Goal Seek | 600 req/min | [[docs/api/analysis\|Analysis]] |
 | GET              | `/api/analysis/catalog`               | Approved dataset, field, measure, and join catalog         | 600 req/min | [[docs/api/analysis\|Analysis]] |
 | POST             | `/api/analysis/compile`               | Currency-safe visual plan to inspectable SQL               | 600 req/min | [[docs/api/analysis\|Analysis]] |
+| POST             | `/api/analysis/interchange/import`   | Read-only CSV/Vision XLSX scenario parsing with original typed values and ignored-formula count | 600 req/min | [[docs/api/analysis\|Analysis]] |
+| POST             | `/api/analysis/interchange/export`   | Raw CSV/XLSX from captured snapshot; 64 MiB file, XLSX 100,000 rows, no query rerun | 600 req/min | [[docs/api/analysis\|Analysis]] |
 | POST             | `/api/analysis/execute`               | Paged visual or bounded custom SQL execution               | 600 req/min | [[docs/api/analysis\|Analysis]] |
 | POST             | `/api/analysis/cancel/:requestId`     | Same-role PostgreSQL cancellation                          | 600 req/min | [[docs/api/analysis\|Analysis]] |
 | POST             | `/api/analysis/drill`                 | Grouped row to bounded contributing records                | 600 req/min | [[docs/api/analysis\|Analysis]] |
@@ -730,7 +732,7 @@ equal the main senders and preload subscriptions.
 | Resource                             | Operations or invoke channels |
 | ------------------------------------ | ----------------------------- |
 | Accounts (ADR-088)                   | 13                            |
-| Analysis Workspace (ADR-144)         | 17                            |
+| Analysis Workspace (ADR-144)         | 21                            |
 | AI Research                          | 20                            |
 | Research Dossiers (ADR-153)          | 9                             |
 | Analysis Monitors (ADR-154)          | 8                             |
@@ -759,9 +761,9 @@ equal the main senders and preload subscriptions.
 | Info/Statistics (Phase 14)           | 18                            |
 | AI Chat                              | 9                             |
 | Electron IPC invoke channels         | 25                            |
-| **Total**                            | **333**                       |
+| **Total**                            | **335**                       |
 
-> **306** versioned `/api` HTTP operations are declared in `openapi.yaml`. The checker compares their concrete method/path pairs with the resource tables and also checks `api_operation_count`. The 2 health routes and 25 Electron invoke channels are separate contracts; the 6 Electron event channels are not request endpoints. Resource summary counts and rate-limit descriptions are navigation aids and are not independently gate-checked.
+> **308** versioned `/api` HTTP operations are declared in `openapi.yaml`. The checker compares their concrete method/path pairs with the resource tables and also checks `api_operation_count`. The 2 health routes and 25 Electron invoke channels are separate contracts; the 6 Electron event channels are not request endpoints. Resource summary counts and rate-limit descriptions are navigation aids and are not independently gate-checked.
 
 ## Phase G Endpoint Consolidation (April 2026)
 

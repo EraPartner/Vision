@@ -242,6 +242,12 @@ struct NativeScreenContainer: View {
             if let imports = model.portfolioImports {
                 PortfolioImportReviewView(model: imports.review, shell: model)
             }
+        case .analysis:
+            if let analysis = model.analysis {
+                AnalysisWorkspaceView(model: analysis.workspace, workbench: analysis.workbench, shell: model)
+            }
+        case .analysisMonitors:
+            if let monitors = model.analysisMonitors { AnalysisMonitorsView(model: monitors, shell: model) }
         case .portfolio:
             if let portfolio = model.portfolio { PortfolioScreenView(screens: portfolio, shell: model) }
         case .portfolioHoldings(let assetClass):

@@ -11,6 +11,8 @@ actor "User" as User
 package "Client" {
   node "Vision Native (synthetic Demo)\nSwiftUI Tax, Portfolio + wealth tools\nDecimal display / native drafts" as NativeTax
   node "Native Portfolio Import\nprobe · parser · staged session\nreview · history · fingerprint commit" as NativeImport
+  node "Native Analysis workspace\nquery / SQL · results · workbench\nversioned definitions + interchange" as NativeAnalysis
+  node "Native Analysis Monitors\nrules · observations · inbox\nexact drafts / guarded reads" as NativeMonitors
   node "Native Portfolio Tax\nDecimal widgets + live-year drafts\nexisting atomic settings CAS" as NativePortfolioTax
 
   rectangle "Browser  /  Electron Renderer" {
@@ -32,7 +34,7 @@ package "Server" {
     node "Middleware Stack\nrequestId · Host guard · metrics\nCORS · CSRF · adminAuth · rate limit\nenvelope · errors" as Middleware
     node "Routes\ntransactions · planning · portfolio · imports\nreports · AI · settings · admin · private audit" as Routes
     node "Services\nimports + XML evidence + reconciliation + custody/adjustments · prices · FX · tax · snapshots\nbackup · AI orchestration + references + Desktop setup · reports · attachments" as Services
-    node "Shared TypeScript helpers\ncomplete-source detection + bounded CSV preview\nPortfolio Tax estimators + cost buckets" as SharedNativeHelpers
+    node "Shared TypeScript helpers\ncomplete-source detection + bounded CSV preview\nPortfolio Tax estimators + cost buckets\nAnalysis CSV / stored-ZIP workbook interchange" as SharedNativeHelpers
     node "Repositories\ntransaction · recipient · planning · portfolio\nimports + history receipts · AI jobs + reference maps · attachments · settings · info" as Repos
     node "Background Jobs\nrefreshCashflowForecastMc · local analysis monitor scheduler" as Jobs
   }
@@ -78,6 +80,8 @@ package "Client to Server" {
   NativeTax --> Express : loopback OpenAPI financial reads + writes
   NativeImport --> Express : readonly probe + existing import/review operations
   NativePortfolioTax --> Express : portfolio-dashboard + settings CAS
+  NativeAnalysis --> Express : existing restricted execution + versions\nreadonly multipart interchange
+  NativeMonitors --> Express : existing monitor reads + explicit writes
   NativeTax --> ReactApp : retained PDF dialog overlay
   Proxy --> Express : Forward
 }
@@ -193,6 +197,21 @@ note right of NativePortfolioTax
   Decimal decode/rendering and drafts stay native;
   fiscal formulas, cost buckets and badge rates stay TypeScript.
   Both setting maps retain unknown fields and original CAS tokens.
+  macOS package and Demo parity review remain pending.
+end note
+
+note right of NativeAnalysis
+  TypeScript owns financial datasets and refinement calculations.
+  Decimal strings, JSON cells, scope and provenance stay lossless.
+  CSV / XLSX imports never execute workbook formula cells.
+  Captured exports retain partial / paged window annotations.
+  Leaving resets reads / previews; pending writes retain acknowledgements.
+end note
+
+note right of NativeMonitors
+  Server owns exact comparisons, episodes and persisted observations.
+  Native thresholds remain strings and target/read generations are guarded.
+  Writes retire prior reads before and after their acknowledgement.
   macOS package and Demo parity review remain pending.
 end note
 

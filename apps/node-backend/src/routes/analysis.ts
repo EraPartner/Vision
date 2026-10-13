@@ -1,6 +1,7 @@
 /** Restricted analysis catalog, execution, drill-through, and persistence API. */
 
 import { Router } from "express";
+import interchangeRouter from "./analysisInterchange.ts";
 import { z } from "zod";
 import type { ExpressResponse } from "../types/express.ts";
 import { ANALYSIS_WORKSPACES } from "@vision/types/analysis";
@@ -60,6 +61,7 @@ import type {
 import type { AnalysisColumn } from "../services/analysisExtensions.ts";
 
 const router = Router();
+router.use(interchangeRouter);
 
 // ── Request schemas ───────────────────────────────────────────────────────────
 // These pin the request envelope: every field a handler reads has a checked

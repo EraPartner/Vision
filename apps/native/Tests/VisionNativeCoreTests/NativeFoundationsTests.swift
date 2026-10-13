@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import VisionNativeCore
 
 @Suite struct NativeAppSettingsTests {
@@ -9,9 +10,11 @@ import Testing
             "adminMode": .bool(true), "colorblindGainLoss": .bool(true), "unrelated": .string("x"),
         ])
         let settings = NativeAppSettings.migrate(raw)
-        #expect(settings == NativeAppSettings(
-            dateFormat: .dayMonthYearDot, numberFormat: .in, showDecimalPlaces: 0, adminMode: true,
-            colorblindGainLoss: true))
+        #expect(
+            settings
+                == NativeAppSettings(
+                    dateFormat: .dayMonthYearDot, numberFormat: .in, showDecimalPlaces: 0, adminMode: true,
+                    colorblindGainLoss: true))
         let invalid = NativeAppSettings.migrate(.object(["dateFormat": .string("YY"), "numberFormat": .int(1)]))
         #expect(invalid == .defaults)
         #expect(NativeAppSettings.migrate(.string("nope")) == .defaults)
@@ -121,12 +124,13 @@ import Testing
         #expect(NativeScreen.screen(forPath: "/admin/providers") == .providerHealth)
         #expect(NativeScreen.screen(forPath: "/admin/endpoints") == .endpointLiveness)
         #expect(NativeScreen.screen(forPath: "/admin/db") == .databaseMaintenance)
-        #expect(NativeScreen.screen(forPath: "/admin/db/transactions") == NativeScreen.tableEditor(table: "transactions"))
-        let adminScreens = NativeScreen.fixedScreens.filter {
-            $0 != .plannedPayments && $0 != .importExport && $0 != .transactions && $0 != .accounts
-                && $0 != .categories && $0 != .recipients
-        }
-        #expect(adminScreens.allSatisfy { screen in screen.requiresAdmin })
+        #expect(
+            NativeScreen.screen(forPath: "/admin/db/transactions") == NativeScreen.tableEditor(table: "transactions"))
+        let adminScreens: [NativeScreen] = [
+            .adminOverview, .databaseMaintenance, .providerHealth, .endpointLiveness, .exchangeRates,
+        ]
+        #expect(NativeScreen.fixedScreens.filter(\.requiresAdmin) == adminScreens)
+        #expect(NativeScreen.fixedScreens.filter { !adminScreens.contains($0) }.allSatisfy { !$0.requiresAdmin })
         #expect(NativeScreen.tableEditor(table: "x").requiresAdmin)
         #expect(NativeScreen.screen(forPath: "/planned") == .plannedPayments)
         #expect(!NativeScreen.plannedPayments.requiresAdmin)

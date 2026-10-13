@@ -173,6 +173,15 @@ See [the architecture page](../../docs/architecture/native-app.md#native-navigat
   and classifications edit the live year with original CAS baselines, even from historical views.
   Both tax routes validate and mirror the viewed year in the URL after reading the live profile
   and snapshots. Portfolio Tax has no PDF action in the existing app.
+- `/analysis` is native (phase 3k): visual and SQL queries, saved versions/proposals, table/chart/
+  pivot results, contributing records, and the preparation/formula/scenario workbench use the
+  existing TypeScript operations. CSV/XLSX parsing and captured-result exports use shared
+  TypeScript interchange operations. Exact values, units, provenance and partial-result metadata
+  are retained. Page drafts reset on leaving; the existing ten-entry SQL history stays in the
+  web view's `vision.analysis.sqlHistory` localStorage key.
+- `/analysis/monitors` is native (phase 3k): saved-analysis/dossier targets, conditions, schedules,
+  observations, unread notifications and rule actions retain server-owned evaluation. Neither
+  Analysis route requires admin mode. Full macOS build and Demo parity review remain pending.
 - `/admin`, `/admin/providers`, `/admin/endpoints` and `/admin/exchange-rates` are native, in
   admin mode only, and so are `/admin/db` and `/admin/db/:table`; the table editor holds
   navigation and Quit behind a native Leave this page? alert while it has pending changes. The admin token card writes the page's
@@ -469,3 +478,14 @@ Demo visual/keyboard checks remain pending.
     URLs. Edit live-year manual costs/classifications from a historical view, exercise CAS conflicts
     and lost acknowledgements, and confirm unknown settings survive. Test profile/year actions,
     filing history and CSV export in EN/NL and each number/date format.
+27. **Analysis (phase 3k, pending Mac review).** Compare visual and SQL queries, templates,
+    parameter coercion, joins, ten-entry SQL history, saved versions and proposals in EN/NL.
+    Check successful-run focus, cancellation, late replies after editing or leaving, last-result
+    retention, table/chart/pivot drill, and exact decimal values and units. Exercise preparation,
+    calendar/formulas/assumptions, scenarios, sensitivity and goal seeking. Import synthetic CSV/
+    XLSX files and compare captured exports, including paged/truncated result metadata. Leaving
+    resets page drafts while SQL history survives a return.
+28. **Analysis Monitors (phase 3k, pending Mac review).** Create and edit each target/condition,
+    verify interval and cooldown limits, enable/disable a rule during an unsaved edit, and inspect
+    observations and unread notifications. Check manual evaluation, delete confirmation, polling,
+    error states and late reads after writes or navigation; no stale reply may undo a newer edit.

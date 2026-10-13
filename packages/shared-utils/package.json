@@ -15,7 +15,8 @@
     "./belgian-tax/*": "./src/belgianTax/*.ts",
     "./portfolio-import-detection": "./src/portfolioImportDetection.ts",
     "./csv-preview": "./src/csvPreview.ts",
-    "./csv-separator": "./src/csvSeparator.ts"
+    "./csv-separator": "./src/csvSeparator.ts",
+    "./analysis/*": "./src/analysis/*.ts"
   },
   "files": [
     "src"

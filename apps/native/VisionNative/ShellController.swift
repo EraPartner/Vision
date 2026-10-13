@@ -91,6 +91,27 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             return try await self.saveExport(data, suggestedName: name)
         }
         let tax = TaxScreens(client: client)
+        let analysis = AnalysisScreens(
+            client: client,
+            sqlRead: { [weak self] in
+                guard let value = await self?.homeLocalStorage(key: "vision.analysis.sqlHistory"), value != .null else {
+                    return nil
+                }
+                return try? value.serialized()
+            },
+            sqlWrite: { [weak self] data in
+                guard let value = try? JSONValue.parse(data) else { return }
+                _ = await self?.homeLocalStorage(key: "vision.analysis.sqlHistory", value: value)
+            })
+        let analysisMonitors = AnalysisMonitorsModel(service: client)
+        analysis.workspace.saveExport = { [weak self] data, name in
+            guard let self else { return false }
+            return try await self.saveExport(data, suggestedName: name)
+        }
+        analysis.didMutate = { [weak self, weak analysisMonitors] in
+            analysisMonitors?.invalidate()
+            if self?.shellModel.route.path == "/analysis/monitors" { await analysisMonitors?.load(force: true) }
+        }
         let portfolio = PortfolioScreens(client: client)
         let portfolioImports = PortfolioImportScreens(
             service: client,
@@ -151,6 +172,8 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             tax: tax,
             portfolio: portfolio,
             portfolioImports: portfolioImports,
+            analysis: analysis,
+            analysisMonitors: analysisMonitors,
             hiddenSections: Self.loadHiddenSections(),
             loadSettings: { try await client.appSettings() },
             saveHiddenSections: { Self.saveHiddenSections($0) },
@@ -232,7 +255,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             ? ["vision.portfolio-import.latest-session.v1", "vision.portfolio-import.latest-review-settings.v1"]
             : [
                 "vision.home.dismissedAccountInactivity", "dismissed_upcoming_planned_payments",
-                TaxDeductionsModel.dismissalStorageKey,
+                TaxDeductionsModel.dismissalStorageKey, "vision.analysis.sqlHistory",
             ]
         guard permitted.contains(key),
             queue.isReady, let webView = webShell?.webView

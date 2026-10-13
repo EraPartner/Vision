@@ -79,6 +79,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/analysis/interchange/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Parse a CSV or Vision XLSX scenario attachment without persistence
+         * @description Read-only shared TypeScript value inference. CSV allows 1,000,000 bytes, 1000 rows and 32 normalized unique columns. XLSX allows 10,000,000 bytes (the tighter existing parser cap), stored ZIP Results/Provenance sheets with CRC validation, then the attachment cap of 1000 rows/32 columns. Formula cells are ignored/null and counted; dates retain Excel 1900 behavior; provenance identifiers are restored while units are stripped. Caller retains its five-attachment cap and CSV replacement versus workbook append behavior. No formulas, Analysis execution, database or settings writes.
+         */
+        post: operations["importAnalysisInterchange"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/analysis/interchange/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Export a supplied captured Analysis snapshot as CSV or value-only XLSX
+         * @description Read-only shared TypeScript export of exactly the submitted result/context. The multipart file contains UTF-8 AnalysisInterchangeExportPayload JSON and has a route-scoped 64 MiB limit, allowing 100000-row XLSX snapshots beyond the global 1 MB JSON limit. XLSX retains its 100000-row limit; CSV adds no row cap. Neither format rereads or recomputes data. CSV retains formula-prefix escaping and captured metadata; XLSX emits five stored-ZIP sheets, exact long-decimal text, Excel 1900 dates and non-executable formula definitions. Client must retain original result/input signatures and unchanged-input/export eligibility checks.
+         */
+        post: operations["exportAnalysisInterchange"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/analysis/execute": {
         parameters: {
             query?: never;
@@ -5787,6 +5827,85 @@ export interface components {
                 offset: number;
             };
         };
+        /** @description Values as returned. PostgreSQL decimal and unsafe-integer strings remain strings; numeric workbook cells retain the existing parser conversion. */
+        AnalysisInterchangeValue: (string | number | boolean) | null;
+        AnalysisInterchangeColumn: {
+            id: string;
+            label: string;
+            /** @enum {string} */
+            type: "string" | "integer" | "decimal" | "boolean" | "date";
+        };
+        AnalysisInterchangeAttachment: {
+            id: string;
+            fileName: string;
+            /** Format: date-time */
+            importedAt: string;
+            sha256: string;
+            columns: components["schemas"]["AnalysisInterchangeColumn"][];
+            rows: {
+                [key: string]: components["schemas"]["AnalysisInterchangeValue"];
+            }[];
+        };
+        /** @description Read-only inferred scenario attachment. CSV uses a stable decoded-text SHA-derived identifier; XLSX uses a fresh workbook identifier and byte digest. Workbook formula cells are counted and become null, never executed. Units are unavailable after import. */
+        AnalysisInterchangeImport: {
+            /** @enum {string} */
+            format: "csv" | "xlsx";
+            attachment: components["schemas"]["AnalysisInterchangeAttachment"];
+            formulaCells: number;
+        };
+        /** @description UTF-8 JSON submitted as the multipart file. Preserve the captured result and context exactly. No query execution or recomputation occurs; unchanged-input/export availability checks remain caller-owned. */
+        AnalysisInterchangeExportPayload: {
+            result: {
+                requestId: string;
+                startedAt?: string;
+                completedAt: string;
+                executor?: string;
+                columns: ({
+                    id: string;
+                    type: string;
+                } & {
+                    [key: string]: unknown;
+                })[];
+                declaredColumns?: ({
+                    id: string;
+                    type: string;
+                    label?: string;
+                } & {
+                    [key: string]: unknown;
+                })[];
+                /** @description Original Analysis cells, including JSON/array columns, as returned; no currency conversion. */
+                rows: {
+                    [key: string]: unknown;
+                }[];
+                window: {
+                    [key: string]: unknown;
+                };
+                complete?: boolean;
+                coverage?: unknown;
+                transformationCoverage?: unknown;
+                preparationLineage?: unknown;
+                transformationErrors?: unknown;
+                formulaErrors?: unknown;
+                formulaSummaries?: {
+                    [key: string]: components["schemas"]["AnalysisInterchangeValue"];
+                };
+            } & {
+                [key: string]: unknown;
+            };
+            context: {
+                name: string;
+                timezone: string;
+                workspace: string;
+                definitionId?: string;
+                definitionVersion?: number;
+                datasetIds?: string[];
+                sourceReferences?: string[];
+                assumptions?: unknown;
+                formulas?: unknown;
+            } & {
+                [key: string]: unknown;
+            };
+        };
         AnalysisVisualFilter: {
             fieldId: string;
             operator: string;
@@ -8119,6 +8238,113 @@ export interface operations {
             };
             /** @description VALIDATION_ERROR for a mistyped plan; otherwise an invalid or duplication-unsafe visual plan */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    importAnalysisInterchange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                    /** @enum {string} */
+                    format: "csv" | "xlsx";
+                };
+            };
+        };
+        responses: {
+            /** @description Inferred value-only attachment and raw ignored-formula count. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data: components["schemas"]["AnalysisInterchangeImport"];
+                    };
+                };
+            };
+            /** @description Invalid format */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description API or existing Analysis rate limit exceeded. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Upload source read failed. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    exportAnalysisInterchange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /**
+                     * Format: binary
+                     * @description UTF-8 JSON matching AnalysisInterchangeExportPayload; maximum 67108864 bytes.
+                     */
+                    file: string;
+                    /** @enum {string} */
+                    format: "csv" | "xlsx";
+                };
+            };
+        };
+        responses: {
+            /** @description Raw bytes with Content-Disposition attachment filename analysis.csv or analysis.xlsx. Native callers may select the captured analysis name as the save destination. */
+            200: {
+                headers: {
+                    "Content-Disposition"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
+                };
+            };
+            /** @description Missing or invalid multipart snapshot/format */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description API or existing Analysis rate limit exceeded. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Upload source read or serialization failed. */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };

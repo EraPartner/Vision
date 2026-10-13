@@ -2708,6 +2708,115 @@ components:
                 limit: { type: integer, minimum: 1, maximum: 200 }
                 offset: { type: integer, minimum: 0, maximum: 1000000 }
 
+    AnalysisInterchangeValue:
+      nullable: true
+      oneOf:
+        - { type: string }
+        - { type: number, format: double }
+        - { type: boolean }
+      description: Values as returned. PostgreSQL decimal and unsafe-integer strings remain strings; numeric workbook cells retain the existing parser conversion.
+    AnalysisInterchangeColumn:
+      type: object
+      required: [id, label, type]
+      properties:
+        id: { type: string }
+        label: { type: string }
+        type:
+          type: string
+          enum: [string, integer, decimal, boolean, date]
+    AnalysisInterchangeAttachment:
+      type: object
+      required: [id, fileName, importedAt, sha256, columns, rows]
+      properties:
+        id: { type: string }
+        fileName: { type: string }
+        importedAt: { type: string, format: date-time }
+        sha256: { type: string, pattern: "^[0-9a-f]{64}$" }
+        columns:
+          type: array
+          maxItems: 32
+          items: { $ref: "#/components/schemas/AnalysisInterchangeColumn" }
+        rows:
+          type: array
+          maxItems: 1000
+          items:
+            type: object
+            additionalProperties:
+              { $ref: "#/components/schemas/AnalysisInterchangeValue" }
+    AnalysisInterchangeImport:
+      type: object
+      required: [format, attachment, formulaCells]
+      properties:
+        format: { type: string, enum: [csv, xlsx] }
+        attachment:
+          { $ref: "#/components/schemas/AnalysisInterchangeAttachment" }
+        formulaCells: { type: integer, minimum: 0 }
+      description: Read-only inferred scenario attachment. CSV uses a stable decoded-text SHA-derived identifier; XLSX uses a fresh workbook identifier and byte digest. Workbook formula cells are counted and become null, never executed. Units are unavailable after import.
+    AnalysisInterchangeExportPayload:
+      type: object
+      required: [result, context]
+      description: UTF-8 JSON submitted as the multipart file. Preserve the captured result and context exactly. No query execution or recomputation occurs; unchanged-input/export availability checks remain caller-owned.
+      properties:
+        result:
+          type: object
+          additionalProperties: true
+          required: [requestId, completedAt, rows, columns, window]
+          properties:
+            requestId: { type: string }
+            startedAt: { type: string }
+            completedAt: { type: string }
+            executor: { type: string }
+            columns:
+              type: array
+              items:
+                type: object
+                required: [id, type]
+                additionalProperties: true
+                properties:
+                  id: { type: string }
+                  type: { type: string }
+            declaredColumns:
+              type: array
+              items:
+                type: object
+                required: [id, type]
+                additionalProperties: true
+                properties:
+                  id: { type: string }
+                  type: { type: string }
+                  label: { type: string }
+            rows:
+              type: array
+              items:
+                type: object
+                additionalProperties: {}
+              description: Original Analysis cells, including JSON/array columns, as returned; no currency conversion.
+            window: { type: object, additionalProperties: true }
+            complete: { type: boolean }
+            coverage: {}
+            transformationCoverage: {}
+            preparationLineage: {}
+            transformationErrors: {}
+            formulaErrors: {}
+            formulaSummaries:
+              type: object
+              additionalProperties:
+                { $ref: "#/components/schemas/AnalysisInterchangeValue" }
+        context:
+          type: object
+          additionalProperties: true
+          required: [name, timezone, workspace]
+          properties:
+            name: { type: string }
+            timezone: { type: string }
+            workspace: { type: string }
+            definitionId: { type: string }
+            definitionVersion: { type: integer }
+            datasetIds: { type: array, items: { type: string } }
+            sourceReferences: { type: array, items: { type: string } }
+            assumptions: {}
+            formulas: {}
+
     AnalysisVisualFilter:
       type: object
       required: [fieldId, operator]
@@ -7258,6 +7367,88 @@ paths:
           {
             description: "VALIDATION_ERROR for a mistyped plan; otherwise an invalid or duplication-unsafe visual plan",
           }
+
+  /api/analysis/interchange/import:
+    post:
+      operationId: importAnalysisInterchange
+      summary: Parse a CSV or Vision XLSX scenario attachment without persistence
+      tags: [Analysis]
+      description: Read-only shared TypeScript value inference. CSV allows 1,000,000 bytes, 1000 rows and 32 normalized unique columns. XLSX allows 10,000,000 bytes (the tighter existing parser cap), stored ZIP Results/Provenance sheets with CRC validation, then the attachment cap of 1000 rows/32 columns. Formula cells are ignored/null and counted; dates retain Excel 1900 behavior; provenance identifiers are restored while units are stripped. Caller retains its five-attachment cap and CSV replacement versus workbook append behavior. No formulas, Analysis execution, database or settings writes.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, format]
+              properties:
+                file: { type: string, format: binary }
+                format: { type: string, enum: [csv, xlsx] }
+      responses:
+        "200":
+          description: Inferred value-only attachment and raw ignored-formula count.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        {
+                          $ref: "#/components/schemas/AnalysisInterchangeImport",
+                        }
+        "400":
+          {
+            description: Invalid format,
+            file,
+            upload limit,
+            CSV structure or bounds,
+            ZIP/CRC/XML,
+            provenance or attachment bounds.,
+          }
+        "429": { description: API or existing Analysis rate limit exceeded. }
+        "500": { description: Upload source read failed. }
+
+  /api/analysis/interchange/export:
+    post:
+      operationId: exportAnalysisInterchange
+      summary: Export a supplied captured Analysis snapshot as CSV or value-only XLSX
+      tags: [Analysis]
+      description: Read-only shared TypeScript export of exactly the submitted result/context. The multipart file contains UTF-8 AnalysisInterchangeExportPayload JSON and has a route-scoped 64 MiB limit, allowing 100000-row XLSX snapshots beyond the global 1 MB JSON limit. XLSX retains its 100000-row limit; CSV adds no row cap. Neither format rereads or recomputes data. CSV retains formula-prefix escaping and captured metadata; XLSX emits five stored-ZIP sheets, exact long-decimal text, Excel 1900 dates and non-executable formula definitions. Client must retain original result/input signatures and unchanged-input/export eligibility checks.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, format]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: UTF-8 JSON matching AnalysisInterchangeExportPayload; maximum 67108864 bytes.
+                format: { type: string, enum: [csv, xlsx] }
+      responses:
+        "200":
+          description: Raw bytes with Content-Disposition attachment filename analysis.csv or analysis.xlsx. Native callers may select the captured analysis name as the save destination.
+          headers:
+            Content-Disposition: { schema: { type: string } }
+          content:
+            text/csv:
+              schema: { type: string, format: binary }
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+        "400":
+          {
+            description: Missing or invalid multipart snapshot/format,
+            over 64 MiB input,
+            invalid result/context JSON,
+            or XLSX row limit.,
+          }
+        "429": { description: API or existing Analysis rate limit exceeded. }
+        "500": { description: Upload source read or serialization failed. }
 
   /api/analysis/execute:
     post:

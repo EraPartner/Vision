@@ -1912,6 +1912,36 @@
             "y": 44,
             "path": "apps/native/Sources/VisionNativeCore/Screens/PortfolioTax/PortfolioTaxModel.swift",
             "desc": "Decimal dashboard readers and seven configurable widgets use server costs/rates/estimates. Live-year adjustments and classification drafts preserve complete records and original atomic settings CAS baselines."
+          },
+          {
+            "id": "native.analysis",
+            "label": "Native Analysis workspace",
+            "sub": "SwiftUI · restricted TS plans",
+            "kind": "client",
+            "x": 20,
+            "y": 1240,
+            "path": "apps/native/Sources/VisionNativeCore/Screens/Analysis/AnalysisScreens.swift",
+            "desc": "Native query/SQL, results/pivot, workbench, saved versions and captured interchange retain lossless values. Server owns financial execution; per-visit cancellation guards late reads."
+          },
+          {
+            "id": "native.analysismonitors",
+            "label": "Native Analysis Monitors",
+            "sub": "SwiftUI · guarded rules / inbox",
+            "kind": "client",
+            "x": 220,
+            "y": 1240,
+            "path": "apps/native/Sources/VisionNativeCore/Screens/AnalysisMonitors/AnalysisMonitorsModel.swift",
+            "desc": "Separate native route with paged targets/rules/observations, exact threshold drafts and explicit writes. Read generations reset around mutations; server owns comparison and episodes."
+          },
+          {
+            "id": "sv.analysisinterchange",
+            "label": "Analysis file interchange",
+            "sub": "shared CSV · stored ZIP / XML",
+            "kind": "service",
+            "x": 420,
+            "y": 1240,
+            "path": "apps/node-backend/src/services/analysisInterchangeService.ts",
+            "desc": "Read-only import/export adapts shared browser serializers/parsers through existing Node CSV and Saxes XML libraries. Scoped transport preserves captured precision, provenance and window metadata."
           }
         ],
         "baseEdges": [
@@ -2390,6 +2420,22 @@
           [
             "native.portfoliotax",
             "be.routes"
+          ],
+          [
+            "native.analysis",
+            "be.routes"
+          ],
+          [
+            "native.analysismonitors",
+            "be.routes"
+          ],
+          [
+            "be.routes",
+            "sv.analysisinterchange"
+          ],
+          [
+            "sv.analysisinterchange",
+            "pkg.shared-utils"
           ]
         ],
         "flows": [
@@ -6481,6 +6527,234 @@
               {
                 "path": "features/portfolio-tax.md",
                 "label": "Portfolio Tax"
+              }
+            ]
+          },
+          {
+            "id": "native-analysis-execute",
+            "name": "Run and refine a native Analysis snapshot",
+            "category": "Native migration",
+            "summary": "Catalog-backed native plans and opaque SQL execute through the restricted TypeScript engine; exact result values and source scope survive refinement and guarded presentation.",
+            "steps": [
+              {
+                "from": "native.analysis",
+                "to": "be.routes",
+                "payload": "Catalog plus POST /api/analysis/execute with request ID, approved plan or SQL and scenario inputs",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/Analysis/AnalysisService.swift reuses generated endpoint metadata with lossless dynamic bodies. apps/native/Sources/VisionNativeUI/AnalysisQueryBuilderView.swift edits identifiers without executing financial formulas."
+              },
+              {
+                "from": "be.routes",
+                "to": "sv.analysis",
+                "payload": "Restricted SQL or canonical financial dataset execution; bounded page/window",
+                "annotation": "apps/node-backend/src/routes/analysis.ts delegates to services/analysisExecutor.ts and services/analysisFinancialDatasets.ts. Request cancellation and restricted relation grants remain server-owned."
+              },
+              {
+                "from": "sv.analysis",
+                "to": "native.analysis",
+                "payload": "Original decimal strings, JSON cells, columns/units, window, scope, coverage and lineage",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/Analysis/AnalysisData.swift decodes dynamic values without passing monetary strings through Double. apps/native/Sources/VisionNativeCore/Screens/Analysis/AnalysisModel.swift verifies active request and query signatures, preserving last usable outdated results."
+              },
+              {
+                "from": "native.analysis",
+                "to": "sv.analysis",
+                "payload": "Debounced POST /api/analysis/extensions/evaluate preview, then full formulas pipeline on Apply",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/Analysis/AnalysisWorkbenchModel.swift guards input signatures and superseded previews. apps/node-backend/src/services/analysisWorkbenchService.ts computes preparation/calendar, formulas, scenarios, sensitivity and goals."
+              },
+              {
+                "from": "sv.analysis",
+                "to": "native.analysis",
+                "payload": "Transformed rows, completeness/lineage/errors and current-plan pivot/drill results",
+                "annotation": "apps/native/Sources/VisionNativeUI/AnalysisResultView.swift and apps/native/Sources/VisionNativeCore/Screens/Analysis/AnalysisPresentation.swift retain unit/scope/completeness gates. apps/native/Sources/VisionNativeCore/Screens/Analysis/AnalysisScreens.swift cancels previews and retires per-visit reads on disappear; chart coordinates alone use floating point."
+              }
+            ],
+            "docs": [
+              {
+                "path": "architecture/native-app.md",
+                "label": "Native architecture"
+              },
+              {
+                "path": "reference/native-parity/analysis.md",
+                "label": "Analysis parity"
+              },
+              {
+                "path": "features/analysis-workspace.md",
+                "label": "Analysis Workspace"
+              },
+              {
+                "path": "api/analysis.md",
+                "label": "Analysis API"
+              }
+            ]
+          },
+          {
+            "id": "native-analysis-saved",
+            "name": "Save, restore and review native Analysis versions",
+            "category": "Native migration",
+            "summary": "Native reusable-analysis controls retain selected-source and expected-version authority while the existing server persists immutable versions and validates edit proposals.",
+            "steps": [
+              {
+                "from": "native.analysis",
+                "to": "be.routes",
+                "payload": "List/save/run definitions with captured plan, workbench, preferences and source references",
+                "annotation": "apps/native/Sources/VisionNativeUI/AnalysisSavedViews.swift renders reusable definitions and refresh status. apps/native/Sources/VisionNativeCore/Screens/Analysis/AnalysisModel.swift protects writes with selection/draft epochs and retains server conflicts."
+              },
+              {
+                "from": "be.routes",
+                "to": "sv.analysis",
+                "payload": "Existing saved-definition persistence and immutable version history",
+                "annotation": "apps/node-backend/src/services/savedAnalysisService.ts owns saved execution and versioned writes; native does not rerun formulas locally."
+              },
+              {
+                "from": "sv.analysis",
+                "to": "native.analysis",
+                "payload": "Definition, run snapshot and version history with authoritative base version",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/Analysis/AnalysisSavedSource.swift adopts server snapshots with known input signatures. Late responses cannot replace another selected saved source."
+              },
+              {
+                "from": "native.analysis",
+                "to": "be.routes",
+                "payload": "Restore version with expectedVersion or preview/generate/apply a saved-analysis edit proposal",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/Analysis/AnalysisModel.swift binds proposal savedAnalysisId/baseVersion and selected version before Apply. Preview and generation use existing server operations rather than executing proposal text locally."
+              },
+              {
+                "from": "be.routes",
+                "to": "native.analysis",
+                "payload": "New authoritative definition/version or explicit validation/conflict feedback",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/Analysis/AnalysisService.swift retains existing restore/proposal contracts. Metadata-only name/source-reference edits do not discard current query/pivot authority."
+              }
+            ],
+            "docs": [
+              {
+                "path": "architecture/native-app.md",
+                "label": "Native architecture"
+              },
+              {
+                "path": "reference/native-parity/analysis.md",
+                "label": "Analysis parity"
+              },
+              {
+                "path": "api/analysis.md",
+                "label": "Versioned Analysis API"
+              }
+            ]
+          },
+          {
+            "id": "native-analysis-interchange",
+            "name": "Import or export a captured native Analysis file",
+            "category": "Native migration",
+            "summary": "Original file bytes use shared TypeScript parsing; captured results export with lossless precision and window annotations, without executing formulas or querying a replacement snapshot.",
+            "steps": [
+              {
+                "from": "native.analysis",
+                "to": "be.routes",
+                "payload": "Multipart import: original file bytes and format csv/xlsx",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/Analysis/AnalysisInterchangeService.swift and apps/native/Sources/VisionNativeUI/AnalysisInterchangeView.swift enforce CSV 1,000,000-byte and XLSX 10,000,000-byte limits plus existing attachment bounds."
+              },
+              {
+                "from": "be.routes",
+                "to": "sv.analysisinterchange",
+                "payload": "Read-only import with file/format validation and no database writes",
+                "annotation": "apps/node-backend/src/routes/analysisInterchange.ts isolates scoped multipart limits and cleans temporary files. apps/node-backend/src/services/analysisInterchangeService.ts enforces 1000 imported rows and 32 columns."
+              },
+              {
+                "from": "sv.analysisinterchange",
+                "to": "pkg.shared-utils",
+                "payload": "CSV logical-type/decoded-text SHA inference or stored ZIP/CRC and Results/Provenance XML parsing",
+                "annotation": "packages/shared-utils/src/analysis/interchange.ts and packages/shared-utils/src/analysis/workbook.ts preserve original web outputs. apps/node-backend/src/services/analysisWorkbookXml.ts adapts existing Saxes XML parsing; formula cells are ignored as null and counted."
+              },
+              {
+                "from": "pkg.shared-utils",
+                "to": "native.analysis",
+                "payload": "Attachment with raw decimal strings, unsafe IDs, recovered column IDs and formulaCells count",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/Analysis/AnalysisModel.swift replaces same-ID CSV attachments, appends random-ID workbooks and removes inputId joins on removal. Source-epoch guards prevent a late import from editing a different source; imported unit metadata remains unavailable."
+              },
+              {
+                "from": "native.analysis",
+                "to": "sv.analysisinterchange",
+                "payload": "Multipart export: captured original result/context JSON plus csv/xlsx format, at most 64 MiB",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/Analysis/AnalysisInterchangeData.swift preserves JSON arrays/objects and decimal strings. apps/native/Sources/VisionNativeCore/Screens/Analysis/AnalysisModel.swift requires current known input signatures, while permitting defined paged/truncated snapshots."
+              },
+              {
+                "from": "sv.analysisinterchange",
+                "to": "native.analysis",
+                "payload": "Raw CSV/XLSX bytes for native save; window/provenance metadata retained",
+                "annotation": "packages/shared-utils/src/analysis/workbook.ts supports 100,000 XLSX rows, precision-preserving text and five sheets without formula execution. packages/shared-utils/src/analysis/interchange.ts applies CSV formula escaping. apps/native/Sources/VisionNativeCore/Screens/Analysis/AnalysisInterchangeService.swift validates response MIME; no financial engine or fresh query runs during export."
+              }
+            ],
+            "docs": [
+              {
+                "path": "architecture/native-app.md",
+                "label": "Native architecture"
+              },
+              {
+                "path": "reference/native-parity/analysis.md",
+                "label": "Analysis parity"
+              },
+              {
+                "path": "api/analysis.md",
+                "label": "Interchange limits and payloads"
+              }
+            ]
+          },
+          {
+            "id": "native-analysis-monitors",
+            "name": "Edit a native monitor and read its persisted evidence",
+            "category": "Native migration",
+            "summary": "The separate native Monitors route presents exact drafts and guarded paged reads; local TypeScript owns comparisons, episode state and notifications.",
+            "steps": [
+              {
+                "from": "native.analysismonitors",
+                "to": "be.routes",
+                "payload": "Paged rules, saved-analysis/dossier targets, observations and inbox; visible rules/inbox polling",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/AnalysisMonitors/AnalysisMonitorsService.swift uses existing monitor operations. apps/native/Sources/VisionNativeUI/AnalysisMonitorsView.swift owns the separate route and visible polling lifecycle."
+              },
+              {
+                "from": "be.routes",
+                "to": "sv.monitors",
+                "payload": "Persisted monitor state and eligible targets, without a client-side comparison",
+                "annotation": "apps/node-backend/src/services/analysisMonitorService.ts reads authoritative rules/observations/inbox and retains exact scalar comparison semantics."
+              },
+              {
+                "from": "sv.monitors",
+                "to": "native.analysismonitors",
+                "payload": "Scoped targets and paged rows with read-generation/selection checks",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/AnalysisMonitors/AnalysisMonitorsData.swift keeps decimal thresholds as strings and typed evidence. apps/native/Sources/VisionNativeCore/Screens/AnalysisMonitors/AnalysisMonitorsModel.swift rejects stale target/observation pages."
+              },
+              {
+                "from": "native.analysismonitors",
+                "to": "be.routes",
+                "payload": "Create/update schedule and exact threshold, enable/disable, Check/Delete or mark notification read",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/AnalysisMonitors/AnalysisMonitorsDraft.swift validates structural schedule/target fields without financial arithmetic. apps/native/Sources/VisionNativeCore/Screens/AnalysisMonitors/AnalysisMonitorsModel.swift retires reads before and after mutations, then refreshes authoritative pages."
+              },
+              {
+                "from": "sv.monitors",
+                "to": "sv.analysis",
+                "payload": "Explicit or scheduled local check runs one saved-analysis snapshot when required",
+                "annotation": "apps/node-backend/src/services/analysisMonitorService.ts and apps/node-backend/src/startup/analysisMonitorScheduler.ts own baselines, exact comparisons, cooldown and episodes. Native controls do not call AI/providers or evaluate conditions."
+              },
+              {
+                "from": "sv.monitors",
+                "to": "native.analysismonitors",
+                "payload": "Persisted observation/episode/inbox status or explicit write failure",
+                "annotation": "apps/native/Sources/VisionNativeUI/AnalysisMonitorsObservationView.swift and apps/native/Sources/VisionNativeUI/AnalysisMonitorsLists.swift display original evidence and unknown coverage without inventing a completeness guarantee."
+              }
+            ],
+            "docs": [
+              {
+                "path": "architecture/native-app.md",
+                "label": "Native architecture"
+              },
+              {
+                "path": "reference/native-parity/analysis.md",
+                "label": "Analysis parity"
+              },
+              {
+                "path": "features/analysis-monitors.md",
+                "label": "Analysis Monitors"
+              },
+              {
+                "path": "api/analysis-monitors.md",
+                "label": "Monitor API"
               }
             ]
           }

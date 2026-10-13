@@ -31,7 +31,7 @@ tags:
     string-catalog,
     navigation,
   ]
-description: "Vision Native is the Swift macOS app under apps/native/ that replaces the Electron shell in phases (ADR-204). Covers the directory layout, the runtime supervisor that starts its own PostgreSQL 18 cluster and backend on synthetic Demo data, payload discovery, the phase 1c shell (window, launch state, preload bridge, web view navigation and download policy, menus, dock and vibrancy), phase 1d backup and restore (bundle format compatibility, Keychain passphrase, restore allow-list, quit-time backup), the phase 1e audit anchor and Keychain witness with restore continuity, the standard and Demo variants of one build, the Debug-only backend override, the phase 2 foundations (generated OpenAPI client, design tokens, String Catalog and sidebar registry, the native NavigationSplitView shell with the shell:route-changed bridge message, and the native Exchange rates screen), the Native (macOS) CI job with the backup and audit interop job, screen ports through phase 3j Portfolio Import and Portfolio Tax (shared TypeScript detection/fiscal results, guarded native reconciliation, atomic settings CAS, and earlier Portfolio/wealth screens), and install-native.sh."
+description: "Vision Native is the Swift macOS app under apps/native/ that replaces the Electron shell in phases (ADR-204). Covers the directory layout, the runtime supervisor that starts its own PostgreSQL 18 cluster and backend on synthetic Demo data, payload discovery, the phase 1c shell (window, launch state, preload bridge, web view navigation and download policy, menus, dock and vibrancy), phase 1d backup and restore (bundle format compatibility, Keychain passphrase, restore allow-list, quit-time backup), the phase 1e audit anchor and Keychain witness with restore continuity, the standard and Demo variants of one build, the Debug-only backend override, the phase 2 foundations (generated OpenAPI client, design tokens, String Catalog and sidebar registry, the native NavigationSplitView shell with the shell:route-changed bridge message, and the native Exchange rates screen), the Native (macOS) CI job with the backup and audit interop job, screen ports through phase 3k Analysis workspace and Monitors (restricted TypeScript execution, shared CSV/XLSX interchange, guarded native workbench and versioned writes, and earlier Portfolio/Tax/import screens), and install-native.sh."
 aliases: [vision native, native app, swift app]
 ---
 
@@ -49,32 +49,32 @@ aliases: [vision native, native app, swift app]
 > settings action to its Swift code. Phase 2 adds a native sidebar around the web view and the
 > first native screen, Exchange rates (see
 > [[docs/architecture/native-app#Native navigation and screens (phase 2)|phase 2]]). Phase 3 now includes
-> native Portfolio Import/review and Portfolio Tax; TypeScript retains import writers and financial
-> calculations. macOS build and synthetic Demo visual/keyboard review remain pending.
+> native Analysis workspace and Monitors, alongside Portfolio Import/review and Portfolio Tax;
+> TypeScript retains restricted execution, financial calculations and import writers. macOS build and synthetic Demo visual/keyboard review remain pending.
 
 ## Layout
 
-| Path                                               | Purpose                                                                                                                                                                   |
-| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/native/project.yml`                          | XcodeGen spec: project `VisionNative`, macOS app target "Vision Native", macOS 26.0                                                                                       |
-| `apps/native/Config/Signing.xcconfig`              | `DEVELOPMENT_TEAM` from `VISION_NATIVE_TEAM_ID`, optional gitignored `Local.xcconfig`                                                                                     |
-| `apps/native/VisionNative/`                        | AppKit entry point, window, menus, `WKWebView` shell and the SwiftUI launch state                                                                                         |
-| `apps/native/Package.swift`                        | SwiftPM package (Swift 6), libraries `VisionNativeCore` and `VisionNativeUI`, no deps                                                                                     |
-| `apps/native/Sources/VisionNativeCore/`            | `BackendLocator` and `BackendHealth`: non-UI logic, testable without the Xcode UI                                                                                         |
-| `apps/native/Sources/VisionNativeCore/API/`        | `APIClient` (the Swift `client.ts`) and the generated OpenAPI models and operations                                                                                       |
-| `apps/native/Sources/VisionNativeCore/Design/`     | Generated design tokens and `ThemeSelection` (variant and appearance of the page)                                                                                         |
-| `apps/native/Sources/VisionNativeCore/Navigation/` | Generated sidebar registry, routes, shortcuts and the `NativeShellModel` (phase 2)                                                                                        |
-| `apps/native/Sources/VisionNativeCore/Screens/`    | View models of native screens (Exchange rates, Admin, Planned, Imports, Transactions, Owes, Accounts, Categories, Recipients, Home/Insights, Tax, Portfolio/wealth tools) |
-| `apps/native/Sources/VisionNativeUI/`              | SwiftUI shell, native screens and the generated `Localizable.xcstrings` (phase 2)                                                                                         |
-| `apps/native/openapi-operations.txt`               | The operationIds the Swift client is generated for                                                                                                                        |
-| `apps/native/i18n-keys.txt`                        | The `i18n/source` keys copied into the String Catalog                                                                                                                     |
-| `apps/native/Sources/VisionNativeCore/Runtime/`    | Runtime supervisor, PostgreSQL and backend lifecycle, Demo seeding, system seams                                                                                          |
-| `apps/native/Sources/VisionNativeCore/Shell/`      | Shell logic without AppKit: bridge contract, codec, policy, menu model, window frame                                                                                      |
-| `apps/native/Sources/VisionNativeCore/Backup/`     | Backup bundles, encryption, restore and the `electronBackup` service (phase 1d)                                                                                           |
-| `apps/native/Sources/VisionNativeCore/Audit/`      | Audit anchor, Keychain witness, backend audit bridge and `electronAudit` (phase 1e)                                                                                       |
-| `apps/native/Tests/VisionNativeCoreTests/`         | Swift Testing tests and fixtures (Electron backup bundle, Electron audit anchor)                                                                                          |
-| `apps/native/Tests/VisionNativeUITests/`           | String Catalog completeness (EN and NL) and SwiftUI layout tests                                                                                                          |
-| `install-native.sh`                                | Local Release build and install, by default to `/Applications/Vision Native Demo.app`                                                                                     |
+| Path                                               | Purpose                                                                                                                                                                                      |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/native/project.yml`                          | XcodeGen spec: project `VisionNative`, macOS app target "Vision Native", macOS 26.0                                                                                                          |
+| `apps/native/Config/Signing.xcconfig`              | `DEVELOPMENT_TEAM` from `VISION_NATIVE_TEAM_ID`, optional gitignored `Local.xcconfig`                                                                                                        |
+| `apps/native/VisionNative/`                        | AppKit entry point, window, menus, `WKWebView` shell and the SwiftUI launch state                                                                                                            |
+| `apps/native/Package.swift`                        | SwiftPM package (Swift 6), libraries `VisionNativeCore` and `VisionNativeUI`, no deps                                                                                                        |
+| `apps/native/Sources/VisionNativeCore/`            | `BackendLocator` and `BackendHealth`: non-UI logic, testable without the Xcode UI                                                                                                            |
+| `apps/native/Sources/VisionNativeCore/API/`        | `APIClient` (the Swift `client.ts`) and the generated OpenAPI models and operations                                                                                                          |
+| `apps/native/Sources/VisionNativeCore/Design/`     | Generated design tokens and `ThemeSelection` (variant and appearance of the page)                                                                                                            |
+| `apps/native/Sources/VisionNativeCore/Navigation/` | Generated sidebar registry, routes, shortcuts and the `NativeShellModel` (phase 2)                                                                                                           |
+| `apps/native/Sources/VisionNativeCore/Screens/`    | View models of native screens (Exchange rates, Admin, Planned, Imports, Transactions, Owes, Accounts, Categories, Recipients, Home/Insights, Tax, Portfolio/wealth tools, Analysis/Monitors) |
+| `apps/native/Sources/VisionNativeUI/`              | SwiftUI shell, native screens and the generated `Localizable.xcstrings` (phase 2)                                                                                                            |
+| `apps/native/openapi-operations.txt`               | The operationIds the Swift client is generated for                                                                                                                                           |
+| `apps/native/i18n-keys.txt`                        | The `i18n/source` keys copied into the String Catalog                                                                                                                                        |
+| `apps/native/Sources/VisionNativeCore/Runtime/`    | Runtime supervisor, PostgreSQL and backend lifecycle, Demo seeding, system seams                                                                                                             |
+| `apps/native/Sources/VisionNativeCore/Shell/`      | Shell logic without AppKit: bridge contract, codec, policy, menu model, window frame                                                                                                         |
+| `apps/native/Sources/VisionNativeCore/Backup/`     | Backup bundles, encryption, restore and the `electronBackup` service (phase 1d)                                                                                                              |
+| `apps/native/Sources/VisionNativeCore/Audit/`      | Audit anchor, Keychain witness, backend audit bridge and `electronAudit` (phase 1e)                                                                                                          |
+| `apps/native/Tests/VisionNativeCoreTests/`         | Swift Testing tests and fixtures (Electron backup bundle, Electron audit anchor)                                                                                                             |
+| `apps/native/Tests/VisionNativeUITests/`           | String Catalog completeness (EN and NL) and SwiftUI layout tests                                                                                                                             |
+| `install-native.sh`                                | Local Release build and install, by default to `/Applications/Vision Native Demo.app`                                                                                                        |
 
 The generated `apps/native/VisionNative.xcodeproj`, its `Info.plist`, `apps/native/build/` and
 the SwiftPM state are gitignored. The app target uses Swift 6 with complete strict concurrency,
@@ -1158,6 +1158,68 @@ mappings are recorded in [[docs/reference/native-parity/portfolio-wealth-tools|W
 [[docs/features/portfolio-import|Portfolio Import]] and [[docs/features/portfolio-tax|Portfolio Tax]]
 retain the shared processing contracts. [[docs/flow-visualizer.html|The flow visualizer]] includes
 native probe/staging, reviewed reconciliation/commit, and Portfolio Tax read/settings journeys.
+
+### Analysis workspace and Monitors (phase 3k)
+
+![[docs/diagrams/system-architecture.puml]]
+
+`AnalysisScreens` coordinates `AnalysisModel` and `AnalysisWorkbenchModel` for `/analysis`.
+`AnalysisWorkspaceView` composes the catalog-backed visual builder, SQL editor/history, financial
+parameters, result table/charts/pivot, refinement workbench and reusable-analysis library. Native
+controls send approved dataset/column identifiers, opaque SQL and plans to the existing restricted
+TypeScript execution APIs. Financial datasets, FX, formulas, calendar/preparation operations,
+scenario evaluation, sensitivity and goal calculations stay server-owned. `AnalysisService` uses
+generated operation metadata with custom lossless dynamic DTOs; decimal strings, unsafe identifiers,
+JSON cells, units, scope, coverage and provenance survive decoding. Chart coordinates alone use
+floating point; labels and tooltips retain original values.
+
+Explicit Run/Cancel, bounded paging and request/signature guards retain the last usable result and
+mark it outdated when its inputs change. Pivot cells drill against the current pivot plan independently
+of an older main table. Workbench previews debounce and reject superseded input signatures; Apply
+runs the complete existing TypeScript transformation pipeline and preserves returned completeness,
+lineage and errors. Money-aware presentation requires compatible units and complete source scope.
+Leaving the workspace cancels previews and retires read generations, resets per-visit state and keeps
+SQL history plus already-started write acknowledgements. See
+[[docs/reference/analysis-contract|the Analysis contract]] and
+[[docs/features/analysis-workspace|Analysis Workspace]].
+
+Saved definitions, run preferences, version history/restore and generated or JSON edit proposals
+reuse the existing versioned APIs. Native selection/draft guards prevent a late response from
+replacing another selected source. Restore carries the selected expected version; proposal preview
+and Apply require the same saved definition and base version. Server conflict/error responses stay
+visible. Names, source references and presentation settings remain metadata edits rather than
+unrelated financial-query changes.
+
+`AnalysisInterchangeService` sends original CSV/XLSX bytes to read-only multipart import and captured
+result/context JSON to multipart export. Shared `packages/shared-utils/src/analysis/` serializers and
+parsers serve both frontend compatibility wrappers and the backend; Node adapts XML through the
+existing Saxes library. CSV imports retain stable SHA-derived identities and replace the same
+attachment, while workbooks receive new identities and append. Removing an attachment removes its
+`inputId` joins. Original decimal strings and provenance column IDs survive; workbook formula cells
+are ignored as null and counted, imported unit metadata is unavailable, and formulas are never
+executed. Imports keep the existing five-attachment, 1000-row and 32-column caller limits; CSV is
+bounded at 1,000,000 bytes and XLSX at the effective parser limit of 10,000,000 bytes. Export uses a
+scoped 64 MiB transport and supports 100,000 XLSX rows without silently truncating. Any defined,
+current captured snapshot can export, including a paged/truncated snapshot whose window is retained;
+chart completeness gates do not block report export. CSV formula escaping, stored ZIP/CRC checks,
+Excel 1900 dates and precision-preserving workbook text match the shared web implementation. See
+[[docs/api/analysis#Read-only CSV and workbook interchange|the exact interchange API]].
+
+`AnalysisMonitorsModel` and `AnalysisMonitorsView` implement the separate `/analysis/monitors`
+route: paged rules and dossier targets, exact string thresholds, schedule/cooldown editing,
+enable/disable, explicit Check/Delete, observations and inbox read state. The page polls rules and
+inbox while visible; target selection and observation reads have independent generations. Mutations
+retire reads both before and after the server action, then refresh authoritative state, preventing
+an earlier read from overwriting a completed write. The existing local TypeScript scheduler and
+monitor service own comparisons, persisted baselines, episodes and notifications; Swift does not
+evaluate conditions or invoke providers. See [[docs/features/analysis-monitors|Analysis Monitors]].
+
+Portable Core/presentation, backend route and browser/Node golden checks cover these paths. The full
+macOS package build and synthetic Vision Demo visual/keyboard review remain pending, including
+EN/NL layout, focus, query cancellation, chart/pivot interaction, version/proposal dialogs and monitor
+errors. [[docs/reference/native-parity/analysis|Analysis parity]] records implemented controls;
+[[docs/flow-visualizer.html|the flow visualizer]] includes native execution/refinement, saved-version,
+interchange and monitor journeys.
 
 ## Install
 

@@ -74,6 +74,8 @@ public final class NativeShellModel {
     public let tax: TaxScreens?
     public let portfolio: PortfolioScreens?
     public let portfolioImports: PortfolioImportScreens?
+    public let analysis: AnalysisScreens?
+    public let analysisMonitors: AnalysisMonitorsModel?
     /// The navigation the Leave this page? alert holds while it asks (`blocker.location`).
     public private(set) var leaveConfirmation: NativeRoute?
 
@@ -110,6 +112,8 @@ public final class NativeShellModel {
         tax: TaxScreens? = nil,
         portfolio: PortfolioScreens? = nil,
         portfolioImports: PortfolioImportScreens? = nil,
+        analysis: AnalysisScreens? = nil,
+        analysisMonitors: AnalysisMonitorsModel? = nil,
         hiddenSections: [NavSectionID: Bool]? = nil,
         loadSettings: @escaping @Sendable () async throws -> NativeAppSettings,
         saveHiddenSections: @escaping @MainActor ([NavSectionID: Bool]) -> Void = { _ in },
@@ -132,6 +136,8 @@ public final class NativeShellModel {
         self.tax = tax
         self.portfolio = portfolio
         self.portfolioImports = portfolioImports
+        self.analysis = analysis
+        self.analysisMonitors = analysisMonitors
         self.hiddenSections = hiddenSections ?? Self.defaultHiddenSections
         self.loadSettings = loadSettings
         self.saveHiddenSections = saveHiddenSections
@@ -171,6 +177,8 @@ public final class NativeShellModel {
         if screen == .portfolioTax && tax == nil { return .web }
         if screen == .portfolioImport && portfolioImports == nil { return .web }
         if case .portfolioImportReview = screen, portfolioImports == nil { return .web }
+        if screen == .analysis && analysis == nil { return .web }
+        if screen == .analysisMonitors && analysisMonitors == nil { return .web }
         return .native(screen)
     }
 
@@ -218,6 +226,8 @@ public final class NativeShellModel {
             portfolio?.invalidate()
         }
         if settingsClosed || pathChanged && next.path.hasPrefix("/portfolio/import") { portfolioImports?.invalidate() }
+        if settingsClosed || pathChanged && next.path == "/analysis" { analysis?.invalidate() }
+        if settingsClosed || pathChanged && next.path == "/analysis/monitors" { analysisMonitors?.invalidate() }
     }
 
     /// A sidebar click, a menu or shortcut navigation, or another native link. The page moves
@@ -454,6 +464,8 @@ public final class NativeShellModel {
             tax?.invalidate()
             portfolio?.invalidate()
             portfolioImports?.invalidate()
+            analysis?.invalidate()
+            analysisMonitors?.invalidate()
         }
         settings = next
         settingsLoaded = true

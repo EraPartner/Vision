@@ -294,6 +294,630 @@ extension OpenAPI {
         }
     }
 
+    public struct AiAnalysisEditProposal: Codable, Equatable, Sendable {
+        public let schemaVersion: Int
+        public let savedAnalysisId: String
+        public let baseVersion: Int
+        public let rationale: String
+        public let operations: [OperationsItem]
+
+        public init(schemaVersion: Int, savedAnalysisId: String, baseVersion: Int, rationale: String, operations: [OperationsItem]) {
+            self.schemaVersion = schemaVersion
+            self.savedAnalysisId = savedAnalysisId
+            self.baseVersion = baseVersion
+            self.rationale = rationale
+            self.operations = operations
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case schemaVersion = "schemaVersion"
+            case savedAnalysisId = "savedAnalysisId"
+            case baseVersion = "baseVersion"
+            case rationale = "rationale"
+            case operations = "operations"
+        }
+
+        public struct OperationsItem: Codable, Equatable, Sendable {
+            public let op: String
+            public let path: String
+            public let value: JSONValue?
+
+            public init(op: String, path: String, value: JSONValue? = nil) {
+                self.op = op
+                self.path = path
+                self.value = value
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case op = "op"
+                case path = "path"
+                case value = "value"
+            }
+        }
+    }
+
+    public struct AnalysisColumnRef: Codable, Equatable, Sendable {
+        public let id: String
+
+        public init(id: String) {
+            self.id = id
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+        }
+    }
+
+    public struct AnalysisMonitor: Codable, Equatable, Sendable {
+        public let id: String
+        public let kind: String
+        public let title: String
+        public let enabled: Bool
+        public let savedAnalysisId: String?
+        public let dossierId: String?
+        public let historicalTargetId: String
+        public let targetLabel: String
+        public let targetAvailable: Bool
+        public let fieldId: String?
+        public let `operator`: String?
+        public let threshold: String?
+        public let intervalMinutes: Int
+        public let cooldownMinutes: Int
+        public let nextDueAt: String
+        public let lastCheckedAt: String?
+        public let lastStatus: String?
+        public let lastObservation: LastObservation?
+        public let createdAt: String
+        public let updatedAt: String
+
+        public init(id: String, kind: String, title: String, enabled: Bool, savedAnalysisId: String? = nil, dossierId: String? = nil, historicalTargetId: String, targetLabel: String, targetAvailable: Bool, fieldId: String? = nil, `operator`: String? = nil, threshold: String? = nil, intervalMinutes: Int, cooldownMinutes: Int, nextDueAt: String, lastCheckedAt: String? = nil, lastStatus: String? = nil, lastObservation: LastObservation? = nil, createdAt: String, updatedAt: String) {
+            self.id = id
+            self.kind = kind
+            self.title = title
+            self.enabled = enabled
+            self.savedAnalysisId = savedAnalysisId
+            self.dossierId = dossierId
+            self.historicalTargetId = historicalTargetId
+            self.targetLabel = targetLabel
+            self.targetAvailable = targetAvailable
+            self.fieldId = fieldId
+            self.operator = `operator`
+            self.threshold = threshold
+            self.intervalMinutes = intervalMinutes
+            self.cooldownMinutes = cooldownMinutes
+            self.nextDueAt = nextDueAt
+            self.lastCheckedAt = lastCheckedAt
+            self.lastStatus = lastStatus
+            self.lastObservation = lastObservation
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case kind = "kind"
+            case title = "title"
+            case enabled = "enabled"
+            case savedAnalysisId = "savedAnalysisId"
+            case dossierId = "dossierId"
+            case historicalTargetId = "historicalTargetId"
+            case targetLabel = "targetLabel"
+            case targetAvailable = "targetAvailable"
+            case fieldId = "fieldId"
+            case `operator` = "operator"
+            case threshold = "threshold"
+            case intervalMinutes = "intervalMinutes"
+            case cooldownMinutes = "cooldownMinutes"
+            case nextDueAt = "nextDueAt"
+            case lastCheckedAt = "lastCheckedAt"
+            case lastStatus = "lastStatus"
+            case lastObservation = "lastObservation"
+            case createdAt = "createdAt"
+            case updatedAt = "updatedAt"
+        }
+
+        public struct LastObservation: Codable, Equatable, Sendable {
+            public let id: String
+            public let monitorId: String
+            public let status: String
+            public let previousValue: String?
+            public let currentValue: String?
+            public let previousEvidenceVersion: Int?
+            public let currentEvidenceVersion: Int?
+            public let analysisDefinitionVersion: Int?
+            public let analysisRunId: String?
+            public let historicalAnalysisRunId: String?
+            public let analysisRunStatus: String?
+            public let analysisWindow: JSONValue?
+            public let coverage: Coverage
+            public let reasonCode: String
+            public let reason: String
+            public let checkedAt: String
+
+            public init(id: String, monitorId: String, status: String, previousValue: String? = nil, currentValue: String? = nil, previousEvidenceVersion: Int? = nil, currentEvidenceVersion: Int? = nil, analysisDefinitionVersion: Int? = nil, analysisRunId: String? = nil, historicalAnalysisRunId: String? = nil, analysisRunStatus: String? = nil, analysisWindow: JSONValue? = nil, coverage: Coverage, reasonCode: String, reason: String, checkedAt: String) {
+                self.id = id
+                self.monitorId = monitorId
+                self.status = status
+                self.previousValue = previousValue
+                self.currentValue = currentValue
+                self.previousEvidenceVersion = previousEvidenceVersion
+                self.currentEvidenceVersion = currentEvidenceVersion
+                self.analysisDefinitionVersion = analysisDefinitionVersion
+                self.analysisRunId = analysisRunId
+                self.historicalAnalysisRunId = historicalAnalysisRunId
+                self.analysisRunStatus = analysisRunStatus
+                self.analysisWindow = analysisWindow
+                self.coverage = coverage
+                self.reasonCode = reasonCode
+                self.reason = reason
+                self.checkedAt = checkedAt
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case id = "id"
+                case monitorId = "monitorId"
+                case status = "status"
+                case previousValue = "previousValue"
+                case currentValue = "currentValue"
+                case previousEvidenceVersion = "previousEvidenceVersion"
+                case currentEvidenceVersion = "currentEvidenceVersion"
+                case analysisDefinitionVersion = "analysisDefinitionVersion"
+                case analysisRunId = "analysisRunId"
+                case historicalAnalysisRunId = "historicalAnalysisRunId"
+                case analysisRunStatus = "analysisRunStatus"
+                case analysisWindow = "analysisWindow"
+                case coverage = "coverage"
+                case reasonCode = "reasonCode"
+                case reason = "reason"
+                case checkedAt = "checkedAt"
+            }
+
+            public struct Coverage: Codable, Equatable, Sendable {
+                public let status: String
+                public let reason: String
+
+                public init(status: String, reason: String) {
+                    self.status = status
+                    self.reason = reason
+                }
+
+                enum CodingKeys: String, CodingKey {
+                    case status = "status"
+                    case reason = "reason"
+                }
+            }
+        }
+    }
+
+    /// A oneOf/anyOf schema, decoded as plain JSON.
+    public typealias AnalysisMonitorCreate = JSONValue
+
+    public struct AnalysisMonitorEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let data: OpenAPI.AnalysisMonitor?
+        public let error: OpenAPI.ErrorPayload?
+
+        public init(ok: Bool, data: OpenAPI.AnalysisMonitor? = nil, error: OpenAPI.ErrorPayload? = nil) {
+            self.ok = ok
+            self.data = data
+            self.error = error
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case data = "data"
+            case error = "error"
+        }
+    }
+
+    public struct AnalysisMonitorListEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let data: Data?
+        public let error: OpenAPI.ErrorPayload?
+
+        public init(ok: Bool, data: Data? = nil, error: OpenAPI.ErrorPayload? = nil) {
+            self.ok = ok
+            self.data = data
+            self.error = error
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case data = "data"
+            case error = "error"
+        }
+
+        public struct Data: Codable, Equatable, Sendable {
+            public let items: [OpenAPI.AnalysisMonitor]
+            public let total: Int
+            public let limit: Int
+            public let offset: Int
+
+            public init(items: [OpenAPI.AnalysisMonitor], total: Int, limit: Int, offset: Int) {
+                self.items = items
+                self.total = total
+                self.limit = limit
+                self.offset = offset
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case items = "items"
+                case total = "total"
+                case limit = "limit"
+                case offset = "offset"
+            }
+        }
+    }
+
+    public struct AnalysisMonitorNotification: Codable, Equatable, Sendable {
+        public let id: String
+        public let monitorId: String
+        public let observationId: String
+        public let kind: String
+        public let title: String
+        public let reasonCode: String
+        public let reason: String
+        public let previousValue: String?
+        public let currentValue: String?
+        public let createdAt: String
+        public let readAt: String?
+
+        public init(id: String, monitorId: String, observationId: String, kind: String, title: String, reasonCode: String, reason: String, previousValue: String? = nil, currentValue: String? = nil, createdAt: String, readAt: String? = nil) {
+            self.id = id
+            self.monitorId = monitorId
+            self.observationId = observationId
+            self.kind = kind
+            self.title = title
+            self.reasonCode = reasonCode
+            self.reason = reason
+            self.previousValue = previousValue
+            self.currentValue = currentValue
+            self.createdAt = createdAt
+            self.readAt = readAt
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case monitorId = "monitorId"
+            case observationId = "observationId"
+            case kind = "kind"
+            case title = "title"
+            case reasonCode = "reasonCode"
+            case reason = "reason"
+            case previousValue = "previousValue"
+            case currentValue = "currentValue"
+            case createdAt = "createdAt"
+            case readAt = "readAt"
+        }
+    }
+
+    public struct AnalysisMonitorNotificationEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let data: OpenAPI.AnalysisMonitorNotification?
+        public let error: OpenAPI.ErrorPayload?
+
+        public init(ok: Bool, data: OpenAPI.AnalysisMonitorNotification? = nil, error: OpenAPI.ErrorPayload? = nil) {
+            self.ok = ok
+            self.data = data
+            self.error = error
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case data = "data"
+            case error = "error"
+        }
+    }
+
+    public struct AnalysisMonitorNotificationListEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let data: Data?
+        public let error: OpenAPI.ErrorPayload?
+
+        public init(ok: Bool, data: Data? = nil, error: OpenAPI.ErrorPayload? = nil) {
+            self.ok = ok
+            self.data = data
+            self.error = error
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case data = "data"
+            case error = "error"
+        }
+
+        public struct Data: Codable, Equatable, Sendable {
+            public let items: [OpenAPI.AnalysisMonitorNotification]
+            public let total: Int
+            public let unreadCount: Int
+            public let limit: Int
+            public let offset: Int
+
+            public init(items: [OpenAPI.AnalysisMonitorNotification], total: Int, unreadCount: Int, limit: Int, offset: Int) {
+                self.items = items
+                self.total = total
+                self.unreadCount = unreadCount
+                self.limit = limit
+                self.offset = offset
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case items = "items"
+                case total = "total"
+                case unreadCount = "unreadCount"
+                case limit = "limit"
+                case offset = "offset"
+            }
+        }
+    }
+
+    public struct AnalysisMonitorObservation: Codable, Equatable, Sendable {
+        public let id: String
+        public let monitorId: String
+        public let status: String
+        public let previousValue: String?
+        public let currentValue: String?
+        public let previousEvidenceVersion: Int?
+        public let currentEvidenceVersion: Int?
+        public let analysisDefinitionVersion: Int?
+        public let analysisRunId: String?
+        public let historicalAnalysisRunId: String?
+        public let analysisRunStatus: String?
+        public let analysisWindow: JSONValue?
+        public let coverage: Coverage
+        public let reasonCode: String
+        public let reason: String
+        public let checkedAt: String
+
+        public init(id: String, monitorId: String, status: String, previousValue: String? = nil, currentValue: String? = nil, previousEvidenceVersion: Int? = nil, currentEvidenceVersion: Int? = nil, analysisDefinitionVersion: Int? = nil, analysisRunId: String? = nil, historicalAnalysisRunId: String? = nil, analysisRunStatus: String? = nil, analysisWindow: JSONValue? = nil, coverage: Coverage, reasonCode: String, reason: String, checkedAt: String) {
+            self.id = id
+            self.monitorId = monitorId
+            self.status = status
+            self.previousValue = previousValue
+            self.currentValue = currentValue
+            self.previousEvidenceVersion = previousEvidenceVersion
+            self.currentEvidenceVersion = currentEvidenceVersion
+            self.analysisDefinitionVersion = analysisDefinitionVersion
+            self.analysisRunId = analysisRunId
+            self.historicalAnalysisRunId = historicalAnalysisRunId
+            self.analysisRunStatus = analysisRunStatus
+            self.analysisWindow = analysisWindow
+            self.coverage = coverage
+            self.reasonCode = reasonCode
+            self.reason = reason
+            self.checkedAt = checkedAt
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case monitorId = "monitorId"
+            case status = "status"
+            case previousValue = "previousValue"
+            case currentValue = "currentValue"
+            case previousEvidenceVersion = "previousEvidenceVersion"
+            case currentEvidenceVersion = "currentEvidenceVersion"
+            case analysisDefinitionVersion = "analysisDefinitionVersion"
+            case analysisRunId = "analysisRunId"
+            case historicalAnalysisRunId = "historicalAnalysisRunId"
+            case analysisRunStatus = "analysisRunStatus"
+            case analysisWindow = "analysisWindow"
+            case coverage = "coverage"
+            case reasonCode = "reasonCode"
+            case reason = "reason"
+            case checkedAt = "checkedAt"
+        }
+
+        public struct Coverage: Codable, Equatable, Sendable {
+            public let status: String
+            public let reason: String
+
+            public init(status: String, reason: String) {
+                self.status = status
+                self.reason = reason
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case status = "status"
+                case reason = "reason"
+            }
+        }
+    }
+
+    public struct AnalysisMonitorObservationEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let data: OpenAPI.AnalysisMonitorObservation?
+        public let error: OpenAPI.ErrorPayload?
+
+        public init(ok: Bool, data: OpenAPI.AnalysisMonitorObservation? = nil, error: OpenAPI.ErrorPayload? = nil) {
+            self.ok = ok
+            self.data = data
+            self.error = error
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case data = "data"
+            case error = "error"
+        }
+    }
+
+    public struct AnalysisMonitorObservationListEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let data: Data?
+        public let error: OpenAPI.ErrorPayload?
+
+        public init(ok: Bool, data: Data? = nil, error: OpenAPI.ErrorPayload? = nil) {
+            self.ok = ok
+            self.data = data
+            self.error = error
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case data = "data"
+            case error = "error"
+        }
+
+        public struct Data: Codable, Equatable, Sendable {
+            public let items: [OpenAPI.AnalysisMonitorObservation]
+            public let total: Int
+            public let limit: Int
+            public let offset: Int
+
+            public init(items: [OpenAPI.AnalysisMonitorObservation], total: Int, limit: Int, offset: Int) {
+                self.items = items
+                self.total = total
+                self.limit = limit
+                self.offset = offset
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case items = "items"
+                case total = "total"
+                case limit = "limit"
+                case offset = "offset"
+            }
+        }
+    }
+
+    /// Numeric condition fields are valid only for analysis-threshold monitors.
+    public struct AnalysisMonitorUpdate: Codable, Equatable, Sendable {
+        public let title: String?
+        public let enabled: Bool?
+        public let fieldId: String?
+        public let `operator`: String?
+        public let threshold: String?
+        public let intervalMinutes: Int?
+        public let cooldownMinutes: Int?
+
+        public init(title: String? = nil, enabled: Bool? = nil, fieldId: String? = nil, `operator`: String? = nil, threshold: String? = nil, intervalMinutes: Int? = nil, cooldownMinutes: Int? = nil) {
+            self.title = title
+            self.enabled = enabled
+            self.fieldId = fieldId
+            self.operator = `operator`
+            self.threshold = threshold
+            self.intervalMinutes = intervalMinutes
+            self.cooldownMinutes = cooldownMinutes
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case title = "title"
+            case enabled = "enabled"
+            case fieldId = "fieldId"
+            case `operator` = "operator"
+            case threshold = "threshold"
+            case intervalMinutes = "intervalMinutes"
+            case cooldownMinutes = "cooldownMinutes"
+        }
+    }
+
+    /// A oneOf/anyOf schema, decoded as plain JSON.
+    public typealias AnalysisQuerySpec = JSONValue
+
+    public struct AnalysisVisualFilter: Codable, Equatable, Sendable {
+        public let fieldId: String
+        public let `operator`: String
+        public let value: JSONValue?
+
+        public init(fieldId: String, `operator`: String, value: JSONValue? = nil) {
+            self.fieldId = fieldId
+            self.operator = `operator`
+            self.value = value
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case fieldId = "fieldId"
+            case `operator` = "operator"
+            case value = "value"
+        }
+    }
+
+    /// Visual analysis plan. The route checks these field types; the catalog compiler owns semantic
+    /// validation. Unknown keys are kept. A null option means the same as leaving it out.
+    public struct AnalysisVisualPlan: Codable, Equatable, Sendable {
+        public let datasetId: String
+        public let fields: [String]?
+        public let groups: [String]?
+        public let measures: [String]?
+        public let joins: [String]?
+        public let filters: [OpenAPI.AnalysisVisualFilter]?
+        public let orderBy: [OrderByItem]?
+        public let limit: Decimal?
+        public let reportingCurrency: String?
+        public let from: String?
+        public let to: String?
+        public let symbol: String?
+        public let range: String?
+        public let costBasisMethod: String?
+        public let generatedSql: String?
+
+        public init(datasetId: String, fields: [String]? = nil, groups: [String]? = nil, measures: [String]? = nil, joins: [String]? = nil, filters: [OpenAPI.AnalysisVisualFilter]? = nil, orderBy: [OrderByItem]? = nil, limit: Decimal? = nil, reportingCurrency: String? = nil, from: String? = nil, to: String? = nil, symbol: String? = nil, range: String? = nil, costBasisMethod: String? = nil, generatedSql: String? = nil) {
+            self.datasetId = datasetId
+            self.fields = fields
+            self.groups = groups
+            self.measures = measures
+            self.joins = joins
+            self.filters = filters
+            self.orderBy = orderBy
+            self.limit = limit
+            self.reportingCurrency = reportingCurrency
+            self.from = from
+            self.to = to
+            self.symbol = symbol
+            self.range = range
+            self.costBasisMethod = costBasisMethod
+            self.generatedSql = generatedSql
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case datasetId = "datasetId"
+            case fields = "fields"
+            case groups = "groups"
+            case measures = "measures"
+            case joins = "joins"
+            case filters = "filters"
+            case orderBy = "orderBy"
+            case limit = "limit"
+            case reportingCurrency = "reportingCurrency"
+            case from = "from"
+            case to = "to"
+            case symbol = "symbol"
+            case range = "range"
+            case costBasisMethod = "costBasisMethod"
+            case generatedSql = "generatedSql"
+        }
+
+        public struct OrderByItem: Codable, Equatable, Sendable {
+            public let id: String
+            public let direction: String
+
+            public init(id: String, direction: String) {
+                self.id = id
+                self.direction = direction
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case id = "id"
+                case direction = "direction"
+            }
+        }
+    }
+
+    public struct AnalysisWorkbenchInput: Codable, Equatable, Sendable {
+        public let steps: [JSONValue]?
+        public let time: JSONValue?
+
+        public init(steps: [JSONValue]? = nil, time: JSONValue? = nil) {
+            self.steps = steps
+            self.time = time
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case steps = "steps"
+            case time = "time"
+        }
+    }
+
     public enum AssetClass: String, Codable, Sendable, CaseIterable {
         case stock = "stock"
         case etf = "etf"
@@ -5502,6 +6126,78 @@ extension OpenAPI {
         case monthly = "monthly"
         case quarterly = "quarterly"
         case yearly = "yearly"
+    }
+
+    public struct ResearchDossierListEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let data: Data?
+        public let error: OpenAPI.ErrorPayload?
+
+        public init(ok: Bool, data: Data? = nil, error: OpenAPI.ErrorPayload? = nil) {
+            self.ok = ok
+            self.data = data
+            self.error = error
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case data = "data"
+            case error = "error"
+        }
+
+        public struct Data: Codable, Equatable, Sendable {
+            public let items: [OpenAPI.ResearchDossierSummary]
+            public let total: Int
+            public let limit: Int
+            public let offset: Int
+
+            public init(items: [OpenAPI.ResearchDossierSummary], total: Int, limit: Int, offset: Int) {
+                self.items = items
+                self.total = total
+                self.limit = limit
+                self.offset = offset
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case items = "items"
+                case total = "total"
+                case limit = "limit"
+                case offset = "offset"
+            }
+        }
+    }
+
+    public struct ResearchDossierSummary: Codable, Equatable, Sendable {
+        public let id: String
+        public let title: String
+        public let workspace: String
+        public let version: Int
+        public let question: String
+        public let reviewDate: String?
+        public let createdAt: String
+        public let updatedAt: String
+
+        public init(id: String, title: String, workspace: String, version: Int, question: String, reviewDate: String? = nil, createdAt: String, updatedAt: String) {
+            self.id = id
+            self.title = title
+            self.workspace = workspace
+            self.version = version
+            self.question = question
+            self.reviewDate = reviewDate
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case title = "title"
+            case workspace = "workspace"
+            case version = "version"
+            case question = "question"
+            case reviewDate = "reviewDate"
+            case createdAt = "createdAt"
+            case updatedAt = "updatedAt"
+        }
     }
 
     public struct RouteMetric: Codable, Equatable, Sendable {

@@ -202,3 +202,33 @@ commitReviewedPortfolioImports
 commitPortfolioImportBatch
 # Authoritative Portfolio Tax results (phase 3j), computed by the shared TS engine.
 getBelgianPortfolioTaxDashboard
+
+# Analysis workspace and Monitors (phase 3k). Financial evaluation stays in TypeScript.
+getAnalysisCatalog
+executeAnalysis
+cancelAnalysis
+drillAnalysis
+executeAnalysisPivot
+evaluateAnalysisExtension
+listSavedAnalyses
+createSavedAnalysis
+updateSavedAnalysis
+deleteSavedAnalysis
+runSavedAnalysis
+listSavedAnalysisVersions
+restoreSavedAnalysisVersion
+generateAnalysisProposal
+previewAnalysisProposal
+applyAnalysisProposal
+listAnalysisMonitors
+createAnalysisMonitor
+patchAnalysisMonitor
+deleteAnalysisMonitor
+checkAnalysisMonitor
+listAnalysisMonitorObservations
+listAnalysisMonitorNotifications
+readAnalysisMonitorNotification
+listResearchDossiers
+
+# Analysis CSV/XLSX import/export use handwritten multipart and binary operations:
+# importAnalysisInterchange, exportAnalysisInterchange.
