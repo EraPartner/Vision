@@ -6875,12 +6875,23 @@ export interface components {
                 [key: string]: number;
             };
         };
+        /** @description A `recipient_match_patterns` row as `listPatternsForRecipient` selects it. */
         RecipientPattern: {
             id: number;
             pattern: string;
-            is_regex?: boolean;
+            /** @enum {string} */
+            pattern_kind: "literal_prefix" | "glob" | "regex";
+            case_sensitive: boolean;
+            /** Format: int32 */
+            priority: number;
+            is_active: boolean;
+            /** @enum {string} */
+            source: "user" | "suggested" | "system";
+            notes?: string | null;
             /** Format: date-time */
             created_at: string;
+            /** Format: date-time */
+            updated_at?: string;
         };
         RecipientBankAccount: {
             id: number;
@@ -11356,7 +11367,10 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: components["schemas"]["RecipientPattern"][];
+                        data?: {
+                            items: components["schemas"]["RecipientPattern"][];
+                            total: number;
+                        };
                     };
                 };
             };
@@ -11388,14 +11402,16 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Created pattern */
+            /** @description Created pattern (its id) */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: components["schemas"]["RecipientPattern"];
+                        data?: {
+                            id: number;
+                        };
                     };
                 };
             };
@@ -11437,7 +11453,14 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: {
+                            matchCount: number;
+                            recipientIds: number[];
+                            /** @description Only on a `regex` preview. */
+                            truncated?: boolean;
+                        };
+                    };
                 };
             };
             /** @description VALIDATION_ERROR: missing pattern, or a field of the wrong type */

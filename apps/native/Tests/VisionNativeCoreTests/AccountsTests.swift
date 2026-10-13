@@ -244,6 +244,7 @@ enum AccountsFixture {
             strings: strings, theme: ThemeSelection(appearance: .light),
             exchangeRates: model.rates, admin: AdminFixture.screens(), planned: PlannedFixture.idleModel(),
             imports: ImportFixture.idleModel(), transactions: TransactionsFixture.idleModel(), accounts: model,
+            categories: CategoriesFixture.idleModel(), recipients: RecipientsFixture.idleModel(),
             loadSettings: { settings }, onNavigate: { recorder.actions.append($0) }, settingsReloadDelay: .milliseconds(1))
     }
 
@@ -278,9 +279,9 @@ enum AccountsFixture {
         #expect(!NativeScreen.accounts.requiresAdmin)
         #expect(!NativeScreen.accountDetail(id: 7).requiresAdmin)
         #expect(NativeScreen.fixedScreens.contains(.accounts))
-        // Part B pages stay web.
-        #expect(NativeScreen.screen(forPath: "/categories") == nil)
-        #expect(NativeScreen.screen(forPath: "/recipients") == nil)
+        // Part B: categories and payees are native too.
+        #expect(NativeScreen.screen(forPath: "/categories") == .categories)
+        #expect(NativeScreen.screen(forPath: "/recipients") == .recipients)
     }
 
     @Test func sinceAcceptsOnlyADay() throws {

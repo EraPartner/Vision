@@ -102,6 +102,8 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             transactions: transactions,
             // `/accounts` converts its subtotals with the same shared rates cache.
             accounts: AccountsModel(service: client, rates: rates),
+            categories: CategoriesModel(service: client),
+            recipients: RecipientsModel(service: client),
             hiddenSections: Self.loadHiddenSections(),
             loadSettings: { try await client.appSettings() },
             saveHiddenSections: { Self.saveHiddenSections($0) },

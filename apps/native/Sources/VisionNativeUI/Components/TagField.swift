@@ -141,6 +141,8 @@ struct TagPopover: View {
     let onChange: ([String]) -> Void
     @State var state: TagInputState
     @State var pendingColor: String
+    /// `tags.createFailed` with the API message, after a failed create.
+    @State var createError: String? = nil
     @FocusState private var searchFocused: Bool
     @Environment(\.visionTheme) var theme
 
@@ -167,6 +169,22 @@ struct TagPopover: View {
                 .onDeleteCommand {
                     _ = removeLastTag()
                 }
+            if let createError {
+                Label {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(strings.t("tags.createFailed"))
+                        if !createError.isEmpty {
+                            Text(createError)
+                                .foregroundStyle(theme.secondaryLabel)
+                        }
+                    }
+                } icon: {
+                    Image(systemName: "exclamationmark.circle.fill")
+                }
+                .font(.footnote)
+                .foregroundStyle(theme.destructive)
+                .accessibilityElement(children: .combine)
+            }
             if state.showsSlugHint {
                 Text(strings.t("tags.slugifyHint").replacingOccurrences(of: "{{slug}}", with: state.liveSlug))
                     .font(.footnote)
@@ -271,7 +289,8 @@ struct TagPopover: View {
 
     private func create(_ slug: String) async {
         guard state.canCreate(existing: pickers.tags) else { return }
-        await pickers.createTag(slug: slug, color: pendingColor)
+        let failure = await pickers.createTag(slug: slug, color: pendingColor)
+        createError = failure.map { APIErrorMessage.text($0, strings: strings) }
         state.add(slug)
         state.typed = ""
         pendingColor = PickerDataModel.tagPalette.randomElement()?.color ?? pendingColor

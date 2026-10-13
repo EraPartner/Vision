@@ -793,7 +793,9 @@ actor StaticAccountsService: AccountsService {
         imports: StaticImportService = StaticImportService(),
         transactions: StaticTransactionsService = StaticTransactionsService(),
         splits: StaticSplitsService = StaticSplitsService(),
-        accounts: StaticAccountsService = StaticAccountsService()
+        accounts: StaticAccountsService = StaticAccountsService(),
+        categories: StaticCategoriesService = StaticCategoriesService(),
+        recipients: StaticRecipientsService = StaticRecipientsService()
     ) -> NativeShellModel {
         let rates = ExchangeRatesModel(service: StaticRatesService(Self.rates))
         return NativeShellModel(
@@ -809,6 +811,7 @@ actor StaticAccountsService: AccountsService {
             transactions: TransactionsModel(
                 service: transactions, attachments: transactions, pickers: planned, bulk: splits, splits: splits),
             accounts: AccountsModel(service: accounts, rates: rates),
+            categories: CategoriesModel(service: categories), recipients: RecipientsModel(service: recipients),
             loadSettings: { NativeAppSettings(adminMode: adminMode) },
             onNavigate: { _ in })
     }

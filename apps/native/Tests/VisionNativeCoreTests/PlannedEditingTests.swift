@@ -564,6 +564,7 @@ enum EditingFixture {
             admin: AdminFixture.screens(), planned: model, imports: ImportFixture.idleModel(),
             transactions: TransactionsFixture.idleModel(),
             accounts: AccountsFixture.idleModel(),
+            categories: CategoriesFixture.idleModel(), recipients: RecipientsFixture.idleModel(),
             loadSettings: { NativeAppSettings() }, onNavigate: { recorder.actions.append($0) })
         shell.routeDidChange(try #require(NativeRoute("/planned")))
         await shell.settingsSettled()

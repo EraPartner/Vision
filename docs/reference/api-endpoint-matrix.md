@@ -2,9 +2,9 @@
 title: API Endpoint Matrix
 type: reference
 status: active
-date: 2026-10-11
-updated: 2026-10-11
-last_modified: 2026-10-11
+date: 2026-10-13
+updated: 2026-10-13
+last_modified: 2026-10-13
 adr-reference: 026
 # Authoritative HTTP-operation count from openapi.yaml. The CI checker also
 # compares every method/path pair; update concrete resource rows when routes change.
@@ -355,7 +355,7 @@ opening anchors without changing request fields, response shape or operation cou
 | GET    | `/api/recipients/clusters`                | Identify merge-candidate clusters                                                             | —          | [[docs/api/recipients\|Recipients]] |
 | GET    | `/api/recipients/:id/patterns`            | List matching patterns for recipient                                                          | —          | [[docs/api/recipients\|Recipients]] |
 | POST   | `/api/recipients/:id/patterns`            | Create matching pattern                                                                       | —          | [[docs/api/recipients\|Recipients]] |
-| POST   | `/api/recipients/:id/patterns/preview`    | Preview transactions matched by a pattern                                                     | —          | [[docs/api/recipients\|Recipients]] |
+| POST   | `/api/recipients/:id/patterns/preview`    | Preview payees matched by a pattern                                                           | —          | [[docs/api/recipients\|Recipients]] |
 | PATCH  | `/api/recipients/:id/patterns/:patternId` | Update pattern                                                                                | —          | [[docs/api/recipients\|Recipients]] |
 | DELETE | `/api/recipients/:id/patterns/:patternId` | Delete pattern                                                                                | —          | [[docs/api/recipients\|Recipients]] |
 

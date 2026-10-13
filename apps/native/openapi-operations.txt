@@ -110,3 +110,21 @@ reconcileAccount
 setAccountStatementBalance
 bulkRetagPortfolioTransactions
 getPortfolioSummary
+# Categories (/categories) and payees (/recipients), phase 3f part B: the category tree's
+# add/edit/merge/delete and status flips, the payee table's add/edit/merge/unmerge/delete and
+# the match-rule dialog. The category body's explicit `parentId: null` / `description: null`,
+# the payee PATCH's `default_category_id: null` and the pattern PATCH's `notes: null` are
+# hand-written in Screens/Categories/CategoriesService.swift and
+# Screens/Recipients/RecipientsService.swift on top of the generated operation ids.
+createCategoryNode
+updateCategoryNode
+deleteCategoryNode
+mergeCategoryNode
+deleteRecipient
+mergeRecipient
+unmergeRecipient
+getRecipientPatterns
+createRecipientPattern
+previewRecipientPattern
+updateRecipientPattern
+deleteRecipientPattern

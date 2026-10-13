@@ -910,6 +910,7 @@ enum PlannedFixture {
             exchangeRates: ExchangeRatesModel(service: FakeExchangeRatesService()), admin: AdminFixture.screens(),
             planned: PlannedFixture.idleModel(), imports: ImportFixture.idleModel(),
             transactions: TransactionsFixture.idleModel(), accounts: AccountsFixture.idleModel(),
+            categories: CategoriesFixture.idleModel(), recipients: RecipientsFixture.idleModel(),
             loadSettings: { settings },
             onNavigate: { recorder.actions.append($0) })
     }

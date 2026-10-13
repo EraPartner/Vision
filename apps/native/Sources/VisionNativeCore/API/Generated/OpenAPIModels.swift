@@ -436,6 +436,63 @@ extension OpenAPI {
         }
     }
 
+    public struct CategoryNodeCreate: Codable, Equatable, Sendable {
+        public let name: String
+        public let parentId: Int?
+        public let description: String?
+
+        public init(name: String, parentId: Int? = nil, description: String? = nil) {
+            self.name = name
+            self.parentId = parentId
+            self.description = description
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case name = "name"
+            case parentId = "parentId"
+            case description = "description"
+        }
+    }
+
+    public struct CategoryNodeEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let data: OpenAPI.CategoryNode?
+        public let error: OpenAPI.ErrorPayload?
+
+        public init(ok: Bool, data: OpenAPI.CategoryNode? = nil, error: OpenAPI.ErrorPayload? = nil) {
+            self.ok = ok
+            self.data = data
+            self.error = error
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case data = "data"
+            case error = "error"
+        }
+    }
+
+    public struct CategoryNodeUpdate: Codable, Equatable, Sendable {
+        public let name: String?
+        public let parentId: Int?
+        public let description: String?
+        public let isActive: Bool?
+
+        public init(name: String? = nil, parentId: Int? = nil, description: String? = nil, isActive: Bool? = nil) {
+            self.name = name
+            self.parentId = parentId
+            self.description = description
+            self.isActive = isActive
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case name = "name"
+            case parentId = "parentId"
+            case description = "description"
+            case isActive = "is_active"
+        }
+    }
+
     public struct CategoryTreeEnvelope: Codable, Equatable, Sendable {
         public let ok: Bool
         public let data: Data?
@@ -1616,6 +1673,46 @@ extension OpenAPI {
             case offset = "offset"
             case items = "items"
             case links = "links"
+        }
+    }
+
+    /// A `recipient_match_patterns` row as `listPatternsForRecipient` selects it.
+    public struct RecipientPattern: Codable, Equatable, Sendable {
+        public let id: Int
+        public let pattern: String
+        public let patternKind: String
+        public let caseSensitive: Bool
+        public let priority: Int
+        public let isActive: Bool
+        public let source: String
+        public let notes: String?
+        public let createdAt: String
+        public let updatedAt: String?
+
+        public init(id: Int, pattern: String, patternKind: String, caseSensitive: Bool, priority: Int, isActive: Bool, source: String, notes: String? = nil, createdAt: String, updatedAt: String? = nil) {
+            self.id = id
+            self.pattern = pattern
+            self.patternKind = patternKind
+            self.caseSensitive = caseSensitive
+            self.priority = priority
+            self.isActive = isActive
+            self.source = source
+            self.notes = notes
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case pattern = "pattern"
+            case patternKind = "pattern_kind"
+            case caseSensitive = "case_sensitive"
+            case priority = "priority"
+            case isActive = "is_active"
+            case source = "source"
+            case notes = "notes"
+            case createdAt = "created_at"
+            case updatedAt = "updated_at"
         }
     }
 

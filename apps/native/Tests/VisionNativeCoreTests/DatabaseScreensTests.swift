@@ -901,6 +901,7 @@ enum DatabaseFixture {
             planned: PlannedFixture.idleModel(), imports: ImportFixture.idleModel(),
             transactions: TransactionsFixture.idleModel(),
             accounts: AccountsFixture.idleModel(),
+            categories: CategoriesFixture.idleModel(), recipients: RecipientsFixture.idleModel(),
             loadSettings: { NativeAppSettings(adminMode: true) }, onNavigate: { recorder.actions.append($0) })
     }
 
