@@ -775,6 +775,7 @@ function formatPlannedTransaction(
   return {
     id: row.id,
     planned_date: ymd(row.planned_date),
+    account_id: row.account_id ?? null,
     bank_account: row.bank_account,
     recipient_id: row.recipient_id,
     recipient_name: row.recipient_name || null,

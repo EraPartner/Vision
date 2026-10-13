@@ -6,6 +6,7 @@ import Testing
 /// over in-memory answers, recording every call.
 actor FakePlannedEditingService: PlannedEditingService {
     private(set) var created: [OpenAPI.PlannedTransactionCreate] = []
+    private(set) var tracked: [PlannedTrackBody] = []
     private(set) var patches: [Int: [PlannedPaymentPatch]] = [:]
     /// `"id:transactionId:executionDate"` per execute.
     private(set) var executed: [String] = []
@@ -23,6 +24,7 @@ actor FakePlannedEditingService: PlannedEditingService {
     private var settingAnswer: Result<OpenAPI.Setting, APIError> = .failure(FakePlannedEditingService.notFound)
     private var candidateGate: CallGate?
     private var patternGate: CallGate?
+    private var suggestionGate: CallGate?
 
     static let notFound = APIError.client(APIClientError(status: 404, code: .notFound, message: "Setting not found"))
 
@@ -34,6 +36,7 @@ actor FakePlannedEditingService: PlannedEditingService {
     func setSetting(_ answer: Result<OpenAPI.Setting, APIError>) { settingAnswer = answer }
     func holdCandidates(_ gate: CallGate?) { candidateGate = gate }
     func holdPatterns(_ gate: CallGate?) { patternGate = gate }
+    func holdSuggestions(_ gate: CallGate?) { suggestionGate = gate }
 
     func createPlannedPayment(_ body: OpenAPI.PlannedTransactionCreate) async throws -> OpenAPI.PlannedTransaction {
         created.append(body)
@@ -44,6 +47,16 @@ actor FakePlannedEditingService: PlannedEditingService {
             categoryId: body.categoryId, isRecurring: body.isRecurring ?? false,
             recurrencePattern: body.recurrencePattern, isLoan: body.isLoan, isExecuted: false, executionCount: 0,
             isActive: true, links: [])
+    }
+
+    func trackPlannedPayment(_ body: PlannedTrackBody) async throws -> OpenAPI.PlannedTransaction {
+        tracked.append(body)
+        if writesFail { throw APIError.network("offline") }
+        return OpenAPI.PlannedTransaction(
+            id: 200 + tracked.count, plannedDate: body.plannedDate, accountId: body.accountId,
+            recipientId: body.recipientId, memo: body.memo, amount: body.amount, currency: body.currency,
+            categoryId: body.categoryId, isRecurring: true, recurrencePattern: body.recurrencePattern, isExecuted: false,
+            executionCount: 0, isActive: true, links: [])
     }
 
     func updatePlannedPayment(id: Int, patch: PlannedPaymentPatch) async throws -> OpenAPI.PlannedTransaction {
@@ -69,6 +82,7 @@ actor FakePlannedEditingService: PlannedEditingService {
 
     func matchSuggestions() async throws -> [PlannedMatchSuggestion] {
         suggestionCalls += 1
+        if let suggestionGate { await suggestionGate.wait() }
         return suggestionAnswer
     }
 
@@ -263,6 +277,20 @@ enum EditingFixture {
         let day = PlannedDay(year: 2026, month: 10, day: 1)
         #expect(day.adding(days: -14, calendar: PlannedFixture.calendar).ymd == "2026-09-17")
         #expect(PlannedDay(ymd: "2026-10-01T00:00:00.000Z", calendar: PlannedFixture.calendar) == day)
+    }
+
+    @Test func anEmptyDateDraftClearsAnOptionalFieldAndKeepsARequiredOne() {
+        let day = PlannedDay(year: 2026, month: 10, day: 1)
+        let iso = AppDateFormat.isoDate
+        #expect(AppDateInput.commit("", current: day, format: iso, allowClear: true) == .clear)
+        #expect(AppDateInput.commit("  ", current: day, format: iso, allowClear: false) == .keep)
+        #expect(AppDateInput.commit("", current: nil, format: iso, allowClear: true) == .keep)
+        #expect(AppDateInput.commit("", current: nil, format: iso, allowClear: false) == .keep)
+        #expect(AppDateInput.commit("2026-10-01", current: day, format: iso, allowClear: false) == .keep)
+        let next = PlannedDay(year: 2026, month: 10, day: 2)
+        #expect(AppDateInput.commit("2026-10-02", current: day, format: iso, allowClear: false) == .set(next))
+        #expect(AppDateInput.commit("2026-10-02", current: nil, format: iso, allowClear: true) == .set(next))
+        #expect(AppDateInput.commit("02/10/2026", current: day, format: iso, allowClear: true) == .invalid)
     }
 }
 
@@ -694,12 +722,35 @@ enum EditingFixture {
         #expect(model.link == nil)
         #expect(model.notice?.key == "plannedPage.toast.executed")
         #expect(model.payments[0].isExecuted)
+        await model.suggestionsRefresh?.value
         #expect(await editing.suggestionCalls == 1)
         // Cancel drops the selection with the dialog.
         model.openLinkDialog(for: model.payments[0])
         #expect(model.link?.selectedTransactionId == nil)
         model.dismissLinkDialog()
         #expect(model.link == nil)
+    }
+
+    @Test func markAsPaidToastsAndClosesBeforeTheSuggestionsRefetchAnswers() async throws {
+        let editing = FakePlannedEditingService()
+        await editing.setCandidates(Self.candidates)
+        await editing.setSuggestions([EditingFixture.suggestion(1)])
+        let gate = CallGate()
+        await editing.holdSuggestions(gate)
+        let model = await EditingFixture.page([Self.row], editing: editing)
+        model.openLinkDialog(for: model.payments[0])
+        let link = try #require(model.link)
+        await link.load()
+        link.select(1)
+        await model.executeLink(strings: EditingFixture.strings)
+        #expect(model.link == nil)
+        #expect(model.notice?.key == "plannedPage.toast.executed")
+        #expect(model.suggestions.isEmpty)
+        gate.open()
+        let refresh = try #require(model.suggestionsRefresh)
+        await refresh.value
+        #expect(await editing.suggestionCalls == 1)
+        #expect(model.suggestions.count == 1)
     }
 }
 
@@ -870,7 +921,7 @@ enum EditingFixture {
         await model.appear(showAll: false, defaultCurrency: "EUR")
         await model.recurring.load()
         await model.track(EditingFixture.pattern(3, "Spotify", amount: Decimal(string: "-9.99")!), strings: EditingFixture.strings)
-        let body = try #require(await editing.created.first)
+        let body = try #require(await editing.tracked.first)
         #expect(body.plannedDate == "2026-11-01")
         #expect(body.amount == Decimal(string: "-9.99"))
         #expect(body.recipientId == 3)
@@ -884,7 +935,7 @@ enum EditingFixture {
         #expect(await service.loads.count == 2)
         let income = EditingFixture.pattern(4, "Employer", direction: "income", detected: "custom", interval: 10, amount: 3000)
         await model.track(income, strings: EditingFixture.strings)
-        let second = try #require(await editing.created.last)
+        let second = try #require(await editing.tracked.last)
         #expect(second.amount == 3000)
         #expect(second.recurrencePattern == "every 10 days")
         await editing.failWrites(true)
@@ -906,7 +957,15 @@ enum EditingFixture {
         #expect(list[0].latestAmount == Decimal(string: "9.99"))
         #expect(list[0].confidenceLevel == .medium)
         #expect(list[0].patternLabel(EditingFixture.strings) == "fortnightly")
-        #expect(list[0].trackBody(memo: "m").accountId == 0)
+        // A pattern without an account leaves `account_id` out, like the web's `undefined`.
+        let track = list[0].trackBody(memo: "m")
+        #expect(track.accountId == nil)
+        let encoded = try JSONValue.parse(try APIBody.encode(track))
+        let fields = try #require(encoded.objectValue)
+        #expect(fields["account_id"] == nil)
+        #expect(fields["recipient_id"] == .int(3))
+        #expect(fields["is_recurring"] == .bool(true))
+        #expect(fields["recurrence_pattern"] == .string("fortnightly"))
         #expect(EditingFixture.pattern(1, "A", confidence: 80).confidenceLevel == .high)
         #expect(EditingFixture.pattern(1, "A", confidence: 59).confidenceLevel == .low)
         #expect(EditingFixture.pattern(1, "A").patternLabel(EditingFixture.strings) == "recurring.pattern.monthly")

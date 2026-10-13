@@ -170,6 +170,30 @@ extension PlannedDay {
 /// The typed-date input of `DatePicker` (`parseAppDateInput`): exactly the app date format,
 /// a real calendar day, nothing else.
 public enum AppDateInput {
+    /// What committing the typed field does.
+    public enum Commit: Equatable, Sendable {
+        /// Nothing to change: the text shows the current day, or a required field was emptied.
+        case keep
+        /// An optional field was emptied: the day is cleared.
+        case clear
+        case set(PlannedDay)
+        /// `datePicker.invalidFormat`.
+        case invalid
+    }
+
+    /// Return or leaving the typed field: an empty draft is never invalid; it clears an
+    /// optional field and leaves a required one as it was.
+    public static func commit(
+        _ draft: String, current: PlannedDay?, format: AppDateFormat, allowClear: Bool
+    ) -> Commit {
+        if draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return allowClear && current != nil ? .clear : .keep
+        }
+        if let current, draft == current.text(format: format) { return .keep }
+        guard let parsed = parse(draft, format: format) else { return .invalid }
+        return .set(parsed)
+    }
+
     public static func parse(_ input: String, format: AppDateFormat) -> PlannedDay? {
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return nil }

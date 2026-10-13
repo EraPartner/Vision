@@ -161,10 +161,11 @@ struct TagPopover: View {
                 .focused($searchFocused)
                 .onSubmit(commit)
                 .onKeyPress(.delete) {
-                    guard state.typed.isEmpty, !state.selected.isEmpty else { return .ignored }
-                    state.backspace()
-                    onChange(state.selected)
-                    return .handled
+                    removeLastTag() ? KeyPress.Result.handled : KeyPress.Result.ignored
+                }
+                // The field editor may take Backspace first; the delete command is the second path.
+                .onDeleteCommand {
+                    _ = removeLastTag()
                 }
             if state.showsSlugHint {
                 Text(strings.t("tags.slugifyHint").replacingOccurrences(of: "{{slug}}", with: state.liveSlug))
@@ -247,6 +248,14 @@ struct TagPopover: View {
                     state.typed = text
                 }
             })
+    }
+
+    /// Backspace in an empty field removes the last tag; with typed text it only edits the text.
+    private func removeLastTag() -> Bool {
+        guard state.typed.isEmpty, !state.selected.isEmpty else { return false }
+        state.backspace()
+        onChange(state.selected)
+        return true
     }
 
     private func commit() {

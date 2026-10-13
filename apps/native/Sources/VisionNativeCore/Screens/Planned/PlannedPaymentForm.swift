@@ -44,6 +44,7 @@ public final class PlannedPaymentFormModel: Identifiable {
     public static let loanTypes: [OpenAPI.PlannedLoanType] = [.amortizing, .fixedPrincipal, .interestOnly]
 
     /// Each Add payment opens a fresh form (the web remounts it); an edit is keyed by its row.
+    /// A stored `let` of a Sendable type satisfies the nonisolated `Identifiable.id` requirement.
     public let id: Int
     /// The row being edited, or `nil` for a new payment.
     public let initial: PlannedPayment?

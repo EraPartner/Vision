@@ -118,6 +118,8 @@ public final class PlannedPaymentsModel {
     @ObservationIgnored private let pickerService: any PickerDataService
     @ObservationIgnored private var suggestionsFetchedAt: Date?
     @ObservationIgnored private var suggestionsInFlight: Task<Void, Never>?
+    /// The suggestions refetch Mark as paid starts after it closes (tests await it).
+    @ObservationIgnored private(set) var suggestionsRefresh: Task<Void, Never>?
     @ObservationIgnored private let now: @Sendable () -> Date
     @ObservationIgnored public let calendar: Calendar
     @ObservationIgnored private var defaultCurrency = NativeAppSettings.defaults.defaultCurrency
@@ -217,22 +219,23 @@ public final class PlannedPaymentsModel {
         }
     }
 
-    /// `setQueryData` on the current view: the server's row replaces the one with its id.
-    private func replace(_ wire: OpenAPI.PlannedTransaction) {
-        guard var list = lists[showAll]?.payments else { return }
+    /// `setQueryData` on the view the mutation started on (`key`, its `show_all`): the
+    /// server's row replaces the one with its id.
+    private func replace(_ wire: OpenAPI.PlannedTransaction, in key: Bool) {
+        guard var list = lists[key]?.payments else { return }
         let currency = defaultCurrency
         list = list.map { $0.id == wire.id ? PlannedPayment(wire, defaultCurrency: currency) : $0 }
-        lists[showAll]?.payments = list
+        lists[key]?.payments = list
     }
 
-    private func remove(id: Int) {
-        lists[showAll]?.payments?.removeAll { $0.id == id }
+    private func remove(id: Int, in key: Bool) {
+        lists[key]?.payments?.removeAll { $0.id == id }
     }
 
-    /// `setList((prev) => [...prev, created])` on the current view.
-    private func append(_ wire: OpenAPI.PlannedTransaction) {
-        guard lists[showAll]?.payments != nil else { return }
-        lists[showAll]?.payments?.append(PlannedPayment(wire, defaultCurrency: defaultCurrency))
+    /// `setList((prev) => [...prev, created])` on the view the mutation started on.
+    private func append(_ wire: OpenAPI.PlannedTransaction, in key: Bool) {
+        guard lists[key]?.payments != nil else { return }
+        lists[key]?.payments?.append(PlannedPayment(wire, defaultCurrency: defaultCurrency))
     }
 
     /// Track invalidated every planned list: both views go stale and the shown one refetches.
@@ -316,16 +319,17 @@ public final class PlannedPaymentsModel {
     public func saveEditor(strings: any Localizing) async {
         guard let form = editor, !actionLoading, let submission = form.submit() else { return }
         form.resetErrors()
+        let key = showAll
         actionLoading = true
         defer { actionLoading = false }
         do {
             if let initial = form.initial {
                 let updated = try await editing.updatePlannedPayment(id: initial.id, patch: submission.patch)
-                replace(updated)
+                replace(updated, in: key)
                 post(.success, "plannedPage.toast.updated", ["name": submission.name])
             } else {
                 let created = try await editing.createPlannedPayment(submission.create)
-                append(created)
+                append(created, in: key)
                 post(.success, "plannedPage.toast.created", ["name": submission.name])
             }
             if editor === form { dismissEditor() }
@@ -358,19 +362,21 @@ public final class PlannedPaymentsModel {
     }
 
     /// Link and mark as paid: `POST …/execute` with the chosen transaction and its date. On
-    /// success the row updates in place, the suggestions refetch, a toast confirms and the
-    /// dialog closes; a failure toasts `plannedPage.link.executeFailed` and keeps it open.
+    /// success the row updates in place, a toast confirms, the dialog closes and the
+    /// suggestions refetch in the background; a failure toasts `plannedPage.link.executeFailed`
+    /// and keeps it open.
     public func executeLink(strings: any Localizing) async {
         guard let dialog = link, let transactionId = dialog.selectedTransactionId, !dialog.isExecuting else { return }
+        let key = showAll
         dialog.isExecuting = true
         defer { dialog.isExecuting = false }
         do {
             let updated = try await editing.executePlannedPayment(
                 id: dialog.payment.id, transactionId: transactionId, executionDate: dialog.executionDate)
-            replace(updated)
-            await loadSuggestions(force: true)
+            replace(updated, in: key)
             post(.success, "plannedPage.toast.executed", ["name": dialog.payment.name])
             if link === dialog { dismissLinkDialog() }
+            suggestionsRefresh = Task { [weak self] in await self?.loadSuggestions(force: true) }
         } catch {
             post(
                 .error, "plannedPage.link.executeFailed",
@@ -420,7 +426,7 @@ public final class PlannedPaymentsModel {
     public func track(_ pattern: PlannedRecurringPattern, strings: any Localizing) async {
         let memo = strings.t("recurring.autoDetectedMemo", ["name": pattern.recipientName])
         do {
-            _ = try await editing.createPlannedPayment(pattern.trackBody(memo: memo))
+            _ = try await editing.trackPlannedPayment(pattern.trackBody(memo: memo))
             post(.success, "recurring.toast.created", ["name": pattern.recipientName])
             await recurring.reloadPatterns()
             await invalidateLists()
@@ -467,9 +473,10 @@ public final class PlannedPaymentsModel {
     /// `toggleMutation`: the cached row's `is_active` flipped; a row no longer cached is left
     /// alone.
     private func flipActive(id: Int) async throws {
+        let key = showAll
         guard let cached = payments.first(where: { $0.id == id }) else { return }
         let updated = try await service.setPlannedPaymentActive(id: id, isActive: !cached.isActive)
-        replace(updated)
+        replace(updated, in: key)
     }
 
     /// Delete: asks first (there is no restore endpoint).
@@ -486,11 +493,12 @@ public final class PlannedPaymentsModel {
     public func confirmDelete() async {
         guard let payment = pendingDelete else { return }
         pendingDelete = nil
+        let key = showAll
         actionLoading = true
         defer { actionLoading = false }
         do {
             try await service.deletePlannedPayment(id: payment.id)
-            remove(id: payment.id)
+            remove(id: payment.id, in: key)
             post(.success, "plannedPage.toast.deleted", ["name": payment.name])
         } catch {
             post(.error, "plannedPage.deleteFailed")
@@ -580,7 +588,7 @@ public final class PlannedHistoryModel {
     }
 
     /// One execution to look up.
-    struct Link: Sendable {
+    struct Link: Equatable, Sendable {
         let plannedPaymentId: Int
         let plannedPaymentName: String
         let executionDate: String
@@ -594,9 +602,10 @@ public final class PlannedHistoryModel {
 
     @ObservationIgnored private let service: any PlannedPaymentsService
     @ObservationIgnored private var version = 0
-    /// The load in progress and the payment ids it covers, so the sheet's `.task` and a caller
-    /// asking for the same payments share one request instead of racing (like ExchangeRatesModel).
-    @ObservationIgnored private var inFlight: (ids: [Int], task: Task<Void, Never>)?
+    /// The load in progress and the transaction links it covers, so the sheet's `.task` and a
+    /// caller asking for the same executions share one request instead of racing (like
+    /// ExchangeRatesModel); a refetch that changed the executions loads again.
+    @ObservationIgnored private var inFlight: (links: [Link], task: Task<Void, Never>)?
 
     init(service: any PlannedPaymentsService) {
         self.service = service
@@ -628,13 +637,13 @@ public final class PlannedHistoryModel {
     /// `loadExecutionHistory`: every lookup in parallel; a missing transaction is skipped and
     /// a failed one marks the history partial. Newest execution first.
     public func load(payments: [PlannedPayment]) async {
-        let ids = payments.map { $0.id }
-        if let inFlight, inFlight.ids == ids {
+        let links = Self.links(payments)
+        if let inFlight, inFlight.links == links {
             await inFlight.task.value
             return
         }
         let request = Task { await run(payments: payments) }
-        inFlight = (ids, request)
+        inFlight = (links, request)
         await request.value
         if inFlight?.task == request { inFlight = nil }
     }

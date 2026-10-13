@@ -151,14 +151,21 @@ struct VisionDatePopover: View {
     }
 
     private func commitDraft() {
-        guard draft != formatted || day == nil else { return }
-        guard let parsed = AppDateInput.parse(draft, format: format) else {
+        switch AppDateInput.commit(draft, current: day, format: format, allowClear: allowClear) {
+        case .keep:
+            inputError = false
+            draft = formatted
+        case .clear:
+            inputError = false
+            draft = ""
+            onChange(nil)
+        case .set(let parsed):
+            inputError = false
+            draft = parsed.text(format: format)
+            onChange(parsed)
+        case .invalid:
             inputError = true
-            return
         }
-        inputError = false
-        draft = parsed.text(format: format)
-        onChange(parsed)
     }
 
     private func select(_ picked: PlannedDay) {

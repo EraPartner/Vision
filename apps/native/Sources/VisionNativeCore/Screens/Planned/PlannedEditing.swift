@@ -8,6 +8,8 @@ public protocol PlannedEditingService: Sendable {
     func createPlannedPayment(_ body: OpenAPI.PlannedTransactionCreate) async throws -> OpenAPI.PlannedTransaction
     /// `updatePlannedTransaction(id, mapToUpdateAPI(updates))`.
     func updatePlannedPayment(id: Int, patch: PlannedPaymentPatch) async throws -> OpenAPI.PlannedTransaction
+    /// Track: `createPlannedTransaction` with the detected pattern's body.
+    func trackPlannedPayment(_ body: PlannedTrackBody) async throws -> OpenAPI.PlannedTransaction
     /// `executePlannedTransaction(id, { executed_transaction_id, execution_date })`.
     func executePlannedPayment(id: Int, transactionId: Int, executionDate: String?) async throws
         -> OpenAPI.PlannedTransaction
@@ -35,6 +37,10 @@ extension APIClient: PlannedEditingService {
 
     public func updatePlannedPayment(id: Int, patch: PlannedPaymentPatch) async throws -> OpenAPI.PlannedTransaction {
         try await send(PlannedPaymentPatchRequest(id: id, patch: patch))
+    }
+
+    public func trackPlannedPayment(_ body: PlannedTrackBody) async throws -> OpenAPI.PlannedTransaction {
+        try await send(PlannedTrackRequest(body: body))
     }
 
     public func executePlannedPayment(id: Int, transactionId: Int, executionDate: String?) async throws
@@ -202,6 +208,82 @@ public struct PlannedPaymentPatchRequest: APIOperation {
     }
 }
 
+/// Track's `POST` body (`createPlannedTransaction` of a detected pattern). Unlike the
+/// generated `PlannedTransactionCreate`, `account_id` is left out when the pattern has no
+/// account, like the web's `pattern.account_id!` (`undefined`); the server then answers its
+/// missing-field 400.
+public struct PlannedTrackBody: Equatable, Sendable, Encodable {
+    public let plannedDate: String
+    public let accountId: Int?
+    public let recipientId: Int
+    public let memo: String
+    public let amount: Decimal
+    public let currency: String
+    public let categoryId: Int?
+    public let recurrencePattern: String
+    /// Always `true`: Track creates a recurring payment.
+    public var isRecurring: Bool { true }
+
+    public init(
+        plannedDate: String, accountId: Int?, recipientId: Int, memo: String, amount: Decimal, currency: String,
+        categoryId: Int?, recurrencePattern: String
+    ) {
+        self.plannedDate = plannedDate
+        self.accountId = accountId
+        self.recipientId = recipientId
+        self.memo = memo
+        self.amount = amount
+        self.currency = currency
+        self.categoryId = categoryId
+        self.recurrencePattern = recurrencePattern
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case plannedDate = "planned_date"
+        case accountId = "account_id"
+        case recipientId = "recipient_id"
+        case memo
+        case amount
+        case currency
+        case categoryId = "category_id"
+        case isRecurring = "is_recurring"
+        case recurrencePattern = "recurrence_pattern"
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(plannedDate, forKey: .plannedDate)
+        try container.encodeIfPresent(accountId, forKey: .accountId)
+        try container.encode(recipientId, forKey: .recipientId)
+        try container.encode(memo, forKey: .memo)
+        try container.encode(amount, forKey: .amount)
+        try container.encode(currency, forKey: .currency)
+        try container.encodeIfPresent(categoryId, forKey: .categoryId)
+        try container.encode(isRecurring, forKey: .isRecurring)
+        try container.encode(recurrencePattern, forKey: .recurrencePattern)
+    }
+}
+
+/// `POST /api/planned-transactions` (operationId `createPlannedTransaction`) with Track's body.
+public struct PlannedTrackRequest: APIOperation {
+    public typealias Response = OpenAPI.PlannedTransaction
+    public static let operationId = OpenAPIOperations.CreatePlannedTransaction.operationId
+    public static let method = OpenAPIOperations.CreatePlannedTransaction.method
+    public static let pathTemplate = OpenAPIOperations.CreatePlannedTransaction.pathTemplate
+
+    public var body: PlannedTrackBody
+
+    public init(body: PlannedTrackBody) {
+        self.body = body
+    }
+
+    public var path: String { Self.pathTemplate }
+
+    public func encodedBody() throws -> Data? {
+        try APIBody.encode(body)
+    }
+}
+
 // MARK: Recurring patterns
 
 /// One detected pattern of `GET /api/info/recurring-patterns` (the fields
@@ -307,15 +389,11 @@ public struct PlannedRecurringPattern: Equatable, Sendable, Decodable, Identifia
     /// Track's body: the next predicted date, the payee, the auto-detected memo, the latest
     /// amount signed by direction, currency, category, account and the pattern (or "every N
     /// days").
-    public func trackBody(memo: String) -> OpenAPI.PlannedTransactionCreate {
+    public func trackBody(memo: String) -> PlannedTrackBody {
         let magnitude = latestAmount < 0 ? -latestAmount : latestAmount
-        return OpenAPI.PlannedTransactionCreate(
-            plannedDate: predictedNext,
-            // `pattern.accountId!`: a pattern without an account sends 0, which the server
-            // rejects like the web's missing field.
-            accountId: accountId ?? 0, recipientId: recipientId, memo: memo,
+        return PlannedTrackBody(
+            plannedDate: predictedNext, accountId: accountId, recipientId: recipientId, memo: memo,
             amount: direction == "income" ? magnitude : -magnitude, currency: currency, categoryId: categoryId,
-            isRecurring: true,
             recurrencePattern: detectedPattern == "custom" ? "every \(intervalDays) days" : detectedPattern)
     }
 }

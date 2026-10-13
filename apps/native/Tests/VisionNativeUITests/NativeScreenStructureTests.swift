@@ -243,6 +243,12 @@ extension StaticPlannedService: PlannedEditingService {
             isRecurring: body.isRecurring ?? false, isExecuted: false, executionCount: 0, isActive: true, links: [])
     }
 
+    func trackPlannedPayment(_ body: PlannedTrackBody) async throws -> OpenAPI.PlannedTransaction {
+        OpenAPI.PlannedTransaction(
+            id: 51, plannedDate: body.plannedDate, memo: body.memo, amount: body.amount, currency: body.currency,
+            isRecurring: true, isExecuted: false, executionCount: 0, isActive: true, links: [])
+    }
+
     func updatePlannedPayment(id: Int, patch: PlannedPaymentPatch) async throws -> OpenAPI.PlannedTransaction {
         guard let row = rows.first(where: { candidate in candidate.id == id }) else { throw APIError.network("missing") }
         return row

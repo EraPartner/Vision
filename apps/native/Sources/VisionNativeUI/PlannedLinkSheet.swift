@@ -228,8 +228,11 @@ struct PlannedLinkSheet: View {
                 }
             }
             Spacer(minLength: 8)
-            MoneyText(amount: transaction.amount, currency: transaction.currency ?? "EUR", settings: settings)
-                .fontWeight(.semibold)
+            MoneyText(
+                amount: transaction.amount, currency: transaction.currency ?? settings.defaultCurrency,
+                settings: settings
+            )
+            .fontWeight(.semibold)
         }
         .padding(.vertical, 3)
         .contentShape(Rectangle())

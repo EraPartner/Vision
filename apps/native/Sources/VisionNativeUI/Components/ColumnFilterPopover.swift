@@ -41,10 +41,10 @@ struct ColumnFilterPopover: View {
                 .textFieldStyle(.roundedBorder)
                 .focused($inputFocused)
                 .onSubmit(close)
-                .onKeyPress(.escape) {
+                // The field editor takes Escape as `cancelOperation:` before `.onKeyPress` sees it.
+                .onExitCommand {
                     value = ""
                     close()
-                    return .handled
                 }
             if !uniqueValues.isEmpty && uniqueValues.count <= Self.listLimit {
                 if uniqueValues.count > Self.searchThreshold {

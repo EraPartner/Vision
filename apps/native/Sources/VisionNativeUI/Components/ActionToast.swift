@@ -1,9 +1,11 @@
+import AppKit
 import SwiftUI
 import VisionNativeCore
 
 /// A Sonner toast with an optional action button, such as `undoToast`'s Undo: the title, the
 /// description line and the action, for `duration`. The action also answers ⌘Z while the
-/// toast is up, like the web's undo registry.
+/// toast is up, like the web's undo registry, except while a text field is being edited
+/// (the web's `isTypingTarget` rule): there ⌘Z stays the field's own undo.
 struct ActionToast: View {
     let notice: ScreenNotice?
     let strings: any Localizing
@@ -33,7 +35,15 @@ struct ActionToast: View {
                     Button(actionTitle, action: action)
                         .buttonStyle(.bordered)
                         .controlSize(.small)
-                        .keyboardShortcut("z", modifiers: .command)
+                        .background {
+                            // The shortcut lives on its own invisible button so a click on Undo
+                            // still acts while a field keeps focus; only the key checks typing.
+                            Button("", action: undoShortcut)
+                                .keyboardShortcut("z", modifiers: .command)
+                                .opacity(0)
+                                .frame(width: 0, height: 0)
+                                .accessibilityHidden(true)
+                        }
                 }
             }
             .padding(.horizontal, 14)
@@ -51,5 +61,14 @@ struct ActionToast: View {
                 clear(notice.id)
             }
         }
+    }
+
+    /// ⌘Z: the field editor (an `NSTextView`) keeps its own undo while a text field has focus.
+    private func undoShortcut() {
+        if NSApp.keyWindow?.firstResponder is NSTextView {
+            NSApp.sendAction(Selector(("undo:")), to: nil, from: nil)
+            return
+        }
+        action()
     }
 }

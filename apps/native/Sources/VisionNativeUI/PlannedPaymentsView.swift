@@ -647,9 +647,20 @@ struct PlannedHistorySheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(strings.t("plannedPage.history.title"))
-                .font(.title2.weight(.semibold))
-                .accessibilityAddTraits(.isHeader)
+            HStack(alignment: .top) {
+                Text(strings.t("plannedPage.history.title"))
+                    .font(.title2.weight(.semibold))
+                    .accessibilityAddTraits(.isHeader)
+                Spacer()
+                Button {
+                    model.closeHistory()
+                } label: {
+                    Image(systemName: "xmark")
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel(strings.t("common.close"))
+                .help(strings.t("common.close"))
+            }
             if history.failed && !history.isLoading {
                 HStack(spacing: 12) {
                     Text(strings.t("plannedPage.history.loadFailed"))

@@ -37,6 +37,7 @@ actor FakePlannedService: PlannedPaymentsService {
     private var failingLookups: Set<Int> = []
     private var loadGate: CallGate?
     private var lookupGate: CallGate?
+    private var updateGate: CallGate?
 
     init(rows: [OpenAPI.PlannedTransaction] = []) {
         self.rows = rows
@@ -47,6 +48,7 @@ actor FakePlannedService: PlannedPaymentsService {
     func failDeletes(_ fail: Bool) { deleteFails = fail }
     func holdLoads(_ gate: CallGate?) { loadGate = gate }
     func holdLookups(_ gate: CallGate?) { lookupGate = gate }
+    func holdUpdates(_ gate: CallGate?) { updateGate = gate }
 
     func setTransactions(_ list: [OpenAPI.Transaction], failing: Set<Int> = []) {
         transactions = Dictionary(uniqueKeysWithValues: list.map { transaction in (transaction.id, transaction) })
@@ -65,6 +67,7 @@ actor FakePlannedService: PlannedPaymentsService {
 
     func setPlannedPaymentActive(id: Int, isActive: Bool) async throws -> OpenAPI.PlannedTransaction {
         updates.append("\(id):\(isActive)")
+        if let updateGate { await updateGate.wait() }
         if updateFails { throw APIError.network("offline") }
         guard let index = rows.firstIndex(where: { row in row.id == id }) else { throw APIError.network("missing") }
         let updated = PlannedFixture.copy(rows[index], isActive: isActive)
@@ -716,6 +719,27 @@ enum PlannedFixture {
         #expect(await service.loads == [false])
     }
 
+    @Test func aMutationWritesToTheViewItStartedOn() async throws {
+        let service = FakePlannedService(rows: Self.rows)
+        let model = PlannedFixture.model(service)
+        await model.appear(showAll: true, defaultCurrency: "EUR")
+        await model.appear(showAll: false, defaultCurrency: "EUR")
+        let gate = CallGate()
+        await service.holdUpdates(gate)
+        let gym = model.payments[1]
+        let pause = Task { await model.toggleActive(gym) }
+        while await service.updates.isEmpty { await Task.yield() }
+        // The route's `show_all` changes while Pause is in flight.
+        await model.appear(showAll: true, defaultCurrency: "EUR")
+        gate.open()
+        await pause.value
+        let shown = try #require(model.lists[false]?.payments)
+        let other = try #require(model.lists[true]?.payments)
+        #expect(shown.first(where: { payment in payment.id == 2 })?.isActive == false)
+        #expect(other.first(where: { payment in payment.id == 2 })?.isActive == true)
+        #expect(await service.loads == [true, false])
+    }
+
     @Test func aFailedDeleteKeepsTheRow() async throws {
         let service = FakePlannedService(rows: Self.rows)
         await service.failDeletes(true)
@@ -834,6 +858,34 @@ enum PlannedFixture {
         await load.value
         #expect(model.history.entries.isEmpty)
         #expect(!model.history.isLoading)
+    }
+
+    @Test func aRefetchThatChangedTheExecutionsLoadsAgainInsteadOfSharing() async {
+        let service = FakePlannedService()
+        await service.setTransactions([
+            PlannedFixture.transaction(13, date: "2026-08-15"), PlannedFixture.transaction(16, date: "2026-10-01"),
+        ])
+        let gate = CallGate()
+        await service.holdLookups(gate)
+        let model = PlannedFixture.model(service)
+        let before = [
+            PlannedFixture.payment(
+                PlannedFixture.row(id: 2, name: "Gym", date: "2026-08-15", isExecuted: true, executedTransactionId: 13))
+        ]
+        // The same payment id after Mark as paid: a new linked transaction.
+        let after = [
+            PlannedFixture.payment(
+                PlannedFixture.row(id: 2, name: "Gym", date: "2026-10-01", isExecuted: true, executedTransactionId: 16))
+        ]
+        let first = Task { await model.history.load(payments: before) }
+        while await service.lookups.isEmpty { await Task.yield() }
+        await service.holdLookups(nil)
+        await model.history.load(payments: after)
+        #expect(await service.lookups == [13, 16])
+        #expect(model.history.entries.map { entry in entry.transactionId } == [16])
+        gate.open()
+        await first.value
+        #expect(model.history.entries.map { entry in entry.transactionId } == [16])
     }
 }
 
