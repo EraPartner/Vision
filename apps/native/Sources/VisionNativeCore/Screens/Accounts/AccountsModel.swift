@@ -669,6 +669,9 @@ public final class AccountsModel {
         }
         if case .detail(let id) = visible {
             await loadDetail(id, force: true)
+        } else {
+            // A switch from the hub reuses the cached detail; this write made it stale.
+            detailId = nil
         }
     }
 

@@ -991,6 +991,22 @@ enum AccountsFixture {
         }
     }
 
+    @Test func aWriteFromTheHubRefetchesTheCachedLedger() async throws {
+        let account = AccountsFixture.account(2, "Daily")
+        let service = FakeAccountsService(list: [account], ledgerRows: Self.ledger(3))
+        let (model, shell) = try await AccountsFixture.opened(service, route: "/accounts/2")
+        defer { withExtendedLifetime(shell) {} }
+        // Back to the hub as a switch does: the hub appears before the detail goes away.
+        await model.appear(.hub)
+        model.disappear(.detail(2))
+        model.openCreate()
+        model.form?.setName("New")
+        await model.submitForm()
+        await model.appear(.detail(2))
+        #expect(await service.ledgerRequests == ["2:0:100", "2:0:100"])
+        #expect(model.ledger?.count == 3)
+    }
+
     @Test func theLedgerPagesByAHundredWithItsRunningBalance() async throws {
         let account = AccountsFixture.account(2, "Daily")
         let service = FakeAccountsService(list: [account], ledgerRows: Self.ledger(150))
