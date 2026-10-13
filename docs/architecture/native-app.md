@@ -1419,6 +1419,11 @@ TypeScript and provider disclosure remaining behind the existing consent boundar
 
 ### Settings and global notices (phase 3o)
 
+![[docs/diagrams/frontend-state-management.puml]]
+![[docs/diagrams/frontend-data-flow.puml]]
+
+See also [[docs/diagrams/system-architecture.puml|System architecture]].
+
 The native Settings window has seven panes: General, Appearance, Insights, Behavior, AI & research,
 Backup, and About & maintenance. `NativeSettingsWindow.swift` and the `NativeSettings*.swift` views
 under `apps/native/Sources/VisionNativeUI/Screens/Settings/` use shared section/group/row primitives,
@@ -1458,11 +1463,13 @@ operations and refreshes desktop/OpenAI status after an acknowledgment. Successf
 receipts are shared with Chat and Investigation; only pending typed reads for the same backend
 scope coalesce. Ordinary focus refetch is disabled globally, paused reads resume with focus,
 and Ollama keeps healthy/down polling intervals. An offline-paused mutation waits for online and
-foreground continuation even after its pane unmounts. The SDK host supplies that environment.
+foreground continuation even after its pane unmounts. `ShellRootView.swift` supplies app-lifetime
+connectivity and scene state to that model.
 
 Appearance keeps the five canonical palettes and source light/dark/system/schedule behavior. A
-system accent changes exactly six primary/ring/sidebar tokens and their paired contrasting
-foreground; palette swatches and the palette accent remain canonical. Display size uses physical
+system accent changes exactly `primary`, `primaryForeground`, `ring`, `sidebarPrimary`,
+`sidebarPrimaryForeground`, and `sidebarRing`. Both foreground tokens use the same source contrast
+pair; palette swatches and the palette accent remain canonical. Display size uses physical
 pixels, with the source cap above 6,000,000 pixels: auto-adapt defaults to reduced effects, and an
 explicit override stays session-only. `NativeSettingsAppearanceResolver.swift`,
 `Design/ThemeSelection.swift`, `VisionTheme.swift`, and the SDK host apply the same appearance to
@@ -1483,7 +1490,8 @@ with their source callbacks/routes. No new retry or confirmation workflow is add
 
 `.github/workflows/native-branch.yml` now verifies `codex/native-phase-*` branch pushes with an
 unsigned Debug macOS app build and Swift package tests. The automated build is not yet green:
-the Home compilation correction passed, and the Tax callback correction is ready for another run.
+the Home compilation correction passed; the Tax callback and account-picker row-identification
+corrections are checked in for continued automated verification.
 Portable source/transport tests and UI syntax checks do not replace macOS SDK or rendered
 VoiceOver/Demo verification. Those checks remain recorded gaps; the user's authorization continues
 later phases without a manual Demo-review intermission. See [[docs/features/settings|Settings]],

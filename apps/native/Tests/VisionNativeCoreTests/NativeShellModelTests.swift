@@ -46,6 +46,25 @@ actor SettingsScript {
     }
 }
 
+private actor ShellSettingsReadGate {
+    private var reply: CheckedContinuation<NativeAppSettings, Never>?
+    private var entered: CheckedContinuation<Void, Never>?
+    func read() async -> NativeAppSettings {
+        await withCheckedContinuation { continuation in
+            reply = continuation
+            entered?.resume()
+            entered = nil
+        }
+    }
+    func waitForRead() async {
+        if reply == nil { await withCheckedContinuation { entered = $0 } }
+    }
+    func release(_ settings: NativeAppSettings) {
+        reply?.resume(returning: settings)
+        reply = nil
+    }
+}
+
 @MainActor
 final class ShellRecorder {
     var actions: [MenuAction] = []
@@ -62,7 +81,8 @@ final class ShellRecorder {
         analysis: AnalysisScreens? = nil, analysisMonitors: AnalysisMonitorsModel? = nil,
         research: ResearchScreens? = nil, researchForecast: ResearchForecastScreens? = nil,
         researchChartBuilder: ResearchChartBuilderModel? = nil, researchDossiers: ResearchDossiersModel? = nil,
-        aiChat: AIChatScreens? = nil
+        aiChat: AIChatScreens? = nil, nativeSettings: NativeSettingsModel? = nil,
+        loadSettings: (@Sendable () async throws -> NativeAppSettings)? = nil
     ) -> NativeShellModel {
         NativeShellModel(
             strings: DictionaryStrings(language: .en, table: [:]),
@@ -83,8 +103,9 @@ final class ShellRecorder {
             researchChartBuilder: researchChartBuilder,
             researchDossiers: researchDossiers,
             aiChat: aiChat,
+            nativeSettings: nativeSettings,
             hiddenSections: hidden,
-            loadSettings: { settings },
+            loadSettings: loadSettings ?? { settings },
             saveHiddenSections: { recorder.saved.append($0) },
             onNavigate: { recorder.actions.append($0) },
             onSidebarVisibilityChange: { recorder.sidebar.append($0) },
@@ -111,6 +132,55 @@ final class ShellRecorder {
         let revision = model.settingsRevision
         model.apply(settings: .defaults)
         #expect(model.settingsRevision == revision + 1)
+    }
+
+    @Test func onboardingRetainsTheNativePageAndReturnsOnTheSameRoute() async throws {
+        let model = makeModel(recorder: ShellRecorder())
+        let route = try #require(NativeRoute("/planned?unrelated=keep"))
+        model.routeDidChange(route)
+        await model.settingsSettled()
+        #expect(model.detail == .native(.plannedPayments))
+        model.isPresentingOnboarding = true
+        model.routeDidChange(route)
+        #expect(model.detail == .web)
+        #expect(model.isTemporarilyCovered("/planned"))
+        model.isPresentingOnboarding = false
+        model.routeDidChange(route)
+        #expect(model.detail == .native(.plannedPayments))
+        #expect(model.route == route)
+    }
+
+    @Test func nativeSettingsSectionChangesPreserveTheRouteAndCloseThroughItsRouter() async throws {
+        let recorder = ShellRecorder()
+        let preferences = NativeSettingsModel(client: APIClient(baseURL: { nil }, adminToken: { nil }))
+        let model = makeModel(recorder: recorder, nativeSettings: preferences)
+        let route = try #require(NativeRoute("/planned?settings=general&unrelated=keep"))
+        model.routeDidChange(route)
+        await model.settingsSettled()
+        #expect(model.isPresentingNativeSettings && model.detail == .native(.plannedPayments))
+        model.selectSettingsSection("backup")
+        #expect(recorder.actions.last == .replaceRoute("/planned?settings=backup&unrelated=keep"))
+        #expect(model.route == route)
+        let actionCount = recorder.actions.count
+        model.selectSettingsSection("unknown")
+        #expect(recorder.actions.count == actionCount)
+        model.closeSettings()
+        #expect(recorder.actions.last == .closeSettings)
+        model.routeDidChange(route.setting("settings", to: nil))
+        #expect(!model.isPresentingNativeSettings && model.detail == .native(.plannedPayments))
+        #expect(model.route.value("unrelated") == "keep")
+        #expect(model.nativeSettings === preferences)
+    }
+
+    @Test func aSettingsReadStartedBeforeALiveEditCannotRewindIt() async {
+        let gate = ShellSettingsReadGate()
+        let model = makeModel(recorder: ShellRecorder(), loadSettings: { await gate.read() })
+        model.reloadSettings()
+        await gate.waitForRead()
+        model.apply(settings: NativeAppSettings(language: "nl"))
+        await gate.release(.defaults)
+        await model.settingsSettled()
+        #expect(model.settings.language == "nl")
     }
 
     @Test func theTaxReportHandoffPreservesTheYearAndReturnsAfterClosing() throws {

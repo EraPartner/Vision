@@ -89,13 +89,11 @@ package "Client to Server" {
   NativeSettings --> Express : existing settings CAS / AI-provider operations
   NativeSettings --> NativeSettingsMirror : immediate draft / acknowledged receipt
   NativeSettingsMirror --> ReactApp : suppress duplicate hydration writers
-  ReactApp --> NativeSettingsMirror : native-only shell:settings-change
-app / dashboard / theme field deltas
+  ReactApp --> NativeSettingsMirror : native-only shell:settings-change\napp / dashboard / theme field deltas
   NativeSettings .. NativeAIChat : successful status / model receipts
   NativeSettings .. NativeInvestigation : successful research-status receipts
   NativeTax --> NativeNotices : source notices / captured actions
-  NativeNotices --> ReactApp : preserve editor-owned Undo
-existing route callbacks
+  NativeNotices --> ReactApp : preserve editor-owned Undo\nexisting route callbacks
   NativeTax --> Express : loopback OpenAPI financial reads + writes
   NativeImport --> Express : readonly probe + existing import/review operations
   NativePortfolioTax --> Express : portfolio-dashboard + settings CAS

@@ -9,6 +9,7 @@ public final class NativeSettingsModel {
     public private(set) var themeRaw: TaxValue?
     public private(set) var isLoading = false
     public private(set) var isLoaded = false
+    public private(set) var isSuspendedForRestore = false
     public var isOnline = true
     public private(set) var loadError: String?
     public private(set) var saveError: String?
@@ -50,6 +51,12 @@ public final class NativeSettingsModel {
     @ObservationIgnored private var categoriesFetchedAt: Date?
     @ObservationIgnored private var recipientsFetchedAt: Date?
     @ObservationIgnored private var timers: [String: Task<Void, Never>] = [:]
+    @ObservationIgnored private var pendingDrafts: [String: TaxValue] = [:]
+    @ObservationIgnored private var acceptedWrites: [UUID: Task<NativeSettingsRecord, Error>] = [:]
+    @ObservationIgnored private var restoreDrain: Task<Void, Never>?
+    @ObservationIgnored private var restoreResume: Task<Void, Never>?
+    @ObservationIgnored private var retired = false
+    @ObservationIgnored private var lifecycleRevision = 0
     @ObservationIgnored private var writes: [UUID: Task<Void, Never>] = [:]
     @ObservationIgnored private var editRevision: [String: Int] = [:]
     private var pendingWrites = 0
@@ -112,6 +119,7 @@ public final class NativeSettingsModel {
             ? sessionTierOverride ?? "reduced" : appString("visualEffects", fallback: "standard")
     }
     public func selectVisualEffects(_ tier: String) {
+        guard !retired, !isSuspendedForRestore else { return }
         guard ["reduced", "standard", "enhanced"].contains(tier) else { return }
         if appBool("autoAdaptDisplay", fallback: true) && isLargeDisplay {
             sessionTierOverride = tier == "reduced" ? nil : tier
@@ -121,10 +129,12 @@ public final class NativeSettingsModel {
         }
     }
     public func setAutoAdaptDisplay(_ enabled: Bool) {
+        guard !retired, !isSuspendedForRestore else { return }
         updateApp(["autoAdaptDisplay": .bool(enabled)])
         sessionTierOverride = nil
     }
     public func setAppValue(_ key: String, _ value: TaxValue?) {
+        guard !retired, !isSuspendedForRestore else { return }
         var next = object(appRaw)
         next[key] = value.flatMap { NativeSettingsDefaults.appValue(key, raw: .object([key: $0])) }
         appRaw = .object(next)
@@ -132,6 +142,7 @@ public final class NativeSettingsModel {
         didChangeApp?(appRaw!)
     }
     public func updateApp(_ fields: [String: TaxValue]) {
+        guard !retired, !isSuspendedForRestore else { return }
         var next = object(appRaw)
         for (key, value) in fields {
             next[key] = value == .null ? nil : NativeSettingsDefaults.appValue(key, raw: .object([key: value]))
@@ -141,6 +152,7 @@ public final class NativeSettingsModel {
         didChangeApp?(appRaw!)
     }
     public func updateDashboard(_ fields: [String: TaxValue]) {
+        guard !retired, !isSuspendedForRestore else { return }
         var next = object(dashboardRaw)
         next.merge(fields) { _, new in new }
         dashboardRaw = .object(next)
@@ -154,6 +166,7 @@ public final class NativeSettingsModel {
         updateDashboard(["excludedRecipientIds": .array(ids.map { .number(Decimal($0)) })])
     }
     public func updateTheme(_ fields: [String: TaxValue]) {
+        guard !retired, !isSuspendedForRestore else { return }
         var next = object(themeRaw)
         next.merge(fields) { _, new in new }
         // ThemeHydration persists these four fields, unlike the loose app/dashboard envelopes.
@@ -173,7 +186,7 @@ public final class NativeSettingsModel {
         updateTheme(["schedule": .object(schedule)])
     }
     public func load(force: Bool = false) async {
-        guard isOnline, !isLoading, force || !isLoaded else { return }
+        guard !retired, !isSuspendedForRestore, isOnline, !isLoading, force || !isLoaded else { return }
         loadingRevision += 1
         let token = loadingRevision
         let edits = editRevision
@@ -221,30 +234,37 @@ public final class NativeSettingsModel {
         _ = await (categories, recipients)
     }
     public func loadCategories(force: Bool = false) async {
-        guard isOnline, !categoriesLoading,
+        guard !retired, !isSuspendedForRestore, isOnline, !categoriesLoading,
             force || categoriesFetchedAt.map({ now().timeIntervalSince($0) >= 60 }) != false
         else { return }
+        let lifecycle = lifecycleRevision
         categoriesLoading = true
         categoriesError = nil
         defer { categoriesLoading = false }
         do {
-            categories = try await service.nativeSettingsCategories()
+            let result = try await service.nativeSettingsCategories()
+            guard lifecycle == lifecycleRevision, !retired else { return }
+            categories = result
             categoriesFetchedAt = now()
-        } catch { categoriesError = "settings.saveFailed" }
+        } catch { if lifecycle == lifecycleRevision, !retired { categoriesError = "settings.saveFailed" } }
     }
     public func loadRecipients(force: Bool = false) async {
-        guard isOnline, !recipientsLoading,
+        guard !retired, !isSuspendedForRestore, isOnline, !recipientsLoading,
             force || recipientsFetchedAt.map({ now().timeIntervalSince($0) >= 60 }) != false
         else { return }
+        let lifecycle = lifecycleRevision
         recipientsLoading = true
         recipientsError = nil
         defer { recipientsLoading = false }
         do {
-            recipients = try await service.nativeSettingsRecipients()
+            let result = try await service.nativeSettingsRecipients()
+            guard lifecycle == lifecycleRevision, !retired else { return }
+            recipients = result
             recipientsFetchedAt = now()
-        } catch { recipientsError = "settings.saveFailed" }
+        } catch { if lifecycle == lifecycleRevision, !retired { recipientsError = "settings.saveFailed" } }
     }
     public func setIncludeTransfers(_ value: Bool) async {
+        guard !retired, !isSuspendedForRestore else { return }
         includeTransfers = value
         editRevision["includeTransfers", default: 0] += 1
         do {
@@ -255,6 +275,7 @@ public final class NativeSettingsModel {
         }
     }
     public func setCashCategory(_ kind: String, _ id: Int?) async {
+        guard !retired, !isSuspendedForRestore else { return }
         guard ["dividend", "interest", "fee", "tax"].contains(kind), !cashLoading, !cashSaving else { return }
         var next = object(cashRaw)
         for key in ["dividend", "interest", "fee", "tax"] where next[key] == nil { next[key] = .null }
@@ -273,6 +294,7 @@ public final class NativeSettingsModel {
         }
     }
     public func setCostBasisMethod(_ method: String) async {
+        guard !retired, !isSuspendedForRestore else { return }
         guard ["weighted_avg", "fifo", "lifo"].contains(method) else { return }
         updateApp(["costBasisMethod": .string(method)])
         do {
@@ -281,6 +303,7 @@ public final class NativeSettingsModel {
         } catch { show(.error, "settings.saveFailed") }
     }
     public func resetRecurringDismissals() async {
+        guard !retired, !isSuspendedForRestore else { return }
         await clearRecurringLocalState?()
         do {
             _ = try await saveNow("dismissed_recurring_patterns", value: .array([]))
@@ -288,6 +311,7 @@ public final class NativeSettingsModel {
         } catch { show(.error, "settings.app.recurringDismissalsResetFailed") }
     }
     public func resetPreferences() async {
+        guard !retired, !isSuspendedForRestore else { return }
         appRaw = NativeSettingsDefaults.app
         dashboardRaw = NativeSettingsDefaults.dashboard
         sessionTierOverride = nil
@@ -306,14 +330,20 @@ public final class NativeSettingsModel {
         }
     }
     public func loadServices() async {
-        guard let loadKeepServices, !servicesLoading else { return }
+        guard !retired, !isSuspendedForRestore, let loadKeepServices, !servicesLoading else { return }
+        let lifecycle = lifecycleRevision
         servicesLoading = true
         defer { servicesLoading = false }
-        do { keepServicesOnQuit = try await loadKeepServices() } catch {
+        do {
+            let value = try await loadKeepServices()
+            guard lifecycle == lifecycleRevision, !retired else { return }
+            keepServicesOnQuit = value
+        } catch {
             // Display default; host writer refuses unknown baseline.
         }
     }
     public func setKeepServicesOnQuit(_ value: Bool) async {
+        guard !retired, !isSuspendedForRestore else { return }
         guard let saveKeepServices, !servicesSaving else { return }
         keepServicesOnQuit = value
         servicesSaving = true
@@ -330,21 +360,89 @@ public final class NativeSettingsModel {
         for timer in currentTimers { await timer.value }
         for task in Array(writes.values) { await task.value }
     }
+    /// Restore alone pauses application-lifetime preference saves. Ordinary sheet dismissal never calls this.
+    public func suspendForRestore() async {
+        if let restoreDrain {
+            await restoreDrain.value
+            return
+        }
+        guard !retired else { return }
+        isSuspendedForRestore = true
+        lifecycleRevision += 1
+        loadingRevision += 1
+        isLoading = false
+        cashLoading = false
+        for timer in timers.values { timer.cancel() }
+        timers.removeAll()
+        pendingDebounces = 0
+        let accepted = Array(acceptedWrites.values)
+        let writer = persistence
+        let drain = Task {
+            // Main-accepted writes reach their writer before its admission gate closes.
+            for task in accepted { _ = try? await task.value }
+            await writer.suspendForRestore()
+        }
+        restoreDrain = drain
+        await drain.value
+        for task in Array(writes.values) { await task.value }
+    }
+    /// Failed/cancelled restore resumes precisely the same opaque baselines and poisoned queues.
+    public func resumeAfterFailedRestore() {
+        guard !retired, isSuspendedForRestore else { return }
+        isSuspendedForRestore = false
+        restoreDrain = nil
+        let writer = persistence
+        let resumed = Task { await writer.resumeAfterFailedRestore() }
+        restoreResume = resumed
+        for (key, value) in pendingDrafts { schedule(key, value: value, revision: editRevision[key] ?? 0) }
+    }
+    /// Successful database replacement retires this generation. The SDK creates a fresh model/writer on reload.
+    public func retireForReload() {
+        guard !retired else { return }
+        retired = true
+        isSuspendedForRestore = true
+        lifecycleRevision += 1
+        loadingRevision += 1
+        isLoading = false
+        cashLoading = false
+        for timer in timers.values { timer.cancel() }
+        timers.removeAll()
+        pendingDrafts.removeAll()
+        pendingDebounces = 0
+        didNotice = nil
+        didChangeApp = nil
+        didChangeDashboard = nil
+        didChangeTheme = nil
+        didAcknowledge = nil
+        didChangeCostBasis = nil
+        didChangeIncludeTransfers = nil
+        didResetPreferences = nil
+        clearRecurringLocalState = nil
+        loadKeepServices = nil
+        saveKeepServices = nil
+        let writer = persistence
+        Task { await writer.retireForReload() }
+    }
     private func changed(_ key: String, _ value: TaxValue) {
+        guard !retired else { return }
         editRevision[key, default: 0] += 1
-        let revision = editRevision[key]!
+        pendingDrafts[key] = value
+        if !isSuspendedForRestore { schedule(key, value: value, revision: editRevision[key]!) }
+    }
+    private func schedule(_ key: String, value: TaxValue, revision: Int) {
         timers[key]?.cancel()
         timers[key] = Task { [weak self] in
             guard let self else { return }
             do { try await Task.sleep(for: delay) } catch { return }
-            guard self.editRevision[key] == revision else { return }
+            guard !self.retired, !self.isSuspendedForRestore, self.editRevision[key] == revision else { return }
             self.timers[key] = nil
             self.pendingDebounces = self.timers.count
             let id = UUID()
             let task = Task { [weak self] in
-                guard let self else { return }
+                guard let self, !self.retired, !self.isSuspendedForRestore else { return }
+                if self.editRevision[key] == revision { self.pendingDrafts[key] = nil }
                 do { _ = try await self.saveNow(key, value: value) } catch {
-                    if key != "theme_settings" {
+                    if !self.retired, key != "theme_settings" {
                         self.saveError = "settings.saveFailed"
                         self.saveErrorNonce += 1
                         self.show(.error, "settings.saveFailed")
@@ -357,9 +455,19 @@ public final class NativeSettingsModel {
         pendingDebounces = timers.count
     }
     private func saveNow(_ key: String, value: TaxValue) async throws -> NativeSettingsRecord {
+        await restoreResume?.value
+        guard !retired, !isSuspendedForRestore else { throw CancellationError() }
         pendingWrites += 1
-        defer { pendingWrites -= 1 }
-        let result = try await persistence.save(key, value: value)
+        let id = UUID()
+        let writer = persistence
+        let task = Task { try await writer.save(key, value: value) }
+        acceptedWrites[id] = task
+        defer {
+            pendingWrites -= 1
+            acceptedWrites[id] = nil
+        }
+        let result = try await task.value
+        guard !retired else { throw CancellationError() }
         didAcknowledge?(key, result.value)
         return result
     }
@@ -378,6 +486,7 @@ public final class NativeSettingsModel {
         return rows.compactMap(NativeSettingsDefaults.integer)
     }
     private func show(_ kind: ScreenNotice.Kind, _ key: String) {
+        guard !retired else { return }
         noticeRevision += 1
         notice = .init(id: noticeRevision, kind: kind, key: key)
         didNotice?(notice!)

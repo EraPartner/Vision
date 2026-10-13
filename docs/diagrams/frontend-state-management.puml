@@ -295,6 +295,12 @@ useTabParam ..> BrowserRouter : uses (useSearchParams)
 useTaxYearParam ..> BrowserRouter : uses (useSearchParams)
 useTaxYearParam ..> BelgianTaxProfileContext : reads/writes viewedYear
 
+package "Retained Zustand settings" {
+  class useSettingsStore {
+    +appSettings / dashboardSettings / theme state
+    +migrated editable values
+  }
+}
 package "Native Settings and retained WK state (phase 3o)" {
   class NativeSettingsModel {
     +migrated app/dashboard editable envelopes
@@ -326,7 +332,7 @@ NativeSettingsModel --> NativeSettingsPersistence : existing conditional setting
 NativeSettingsModel --> NativeSettingsMirror : draft then receipt
 NativeSettingsMirror --> NativeSettingsPatch : native-only shell:settings-change
 NativeSettingsPatch --> NativeSettingsModel : same writer
-NativeSettingsMirror --> ZustandStore : mirror three preference slices
+NativeSettingsMirror --> useSettingsStore : mirror three preference slices
 NativeSettingsMirror ..> ThemeHydration : skip competing persistence in native mode
 NativeSettingsMirror ..> AppSettingsHydration : skip competing persistence in native mode
 NativeSettingsMirror ..> SettingsHydration : skip competing persistence in native mode

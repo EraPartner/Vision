@@ -2029,9 +2029,9 @@
             "id": "native.settings",
             "label": "Native Settings",
             "sub": "seven panes · existing controls",
-            "kind": "frontend",
-            "x": 780,
-            "y": 1340,
+            "kind": "client",
+            "x": 760,
+            "y": 1120,
             "path": "apps/native/Sources/VisionNativeUI/Screens/Settings/NativeSettingsWindow.swift",
             "desc": "General/Appearance/Insights/Behavior/AI/Backup/About retain source controls, appearance and existing desktop services. Raw CAS lanes preserve drafts and only acknowledged baselines."
           },
@@ -2039,9 +2039,9 @@
             "id": "native.settingsbridge",
             "label": "Native Settings writer",
             "sub": "three-key deltas · draft / ACK",
-            "kind": "frontend",
-            "x": 980,
-            "y": 1340,
+            "kind": "client",
+            "x": 940,
+            "y": 1120,
             "path": "apps/native/Sources/VisionNativeCore/Shell/NativeSettingsPatch.swift",
             "desc": "App/dashboard migration preserves unknown fields; theme writes known four fields. Retained-page deltas join the same per-key writer; drafts never advance web baselines."
           },
@@ -2049,9 +2049,9 @@
             "id": "native.notices",
             "label": "Native global notices",
             "sub": "captured actions · 8s Undo",
-            "kind": "frontend",
-            "x": 1180,
-            "y": 1340,
+            "kind": "client",
+            "x": 760,
+            "y": 1180,
             "path": "apps/native/Sources/VisionNativeCore/Shell/NativeNoticeCenter.swift",
             "desc": "App-lifetime host retains six source Undo owners and the one-slot typing-guarded shortcut. Retry/Create rule/Import stay non-Undo actions; callbacks consume before awaiting."
           }
@@ -7602,7 +7602,21 @@
                 "annotation": "apps/native/Sources/VisionNativeCore/Screens/AIChat/AIInvestigationModel.swift refreshes an active invalidated status observer. Global ordinary focus refetch is disabled; paused reads/writes follow source continuation gates."
               }
             ],
-            "category": "Native migration"
+            "category": "Native migration",
+            "docs": [
+              {
+                "path": "features/settings.md",
+                "label": "Settings"
+              },
+              {
+                "path": "api/settings.md",
+                "label": "Settings API"
+              },
+              {
+                "path": "architecture/native-app.md",
+                "label": "Native architecture"
+              }
+            ]
           },
           {
             "id": "native-settings-retained-delta",
@@ -7634,7 +7648,21 @@
                 "annotation": "apps/frontend/src/lib/api/settings.ts acknowledgeNativeSettingReceipt checks the value/expected pair. AppSettingsHydration.tsx, SettingsHydration.tsx and ThemeHydration.tsx skip native-owned saves."
               }
             ],
-            "category": "Native migration"
+            "category": "Native migration",
+            "docs": [
+              {
+                "path": "features/settings.md",
+                "label": "Settings"
+              },
+              {
+                "path": "api/settings.md",
+                "label": "Settings API"
+              },
+              {
+                "path": "architecture/native-app.md",
+                "label": "Native architecture"
+              }
+            ]
           },
           {
             "id": "native-settings-backup-appearance",
@@ -7666,7 +7694,21 @@
                 "annotation": "apps/native/Sources/VisionNativeCore/Shell/NativeSettingsStorageBridge.swift and Backup/BackupService.swift preserve existing bundle coverage and local-state restoration. Restored-model/data-session fencing is pending; no completed verification claim."
               }
             ],
-            "category": "Native migration"
+            "category": "Native migration",
+            "docs": [
+              {
+                "path": "features/settings.md",
+                "label": "Settings"
+              },
+              {
+                "path": "api/settings.md",
+                "label": "Settings API"
+              },
+              {
+                "path": "architecture/native-app.md",
+                "label": "Native architecture"
+              }
+            ]
           },
           {
             "id": "native-global-notice-actions",
@@ -7693,12 +7735,26 @@
               },
               {
                 "from": "native.notices",
-                "to": "be.routes",
-                "payload": "Existing Retry/Create rule/Import callbacks remain non-Undo actions with source scopes/routes",
+                "to": "native.notices",
+                "payload": "Consume existing Retry/Create rule/Import callback once; keep its own request or route scope",
                 "annotation": "apps/native/Sources/VisionNativeCore/Screens/Transactions/TransactionsModel.swift, Recipients/RecipientsModel.swift and Imports/ImportNotices.swift retain these action kinds; no new endpoint or retry UI."
               }
             ],
-            "category": "Native migration"
+            "category": "Native migration",
+            "docs": [
+              {
+                "path": "features/settings.md",
+                "label": "Settings"
+              },
+              {
+                "path": "api/settings.md",
+                "label": "Settings API"
+              },
+              {
+                "path": "architecture/native-app.md",
+                "label": "Native architecture"
+              }
+            ]
           }
         ],
         "learningPaths": [

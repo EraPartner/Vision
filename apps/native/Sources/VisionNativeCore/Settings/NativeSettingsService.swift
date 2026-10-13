@@ -79,10 +79,14 @@ public actor NativeSettingsPersistence {
     private let service: any NativeSettingsService
     private var baselines: [String: TaxValue] = [:]
     private var allRead = false
+    private var suspended = false
+    private var retired = false
     private var tails: [String: Task<NativeSettingsRecord, Error>] = [:]
     public init(service: any NativeSettingsService) { self.service = service }
     public func readAll() async throws -> NativeSettingsSnapshot {
+        guard !retired, !suspended else { throw CancellationError() }
         let snapshot = try await service.readNativeSettings()
+        guard !retired else { throw CancellationError() }
         if !allRead {
             for (key, baseline) in snapshot.expected where baselines[key] == nil { baselines[key] = baseline }
             allRead = true
@@ -90,7 +94,9 @@ public actor NativeSettingsPersistence {
         return snapshot
     }
     public func read(_ key: String) async throws -> NativeSettingsRecord {
+        guard !retired, !suspended else { throw CancellationError() }
         let record = try await service.readNativeSetting(key)
+        guard !retired else { throw CancellationError() }
         if baselines[key] == nil { baselines[key] = record.expected }
         return record
     }
@@ -98,6 +104,7 @@ public actor NativeSettingsPersistence {
         baselines[key] ?? (allRead ? .object(["exists": .bool(false)]) : nil)
     }
     public func save(_ key: String, value: TaxValue) async throws -> NativeSettingsRecord {
+        guard !suspended, !retired else { throw CancellationError() }
         let previous = tails[key]
         let task = Task {
             _ = try await previous?.value
@@ -106,11 +113,23 @@ public actor NativeSettingsPersistence {
         tails[key] = task
         return try await task.value
     }
+    /// Stop accepting writes, then settle every already accepted per-key queue before a database switch.
+    public func suspendForRestore() async {
+        suspended = true
+        for task in Array(tails.values) { _ = try? await task.value }
+    }
+    public func resumeAfterFailedRestore() { if !retired { suspended = false } }
+    public func retireForReload() {
+        retired = true
+        suspended = true
+    }
     private func write(_ key: String, value: TaxValue) async throws -> NativeSettingsRecord {
+        guard !retired else { throw CancellationError() }
         guard let expected = baseline(key) else {
             throw SettingsWriteError("Settings were not loaded. Reload before saving.")
         }
         let result = try await service.saveNativeSetting(key, value: value, expected: expected)
+        guard !retired else { throw CancellationError() }
         baselines[key] = .object(["exists": .bool(true), "value": result.value])
         return result
     }

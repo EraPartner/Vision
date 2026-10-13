@@ -7,6 +7,8 @@ updated: 2026-10-13
 tags:
   [
     feature,
+    native-app,
+    swift,
     settings,
     configuration,
     preferences,
@@ -32,9 +34,12 @@ tags:
     design-system,
     adr-183,
   ]
-description: Application settings system with JSONB storage, preload optimization, propagation across all pages, and the instant-apply Settings window (DashboardSettingsDialog, ADR-084 and ADR-183).
+description: Application settings with JSONB CAS storage, native seven-pane Settings and a retained web draft/receipt mirror, alongside the web/Electron instant-apply window (ADR-084, ADR-183 and ADR-204).
 aliases: [preferences, configuration, app settings, user settings]
 related_code:
+  - apps/native/Sources/VisionNativeCore/Settings/NativeSettingsModel.swift
+  - apps/native/Sources/VisionNativeUI/Screens/Settings/NativeSettingsWindow.swift
+  - apps/frontend/src/stores/hydration/nativeSettings.ts
   - apps/frontend/src/stores/settingsStore.ts
   - apps/frontend/src/features/settings/DashboardSettingsDialog.tsx
   - apps/frontend/src/features/settings/SettingsPrimitives.tsx
@@ -60,7 +65,7 @@ related_code:
 
 ## Overview
 
-The Settings system manages all application preferences, from display formatting (currency, date format, number format) to behavioral settings (exclusions, pagination defaults, widget visibility). It uses a unified Zustand store, three hydration bridges, a preload context, and a JSONB-backed storage system.
+The Settings system manages display formatting, exclusions, pagination defaults and widget visibility. Web/Electron use a unified Zustand store, three hydration bridges and a preload context. Vision Native phase 3o renders seven native panes, with one CAS writer and a retained web draft/receipt mirror. Both use the existing JSONB-backed settings API.
 
 The Settings dialog was reworked in June 2026 from a 5-tab Save/Cancel form into a **sidebar-navigated, instant-apply** surface ([[docs/adr/084-settings-instant-apply-sidebar|ADR-084]]), and in October 2026 into a macOS-style **Settings window** on the design system (ADR-183).
 
@@ -455,6 +460,9 @@ retain six eight-second Undo owners and existing non-Undo Retry/Create rule/Impo
 Restored-model/data-session fencing is still being completed at this checkpoint; it is not a
 completed verification claim. See [[docs/architecture/native-app#Settings and global notices (phase 3o)|Native Settings architecture]],
 [[docs/api/settings|Settings API]], and [[docs/reference/native-parity/shell-and-settings|Settings parity]].
+
+[Native Settings journey](../flow-visualizer.html#native-settings-instant-apply) and
+[global notice actions](../flow-visualizer.html#native-global-notice-actions) show the native handoffs.
 
 ## Related Features
 

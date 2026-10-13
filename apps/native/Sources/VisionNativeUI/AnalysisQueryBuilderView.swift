@@ -22,7 +22,10 @@ struct AnalysisQueryBuilderView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack {
-                Picker(strings.t("analysis.mode"), selection: Binding(get: { model.mode }, set: model.setMode)) {
+                Picker(
+                    strings.t("analysis.mode"),
+                    selection: Binding(get: { model.mode }, set: { value in model.setMode(value) })
+                ) {
                     Text(strings.t("analysis.visual")).tag(AnalysisMode.visual)
                     Text(strings.t("analysis.sql")).tag(AnalysisMode.sql)
                 }.pickerStyle(.segmented)
@@ -55,7 +58,7 @@ struct AnalysisQueryBuilderView: View {
         VStack(alignment: .leading, spacing: 18) {
             Picker(
                 strings.t("analysis.dataset"),
-                selection: Binding(get: { model.plan.datasetId }, set: model.selectDataset)
+                selection: Binding(get: { model.plan.datasetId }, set: { value in model.selectDataset(value) })
             ) {
                 ForEach(model.datasets) { entry in Text(label(entry.label)).tag(entry.id) }
             }

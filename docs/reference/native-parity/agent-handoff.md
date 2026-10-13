@@ -28,7 +28,7 @@ in-progress files compile or that macOS validation has passed. Inspect `git log`
 `git status` and the actual diff before continuing.
 
 The first phase-3o safety checkpoint, **`9a38ffed`**, published the initial handoff and
-Settings scaffolding. The next in-progress checkpoint saves all current task changes and
+Settings scaffolding. The next in-progress checkpoint saved all current task changes and
 introduces `.github/workflows/native-branch.yml`, an automatic macOS app/package check on
 pushes to `codex/native-phase-*`. This is a work-in-progress checkpoint, not a completed
 Settings port. Full integration and combined verification are still required.
@@ -38,8 +38,10 @@ seven-section native window and General/Appearance/Insights/Behavior/Backup/Abou
 AI service/model work, the desktop callback interface and private localStorage helper,
 global notice host, six captured Undo adapters, zero-retry Settings client support and
 sticky host settings queues. Root Settings sheet/close-router integration is on disk.
-The desktop SDK factory has **not yet been wired**, so do not claim the Settings screen is
-usable end to end. Raw normal app/dashboard edits preserve unknown fields, required fields
+The desktop SDK factory is wired to all seven sections, the single native writer, source
+router and shared notices. The latest restore lifetime fences remain under verification;
+do not claim the Settings screen is usable end to end until the macOS build passes.
+Raw normal app/dashboard edits preserve unknown fields, required fields
 are migrated exactly as the source, optional presence is retained, and CAS baselines remain
 the original raw value. Theme normal writes reconstruct its four source fields.
 
@@ -47,7 +49,9 @@ Focused checks so far: 21 main Settings Core tests, eight Insights/Behavior help
 rail navigation tests, four portable storage bridge tests, two Import/global notice tests,
 script behaviour under Bun and workflow admission/policy checks passed. New global Undo,
 API replay and combined checks are in progress. SwiftUI sources passed syntax/format checks
-where reported; macOS semantic build and rendering are not yet verified. The prior phase's
+where reported; automated macOS builds are finding and correcting real compiler issues,
+and rendering is not yet verified. Final frontend takeover validation passed 81 tests in
+seven files, full frontend typecheck and targeted ESLint. The prior phase's
 979-test result applies only to `17158f6d`, not to this unfinished snapshot.
 
 The user requested an immediate handoff, commit and push of **all dirty changes for this
@@ -75,6 +79,30 @@ explicitly. Do not leave the handoff or unfinished task files only in the worksp
 All Research/AI inventory actions have native implementations. Per-screen visual approval
 and the full macOS compiler/runtime checks remain pending; implementation status alone
 does not satisfy those gates.
+
+## Latest continuation checkpoint
+
+`86c34c71` saved all 89 dirty task files and was verified on the GitHub branch.
+`2310593d` subsequently fixed five account-picker identities exposed by the real macOS
+build and was pushed and verified. That build passed the earlier Home/Tax/account
+diagnostics, then Xcode 26.6 crashed during Analysis query-view IR generation. The next
+checkpoint replaces bound model setters with explicit closures to avoid that compiler
+reabstraction; the automatic rebuild must confirm the result.
+
+The API data-session actor and wrapper now exist on disk, and the SDK uses one shared
+session for HTTP and streams. Accepted restore confirmation drains Main Settings, the
+legacy host writer, old chat streams and the data session before the existing unfenced
+backup restore operation. A failed restore resumes the same actors; success retires them
+and reconstructs the graph. Main model and persistence fences are now on disk. Settings
+controls are disabled during suspension; controlled transport tests are still being
+completed. Inspect actual code rather than treating this wiring as
+verified. New root tests cover trusted preference IPC, same-route onboarding, native
+Settings route/history retention and stale Settings-read protection; these are not yet
+part of a completed combined proof.
+
+The final documentation snapshot describes 100 flow components and 74 flows. Five flow
+tests and structural/link checks passed. Final combined Swift proof, full macOS app build
+and package tests remain pending; the earlier 979-test proof is preserved unchanged.
 
 ## Active phase 3o ownership
 
@@ -240,17 +268,18 @@ compiled actual bridge/notice/settings sources and reported 30 passing focused t
 nine sources changed during that run, so it is an early result, not final hash-matched
 verification. New combined verification remains pending.
 
-**Still unfinished at this safety checkpoint:** the before-restore lifetime fences.
-The main Settings model must suspend/drain accepted writes, preserve pending drafts and
-the same sticky CAS writer on a failed/cancelled restore, and retire permanently only for
-an actual successful reload. The per-client `NativeDataSession` HTTP/stream wrapper must
-pause new mutations and drain actual delegate completions before the database switches;
+**Still unverified at this safety checkpoint:** the before-restore lifetime fences.
+The main Settings model now suspends/drains accepted writes, preserves pending drafts and
+the same sticky CAS writer on a failed/cancelled restore, and retires permanently only for
+an actual successful reload. The per-client `NativeDataSession` HTTP/stream wrapper now
+pauses new mutations and drains actual delegate completions before the database switches;
 failed restores resume the same session, successful reloads reject old queued work and
 use a fresh session. Root's host `SettingsWriter` fence and three tests are on disk but
 not yet validated. The intended SDK order is Main Settings drain, host Settings writer
 drain, old chat stream stop, API session drain, then the existing restore operation.
 Keep the restore operation's own transport unfenced to avoid a deadlock. This fencing is
-not yet implemented end to end; do not claim the native backup restore is ready.
+wired end to end but awaiting new gated proofs and a successful macOS build; do not
+claim the native backup restore is verified.
 
 Remaining owners: `tax_overview_ui` main Settings fence/tests and root proof support;
 `tax_charts_ui` new API data-session fence/tests; `tax_deductions` SDK fence wiring;

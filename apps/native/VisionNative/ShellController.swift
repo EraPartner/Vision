@@ -33,6 +33,9 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     private lazy var auditChannels = makeAuditChannels()
     /// The typed API client of native screens (`client.ts`).
     private lazy var apiClient = makeAPIClient()
+    private var dataSession = NativeDataSession()
+    private var restoreFenceEntered = false
+    private var restoreFenceOwner: UUID?
     /// The sidebar, route and settings state of the native navigation shell.
     private lazy var shellModel = makeShellModel()
     /// `ALLOWED_RESTORE_PATHS`: only paths the restore picker returned may be restored.
@@ -53,6 +56,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     private var frameSaveTask: Task<Void, Never>?
     private var languageRequest = 0
     private var accentObserver: NSObjectProtocol?
+    private var appearanceObserver: NSKeyValueObservation?
     private var nativeSettingsGeneration = UUID()
     private var nativeSettingsDrafts: [String: TaxValue] = [:]
     private var settingsAppearanceTask: Task<Void, Never>?
@@ -67,9 +71,12 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     }
 
     private func makeAPIClient() -> APIClient {
-        APIClient(
+        let transport = URLSessionAPITransport()
+        let fenced = NativeSessionAPITransport(base: transport, streamBase: transport, session: dataSession)
+        return APIClient(
             baseURL: { [weak self] in await self?.appURL },
-            adminToken: { [weak self] in await self?.adminToken() })
+            adminToken: { [weak self] in await self?.adminToken() },
+            transport: fenced, streamTransport: fenced)
     }
 
     private func makeShellModel() -> NativeShellModel {
@@ -589,6 +596,12 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     private func reloadNativeSettingsFrontend() async throws {
         guard let webView = webShell?.webView else { throw APIError.backendUnavailable }
         let old = shellModel
+        old.nativeSettings?.retireForReload()
+        await settingsWriter.retireForReload()
+        if let streams = old.aiChat?.chat.streams {
+            for id in streams.activeIDs { streams.stop(id: id) }
+        }
+        await dataSession.retireForReload()
         old.analysis?.didDisappear()
         old.research?.didDisappear(route: old.route)
         old.researchForecast?.didDisappear()
@@ -601,6 +614,8 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             "ollama-status", "ollama-models", "openai-research-status", "provider-keys", "agentcloak-desktop",
         ])
         nativeSettingsDrafts = [:]
+        dataSession = NativeDataSession()
+        apiClient = makeAPIClient()
         settingsWriter = SettingsWriter(transport: settingsTransport)
         shellModel = makeShellModel()
         let hidden = shellHost?.isHidden ?? false
@@ -1051,10 +1066,16 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
 
     func windowDidResize(_ notification: Notification) {
         scheduleFrameSave()
+        resolveNativeSettingsAppearance()
     }
 
     func windowDidMove(_ notification: Notification) {
         scheduleFrameSave()
+        resolveNativeSettingsAppearance()
+    }
+
+    func windowDidChangeScreen(_ notification: Notification) {
+        resolveNativeSettingsAppearance()
     }
 
     func windowDidEnterFullScreen(_ notification: Notification) {
@@ -1231,6 +1252,9 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     }
 
     private func observeAccentColor() {
+        appearanceObserver = NSApp.observe(\.effectiveAppearance, options: [.new]) { [weak self] _, _ in
+            Task { @MainActor in self?.resolveNativeSettingsAppearance() }
+        }
         accentObserver = DistributedNotificationCenter.default().addObserver(
             forName: NSNotification.Name("AppleColorPreferencesChangedNotification"), object: nil, queue: .main
         ) { [weak self] _ in
@@ -1441,21 +1465,53 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     /// `backup:restore`: the localized confirmation, then the restore, which stops and
     /// restarts the backend itself.
     func restoreBackup(_ path: String, passphrase: String?) async -> JSONValue {
+        guard !restoreFenceEntered else {
+            return .object(["success": .bool(false), "error": .string("A restore is already in progress")])
+        }
+        let operation = UUID()
         let fileName = (path as NSString).lastPathComponent
         // `stopHealthWatchdog` stops the closure timer for the restore;
         // `startHealthWatchdog` starts it again.
         auditChannels.stopClosureTimer()
         let result = await backupService.restore(
             path: path, passphrase: passphrase,
-            confirm: { [weak self] in await self?.confirmRestore(fileName: fileName) ?? false },
+            confirm: { [weak self] in
+                await self?.confirmAndSuspendForRestore(fileName: fileName, operation: operation) ?? false
+            },
             confirmAuditRecovery: { [weak self] status in
                 await self?.confirmAuditRecovery(fileName: fileName, auditStatus: status) ?? false
             })
+        if restoreFenceEntered, restoreFenceOwner == operation {
+            if result["success"] == .bool(true) {
+                shellModel.nativeSettings?.retireForReload()
+                await settingsWriter.retireForReload()
+                await dataSession.retireForReload()
+            } else {
+                shellModel.nativeSettings?.resumeAfterFailedRestore()
+                await settingsWriter.resumeAfterFailedRestore()
+                await dataSession.resumeAfterFailedRestore()
+            }
+            restoreFenceEntered = false
+            restoreFenceOwner = nil
+        }
         if result["auditStatus"]?.stringValue == "unavailable" {
             auditChannels.report("unavailable")
         }
         await auditChannels.startClosureTimer()
         return result
+    }
+
+    private func confirmAndSuspendForRestore(fileName: String, operation: UUID) async -> Bool {
+        guard !restoreFenceEntered, await confirmRestore(fileName: fileName), !restoreFenceEntered else { return false }
+        restoreFenceEntered = true
+        restoreFenceOwner = operation
+        await shellModel.nativeSettings?.suspendForRestore()
+        await settingsWriter.suspendAndDrain()
+        if let streams = shellModel.aiChat?.chat.streams {
+            for id in streams.activeIDs { streams.stop(id: id) }
+        }
+        await dataSession.suspendAndDrain()
+        return true
     }
 
     private func confirmRestore(fileName: String) async -> Bool {

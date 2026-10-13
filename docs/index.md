@@ -118,7 +118,7 @@ LIMIT 5
 > 2. **Use ADRs for decisions** - Document significant design choices in `docs/adr/`
 > 3. **Update relevant docs** - Keep API, features, and guides docs in sync with code
 > 4. **Use templates** - Start new documents from templates in `docs/templates/`
-> 5. **Use wiki-links** - Link to code with `[[apps/node-backend/src/routes/file.js]]` format
+> 5. **Use wiki-links** - Link to code with `[[apps/node-backend/src/routes/settings.ts]]` format
 > 6. **Search first** - Use repository search to find existing docs
 
 **Start here:** [[AGENTS.md]] → [[docs/guides/ai-agent-kb-usage|AI Agent KB Usage]] → [[docs/guides/kb-maintenance|KB Maintenance]]

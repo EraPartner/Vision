@@ -37,6 +37,7 @@ struct NativeSettingsScreenView: View {
             restartOnboarding: { await about.restartOnboarding() },
             resetPreferences: { await model.resetPreferences() }
         )
+        .disabled(model.isSuspendedForRestore)
         .environment(\.nativeNoticeCenter, shell.notices)
         .overlay(alignment: .bottom) {
             NativeNoticeHost(center: shell.notices, strings: shell.strings)
