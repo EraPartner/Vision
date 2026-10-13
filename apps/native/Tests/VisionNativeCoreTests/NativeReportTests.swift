@@ -297,6 +297,31 @@ actor ReportTestTransport: APITransport {
         #expect(recorder.prints.first?.0 == Data("%PDF-synthetic".utf8))
         #expect(recorder.saves.isEmpty && recorder.notices.isEmpty && recorder.closes == 1)
     }
+    @Test func samePageReopenKeepsTypePeriodCurrencyAndSections() {
+        let model = model(ReportTestService(), ReportCallbackRecorder())
+        model.configure(type: .tax, origin: "/tax?year=2025&export=pdf")
+        model.setType(.financial)
+        model.periodPreset = .year
+        model.customYear = "2020"
+        model.currency = "CHF"
+        model.setSection("plannedOutlook", selected: false)
+        model.didDisappear()
+        model.configure(type: .tax, origin: "/tax?year=2024&export=pdf")
+        #expect(model.type == .financial && model.periodPreset == .year && model.customYear == "2020")
+        #expect(model.currency == "CHF" && !model.selectedSections.contains("plannedOutlook"))
+        #expect(model.isPresented && model.canSubmit)
+    }
+    @Test func pageUnmountDropsDraftBeforeSameRouteReturns() {
+        let model = model(ReportTestService(), ReportCallbackRecorder())
+        model.configure(type: .tax, origin: "/tax?year=2025&export=pdf")
+        model.currency = "CHF"
+        model.periodPreset = .year
+        model.customYear = "2020"
+        model.didLeavePage()
+        model.configure(type: .tax, origin: "/tax?year=2025&export=pdf")
+        #expect(model.type == .tax && model.periodPreset == .rolling12 && model.currency == "USD")
+        #expect(model.customYear == String(model.currentYear) && model.allSectionsSelected)
+    }
     @Test func graphRetirementPermanentlyRejectsReconfigureAndSubmission() async {
         let recorder = ReportCallbackRecorder()
         let service = ReportTestService()

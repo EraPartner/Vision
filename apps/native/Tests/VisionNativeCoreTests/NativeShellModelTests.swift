@@ -165,11 +165,22 @@ final class ShellRecorder {
         model.routeDidChange(try #require(NativeRoute("/tax?year=2020&export=pdf&unrelated=keep")))
         #expect(report.isPresented && report.type == .tax)
         #expect(report.periodPreset == .rolling12)
+        report.setType(.portfolio)
+        report.periodPreset = .year
+        report.customYear = "2014"
+        report.currency = "JPY"
+        model.routeDidChange(try #require(NativeRoute("/tax?year=2020&export=pdf&unrelated=keep")))
+        #expect(report.type == .portfolio && report.customYear == "2014" && report.currency == "JPY")
         model.closeReport()
         #expect(!report.isPresented)
         #expect(recorder.actions.last == .replaceRoute("/tax?year=2020&unrelated=keep"))
+        model.routeDidChange(try #require(NativeRoute("/tax?year=2020&unrelated=keep")))
+        model.routeDidChange(try #require(NativeRoute("/tax?year=2020&export=pdf&unrelated=keep")))
+        #expect(report.type == .portfolio && report.periodPreset == .year && report.currency == "JPY")
         model.routeDidChange(try #require(NativeRoute("/unknown?unrelated=keep")))
         #expect(model.detail == .notFound)
+        model.routeDidChange(try #require(NativeRoute("/tax?export=pdf")))
+        #expect(report.type == .tax && report.periodPreset == .rolling12)
         model.routeDidChange(try #require(NativeRoute("/portfolio/performance")))
         #expect(model.detail == .web)
     }

@@ -331,6 +331,7 @@ public final class NativeShellModel {
     public func routeDidChange(_ next: NativeRoute) {
         let pathChanged = next.path != route.path
         if pathChanged {
+            reports?.didLeavePage()
             if route.path == "/analysis" { analysis?.didDisappear() }
             research?.didDisappear(route: route)
             if route.path == "/research/forecast" { researchForecast?.didDisappear() }
@@ -350,7 +351,7 @@ public final class NativeShellModel {
         route = next
         if let reports {
             if next.value("export") == "pdf", let type = Self.reportType(for: next.path) {
-                if !reports.isPresented || reports.type != type { reports.configure(type: type, origin: next.string) }
+                if !reports.isPresented { reports.configure(type: type, origin: next.string) }
             } else if reports.isPresented {
                 reports.didDisappear()
             }

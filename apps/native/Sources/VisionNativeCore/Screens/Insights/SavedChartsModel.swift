@@ -4,6 +4,7 @@ import Observation
 @MainActor
 @Observable
 public final class SavedChartsModel {
+    public var printLocalState = NativeStatisticsPrintLocalState()
     public private(set) var charts: [OpenAPI.SavedChart] = []
     public private(set) var datasets: [Int: CustomChartDataset] = [:]
     public private(set) var errors: [Int: String] = [:]

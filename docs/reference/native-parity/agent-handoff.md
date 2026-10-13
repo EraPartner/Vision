@@ -607,6 +607,39 @@ current-view print work is parallel preparation. Notification/rates latest focus
 passes 54 cases with zero drift; manifest
 `b6f3c6275f163b6e2ae56e5b23807d7cc746b1beac1447bc250de1bb95f49803`.
 
+## Full print/lifecycle checkpoint (2026-10-13 23:42 UTC)
+
+`2ef06366` is pushed and verified after `69415f27`; it saves the actual emitted-storage
+guard fix, permanent Mac JavaScriptCore tests, native zoom/reload Core ABI and the focus
+monitor compiler repair. The next full checkpoint saves all dirty/new printing and
+lifecycle task files, including unfinished preparation and new tests.
+
+Current on-disk scope: native detail zoom/root input fence; SDK normal graph reload and
+bidirectional FX cache refresh; shared paginator and Statistics print routing; Tax current
+comparison/disclosure snapshot state; Statistics snapshot/inert presentation/document with
+five new tests; Net-worth snapshot/presentation/document without tests yet; Tax seven
+print tests and synthetic fixtures. Reports now preserves same-page form drafts across
+close/reopen and clears them on page leave, with focused tests and Root same-route/type/
+query integration. Source parse/format checks pass where reported, but new Core, Mac
+rendering and pagination verification are unfinished.
+
+**Normal reload is still in progress:** Onboarding completion/category/import actions,
+Analysis SQL-history tails and Portfolio import checkpoint tails must be drained through
+their entire accepted logical actions before Main/HTTP/local actors pause. Physical HTTP
+completion and two local flushes do not prove a future post-ACK callback has finished.
+`onboarding_cont` owns its accepted-action hook; `verify_cont` will implement
+`AnalysisModel.flushAcceptedRuns`; `palette_cont` owns the Portfolio commit-tail hook and
+SDK await order. Keep restore's intentional old-tail rejection separate so it cannot
+deadlock at paused writers. The new hooks are pending at this save.
+
+Next source printing work: Stats width/footer/loaded-snapshot guards and cached-error
+behavior; Net-worth semantic tests and SDK binding; Tax proof and capture/lifecycle tests;
+light print appearance and readable source chart layouts. Required stable 3p parity/
+structural docs have no partial changes yet and remain `docs_reports_cont`'s next chunk.
+Keep the 1,271-test proof immutable and establish a new full scope after all new Core
+source stabilizes. Follow real Mac compiler/package runs continuously, then proceed to
+phase 4 under a new ADR; no user manual verification or intermission is needed.
+
 ## Tooling and safety for continuation
 
 - Workspace: `/workspace/Vision`. Bun: `/tmp/vision-tools/package/bin/bun` (1.4.3).

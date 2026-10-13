@@ -205,8 +205,19 @@ struct TaxYearComparisonView: View {
     let overview: OpenAPI.BelgianTaxOverview
     let shell: NativeShellModel
     @State private var compareYear: Int?
+    private let onComparisonChange: ((Int?) -> Void)?
     @Environment(\.visionTheme) private var theme
 
+    init(
+        model: TaxDashboardModel, overview: OpenAPI.BelgianTaxOverview, shell: NativeShellModel,
+        initialComparisonYear: Int? = nil, onComparisonChange: ((Int?) -> Void)? = nil
+    ) {
+        self.model = model
+        self.overview = overview
+        self.shell = shell
+        self._compareYear = State(initialValue: initialComparisonYear)
+        self.onComparisonChange = onComparisonChange
+    }
     private var data: TaxDashboardData? {
         guard let data = model.data, data.year == overview.year,
             data.currency == shell.settings.defaultCurrency
@@ -230,7 +241,11 @@ struct TaxYearComparisonView: View {
                 Picker(
                     shell.strings.t("tax.comparison.versus"),
                     selection: Binding(
-                        get: { selected.year }, set: { compareYear = $0 })
+                        get: { selected.year },
+                        set: { value in
+                            compareYear = value
+                            onComparisonChange?(value)
+                        })
                 ) {
                     ForEach(available, id: \.year) { year in
                         HStack {
@@ -271,9 +286,17 @@ struct TaxYearComparisonView: View {
                     }.frame(minWidth: 640, maxWidth: .infinity, alignment: .leading)
                 }
             }
-            .onChange(of: overview.year) { _, _ in compareYear = defaultYear }
+            .onAppear { onComparisonChange?(compareYear) }
+            .onDisappear { onComparisonChange?(nil) }
+            .onChange(of: overview.year) { _, _ in
+                compareYear = defaultYear
+                onComparisonChange?(defaultYear)
+            }
             .onChange(of: available.map(\.year)) { _, years in
-                if let compareYear, !years.contains(compareYear) { self.compareYear = defaultYear }
+                if let compareYear, !years.contains(compareYear) {
+                    self.compareYear = defaultYear
+                    onComparisonChange?(defaultYear)
+                }
             }
         }
     }

@@ -11,6 +11,7 @@ public final class StatisticsModel {
     public private(set) var exclusions = InsightExclusions()
     public private(set) var window: StatisticsWindow = .rolling24
     public private(set) var tab: StatisticsTab = .overview
+    public var printLocalState = NativeStatisticsPrintLocalState()
     public var graphExclusions: [String: Bool] = [:]
     public var recipientQuery = LocalTableQuery()
     public var categoryMetric: StatisticsMetric = .absolute
@@ -32,6 +33,7 @@ public final class StatisticsModel {
     @ObservationIgnored private let service: any StatisticsService
     @ObservationIgnored private let calendar: Calendar
     @ObservationIgnored private let now: @Sendable () -> Date
+    @ObservationIgnored private var frozenPeriod: String?
     @ObservationIgnored private var currency = "EUR"
     @ObservationIgnored private var day = ""
     @ObservationIgnored private var fetchedAt: Date?
@@ -51,10 +53,43 @@ public final class StatisticsModel {
         self.now = now
         self.flowYear = calendar.component(.year, from: now())
     }
+    /// Restores only captured values into an isolated, inert presentation model.
+    init(printSnapshot value: NativeStatisticsPrintSnapshot) {
+        service = APIClient(baseURL: { nil })
+        calendar = .current
+        now = { Date() }
+        filtered = value.filtered
+        unfiltered = value.unfiltered
+        exclusions = value.exclusions
+        window = value.window
+        tab = value.tab
+        graphExclusions = value.graphExclusions
+        widgets = value.widgets
+        widgetsLoaded = true
+        printLocalState = value.localState
+        frozenPeriod = value.currentPeriod
+        currency = value.settings.defaultCurrency
+        recipientQuery = value.recipientQuery
+        recipientVisibleCount = value.recipientVisibleCount
+        categoryMetric = value.categoryMetric
+        categoryYear = value.categoryYear
+        pivotYear = value.pivotYear
+        recipientYear = value.recipientYear
+        expandedGroups = value.expandedGroups
+        pivotPage = value.pivotPage
+        flowYear = value.flowYear
+        flow = value.flow
+        flowError = value.flowError
+    }
+    func matchesPrintRoute(_ route: NativeRoute, currency: String) -> Bool {
+        self.currency == currency
+            && window == (route.value("window") == "all" ? .all : .rolling24)
+            && tab == (StatisticsTab(rawValue: route.value("tab") ?? "") ?? .overview)
+    }
     public var isLoading: Bool { filtered == nil && error == nil }
     public var hasData: Bool { !(filtered?.monthly.months.isEmpty ?? true) }
     public var hasExclusions: Bool { !exclusions.isEmpty }
-    public var currentPeriod: String { String(StatisticsWindow.day(now(), calendar: calendar).prefix(7)) }
+    public var currentPeriod: String { frozenPeriod ?? String(StatisticsWindow.day(now(), calendar: calendar).prefix(7)) }
     public func data(for graph: String) -> StatisticsSnapshot? {
         graphExclusions[graph] == false ? unfiltered : filtered
     }

@@ -5,21 +5,44 @@ public struct StatisticsView: View {
     let screens: StatisticsScreens
     let shell: NativeShellModel
     @State private var customize = false
-    @State private var rollingAverage = false
-    @State private var selection: [String: String] = [:]
-    @State private var range: [String: String] = [:]
+    private let printSection: NativeStatisticsPrintSection?
     @Environment(\.visionTheme) private var theme
 
     public init(screens: StatisticsScreens, shell: NativeShellModel) {
         self.screens = screens
         self.shell = shell
+        printSection = nil
+    }
+    init(screens: StatisticsScreens, shell: NativeShellModel, printSection: NativeStatisticsPrintSection) {
+        self.screens = screens
+        self.shell = shell
+        self.printSection = printSection
     }
     private var model: StatisticsModel { screens.model }
     private var strings: any Localizing { shell.strings }
     private var settings: NativeAppSettings { shell.settings }
     private var currency: String { settings.defaultCurrency }
 
+    private var includesPivot: Bool {
+        guard let printSection else { return true }
+        if case .pivotTable = printSection { return true }
+        return false
+    }
+    private var displayedPivotPeriods: [String] {
+        guard case .pivotTable(let page) = printSection else { return model.pivotPeriods }
+        return Array(model.pivotPeriods.dropFirst(page * 4).prefix(4))
+    }
+    private var pivotColumnWidth: CGFloat { isPrinting ? 78 : 110 }
+    private var isPrinting: Bool { printSection != nil }
+    private func includes(_ section: NativeStatisticsPrintSection) -> Bool { printSection == nil || printSection == section }
     public var body: some View {
+        if let printSection {
+            printContent(printSection)
+        } else {
+            liveContent
+        }
+    }
+    private var liveContent: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 VisionPageHeader(
@@ -106,22 +129,22 @@ public struct StatisticsView: View {
         InsightTimelineChart(
             series: series, currency: currency, settings: settings, title: strings.t("statsPage.title"),
             bars: bars, areas: areas, stackedAreas: false, rangeComparison: rangeComparison,
-            selection: Binding(get: { selection[key] }, set: { selection[key] = $0 }),
-            rangeStart: Binding(get: { range[key] }, set: { range[key] = $0 }))
+            selection: isPrinting ? .constant(model.printLocalState.selection[key]) : Binding(get: { model.printLocalState.selection[key] }, set: { model.printLocalState.selection[key] = $0 }),
+            rangeStart: isPrinting ? .constant(model.printLocalState.rangeStart[key]) : Binding(get: { model.printLocalState.rangeStart[key] }, set: { model.printLocalState.rangeStart[key] = $0 }))
     }
     private var overview: some View {
         VStack(alignment: .leading, spacing: 20) {
-            if model.isVisible("summaryCards"), let snapshot = model.filtered { rhythm(snapshot) }
-            StatisticsDigestView(model: screens.digest, settings: settings, strings: strings)
-            if model.isVisible("monthly") {
+            if includes(.rhythm), model.isVisible("summaryCards"), let snapshot = model.filtered { rhythm(snapshot) }
+            if includes(.digest) { StatisticsDigestView(model: screens.digest, settings: settings, strings: strings, isPrinting: isPrinting) }
+            if includes(.monthly), model.isVisible("monthly") {
                 card("statsPage.widget.monthly", graph: "monthly") {
-                    Toggle(strings.t("statsPage.toggleRollingAvg", ["n": "3"]), isOn: $rollingAverage).toggleStyle(
-                        .button)
+                    if !isPrinting { Toggle(strings.t("statsPage.toggleRollingAvg", ["n": "3"]), isOn: Binding(get: { model.printLocalState.rollingAverage }, set: { model.printLocalState.rollingAverage = $0 })).toggleStyle(
+                        .button) }
                     chart(
-                        monthlySeries(model.data(for: "monthly"), average: rollingAverage), key: "monthly", bars: true)
+                        monthlySeries(model.data(for: "monthly"), average: model.printLocalState.rollingAverage), key: "monthly", bars: true)
                 }
             }
-            if model.isVisible("netTrend") {
+            if includes(.netTrend), model.isVisible("netTrend") {
                 card("statsPage.widget.netTrend", graph: "netTrend") {
                     chart(
                         [
@@ -138,7 +161,7 @@ public struct StatisticsView: View {
     private func rhythm(_ snapshot: StatisticsSnapshot) -> some View {
         card("statsPage.rhythm.title") {
             let months = snapshot.monthly.orderedMonths
-            let chosen = months.first { $0.id == selection["rhythm"] } ?? months.last
+            let chosen = months.first { $0.id == model.printLocalState.selection["rhythm"] } ?? months.last
             if let chosen {
                 let net = chosen.total_income - abs(chosen.total_spending)
                 Text(
@@ -187,7 +210,7 @@ public struct StatisticsView: View {
                     value: money(snapshot.totalIncome / Decimal(max(1, months.count))))
                 LabeledContent(strings.t("statsPage.rhythm.typicalOut"), value: money(snapshot.averageSpending))
             }
-            Text(strings.t("statsPage.rhythm.scrubHint")).font(.caption).foregroundStyle(theme.secondaryLabel)
+            if !isPrinting { Text(strings.t("statsPage.rhythm.scrubHint")).font(.caption).foregroundStyle(theme.secondaryLabel) }
         }
     }
     private func monthlySeries(_ snapshot: StatisticsSnapshot?, average: Bool) -> [InsightChartSeries] {
@@ -219,7 +242,7 @@ public struct StatisticsView: View {
 
     private var categories: some View {
         VStack(alignment: .leading, spacing: 20) {
-            if model.isVisible("categoryPie") {
+            if includes(.categoryPie), model.isVisible("categoryPie") {
                 card("statsPage.widget.categoryPie", graph: "categoryPie") {
                     yearPicker(Binding(get: { model.categoryYear }, set: { model.categoryYear = $0 }))
                     let snapshot = model.data(for: "categoryPie")
@@ -234,7 +257,7 @@ public struct StatisticsView: View {
                         settings: settings, currency: currency, strings: strings)
                 }
             }
-            if model.isVisible("categoryTrend") {
+            if includes(.categoryTrend), model.isVisible("categoryTrend") {
                 card("statsPage.widget.categoryTrend", graph: "categoryTrend") {
                     let snapshot = model.data(for: "categoryTrend")
                     let rows = Array((snapshot?.categories(metric: .expense) ?? []).filter { $0.total > 0 }.prefix(5))
@@ -248,12 +271,12 @@ public struct StatisticsView: View {
                         }, key: "categoryTrend")
                 }
             }
-            if model.isVisible("pivotTable") { pivot }
+            if includesPivot, model.isVisible("pivotTable") { pivot }
         }
     }
     private var pivot: some View {
         card("statsPage.pivotTitle", graph: "pivotTable") {
-            HStack {
+            if !isPrinting { HStack {
                 Picker(
                     strings.t("statsPage.pivot.metric"),
                     selection: Binding(get: { model.categoryMetric }, set: { model.categoryMetric = $0 })
@@ -265,13 +288,15 @@ public struct StatisticsView: View {
                 yearPicker(Binding(get: { model.pivotYear }, set: { model.pivotYear = $0 }))
                 Button(strings.t("statsPage.pivot.expandAll")) { model.expandAllGroups() }
                 Button(strings.t("statsPage.pivot.collapseAll")) { model.collapseAllGroups() }
+            } } else {
+                Text(strings.t("statsPage.pivot.metric.\(model.categoryMetric.rawValue)") + " · " + (model.pivotYear.map(String.init) ?? strings.t("statsPage.allYears")))
             }
             HStack {
-                Button(strings.t("common.previous")) { model.pivotPage += 1 }
-                    .disabled(!model.pivotHasPrevious)
-                Text((model.pivotPeriods.first ?? "") + " – " + (model.pivotPeriods.last ?? "")).font(.caption)
-                Button(strings.t("common.next")) { model.pivotPage = max(0, model.pivotPage - 1) }.disabled(
-                    model.pivotPage == 0)
+                if !isPrinting { Button(strings.t("common.previous")) { model.pivotPage += 1 }
+                    .disabled(!model.pivotHasPrevious) }
+                Text((displayedPivotPeriods.first ?? "") + " – " + (displayedPivotPeriods.last ?? "")).font(.caption)
+                if !isPrinting { Button(strings.t("common.next")) { model.pivotPage = max(0, model.pivotPage - 1) }.disabled(
+                    model.pivotPage == 0) }
             }
             // The label column stays outside the scrolling month columns, preserving the
             // web table's sticky category labels in narrow windows.
@@ -280,7 +305,7 @@ public struct StatisticsView: View {
                     Text(strings.t("categories.title")).font(.caption.weight(.semibold)).frame(height: 32)
                     ForEach(model.pivotGroups) { group in
                         HStack {
-                            if group.isExpandable {
+                            if group.isExpandable, !isPrinting {
                                 Button {
                                     model.toggleGroup(group.id)
                                 } label: {
@@ -304,14 +329,14 @@ public struct StatisticsView: View {
                         }
                     }
                     Text(strings.t("statsPage.total")).fontWeight(.semibold).frame(height: 32)
-                }.frame(width: 200, alignment: .leading)
-                ScrollView(.horizontal) {
+                }.frame(width: isPrinting ? 140 : 200, alignment: .leading)
+                horizontalContent {
                     VStack(alignment: .leading, spacing: 0) {
                         HStack(spacing: 0) {
-                            ForEach(model.pivotPeriods, id: \.self) { period in
-                                Text(period).frame(width: 110, height: 32)
+                            ForEach(displayedPivotPeriods, id: \.self) { period in
+                                Text(period).frame(width: pivotColumnWidth, height: 32)
                             }
-                            Text(strings.t("statsPage.total")).frame(width: 110, height: 32)
+                            Text(strings.t("statsPage.total")).frame(width: pivotColumnWidth, height: 32)
                         }.font(.caption.weight(.semibold))
                         ForEach(model.pivotGroups) { group in
                             pivotRow(
@@ -324,15 +349,15 @@ public struct StatisticsView: View {
                             }
                         }
                         HStack(spacing: 0) {
-                            ForEach(model.pivotPeriods, id: \.self) { period in
+                            ForEach(displayedPivotPeriods, id: \.self) { period in
                                 pivotCell(
                                     model.pivotGroups.reduce(0) { $0 + ($1.values[period] ?? 0) }, ids: [],
                                     period: period, name: strings.t("statsPage.total"))
                             }
-                            Button(money(model.pivotGroups.reduce(0) { $0 + $1.total })) {
+                            if isPrinting { Text(money(model.pivotGroups.reduce(0) { $0 + $1.total })).frame(width: pivotColumnWidth, height: 32) } else { Button(money(model.pivotGroups.reduce(0) { $0 + $1.total })) {
                                 shell.navigate(to: "/transactions")
                             }
-                            .buttonStyle(.link).frame(width: 110, height: 32)
+                            .buttonStyle(.link).frame(width: pivotColumnWidth, height: 32) }
                         }.fontWeight(.semibold)
                     }
                 }
@@ -342,7 +367,7 @@ public struct StatisticsView: View {
     private func pivotRow(values: [String: Decimal], ids: [Int], name: String, uncategorised: Bool = false) -> some View
     {
         HStack(spacing: 0) {
-            ForEach(model.pivotPeriods, id: \.self) { period in
+            ForEach(displayedPivotPeriods, id: \.self) { period in
                 pivotCell(values[period] ?? 0, ids: ids, period: period, name: name, uncategorised: uncategorised)
             }
             pivotCell(values.values.reduce(0, +), ids: ids, period: nil, name: name, uncategorised: uncategorised)
@@ -351,12 +376,12 @@ public struct StatisticsView: View {
     private func pivotCell(_ value: Decimal, ids: [Int], period: String?, name: String, uncategorised: Bool = false)
         -> some View
     {
-        Button(money(value)) {
+        Group { if isPrinting { Text(money(value)).frame(width: pivotColumnWidth, height: 32).monospacedDigit() } else { Button(money(value)) {
             shell.navigate(
                 to: model.pivotDrill(categoryIds: ids, period: period, label: name, uncategorised: uncategorised).string
             )
-        }.buttonStyle(.link).disabled(value == 0).frame(width: 110, height: 32).monospacedDigit()
-            .help(money(value)).accessibilityLabel(strings.t("statsPage.pivot.drillAria", ["label": name]))
+        }.buttonStyle(.link).disabled(value == 0).frame(width: pivotColumnWidth, height: 32).monospacedDigit()
+            .help(money(value)).accessibilityLabel(strings.t("statsPage.pivot.drillAria", ["label": name])) } }
     }
 
     private var recipients: some View {
@@ -385,7 +410,7 @@ public struct StatisticsView: View {
                                 ? data.topMerchants.prefix(10).reduce(0) { $0 + $1.totalSpend } / Decimal(transactions)
                                 : 0))
                 }
-                LocalDataTable(
+                if isPrinting { recipientPrintTable } else { LocalDataTable(
                     title: strings.t("insights.detailsTitle"), subtitle: strings.t("insights.detailsSubtitle"),
                     columns: recipientColumns,
                     rows: Array(model.recipientRows.prefix(model.recipientVisibleCount)),
@@ -401,6 +426,7 @@ public struct StatisticsView: View {
                     ) {
                         model.loadMoreRecipients(pageSize: settings.defaultPageSize)
                     }
+                }
                 }
                 ForEach(data.monthOverMonth) { change in
                     LabeledContent(
@@ -451,7 +477,7 @@ public struct StatisticsView: View {
     }
     private var yearly: some View {
         VStack(alignment: .leading, spacing: 20) {
-            if model.isVisible("yearlyComparison") {
+            if includes(.yearlyComparison), model.isVisible("yearlyComparison") {
                 card("statsPage.widget.yearlyComparison", graph: "yearlyComparison") {
                     let years = model.data(for: "yearlyComparison")?.years ?? []
                     chart(
@@ -465,7 +491,7 @@ public struct StatisticsView: View {
                         ], key: "yearlyComparison", bars: true)
                 }
             }
-            if model.isVisible("yearlySummary") {
+            if includes(.yearlySummary), model.isVisible("yearlySummary") {
                 card("statsPage.yearly.title") {
                     Grid(alignment: .trailing, horizontalSpacing: 28, verticalSpacing: 12) {
                         GridRow {
@@ -489,7 +515,7 @@ public struct StatisticsView: View {
     }
     private var flow: some View {
         card("statsPage.sankey.title", graph: "sankey") {
-            Picker(
+            if !isPrinting { Picker(
                 strings.t("statistics.selectYear"),
                 selection: Binding(
                     get: { model.flowYear },
@@ -506,31 +532,64 @@ public struct StatisticsView: View {
                             ])
                     ).sorted(by: >), id: \.self
                 ) { Text(String($0)).tag($0) }
-            }.frame(maxWidth: 200)
+            }.frame(maxWidth: 200) } else { Text(String(model.flowYear)) }
             if model.isFlowLoading {
                 ProgressView().frame(height: 380)
             } else if let flow = model.flow {
                 if flow.nodes.isEmpty {
                     Text(strings.t("statsPage.sankey.noData")).foregroundStyle(theme.secondaryLabel)
                 } else {
-                    ScrollView(.horizontal) {
+                    horizontalContent {
                         StatisticsFlowView(flow: flow, settings: settings, currency: currency, strings: strings).frame(
                             minWidth: 720)
                     }.frame(height: 380)
                 }
             } else if let error = model.flowError {
                 Text(error).foregroundStyle(theme.destructive)
-                Button(strings.t("common.retry")) { Task { await model.loadFlow() } }
+                if !isPrinting { Button(strings.t("common.retry")) { Task { await model.loadFlow() } } }
             }
         }
     }
-    private func yearPicker(_ binding: Binding<Int?>) -> some View {
-        Picker(strings.t("statistics.selectYear"), selection: binding) {
+    @ViewBuilder private func yearPicker(_ binding: Binding<Int?>) -> some View {
+        if isPrinting { Text(binding.wrappedValue.map(String.init) ?? strings.t("statsPage.allYears")) } else { Picker(strings.t("statistics.selectYear"), selection: binding) {
             Text(strings.t("statsPage.allYears")).tag(nil as Int?)
             ForEach((model.unfiltered?.years.map(\.year) ?? []).sorted(by: >), id: \.self) {
                 Text(String($0)).tag(Optional($0))
             }
-        }.frame(maxWidth: 180)
+        }.frame(maxWidth: 180) }
+    }
+    @ViewBuilder private func horizontalContent<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        if isPrinting { content() } else { ScrollView(.horizontal) { content() } }
+    }
+    private var recipientPrintTable: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(strings.t("insights.detailsTitle")).font(.headline)
+            Text(strings.t("insights.detailsSubtitle")).font(.caption)
+            if !model.recipientQuery.search.isEmpty { Text(model.recipientQuery.search) }
+            ForEach(model.recipientQuery.filters) { filter in Text(filter.key + ": " + filter.value) }
+            Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 8) {
+                GridRow { ForEach(recipientColumns) { column in Text(column.title).font(.caption.weight(.semibold)) } }
+                ForEach(Array(model.recipientRows.prefix(model.recipientVisibleCount))) { row in
+                    GridRow { ForEach(recipientColumns) { column in column.cell(row).font(.caption) } }
+                }
+            }
+            if model.recipientRows.isEmpty {
+                Text(strings.t(model.recipientQuery.isNarrowed ? "table.noFilterResults" : "insights.detailsEmpty"))
+            }
+        }
+    }
+    @ViewBuilder private func printContent(_ section: NativeStatisticsPrintSection) -> some View {
+        switch section {
+        case .header:
+            VisionPageHeader(title: strings.t("statsPage.title"), subtitle: strings.t("statsPage.subtitle"), symbol: "chart.bar") { EmptyView() }
+            Text(strings.t(model.tab.labelKey) + " · " + strings.t(model.window == .all ? "statsPage.window.allTime" : "statsPage.window.rolling24"))
+        case .rhythm, .digest, .monthly, .netTrend: overview
+        case .categoryPie, .categoryTrend, .pivotTable: categories
+        case .recipients: recipients
+        case .yearlyComparison, .yearlySummary: yearly
+        case .flow: flow
+        case .customHeader, .customStatus, .savedChart: EmptyView()
+        }
     }
     private func card<Content: View>(
         _ title: String, graph: String? = nil, @ViewBuilder content: @escaping () -> Content
@@ -542,7 +601,7 @@ public struct StatisticsView: View {
                 HStack {
                     Text(strings.t(title)).font(.headline)
                     Spacer()
-                    if let graph, model.hasExclusions {
+                    if let graph, model.hasExclusions, !isPrinting {
                         Toggle(
                             strings.t(
                                 model.graphExclusions[graph] != false

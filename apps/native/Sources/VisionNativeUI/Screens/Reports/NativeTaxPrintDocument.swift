@@ -88,7 +88,7 @@ public struct NativeTaxPrintSectionView: View {
                 totalIncludingPortfolio: data.totalTaxIncludingPortfolio,
                 totalIncludingProperty: data.totalTaxIncludingPropertyEstimate)
         case .taxRules:
-            TaxRulesView(strings: strings)
+            TaxRulesView(strings: strings, initiallyExpanded: snapshot.localState.rulesExpanded)
         case .householdBreakdown:
             TaxHouseholdBreakdownView(overview: overview, data: data, shell: shell)
         case .incomeBreakdown:
@@ -110,7 +110,9 @@ public struct NativeTaxPrintSectionView: View {
                 if let error = snapshot.deductionApplyError { Text(error) }
             }
         case .yearComparison:
-            TaxYearComparisonView(model: presentation.dashboard, overview: overview, shell: shell)
+            TaxYearComparisonView(
+                model: presentation.dashboard, overview: overview, shell: shell,
+                initialComparisonYear: snapshot.localState.comparisonYear)
         case .yearlyOverview:
             TaxYearlyOverviewView(model: presentation.dashboard, overview: overview, shell: shell)
         case .automation:

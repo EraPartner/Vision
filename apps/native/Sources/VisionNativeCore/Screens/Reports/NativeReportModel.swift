@@ -20,6 +20,7 @@ import Observation
     @ObservationIgnored private let now: @MainActor () -> Date
     @ObservationIgnored private let calendar: Calendar
     @ObservationIgnored private var generation = UUID()
+    @ObservationIgnored private var configuredOriginPath: String?
     @ObservationIgnored private var noticeID = 0
     public init(
         service: any NativeReportService, callbacks: NativeReportCallbacks,
@@ -53,8 +54,15 @@ import Observation
     public func configure(type: NativeReportType, origin: String? = nil) {
         guard !isRetired else { return }
         generation = UUID()
-        self.type = type
+        let path = origin?.split(separator: "?", maxSplits: 1).first.map(String.init)
+        let samePage = path != nil && configuredOriginPath == path
         self.origin = origin
+        configuredOriginPath = path
+        isSubmitting = false
+        isPresented = true
+        errorDetail = nil
+        guard !samePage else { return }
+        self.type = type
         periodPreset = .rolling12
         customYear = String(currentYear)
         customFrom = "\(currentYear - 1)-01-01"
@@ -94,6 +102,11 @@ import Observation
         generation = UUID()
         isPresented = false
         isSubmitting = false
+    }
+    /// Closing a dialog keeps its page-owned form; leaving the page retires that draft.
+    public func didLeavePage() {
+        didDisappear()
+        configuredOriginPath = nil
     }
     public func retireForReload() {
         isRetired = true

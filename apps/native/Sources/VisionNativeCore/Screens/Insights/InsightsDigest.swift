@@ -82,6 +82,13 @@ public final class StatisticsDigestModel {
     @ObservationIgnored private var loadedAt: Date?
     @ObservationIgnored private var task: Task<Void, Never>?
     public init(service: any StatisticsDigestService) { self.service = service }
+    init(printSnapshot value: NativeStatisticsPrintSnapshot) {
+        service = APIClient(baseURL: { nil })
+        data = value.digest
+        error = value.digestError
+        expanded = value.digestExpanded
+        isLoading = false
+    }
     public func load(force: Bool = false) async {
         if !force, let loadedAt, Date().timeIntervalSince(loadedAt) < 30 { return }
         if let task {

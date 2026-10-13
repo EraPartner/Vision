@@ -11,6 +11,8 @@ public final class TaxScreens {
     public let actions: TaxActionsModel
     public let widgets: TaxWidgetsModel
     public let deductions: TaxDeductionsModel
+    /// Memory-only current view state used by the loaded-page printer.
+    public var printLocalState = NativeTaxPrintLocalState()
     public private(set) var exportError: String?
     public private(set) var profileOpenError: String?
     public private(set) var routeLoadError: String?

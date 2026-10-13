@@ -44,6 +44,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     private var pendingRestoreReload: UUID?
     private var onboardingRestoreIntent: UUID?
     private var nativeSettingsRebuildTask: Task<Void, any Error>?
+    private var manualReloadTask: Task<Void, Never>?
     private var isPrintingCurrentPage = false
     /// The sidebar, route and settings state of the native navigation shell.
     private lazy var shellModel = makeShellModel()
@@ -468,6 +469,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             return (try? await self.nativeSettingsScript(NativeSettingsStorageBridge.editingScript))?.boolValue ?? true
         }
         model.isRendererReady = queue.isReady
+        model.setPageZoom(Double(webShell?.webView.pageZoom ?? 1))
         model.home?.useSharedUpcoming()
         notifications.upcoming.didLoadUpcoming = { [weak model] rows in
             model?.home?.applySharedUpcoming(rows)
@@ -484,6 +486,12 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         notifications.fx.didRefreshRates = { [weak model] in
             model?.exchangeRatesDidRefresh()
             if let model, model.route.path == "/admin/exchange-rates" { await model.exchangeRates.retry() }
+        }
+        model.exchangeRates.didRefreshRates = { [weak self, weak model, weak notifications] in
+            guard let self, (try? self.requireNativeGeneration(settingsGeneration)) != nil else { return }
+            model?.exchangeRatesDidRefresh()
+            notifications?.fx.invalidate()
+            await notifications?.fx.refreshIfStale()
         }
         onboarding.requestDashboardArrival = { [weak self] in
             guard let self, self.nativeSettingsGeneration == settingsGeneration else { return }
@@ -761,6 +769,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             isBackupEncrypted: { [weak self] path in await self?.isBackupEncrypted(path) ?? false },
             restoreBackup: { [weak self] path, passphrase in
                 guard let self else { return nil }
+                try self.requireNativeGeneration(generation)
                 return await self.restoreNativeBackup(
                     path, passphrase: passphrase, onboardingRestore: onboardingRestore, nativeReloadOwned: true)
             },
@@ -781,10 +790,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             },
             readBackupReminder: { [weak self] in
                 guard let self else { return false }
-                let result = try await self.nativeSettingsScript(
-                    NativeSettingsStorageBridge.readScript,
-                    arguments: NativeSettingsStorageBridge.arguments(for: .reminder))
-                return try NativeSettingsStorageBridge.readLocalReply(result) == "1"
+                return try await self.nativeLocalValue(.reminder, generation: generation) == "1"
             },
             writeBackupReminder: { [weak self] dismissed in
                 guard let self else { throw APIError.backendUnavailable }
@@ -999,8 +1005,11 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         }
     }
 
-    private func reloadNativeSettingsFrontend(expectedGeneration: UUID, restoreReload: Bool = false) async throws {
+    private func reloadNativeSettingsFrontend(
+        expectedGeneration: UUID, restoreReload: Bool = false, manualReloadOwned: Bool = false
+    ) async throws {
         guard expectedGeneration == nativeSettingsGeneration else { return }
+        if manualReloadTask != nil, !manualReloadOwned { return }
         if let pendingRestoreReload {
             guard restoreReload, pendingRestoreReload == expectedGeneration else { return }
         }
@@ -1683,13 +1692,27 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         menuController.makeMenu(title: "", entries: ApplicationMenu.dock(strings: strings))
     }
 
+    private enum PagePrintSnapshot {
+        case tax(NativeTaxPrintSnapshot)
+        case statistics(NativeStatisticsPrintSnapshot)
+    }
+
+    private func capturePagePrintSnapshot() -> PagePrintSnapshot? {
+        switch shellModel.route.path {
+        case "/tax": (try? NativeTaxPrintSnapshot.capture(shell: shellModel)).map(PagePrintSnapshot.tax)
+        case "/statistics":
+            (try? NativeStatisticsPrintSnapshot.capture(shell: shellModel)).map(PagePrintSnapshot.statistics)
+        default: nil
+        }
+    }
+
     var canPrintCurrentPage: Bool {
         guard !isPrintingCurrentPage, !restoreFenceEntered, pendingRestoreReload == nil,
             restoredNativeGeneration == nil, shellModel.nativeSettings?.isSuspendedForRestore != true,
-            !shellModel.isPresentingNativeOverlay, queue.isReady
+            !shellModel.isReloadingGraph, !shellModel.isPresentingNativeOverlay, queue.isReady
         else { return false }
         if shellModel.detail == .web { return webShell?.webView != nil }
-        return (try? NativeTaxPrintSnapshot.capture(shell: shellModel)) != nil
+        return capturePagePrintSnapshot() != nil
     }
 
     private func printCurrentPage() {
@@ -1701,7 +1724,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             operation?.run()
             return
         }
-        guard let snapshot = try? NativeTaxPrintSnapshot.capture(shell: shellModel) else { return }
+        guard let snapshot = capturePagePrintSnapshot() else { return }
         let generation = nativeSettingsGeneration
         let route = shellModel.route.string
         isPrintingCurrentPage = true
@@ -1709,16 +1732,39 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             guard let self else { return }
             defer { self.isPrintingCurrentPage = false }
             do {
-                let presentation = try await NativeTaxPrintPresentation.prepare(snapshot)
+                let title: String
+                let buildBlocks: @MainActor (CGFloat) -> [NSView]
+                switch snapshot {
+                case .tax(let snapshot):
+                    let presentation = try await NativeTaxPrintPresentation.prepare(snapshot)
+                    title = snapshot.strings.t("tax.page.title") + " · " + String(snapshot.year)
+                    buildBlocks = { width in
+                        snapshot.sections.map {
+                            NSHostingView(
+                                rootView: NativeTaxPrintDocument(presentation: presentation, sections: [$0])
+                                    .frame(width: width)) as NSView
+                        }
+                    }
+                case .statistics(let snapshot):
+                    let presentation = NativeStatisticsPrintPresentation.prepare(snapshot)
+                    title = snapshot.strings.t("statsPage.title")
+                    buildBlocks = { width in
+                        snapshot.sections.map {
+                            NSHostingView(
+                                rootView: NativeStatisticsPrintDocument(presentation: presentation, sections: [$0])
+                                    .frame(width: width)) as NSView
+                        }
+                    }
+                }
                 try self.requireNativeGeneration(generation)
                 guard self.shellModel.route.string == route, !self.restoreFenceEntered,
                     self.pendingRestoreReload == nil, !self.shellModel.isPresentingNativeOverlay,
-                    self.shellModel.nativeSettings?.isSuspendedForRestore != true
+                    !self.shellModel.isReloadingGraph, self.shellModel.nativeSettings?.isSuspendedForRestore != true
                 else { return }
                 let info = (NSPrintInfo.shared.copy() as? NSPrintInfo) ?? NSPrintInfo.shared
-                let pages = NativeTaxPrintPagesView(presentation: presentation, printInfo: info)
+                let pages = NativePagePrintPagesView(printInfo: info, buildBlocks: buildBlocks)
                 let operation = NSPrintOperation(view: pages, printInfo: info)
-                operation.jobTitle = snapshot.strings.t("tax.page.title") + " · " + String(snapshot.year)
+                operation.jobTitle = title
                 operation.showsPrintPanel = true
                 operation.showsProgressPanel = true
                 operation.run()
@@ -1732,7 +1778,48 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         }
     }
 
+    private func reloadCurrentGraph() {
+        guard appURL != nil, webShell?.webView != nil, manualReloadTask == nil,
+            nativeSettingsRebuildTask == nil, !restoreFenceEntered, pendingRestoreReload == nil,
+            restoredNativeGeneration == nil, shellModel.nativeSettings?.isSuspendedForRestore != true,
+            confirmQuitWithUnsavedChanges()
+        else { return }
+        let generation = nativeSettingsGeneration
+        let model = shellModel
+        model.isReloadingGraph = true
+        manualReloadTask = Task { [weak self] in
+            guard let self else { return }
+            defer { self.manualReloadTask = nil }
+            await model.nativeSettings?.flush()
+            await model.nativeSettings?.suspendForRestore()
+            await self.settingsWriter.suspendAndDrain()
+            model.closePalette()
+            model.closeShortcuts()
+            await self.drainNativeLocalWrites(model)
+            if let streams = model.aiChat?.chat.streams {
+                for id in streams.activeIDs { streams.stop(id: id) }
+            }
+            model.imports.cancelImport()
+            model.portfolioImports?.advanced.cancel()
+            await self.dataSession.suspendAndDrain()
+            await self.drainNativeLocalWrites(model)
+            do {
+                try await self.reloadNativeSettingsFrontend(expectedGeneration: generation, manualReloadOwned: true)
+            } catch {
+                guard generation == self.nativeSettingsGeneration else { return }
+                await self.localStateSession.resumeAfterFailedRestore()
+                model.nativeSettings?.resumeAfterFailedRestore()
+                await self.settingsWriter.resumeAfterFailedRestore()
+                await self.dataSession.resumeAfterFailedRestore()
+                model.isReloadingGraph = false
+                model.isRendererReady = self.queue.isReady
+                self.logger.error("native reload failed: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+
     func run(_ command: MenuCommand) {
+        guard !shellModel.isReloadingGraph else { return }
         switch command {
         case .print:
             printCurrentPage()
@@ -1756,13 +1843,18 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         case .about:
             showAboutPanel()
         case .reload:
-            if let webView = webShell?.webView, appURL != nil { webView.reload() } else { launch() }
+            if appURL != nil { reloadCurrentGraph() } else { launch() }
         case .resetZoom:
             webShell?.webView.pageZoom = 1
+            shellModel.setPageZoom(1)
         case .zoomIn:
-            if let webView = webShell?.webView { webView.pageZoom = PageZoom.zoomedIn(from: Double(webView.pageZoom)) }
+            let zoom = PageZoom.zoomedIn(from: webShell.map { Double($0.webView.pageZoom) } ?? shellModel.pageZoom)
+            webShell?.webView.pageZoom = zoom
+            shellModel.setPageZoom(zoom)
         case .zoomOut:
-            if let webView = webShell?.webView { webView.pageZoom = PageZoom.zoomedOut(from: Double(webView.pageZoom)) }
+            let zoom = PageZoom.zoomedOut(from: webShell.map { Double($0.webView.pageZoom) } ?? shellModel.pageZoom)
+            webShell?.webView.pageZoom = zoom
+            shellModel.setPageZoom(zoom)
         default:
             // Role items use AppKit's standard actions (MenuController).
             break
@@ -2032,7 +2124,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     private func restoreNativeBackup(
         _ path: String, passphrase: String?, onboardingRestore: Bool, nativeReloadOwned: Bool
     ) async -> JSONValue {
-        guard !restoreFenceEntered, pendingRestoreReload == nil else {
+        guard !restoreFenceEntered, pendingRestoreReload == nil, !shellModel.isReloadingGraph else {
             return .object(["success": .bool(false), "error": .string("A restore is already in progress")])
         }
         let operation = UUID()
@@ -2086,8 +2178,9 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     }
 
     private func confirmAndSuspendForRestore(fileName: String, operation: UUID) async -> Bool {
-        guard !restoreFenceEntered, pendingRestoreReload == nil,
-            await confirmRestore(fileName: fileName), !restoreFenceEntered, pendingRestoreReload == nil
+        guard !restoreFenceEntered, pendingRestoreReload == nil, !shellModel.isReloadingGraph,
+            await confirmRestore(fileName: fileName), !restoreFenceEntered, pendingRestoreReload == nil,
+            !shellModel.isReloadingGraph
         else { return false }
         restoreFenceEntered = true
         restoreFenceOwner = operation
@@ -2113,6 +2206,9 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         await model.onboarding?.flushDraft()
         await model.shellNotifications?.flushStorage()
         await model.home?.flushLocalStorage()
+        await model.researchChartBuilder?.flushStorage()
+        await model.analysis?.flushHistory()
+        await model.portfolioImports?.session.flushCheckpoint()
     }
 
     private func confirmRestore(fileName: String) async -> Bool {
@@ -2292,11 +2388,14 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     }
 
     func changeNativeSettings(_ patch: NativeSettingsPatch) async throws {
+        guard !shellModel.isReloadingGraph else { throw CancellationError() }
         let generation = nativeSettingsGeneration
         guard let model = shellModel.nativeSettings else { throw APIError.backendUnavailable }
         await model.load()
         guard model.isLoaded, generation == nativeSettingsGeneration else { throw APIError.backendUnavailable }
-        guard !model.isSuspendedForRestore else { throw APIError.invalidRequest("Settings are paused during restore") }
+        guard !model.isSuspendedForRestore, !shellModel.isReloadingGraph else {
+            throw APIError.invalidRequest("Settings are paused during restore or reload")
+        }
         let raw = try JSONDecoder().decode(TaxValue.self, from: JSONEncoder().encode(JSONValue.object(patch.updates)))
         guard var fields = raw.objectValue else { throw APIError.invalidRequest("Invalid native settings patch") }
         switch patch.key {
@@ -2320,7 +2419,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
 
     func openNativeOverlay(_ kind: NativeShellOverlayKind) async throws {
         guard !restoreFenceEntered, restoredNativeGeneration == nil,
-            shellModel.nativeSettings?.isSuspendedForRestore != true
+            !shellModel.isReloadingGraph, shellModel.nativeSettings?.isSuspendedForRestore != true
         else { throw APIError.invalidRequest("Native overlays are paused during restore") }
         guard queue.isReady, shellModel.nativeSettings?.isLoaded == true else { throw APIError.backendUnavailable }
         switch kind {
@@ -2344,22 +2443,20 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     }
 }
 
-/// Frozen Tax sections laid out in source order. Short sections begin on a fresh page
+/// Frozen page sections laid out in source order. Short sections begin on a fresh page
 /// when needed; sections taller than the paper continue on the following page.
 @MainActor
-private final class NativeTaxPrintPagesView: NSView {
+private final class NativePagePrintPagesView: NSView {
     private let pageHeight: CGFloat
     private let pageCount: Int
     override var isFlipped: Bool { true }
 
-    init(presentation: NativeTaxPrintPresentation, printInfo: NSPrintInfo) {
+    init(printInfo: NSPrintInfo, buildBlocks: @MainActor (CGFloat) -> [NSView]) {
         let width = max(1, printInfo.paperSize.width - printInfo.leftMargin - printInfo.rightMargin)
         let heightPerPage = max(1, printInfo.paperSize.height - printInfo.topMargin - printInfo.bottomMargin)
         var blocks: [(NSView, CGFloat, CGFloat)] = []
         var offset: CGFloat = 0
-        for section in presentation.snapshot.sections {
-            let block = NSHostingView(
-                rootView: NativeTaxPrintDocument(presentation: presentation, sections: [section]).frame(width: width))
+        for block in buildBlocks(width) {
             block.setFrameSize(NSSize(width: width, height: 1))
             block.layoutSubtreeIfNeeded()
             let height = max(1, block.fittingSize.height)

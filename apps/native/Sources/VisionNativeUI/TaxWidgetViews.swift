@@ -80,6 +80,13 @@ struct TaxWidgetsSheet: View {
 
 struct TaxRulesView: View {
     let strings: any Localizing
+    @State private var expanded: Bool
+    private let onExpandedChange: ((Bool) -> Void)?
+    init(strings: any Localizing, initiallyExpanded: Bool = false, onExpandedChange: ((Bool) -> Void)? = nil) {
+        self.strings = strings
+        self._expanded = State(initialValue: initiallyExpanded)
+        self.onExpandedChange = onExpandedChange
+    }
     @Environment(\.visionTheme) private var theme
     private let sections: [(String, [String])] = [
         ("federalBracketsTitle", ["federalBrackets.1", "federalBrackets.2", "federalBrackets.3", "federalBrackets.4"]),
@@ -89,7 +96,15 @@ struct TaxRulesView: View {
     ]
     var body: some View {
         TaxCard {
-            DisclosureGroup(strings.t("tax.rules.title")) {
+            DisclosureGroup(
+                strings.t("tax.rules.title"),
+                isExpanded: Binding(
+                    get: { expanded },
+                    set: { value in
+                        expanded = value
+                        onExpandedChange?(value)
+                    })
+            ) {
                 VStack(alignment: .leading, spacing: 14) {
                     Text(strings.t("tax.rules.description")).foregroundStyle(theme.secondaryLabel)
                     ForEach(sections, id: \.0) { title, keys in
@@ -100,6 +115,7 @@ struct TaxRulesView: View {
                     }
                 }.padding(.top, 12)
             }
-        }
+        }.onAppear { onExpandedChange?(expanded) }
+            .onDisappear { onExpandedChange?(false) }
     }
 }

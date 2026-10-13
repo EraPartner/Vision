@@ -12,6 +12,7 @@ public struct ShellRootView<WebContent: View>: View {
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var connectivity = PortfolioConnectivity()
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     public init(model: NativeShellModel, @ViewBuilder webContent: @escaping (_ hidden: Bool) -> WebContent) {
         self.model = model
@@ -34,11 +35,15 @@ public struct ShellRootView<WebContent: View>: View {
                     webContent(model.detail != .web)
                         .ignoresSafeArea()
                     if case .native(let screen) = model.detail {
-                        NativeScreenContainer(screen: screen, model: model)
-                            .environment(\.colorScheme, theme.colorScheme)
+                        NativePageZoomView(factor: model.pageZoom) {
+                            NativeScreenContainer(screen: screen, model: model)
+                                .environment(\.colorScheme, theme.colorScheme)
+                        }
                     } else if case .notFound = model.detail {
-                        NativeNotFoundView(shell: model)
-                            .environment(\.colorScheme, theme.colorScheme)
+                        NativePageZoomView(factor: model.pageZoom) {
+                            NativeNotFoundView(shell: model)
+                                .environment(\.colorScheme, theme.colorScheme)
+                        }
                     }
                 }
             }
@@ -88,7 +93,9 @@ public struct ShellRootView<WebContent: View>: View {
         .onChange(of: model.isSidebarVisible) { _, visible in
             let target: NavigationSplitViewVisibility = visible ? .all : .detailOnly
             if columnVisibility != target {
-                withAnimation(.easeInOut(duration: DesignTokens.Duration.normal)) { columnVisibility = target }
+                withAnimation(reduceMotion ? nil : .easeInOut(duration: DesignTokens.Duration.normal)) {
+                    columnVisibility = target
+                }
             }
         }
         .onChange(of: columnVisibility) { _, visibility in
@@ -103,7 +110,9 @@ public struct ShellRootView<WebContent: View>: View {
                 model.settingsAI?.isOnline = online
                 model.onboarding?.isOnline = online
                 model.shellNotifications?.isOnline = online
-                if reconnecting, model.isRendererReady, model.nativeSettings?.isSuspendedForRestore != true {
+                if reconnecting, model.isRendererReady, !model.isReloadingGraph,
+                    model.nativeSettings?.isSuspendedForRestore != true
+                {
                     Task {
                         await model.shellNotifications?.refreshIfStale()
                         if model.onboarding?.isPresented == true { await model.onboarding?.loadAdapters() }
@@ -112,7 +121,9 @@ public struct ShellRootView<WebContent: View>: View {
             }
         }
         .task(id: startupIdentity) {
-            guard model.isRendererReady, model.nativeSettings?.isSuspendedForRestore != true else { return }
+            guard model.isRendererReady, !model.isReloadingGraph,
+                model.nativeSettings?.isSuspendedForRestore != true
+            else { return }
             async let notifications: Void = loadNotifications()
             async let onboarding: Void = loadOnboarding()
             _ = await (notifications, onboarding)
@@ -120,6 +131,8 @@ public struct ShellRootView<WebContent: View>: View {
         .onChange(of: model.settings.language) { _, _ in model.onboarding?.strings = model.strings }
         .onChange(of: scenePhase) { _, phase in model.settingsAI?.isForeground = phase == .active }
         .onDisappear { connectivity.stop() }
+        .disabled(model.isReloadingGraph)
+        .allowsHitTesting(!model.isReloadingGraph)
     }
     @ViewBuilder private var shellBanners: some View {
         if let notifications = model.shellNotifications {
@@ -134,7 +147,7 @@ public struct ShellRootView<WebContent: View>: View {
         }
     }
     private var startupIdentity: String {
-        "\(ObjectIdentifier(model))|\(model.isRendererReady)|\(model.nativeSettings?.isSuspendedForRestore == true)"
+        "\(ObjectIdentifier(model))|\(model.isRendererReady)|\(model.isReloadingGraph)|\(model.nativeSettings?.isSuspendedForRestore == true)"
     }
     private func loadNotifications() async { await model.shellNotifications?.load() }
     private func loadOnboarding() async {

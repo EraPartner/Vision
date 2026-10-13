@@ -1,5 +1,14 @@
 import Foundation
 
+public struct NativeTaxPrintLocalState: Equatable, Sendable {
+    public var comparisonYear: Int?
+    public var rulesExpanded: Bool
+    public init(comparisonYear: Int? = nil, rulesExpanded: Bool = false) {
+        self.comparisonYear = comparisonYear
+        self.rulesExpanded = rulesExpanded
+    }
+}
+
 public enum NativeTaxPrintSection: String, CaseIterable, Identifiable, Sendable {
     case header, masthead, trendStrip, disclaimer, noProfile, summaryCards, pitBreakdown, taxRules
     case householdBreakdown, incomeBreakdown, currentInputs, suggestions, deductionCandidates
@@ -15,6 +24,7 @@ public struct NativeTaxPrintSnapshot: Sendable {
     public let strings: any Localizing
     public let theme: ThemeSelection
     public let visibleWidgets: Set<String>
+    public let localState: NativeTaxPrintLocalState
     public let deductionData: TaxDeductionCandidates?
     public let deductionGroups: [TaxDeductionGroup]
     public let appliedDeductionTypes: Set<String>
@@ -44,7 +54,8 @@ public struct NativeTaxPrintSnapshot: Sendable {
     public init(
         overview: OpenAPI.BelgianTaxOverview, dashboard: TaxDashboardData,
         settings: NativeAppSettings, strings: any Localizing, theme: ThemeSelection,
-        visibleWidgets: Set<String>, deductionData: TaxDeductionCandidates? = nil,
+        visibleWidgets: Set<String>, localState: NativeTaxPrintLocalState = .init(),
+        deductionData: TaxDeductionCandidates? = nil,
         deductionGroups: [TaxDeductionGroup] = [], appliedDeductionTypes: Set<String> = [],
         deductionError: String? = nil, deductionApplyError: String? = nil
     ) throws {
@@ -57,6 +68,7 @@ public struct NativeTaxPrintSnapshot: Sendable {
         self.strings = strings
         self.theme = theme
         self.visibleWidgets = visibleWidgets
+        self.localState = localState
         self.deductionData = deductionData
         self.deductionGroups = deductionGroups
         self.appliedDeductionTypes = appliedDeductionTypes
@@ -75,7 +87,8 @@ public struct NativeTaxPrintSnapshot: Sendable {
             overview: overview, dashboard: dashboard, settings: shell.settings, strings: shell.strings,
             theme: shell.theme,
             visibleWidgets: Set(TaxWidgetsModel.definitions.filter { screens.widgets.isVisible($0.id) }.map(\.id)),
-            deductionData: screens.deductions.data, deductionGroups: screens.deductions.groups,
+            localState: screens.printLocalState, deductionData: screens.deductions.data,
+            deductionGroups: screens.deductions.groups,
             appliedDeductionTypes: screens.deductions.appliedTypes, deductionError: screens.deductions.error,
             deductionApplyError: screens.deductions.applyError)
     }

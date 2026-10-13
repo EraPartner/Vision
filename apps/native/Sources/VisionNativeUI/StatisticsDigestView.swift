@@ -5,6 +5,7 @@ struct StatisticsDigestView: View {
     let model: StatisticsDigestModel
     let settings: NativeAppSettings
     let strings: any Localizing
+    var isPrinting = false
     @Environment(\.visionTheme) private var theme
 
     var body: some View {
@@ -16,7 +17,7 @@ struct StatisticsDigestView: View {
                     HStack {
                         Text(strings.t("insights.panel.title")).font(.headline)
                         Spacer()
-                        if data.findingCount > 0 {
+                        if data.findingCount > 0, !isPrinting {
                             Button(
                                 strings.t(model.expanded ? "insights.panel.hideDetails" : "insights.panel.showDetails")
                             ) { model.expanded.toggle() }
@@ -106,13 +107,13 @@ struct StatisticsDigestView: View {
             }
             Spacer()
             content()
-            Button {
+            if !isPrinting { Button {
                 Task { await model.dismiss(body, key: key) }
             } label: {
                 Image(systemName: "xmark")
             }
             .buttonStyle(.plain).disabled(model.dismissing.contains(key))
-            .accessibilityLabel(strings.t("insights.dismissFinding", ["kind": strings.t(kind), "name": title]))
+            .accessibilityLabel(strings.t("insights.dismissFinding", ["kind": strings.t(kind), "name": title])) }
         }.padding(.vertical, 4)
     }
 }

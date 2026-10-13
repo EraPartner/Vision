@@ -40,7 +40,9 @@ struct SavedChartsView: View {
                         if let dataset = model.datasets[chart.id] {
                             CustomChartPlot(
                                 dataset: dataset, kind: CustomChartDraft(chart: chart).kind, settings: settings,
-                                strings: strings)
+                                strings: strings,
+                                selection: Binding(get: { model.printLocalState.selection[String(chart.id)] }, set: { model.printLocalState.selection[String(chart.id)] = $0 }),
+                                range: Binding(get: { model.printLocalState.rangeStart[String(chart.id)] }, set: { model.printLocalState.rangeStart[String(chart.id)] = $0 }))
                         } else if let error = model.errors[chart.id] {
                             Text(error).foregroundStyle(theme.destructive)
                         } else {
@@ -69,13 +71,22 @@ struct SavedChartsView: View {
     }
 }
 
-private struct CustomChartPlot: View {
+struct CustomChartPlot: View {
     let dataset: CustomChartDataset
     let kind: CustomChartKind
     let settings: NativeAppSettings
     let strings: any Localizing
-    @State private var selection: String?
-    @State private var range: String?
+    @Binding var selection: String?
+    @Binding var range: String?
+    init(dataset: CustomChartDataset, kind: CustomChartKind, settings: NativeAppSettings, strings: any Localizing,
+         selection: Binding<String?> = .constant(nil), range: Binding<String?> = .constant(nil)) {
+        self.dataset = dataset
+        self.kind = kind
+        self.settings = settings
+        self.strings = strings
+        _selection = selection
+        _range = range
+    }
     private var entities: [CustomChartEntity] {
         dataset.entities.map { entity in
             entity.id == "other"
@@ -117,6 +128,8 @@ private struct CustomChartBuilderSheet: View {
     let settings: NativeAppSettings
     let strings: any Localizing
     @Environment(\.visionTheme) private var theme
+    @State private var previewSelection: String?
+    @State private var previewRange: String?
     private var draft: CustomChartDraft { model.draft ?? CustomChartDraft() }
     private func binding<Value>(_ keyPath: WritableKeyPath<CustomChartDraft, Value>) -> Binding<Value> {
         Binding(
@@ -167,7 +180,7 @@ private struct CustomChartBuilderSheet: View {
                     if model.isPreviewLoading {
                         ProgressView().frame(height: 240)
                     } else if let preview = model.preview {
-                        CustomChartPlot(dataset: preview, kind: draft.kind, settings: settings, strings: strings)
+                        CustomChartPlot(dataset: preview, kind: draft.kind, settings: settings, strings: strings, selection: $previewSelection, range: $previewRange)
                     } else if let error = model.previewError {
                         Text(error).foregroundStyle(theme.destructive)
                     }

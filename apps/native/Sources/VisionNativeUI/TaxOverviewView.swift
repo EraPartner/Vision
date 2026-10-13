@@ -48,6 +48,7 @@ public struct TaxOverviewView: View {
         .task(id: shell.route.string + shell.settings.defaultCurrency + String(shell.settingsRevision)) {
             await reload()
         }
+        .onDisappear { screens.printLocalState = .init() }
         .onChange(of: screens.profile.isPresented) { _, presented in
             if !presented { Task { await reload(force: true) } }
         }
@@ -163,7 +164,9 @@ public struct TaxOverviewView: View {
                         totalIncludingPortfolio: data.totalTaxIncludingPortfolio,
                         totalIncludingProperty: data.totalTaxIncludingPropertyEstimate)
                 }
-                if screens.widgets.isVisible("taxRules") { TaxRulesView(strings: strings) }
+                if screens.widgets.isVisible("taxRules") {
+                    TaxRulesView(strings: strings, onExpandedChange: { screens.printLocalState.rulesExpanded = $0 })
+                }
                 if screens.widgets.isVisible("householdBreakdown") {
                     TaxHouseholdBreakdownView(overview: overview, data: data, shell: shell)
                 }
@@ -178,7 +181,9 @@ public struct TaxOverviewView: View {
                     onEditProfile: { openLiveProfile(overview) })
                 deductions(overview)
                 if screens.widgets.isVisible("yearComparison") {
-                    TaxYearComparisonView(model: screens.dashboard, overview: overview, shell: shell)
+                    TaxYearComparisonView(
+                        model: screens.dashboard, overview: overview, shell: shell,
+                        onComparisonChange: { screens.printLocalState.comparisonYear = $0 })
                 }
                 if screens.widgets.isVisible("yearlyOverview") {
                     TaxYearlyOverviewView(
