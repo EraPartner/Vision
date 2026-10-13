@@ -70,7 +70,8 @@ public struct ServerSentEventParser: Sendable {
     static func parseFrame(_ block: String) -> ServerSentEvent? {
         var name = "message"
         var dataLines: [String] = []
-        for rawLine in block.split(separator: "\n", omittingEmptySubsequences: false) {
+        // "\r\n" is one Character in Swift, so split on either line end, not on "\n" alone.
+        for rawLine in block.split(omittingEmptySubsequences: false, whereSeparator: { $0 == "\n" || $0 == "\r\n" }) {
             var line = Substring(rawLine)
             if line.hasSuffix("\r") { line = line.dropLast() }
             if line.isEmpty || line.hasPrefix(":") { continue }
