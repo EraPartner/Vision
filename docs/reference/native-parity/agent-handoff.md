@@ -89,6 +89,12 @@ diagnostics, then Xcode 26.6 crashed during Analysis query-view IR generation. T
 checkpoint replaces bound model setters with explicit closures to avoid that compiler
 reabstraction; the automatic rebuild must confirm the result.
 
+The `ce1848ee` checkpoint was pushed and verified, saving all 15 task files present at
+the snapshot, including Main/HTTP/stream restore fences and the Analysis workaround.
+Its macOS build passed that compiler crash and next reported the Portfolio freshness
+helper reading MainActor shell state from an unisolated function. The follow-up marks
+that helper MainActor; source parsing/format checks pass, and CI will rerun.
+
 The API data-session actor and wrapper now exist on disk, and the SDK uses one shared
 session for HTTP and streams. Accepted restore confirmation drains Main Settings, the
 legacy host writer, old chat streams and the data session before the existing unfenced

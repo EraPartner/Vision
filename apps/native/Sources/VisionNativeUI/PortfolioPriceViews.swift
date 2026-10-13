@@ -7,7 +7,7 @@ enum PortfolioPricePresentation {
         guard let stamp = holding.priceUpdatedAt, let date = VisionFormat.parseTimestamp(stamp) else { return true }
         return now.timeIntervalSince(date) > 86_400
     }
-    static func freshness(_ holdings: [PortfolioHolding], shell: NativeShellModel) -> String? {
+    @MainActor static func freshness(_ holdings: [PortfolioHolding], shell: NativeShellModel) -> String? {
         let live = holdings.filter { $0.isActive && ($0.priceProvider ?? "manual") != "manual" }
         guard !live.isEmpty else { return nil }
         let dates = live.compactMap { $0.priceUpdatedAt.flatMap { VisionFormat.parseTimestamp($0) } }
