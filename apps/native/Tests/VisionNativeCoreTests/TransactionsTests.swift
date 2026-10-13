@@ -273,6 +273,7 @@ enum TxFixture {
             strings: strings, theme: ThemeSelection(appearance: .light),
             exchangeRates: ExchangeRatesModel(service: FakeExchangeRatesService()), admin: AdminFixture.screens(),
             planned: PlannedFixture.idleModel(), imports: ImportFixture.idleModel(), transactions: model,
+            accounts: AccountsFixture.idleModel(),
             loadSettings: { settings }, onNavigate: { recorder.actions.append($0) }, settingsReloadDelay: .milliseconds(1))
     }
 

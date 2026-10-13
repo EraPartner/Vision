@@ -900,6 +900,7 @@ enum DatabaseFixture {
             admin: AdminFixture.screens(database: database),
             planned: PlannedFixture.idleModel(), imports: ImportFixture.idleModel(),
             transactions: TransactionsFixture.idleModel(),
+            accounts: AccountsFixture.idleModel(),
             loadSettings: { NativeAppSettings(adminMode: true) }, onNavigate: { recorder.actions.append($0) })
     }
 

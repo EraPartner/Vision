@@ -59,6 +59,8 @@ public final class NativeShellModel {
     public let imports: ImportsModel
     /// `/transactions`.
     public let transactions: TransactionsModel
+    /// `/accounts` and `/accounts/:id`.
+    public let accounts: AccountsModel
     /// The navigation the Leave this page? alert holds while it asks (`blocker.location`).
     public private(set) var leaveConfirmation: NativeRoute?
 
@@ -87,6 +89,7 @@ public final class NativeShellModel {
         planned: PlannedPaymentsModel,
         imports: ImportsModel,
         transactions: TransactionsModel,
+        accounts: AccountsModel,
         hiddenSections: [NavSectionID: Bool]? = nil,
         loadSettings: @escaping @Sendable () async throws -> NativeAppSettings,
         saveHiddenSections: @escaping @MainActor ([NavSectionID: Bool]) -> Void = { _ in },
@@ -101,6 +104,7 @@ public final class NativeShellModel {
         self.planned = planned
         self.imports = imports
         self.transactions = transactions
+        self.accounts = accounts
         self.hiddenSections = hiddenSections ?? Self.defaultHiddenSections
         self.loadSettings = loadSettings
         self.saveHiddenSections = saveHiddenSections
@@ -108,6 +112,7 @@ public final class NativeShellModel {
         self.onSidebarVisibilityChange = onSidebarVisibilityChange
         self.settingsReloadDelay = settingsReloadDelay
         transactions.attach(self)
+        accounts.attach(self)
     }
 
     /// `DEFAULT_HIDDEN` of useSidebarPreferences.

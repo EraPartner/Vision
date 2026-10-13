@@ -909,7 +909,8 @@ enum PlannedFixture {
             strings: DictionaryStrings(language: .en, table: [:]), theme: ThemeSelection(appearance: .light),
             exchangeRates: ExchangeRatesModel(service: FakeExchangeRatesService()), admin: AdminFixture.screens(),
             planned: PlannedFixture.idleModel(), imports: ImportFixture.idleModel(),
-            transactions: TransactionsFixture.idleModel(), loadSettings: { settings },
+            transactions: TransactionsFixture.idleModel(), accounts: AccountsFixture.idleModel(),
+            loadSettings: { settings },
             onNavigate: { recorder.actions.append($0) })
     }
 

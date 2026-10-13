@@ -903,6 +903,7 @@ enum ImportFixture {
             strings: ImportFixture.strings, theme: ThemeSelection(appearance: .light),
             exchangeRates: ExchangeRatesModel(service: FakeExchangeRatesService()), admin: AdminFixture.screens(),
             planned: PlannedFixture.idleModel(), imports: imports, transactions: TransactionsFixture.idleModel(),
+            accounts: AccountsFixture.idleModel(),
             loadSettings: { NativeAppSettings(adminMode: adminMode) }, onNavigate: { recorder.actions.append($0) })
     }
 

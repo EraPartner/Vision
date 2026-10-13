@@ -243,6 +243,11 @@ struct NativeScreenContainer: View {
             TransactionsView(model: model.transactions, shell: model)
         case .owes:
             OwesView(model: model.owes, shell: model)
+        case .accounts:
+            AccountsView(model: model.accounts, shell: model)
+        case .accountDetail(let id):
+            AccountDetailView(model: model.accounts, shell: model, accountId: id)
+                .id(id)
         }
     }
 }

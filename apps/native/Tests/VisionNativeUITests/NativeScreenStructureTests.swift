@@ -679,6 +679,100 @@ actor StaticSplitsService: TransactionBulkService, SplitsService {
     }
 }
 
+/// An accounts service with fixed answers: a checking, a brokerage and an archived savings
+/// account, a two-row ledger and one planned payment. `failing` fails the list.
+actor StaticAccountsService: AccountsService {
+    let rows: [OpenAPI.Account]
+    let failing: Bool
+
+    init(rows: [OpenAPI.Account] = StaticAccountsService.sample, failing: Bool = false) {
+        self.rows = rows
+        self.failing = failing
+    }
+
+    static func account(
+        _ id: Int, _ name: String, type: String, balance: Decimal, isActive: Bool = true,
+        statements: [OpenAPI.Account.StatementBalancesItem]? = nil, drift: Decimal? = nil
+    ) -> OpenAPI.Account {
+        let flags = AccountTypeFlags.of(type)
+        return OpenAPI.Account(
+            id: id, name: name, displayName: nil, institution: "KBC", currency: "EUR", type: type,
+            liquidityClass: flags.liquidityClass, spendable: flags.spendable, inNetWorth: true,
+            taxWrapper: flags.taxWrapper, owner: "me", multiCurrencyCash: false, hasCashSleeve: flags.hasCashSleeve,
+            statementBalances: statements, computedBalance: balance, balanceParts: nil, balanceIncomplete: false,
+            unconvertedCurrencies: nil, reconcilableBalance: balance, reconcilableCurrency: "EUR", drift: drift,
+            anchorDate: nil, postAnchorCount: nil, hasTransactions: true, isActive: isActive,
+            createdAt: "2026-01-01", updatedAt: "2026-01-01")
+    }
+
+    static let sample = [
+        account(
+            1, "Zichtrekening met een bijzonder lange naam", type: "checking", balance: Decimal(string: "1234.56")!,
+            statements: [.init(currency: "EUR", balance: Decimal(string: "1244.56")!, balanceDate: "2026-10-01")],
+            drift: 10),
+        account(2, "Bolero", type: "brokerage", balance: 250),
+        account(3, "Spaarrekening", type: "savings", balance: 0, isActive: false),
+    ]
+
+    func accounts(active: String) async throws -> [OpenAPI.Account] {
+        if failing { throw APIError.network("offline") }
+        return active == "true" ? rows.filter(\.isActive) : rows
+    }
+
+    func portfolioAccountRows(currency: String) async throws -> [PortfolioAccountRow] {
+        [
+            PortfolioAccountRow(
+                accountId: 2, contributionKind: "position", oversold: false, currentValue: 4200, gainLoss: 310)
+        ]
+    }
+
+    func ledger(accountId: Int, offset: Int, limit: Int) async throws -> AccountLedgerPage {
+        AccountLedgerPage(
+            rows: [
+                AccountLedgerRow(
+                    id: 11, date: "2026-10-10", recipientName: "Delhaize", memo: "Boodschappen",
+                    categoryName: "Groceries", amount: -42, runningBalance: Decimal(string: "1234.56")!),
+                AccountLedgerRow(
+                    id: 10, date: "2026-10-01", recipientName: "Werkgever", amount: 2500,
+                    runningBalance: Decimal(string: "1276.56")!),
+            ],
+            total: 140)
+    }
+
+    func plannedRows(accountId: Int) async throws -> AccountPlannedPage {
+        AccountPlannedPage(
+            rows: [AccountPlannedRow(id: 7, date: "2026-11-01", recipientName: "Huur", amount: -950, currency: "EUR")],
+            total: 1)
+    }
+
+    func createAccount(_ body: OpenAPI.AccountCreate) async throws -> Int { 9 }
+    func updateAccount(id: Int, patch: AccountPatch) async throws {}
+    func deleteAccount(id: Int) async throws {}
+    func setOpeningBalance(id: Int, balance: Decimal, date: String, currency: String) async throws -> String? { nil }
+    func setStatementBalance(id: Int, currency: String, balance: Decimal, date: String) async throws {}
+    func reconcile(id: Int, mode: ReconcileMode, currency: String) async throws {}
+
+    func mergePreview(sourceId: Int, targetId: Int) async throws -> AccountMergePreview {
+        AccountMergePreview(
+            into: targetId, source: sourceId, transactions: 12, planned: 1, projectedBalance: 1500,
+            projectedBalanceCurrency: "EUR")
+    }
+
+    func merge(targetId: Int, sourceIds: [Int]) async throws -> AccountMergeCounts {
+        AccountMergeCounts(transactions: 12, planned: 1)
+    }
+
+    func closeAccount(id: Int, balanceHandling: CloseBalanceHandling) async throws {}
+
+    func lotPreview(accountId: Int) async throws -> AccountLotPreview {
+        AccountLotPreview(accountId: accountId, eligibleCount: 3, transactionIds: [21, 22, 23], limit: 500)
+    }
+
+    func retagLots(_ request: LotRetagRequest) async throws -> LotRetagReceipt {
+        LotRetagReceipt(receiptId: 1, changedCount: request.transactionIds.count)
+    }
+}
+
 /// The SwiftUI screens build and lay out in both languages and appearances.
 @MainActor
 @Suite struct NativeScreenStructureTests {
@@ -698,7 +792,8 @@ actor StaticSplitsService: TransactionBulkService, SplitsService {
         planned: StaticPlannedService = StaticPlannedService(), adminMode: Bool = true,
         imports: StaticImportService = StaticImportService(),
         transactions: StaticTransactionsService = StaticTransactionsService(),
-        splits: StaticSplitsService = StaticSplitsService()
+        splits: StaticSplitsService = StaticSplitsService(),
+        accounts: StaticAccountsService = StaticAccountsService()
     ) -> NativeShellModel {
         let rates = ExchangeRatesModel(service: StaticRatesService(Self.rates))
         return NativeShellModel(
@@ -713,6 +808,7 @@ actor StaticSplitsService: TransactionBulkService, SplitsService {
             imports: ImportsModel(service: imports, exports: imports, review: imports, pickers: planned),
             transactions: TransactionsModel(
                 service: transactions, attachments: transactions, pickers: planned, bulk: splits, splits: splits),
+            accounts: AccountsModel(service: accounts, rates: rates),
             loadSettings: { NativeAppSettings(adminMode: adminMode) },
             onNavigate: { _ in })
     }
@@ -1408,5 +1504,172 @@ actor StaticSplitsService: TransactionBulkService, SplitsService {
         await failing.imports.review.appear(batchId: 13)
         #expect(failing.imports.review.showsError)
         #expect(layOutReview(failing).fittingSize.height > 0)
+    }
+
+    func layOutAccounts(_ shell: NativeShellModel) -> NSHostingView<some View> {
+        layOut(
+            AccountsView(model: shell.accounts, shell: shell)
+                .environment(\.visionTheme, VisionTheme(selection: shell.theme)))
+    }
+
+    func layOutAccount(_ shell: NativeShellModel, _ id: Int) -> NSHostingView<some View> {
+        layOut(
+            AccountDetailView(model: shell.accounts, shell: shell, accountId: id)
+                .environment(\.visionTheme, VisionTheme(selection: shell.theme)))
+    }
+
+    @Test(arguments: [NativeLanguage.en, .nl], [ThemeAppearance.light, .dark])
+    func theAccountsHubLaysOutInEveryState(_ language: NativeLanguage, _ appearance: ThemeAppearance) async throws {
+        let shell = makeShell(language: language, appearance: appearance)
+        let model = shell.accounts
+        shell.routeDidChange(try #require(NativeRoute("/accounts")))
+        await shell.settingsSettled()
+        // Each host stays alive until the end, so no `.onDisappear` resets the model early.
+        var hosts: [NSView] = []
+        defer { withExtendedLifetime(hosts) {} }
+        // Loading, then the groups with subtotals, Net cash and the archived disclosure open.
+        #expect(model.isLoading)
+        let loadingHost = layOutAccounts(shell)
+        hosts.append(loadingHost)
+        #expect(loadingHost.fittingSize.width > 0)
+        await model.appear(.hub)
+        #expect(model.accounts?.count == 3)
+        #expect(model.archivedGroup?.accounts.count == 1)
+        #expect(model.metrics(StaticAccountsService.sample[1])?.holdingsValue == 4200)
+        model.archivedOpen = true
+        let loadedHost = layOutAccounts(shell)
+        hosts.append(loadedHost)
+        #expect(loadedHost.fittingSize.height > 0)
+        // The delete confirmation over the hub.
+        await model.appear(.hub)
+        model.requestDelete(StaticAccountsService.sample[0])
+        #expect(model.deleteText() != nil)
+        let deleteHost = layOutAccounts(shell)
+        hosts.append(deleteHost)
+        #expect(deleteHost.fittingSize.height > 0)
+        model.cancelDelete()
+        // No accounts yet, and the error card with Retry.
+        let empty = makeShell(language: language, appearance: appearance, accounts: StaticAccountsService(rows: []))
+        empty.routeDidChange(try #require(NativeRoute("/accounts")))
+        await empty.settingsSettled()
+        await empty.accounts.appear(.hub)
+        #expect(empty.accounts.accounts?.isEmpty == true)
+        let emptyHost = layOutAccounts(empty)
+        hosts.append(emptyHost)
+        #expect(emptyHost.fittingSize.height > 0)
+        let failing = makeShell(language: language, appearance: appearance, accounts: StaticAccountsService(failing: true))
+        failing.routeDidChange(try #require(NativeRoute("/accounts")))
+        await failing.settingsSettled()
+        await failing.accounts.appear(.hub)
+        #expect(failing.accounts.accountsError != nil)
+        let failingHost = layOutAccounts(failing)
+        hosts.append(failingHost)
+        #expect(failingHost.fittingSize.height > 0)
+    }
+
+    @Test(arguments: [NativeLanguage.en, .nl], [ThemeAppearance.light, .dark])
+    func theAccountDetailLaysOutWithItsLedger(_ language: NativeLanguage, _ appearance: ThemeAppearance)
+        async throws
+    {
+        let shell = makeShell(language: language, appearance: appearance)
+        let model = shell.accounts
+        shell.routeDidChange(try #require(NativeRoute("/accounts/1?since=2026-10-01")))
+        await shell.settingsSettled()
+        #expect(shell.detail == .native(.accountDetail(id: 1)))
+        var hosts: [NSView] = []
+        defer { withExtendedLifetime(hosts) {} }
+        // Loading, then the balance card, the planned card, the ledger with its since banner.
+        let loadingHost = layOutAccount(shell, 1)
+        hosts.append(loadingHost)
+        #expect(loadingHost.fittingSize.width > 0)
+        await model.appear(.detail(1))
+        #expect(model.detailState(1) == .loaded(StaticAccountsService.sample[0]))
+        #expect(model.visibleLedger.count == 2)
+        #expect(model.ledgerHasMore)
+        #expect(model.plannedRows.count == 1)
+        #expect(model.since == "2026-10-01")
+        let detailHost = layOutAccount(shell, 1)
+        hosts.append(detailHost)
+        #expect(detailHost.fittingSize.height > 0)
+        // A brokerage account, and an id that does not exist.
+        shell.routeDidChange(try #require(NativeRoute("/accounts/2")))
+        await model.appear(.detail(2))
+        #expect(model.detailState(2) == .loaded(StaticAccountsService.sample[1]))
+        let brokerHost = layOutAccount(shell, 2)
+        hosts.append(brokerHost)
+        #expect(brokerHost.fittingSize.height > 0)
+        shell.routeDidChange(try #require(NativeRoute("/accounts/99")))
+        await model.appear(.detail(99))
+        #expect(model.detailState(99) == .notFound)
+        let missingHost = layOutAccount(shell, 99)
+        hosts.append(missingHost)
+        #expect(missingHost.fittingSize.height > 0)
+    }
+
+    @Test(arguments: [NativeLanguage.en, .nl], [ThemeAppearance.light, .dark])
+    func theAccountDialogsLayOut(_ language: NativeLanguage, _ appearance: ThemeAppearance) async throws {
+        let shell = makeShell(language: language, appearance: appearance)
+        let theme = VisionTheme(selection: shell.theme)
+        let model = shell.accounts
+        shell.routeDidChange(try #require(NativeRoute("/accounts")))
+        await shell.settingsSettled()
+        await model.appear(.hub)
+        let checking = try #require(model.account(1))
+        let broker = try #require(model.account(2))
+        // Add and Edit.
+        model.openCreate()
+        #expect(model.form != nil)
+        #expect(layOut(AccountFormSheet(model: model, shell: shell).environment(\.visionTheme, theme)).fittingSize.height > 0)
+        model.closeForm()
+        model.openEdit(checking)
+        #expect(model.form != nil)
+        #expect(layOut(AccountFormSheet(model: model, shell: shell).environment(\.visionTheme, theme)).fittingSize.height > 0)
+        model.closeForm()
+        // Reconcile, and the opening balance.
+        model.openReconcile(checking)
+        #expect(model.reconcile != nil)
+        #expect(layOut(ReconcileSheet(model: model, shell: shell).environment(\.visionTheme, theme)).fittingSize.height > 0)
+        model.closeReconcile()
+        model.openOpeningBalance(checking)
+        #expect(model.opening != nil)
+        #expect(layOut(OpeningBalanceSheet(model: model, shell: shell).environment(\.visionTheme, theme)).fittingSize.height > 0)
+        model.closeOpeningBalance()
+        // Merge, with the preview loaded and acknowledged.
+        model.openMerge(checking)
+        #expect(layOut(MergeAccountSheet(model: model, shell: shell).environment(\.visionTheme, theme)).fittingSize.height > 0)
+        await model.selectMergeTarget(2)
+        #expect(model.merge?.preview?.value?.transactions == 12)
+        model.setMergeAcknowledged(true)
+        #expect(layOut(MergeAccountSheet(model: model, shell: shell).environment(\.visionTheme, theme)).fittingSize.height > 0)
+        model.closeMerge()
+        // Close: a plain account, then a brokerage with its lots.
+        await model.openClose(checking)
+        #expect(model.close?.lotPreview == nil)
+        #expect(layOut(CloseAccountSheet(model: model, shell: shell).environment(\.visionTheme, theme)).fittingSize.height > 0)
+        model.closeCloseDialog()
+        await model.openClose(broker)
+        #expect(model.close?.lotPreview?.value?.eligibleCount == 3)
+        model.setCloseLotChoice(.unassigned)
+        #expect(layOut(CloseAccountSheet(model: model, shell: shell).environment(\.visionTheme, theme)).fittingSize.height > 0)
+        model.closeCloseDialog()
+        // Transfer lots.
+        await model.openTransfer(broker)
+        #expect(model.transfer?.preview.value?.eligibleCount == 3)
+        model.setTransferDestination(.unassigned)
+        #expect(layOut(BrokerTransferSheet(model: model, shell: shell).environment(\.visionTheme, theme)).fittingSize.height > 0)
+        model.closeTransfer()
+    }
+
+    @Test func theShellShowsTheAccountsScreens() async throws {
+        let shell = makeShell(language: .nl, appearance: .dark, adminMode: false)
+        let host = layOut(ShellRootView(model: shell) { hidden in Color.clear.accessibilityHidden(hidden) })
+        shell.routeDidChange(try #require(NativeRoute("/accounts")))
+        await shell.settingsSettled()
+        #expect(shell.detail == .native(.accounts))
+        host.layoutSubtreeIfNeeded()
+        shell.routeDidChange(try #require(NativeRoute("/accounts/1")))
+        #expect(shell.detail == .native(.accountDetail(id: 1)))
+        host.layoutSubtreeIfNeeded()
+        #expect(!host.subviews.isEmpty)
     }
 }

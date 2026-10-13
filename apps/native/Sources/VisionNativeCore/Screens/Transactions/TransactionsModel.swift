@@ -479,6 +479,15 @@ public final class TransactionsModel {
         }
     }
 
+    /// Another native screen changed accounts or their transactions (an account create,
+    /// merge, close or reconcile): the list, the account filter and the pickers refetch on the
+    /// next load instead of serving a cached answer.
+    public func invalidate() {
+        fetchedAt = nil
+        allAccounts = []
+        pickers.reset()
+    }
+
     /// The error state's Retry, and the reload after a create.
     public func reload() async {
         await load(currentQuery(), force: true)

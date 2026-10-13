@@ -238,6 +238,13 @@ public final class PlannedPaymentsModel {
         lists[key]?.payments?.append(PlannedPayment(wire, defaultCurrency: defaultCurrency))
     }
 
+    /// Another native screen moved or removed planned rows (an account merge or close): both
+    /// lists and the pickers refetch on the next load.
+    public func invalidate() {
+        for key in Array(lists.keys) { lists[key]?.fetchedAt = nil }
+        pickers.reset()
+    }
+
     /// Track invalidated every planned list: both views go stale and the shown one refetches.
     private func invalidateLists() async {
         for key in Array(lists.keys) { lists[key]?.fetchedAt = nil }

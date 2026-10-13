@@ -119,7 +119,7 @@ import Testing
         #expect(NativeScreen.screen(forPath: "/admin/db") == .databaseMaintenance)
         #expect(NativeScreen.screen(forPath: "/admin/db/transactions") == NativeScreen.tableEditor(table: "transactions"))
         let adminScreens = NativeScreen.fixedScreens.filter {
-            $0 != .plannedPayments && $0 != .importExport && $0 != .transactions
+            $0 != .plannedPayments && $0 != .importExport && $0 != .transactions && $0 != .accounts
         }
         #expect(adminScreens.allSatisfy { screen in screen.requiresAdmin })
         #expect(NativeScreen.tableEditor(table: "x").requiresAdmin)

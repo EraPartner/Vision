@@ -93,3 +93,20 @@ paySplit
 settleSplit
 settleAllSplitsForRecipient
 deleteSplit
+# Accounts (/accounts and /accounts/:id, phase 3f part A): the hub, the Add/Edit account
+# sheet, Reconcile, Opening balance, Merge, Close and Delete, and the broker-only Transfer
+# portfolio lots dialog with the lot re-tag preview. The account PATCH's explicit nulls, the
+# re-tag's nullable destination and the portfolio summary's per-account rows are hand-written
+# in Screens/Accounts/AccountsService.swift on top of the generated operation ids.
+createAccount
+updateAccount
+deleteAccount
+previewAccountPortfolioLots
+closeAccount
+mergeAccounts
+previewAccountMerge
+setAccountOpeningBalance
+reconcileAccount
+setAccountStatementBalance
+bulkRetagPortfolioTransactions
+getPortfolioSummary
