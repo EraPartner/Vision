@@ -6,6 +6,7 @@ public actor NativeSettingsAIReadFlights {
         let token: UUID
         let task: Task<Data, Error>
         var retired = false
+        var waiters = 0
         init(token: UUID, task: Task<Data, Error>) {
             self.token = token
             self.task = task
@@ -24,6 +25,8 @@ public actor NativeSettingsAIReadFlights {
             flight = .init(token: UUID(), task: Task { try APIBody.encode(try await load()) })
             flights[identity] = flight
         }
+        flight.waiters += 1
+        defer { flight.waiters -= 1 }
         do {
             let bytes = try await flight.task.value
             guard !flight.retired else { throw CancellationError() }
@@ -32,6 +35,16 @@ public actor NativeSettingsAIReadFlights {
         } catch {
             if flights[identity]?.token == flight.token { flights[identity] = nil }
             throw error
+        }
+    }
+    // Pending subscriber count is internal diagnostic state; completed values are never retained.
+    func pendingWaiterCount(origin: String, key: String) -> Int {
+        flights.reduce(0) { result, entry in
+            guard let bytes = Data(base64Encoded: entry.key),
+                let scope = try? JSONDecoder().decode([String].self, from: bytes),
+                scope.count == 3, scope[0] == origin, scope[1] == key
+            else { return result }
+            return result + entry.value.waiters
         }
     }
     public func invalidate(origin: String, keys: [String]) {

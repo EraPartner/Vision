@@ -295,4 +295,41 @@ useTabParam ..> BrowserRouter : uses (useSearchParams)
 useTaxYearParam ..> BrowserRouter : uses (useSearchParams)
 useTaxYearParam ..> BelgianTaxProfileContext : reads/writes viewedYear
 
+package "Native Settings and retained WK state (phase 3o)" {
+  class NativeSettingsModel {
+    +migrated app/dashboard editable envelopes
+    +unknown fields and optional absence preserved
+    +500 ms per-key debounce
+    +draft callbacks / acknowledged receipts
+  }
+  class "NativeSettingsPersistence" as NativeSettingsPersistence {
+    +raw first-read CAS baselines
+    +serialized per-key writes
+    +sticky rejected / uncertain lane
+  }
+  class "nativeSettings.ts" as NativeSettingsMirror {
+    +apply drafts without echo
+    +forward supported field deltas
+    +advance baseline only from checked receipt
+  }
+  class NativeSettingsPatch {
+    +app_settings / dashboard_settings / theme_settings
+    +restricted fields and optional removals
+  }
+  class NativeNoticeCenter {
+    +app-lifetime notices / captured actions
+    +six eight-second Undo owners
+    +source typing guard / one-slot shortcut
+  }
+}
+NativeSettingsModel --> NativeSettingsPersistence : existing conditional settings API
+NativeSettingsModel --> NativeSettingsMirror : draft then receipt
+NativeSettingsMirror --> NativeSettingsPatch : native-only shell:settings-change
+NativeSettingsPatch --> NativeSettingsModel : same writer
+NativeSettingsMirror --> ZustandStore : mirror three preference slices
+NativeSettingsMirror ..> ThemeHydration : skip competing persistence in native mode
+NativeSettingsMirror ..> AppSettingsHydration : skip competing persistence in native mode
+NativeSettingsMirror ..> SettingsHydration : skip competing persistence in native mode
+NativeSettingsModel ..> NativeNoticeCenter : existing save feedback
+
 @enduml

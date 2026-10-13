@@ -22,6 +22,7 @@ public final class RebalanceModel {
     public private(set) var errorKey: String?
     public private(set) var noticeKey: String?
     public private(set) var noticeRevision = 0
+    public private(set) var notice: ScreenNotice?
     public var deletingPlan: RebalancePlan?
     public private(set) var currency = "EUR"
     public private(set) var numberFormat: NumberFormat = .eu
@@ -45,10 +46,23 @@ public final class RebalanceModel {
     @ObservationIgnored private var plansRevision = UUID()
     @ObservationIgnored private var computeRevision = UUID()
     @ObservationIgnored private var computeTask: Task<Void, Never>?
+    @ObservationIgnored private var notices = NoticeCounter()
 
     public init(service: any RebalanceService, now: @escaping @Sendable () -> Date = { Date() }) {
         self.service = service
         self.now = now
+    }
+    public func attachNotices(_ center: NativeNoticeCenter) {
+        notices.attach(center) { [weak self] in self?.clearNotice($0) }
+    }
+    public func clearNotice(_ id: Int) { if notice?.id == id { notice = nil } }
+    private func publishActionNotice() {
+        if let key = noticeKey {
+            notice = notices.make(.success, key)
+        } else if let key = errorKey {
+            notice = notices.make(.error, key, detail: actionError)
+        }
+        noticeRevision += 1
     }
     public func invalidate() {
         inputsRevision = UUID()
@@ -183,13 +197,13 @@ public final class RebalanceModel {
         let name = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else {
             errorKey = "rebalance.plan.nameRequired"
-            noticeRevision += 1
+            publishActionNotice()
             return
         }
         let weights = RebalanceForm.weights(draft.rows, format: numberFormat)
         guard !weights.isEmpty else {
             errorKey = "rebalance.editor.needSleeve"
-            noticeRevision += 1
+            publishActionNotice()
             return
         }
         let previous = plans.first { $0.id == draft.planId }
@@ -214,7 +228,7 @@ public final class RebalanceModel {
             actionError = error.localizedDescription
             errorKey = "rebalance.plan.saveFailed"
         }
-        noticeRevision += 1
+        publishActionNotice()
         isSaving = false
     }
     public func requestDelete() {
@@ -241,7 +255,7 @@ public final class RebalanceModel {
             actionError = error.localizedDescription
             errorKey = "rebalance.plan.saveFailed"
         }
-        noticeRevision += 1
+        publishActionNotice()
         isSaving = false
     }
     private var signature: ComputeSignature {

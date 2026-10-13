@@ -19,12 +19,24 @@ struct NativeSettingsScreenView: View {
             + String(describing: scenePhase) + "|" + String(ai.statusPollInterval ?? -1)
     }
 
+    init(
+        shell: NativeShellModel, model: NativeSettingsModel, ai: NativeSettingsAIModel,
+        backup: NativeSettingsBackupModel, about: NativeSettingsAboutModel
+    ) {
+        self.shell = shell
+        self.model = model
+        self.ai = ai
+        self.backup = backup
+        self.about = about
+    }
+
     var body: some View {
         NativeSettingsWindow(
             model: model, shell: shell, ai: ai, backup: backup, about: about, section: section,
             onSelectSection: shell.selectSettingsSection, onClose: shell.closeSettings,
             restartOnboarding: { await about.restartOnboarding() },
-            resetPreferences: { await model.resetPreferences() })
+            resetPreferences: { await model.resetPreferences() }
+        )
         .environment(\.nativeNoticeCenter, shell.notices)
         .overlay(alignment: .bottom) {
             NativeNoticeHost(center: shell.notices, strings: shell.strings)

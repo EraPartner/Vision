@@ -220,6 +220,7 @@ import Observation
         } catch { if revision == modelRevision, isActive { errors["models"] = error.localizedDescription } }
     }
     public func retryStatus() async {
+        await service.chatInvalidateSharedReads(["ollama-status", "ollama-models"])
         didInvalidateSharedReads?(["ollama-status", "ollama-models"])
         statusDate = nil
         modelsDate = nil

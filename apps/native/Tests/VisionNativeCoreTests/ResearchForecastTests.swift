@@ -203,6 +203,26 @@ struct ResearchForecastTests {
         #expect(await transport.writes.count == before)
         #expect(life.undoNotice == nil)
     }
+    @Test func globalLifeUndoSurvivesRouteExitWithoutReplacingANewVisitDraft() async throws {
+        let transport = ForecastTransport()
+        let clock = ForecastTestClock()
+        let life = ResearchLifeScenarioModel(service: client(transport), now: { clock.read() }, newID: { "saved-id" })
+        let center = NativeNoticeCenter(now: { clock.read() }, automaticExpiry: false)
+        life.attachNotices(center)
+        await life.loadSaved()
+        life.draft = validDraft()
+        await life.saveDraft()
+        let previous = try #require(await transport.writes.last)
+        await life.deleteDraft()
+        life.didDisappear()
+        life.beginVisit()
+        life.draft.name = "New visit draft"
+        #expect(await center.consumeUndo())
+        #expect(await transport.writes.last?["value"] == previous["value"])
+        #expect(life.draft.name == "New visit draft")
+        #expect(await center.consumeUndo() == false)
+    }
+
     @Test func comparisonEditWhileRunningHidesLateResultAndServerMismatchProducesItsError() async throws {
         let transport = ForecastTransport()
         let life = ResearchLifeScenarioModel(service: client(transport))

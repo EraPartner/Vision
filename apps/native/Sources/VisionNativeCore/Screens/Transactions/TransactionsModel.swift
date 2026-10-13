@@ -514,6 +514,9 @@ public final class TransactionsModel {
             let notice = notices.make(.error, "txPage.loadMoreFailed", detail: strings.t("txPage.loadMoreFailedDesc"))
             self.notice = notice
             pendingAction = TransactionPendingAction(noticeID: notice.id, action: .retryLoadMore)
+            notices.offerAction(for: notice, titleKey: "common.retry", lifetime: 4, isUndo: false) { [weak self] in
+                await self?.loadMore()
+            }
         }
         if mine == listVersion { isFetchingMore = false }
     }

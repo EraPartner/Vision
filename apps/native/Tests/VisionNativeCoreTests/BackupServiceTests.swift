@@ -389,6 +389,42 @@ private struct ServiceFixture {
         #expect(fixture.store.stored == nil)
     }
 
+    @Test func passphraseHandlerTrimsBOMAndClearsWhitespaceOnlyInput() async {
+        let store = InMemoryPassphraseStore("previous synthetic password")
+        let service = BackupService(
+            context: BackupContext(
+                environment: [:], appVersion: "test", userDataDirectory: "/synthetic", homeDirectory: "/synthetic",
+                appName: "Synthetic"),
+            settings: FakeBackupSettings(["backupDeviceId": .string("synthetic-device")]),
+            runtimeProvider: { nil }, passphraseStoreFactory: { _ in store }, logger: RecordingLog())
+        let raw = "\u{FEFF}\u{00A0}synthetic password\u{3000}\u{FEFF}"
+        #expect(await service.setPassphrase(raw) == PassphraseUpdateResult(success: true, available: true))
+        #expect(raw == "\u{FEFF}\u{00A0}synthetic password\u{3000}\u{FEFF}")
+        #expect(await service.passphrase() == "synthetic password")
+        #expect(await service.encryptionStatus().hasStoredPassphrase)
+
+        #expect(await service.setPassphrase("\u{FEFF}\u{2028}\u{FEFF}").success)
+        #expect(store.stored == nil)
+        #expect(await service.passphrase() == nil)
+        #expect(!(await service.encryptionStatus()).hasStoredPassphrase)
+    }
+
+    @Test func passphraseHandlerPreservesNELAsPasswordContent() async {
+        let store = InMemoryPassphraseStore()
+        let service = BackupService(
+            context: BackupContext(
+                environment: [:], appVersion: "test", userDataDirectory: "/synthetic", homeDirectory: "/synthetic",
+                appName: "Synthetic"),
+            settings: FakeBackupSettings(["backupDeviceId": .string("synthetic-device")]),
+            runtimeProvider: { nil }, passphraseStoreFactory: { _ in store }, logger: RecordingLog())
+        #expect(await service.setPassphrase("\u{FEFF}\u{0085}synthetic\u{0085}\u{FEFF}").success)
+        #expect(await service.passphrase() == "\u{0085}synthetic\u{0085}")
+
+        #expect(await service.setPassphrase(" \u{0085} ").success)
+        #expect(store.stored == "\u{0085}")
+        #expect(await service.encryptionStatus().hasStoredPassphrase)
+    }
+
     @Test func theSchemaCheckFallsBackToThePayloadsMigrationChain() async throws {
         let source = try ServiceFixture(runtime: FakeBackupRuntime(head: "0130_head"))
         defer { source.remove() }

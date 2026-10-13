@@ -1,6 +1,7 @@
 import Foundation
 
 public protocol AIChatService: Sendable {
+    func chatInvalidateSharedReads(_ keys: [String]) async
     func chatStatus() async throws -> AIChatOllamaStatus
     func chatModels() async throws -> [AIChatOllamaModel]
     func chatConversations(offset: Int) async throws -> AIChatConversationPage
@@ -11,11 +12,15 @@ public protocol AIChatService: Sendable {
     func chatStream(_ request: AIChatSendRequest, onEvent: @escaping @Sendable (AIChatEvent) async -> Void) async throws
         -> AIChatComplete
 }
+extension AIChatService {
+    public func chatInvalidateSharedReads(_ keys: [String]) async {}
+}
 private struct AIChatModelsResponse: Codable, Sendable {
     let items: [AIChatOllamaModel]
     let total: Int
 }
 extension APIClient: AIChatService {
+    public func chatInvalidateSharedReads(_ keys: [String]) async { await invalidateSharedAIReads(keys: keys) }
     public func chatStatus() async throws -> AIChatOllamaStatus {
         try await coalescedAIRead(key: "ollama-status") {
             try await send(

@@ -20,6 +20,8 @@ struct NativeNoticeHost: View {
     var isWebVisible = false
     var isEditingWebText: (@MainActor () async -> Bool)? = nil
     @Environment(\.visionTheme) private var theme
+    @Environment(\.visionVisualEffects) private var effects
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var body: some View {
         VStack(spacing: 8) {
@@ -39,12 +41,22 @@ struct NativeNoticeHost: View {
                     }
                 }
                 .padding(.horizontal, 14).padding(.vertical, 10)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.card))
-                .foregroundStyle(entry.notice.kind == .error ? theme.destructive : theme.foreground)
+                .background {
+                    if effects == "reduced" || reduceTransparency {
+                        RoundedRectangle(cornerRadius: DesignTokens.Radius.card).fill(theme.card)
+                    } else {
+                        RoundedRectangle(cornerRadius: DesignTokens.Radius.card).fill(.regularMaterial)
+                    }
+                }
+                .foregroundStyle(
+                    entry.notice.kind == .error
+                        ? theme.destructive : entry.notice.kind == .warning ? theme.warning : theme.foreground
+                )
                 .frame(maxWidth: 560)
                 .accessibilityElement(children: .contain)
-                .task(id: entry.id) {
-                    AccessibilityNotification.Announcement(strings.t(entry.notice.key, displayVariables(entry.notice))).post()
+                .task(id: entry.revision) {
+                    AccessibilityNotification.Announcement(strings.t(entry.notice.key, displayVariables(entry.notice)))
+                        .post()
                 }
             }
         }

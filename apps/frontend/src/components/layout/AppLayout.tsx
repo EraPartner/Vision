@@ -32,7 +32,11 @@ import { isShortcutSafeTarget, isTypingTarget } from "@/lib/keyboard";
 import { readSidebarCollapsed } from "@/hooks/useSidebarPreferences";
 import { cn } from "@/lib/utils";
 import { BackgroundQueryIndicator } from "@/components/shared/BackgroundQueryIndicator";
-import { isNativeNavigation, reportNativeRoute } from "@/lib/api/electron";
+import {
+    isNativeNavigation,
+    isNativeSettings,
+    reportNativeRoute,
+} from "@/lib/api/electron";
 
 interface AppLayoutProps {
     children: React.ReactNode;
@@ -54,6 +58,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     // Vision Native draws the sidebar itself (ADR-204 phase 2); the bridge flag
     // is fixed for the page's lifetime.
     const [nativeNavigation] = useState(isNativeNavigation);
+    const [nativeSettings] = useState(isNativeSettings);
 
     const writeSettingsSection = useCallback(
         (section: SettingsSectionId, replace: boolean) => {
@@ -197,18 +202,29 @@ export function AppLayout({ children }: AppLayoutProps) {
     // shortcuts overlay is open; reporting the same route again when it closes
     // tells the shell the page has nothing more to show.
     const overlayOpen = paletteOpen || shortcutsOpen;
+    const onboardingPresented = !onboardingLoading && !onboardingComplete;
     const lastNativeReportRef = useRef<
-        { route: string; overlayOpen: boolean } | undefined
+        | { route: string; overlayOpen: boolean; onboardingPresented: boolean }
+        | undefined
     >(undefined);
     useEffect(() => {
         if (!nativeNavigation) return;
         const route = `${pathname}${search}`;
         const last = lastNativeReportRef.current;
-        lastNativeReportRef.current = { route, overlayOpen };
+        lastNativeReportRef.current = {
+            route,
+            overlayOpen,
+            onboardingPresented,
+        };
         const overlayClosed = last?.overlayOpen === true && !overlayOpen;
-        if (last?.route === route && !overlayClosed) return;
-        reportNativeRoute(route);
-    }, [nativeNavigation, pathname, search, overlayOpen]);
+        if (
+            last?.route === route &&
+            !overlayClosed &&
+            last.onboardingPresented === onboardingPresented
+        )
+            return;
+        reportNativeRoute(route, onboardingPresented);
+    }, [nativeNavigation, pathname, search, overlayOpen, onboardingPresented]);
     const isPrintReport =
         pathname === "/tax" ||
         pathname === "/statistics" ||
@@ -329,16 +345,18 @@ export function AppLayout({ children }: AppLayoutProps) {
                     open={shortcutsOpen}
                     onOpenChange={setShortcutsOpen}
                 />
-                <DashboardSettingsDialog
-                    open={settingsOpen}
-                    onOpenChange={(open) => {
-                        if (!open) closeSettings();
-                    }}
-                    defaultTab={settingsSection ?? "general"}
-                    onSectionChange={(section) =>
-                        writeSettingsSection(section, true)
-                    }
-                />
+                {!nativeSettings && (
+                    <DashboardSettingsDialog
+                        open={settingsOpen}
+                        onOpenChange={(open) => {
+                            if (!open) closeSettings();
+                        }}
+                        defaultTab={settingsSection ?? "general"}
+                        onSectionChange={(section) =>
+                            writeSettingsSection(section, true)
+                        }
+                    />
+                )}
                 {!onboardingLoading && (
                     <OnboardingWizard
                         open={!onboardingComplete}

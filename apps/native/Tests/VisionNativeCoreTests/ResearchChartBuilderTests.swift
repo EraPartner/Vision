@@ -250,6 +250,50 @@ struct ResearchChartBuilderTests {
         clock.advance(9)
         #expect(!model.canUndoDelete)
     }
+    @Test func globalChartUndoRestoresCapturedStorageAfterLeavingTheScreen() async throws {
+        let clock = ChartTestClock()
+        let store = ChartTestStore()
+        let model = chartTestModel(ChartTestTransport(), store: store, clock: clock)
+        let center = NativeNoticeCenter(now: { clock.date }, automaticExpiry: false)
+        model.attachNotices(center)
+        await model.load(route: chartTestRoute)
+        await model.flushStorage()
+        model.layoutName = "Saved before leaving"
+        #expect(await model.saveAs())
+        let previous = model.library
+        #expect(await model.deleteLayout())
+        model.didDisappear()
+        #expect(!model.isStorageLoaded)
+        #expect(await center.consumeUndo())
+        #expect(ResearchChartLayoutCodec.load(store.data) == previous)
+        #expect(!model.isStorageLoaded)
+        #expect(await center.consumeUndo() == false)
+    }
+
+    @Test func detachedChartUndoDoesNotOverwriteChangedOrUnreadableStorage() async throws {
+        for unreadable in [false, true] {
+            let store = ChartTestStore()
+            let model = chartTestModel(ChartTestTransport(), store: store)
+            let center = NativeNoticeCenter(automaticExpiry: false)
+            model.attachNotices(center)
+            await model.load(route: chartTestRoute)
+            await model.flushStorage()
+            model.layoutName = "Captured"
+            #expect(await model.saveAs())
+            #expect(await model.deleteLayout())
+            model.didDisappear()
+            var external = ResearchChartBuilderLibrary.empty
+            external.draft.range = "max"
+            store.data = try ResearchChartLayoutCodec.save(external)
+            store.readFails = unreadable
+            let writes = store.writes.count
+            #expect(await center.consumeUndo())
+            #expect(store.writes.count == writes)
+            #expect(ResearchChartLayoutCodec.load(store.data) == external)
+            #expect(!center.hasUndo)
+        }
+    }
+
     @Test func sharesConfirmUnnamedDraftReplacementAndRemoveOnlyChartQuery() async throws {
         let library = ResearchChartBuilderLibrary(draft: chartTestState())
         let store = ChartTestStore(data: try ResearchChartLayoutCodec.save(library))

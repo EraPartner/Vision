@@ -27,6 +27,7 @@ import {
     getElectronAPI,
     getSystemAccentColor,
     isElectronMac,
+    isNativeSettings,
     persistSplashTheme,
 } from "@/lib/api/electron";
 import {
@@ -179,6 +180,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
     // Persist mode/schedule/variant/systemAccent when they change after initial load
     useEffect(() => {
+        if (isNativeSettings()) return;
         if (!isLoaded) return;
         if (isFirstPersist.current) {
             isFirstPersist.current = false;

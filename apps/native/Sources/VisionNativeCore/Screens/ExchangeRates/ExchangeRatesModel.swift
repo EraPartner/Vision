@@ -27,6 +27,7 @@ public struct ScreenNotice: Equatable, Sendable, Identifiable {
         case error
         /// `toast.info`.
         case info
+        case warning
     }
 
     public let id: Int

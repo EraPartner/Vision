@@ -215,7 +215,7 @@ public struct TaxOverviewView: View {
             model: screens.deductions, shell: shell,
             household: try? TaxValue(encoding: overview.liveHousehold),
             canApply: !screens.actions.isSaving && !overview.storedValueInvalid && !screens.profile.isPresented,
-            onApply: { await screens.applyDeduction($0) })
+            onApply: { try await screens.applyDeduction($0) })
     }
     private var automation: some View {
         TaxCard(title: strings.t("tax.automation.title")) {

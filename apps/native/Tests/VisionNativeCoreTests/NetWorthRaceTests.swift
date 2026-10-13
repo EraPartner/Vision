@@ -31,6 +31,10 @@ struct NetWorthRaceTests {
     @Test func priceRefreshPreservesThePeriodSelectedWhileItsRequestWasRunning() async throws {
         let service = NetWorthRaceService()
         let model = NetWorthModel(service: service)
+        let center = NativeNoticeCenter(automaticExpiry: false)
+        model.attachNotices(center)
+        var receipts: [PortfolioPriceRefreshReceipt] = []
+        model.didPriceRefresh = { receipts.append($0) }
         let initial = try #require(NativeRoute("/portfolio/net-worth?period=1m"))
         let updated = try #require(NativeRoute("/portfolio/net-worth?period=all"))
         await model.load(currency: "EUR", pageSize: 2, route: initial)
@@ -45,6 +49,8 @@ struct NetWorthRaceTests {
         #expect(model.period == .all)
         #expect(!model.isRefreshingPrices)
         #expect(await service.refreshes == 1)
+        #expect(receipts.count == 1 && receipts.first?.result?.total == 1 && receipts.first?.error == nil)
+        #expect(center.entries.isEmpty && model.notice == nil)
         #expect(await service.pageOffsets == [0, 0])
     }
 }

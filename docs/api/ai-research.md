@@ -202,7 +202,9 @@ while the Investigation mode is hidden on the mounted AI page. Slow GETs can ove
 ticks; current snapshots restart the interval and obsolete replies lose publication authority.
 This is the source manual timer,
 which continues across offline/background intervals with silent failures. Status alone follows
-the source 60-second TanStack freshness and focus/reconnect policy; document reads remain mount-only.
+the source 60-second TanStack mount/reconnect freshness. The global QueryClient disables ordinary
+focus refetch; focus only continues a paused status read. Explicit query invalidation refreshes an
+active observer, and Settings shares successful status receipts. Document reads remain mount-only.
 Real route exit clears local form,
 job and polling state; it does not delete the remote job or introduce a recovery browser. Existing
 resume, cancel, grant revoke, disclosure deletion and document actions remain available with their

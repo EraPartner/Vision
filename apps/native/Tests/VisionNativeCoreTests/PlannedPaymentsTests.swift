@@ -687,6 +687,21 @@ enum PlannedFixture {
         #expect(await service.updates == ["3:true"])
     }
 
+    @Test func globalUndoRestoresCapturedStatusAfterNavigationAndAReadThatOmitsThePausedRow() async {
+        let service = FakePlannedService(rows: Self.rows)
+        let model = PlannedFixture.model(service)
+        let center = NativeNoticeCenter(automaticExpiry: false)
+        model.attachNotices(center)
+        await model.appear(showAll: false, defaultCurrency: "EUR")
+        await model.toggleActive(model.payments[0])
+        model.disappear()
+        await model.retry()
+        #expect(!model.payments.contains { $0.id == 1 })
+        #expect(await center.consumeUndo())
+        #expect(await service.updates == ["1:false", "1:true"])
+        #expect(await center.consumeUndo() == false)
+    }
+
     @Test func aFailedToggleLeavesTheRowAndSaysSo() async throws {
         let service = FakePlannedService(rows: Self.rows)
         await service.failUpdates(true)

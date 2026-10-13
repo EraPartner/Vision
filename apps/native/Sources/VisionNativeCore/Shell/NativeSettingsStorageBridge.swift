@@ -20,6 +20,26 @@ public enum NativeSettingsStorageBridge {
     }
     public enum ReplyError: Error, Equatable, Sendable { case invalidReply }
 
+    /// Source lib/keyboard.ts typing detection. Unknown DOM/transport state must
+    /// not let a shell shortcut replace the focused editor's own action.
+    public static let editingScript = """
+        try {
+            const target = document.activeElement;
+            if (!(target instanceof HTMLElement)) return false;
+            return target.isContentEditable || target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT";
+        } catch { return true; }
+        """
+    /// Raw legacy ThemeHydration reads; SDK migration accepts only light/dark
+    /// modes and recognized variants. Preserve the first read if the second fails.
+    public static let legacyThemeScript = """
+        const legacy = { mode: null, variant: null };
+        try {
+            legacy.mode = window.localStorage.getItem("vision_theme");
+            legacy.variant = window.localStorage.getItem("vision_theme_variant");
+        } catch {}
+        return JSON.stringify(legacy);
+        """
+
     /// Matches BackupSection's one outer nonfatal catch: a read error produces no
     /// capture, rather than a confident partial snapshot.
     public static var exportScript: String {

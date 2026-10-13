@@ -13,6 +13,18 @@ public enum PortfolioPeriod: String, CaseIterable, Sendable {
     }
 }
 public enum PortfolioHoldingsSort: String, CaseIterable, Sendable { case value, returnRate }
+/// Captures the price mutation's acknowledgement before subsequent financial reads.
+public struct PortfolioPriceRefreshReceipt: Equatable, Sendable {
+    public let result: PortfolioPriceRefresh?
+    public let error: String?
+    public let offline: Bool
+
+    public init(result: PortfolioPriceRefresh?, error: String?, offline: Bool) {
+        self.result = result
+        self.error = error
+        self.offline = offline
+    }
+}
 public struct PortfolioBrokerOption: Equatable, Sendable, Identifiable {
     public let id: String
     public let name: String
@@ -54,6 +66,8 @@ public final class PortfolioModel {
     public private(set) var isFetching = false
     public private(set) var isRefreshingPrices = false
     public private(set) var priceNoticeRevision = 0
+    @ObservationIgnored public var didPriceRefresh: (@MainActor (PortfolioPriceRefreshReceipt) -> Void)?
+    public var usesExternalPriceNotices: Bool { didPriceRefresh != nil }
     @ObservationIgnored public var pricesDidChange: (@MainActor () -> Void)?
     public private(set) var priceRefreshResult: PortfolioPriceRefresh?
     public private(set) var priceError: String?
@@ -443,6 +457,8 @@ public final class PortfolioModel {
         do { priceRefreshResult = try await service.portfolioRefreshPrices() } catch {
             priceError = error.localizedDescription
         }
+        didPriceRefresh?(
+            PortfolioPriceRefreshReceipt(result: priceRefreshResult, error: priceError, offline: !isOnline))
         await refreshAfterWrite()
     }
     public func refreshAfterWrite() async {

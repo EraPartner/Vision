@@ -18,6 +18,7 @@ public final class NetWorthModel {
     public private(set) var priceRefreshResult: PortfolioPriceRefresh?
     @ObservationIgnored private var notices = NoticeCounter()
     @ObservationIgnored public var pricesDidChange: (@MainActor () -> Void)?
+    @ObservationIgnored public var didPriceRefresh: (@MainActor (PortfolioPriceRefreshReceipt) -> Void)?
     public private(set) var currency = "EUR"
     public var isOnline = true
     public var period: NetWorthPeriod = .year
@@ -166,16 +167,27 @@ public final class NetWorthModel {
             isRefreshingPrices = false
             pricesDidChange?()
         }
+        var refreshFailure: String?
         do {
             let result = try await service.refreshNetWorthPrices()
             priceRefreshResult = result
-            notice = notices.make(
-                result.staleCount > 0 ? .info : .success, "portfolio.refreshedPrices", ["n": String(result.total ?? 0)])
+            if let didPriceRefresh {
+                didPriceRefresh(PortfolioPriceRefreshReceipt(result: result, error: nil, offline: !isOnline))
+            } else {
+                notice = notices.make(
+                    result.staleCount > 0 ? .info : .success, "portfolio.refreshedPrices",
+                    ["n": String(result.total ?? 0)])
+            }
         } catch {
             pricesError = error.localizedDescription
-            notice = notices.make(.error, "portfolio.refreshPricesFailedTitle", detail: error.localizedDescription)
+            refreshFailure = error.localizedDescription
+            if let didPriceRefresh {
+                didPriceRefresh(
+                    PortfolioPriceRefreshReceipt(result: nil, error: error.localizedDescription, offline: !isOnline))
+            } else {
+                notice = notices.make(.error, "portfolio.refreshPricesFailedTitle", detail: error.localizedDescription)
+            }
         }
-        let refreshFailure = notice?.kind == .error ? notice?.detail : nil
         // A missing acknowledgement can follow successful provider writes. Read the
         // authoritative financial state on either outcome, retaining the refresh error.
         invalidate()

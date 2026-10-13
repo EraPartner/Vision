@@ -177,7 +177,7 @@ struct AIChatTextBubble: View {
                         .accessibilityHidden(true)
                 }
             }.padding(.horizontal, 16).padding(.vertical, 12)
-                .foregroundStyle(user ? Color(token: theme.palette.primaryForeground) : theme.foreground)
+                .foregroundStyle(user ? theme.primaryForeground : theme.foreground)
                 .background(user ? theme.primary : theme.card, in: RoundedRectangle(cornerRadius: 12))
                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(user ? .clear : theme.border.opacity(0.6)))
             if user { AIChatAvatar(role: role) } else { Spacer(minLength: 30) }

@@ -76,14 +76,58 @@ import Testing
             context.evaluateScript(
                 """
                 var saved = { vision_theme: "dark", unregistered: "untouched", "vision.adminToken": "not exported" };
-                var fail = false, writes = 0;
+                var fail = false, failAt = "", writes = 0;
                 var window = { localStorage: {
-                    getItem(key) { if (fail) throw new Error("restricted"); return Object.hasOwn(saved, key) ? saved[key] : null; },
+                    getItem(key) { if (fail || key === failAt) throw new Error("restricted"); return Object.hasOwn(saved, key) ? saved[key] : null; },
                     setItem(key, value) { writes++; if (fail) throw new Error("restricted"); saved[key] = String(value); },
                     removeItem(key) { if (fail) throw new Error("restricted"); delete saved[key]; }
                 } };
                 """)
             return context
+        }
+        @MainActor @Test func editingDetectorMatchesSourceAndFailsSafeWithoutDOM() throws {
+            let context = try context()
+            #expect(
+                context.evaluateScript("(function(){\(NativeSettingsStorageBridge.editingScript)})()")?.toBool() == true
+            )
+            context.evaluateScript(
+                """
+                class HTMLElement { constructor(tag, editable = false) { this.tagName = tag; this.isContentEditable = editable; } }
+                var document = { activeElement: new HTMLElement("INPUT") };
+                """)
+            for tag in ["INPUT", "TEXTAREA", "SELECT"] {
+                context.setObject(tag, forKeyedSubscript: "tag" as NSString)
+                context.evaluateScript("document.activeElement = new HTMLElement(tag)")
+                #expect(
+                    context.evaluateScript("(function(){\(NativeSettingsStorageBridge.editingScript)})()")?.toBool()
+                        == true)
+            }
+            context.evaluateScript("document.activeElement = new HTMLElement('DIV', true)")
+            #expect(
+                context.evaluateScript("(function(){\(NativeSettingsStorageBridge.editingScript)})()")?.toBool() == true
+            )
+            context.evaluateScript("document.activeElement = new HTMLElement('BUTTON')")
+            #expect(
+                context.evaluateScript("(function(){\(NativeSettingsStorageBridge.editingScript)})()")?.toBool()
+                    == false)
+            context.evaluateScript("document.activeElement = null")
+            #expect(
+                context.evaluateScript("(function(){\(NativeSettingsStorageBridge.editingScript)})()")?.toBool()
+                    == false)
+        }
+        @MainActor @Test func legacyThemeReadsRawValuesWithoutDiscardingAPartialRead() throws {
+            let context = try context()
+            context.evaluateScript("saved.vision_theme = 'light'; saved.vision_theme_variant = 'nord'")
+            let script = "(function(){\(NativeSettingsStorageBridge.legacyThemeScript)})()"
+            let text = try #require(context.evaluateScript(script)?.toString())
+            #expect(
+                try JSONValue.parse(Data(text.utf8)) == .object(["mode": .string("light"), "variant": .string("nord")]))
+            context.evaluateScript("failAt = 'vision_theme_variant'")
+            let partial = try #require(context.evaluateScript(script)?.toString())
+            #expect(try JSONValue.parse(Data(partial.utf8)) == .object(["mode": .string("light"), "variant": .null]))
+            context.evaluateScript("fail = true")
+            let unavailable = try #require(context.evaluateScript(script)?.toString())
+            #expect(try JSONValue.parse(Data(unavailable.utf8)) == .object(["mode": .null, "variant": .null]))
         }
         @MainActor @Test func actualScriptsCaptureKnownKeysAndTreatReadFailureAsNoCapture() throws {
             let context = try context()

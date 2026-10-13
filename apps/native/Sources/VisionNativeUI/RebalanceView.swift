@@ -5,8 +5,6 @@ public struct RebalanceView: View {
     @Bindable var model: RebalanceModel
     let shell: NativeShellModel
     @State private var methodology = false
-    @State private var notice: ScreenNotice?
-    @State private var noticeId = 0
     @FocusState var focus: String?
     @Environment(\.visionTheme) var theme
     var strings: any Localizing { shell.strings }
@@ -39,19 +37,12 @@ public struct RebalanceView: View {
             if model.route.string != shell.route.string { shell.replace(with: model.route.string) }
         }
         .onChange(of: model.noticeRevision) {
-            if let key = model.noticeKey {
-                showNotice(key, kind: .success)
-            } else if let key = model.errorKey {
-                showNotice(key, kind: .error, detail: model.actionError)
-                if key == "rebalance.plan.nameRequired" { focus = "name" }
-            }
+            if model.errorKey == "rebalance.plan.nameRequired" { focus = "name" }
         }
         .overlay(alignment: .bottom) {
             ActionToast(
-                notice: notice, strings: strings, actionTitle: nil, duration: .seconds(4), action: {},
-                clear: { id in
-                    if notice?.id == id { notice = nil }
-                })
+                notice: model.notice, strings: strings, actionTitle: nil, duration: .seconds(4), action: {},
+                clear: model.clearNotice)
         }
         .confirmationDialog(
             strings.t("rebalance.plan.deleteTitle"),
@@ -243,10 +234,6 @@ public struct RebalanceView: View {
             Text(strings.t(key)).font(.callout.weight(.medium))
             content()
         }
-    }
-    func showNotice(_ key: String, kind: ScreenNotice.Kind, detail: String? = nil) {
-        noticeId += 1
-        notice = ScreenNotice(id: noticeId, kind: kind, key: key, detail: detail)
     }
     func reload() async { await model.load(route: shell.route, settings: settings, force: true) }
 }

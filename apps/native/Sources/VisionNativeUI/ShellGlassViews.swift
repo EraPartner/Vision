@@ -2,16 +2,28 @@ import AppKit
 import SwiftUI
 import VisionNativeCore
 
-/// A behind-window `NSVisualEffectView`: the desktop glows through, like Electron's
-/// vibrancy under the web page. The material follows the page theme's color scheme, not the
-/// macOS appearance.
+private struct VisionVisualEffectsKey: EnvironmentKey {
+    static let defaultValue = "standard"
+}
+
+extension EnvironmentValues {
+    /// The effective tier after the settings model applies the display-size cap.
+    var visionVisualEffects: String {
+        get { self[VisionVisualEffectsKey.self] }
+        set { self[VisionVisualEffectsKey.self] = newValue }
+    }
+}
+
+/// Native material using the page's appearance. Desktop vibrancy is reserved for Enhanced;
+/// Standard blends the sidebar with the window's own content.
 struct VibrancyBackground: NSViewRepresentable {
     var material: NSVisualEffectView.Material
+    var blendingMode: NSVisualEffectView.BlendingMode = .withinWindow
 
     func makeNSView(context: Context) -> NSVisualEffectView {
         let view = NSVisualEffectView()
         view.material = material
-        view.blendingMode = .behindWindow
+        view.blendingMode = blendingMode
         view.state = .followsWindowActiveState
         view.appearance = Self.appearance(context.environment.colorScheme)
         return view
@@ -19,6 +31,7 @@ struct VibrancyBackground: NSViewRepresentable {
 
     func updateNSView(_ view: NSVisualEffectView, context: Context) {
         view.material = material
+        view.blendingMode = blendingMode
         view.appearance = Self.appearance(context.environment.colorScheme)
     }
 
@@ -31,16 +44,24 @@ struct VibrancyBackground: NSViewRepresentable {
 /// `--sidebar-background` gradient, the inset highlight and the rail border.
 struct SidebarGlassBackground: View {
     @Environment(\.visionTheme) var theme
+    @Environment(\.visionVisualEffects) private var visualEffects
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var body: some View {
         let glass = theme.glass
         ZStack(alignment: .trailing) {
-            VibrancyBackground(material: .sidebar)
-            LinearGradient(
-                colors: [
-                    Color(token: glass.sidebarTop, opacity: glass.sidebarTopOpacity),
-                    Color(token: glass.sidebarTop, opacity: glass.sidebarBottomOpacity),
-                ], startPoint: .top, endPoint: .bottom)
+            if visualEffects == "reduced" || reduceTransparency {
+                Color(token: glass.sidebarTop)
+            } else {
+                VibrancyBackground(
+                    material: .sidebar,
+                    blendingMode: visualEffects == "enhanced" ? .behindWindow : .withinWindow)
+                LinearGradient(
+                    colors: [
+                        Color(token: glass.sidebarTop, opacity: glass.sidebarTopOpacity),
+                        Color(token: glass.sidebarTop, opacity: glass.sidebarBottomOpacity),
+                    ], startPoint: .top, endPoint: .bottom)
+            }
             VStack(spacing: 0) {
                 Rectangle()
                     .fill(Color(token: glass.highlight, opacity: glass.highlightOpacity))
@@ -56,16 +77,22 @@ struct SidebarGlassBackground: View {
     }
 }
 
-/// The detail column behind native screens: a vibrant material tinted with the page's
-/// `--background`, so the opaque cards and tables stay as legible as on the web page.
+/// The detail column is opaque in Standard and Reduced. Enhanced opts into desktop
+/// vibrancy, tinted with the page's background; Reduce Transparency always wins.
 struct DetailGlassBackground: View {
     @Environment(\.visionTheme) var theme
+    @Environment(\.visionVisualEffects) private var visualEffects
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var body: some View {
         let glass = theme.glass
         ZStack {
-            VibrancyBackground(material: .underWindowBackground)
-            Color(token: glass.detailTint, opacity: glass.detailTintOpacity)
+            if visualEffects == "enhanced" && !reduceTransparency {
+                VibrancyBackground(material: .underWindowBackground, blendingMode: .behindWindow)
+                Color(token: glass.detailTint, opacity: glass.detailTintOpacity)
+            } else {
+                Color(token: glass.detailTint)
+            }
         }
         .ignoresSafeArea()
         .accessibilityHidden(true)

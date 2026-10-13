@@ -142,4 +142,26 @@ PriceProviderService --> YahooFinance
 PriceProviderService --> Kinesis
 BelgianInflationService --> Statbel
 
+package "Native Settings single writer (phase 3o)" {
+  class NativeSettingsWindow
+  class NativeSettingsModel
+  class NativeSettingsPersistence
+  class "nativeSettings.ts" as NativeSettingsMirror
+  class "shell:settings-change" as NativeSettingsDelta
+  class "GET /api/settings\nPUT /api/settings/:key {value, expected}" as NativeSettingsAPI
+}
+NativeSettingsWindow --> NativeSettingsModel : source control edit
+NativeSettingsModel --> NativeSettingsPersistence : 500 ms / per-key serialized write
+NativeSettingsPersistence --> NativeSettingsAPI : original raw CAS expected token
+NativeSettingsAPI --> Repositories : existing validation / conditional replacement
+NativeSettingsModel --> NativeSettingsMirror : draft then acknowledged receipt
+NativeSettingsMirror --> Pages : retained route / immediate display mirror
+Pages --> NativeSettingsDelta : supported app / dashboard / theme field deltas
+NativeSettingsDelta --> NativeSettingsModel : restricted native-only bridge
+note right of NativeSettingsMirror
+  Native mode disables three competing web hydration writers.
+  Drafts do not advance server baselines.
+  Existing widget/other-key writers are unchanged.
+end note
+
 @enduml

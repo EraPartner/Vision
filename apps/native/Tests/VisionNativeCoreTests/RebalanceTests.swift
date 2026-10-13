@@ -206,12 +206,16 @@ struct RebalanceModelTests {
     @Test func saveKeepsOriginalCASAndUnknownFieldsAndFailureRetainsTheDraft() async throws {
         let service = try RebalanceFixtureService()
         let model = RebalanceModel(service: service)
+        let center = NativeNoticeCenter(automaticExpiry: false)
+        model.attachNotices(center)
         await model.load(route: NativeRoute("/portfolio/rebalance?source=plan%3Afirst")!, settings: .defaults)
         let baseline = await service.record.expected
         model.updateDraft { $0.name = "Updated" }
         await service.setFailure(true)
         await model.savePlan()
         #expect(model.errorKey == "rebalance.plan.saveFailed")
+        #expect(center.entries.last?.notice.key == "rebalance.plan.saveFailed")
+        #expect(center.entries.last?.notice.kind == .error)
         #expect(model.draft.name == "Updated" && model.plans.first?.name == "First plan")
         await service.setFailure(false)
         await model.savePlan()
@@ -220,6 +224,11 @@ struct RebalanceModelTests {
         #expect(writes.last?.plans.first?.storedValue["future"] == .string("keep"))
         #expect(writes.last?.plans.last?.id == "other")
         #expect(model.noticeKey == "rebalance.plan.updated")
+        #expect(center.entries.map(\.notice.key) == ["rebalance.plan.saveFailed", "rebalance.plan.updated"])
+        model.invalidate()
+        #expect(center.entries.last?.notice == model.notice)
+        center.dismiss(try #require(center.entries.last?.id))
+        #expect(model.notice == nil)
     }
     @Test func deletingRequiresConfirmationAndResetsOnlyOwnedURLState() async throws {
         let service = try RebalanceFixtureService()

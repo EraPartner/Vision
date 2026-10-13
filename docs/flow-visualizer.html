@@ -2013,7 +2013,7 @@
             "x": 592,
             "y": 1340,
             "path": "apps/native/Sources/VisionNativeCore/Screens/AIChat/AIInvestigationModel.swift",
-            "desc": "Exact frozen preview/grant requests, manual mounted job polling, status-only focus/reconnect freshness, documents and disclosure history retain source privacy controls and guarded visits."
+            "desc": "Exact frozen preview/grant requests, manual mounted job polling, status-only mount/reconnect freshness, documents and disclosure history retain source privacy controls and guarded visits."
           },
           {
             "id": "native.dossiers",
@@ -2024,6 +2024,36 @@
             "y": 852,
             "path": "apps/native/Sources/VisionNativeCore/Screens/ResearchDossiers/ResearchDossiersModel.swift",
             "desc": "Paged current links, explicit evidence drafts, document anchors, immutable versions/conflicts and existing server JSON exports retain selection/visit authority."
+          },
+          {
+            "id": "native.settings",
+            "label": "Native Settings",
+            "sub": "seven panes · existing controls",
+            "kind": "frontend",
+            "x": 780,
+            "y": 1340,
+            "path": "apps/native/Sources/VisionNativeUI/Screens/Settings/NativeSettingsWindow.swift",
+            "desc": "General/Appearance/Insights/Behavior/AI/Backup/About retain source controls, appearance and existing desktop services. Raw CAS lanes preserve drafts and only acknowledged baselines."
+          },
+          {
+            "id": "native.settingsbridge",
+            "label": "Native Settings writer",
+            "sub": "three-key deltas · draft / ACK",
+            "kind": "frontend",
+            "x": 980,
+            "y": 1340,
+            "path": "apps/native/Sources/VisionNativeCore/Shell/NativeSettingsPatch.swift",
+            "desc": "App/dashboard migration preserves unknown fields; theme writes known four fields. Retained-page deltas join the same per-key writer; drafts never advance web baselines."
+          },
+          {
+            "id": "native.notices",
+            "label": "Native global notices",
+            "sub": "captured actions · 8s Undo",
+            "kind": "frontend",
+            "x": 1180,
+            "y": 1340,
+            "path": "apps/native/Sources/VisionNativeCore/Shell/NativeNoticeCenter.swift",
+            "desc": "App-lifetime host retains six source Undo owners and the one-slot typing-guarded shortcut. Retry/Create rule/Import stay non-Undo actions; callbacks consume before awaiting."
           }
         ],
         "baseEdges": [
@@ -2566,6 +2596,42 @@
           [
             "sv.aichat",
             "pkg.shared-utils"
+          ],
+          [
+            "native.settings",
+            "native.settingsbridge"
+          ],
+          [
+            "native.settingsbridge",
+            "be.routes"
+          ],
+          [
+            "native.settingsbridge",
+            "fe.stores"
+          ],
+          [
+            "fe.stores",
+            "native.settingsbridge"
+          ],
+          [
+            "native.settings",
+            "native.aichat"
+          ],
+          [
+            "native.settings",
+            "native.investigation"
+          ],
+          [
+            "native.settings",
+            "build.native"
+          ],
+          [
+            "native.settings",
+            "native.notices"
+          ],
+          [
+            "native.notices",
+            "fe.pages"
           ]
         ],
         "flows": [
@@ -7493,6 +7559,146 @@
                 "label": "Native architecture"
               }
             ]
+          },
+          {
+            "id": "native-settings-instant-apply",
+            "name": "Edit native Settings with original CAS baselines",
+            "summary": "Seven native panes retain source controls; 500 ms per-key lanes preserve optional absence, unknown app/dashboard fields and sticky rejected writes.",
+            "steps": [
+              {
+                "from": "native.settings",
+                "to": "native.settingsbridge",
+                "payload": "Control edit updates migrated app/dashboard envelope or four known theme fields; no initial hydration save",
+                "annotation": "apps/native/Sources/VisionNativeCore/Settings/NativeSettingsDefaults.swift; NativeSettingsModel.swift retain original expected JSON separately from editable defaults."
+              },
+              {
+                "from": "native.settingsbridge",
+                "to": "be.routes",
+                "payload": "Existing PUT /api/settings/:key {value, expected} after 500 ms; serialized per-key lane",
+                "annotation": "apps/native/Sources/VisionNativeCore/Settings/NativeSettingsService.swift uses the existing conditional operation and disables transport replay of CAS writes."
+              },
+              {
+                "from": "be.routes",
+                "to": "db.postgres",
+                "payload": "Validate known key; compare original stored baseline; replace or reject stale value",
+                "annotation": "apps/node-backend/src/routes/settings.ts and repositories/settingsRepository.ts retain existing conditional settings behavior; no new endpoint."
+              },
+              {
+                "from": "native.settingsbridge",
+                "to": "fe.stores",
+                "payload": "Immediate draft and separate acknowledged receipt; baseline advances only from receipt",
+                "annotation": "apps/native/VisionNative/ShellController.swift sends vision:native-settings; apps/frontend/src/stores/hydration/nativeSettings.ts mirrors without echo. Rejected app/dashboard saves retain source feedback; theme save failures stay silent."
+              },
+              {
+                "from": "native.settings",
+                "to": "native.aichat",
+                "payload": "Share successful Ollama status/models receipts; preserve independent default-model fields",
+                "annotation": "apps/native/Sources/VisionNativeCore/Settings/NativeSettingsAIModel.swift and NativeSettingsAIReadFlights.swift coalesce pending typed reads only; provider writes invalidate masked key status rather than quote/news."
+              },
+              {
+                "from": "native.settings",
+                "to": "native.investigation",
+                "payload": "AgentCloak acknowledgment invalidates active OpenAI status; benchmark blur and default-depth removal retain source semantics",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/AIChat/AIInvestigationModel.swift refreshes an active invalidated status observer. Global ordinary focus refetch is disabled; paused reads/writes follow source continuation gates."
+              }
+            ],
+            "category": "Native migration"
+          },
+          {
+            "id": "native-settings-retained-delta",
+            "name": "Forward retained web preference edits to the native writer",
+            "summary": "Native-mode hydration writers pause; supported structural three-key deltas share one native writer and drafts never masquerade as persisted receipts.",
+            "steps": [
+              {
+                "from": "fe.stores",
+                "to": "native.settingsbridge",
+                "payload": "shell:settings-change {key, updates, removed}; app_settings/dashboard_settings/theme_settings only",
+                "annotation": "apps/frontend/src/stores/hydration/nativeSettings.ts diffs user edits, skips initial hydration and echo updates, and merges edited schedule fields."
+              },
+              {
+                "from": "native.settingsbridge",
+                "to": "native.settings",
+                "payload": "Validate supported keys/fields; optional removals limited to four app fields; apply same native model edit",
+                "annotation": "apps/native/Sources/VisionNativeCore/Shell/NativeSettingsPatch.swift and Shell/BridgeDispatcher.swift restrict the native-only bridge. It is separate from 25 Electron IPC and unchanged HTTP endpoints."
+              },
+              {
+                "from": "native.settings",
+                "to": "native.settingsbridge",
+                "payload": "Queue original-baseline CAS save; retain whole editable app/dashboard unknown fields",
+                "annotation": "apps/native/Sources/VisionNativeCore/Settings/NativeSettingsModel.swift and NativeSettingsService.swift use 500 ms per-key persistence; no background read blesses a failed lane."
+              },
+              {
+                "from": "native.settingsbridge",
+                "to": "fe.stores",
+                "payload": "vision:native-settings receipt with returned value and matching expected token",
+                "annotation": "apps/frontend/src/lib/api/settings.ts acknowledgeNativeSettingReceipt checks the value/expected pair. AppSettingsHydration.tsx, SettingsHydration.tsx and ThemeHydration.tsx skip native-owned saves."
+              }
+            ],
+            "category": "Native migration"
+          },
+          {
+            "id": "native-settings-backup-appearance",
+            "name": "Use native appearance and existing Backup/About services",
+            "summary": "Canonical palettes, six system-accent tokens, source display cap and existing backup/restore/update bridges remain shared with the retained page. Restore/session fencing is still pending at this checkpoint.",
+            "steps": [
+              {
+                "from": "native.settings",
+                "to": "build.native",
+                "payload": "Resolve appearance, schedule and physical display pixels; session-only effects override above six million pixels",
+                "annotation": "apps/native/Sources/VisionNativeCore/Settings/NativeSettingsAppearanceResolver.swift; apps/native/VisionNative/ShellController.swift applies source appearance/display policy."
+              },
+              {
+                "from": "build.native",
+                "to": "fe.stores",
+                "payload": "Paired system-accent primary/ring/sidebar family and immediate theme/session mirror",
+                "annotation": "apps/native/Sources/VisionNativeCore/Design/ThemeSelection.swift overrides six tokens with their contrasting foreground; palette accent/swatches remain canonical. ShellController.swift mirrors source effects session state."
+              },
+              {
+                "from": "native.settings",
+                "to": "build.native",
+                "payload": "Existing backup directory/passphrase/run/restore, update, services and onboarding bridge actions",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/Settings/NativeSettingsBackupModel.swift and NativeSettingsAboutModel.swift retain source confirmations and desktop operations; .github/workflows/native-branch.yml runs unsigned macOS verification."
+              },
+              {
+                "from": "build.native",
+                "to": "fe.stores",
+                "payload": "Capture source localStorage registry; confirmed restore reapplies captured strings without clearing omitted keys",
+                "annotation": "apps/native/Sources/VisionNativeCore/Shell/NativeSettingsStorageBridge.swift and Backup/BackupService.swift preserve existing bundle coverage and local-state restoration. Restored-model/data-session fencing is pending; no completed verification claim."
+              }
+            ],
+            "category": "Native migration"
+          },
+          {
+            "id": "native-global-notice-actions",
+            "name": "Consume native global Undo and source notice actions",
+            "summary": "App-lifetime notices preserve route-surviving source actions, eight-second Undo deadlines, one shortcut slot and editor typing guards.",
+            "steps": [
+              {
+                "from": "native.settings",
+                "to": "native.notices",
+                "payload": "Publish source notice and captured action; host survives page/Settings changes",
+                "annotation": "apps/native/Sources/VisionNativeCore/Shell/NativeNoticeCenter.swift and apps/native/Sources/VisionNativeUI/Components/NativeNoticeHost.swift retain notices independently of their source view."
+              },
+              {
+                "from": "native.notices",
+                "to": "native.notices",
+                "payload": "Six owners offer eight-second Undo; newest eligible action occupies the shortcut slot",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/Transactions/TransactionsModel.swift, Planned/PlannedPaymentsModel.swift, Categories/CategoriesModel.swift, Recipients/RecipientsModel.swift, ResearchCharts/ResearchChartBuilderModel.swift and ResearchForecast/ResearchLifeScenarioModel.swift bind source Undo callbacks."
+              },
+              {
+                "from": "native.notices",
+                "to": "fe.pages",
+                "payload": "Preserve focused editor Undo; consume captured action before awaiting its callback",
+                "annotation": "apps/native/VisionNative/ShellController.swift and Shell/NativeSettingsStorageBridge.swift guard native/retained editing context. NativeNoticeCenter.swift reserves the shortcut and dismisses action state before await."
+              },
+              {
+                "from": "native.notices",
+                "to": "be.routes",
+                "payload": "Existing Retry/Create rule/Import callbacks remain non-Undo actions with source scopes/routes",
+                "annotation": "apps/native/Sources/VisionNativeCore/Screens/Transactions/TransactionsModel.swift, Recipients/RecipientsModel.swift and Imports/ImportNotices.swift retain these action kinds; no new endpoint or retry UI."
+              }
+            ],
+            "category": "Native migration"
           }
         ],
         "learningPaths": [

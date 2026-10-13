@@ -30,7 +30,7 @@ public final class PortfolioTaxModel {
     @ObservationIgnored private var settingsDraft: PortfolioTaxSettingsDraft?
     @ObservationIgnored private var editorDraft: PortfolioTaxSettingsDraft?
     @ObservationIgnored private var numberFormat: NumberFormat = .eu
-    @ObservationIgnored private var noticeID = 0
+    @ObservationIgnored private var notices = NoticeCounter()
     private struct Context: Equatable {
         let year: Int
         let currency: String
@@ -50,6 +50,9 @@ public final class PortfolioTaxModel {
         }
     }
     public func clearNotice(_ id: Int) { if notice?.id == id { notice = nil } }
+    public func attachNotices(_ center: NativeNoticeCenter) {
+        notices.attach(center) { [weak self] in self?.clearNotice($0) }
+    }
     public func invalidate() {
         revision = UUID()
         task?.cancel()
@@ -186,8 +189,7 @@ public final class PortfolioTaxModel {
             draftRows = []
             adjustmentYear = nil
             focusInvestmentID = nil
-            noticeID &+= 1
-            notice = ScreenNotice(id: noticeID, kind: .success, key: "tax.manualAdjustmentsSaved")
+            notice = notices.make(.success, "tax.manualAdjustmentsSaved")
             await didSave?()
             if let context, let liveYear {
                 invalidate()
@@ -197,9 +199,7 @@ public final class PortfolioTaxModel {
             return true
         } catch {
             adjustmentsError = error.localizedDescription
-            noticeID &+= 1
-            notice = ScreenNotice(
-                id: noticeID, kind: .error, key: "tax.manualAdjustmentsSaveFailed", detail: error.localizedDescription)
+            notice = notices.make(.error, "tax.manualAdjustmentsSaveFailed", detail: error.localizedDescription)
             if attemptedWrite {
                 // A response can be lost after PostgreSQL commits. Refresh the displayed
                 // authority, retaining the form and its original CAS for review/cancel.

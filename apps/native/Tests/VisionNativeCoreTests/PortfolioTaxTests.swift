@@ -184,6 +184,8 @@ struct PortfolioTaxModelTests {
     @Test func lostAcknowledgementInvalidatesDependentsAndReopeningUsesTheCommittedBaseline() async throws {
         let service = try PortfolioTaxTestService()
         let model = PortfolioTaxModel(service: service)
+        let center = NativeNoticeCenter(automaticExpiry: false)
+        model.attachNotices(center)
         var notifications = 0
         model.didSave = { notifications += 1 }
         await model.load(year: 2025, liveYear: 2026, currency: "EUR")
@@ -192,16 +194,20 @@ struct PortfolioTaxModelTests {
         await service.loseNextAcknowledgement()
         #expect(!(await model.saveAdjustments()))
         #expect(notifications == 1 && model.isAdjustmentsPresented)
+        #expect(center.entries.last?.notice.key == "tax.manualAdjustmentsSaveFailed")
         #expect(model.draftRows.first?.taxes == "42,5")
         let committed = await service.records[0].expected
         #expect(model.closeAdjustments() && model.beginAdjustments(numberFormat: .eu))
         #expect(model.draftRows.first?.taxes == "42,5")
         #expect(await model.saveAdjustments())
+        #expect(center.entries.map(\.notice.key) == ["tax.manualAdjustmentsSaveFailed", "tax.manualAdjustmentsSaved"])
         #expect(await service.writes.last?.expected[PortfolioTaxSettingsDraft.adjustmentsKey] == committed)
     }
     @Test func yearChangeDuringSaveKeepsTheWriteYearAndRefreshesTheCurrentView() async throws {
         let service = try PortfolioTaxTestService()
         let model = PortfolioTaxModel(service: service)
+        let center = NativeNoticeCenter(automaticExpiry: false)
+        model.attachNotices(center)
         await model.load(year: 2025, liveYear: 2026, currency: "EUR")
         #expect(model.beginAdjustments(numberFormat: .eu))
         model.updateDraft(id: 1) { $0.taxes = "9,75" }
@@ -214,6 +220,10 @@ struct PortfolioTaxModelTests {
         await model.load(year: 2024, liveYear: 2026, currency: "USD")
         await service.release()
         #expect(await save.value)
+        #expect(center.entries.last?.notice.key == "tax.manualAdjustmentsSaved")
+        #expect(center.entries.last?.notice == model.notice)
+        center.dismiss(try #require(center.entries.last?.id))
+        #expect(model.notice == nil)
         #expect(model.dashboard?.year == 2024 && model.dashboard?.currency == "USD")
         let patch = try #require(await service.writes.last)
         #expect(

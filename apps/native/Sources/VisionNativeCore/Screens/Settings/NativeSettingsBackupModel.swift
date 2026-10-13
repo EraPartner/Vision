@@ -262,8 +262,8 @@ import Observation
                     try? await service.applyRestoredFrontendState(state)
                 }
                 enqueue("settings.restore.success", variables: ["file": result["file"]?.stringValue ?? file])
-                guard isActive, captured == workflow else { return }
                 finishWorkflow(captured)
+                // An accepted database restore changes the whole app, even if this section has left.
                 reloadTask?.cancel()
                 reloadTask = Task { [service, reloadDelay] in
                     do {
@@ -321,8 +321,6 @@ import Observation
         pendingConfirmationFile = nil
         pendingRestoreFile = nil
         restorePassphrase = ""
-        reloadTask?.cancel()
-        reloadTask = nil
         restoreSubmitting = false
         restoreRunning = false
     }

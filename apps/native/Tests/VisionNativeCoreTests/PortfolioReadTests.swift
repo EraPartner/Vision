@@ -262,8 +262,17 @@ struct PortfolioReadTests {
         let transport = PortfolioReadTransport()
         let model = PortfolioModel(service: portfolioReadClient(transport))
         await model.load(currency: "EUR")
+        var receipts: [PortfolioPriceRefreshReceipt] = []
+        var valueAtReceipt: Decimal?
+        model.didPriceRefresh = {
+            receipts.append($0)
+            valueAtReceipt = model.summary?.totals.totalPortfolioValue
+        }
         await transport.losePriceAcknowledgement()
         await model.refreshPrices()
+        #expect(receipts.count == 1 && receipts.first?.error == model.priceError)
+        #expect(receipts.first?.result == nil && receipts.first?.offline == false)
+        #expect(valueAtReceipt == 100)
         #expect(model.priceError != nil)
         #expect(model.summary?.totals.totalPortfolioValue == 101)
         #expect(!model.isRefreshingPrices)
@@ -274,6 +283,9 @@ struct PortfolioReadTests {
     @Test func identicalPriceRefreshCompletionsEachPublishANoticeAndOfflineAttemptsDoNot() async {
         let transport = PortfolioReadTransport()
         let model = PortfolioModel(service: portfolioReadClient(transport))
+        var receipts: [PortfolioPriceRefreshReceipt] = []
+        model.didPriceRefresh = { receipts.append($0) }
+        #expect(model.usesExternalPriceNotices)
         await model.load(currency: "EUR")
         await model.refreshPrices()
         let firstResult = model.priceRefreshResult
@@ -282,9 +294,11 @@ struct PortfolioReadTests {
         await model.refreshPrices()
         #expect(model.priceRefreshResult == firstResult)
         #expect(model.priceNoticeRevision == 2)
+        #expect(receipts.count == 2 && receipts[0] == receipts[1])
         model.isOnline = false
         await model.refreshPrices()
         #expect(model.priceNoticeRevision == 2)
+        #expect(receipts.count == 2)
     }
 
     @Test func failedSameCurrencyRefreshExposesErrorWithRetainedServerFiguresAndClearsOnRetry() async {

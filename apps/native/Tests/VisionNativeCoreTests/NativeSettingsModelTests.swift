@@ -286,8 +286,9 @@ struct NativeSettingsModelTests {
     }
     @Test func optionReadsAreSectionScopedAndCacheSuccessfulEmptyListsForSixtySeconds() async throws {
         let transport = NativeSettingsFixture()
-        var clock = Date(timeIntervalSince1970: 1000)
-        let model = NativeSettingsModel(service: settingsClient(transport), debounce: .milliseconds(10), now: { clock })
+        let clock = NativeSettingsFixtureClock(Date(timeIntervalSince1970: 1000))
+        let model = NativeSettingsModel(
+            service: settingsClient(transport), debounce: .milliseconds(10), now: { clock.value })
         var servicesReads = 0
         model.loadKeepServices = {
             servicesReads += 1
@@ -300,10 +301,10 @@ struct NativeSettingsModelTests {
         #expect(!(await transport.requests).contains { $0.url.path == "/api/recipients" })
         await model.loadOptions()
         #expect(await transport.requests.count == 3)
-        clock = clock.addingTimeInterval(59)
+        clock.value = clock.value.addingTimeInterval(59)
         await model.loadOptions()
         #expect(await transport.requests.count == 3)
-        clock = clock.addingTimeInterval(2)
+        clock.value = clock.value.addingTimeInterval(2)
         await model.loadOptions()
         #expect(await transport.requests.count == 5)
         await model.loadCategories(force: true)
@@ -449,4 +450,9 @@ private actor NativeSettingsFixture: APITransport {
                     ]),
                 ])))
     }
+}
+
+@MainActor private final class NativeSettingsFixtureClock {
+    var value: Date
+    init(_ value: Date) { self.value = value }
 }

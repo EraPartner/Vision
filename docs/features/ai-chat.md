@@ -501,7 +501,9 @@ tables/charts. Shared TypeScript retains source first-row inference and signed R
 composition; Swift only draws and formats returned values. This adds no tool/provider request.
 Investigation preserves exact preview, digest-bound consent grant and frozen outbound request,
 source privacy controls, documents, history and evidence. Status refreshes follow the source
-60-second focus/reconnect policy; documents remain mount-only and job polling retains its manual
+60-second mount/reconnect freshness; ordinary focus refetch is disabled globally and focus only
+continues a paused status read. Settings shares successful status/model receipts, and acknowledged
+AgentCloak changes invalidate active OpenAI status. Documents remain mount-only and job polling retains its manual
 1.2-second policy while mounted. Only document deletion adds the existing Investigation confirmation.
 
 Portable tests cover transport/state and source presentation contracts. macOS package, responsive

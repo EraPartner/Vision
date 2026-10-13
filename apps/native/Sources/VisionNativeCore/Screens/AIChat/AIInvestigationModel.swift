@@ -46,6 +46,7 @@ import Observation
     public func seedSharedResearch(_ value: AIResearchStatus, fetchedAt: Date) {
         guard statusReadAt.map({ fetchedAt > $0 }) ?? true else { return }
         let oldModel = openAiModel
+        statusRevision = UUID()
         statusTask?.cancel()
         statusTask = nil
         status = value
@@ -54,9 +55,12 @@ import Observation
         if oldModel != openAiModel { clearPreview() }
     }
     public func invalidateSharedResearch() {
+        statusRevision = UUID()
         statusTask?.cancel()
         statusTask = nil
         statusReadAt = nil
+        // Query invalidation refetches an active observer even if the Settings writer has unmounted.
+        refreshStatusSoon(initialMount: true)
     }
     public var pickDocument: (@MainActor () async throws -> AIResearchDocumentFile?)?
     @ObservationIgnored private let service: any AIInvestigationService
@@ -73,6 +77,7 @@ import Observation
     @ObservationIgnored private var busyCount = 0
     @ObservationIgnored private var pollTask: Task<Void, Never>?
     @ObservationIgnored private var loadTask: Task<Void, Never>?
+    @ObservationIgnored private var statusRevision = UUID()
     @ObservationIgnored private var statusTask: Task<Void, Never>?
     @ObservationIgnored private var statusReadAt: Date?
     @ObservationIgnored private var pausedStatusRead = false
@@ -183,11 +188,13 @@ import Observation
         guard initialMount || isForeground else { return }
         pausedStatusRead = false
         let scope = visit
+        let revision = UUID()
+        statusRevision = revision
         let task = Task { [weak self] in
-            guard let self, active, visit == scope, !Task.isCancelled else { return }
+            guard let self, active, visit == scope, statusRevision == revision, !Task.isCancelled else { return }
             do {
                 let response = try await service.investigationStatus()
-                guard active, visit == scope else { return }
+                guard active, visit == scope, statusRevision == revision, !Task.isCancelled else { return }
                 let oldModel = openAiModel
                 status = response
                 statusReadAt = now()
@@ -199,7 +206,7 @@ import Observation
         }
         statusTask = task
         await task.value
-        if active, visit == scope { statusTask = nil }
+        if active, visit == scope, statusRevision == revision { statusTask = nil }
     }
     private func readDocuments(visit scope: UUID) async -> [AIResearchDocument]? {
         guard active, visit == scope, !Task.isCancelled else { return nil }
@@ -223,6 +230,7 @@ import Observation
         pollTask = nil
         loadTask?.cancel()
         loadTask = nil
+        statusRevision = UUID()
         statusTask?.cancel()
         statusTask = nil
         pausedStatusRead = false

@@ -17,23 +17,69 @@ import Observation
     public var isOnline = true {
         didSet {
             if isOnline && !oldValue {
-                let pending = onlineWaiters
-                onlineWaiters = []
-                for continuation in pending { continuation.resume() }
+                resumePausedMutations()
                 if active { Task { [weak self] in await self?.reconnect() } }
             }
         }
     }
     public var isForeground = true {
         didSet {
-            if isForeground && !oldValue && active && !pausedReads.isEmpty {
-                Task { [weak self] in await self?.resumePausedReads() }
+            if isForeground && !oldValue {
+                resumePausedMutations()
+                if active && !pausedReads.isEmpty { Task { [weak self] in await self?.resumePausedReads() } }
             }
         }
     }
     public var didNotice: (@MainActor (String) -> Void)?
+    public var didReceiveStatus: (@MainActor (NativeSettingsAIReceipt<AIChatOllamaStatus>) -> Void)?
+    public var didReceiveModels: (@MainActor (NativeSettingsAIReceipt<[AIChatOllamaModel]>) -> Void)?
+    public var didReceiveResearch: (@MainActor (NativeSettingsAIReceipt<AIResearchStatus>) -> Void)?
+    public var didInvalidateSharedReads: (@MainActor ([String]) -> Void)?
+    public var sharedStatusReceipt: NativeSettingsAIReceipt<AIChatOllamaStatus>? {
+        guard let ollamaStatus, let date = dates[.status] else { return nil }
+        return .init(value: ollamaStatus, fetchedAt: date)
+    }
+    public var sharedModelsReceipt: NativeSettingsAIReceipt<[AIChatOllamaModel]>? {
+        guard let ollamaModels, let date = dates[.models] else { return nil }
+        return .init(value: ollamaModels, fetchedAt: date)
+    }
+    public var sharedResearchReceipt: NativeSettingsAIReceipt<AIResearchStatus>? {
+        guard let researchStatus, let date = dates[.research] else { return nil }
+        return .init(value: researchStatus, fetchedAt: date)
+    }
+    public func seedSharedStatus(_ value: AIChatOllamaStatus, fetchedAt: Date) {
+        guard dates[.status].map({ fetchedAt > $0 }) ?? true else { return }
+        retire(.status)
+        pausedReads.remove(.status)
+        ollamaStatus = value
+        dates[.status] = fetchedAt
+        statusFailed = false
+    }
+    public func seedSharedModels(_ value: [AIChatOllamaModel], fetchedAt: Date) {
+        guard dates[.models].map({ fetchedAt > $0 }) ?? true else { return }
+        retire(.models)
+        pausedReads.remove(.models)
+        ollamaModels = value
+        dates[.models] = fetchedAt
+    }
+    public func seedSharedResearch(_ value: AIResearchStatus, fetchedAt: Date) {
+        guard dates[.research].map({ fetchedAt > $0 }) ?? true else { return }
+        retire(.research)
+        pausedReads.remove(.research)
+        researchStatus = value
+        dates[.research] = fetchedAt
+    }
+    public func invalidateSharedAIReads(_ keys: [String]) {
+        for (key, lane) in [
+            ("ollama-status", Lane.status), ("ollama-models", .models), ("openai-research-status", .research),
+        ] where keys.contains(key) {
+            dates[lane] = nil
+            retire(lane)
+        }
+    }
     public var didInvalidateResearchStatus: (@MainActor () -> Void)?
     @ObservationIgnored private let service: any NativeSettingsAIService
+    @ObservationIgnored private let sleep: @Sendable (Duration) async throws -> Void
     @ObservationIgnored private let now: @Sendable () -> Date
     @ObservationIgnored private var active = false
     @ObservationIgnored private var visit = UUID()
@@ -45,13 +91,18 @@ import Observation
     @ObservationIgnored private var revisions: [Lane: UUID] = [:]
     @ObservationIgnored private var tasks: [Lane: Task<Void, Never>] = [:]
     @ObservationIgnored private var onlineWaiters: [CheckedContinuation<Void, Never>] = []
+    @ObservationIgnored private var providerRetryPending = false
     @ObservationIgnored private var statusFailed = false
     @ObservationIgnored private var desktopFailed = false
     private enum Lane: CaseIterable, Hashable { case status, models, research, providers, desktop }
 
-    public init(service: any NativeSettingsAIService, now: @escaping @Sendable () -> Date = { Date() }) {
+    public init(
+        service: any NativeSettingsAIService, now: @escaping @Sendable () -> Date = { Date() },
+        sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
+    ) {
         self.service = service
         self.now = now
+        self.sleep = sleep
     }
     public var isLoadingStatus: Bool { ollamaStatus == nil && fetching.contains(.status) }
     public var isLoadingModels: Bool { ollamaModels == nil && fetching.contains(.models) }
@@ -122,6 +173,7 @@ import Observation
         tasks = [:]
         fetching = []
         pausedReads = []
+        providerRetryPending = false
         for lane in Lane.allCases { revisions[lane] = UUID() }
         keyInputs = [:]
         benchmarkDraft = ""
@@ -132,12 +184,21 @@ import Observation
         desktopMutationError = nil
     }
     private func initialReads() async {
-        async let status: Void = read(.status)
+        async let statusAndModels: Void = readStatusAndModels()
         async let research: Void = read(.research)
         async let providers: Void = read(.providers)
         async let desktop: Void = read(.desktop)
-        _ = await (status, research, providers, desktop)
-        if ollamaStatus?.ok == true { await read(.models) }
+        _ = await (statusAndModels, research, providers, desktop)
+    }
+    private func readStatusAndModels() async {
+        if ollamaStatus?.ok == true {
+            async let models: Void = read(.models)
+            await read(.status)
+            await models
+        } else {
+            await read(.status)
+            if ollamaStatus?.ok == true { await read(.models) }
+        }
     }
     private func reconnect() async {
         guard active else { return }
@@ -173,26 +234,24 @@ import Observation
             let receipt = try await service.settingsAIConfigureDesktop(enabled: !desktopStatus.enabled)
             dates[.desktop] = nil
             dates[.research] = nil
+            retire(.desktop)
+            retire(.research)
+            self.desktopStatus = receipt
+            desktopFailed = false
+            await service.settingsAIInvalidateReads(["agentcloak-desktop", "openai-research-status"])
+            didInvalidateSharedReads?(["agentcloak-desktop", "openai-research-status"])
             didInvalidateResearchStatus?()
-            if active, visit == scope {
-                self.desktopStatus = receipt
-                desktopFailed = false
-                isTogglingDesktop = false
-                retire(.desktop)
-                retire(.research)
+            if active {
                 async let desktop: Void = read(.desktop, force: true)
                 async let research: Void = read(.research, force: true)
                 _ = await (desktop, research)
             }
+            if active, visit == scope { isTogglingDesktop = false }
         } catch {
             if active, visit == scope {
                 isTogglingDesktop = false
                 desktopMutationError = error.localizedDescription
             }
-            dates[.desktop] = nil
-            dates[.research] = nil
-            retire(.desktop)
-            retire(.research)
         }
     }
     public func keyInput(_ provider: String) -> String { keyInputs[provider] ?? "" }
@@ -215,12 +274,12 @@ import Observation
             _ = try await service.settingsAISetProviderKey(provider: provider, input: input)
             dates[.providers] = nil
             retire(.providers)
+            await service.settingsAIInvalidateReads(["provider-keys"])
+            didInvalidateSharedReads?(["provider-keys"])
             didNotice?("settings.research.saved")
             if active, visit == scope { isSavingKey = false }
             if active { await read(.providers, force: true) }
         } catch {
-            dates[.providers] = nil
-            retire(.providers)
             if active, visit == scope { isSavingKey = false }
             didNotice?("settings.research.saveFailed")
         }
@@ -235,12 +294,12 @@ import Observation
             try await service.settingsAIClearProviderKey(provider: provider)
             dates[.providers] = nil
             retire(.providers)
+            await service.settingsAIInvalidateReads(["provider-keys"])
+            didInvalidateSharedReads?(["provider-keys"])
             didNotice?("settings.research.cleared")
             if active, visit == scope { isClearingKey = false }
             if active { await read(.providers, force: true) }
         } catch {
-            dates[.providers] = nil
-            retire(.providers)
             if active, visit == scope { isClearingKey = false }
             didNotice?("settings.research.clearFailed")
         }
@@ -261,10 +320,19 @@ import Observation
     }
     public func updateBenchmarkDraft(_ value: String) { benchmarkDraft = NativeSettingsAIText.limitBenchmark(value) }
     private func waitForOnline() async {
+        // An online mutation can start in the background. Once paused offline, source retryer
+        // continuation requires both online and focused, including after this pane unmounts.
         guard !isOnline else { return }
         await withCheckedContinuation { onlineWaiters.append($0) }
     }
+    private func resumePausedMutations() {
+        guard isOnline, isForeground else { return }
+        let pending = onlineWaiters
+        onlineWaiters = []
+        for continuation in pending { continuation.resume() }
+    }
     private func retire(_ lane: Lane) {
+        if lane == .providers { providerRetryPending = false }
         revisions[lane] = UUID()
         tasks[lane]?.cancel()
         tasks[lane] = nil
@@ -284,12 +352,14 @@ import Observation
         }
         pausedReads.remove(lane)
         let scope = visit
+        let continuingRetry = lane == .providers && providerRetryPending
+        if lane == .providers { providerRetryPending = false }
         let revision = UUID()
         revisions[lane] = revision
         fetching.insert(lane)
-        if lane == .desktop {
+        if lane == .desktop, desktopStatus == nil {
             desktopReadError = nil
-            if desktopStatus == nil { desktopFailed = false }
+            desktopFailed = false
         }
         let task = Task { [weak self] in
             guard let self, active, visit == scope, revisions[lane] == revision, !Task.isCancelled else { return }
@@ -297,8 +367,19 @@ import Observation
                 try await performRead(lane, scope: scope, revision: revision)
             } catch {
                 // Provider status inherits QueryClient retry: 1; the other source queries explicitly disable it.
-                if lane == .providers, active, visit == scope, revisions[lane] == revision, !Task.isCancelled {
-                    do { try await performRead(lane, scope: scope, revision: revision) } catch {}
+                if lane == .providers, !continuingRetry, active, visit == scope, revisions[lane] == revision,
+                    !Task.isCancelled
+                {
+                    do {
+                        try await sleep(.seconds(1))
+                        guard active, visit == scope, revisions[lane] == revision, !Task.isCancelled else { return }
+                        if isOnline && isForeground {
+                            try await performRead(lane, scope: scope, revision: revision)
+                        } else {
+                            pausedReads.insert(.providers)
+                            providerRetryPending = true
+                        }
+                    } catch {}
                 } else if active, visit == scope, revisions[lane] == revision {
                     if lane == .status { statusFailed = true }
                     if lane == .desktop {
@@ -343,5 +424,11 @@ import Observation
         }
         guard active, visit == scope, revisions[lane] == revision, !Task.isCancelled else { return }
         dates[lane] = now()
+        switch lane {
+        case .status: if let receipt = sharedStatusReceipt { didReceiveStatus?(receipt) }
+        case .models: if let receipt = sharedModelsReceipt { didReceiveModels?(receipt) }
+        case .research: if let receipt = sharedResearchReceipt { didReceiveResearch?(receipt) }
+        default: break
+        }
     }
 }

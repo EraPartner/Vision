@@ -1,6 +1,7 @@
 import Foundation
 
 public protocol NativeSettingsAIService: Sendable {
+    func settingsAIInvalidateReads(_ keys: [String]) async
     func settingsAIStatus() async throws -> AIChatOllamaStatus
     func settingsAIModels() async throws -> [AIChatOllamaModel]
     func settingsAIResearchStatus() async throws -> AIResearchStatus
@@ -10,7 +11,11 @@ public protocol NativeSettingsAIService: Sendable {
     func settingsAIDesktopStatus() async throws -> NativeSettingsAIAgentCloakStatus
     func settingsAIConfigureDesktop(enabled: Bool) async throws -> NativeSettingsAIAgentCloakStatus
 }
+extension NativeSettingsAIService {
+    public func settingsAIInvalidateReads(_ keys: [String]) async {}
+}
 extension APIClient: NativeSettingsAIService {
+    public func settingsAIInvalidateReads(_ keys: [String]) async { await invalidateSharedAIReads(keys: keys) }
     public func settingsAIStatus() async throws -> AIChatOllamaStatus { try await chatStatus() }
     public func settingsAIModels() async throws -> [AIChatOllamaModel] { try await chatModels() }
     public func settingsAIResearchStatus() async throws -> AIResearchStatus { try await investigationStatus() }
@@ -25,7 +30,7 @@ extension APIClient: NativeSettingsAIService {
         try await send(
             ResearchRequest<OpenAPIOperations.ResearchSetProviderKey, NativeSettingsAIProviderStatuses>(
                 OpenAPIOperations.ResearchSetProviderKey.self, parameters: ["provider": provider],
-                body: .object(["api_key": .string(input)])), retries: 0)
+                body: .object(["api_key": .string(input)])))
     }
     public func settingsAIClearProviderKey(provider: String) async throws {
         let _: APIEmpty = try await send(

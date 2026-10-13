@@ -213,7 +213,7 @@ struct NativeSettingsBackupTests {
         #expect(NativeSettingsBackupNotice.lifetime(notice) == 12)
         #expect(!model.restoreRunning && host.reloads == 0)
     }
-    @Test func oldRestoreReceiptAppliesAcceptedStateButCannotClearNewPromptOrScheduleHiddenReload() async throws {
+    @Test func oldRestoreReceiptAppliesAcceptedStateKeepsNewPromptAndSchedulesAuthoritativeGlobalReload() async throws {
         let host = BackupDesktopFixture()
         host.pauseRestore = true
         host.restoreReceipts = [
@@ -233,8 +233,11 @@ struct NativeSettingsBackupTests {
         #expect(host.appliedStates.count == 1)
         #expect(model.pendingRestoreFile == "/synthetic/new.enc")
         #expect(model.restorePassphrase == "new pending fixture" && model.restoreRunning)
-        try await Task.sleep(for: .milliseconds(10))
-        #expect(host.reloads == 0)
+        for _ in 0..<1000 {
+            if host.reloads == 1 { break }
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        #expect(host.reloads == 1)
     }
     @Test func noticesLocalizeDescriptionsHumanizeLegacyErrorsAndKeepExactLifetimes() throws {
         let strings = BackupFixtureStrings()
@@ -281,6 +284,7 @@ struct NativeSettingsBackupTests {
     }
 }
 private struct BackupFixtureStrings: Localizing {
+    let language: NativeLanguage = .en
     func t(_ key: String, _ variables: [String: String]) -> String {
         key + variables.keys.sorted().map { "|" + $0 + "=" + variables[$0]! }.joined()
     }

@@ -307,6 +307,7 @@ public final class DatabaseScreens {
     public private(set) var editor: TableDataEditorModel?
 
     @ObservationIgnored private let service: any DatabaseAdminService
+    @ObservationIgnored private weak var noticeCenter: NativeNoticeCenter?
 
     public init(
         service: any DatabaseAdminService, now: @escaping @Sendable () -> Date = { Date() },
@@ -321,9 +322,18 @@ public final class DatabaseScreens {
     /// changes, so coming back starts fresh.
     public func routeDidChange(path: String) {
         if let table = TableEditorRoute.table(forPath: path) {
-            if editor?.table != table { editor = TableDataEditorModel(table: table, service: service) }
+            if editor?.table != table {
+                editor = TableDataEditorModel(table: table, service: service)
+                if let noticeCenter { editor?.attachNotices(noticeCenter) }
+            }
             return
         }
         if let editor, !editor.hasPending { self.editor = nil }
+    }
+
+    public func attachNotices(_ center: NativeNoticeCenter) {
+        noticeCenter = center
+        maintenance.attachNotices(center)
+        editor?.attachNotices(center)
     }
 }

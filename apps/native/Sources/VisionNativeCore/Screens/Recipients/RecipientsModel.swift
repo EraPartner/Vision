@@ -711,6 +711,12 @@ public final class RecipientsModel {
             pendingAction = (
                 notice.id, .createRule(primaryId: result.primary.id, pattern: suggestion.pattern, kind: kind)
             )
+            let primaryId = result.primary.id
+            let pattern = suggestion.pattern
+            notices.offerAction(for: notice, titleKey: "recipients.createRule", lifetime: 10, isUndo: false) {
+                [weak self] in
+                await self?.createSuggestedRule(primaryId: primaryId, pattern: pattern, kind: kind)
+            }
         } else {
             post(.success, "recipients.merged", variables)
         }
@@ -732,15 +738,17 @@ public final class RecipientsModel {
         case .undoStatus(let payee, let restore):
             await restoreStatus(id: payee.id, active: restore)
         case .createRule(let primaryId, let pattern, let kind):
-            do {
-                try await service.createMatchRule(
-                    recipientId: primaryId,
-                    body: MatchRuleBody(pattern: pattern, kind: kind, caseSensitive: false, priority: nil, notes: nil))
-                post(.success, "recipientPatterns.toast.created")
-            } catch {
-                post(.error, "recipientPatterns.toast.error")
-            }
+            await createSuggestedRule(primaryId: primaryId, pattern: pattern, kind: kind)
         }
+    }
+
+    private func createSuggestedRule(primaryId: Int, pattern: String, kind: MatchRuleKind) async {
+        do {
+            try await service.createMatchRule(
+                recipientId: primaryId,
+                body: MatchRuleBody(pattern: pattern, kind: kind, caseSensitive: false, priority: nil, notes: nil))
+            post(.success, "recipientPatterns.toast.created")
+        } catch { post(.error, "recipientPatterns.toast.error") }
     }
 
     private func restoreStatus(id: Int, active: Bool) async {

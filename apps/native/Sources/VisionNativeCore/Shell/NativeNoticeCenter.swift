@@ -10,6 +10,7 @@ import Observation
         public let expiresAt: Date
         public let actionTitleKey: String?
         public let isUndo: Bool
+        public let revision: UUID
     }
 
     public private(set) var entries: [Entry] = []
@@ -35,23 +36,25 @@ import Observation
     /// after a plain publication updates that entry rather than showing a second toast.
     @discardableResult public func publish(
         _ notice: ScreenNotice, source: UUID, lifetime: TimeInterval = 4,
+        replacementKey: String? = nil,
         actionTitleKey: String? = nil, isUndo: Bool = false,
         action: (@MainActor () async -> Void)? = nil, clear: @escaping @MainActor () -> Void = {}
     ) -> UUID {
-        let identity = "\(source.uuidString):\(notice.id)"
+        let identity = replacementKey.map { "replacement:\($0)" } ?? "\(source.uuidString):\(notice.id)"
         let id = identities[identity] ?? UUID()
         identities[identity] = id
         let entry = Entry(
             id: id, notice: notice, expiresAt: now().addingTimeInterval(max(0, lifetime)),
-            actionTitleKey: actionTitleKey, isUndo: isUndo)
+            actionTitleKey: actionTitleKey, isUndo: isUndo, revision: UUID())
         if let index = entries.firstIndex(where: { $0.id == id }) {
+            if replacementKey != nil { clears[id]?() }
             entries[index] = entry
         } else {
             entries.append(entry)
         }
         actions[id] = action
         clears[id] = clear
-        if isUndo, action != nil { latestUndo = id }
+        if isUndo, action != nil { latestUndo = id } else if latestUndo == id { latestUndo = nil }
         timers[id]?.cancel()
         if automaticExpiry {
             timers[id] = Task { [weak self] in

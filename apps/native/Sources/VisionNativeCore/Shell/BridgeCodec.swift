@@ -166,7 +166,8 @@ public enum BridgeCall: Equatable, Sendable {
     case windowDrag
     case windowTitlebarDoubleClick
     /// `shell:route-changed` with a valid app-relative route.
-    case routeChanged(NativeRoute)
+    case routeChanged(NativeRoute, onboardingPresented: Bool = false)
+    case settingsChange(NativeSettingsPatch)
     /// A pending or removed channel; it rejects without looking at arguments.
     case unavailable(BridgeChannel)
 }
@@ -276,7 +277,9 @@ public enum BridgeCodec {
             return .setLanguage(language)
         case .setVibrancy:
             try expectArity(arguments, 1)
-            guard let enabled = argument(arguments, 0)?.boolValue else { throw InvalidArguments("Invalid vibrancy flag") }
+            guard let enabled = argument(arguments, 0)?.boolValue else {
+                throw InvalidArguments("Invalid vibrancy flag")
+            }
             return .setVibrancy(enabled)
         case .getAccentColor:
             try expectArity(arguments, 0)
@@ -370,11 +373,27 @@ public enum BridgeCodec {
             try expectArity(arguments, 0)
             return .windowTitlebarDoubleClick
         case .routeChanged:
-            try expectArity(arguments, 1)
+            try expectArity(arguments, 2)
             guard let raw = argument(arguments, 0)?.stringValue, let route = NativeRoute(raw) else {
                 throw InvalidArguments("Invalid route")
             }
-            return .routeChanged(route)
+            let onboarding = argument(arguments, 1)
+            guard onboarding == nil || onboarding?.boolValue != nil else {
+                throw InvalidArguments("Invalid onboarding presentation")
+            }
+            return .routeChanged(route, onboardingPresented: onboarding?.boolValue ?? false)
+        case .settingsChange:
+            try expectArity(arguments, 3)
+            guard let key = argument(arguments, 0)?.stringValue,
+                let updates = argument(arguments, 1)?.objectValue,
+                let rawRemoved = argument(arguments, 2)?.arrayValue,
+                rawRemoved.allSatisfy({ $0.stringValue != nil })
+            else { throw InvalidArguments("Invalid native settings delta") }
+            do {
+                return .settingsChange(
+                    try NativeSettingsPatch(
+                        key: key, updates: updates, removed: rawRemoved.compactMap(\.stringValue)))
+            } catch { throw InvalidArguments("Invalid native settings delta") }
         default:
             return .unavailable(channel)
         }

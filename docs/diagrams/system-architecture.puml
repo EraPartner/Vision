@@ -9,6 +9,9 @@ skinparam ranksep 70
 actor "User" as User
 
 package "Client" {
+  node "Native Settings (seven panes)\nraw CAS / 500 ms sticky lanes\nshared AI receipts + existing desktop bridges" as NativeSettings
+  node "Native Settings mirror\nsupported three-key deltas\ndraft then acknowledged receipt" as NativeSettingsMirror
+  node "Native app-lifetime notices\nsix 8-second Undo owners\nsource non-Undo actions" as NativeNotices
   node "Vision Native (synthetic Demo)\nSwiftUI Tax, Portfolio + wealth tools\nDecimal display / native drafts" as NativeTax
   node "Native Portfolio Import\nprobe · parser · staged session\nreview · history · fingerprint commit" as NativeImport
   node "Native AI Chat\nconversation streams + partial retries\nTS tool-message presentation" as NativeAIChat
@@ -83,6 +86,16 @@ cloud "Build & Distribution" as DevToolsCloud {
 package "Client to Server" {
   User --> ReactApp : HTTPS
   ReactApp --> Proxy : REST API
+  NativeSettings --> Express : existing settings CAS / AI-provider operations
+  NativeSettings --> NativeSettingsMirror : immediate draft / acknowledged receipt
+  NativeSettingsMirror --> ReactApp : suppress duplicate hydration writers
+  ReactApp --> NativeSettingsMirror : native-only shell:settings-change
+app / dashboard / theme field deltas
+  NativeSettings .. NativeAIChat : successful status / model receipts
+  NativeSettings .. NativeInvestigation : successful research-status receipts
+  NativeTax --> NativeNotices : source notices / captured actions
+  NativeNotices --> ReactApp : preserve editor-owned Undo
+existing route callbacks
   NativeTax --> Express : loopback OpenAPI financial reads + writes
   NativeImport --> Express : readonly probe + existing import/review operations
   NativePortfolioTax --> Express : portfolio-dashboard + settings CAS
@@ -260,7 +273,8 @@ end note
 note right of NativeInvestigation
   Form changes retire obsolete previews.
   Consented sends use the frozen preview request and its digest-bound grant.
-  Status focus / reconnect policy is separate from manual job polling.
+  Status mount / reconnect freshness and explicit invalidation
+  are separate from manual job polling; ordinary focus refetch is disabled.
   Documents remain mount-only reads; original upload bytes reach the backend.
   Real route exit resets local job state without deleting the remote job.
   macOS package and Demo parity review remain pending.
@@ -271,6 +285,14 @@ note right of NativeDossiers
   Current selection / visit guards protect drafts and source anchors.
   Existing JSON exports are captured server snapshots, not an import format.
   macOS package and Demo parity review remain pending.
+end note
+
+note right of NativeSettings
+  App/dashboard migrations preserve unknown fields and optional absence.
+  Theme writes contain mode, schedule, variant, systemAccent only.
+  No new backend endpoint or native financial engine.
+  Restore/data-session fencing is pending at this checkpoint.
+  Automated branch macOS verification exists but is not yet green.
 end note
 
 @enduml

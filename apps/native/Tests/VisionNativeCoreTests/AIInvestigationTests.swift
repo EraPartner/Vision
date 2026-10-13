@@ -325,6 +325,21 @@ struct AIInvestigationTests {
         #expect(await service.statusReads == 0)
         #expect(await service.documentReads == 1)
     }
+    @Test func sharedResearchInvalidationRefreshesAnActiveBackgroundObserverOnly() async throws {
+        let service = InvestigationFixtureService()
+        let model = AIInvestigationModel(service: service)
+        await model.load()
+        model.isForeground = false
+        model.invalidateSharedResearch()
+        let deadline = ContinuousClock.now.advanced(by: .seconds(10))
+        while await service.statusReads < 2 && ContinuousClock.now < deadline { await Task.yield() }
+        #expect(await service.statusReads == 2)
+        #expect(await service.documentReads == 1)
+        model.didDisappear()
+        model.invalidateSharedResearch()
+        await Task.yield()
+        #expect(await service.statusReads == 2)
+    }
     @Test func onlineInitialMountFetchesStatusEvenWhenBackgrounded() async throws {
         let service = InvestigationFixtureService()
         let model = AIInvestigationModel(service: service)

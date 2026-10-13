@@ -51,6 +51,7 @@ public final class NativeShellModel {
     /// the web view shows even where a native screen exists, until the page reports a route
     /// again (it re-reports the same route when the palette or shortcuts overlay closes).
     public private(set) var isPresentingWeb = false
+    public var isPresentingOnboarding = false
     /// The route a sidebar click or shortcut asked the page for, until the page reports one.
     public private(set) var pendingRoute: NativeRoute?
     public let exchangeRates: ExchangeRatesModel
@@ -99,6 +100,7 @@ public final class NativeShellModel {
     @ObservationIgnored private let settingsReloadDelay: Duration
     @ObservationIgnored private var shortcuts = NativeShortcuts()
     @ObservationIgnored private var leaveGuard: NativeLeaveGuard?
+    @ObservationIgnored private let priceNoticeSource = UUID()
 
     /// - Parameters:
     ///   - hiddenSections: the stored section choices; `nil` uses the `defaultHidden` flags.
@@ -185,6 +187,23 @@ public final class NativeShellModel {
         researchForecast?.life.attachNotices(notices)
         researchChartBuilder?.attachNotices(notices)
         aiChat?.chat.attachNotices(notices)
+        accounts.attachNotices(notices)
+        owes.attachNotices(notices)
+        exchangeRates.attachNotices(notices)
+        imports.toasts.attachNotices(notices)
+        imports.toasts.navigateTo = { [weak self] in self?.navigate(to: $0) }
+        admin.overview.attachNotices(notices)
+        admin.providers.attachNotices(notices)
+        admin.database.attachNotices(notices)
+        portfolio?.editing.attachNotices(notices)
+        portfolio?.netWorth.attachNotices(notices)
+        portfolio?.rebalance.attachNotices(notices)
+        portfolio?.tax.attachNotices(notices)
+        portfolio?.model.didPriceRefresh = { [weak self] in self?.publishPriceRefresh($0) }
+        portfolio?.netWorth.didPriceRefresh = { [weak self] in self?.publishPriceRefresh($0) }
+        research?.watchlist.attachNotices(notices)
+        research?.watchlistAdd.attachNotices(notices)
+        research?.lookup.action.attachNotices(notices)
     }
 
     /// `DEFAULT_HIDDEN` of useSidebarPreferences.
@@ -201,7 +220,9 @@ public final class NativeShellModel {
     /// while it says admin mode is on, otherwise the page shows the route and its
     /// `RequireAdmin` redirects, which the page then reports.
     public var detail: NativeShellDetail {
-        guard !isPresentingWeb, settingsLoaded, let screen = NativeScreen.screen(forPath: route.path) else {
+        guard !isPresentingWeb, !isPresentingOnboarding, settingsLoaded,
+            let screen = NativeScreen.screen(forPath: route.path)
+        else {
             return .web
         }
         if screen.requiresAdmin && !settings.adminMode { return .web }
@@ -240,7 +261,7 @@ public final class NativeShellModel {
 
     /// Settings and global overlays cover the native view while React keeps its page mounted.
     public func isTemporarilyCovered(_ path: String) -> Bool {
-        route.path == path && (isPresentingWeb || route.value("settings") != nil)
+        route.path == path && (isPresentingWeb || isPresentingOnboarding || route.value("settings") != nil)
     }
 
     /// `shell:route-changed`: the page's router moved, or an overlay closed on the same route.
@@ -256,6 +277,7 @@ public final class NativeShellModel {
             if route.path == "/research/market" { removeLeaveGuard(id: route.path) }
         }
         let settingsClosed = route.value("settings") != nil && next.value("settings") == nil
+        let webSettingsClosed = settingsClosed && nativeSettings == nil
         let reportClosed = route.value("export") == "pdf" && next.value("export") != "pdf"
         // A new page, the settings dialog closing (`?settings` removed), or the same route
         // again (the palette or shortcuts overlay closed) ends a web presentation over a
@@ -274,21 +296,23 @@ public final class NativeShellModel {
         }
         // The page may have changed `app_settings` (admin mode, formats) in its settings
         // dialog or on the previous page.
-        if pathChanged || settingsClosed { reloadSettings() }
+        if pathChanged || webSettingsClosed { reloadSettings() }
         // The page saves `app_settings` 500 ms after a change, so a read right after the
         // dialog closes can still see the old values.
-        if settingsClosed { reloadSettingsLater() }
-        if settingsClosed { home?.invalidate() }
+        if webSettingsClosed { reloadSettingsLater() }
+        if webSettingsClosed { home?.invalidate() }
         if pathChanged && next.path == InsightsRoutes.home { home?.invalidate() }
-        if settingsClosed || pathChanged && next.path == InsightsRoutes.statistics { statistics?.model.invalidate() }
-        if settingsClosed || pathChanged && next.path == "/tax" { tax?.invalidate() }
-        if settingsClosed || pathChanged && next.path == "/portfolio/tax" { tax?.invalidate() }
-        if settingsClosed || pathChanged && (next.path == "/portfolio" || next.path.hasPrefix("/portfolio/")) {
+        if webSettingsClosed || pathChanged && next.path == InsightsRoutes.statistics { statistics?.model.invalidate() }
+        if webSettingsClosed || pathChanged && next.path == "/tax" { tax?.invalidate() }
+        if webSettingsClosed || pathChanged && next.path == "/portfolio/tax" { tax?.invalidate() }
+        if webSettingsClosed || pathChanged && (next.path == "/portfolio" || next.path.hasPrefix("/portfolio/")) {
             portfolio?.invalidate()
         }
-        if settingsClosed || pathChanged && next.path.hasPrefix("/portfolio/import") { portfolioImports?.invalidate() }
-        if settingsClosed || pathChanged && next.path == "/analysis" { analysis?.invalidate() }
-        if settingsClosed || pathChanged && next.path == "/analysis/monitors" { analysisMonitors?.invalidate() }
+        if webSettingsClosed || pathChanged && next.path.hasPrefix("/portfolio/import") {
+            portfolioImports?.invalidate()
+        }
+        if webSettingsClosed || pathChanged && next.path == "/analysis" { analysis?.invalidate() }
+        if webSettingsClosed || pathChanged && next.path == "/analysis/monitors" { analysisMonitors?.invalidate() }
     }
 
     /// A sidebar click, a menu or shortcut navigation, or another native link. The page moves
@@ -371,6 +395,34 @@ public final class NativeShellModel {
 
     /// `/owes`.
     public var owes: OwesModel { transactions.owes }
+
+    private func publishPriceRefresh(_ receipt: PortfolioPriceRefreshReceipt) {
+        let kind: ScreenNotice.Kind
+        let key: String
+        let variables: [String: String]
+        let detail: String?
+        if let error = receipt.error {
+            kind = .error
+            key = "portfolio.refreshPricesFailedTitle"
+            variables = [:]
+            detail = receipt.offline ? strings.t("portfolio.refreshPricesOffline") : error
+        } else if let result = receipt.result {
+            kind = result.staleCount > 0 ? .warning : .success
+            key = "portfolio.refreshedPrices"
+            variables = ["n": String(result.total ?? 0)]
+            detail =
+                result.staleCount > 0
+                ? strings.t(
+                    "portfolio.refreshedPricesStale",
+                    ["n": String(result.staleCount), "total": String(result.total ?? 0)])
+                : nil
+        } else {
+            return
+        }
+        notices.publish(
+            .init(id: 0, kind: kind, key: key, variables: variables, detail: detail),
+            source: priceNoticeSource, replacementKey: "portfolio-refresh-prices")
+    }
 
     /// Import cash and trades can become durable after the user has opened another screen.
     public func portfolioImportDidMutate() async { await portfolioDataDidMutate() }
@@ -565,10 +617,39 @@ public final class NativeShellModel {
     public func reloadSettings() {
         settingsTask?.cancel()
         let load = loadSettings
+        let revision = settingsRevision
         settingsTask = Task { [weak self] in
-            guard let loaded = try? await load(), !Task.isCancelled else { return }
+            guard let loaded = try? await load(), !Task.isCancelled, self?.settingsRevision == revision else { return }
             self?.apply(settings: loaded)
         }
+    }
+
+    /// Server-owned projections read persisted Settings. Retire only their actual
+    /// dependencies after acknowledgement; presentation-only edits keep cached data.
+    public func nativeSettingsDidAcknowledge(_ key: String, value: TaxValue) {
+        switch key {
+        case "dashboard_settings", "includeTransfers":
+            home?.invalidate()
+            statistics?.model.invalidate()
+            settingsRevision &+= 1
+        case "cost_basis_method":
+            portfolio?.dataDidChange()
+            settingsRevision &+= 1
+        case "brokerage_cash_category_ids":
+            portfolioImports?.invalidate()
+            portfolio?.tax.invalidate()
+            settingsRevision &+= 1
+        default: break
+        }
+    }
+
+    public func nativePreferencesDidReset() async {
+        home?.invalidate()
+        statistics?.model.invalidate()
+        portfolio?.invalidate()
+        analysis?.invalidate()
+        analysisMonitors?.invalidate()
+        settingsRevision &+= 1
     }
 
     /// Reads `app_settings` once more after `settingsReloadDelay`, replacing a pending

@@ -24,7 +24,15 @@ public struct VisionTheme: Equatable, Sendable {
     public var tertiaryLabel: Color { Color(token: palette.foreground, opacity: palette.labelTertiaryAlpha) }
     public var card: Color { Color(token: palette.card) }
     public var border: Color { Color(token: palette.border) }
-    public var primary: Color { Color(token: palette.primary) }
+    public var primary: Color { Color(token: selection.primary) }
+    public var primaryForeground: Color { Color(token: selection.primaryForeground) }
+    public var ring: Color { Color(token: selection.ring) }
+    public var sidebarPrimary: Color { Color(token: selection.sidebarPrimary) }
+    public var sidebarPrimaryForeground: Color { Color(token: selection.sidebarPrimaryForeground) }
+    public var sidebarRing: Color { Color(token: selection.sidebarRing) }
+    /// --accent stays the variant's canonical color; system accent changes the primary/ring family only.
+    public var accent: Color { Color(token: palette.accent) }
+    public var accentForeground: Color { Color(token: palette.accentForeground) }
     public var destructive: Color { Color(token: palette.destructive) }
     public var success: Color { Color(token: palette.success) }
     public var warning: Color { Color(token: palette.warning) }

@@ -31,7 +31,7 @@ tags:
     string-catalog,
     navigation,
   ]
-description: "Vision Native is the Swift macOS app under apps/native/ that replaces the Electron shell in phases (ADR-204). Covers the directory layout, the runtime supervisor that starts its own PostgreSQL 18 cluster and backend on synthetic Demo data, payload discovery, the phase 1c shell (window, launch state, preload bridge, web view navigation and download policy, menus, dock and vibrancy), phase 1d backup and restore (bundle format compatibility, Keychain passphrase, restore allow-list, quit-time backup), the phase 1e audit anchor and Keychain witness with restore continuity, the standard and Demo variants of one build, the Debug-only backend override, the phase 2 foundations (generated OpenAPI client, design tokens, String Catalog and sidebar registry, the native NavigationSplitView shell with the shell:route-changed bridge message, and the native Exchange rates screen), the Native (macOS) CI job with the backup and audit interop job, screen ports through phase 3n Research Home, Markets, Lookup, Watchlist, Compare, Forecast, Chart Builder, Dossiers and AI chat/Investigation (lossless provider data, shared TypeScript presentation, guarded local drafts/cache, and earlier Analysis/Portfolio/Tax/import screens), and install-native.sh."
+description: "Vision Native is the Swift macOS app under apps/native/ that replaces the Electron shell in phases (ADR-204). Covers the directory layout, the runtime supervisor that starts its own PostgreSQL 18 cluster and backend on synthetic Demo data, payload discovery, the phase 1c shell (window, launch state, preload bridge, web view navigation and download policy, menus, dock and vibrancy), phase 1d backup and restore (bundle format compatibility, Keychain passphrase, restore allow-list, quit-time backup), the phase 1e audit anchor and Keychain witness with restore continuity, the standard and Demo variants of one build, the Debug-only backend override, the phase 2 foundations (generated OpenAPI client, design tokens, String Catalog and sidebar registry, the native NavigationSplitView shell with the shell:route-changed bridge message, and the native Exchange rates screen), the Native (macOS) CI job with the backup and audit interop job, screen ports through phase 3o native Settings and global action notices, alongside phase 3n Research Home, Markets, Lookup, Watchlist, Compare, Forecast, Chart Builder, Dossiers and AI chat/Investigation (lossless provider data, shared TypeScript presentation, guarded local drafts/cache, and earlier Analysis/Portfolio/Tax/import screens), and install-native.sh."
 aliases: [vision native, native app, swift app]
 ---
 
@@ -51,7 +51,7 @@ aliases: [vision native, native app, swift app]
 > [[docs/architecture/native-app#Native navigation and screens (phase 2)|phase 2]]). Phase 3 now includes
 > native Research Home, Markets, Lookup, Watchlist, Compare, Forecast and Chart Builder, alongside Analysis, Portfolio
 > Import/review and Portfolio Tax. TypeScript retains financial calculations, restricted execution
-> and import writers; Settings and global overlays still use the web view. Dossiers and AI chat/Investigation
+> and import writers. Settings and global notices are native in phase 3o; onboarding and shared PDF overlays retain the web view. Dossiers and AI chat/Investigation
 > are native in phase 3n. macOS build and synthetic Demo visual/keyboard review remain pending.
 
 ## Layout
@@ -1382,9 +1382,11 @@ and submits the preview's frozen `outboundRequest` with that grant ID. Form or r
 changes retire obsolete previews. Native rendering retains capability/reference/preflight metadata,
 facts, calculations, interpretations, evidence locators and the existing saved-analysis link.
 
-Status alone follows the source 60-second TanStack freshness and focus/reconnect policy. It uses
-online gating on initial mount and foreground guards on subsequent refresh, with no automatic
-retry loop. An online initial mount still reads status when backgrounded. Documents remain a
+Status alone follows the source 60-second TanStack freshness and mount/reconnect policy, with
+no automatic retry loop. The global QueryClient disables ordinary window-focus refetch; focus
+continues a previously paused read. Online initial mounts and newly invalidated active reads can
+start when backgrounded, while continuation of an offline-paused read waits for focus. Successful
+status receipts are shared with Settings without another provider request. Documents remain a
 mount-only manual read.
 The current job uses the source manual 1.2-second polling policy while the page remains mounted,
 including hidden mode and offline/background intervals; failed polls are silent. A slow GET does
@@ -1414,6 +1416,78 @@ contracts. The native parity inventory records code coverage; responsive renderi
 keyboard behavior and Vision Demo acceptance still require macOS. The architecture/flow catalogue
 shows native clients calling existing backend services, with tool presentation staying in shared
 TypeScript and provider disclosure remaining behind the existing consent boundary.
+
+### Settings and global notices (phase 3o)
+
+The native Settings window has seven panes: General, Appearance, Insights, Behavior, AI & research,
+Backup, and About & maintenance. `NativeSettingsWindow.swift` and the `NativeSettings*.swift` views
+under `apps/native/Sources/VisionNativeUI/Screens/Settings/` use shared section/group/row primitives,
+a section rail with keyboard navigation, and the existing source controls. The retained router still
+owns section query parameters and Back/close navigation. Settings and action notices now render
+natively; the retained WK page continues to host onboarding, shared PDF dialogs, and browser state.
+
+`NativeSettingsModel.swift`, `NativeSettingsDefaults.swift`, and `NativeSettingsService.swift` under
+`apps/native/Sources/VisionNativeCore/Settings/` retain the existing settings API and raw first-read
+CAS baselines. App and dashboard envelopes are migrated into editable defaults while preserving
+unknown fields; optional AI model/depth/benchmark absence stays absent. Initial hydration does not
+save. Theme writes retain the source four known fields (`mode`, `schedule`, `variant`,
+`systemAccent`). Each preference key has its own 500 ms debounce and serialized write lane. Only
+acknowledged receipts advance its baseline; a rejected or uncertain save keeps the failed lane
+sticky rather than blessing a later draft with a fresh background read. App/dashboard failures
+retain the existing save feedback, while theme persistence retains the source silent-failure policy.
+Server-only transfer and cash-category controls keep their existing operations. No new backend
+endpoint or financial calculation accompanies this screen port.
+
+The retained page and native window share one writer for `app_settings`, `dashboard_settings`, and
+`theme_settings`. `apps/frontend/src/stores/hydration/nativeSettings.ts` receives immediate native
+drafts and separate acknowledged receipts, updates Zustand without an echo, and forwards retained
+page edits as structural field deltas. The native-only `shell:settings-change` bridge accepts only
+these three keys and their supported fields; removal is restricted to the four optional app fields.
+`NativeSettingsPatch.swift`, the existing bridge codec/dispatcher, and
+`apps/native/VisionNative/ShellController.swift` apply those deltas to the same native writer.
+App/dashboard unknown fields survive; schedule changes merge only the edited clock fields. Native
+mode disables the three web hydration writers. Draft mirrors never advance the web CAS baseline;
+only a checked server receipt does. These native-only messages are separate from the endpoint
+matrix's unchanged 309 HTTP routes, two health entries, and 25 Electron IPC entries (336 total).
+
+`NativeSettingsAIModel.swift` retains independent local/OpenAI defaults, source server-default
+fallbacks, benchmark-on-blur validation, and absent product-default depth. Secure provider drafts
+clear on submission, including failures; Clear appears only for settings-backed keys. Provider
+writes invalidate masked key status only. AgentCloak uses the existing status/configuration
+operations and refreshes desktop/OpenAI status after an acknowledgment. Successful status/model
+receipts are shared with Chat and Investigation; only pending typed reads for the same backend
+scope coalesce. Ordinary focus refetch is disabled globally, paused reads resume with focus,
+and Ollama keeps healthy/down polling intervals. An offline-paused mutation waits for online and
+foreground continuation even after its pane unmounts. The SDK host supplies that environment.
+
+Appearance keeps the five canonical palettes and source light/dark/system/schedule behavior. A
+system accent changes exactly six primary/ring/sidebar tokens and their paired contrasting
+foreground; palette swatches and the palette accent remain canonical. Display size uses physical
+pixels, with the source cap above 6,000,000 pixels: auto-adapt defaults to reduced effects, and an
+explicit override stays session-only. `NativeSettingsAppearanceResolver.swift`,
+`Design/ThemeSelection.swift`, `VisionTheme.swift`, and the SDK host apply the same appearance to
+native chrome and the retained page.
+
+Backup/About use the existing native picker, encrypted bundle, passphrase, restore, services,
+update and onboarding bridges. `NativeSettingsStorageBridge.swift` captures the source localStorage
+registry without file bytes and restores captured strings without clearing omitted keys. Confirmed
+restore remains a lifecycle boundary. The restored-model/data-session fencing extension is still
+being implemented at this documentation checkpoint; it is not yet claimed as completed parity.
+
+`Shell/NativeNoticeCenter.swift`, `Components/NativeNoticeHost.swift`, and `ActionToast.swift`
+provide app-lifetime notices and consume captured actions before awaiting them. Transactions,
+Planned payments, Categories, Recipients, Chart Builder, and Life Scenario retain eight-second
+Undo actions and the source one-slot shortcut registry. Editor typing keeps its own Undo; route
+changes preserve eligible notices. Retry, Create rule, and Import actions remain non-Undo actions
+with their source callbacks/routes. No new retry or confirmation workflow is added.
+
+`.github/workflows/native-branch.yml` now verifies `codex/native-phase-*` branch pushes with an
+unsigned Debug macOS app build and Swift package tests. The automated build is not yet green:
+the Home compilation correction passed, and the Tax callback correction is ready for another run.
+Portable source/transport tests and UI syntax checks do not replace macOS SDK or rendered
+VoiceOver/Demo verification. Those checks remain recorded gaps; the user's authorization continues
+later phases without a manual Demo-review intermission. See [[docs/features/settings|Settings]],
+[[docs/api/settings|Settings API]], and [[docs/reference/native-parity/shell-and-settings|Settings parity]].
 
 ## Install
 

@@ -71,6 +71,10 @@ public actor SettingsWriter {
     private let transport: any SettingsTransport
     private var baselines: [String: JSONValue] = [:]
     private var pending: [String: Task<JSONValue, Error>] = [:]
+    private enum Lifetime: Equatable { case active, suspended, retired }
+    private var lifetime = Lifetime.active
+    private var permissions: [UUID: CheckedContinuation<Void, any Error>] = [:]
+    public var isSuspendedForRestore: Bool { lifetime == .suspended }
 
     public init(transport: any SettingsTransport) {
         self.transport = transport
@@ -93,6 +97,7 @@ public actor SettingsWriter {
     /// A rejected or unacknowledged write poisons this key's queue until app reload,
     /// matching Electron: a later edit cannot silently retry unknown durable state.
     public func save(_ key: String, value: JSONValue, baseURL: URL) async throws -> JSONValue {
+        try await awaitPermission()
         let previous = pending[key]
         let task = Task {
             _ = try await previous?.value
@@ -100,6 +105,53 @@ public actor SettingsWriter {
         }
         pending[key] = task
         return try await task.value
+    }
+
+    /// Accepted per-key chains settle before the dataset switches. Later host edits
+    /// wait; a refused restore resumes the same baselines and sticky failed queues.
+    public func suspendAndDrain() async {
+        guard lifetime != .retired else { return }
+        lifetime = .suspended
+        for task in Array(pending.values) { _ = try? await task.value }
+    }
+
+    public func resumeAfterFailedRestore() {
+        guard lifetime != .retired else { return }
+        lifetime = .active
+        let waiting = permissions
+        permissions.removeAll()
+        for continuation in waiting.values { continuation.resume() }
+    }
+
+    public func retireForReload() {
+        lifetime = .retired
+        let waiting = permissions
+        permissions.removeAll()
+        for continuation in waiting.values { continuation.resume(throwing: CancellationError()) }
+    }
+
+    private func awaitPermission() async throws {
+        while lifetime == .suspended {
+            let id = UUID()
+            try await withTaskCancellationHandler {
+                try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
+                    if Task.isCancelled || lifetime == .retired {
+                        continuation.resume(throwing: CancellationError())
+                    } else if lifetime == .active {
+                        continuation.resume()
+                    } else {
+                        permissions[id] = continuation
+                    }
+                }
+            } onCancel: {
+                Task { await self.cancelPermission(id) }
+            }
+        }
+        guard lifetime != .retired, !Task.isCancelled else { throw CancellationError() }
+    }
+
+    private func cancelPermission(_ id: UUID) {
+        permissions.removeValue(forKey: id)?.resume(throwing: CancellationError())
     }
 
     private func write(_ key: String, value: JSONValue, baseURL: URL) async throws -> JSONValue {

@@ -27,7 +27,7 @@ struct NativeSettingsAppearanceTests {
                 "startOfWeek": .string("Saturday"), "costBasisMethod": .string("average"),
                 "startupSection": .string("/research"),
                 "autoClearPlannedOnMatch": .string("false"), "visualEffects": .string("high"),
-                "autoAdaptDisplay": .number(1),
+                "autoAdaptDisplay": .int(1),
             ]))
         #expect(malformed == defaults)
     }
@@ -60,7 +60,7 @@ struct NativeSettingsAppearanceTests {
         #expect(resolve(hour: 8, light: "bad:Infinity", dark: "20:00").theme.appearance == .light)
         #expect(resolve(hour: 8, light: "0x8:0b1", dark: "20:00").theme.appearance == .dark)
         #expect(resolve(hour: 8, minute: 1, light: "0x8:0b1", dark: "20:00").theme.appearance == .light)
-        #expect(resolve(hour: 8, light: "0x1p2:00", dark: "20:00").theme.appearance == .light)
+        #expect(resolve(hour: 5, light: "0x1p2:00", dark: "20:00").theme.appearance == .dark)
         #expect(resolve(hour: 8, light: "8:30:59", dark: "20:00").theme.appearance == .dark)
         #expect(resolve(hour: 8, minute: 30, light: "8:30:59", dark: "20:00").theme.appearance == .light)
         #expect(resolve(mode: "unknown", hour: 7).theme.appearance == .light)

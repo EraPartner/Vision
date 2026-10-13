@@ -64,6 +64,14 @@ public enum BridgeScript {
           const parse = JSON.parse;
           const invoke = (channel, args) =>
             post(stringify({ channel, args })).then((raw) => (typeof raw === "string" ? parse(raw) : null));
+          Object.defineProperty(window, "__VISION_NATIVE_SETTINGS__", { value: true });
+          Object.defineProperty(window, "__VISION_NATIVE_SETTINGS_SNAPSHOT__", { value: Object.create(null) });
+          Object.defineProperty(window, "__VISION_NATIVE_SETTINGS_SESSION_TIER__", { value: { value: null } });
+          Object.defineProperty(window, "__visionNativeSettingsChange", {
+            value: (key, updates, removed) => invoke("shell:settings-change", [key, updates, removed]).then((reply) => {
+              if (!reply || reply.success !== true) throw new Error("Could not apply native settings");
+            }),
+          });
           const listeners = new Map();
           const subscribe = (channel) => (callback) => {
             if (typeof callback !== "function") return () => {};

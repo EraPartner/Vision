@@ -199,6 +199,54 @@ CLI Actions API access was denied by the workspace network policy. The permitted
 GitHub Actions page supplied the run ID; GitHub connector workflow job/log tools then
 provided the actual status and compiler errors.
 
+## Latest integration checkpoint
+
+`7e023475` published the Home date-overload fix. The next automatic run,
+`https://github.com/EraPartner/Vision/actions/runs/38462560168`, passed that compiler stage
+and failed on Tax Overview's missing `try` in a deduction callback. The current checkpoint
+includes the one-line `try await` fix; the existing deduction model handles failures and
+records success only after an acknowledged result. Logs:
+`/workspace/vision-native-macos-second-build.log`.
+
+The SDK Settings factory and existing desktop callbacks are now wired in
+`apps/native/VisionNative/ShellController.swift`, including raw draft/ACK mirrors, source
+route history, global notices, language, appearance/session tier, display/schedule checks,
+and fresh native model/host reconstruction after a successful restore. The frontend
+native-Settings takeover now suppresses hidden React Settings panes, forwards known field
+deltas to the native writer, and applies native drafts/ACKs without duplicate saves. A new
+restricted native-only `shell:settings-change` channel handles exactly app/dashboard/theme
+preferences; optional onboarding visibility on the existing route channel keeps the
+retained wizard visible. No HTTP operations were added. The endpoint-matrix total counts
+Electron IPC separately and remains 336.
+
+Additional focused evidence: 59 AI/settings/shared-read tests, 52 portfolio-notice tests,
+14 Backup/About tests, six semantic accent tests and four date formatter tests passed.
+The frontend takeover passed its focused tests and type check before its final onboarding
+coverage adjustments; rerun after the final diff. A root Foundation integration proof
+compiled actual bridge/notice/settings sources and reported 30 passing focused tests, but
+nine sources changed during that run, so it is an early result, not final hash-matched
+verification. New combined verification remains pending.
+
+**Still unfinished at this safety checkpoint:** the before-restore lifetime fences.
+The main Settings model must suspend/drain accepted writes, preserve pending drafts and
+the same sticky CAS writer on a failed/cancelled restore, and retire permanently only for
+an actual successful reload. The per-client `NativeDataSession` HTTP/stream wrapper must
+pause new mutations and drain actual delegate completions before the database switches;
+failed restores resume the same session, successful reloads reject old queued work and
+use a fresh session. Root's host `SettingsWriter` fence and three tests are on disk but
+not yet validated. The intended SDK order is Main Settings drain, host Settings writer
+drain, old chat stream stop, API session drain, then the existing restore operation.
+Keep the restore operation's own transport unfenced to avoid a deadlock. This fencing is
+not yet implemented end to end; do not claim the native backup restore is ready.
+
+Remaining owners: `tax_overview_ui` main Settings fence/tests and root proof support;
+`tax_charts_ui` new API data-session fence/tests; `tax_deductions` SDK fence wiring;
+`tax_profile` frontend/onboarding final tests and combined proof; `tax_charts_backend`
+architecture/flow documentation; Root integration/tests/checks/publishing. `review_native`
+finished its assigned portfolio notices, Backup trim and scoped parity documentation.
+The broad UI/runtime, final catalogs/docs checks and actual macOS build/test are still
+required. Keep publishing unfinished checkpoints as well as verified milestones.
+
 ## Tooling and safety for continuation
 
 - Workspace: `/workspace/Vision`. Bun: `/tmp/vision-tools/package/bin/bun` (1.4.3).

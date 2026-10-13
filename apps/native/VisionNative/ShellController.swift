@@ -1,5 +1,6 @@
 import AppKit
 import OSLog
+import Observation
 import SwiftUI
 import UniformTypeIdentifiers
 import VisionNativeCore
@@ -26,7 +27,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     private let launchModel: LaunchModel
     private let menuController = MenuController()
     private let settingsTransport: URLSessionSettingsTransport
-    private let settingsWriter: SettingsWriter
+    private var settingsWriter: SettingsWriter
     private let backupService: BackupService
     /// The six `electronAudit` channels, the closure timer and the audit notices.
     private lazy var auditChannels = makeAuditChannels()
@@ -52,6 +53,12 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     private var frameSaveTask: Task<Void, Never>?
     private var languageRequest = 0
     private var accentObserver: NSObjectProtocol?
+    private var nativeSettingsGeneration = UUID()
+    private var nativeSettingsDrafts: [String: TaxValue] = [:]
+    private var settingsAppearanceTask: Task<Void, Never>?
+    private var lastSettingsClockRefresh = Date.distantPast
+    private var lastSettingsDisplayPixels: Double?
+    private var lastSettingsSystemIsDark: Bool?
 
     private func makeAuditChannels() -> AuditChannels {
         AuditChannels(
@@ -67,6 +74,72 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
 
     private func makeShellModel() -> NativeShellModel {
         let client = apiClient
+        let settingsGeneration = UUID()
+        nativeSettingsGeneration = settingsGeneration
+        let nativeSettings = NativeSettingsModel(client: client)
+        let settingsAI = NativeSettingsAIModel(service: client)
+        let desktopSettings = makeNativeSettingsDesktopCallbacks()
+        let settingsBackup = NativeSettingsBackupModel(service: desktopSettings)
+        let settingsAbout = NativeSettingsAboutModel(
+            service: desktopSettings,
+            version: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
+            appName: Self.appName)
+        nativeSettings.loadKeepServices = { [weak self] in
+            guard let self else { throw APIError.backendUnavailable }
+            return await self.loadServicesSettings()
+        }
+        nativeSettings.saveKeepServices = { [weak self] keep in
+            guard let self else { throw APIError.backendUnavailable }
+            try await self.saveServicesSettings(keepServicesOnQuit: keep)
+        }
+        nativeSettings.clearRecurringLocalState = { [weak self] in
+            _ = try? await self?.nativeSettingsScript(
+                NativeSettingsStorageBridge.removeScript,
+                arguments: NativeSettingsStorageBridge.arguments(for: .recurringDismissals))
+        }
+        nativeSettings.didChangeApp = { [weak self, weak settingsAI] raw in
+            guard let self, self.nativeSettingsGeneration == settingsGeneration,
+                let projected = try? JSONValue(encoding: raw)
+            else { return }
+            let settings = NativeAppSettings.migrate(projected)
+            self.shellModel.apply(settings: settings)
+            settingsAI?.configure(appRaw: raw)
+            self.publishNativeSettings(kind: "draft", key: "app_settings", value: raw)
+            self.resolveNativeSettingsAppearance()
+            if let language = NativeLanguage(rawValue: settings.language) {
+                Task { [weak self] in _ = await self?.setLanguage(language) }
+            }
+        }
+        nativeSettings.didChangeDashboard = { [weak self] raw in
+            guard let self, self.nativeSettingsGeneration == settingsGeneration else { return }
+            self.publishNativeSettings(kind: "draft", key: "dashboard_settings", value: raw)
+        }
+        nativeSettings.didChangeTheme = { [weak self] raw in
+            guard let self, self.nativeSettingsGeneration == settingsGeneration else { return }
+            self.publishNativeSettings(kind: "draft", key: "theme_settings", value: raw)
+            self.resolveNativeSettingsAppearance()
+        }
+        nativeSettings.didAcknowledge = { [weak self] key, value in
+            guard let self, self.nativeSettingsGeneration == settingsGeneration else { return }
+            self.publishNativeSettings(kind: "ack", key: key, value: value)
+            self.shellModel.nativeSettingsDidAcknowledge(key, value: value)
+        }
+        nativeSettings.didResetPreferences = { [weak self] in
+            guard let self, self.nativeSettingsGeneration == settingsGeneration else { return }
+            await self.shellModel.nativePreferencesDidReset()
+        }
+        settingsAbout.onOpenExternal = { url in NSWorkspace.shared.open(url) }
+        settingsAbout.onRestartOnboarding = { [weak self, weak nativeSettings] in
+            guard let self, let nativeSettings, self.nativeSettingsGeneration == settingsGeneration else {
+                throw APIError.backendUnavailable
+            }
+            _ = try await nativeSettings.persistence.save("onboarding_complete", value: .bool(false))
+            let result = try await self.nativeSettingsScript(
+                NativeSettingsStorageBridge.removeScript,
+                arguments: NativeSettingsStorageBridge.arguments(for: .onboardingDraft))
+            guard try NativeSettingsStorageBridge.mutationReply(result) else { throw APIError.backendUnavailable }
+            self.shellModel.closeSettings()
+        }
         let systemIsDark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
         // The rates page and the planned payments page share one rates cache, like the web's
         // shared query key.
@@ -146,6 +219,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             if self?.shellModel.route.path == "/analysis/monitors" { await analysisMonitors?.load(force: true) }
         }
         let aiChat = AIChatScreens(client: client)
+        bindNativeSettingsAI(settingsAI, chat: aiChat)
         aiChat.chat.didReplaceRoute = { [weak self] route in
             guard let self, self.shellModel.route.path == route.path else { return }
             self.shellModel.replaceQuery(route.query)
@@ -211,7 +285,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
                 guard let value = try? JSONValue.parse(Data(raw.utf8)) else { return }
                 _ = await self?.homeLocalStorage(key: key, value: value)
             })
-        return NativeShellModel(
+        let model = NativeShellModel(
             strings: CatalogStrings(language: strings.language),
             theme: ThemeSelection.resolve(
                 splashTheme: LaunchAppearance.theme(fromSettings: initialSettings), systemIsDark: systemIsDark),
@@ -240,8 +314,18 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             researchChartBuilder: researchCharts,
             researchDossiers: dossiers,
             aiChat: aiChat,
+            nativeSettings: nativeSettings,
+            settingsAI: settingsAI,
+            settingsBackup: settingsBackup,
+            settingsAbout: settingsAbout,
             hiddenSections: Self.loadHiddenSections(),
-            loadSettings: { try await client.appSettings() },
+            loadSettings: {
+                await nativeSettings.load()
+                return try await MainActor.run {
+                    guard nativeSettings.isLoaded else { throw APIError.backendUnavailable }
+                    return NativeAppSettings.migrate(try JSONValue(encoding: nativeSettings.appRaw ?? .object([:])))
+                }
+            },
             saveHiddenSections: { Self.saveHiddenSections($0) },
             onNavigate: { [weak self] action in
                 self?.sendToApp(.menuAction, BridgeDispatcher.menuActionPayload(action))
@@ -249,6 +333,289 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             onSidebarVisibilityChange: { [weak self] visible in
                 self?.deliver(.menuAction, BridgeDispatcher.menuActionPayload(.nativeSidebar(visible: visible)))
             })
+        model.isEditingWebText = { [weak self] in
+            guard let self else { return true }
+            return (try? await self.nativeSettingsScript(NativeSettingsStorageBridge.editingScript))?.boolValue ?? true
+        }
+        observeNativeSettingsSession(model: model, generation: settingsGeneration)
+        return model
+    }
+
+    private func makeNativeSettingsDesktopCallbacks() -> NativeSettingsDesktopCallbacks {
+        NativeSettingsDesktopCallbacks(
+            loadBackupSettings: { [weak self] in
+                guard let self else { throw APIError.backendUnavailable }
+                return await self.loadBackupSettings()
+            },
+            saveBackupSettings: { [weak self] value in
+                guard let self else { throw APIError.backendUnavailable }
+                try await self.saveBackupSettings(value)
+            },
+            selectBackupDirectory: { [weak self] in await self?.selectBackupDirectory() },
+            selectBackupFile: { [weak self] in await self?.selectRestoreFile() },
+            backupEncryptionStatus: { [weak self] in await self?.backupEncryptionStatus() },
+            setBackupPassphrase: { [weak self] value in await self?.setBackupPassphrase(value) },
+            captureFrontendState: { [weak self] in
+                guard let self else { return nil }
+                return try NativeSettingsStorageBridge.readReply(
+                    try await self.nativeSettingsScript(NativeSettingsStorageBridge.exportScript))
+            },
+            runBackup: { [weak self] directory, state in
+                await self?.runBackup(destination: directory, frontendStateJson: state)
+            },
+            isBackupEncrypted: { [weak self] path in await self?.isBackupEncrypted(path) ?? false },
+            restoreBackup: { [weak self] path, passphrase in
+                guard let self else { return nil }
+                return await self.restoreBackup(path, passphrase: passphrase)
+            },
+            applyRestoredFrontendState: { [weak self] state in
+                guard let self else { throw APIError.backendUnavailable }
+                let result = try await self.nativeSettingsScript(
+                    NativeSettingsStorageBridge.restoreScript,
+                    arguments: NativeSettingsStorageBridge.restoreArguments(state))
+                guard try NativeSettingsStorageBridge.mutationReply(result) else { throw APIError.backendUnavailable }
+            },
+            reloadFrontend: { [weak self] in
+                guard let self else { throw APIError.backendUnavailable }
+                try await self.reloadNativeSettingsFrontend()
+            },
+            readBackupReminder: { [weak self] in
+                guard let self else { return false }
+                let result = try await self.nativeSettingsScript(
+                    NativeSettingsStorageBridge.readScript,
+                    arguments: NativeSettingsStorageBridge.arguments(for: .reminder))
+                return try NativeSettingsStorageBridge.readLocalReply(result) == "1"
+            },
+            writeBackupReminder: { [weak self] dismissed in
+                guard let self else { throw APIError.backendUnavailable }
+                let result = try await self.nativeSettingsScript(
+                    dismissed ? NativeSettingsStorageBridge.writeScript : NativeSettingsStorageBridge.removeScript,
+                    arguments: NativeSettingsStorageBridge.arguments(for: .reminder, value: dismissed ? "1" : nil))
+                guard try NativeSettingsStorageBridge.mutationReply(result) else { throw APIError.backendUnavailable }
+            })
+    }
+
+    /// Receipt seeds update shared read lanes without triggering another provider request.
+    private func bindNativeSettingsAI(_ settings: NativeSettingsAIModel, chat: AIChatScreens) {
+        settings.didReceiveStatus = { [weak chat] receipt in
+            chat?.chat.seedSharedStatus(receipt.value, fetchedAt: receipt.fetchedAt)
+        }
+        settings.didReceiveModels = { [weak chat] receipt in
+            chat?.chat.seedSharedModels(receipt.value, fetchedAt: receipt.fetchedAt)
+        }
+        settings.didReceiveResearch = { [weak chat] receipt in
+            chat?.investigation.seedSharedResearch(receipt.value, fetchedAt: receipt.fetchedAt)
+        }
+        chat.chat.didReceiveStatus = { [weak settings] receipt in
+            settings?.seedSharedStatus(receipt.value, fetchedAt: receipt.fetchedAt)
+        }
+        chat.chat.didReceiveModels = { [weak settings] receipt in
+            settings?.seedSharedModels(receipt.value, fetchedAt: receipt.fetchedAt)
+        }
+        chat.investigation.didReceiveResearch = { [weak settings] receipt in
+            settings?.seedSharedResearch(receipt.value, fetchedAt: receipt.fetchedAt)
+        }
+        settings.didInvalidateSharedReads = { [weak chat] keys in
+            chat?.chat.invalidateSharedAIReads(keys)
+            if keys.contains("openai-research-status") { chat?.investigation.invalidateSharedResearch() }
+        }
+        chat.chat.didInvalidateSharedReads = { [weak settings] keys in settings?.invalidateSharedAIReads(keys) }
+    }
+
+    /// Fixed scripts and typed argument binding: no source text is constructed from local values.
+    private func nativeSettingsScript(_ script: String, arguments: [String: JSONValue] = [:]) async throws -> JSONValue
+    {
+        guard queue.isReady, let webView = webShell?.webView else { throw APIError.backendUnavailable }
+        let bound =
+            try JSONSerialization.jsonObject(with: JSONValue.object(arguments).serialized()) as? [String: Any] ?? [:]
+        return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<JSONValue, any Error>) in
+            let pending = OSAllocatedUnfairLock<CheckedContinuation<JSONValue, any Error>?>(initialState: continuation)
+            let resume: @Sendable (Result<JSONValue, any Error>) -> Void = { result in
+                let waiting = pending.withLock { state -> CheckedContinuation<JSONValue, any Error>? in
+                    defer { state = nil }
+                    return state
+                }
+                waiting?.resume(with: result)
+            }
+            let timeout = Task {
+                do { try await Task.sleep(for: Self.adminTokenTimeout) } catch { return }
+                resume(.failure(APIError.backendUnavailable))
+            }
+            webView.callAsyncJavaScript(
+                "return JSON.stringify(await (async () => {\n" + script + "\n})());",
+                arguments: bound, in: nil, in: .page
+            ) { result in
+                do {
+                    guard let text = try result.get() as? String else { throw APIError.backendUnavailable }
+                    resume(.success(try JSONValue.parse(Data(text.utf8))))
+                } catch { resume(.failure(error)) }
+                timeout.cancel()
+            }
+        }
+    }
+
+    private func publishNativeSettings(kind: String, key: String, value: TaxValue) {
+        guard ["app_settings", "dashboard_settings", "theme_settings"].contains(key) else { return }
+        if kind == "draft" { nativeSettingsDrafts[key] = value }
+        let generation = nativeSettingsGeneration
+        Task { [weak self] in
+            guard let self, generation == self.nativeSettingsGeneration, self.queue.isReady,
+                let bytes = try? JSONEncoder().encode(value)
+            else { return }
+            _ = try? await self.nativeSettingsScript(
+                """
+                const value = JSON.parse(valueJSON);
+                const detail = {kind, key, value};
+                if (kind === 'draft') {
+                    window.__VISION_NATIVE_SETTINGS_SNAPSHOT__[key] = value;
+                } else {
+                    detail.expected = {exists: true, value};
+                }
+                window.dispatchEvent(new CustomEvent('vision:native-settings', {detail}));
+                return true;
+                """,
+                arguments: [
+                    "kind": .string(kind), "key": .string(key),
+                    "valueJSON": .string(String(decoding: bytes, as: UTF8.self)),
+                ])
+        }
+    }
+
+    private func observeNativeSettingsSession(model: NativeShellModel, generation: UUID) {
+        withObservationTracking {
+            _ = model.nativeSettings?.sessionTierOverride
+        } onChange: { [weak self, weak model] in
+            Task { @MainActor in
+                guard let self, let model, generation == self.nativeSettingsGeneration else { return }
+                self.resolveNativeSettingsAppearance()
+                self.publishNativeSettingsSession()
+                self.observeNativeSettingsSession(model: model, generation: generation)
+            }
+        }
+    }
+
+    private func publishNativeSettingsSession() {
+        let generation = nativeSettingsGeneration
+        let tier = shellModel.nativeSettings?.sessionTierOverride
+        Task { [weak self] in
+            guard let self, generation == self.nativeSettingsGeneration, self.queue.isReady else { return }
+            _ = try? await self.nativeSettingsScript(
+                """
+                window.__VISION_NATIVE_SETTINGS_SESSION_TIER__.value = tier;
+                window.dispatchEvent(new CustomEvent('vision:native-settings-session', {detail:{sessionTierOverride:tier}}));
+                return true;
+                """, arguments: ["tier": tier.map(JSONValue.string) ?? .null])
+        }
+    }
+
+    private func loadNativeSettingsLegacyTheme() async {
+        guard let model = shellModel.nativeSettings else { return }
+        let generation = nativeSettingsGeneration
+        guard let reply = try? await nativeSettingsScript(NativeSettingsStorageBridge.legacyThemeScript),
+            let text = reply.stringValue, let raw = try? JSONDecoder().decode(TaxValue.self, from: Data(text.utf8)),
+            generation == nativeSettingsGeneration
+        else { return }
+        var legacy: [String: TaxValue] = [:]
+        if let mode = raw["mode"]?.stringValue, ["light", "dark"].contains(mode) { legacy["mode"] = .string(mode) }
+        if let variant = raw["variant"]?.stringValue, ThemeVariant(rawValue: variant) != nil {
+            legacy["variant"] = .string(variant)
+        }
+        model.legacyTheme = legacy.isEmpty ? nil : .object(legacy)
+        if model.isLoaded { await model.load(force: true) }
+    }
+
+    private func resolveNativeSettingsAppearance() {
+        guard let settings = shellModel.nativeSettings, settings.isLoaded else { return }
+        let screen = window?.screen ?? NSScreen.main
+        let scale = screen?.backingScaleFactor ?? 1
+        let pixels = Double((screen?.frame.width ?? 0) * (screen?.frame.height ?? 0) * scale * scale)
+        let systemDark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        let resolved = NativeSettingsAppearanceResolver.resolve(
+            theme: settings.themeRaw, settings: shellModel.settings, systemIsDark: systemDark,
+            physicalPixelCount: pixels, sessionTierOverride: settings.sessionTierOverride,
+            previousAppearance: shellModel.theme.appearance)
+        if settings.isLargeDisplay != resolved.isLargeDisplay { settings.isLargeDisplay = resolved.isLargeDisplay }
+        var selection = resolved.theme
+        if resolved.systemAccent, let hex = accentColor(), let tokens = AccentColor.themeTokens(hex: hex) {
+            selection.systemAccentColor = tokens.color
+            selection.systemAccentForegroundColor = tokens.foreground
+        }
+        let changed = selection != shellModel.theme
+        shellModel.theme = selection
+        lastSettingsClockRefresh = Date()
+        lastSettingsDisplayPixels = pixels
+        lastSettingsSystemIsDark = systemDark
+        if changed {
+            let palette = selection.palette
+            func components(_ color: HSLColor) -> String { "\(color.hue) \(color.saturation)% \(color.lightness)%" }
+            if let splash = SplashTheme.parse(
+                .object([
+                    "mode": .string(selection.appearance.rawValue),
+                    "background": .string(components(palette.primary)),
+                    "foreground": .string(components(palette.primaryForeground)),
+                    "surface": .string(components(palette.background)), "text": .string(components(palette.foreground)),
+                ]))
+            {
+                self.palette = LaunchAppearance.palette(theme: splash)
+                applyPalette()
+                let supervisor = supervisor
+                Task {
+                    _ = try? await supervisor.updateSettings { $0[LaunchAppearance.splashThemeKey] = splash.jsonValue }
+                }
+            }
+        }
+    }
+
+    private func startNativeSettingsAppearanceWatch() {
+        settingsAppearanceTask?.cancel()
+        settingsAppearanceTask = Task { [weak self] in
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(5)) } catch { return }
+                guard let self else { return }
+                let screen = self.window?.screen ?? NSScreen.main
+                let scale = screen?.backingScaleFactor ?? 1
+                let pixels = Double((screen?.frame.width ?? 0) * (screen?.frame.height ?? 0) * scale * scale)
+                let dark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+                let clockDue =
+                    self.shellModel.nativeSettings?.themeString("mode", fallback: "dark") == "schedule"
+                    && Date().timeIntervalSince(self.lastSettingsClockRefresh) >= 60
+                if pixels != self.lastSettingsDisplayPixels || dark != self.lastSettingsSystemIsDark || clockDue {
+                    self.resolveNativeSettingsAppearance()
+                }
+            }
+        }
+    }
+
+    private func reloadNativeSettingsFrontend() async throws {
+        guard let webView = webShell?.webView else { throw APIError.backendUnavailable }
+        let old = shellModel
+        old.analysis?.didDisappear()
+        old.research?.didDisappear(route: old.route)
+        old.researchForecast?.didDisappear()
+        old.researchChartBuilder?.didDisappear()
+        old.researchDossiers?.didDisappear()
+        old.aiChat?.didDisappear()
+        old.settingsAI?.didDisappear()
+        old.settingsBackup?.didDisappear()
+        await apiClient.invalidateSharedAIReads(keys: [
+            "ollama-status", "ollama-models", "openai-research-status", "provider-keys", "agentcloak-desktop",
+        ])
+        nativeSettingsDrafts = [:]
+        settingsWriter = SettingsWriter(transport: settingsTransport)
+        shellModel = makeShellModel()
+        let hidden = shellHost?.isHidden ?? false
+        shellHost?.removeFromSuperview()
+        let host = NSHostingView(
+            rootView: ShellRootView(model: shellModel) { hidden in WebViewHost(webView: webView, hidden: hidden) })
+        host.sizingOptions = []
+        host.sceneBridgingOptions = []
+        host.frame = container?.bounds ?? .zero
+        host.autoresizingMask = [.width, .height]
+        host.isHidden = hidden
+        container?.addSubview(host, positioned: .below, relativeTo: launchView)
+        shellHost = host
+        shellModel.reloadSettings()
+        webView.reload()
     }
 
     /// The sections the user hid (`SIDEBAR_HIDDEN_SECTIONS` of the web sidebar), per Mac.
@@ -872,6 +1239,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     }
 
     private func accentColorDidChange() {
+        resolveNativeSettingsAppearance()
         guard queue.isReady else { return }
         deliver(.accentColorChanged, accentColor().map(JSONValue.string) ?? .null)
     }
@@ -888,7 +1256,20 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     func rendererDidBecomeReady() {
         for message in queue.markReady() { evaluate(message.event, message.payload) }
         deliver(.menuAction, BridgeDispatcher.menuActionPayload(.nativeSidebar(visible: shellModel.isSidebarVisible)))
-        shellModel.reloadSettings()
+        let generation = nativeSettingsGeneration
+        Task { [weak self] in
+            guard let self, generation == self.nativeSettingsGeneration else { return }
+            await self.loadNativeSettingsLegacyTheme()
+            await self.shellModel.nativeSettings?.load()
+            guard generation == self.nativeSettingsGeneration else { return }
+            for (key, value) in self.nativeSettingsDrafts {
+                self.publishNativeSettings(kind: "draft", key: key, value: value)
+            }
+            self.publishNativeSettingsSession()
+            self.resolveNativeSettingsAppearance()
+            self.startNativeSettingsAppearanceWatch()
+            self.shellModel.reloadSettings()
+        }
         revealWebView()
     }
 
@@ -933,6 +1314,10 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     }
 
     func persistSplashTheme(_ theme: SplashTheme) async -> Bool {
+        if shellModel.nativeSettings?.isLoaded == true {
+            resolveNativeSettingsAppearance()
+            return true
+        }
         let value = theme.jsonValue
         do {
             try await supervisor.updateSettings { $0[LaunchAppearance.splashThemeKey] = value }
@@ -1242,6 +1627,37 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
 
     func routeDidChange(_ route: NativeRoute) {
         shellModel.routeDidChange(route)
+    }
+
+    func routeDidChange(_ route: NativeRoute, onboardingPresented: Bool) {
+        shellModel.isPresentingOnboarding = onboardingPresented
+        shellModel.routeDidChange(route)
+    }
+
+    func changeNativeSettings(_ patch: NativeSettingsPatch) async throws {
+        let generation = nativeSettingsGeneration
+        guard let model = shellModel.nativeSettings else { throw APIError.backendUnavailable }
+        await model.load()
+        guard model.isLoaded, generation == nativeSettingsGeneration else { throw APIError.backendUnavailable }
+        let raw = try JSONDecoder().decode(TaxValue.self, from: JSONEncoder().encode(JSONValue.object(patch.updates)))
+        guard var fields = raw.objectValue else { throw APIError.invalidRequest("Invalid native settings patch") }
+        switch patch.key {
+        case "app_settings":
+            for key in patch.removed { fields[key] = .null }
+            model.updateApp(fields)
+        case "dashboard_settings": model.updateDashboard(fields)
+        case "theme_settings":
+            if let schedule = fields.removeValue(forKey: "schedule") {
+                guard let updates = schedule.objectValue,
+                    Set(updates.keys).isSubset(of: ["lightFrom", "darkFrom"])
+                else {
+                    throw APIError.invalidRequest("Invalid theme schedule")
+                }
+                model.updateThemeSchedule(updates)
+            }
+            if !fields.isEmpty { model.updateTheme(fields) }
+        default: throw APIError.invalidRequest("Unsupported native settings key")
+        }
     }
 
     func titlebarDoubleClicked() {

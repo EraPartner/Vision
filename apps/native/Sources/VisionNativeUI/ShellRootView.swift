@@ -10,6 +10,8 @@ public struct ShellRootView<WebContent: View>: View {
     private let model: NativeShellModel
     private let webContent: (_ hidden: Bool) -> WebContent
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    @State private var connectivity = PortfolioConnectivity()
+    @Environment(\.scenePhase) private var scenePhase
 
     public init(model: NativeShellModel, @ViewBuilder webContent: @escaping (_ hidden: Bool) -> WebContent) {
         self.model = model
@@ -36,25 +38,30 @@ public struct ShellRootView<WebContent: View>: View {
             }
         }
         .environment(\.visionTheme, theme)
+        .environment(\.visionVisualEffects, model.nativeSettings?.effectiveVisualEffects ?? "standard")
         .environment(\.locale, Locale(identifier: model.strings.language.rawValue))
         .environment(\.nativeNoticeCenter, model.notices)
         .overlay(alignment: .bottom) {
             if !model.isPresentingNativeSettings {
                 NativeNoticeHost(
                     center: model.notices, strings: model.strings, isWebVisible: model.detail == .web,
-                    isEditingWebText: model.isEditingWebText)
-                    .environment(\.visionTheme, theme)
+                    isEditingWebText: model.isEditingWebText
+                )
+                .environment(\.visionTheme, theme)
             }
         }
-        .sheet(isPresented: Binding(
-            get: { model.isPresentingNativeSettings },
-            set: { if !$0 { model.closeSettings() } }
-        )) {
+        .sheet(
+            isPresented: Binding(
+                get: { model.isPresentingNativeSettings },
+                set: { if !$0 { model.closeSettings() } }
+            )
+        ) {
             if let settings = model.nativeSettings, let ai = model.settingsAI,
                 let backup = model.settingsBackup, let about = model.settingsAbout
             {
                 NativeSettingsScreenView(shell: model, model: settings, ai: ai, backup: backup, about: about)
                     .environment(\.visionTheme, theme)
+                    .environment(\.visionVisualEffects, settings.effectiveVisualEffects)
                     .environment(\.colorScheme, theme.colorScheme)
                     .environment(\.locale, Locale(identifier: model.strings.language.rawValue))
             }
@@ -86,6 +93,15 @@ public struct ShellRootView<WebContent: View>: View {
             let visible = visibility != .detailOnly
             model.setSidebarVisible(visible)
         }
+        .onAppear {
+            model.settingsAI?.isForeground = scenePhase == .active
+            connectivity.start { online in
+                model.nativeSettings?.isOnline = online
+                model.settingsAI?.isOnline = online
+            }
+        }
+        .onChange(of: scenePhase) { _, phase in model.settingsAI?.isForeground = phase == .active }
+        .onDisappear { connectivity.stop() }
     }
 }
 

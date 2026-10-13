@@ -17,7 +17,7 @@ struct PortfolioPriceRefreshToast: View {
 
     var body: some View {
         Group {
-            if let notice {
+            if let notice, !model.usesExternalPriceNotices {
                 let title =
                     notice.error != nil
                     ? shell.strings.t("portfolio.refreshPricesFailedTitle")
@@ -49,6 +49,7 @@ struct PortfolioPriceRefreshToast: View {
         .allowsHitTesting(false)
         .animation(.easeInOut(duration: 0.2), value: notice?.id)
         .onChange(of: model.priceNoticeRevision) { _, revision in
+            guard !model.usesExternalPriceNotices else { return }
             guard model.priceError != nil || model.priceRefreshResult != nil else { return }
             notice = RefreshNotice(
                 id: revision, result: model.priceRefreshResult, error: model.priceError, offline: !model.isOnline)
