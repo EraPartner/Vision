@@ -97,9 +97,9 @@
                 let containing = documents.filter { $0.string?.contains("StartAccount" + identifier) == true }
                 #expect(containing.count == 1)
                 #expect(containing.first?.string?.contains("EndAccount" + identifier) == true)
-                #expect(
-                    normalized(containing.first?.string ?? "").contains(
-                        normalized(snapshot.strings.t("networth.byAccount.title"))))
+                let pageText = normalized(containing.first?.string ?? "")
+                let accountTitle = normalized(snapshot.strings.t("networth.byAccount.title"))
+                #expect(pageText.contains(accountTitle))
             }
             let text = documents.compactMap(\.string).joined(separator: "\n")
             #expect(normalized(text).contains(normalized(snapshot.strings.t("networth.byAccount.unassigned"))))
@@ -159,7 +159,7 @@
             let service = NetWorthRowPrintService(unavailableAccounts: true, unavailablePrices: true)
             let model = await loaded(service)
             let snapshot = try NativeNetWorthPrintSnapshot.capture(
-                model: model, settings: .defaults, strings: CatalogStrings(language: .en), theme: .init())
+                model: model, settings: .defaults, strings: CatalogStrings(language: .en), theme: .init(appearance: .dark))
             #expect(snapshot.accounts == nil && snapshot.accountsError != nil)
             let error = try #require(snapshot.pricesError)
             let before = await service.calls
@@ -213,22 +213,7 @@
             return range
         }
         private func render(_ view: NativePagePrintPagesView) throws -> [PDFDocument] {
-            _ = NSApplication.shared
-            let canvas = NetWorthRowPrintCanvas(frame: view.frame)
-            canvas.addSubview(view)
-            let window = NSWindow(contentRect: view.frame, styleMask: .borderless, backing: .buffered, defer: false)
-            window.isReleasedWhenClosed = false
-            window.contentView = canvas
-            defer {
-                window.contentView = nil
-                window.close()
-            }
-            view.layoutSubtreeIfNeeded()
-            return try (1...pageRange(view).length).map { number in
-                let document = try #require(PDFDocument(data: canvas.dataWithPDF(inside: view.rectForPage(number))))
-                #expect(document.pageCount == 1)
-                return document
-            }
+            try NativePrintPDFRenderer.render(view)
         }
         private func expectTextFits(_ documents: [PDFDocument]) {
             for document in documents {

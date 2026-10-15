@@ -39,7 +39,7 @@
         }
 
         @Test func coveredOverlaysRestoreTheirOwnAttachedResponder() async throws {
-            let fixture = OverlayFocusWindow()
+            let fixture = try OverlayFocusWindow()
             defer { fixture.close() }
             let graph = NSObject()
             let context = NativeOverlayFocusContext(graph: ObjectIdentifier(graph), route: .home)
@@ -56,7 +56,7 @@
         }
 
         @Test func finalDismissalReturnsToTheRouteOpenerOnlyAfterTheSheetEnds() async throws {
-            let fixture = OverlayFocusWindow()
+            let fixture = try OverlayFocusWindow()
             defer { fixture.close() }
             let graph = NSObject()
             let context = NativeOverlayFocusContext(graph: ObjectIdentifier(graph), route: .home)
@@ -74,7 +74,7 @@
         }
 
         @Test func finalDismissalRestoresFieldOwnerAndSelectionRatherThanTheSharedEditor() async throws {
-            let fixture = OverlayFocusWindow()
+            let fixture = try OverlayFocusWindow()
             defer { fixture.close() }
             let field = NSTextField(string: "synthetic route draft")
             field.frame = NSRect(x: 10, y: 100, width: 220, height: 24)
@@ -99,7 +99,7 @@
         }
 
         @Test func detachedFieldOwnerCannotRedirectTheSharedEditorOfAnotherField() async throws {
-            let fixture = OverlayFocusWindow()
+            let fixture = try OverlayFocusWindow()
             defer { fixture.close() }
             let original = NSTextField(string: "synthetic opener draft")
             let current = NSTextField(string: "synthetic current draft")
@@ -129,13 +129,13 @@
 
         @Test(arguments: ["detached", "anotherWindow", "hidden", "disabled", "detachedMarker"])
         func finalDismissalCannotRestoreAnUnavailableOrReparentedControl(_ change: String) async throws {
-            let fixture = OverlayFocusWindow()
-            let second = OverlayFocusWindow()
+            let fixture = try OverlayFocusWindow()
+            let second = try OverlayFocusWindow()
             defer {
                 second.close()
                 fixture.close()
             }
-            fixture.window.makeKeyAndOrderFront(nil)
+            try fixture.makeKey()
             let graph = NSObject()
             let context = NativeOverlayFocusContext(graph: ObjectIdentifier(graph), route: .home)
             let coordinator = NativeOverlayFocusReturnCoordinator()
@@ -159,7 +159,7 @@
 
         @Test(arguments: ["graph", "route", "query", "restore"])
         func routeGraphAndRestoreChangesRetireTheOpener(_ change: String) async throws {
-            let fixture = OverlayFocusWindow()
+            let fixture = try OverlayFocusWindow()
             defer { fixture.close() }
             let graph = NSObject()
             let replacementGraph = NSObject()
@@ -181,7 +181,7 @@
         }
 
         @Test func settingsAndExportQueryChangesKeepTheSameUnderlyingVisit() async throws {
-            let fixture = OverlayFocusWindow()
+            let fixture = try OverlayFocusWindow()
             defer { fixture.close() }
             let graph = NSObject()
             let plain = NativeOverlayFocusContext(
@@ -201,7 +201,7 @@
         }
 
         @Test func dismissalDoesNotStealFocusFromAnotherWindowOrANewOverlay() async throws {
-            let fixture = OverlayFocusWindow()
+            let fixture = try OverlayFocusWindow()
             defer { fixture.close() }
             let graph = NSObject()
             let context = NativeOverlayFocusContext(graph: ObjectIdentifier(graph), route: .home)
@@ -212,14 +212,14 @@
             try #require(fixture.window.makeFirstResponder(fixture.opener))
             coordinator.update(context, isPresented: true)
             try #require(fixture.window.makeFirstResponder(fixture.other))
-            let second = OverlayFocusWindow()
+            let second = try OverlayFocusWindow()
             defer { second.close() }
             try #require(second.window.makeFirstResponder(second.opener))
             await coordinator.didDismiss(context: context, isPresented: false)?.value
             #expect(second.window.firstResponder === second.opener)
             #expect(fixture.window.firstResponder === fixture.other)
 
-            fixture.window.makeKeyAndOrderFront(nil)
+            try fixture.makeKey()
             try #require(fixture.window.makeFirstResponder(fixture.opener))
             coordinator.update(context, isPresented: true)
             try #require(fixture.window.makeFirstResponder(fixture.other))
@@ -236,13 +236,24 @@
     }
 
     @MainActor private struct OverlayFocusWindow {
+        private static var applicationPrepared = false
         let window: NSWindow
         let content = NSView(frame: NSRect(x: 0, y: 0, width: 320, height: 240))
         let marker = NSView(frame: .zero)
         let opener = OverlayFocusableControl(frame: NSRect(x: 10, y: 10, width: 80, height: 24))
         let other = OverlayFocusableControl(frame: NSRect(x: 10, y: 50, width: 80, height: 24))
-        init() {
-            _ = NSApplication.shared
+        init() throws {
+            let application = NSApplication.shared
+            if !Self.applicationPrepared {
+                // A command-line swift-test process starts without the app target's
+                // activation policy and application event loop. An ordered window
+                // alone is not evidence that AppKit granted it keyboard ownership.
+                if application.activationPolicy() == .prohibited {
+                    try #require(application.setActivationPolicy(.accessory))
+                }
+                application.finishLaunching()
+                Self.applicationPrepared = true
+            }
             window = NSWindow(
                 contentRect: NSRect(x: -10_000, y: -10_000, width: 320, height: 240),
                 styleMask: [.titled], backing: .buffered, defer: false)
@@ -251,7 +262,31 @@
             content.addSubview(opener)
             content.addSubview(other)
             window.contentView = content
+            do { try makeKey() } catch {
+                close()
+                throw error
+            }
+        }
+        func makeKey() throws {
+            let application = NSApplication.shared
+            application.activate()
             window.makeKeyAndOrderFront(nil)
+            window.makeKey()
+            let deadline = Date().addingTimeInterval(2)
+            while (!application.isActive || application.keyWindow !== window || !window.isKeyWindow)
+                && Date() < deadline
+            {
+                if let event = application.nextEvent(
+                    matching: .any, until: Date().addingTimeInterval(0.01), inMode: .default, dequeue: true)
+                {
+                    application.sendEvent(event)
+                }
+                application.updateWindows()
+                window.makeKey()
+            }
+            try #require(
+                application.isActive && application.keyWindow === window && window.isKeyWindow,
+                "Synthetic fixture must activate and own AppKit's actual key window before testing responder restoration")
         }
         func close() {
             window.orderOut(nil)

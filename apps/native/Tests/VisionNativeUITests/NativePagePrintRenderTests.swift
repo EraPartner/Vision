@@ -10,6 +10,26 @@
     /// This exercises AppKit/SwiftUI layout, not a printer driver or the system print panel.
     @MainActor @Suite("Current-page print layout and PDF rendering")
     struct NativePagePrintRenderTests {
+        @Test func swiftUITextDrawsAsVectorTextOnEveryPageWithoutChangingTheKeyWindow() throws {
+            let keyWindow = NSApplication.shared.keyWindow
+            let pages = NativePagePrintPagesView(printInfo: paper(width: 240, height: 120)) { width in
+                ["First SwiftUI page", "Second SwiftUI page"].map { marker in
+                    NSHostingView(
+                        rootView: Text(marker).font(.system(size: 14)).foregroundStyle(.black)
+                            .frame(width: width, height: 100, alignment: .topLeading))
+                }
+            }
+            #expect(pageRange(pages).length == 2)
+            let documents = try render(pages)
+            for (index, marker) in ["First SwiftUI page", "Second SwiftUI page"].enumerated() {
+                let page = try #require(documents[index].page(at: 0))
+                let selection = try #require(documents[index].findString(marker, withOptions: []).first)
+                #expect(page.bounds(for: .mediaBox).contains(selection.bounds(for: page)))
+                #expect(documents[1 - index].findString(marker, withOptions: []).isEmpty)
+            }
+            #expect(NSApplication.shared.keyWindow === keyWindow)
+        }
+
         @Test func shortSectionsMoveTogetherAndExactPageDoesNotAddABlankTail() throws {
             let info = paper(width: 480, height: 300)
             let first = MeasuredPrintBlock(height: 180, labels: [(20, "First section")])
@@ -252,28 +272,7 @@
             return range
         }
         private func render(_ view: NativePagePrintPagesView) throws -> [PDFDocument] {
-            _ = NSApplication.shared
-            // Render already-paginated rectangles. A separate canvas keeps the helper's
-            // PDF operation from starting a new print-settings pass on the paginator.
-            let canvas = PrintPDFCanvas(frame: view.frame)
-            canvas.addSubview(view)
-            let window = NSWindow(contentRect: view.frame, styleMask: .borderless, backing: .buffered, defer: false)
-            window.isReleasedWhenClosed = false
-            window.contentView = canvas
-            defer {
-                window.contentView = nil
-                window.close()
-            }
-            view.layoutSubtreeIfNeeded()
-            return try (1...pageRange(view).length).map { page in
-                let rect = view.rectForPage(page)
-                let document = try #require(PDFDocument(data: canvas.dataWithPDF(inside: rect)))
-                #expect(document.pageCount == 1)
-                let output = try #require(document.page(at: 0))
-                #expect(abs(output.bounds(for: .mediaBox).width - rect.width) < 1)
-                #expect(abs(output.bounds(for: .mediaBox).height - rect.height) < 1)
-                return document
-            }
+            try NativePrintPDFRenderer.render(view)
         }
         private func expectTextFitsHorizontally(_ documents: [PDFDocument]) {
             for document in documents {

@@ -72,16 +72,52 @@ struct NativeNavigationParameterTests {
         #expect(try #require(NativeNavigationLocation(raw)).match?.screen == .portfolioImportReview(batchId: "1"))
     }
 
-    @Test @MainActor func numericCoercionRemainsAnExplicitGateBeyondParameterDecoding() throws {
-        for value in ["01", "1e2", "+1", "%201%20", "0x10"] {
-            let location = try #require(NativeNavigationLocation("/portfolio/import/\(value)/review"))
-            let parameter = try #require(location.match?.parameters["batchId"])
-            #expect(PortfolioImportReviewModel.parseBatchId(parameter) == nil)
+    @Test func supportedNumericAliasesReachMatchedAccountAndImportConsumerInputs() throws {
+        for (value, expected) in [
+            ("01", 1), ("1e2", 100), ("+1", 1), ("%201%20", 1), ("0x10", 16),
+            ("0b11", 3), ("0o17", 15), ("1.", 1), (".1e1", 1), ("%EF%BB%BF1%EF%BB%BF", 1),
+        ] {
+            let account = try #require(NativeNavigationLocation("/accounts/\(value)?q=a+b&flag"))
+            let imported = try #require(NativeNavigationLocation("/import/\(value)/review?flag"))
+            let portfolio = try #require(NativeNavigationLocation("/portfolio/import/\(value)/review?flag"))
+            #expect(account.match?.screen == .accountDetail(id: expected))
+            #expect(imported.match?.screen == .importReview(batchId: expected))
+            #expect(imported.match?.supportedBatchId == expected)
+            #expect(portfolio.match?.supportedBatchId == expected)
+            #expect(account.raw == "/accounts/\(value)?q=a+b&flag")
+            #expect(imported.raw == "/import/\(value)/review?flag")
+            #expect(portfolio.raw == "/portfolio/import/\(value)/review?flag")
         }
-        #expect(try #require(NativeNavigationLocation("/accounts/1e2")).match?.screen == .accountDetail(id: 0))
-        let invalidImport = try #require(NativeNavigationLocation("/import/1e2/review"))
-        #expect(invalidImport.match?.parameters["batchId"] == "1e2")
-        #expect(invalidImport.match?.screen == nil)
+    }
+
+    @Test func matchedIdentifiersApplyBackendBoundsAfterSourceNumberRounding() throws {
+        for (value, expected) in [("2147483648", 2_147_483_648), ("9007199254740991.1", 9_007_199_254_740_991)] {
+            #expect(try #require(NativeNavigationLocation("/accounts/\(value)")).match?.screen == .accountDetail(id: 0))
+            let imported = try #require(NativeNavigationLocation("/import/\(value)/review"))
+            #expect(imported.match?.screen == .importReview(batchId: expected))
+            #expect(imported.match?.supportedBatchId == expected)
+            #expect(try #require(NativeNavigationLocation("/portfolio/import/\(value)/review"))
+                .match?.supportedBatchId == expected)
+        }
+    }
+
+    @Test func invalidReviewQueryAndErrorContextRemainAnExplicitActivationGate() throws {
+        for value in ["0", "-1", "1.5", "Infinity", "not-a-number", "9007199254740992", "%2F"] {
+            let imported = try #require(NativeNavigationLocation("/import/\(value)/review"))
+            let portfolio = try #require(NativeNavigationLocation("/portfolio/import/\(value)/review"))
+            #expect(imported.match?.parameters["batchId"] != nil)
+            #expect(imported.match?.supportedBatchId == nil && imported.match?.screen == nil)
+            #expect(portfolio.match?.supportedBatchId == nil)
+            #expect(portfolio.match?.screen != nil)
+        }
+    }
+
+    @Test @MainActor func rendererNumericParsersRetainTheirExistingPolicies() {
+        for value in ["01", "1e2", "+1", " 1 ", "0x10"] {
+            #expect(PortfolioImportReviewModel.parseBatchId(value) == nil)
+        }
+        #expect(NativeScreen.screen(forPath: "/accounts/1e2") == .accountDetail(id: 0))
+        #expect(NativeScreen.screen(forPath: "/import/1e2/review") == nil)
     }
 }
 
@@ -132,5 +168,23 @@ struct NativeNavigationParameterShellTests {
         #expect(recorder.actions.isEmpty)
         await native.settingsSettled()
         await renderer.settingsSettled()
+    }
+
+    @Test func nativeNumericAliasesSelectExistingTypedScreensWhileRendererUsesItsOriginalParsers() async {
+        let recorder = ShellRecorder()
+        for (raw, expected) in [
+            ("/accounts/1e2", NativeScreen.accountDetail(id: 100)),
+            ("/import/0x10/review", NativeScreen.importReview(batchId: 16)),
+        ] {
+            let native = makeShell(native: true, initial: raw, recorder: recorder)
+            let renderer = makeShell(native: false, initial: raw, recorder: recorder)
+            #expect(native.detail == .native(expected))
+            #expect(native.nativeNavigationLocation?.raw == raw)
+            if raw.hasPrefix("/accounts/") { #expect(renderer.detail == .native(.accountDetail(id: 0))) }
+            else { #expect(renderer.detail == .notFound) }
+            #expect(renderer.route.path == raw && recorder.actions.isEmpty)
+            await native.settingsSettled()
+            await renderer.settingsSettled()
+        }
     }
 }

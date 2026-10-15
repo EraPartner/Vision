@@ -874,9 +874,13 @@ invalidates Transactions and Planned.
 Linux cannot build macOS apps, so the `native-macos` job ("Native (macOS)") in
 `.github/workflows/ci.yml` runs on the GitHub-hosted `macos-26` runner. It installs XcodeGen,
 generates the project, builds the Debug app with `CODE_SIGNING_ALLOWED=NO` and runs
-`swift test --package-path apps/native`. It selects Xcode 26.6 with `xcode-select` and prints
+separate Core and UI test processes. It selects Xcode 26.6 with `xcode-select` and prints
 `xcodebuild -version`, and installs XcodeGen 2.46.0 from its release zip after checking a pinned
-SHA-256. `swift test` runs both test targets, `VisionNativeCoreTests` and `VisionNativeUITests`. CI
+SHA-256. The Core invocation skips only `VisionNativeUITests`; the UI invocation uses
+`--skip-build --no-parallel --filter VisionNativeUITests`. Explicit serial UI execution keeps
+process-global AppKit activation, key-window ownership and display transactions from racing.
+Both test targets remain covered. Failed runs upload synthetic print diagnostics from
+`VISION_NATIVE_INTEROP_DIR/print-render` for three days when those files exist. CI
 builds without a runtime payload. The generated Swift sources and String Catalog are checked on
 Linux by the Verify Generated Artifacts job (`bun run native:generate`, then no change below
 `apps/native/`). The `changes` job sets `native` to true when a pull request
@@ -1532,9 +1536,10 @@ changes preserve eligible notices. Retry, Create rule, and Import actions remain
 with their source callbacks/routes. No new retry or confirmation workflow is added.
 
 `.github/workflows/native-branch.yml` now verifies `codex/native-phase-*` branch pushes with an
-unsigned Debug macOS app build and Swift package tests. The automated build is not yet green:
-successive builds have exposed SDK compiler issues, and corrections continue through the
-automatic branch workflow. Full app compilation and the following package-test step remain pending.
+unsigned Debug macOS app build and Swift package tests. The `ca7a25ea` checkpoint built the app
+and package and passed all 1,617 Core tests; its UI run exposed blank SwiftUI PDF text and four
+focus-restoration failures. Updated display/key-window fixtures await their own Mac execution;
+the complete branch gate remains open. Read the handoff for newer checkpoint results.
 Portable source/transport tests and UI syntax checks do not replace macOS SDK or rendered
 VoiceOver/Demo verification. Those checks remain recorded gaps; the user's authorization continues
 later phases without a manual Demo-review intermission. See [[docs/features/settings|Settings]],
@@ -1635,6 +1640,22 @@ raw store requires an explicit origin, website-store identity, caller-selected f
 capture provenance; atomic commits preserve unknown/raw local strings while session values remain
 in memory. It exports the existing 15-key backup subset and accepts only already-source-normalized
 restore strings. Missing, corrupt or incomplete migration state never silently becomes empty state.
+
+`NativeRawStateCaptureBridge` provides a dormant fixed read-only capture script and strict receipt
+decoder. It compares actual origin before storage access, reads all raw local entries and exactly
+four session keys, detects unstable rereads and rejects incomplete or mismatched replies. Request
+UUIDs correlate graph/document/capture receipts; echoed store identity does not verify WebKit.
+Host-exclusive admission, physical callback drains and current-generation checks are still required.
+`NativeNavigationIdentifier` separately models JavaScript Number coercion for route IDs only;
+its binary64 conversion is not a financial calculation and is not yet a complete import error policy.
+
+The detached `lib/nativeRouteAdapter.ts` delegates explicit requests to the actual source router
+after a native preflight lease, then observes source acceptance before reporting a commit. It adds
+no blocker, global history override or App wiring. Existing web leave guards remain authoritative;
+resolved-target admission, unified interception and host projection atomicity are still gates.
+[[docs/adr/207-vision-native-helper-document|Proposed ADR-207]] records a separate default-off
+Debug Demo helper-document strategy that avoids mounting React UI/router in a fresh session.
+It is not enabled and still requires explicit native command, locale/readiness and startup owners.
 
 The original fixed TypeScript palette and fiscal helpers still require their retained React owner,
 shared cache, locale and lifetime checks. These staged APIs do not retire that owner or the web view,

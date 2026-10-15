@@ -190,19 +190,8 @@
             }
         }
         private func render(_ pages: NativePagePrintPagesView) throws -> [PDFDocument] {
-            _ = NSApplication.shared
-            let canvas = TaxRowPrintCanvas(frame: pages.frame)
-            canvas.addSubview(pages)
-            let window = NSWindow(contentRect: pages.frame, styleMask: .borderless, backing: .buffered, defer: false)
-            window.isReleasedWhenClosed = false
-            window.contentView = canvas
-            defer {
-                window.contentView = nil
-                window.close()
-            }
-            pages.layoutSubtreeIfNeeded()
-            return try (1...range(pages).length).map { index in
-                let document = try #require(PDFDocument(data: canvas.dataWithPDF(inside: pages.rectForPage(index))))
+            let documents = try NativePrintPDFRenderer.render(pages)
+            for document in documents {
                 let page = try #require(document.page(at: 0))
                 let bounds = page.bounds(for: .mediaBox)
                 for character in 0..<page.numberOfCharacters {
@@ -210,8 +199,8 @@
                     guard rect.width > 0, rect.height > 0 else { continue }
                     #expect(rect.minX >= bounds.minX - 1 && rect.maxX <= bounds.maxX + 1)
                 }
-                return document
             }
+            return documents
         }
     }
 

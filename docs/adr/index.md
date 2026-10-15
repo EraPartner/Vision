@@ -249,6 +249,13 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 
 ## Recent Decisions
 
+### 2026-10-15: Isolate a native Demo helper document (proposed)
+
+[[docs/adr/207-vision-native-helper-document|ADR-207]] proposes a default-off Debug Demo
+experiment with native presentation and routing plus a same-origin document for unchanged
+TypeScript helpers and scoped storage. It records build/readiness and native-owner prerequisites;
+no helper-only SDK mode, real-data migration or phase-4 completion is enabled by the proposal.
+
 ### 2026-10-15: Stage native route authority before web retirement (proposed)
 
 [[docs/adr/206-vision-native-staged-web-retirement|ADR-206]] proposes explicit opt-in native

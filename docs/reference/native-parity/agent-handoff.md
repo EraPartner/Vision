@@ -224,7 +224,7 @@ establishes phase completion. Continue from actual `git log` and collect all tas
 
 ### Row-aware print and staged navigation checkpoint (2026-10-15)
 
-This snapshot adds `NativePagePrintRow`/`NativePagePrintTableBlock`, retaining the existing
+**`4ddaa2c7`** is pushed and remote-verified. This snapshot adds `NativePagePrintRow`/`NativePagePrintTableBlock`, retaining the existing
 `[NSView]` builder boundary. The paginator measures actual variable-height rows, moves fitting
 tables intact, repeats fresh continuation headers, keeps the final footer with the last row
 when possible, and resolves columns from the full frozen table. Oversized individual rows or
@@ -265,6 +265,56 @@ strict raw-state capture codec/script before any live migration; numeric route-I
 typed host bootstrap, history continuity and restore/menu integration. Startup resolution and
 matched parameters alone do not enable a new SDK route owner. Continue independent preparation
 while full package checks run; do not end work merely because a snapshot was published.
+
+### Core gate and UI/Phase-4 follow-up (2026-10-15)
+
+`ca7a25ea` built the app/package and **all 1,617 Core tests / 221 suites passed**. The separate
+UI process ran **70 tests / ten suites / 84 issues**: 80 print-content assertions saw blank
+SwiftUI PDFs while custom NSView PDF markers passed, and four positive focus restorations
+failed while the ownership-fence cases passed. Diagnostics: `/workspace/mac-ca7-diagnostics.log`.
+The follow-up keeps assertions and production guards: shared print tests use a visible non-key
+per-page viewport, observed SwiftUI vector readiness and display transactions; focus fixtures
+establish and assert actual AppKit activation/key ownership. A two-page SwiftUI text canary
+checks the harness independently. The UI invocation is explicitly `--no-parallel` in both Mac
+workflows because AppKit state is process-global. An actual Swift 6.2.3 probe showed default
+Testing concurrency versus serial execution with that flag; source evidence is under
+`/workspace/scratch/swift-testing-concurrency-probe`. Failed runs retain synthetic print PDFs
+for three days when emitted. No actual repaired Mac render pass is claimed.
+
+`4ddaa2c7` also **built the app successfully**, including row-aware production views and
+native matching, but its package compilation stopped on two Net-worth test diagnostics:
+a Testing macro incorrectly propagated optional chaining through a nested `normalized` call,
+and a fixture omitted required theme appearance. The follow-up extracts typed local strings
+before the unchanged assertion and supplies explicit dark appearance. No tests ran in that run.
+
+Additional dormant Phase-4 preparation is collected in this follow-up:
+
+- `NativeRawStateCaptureBridge` and permanent tests: six exact-source Foundation cases plus
+  16 exact emitted-script Bun cases passed, zero adapters/drift; three JavaScriptCore cases
+  remain Mac-only. Full raw local keys/unknown strings and exactly four session keys are
+  captured read-only, with strict origin/provenance/stability checks. Host-exclusive admission,
+  physical callback drains and final current-document checks remain mandatory; no SDK import.
+  Preserve `/workspace/vision-phase4-capture-check`, manifest SHA
+  `f176ff7afcdaca826beaf8e1811b0c272e1e9661b10963a085d10a01e74d0fb8`.
+- `lib/nativeRouteAdapter.ts` is detached and inactive: native preflight is a lease, source
+  `UnsavedChangesProvider` stays the sole blocker, and commits report actual source acceptance
+  once. It adds no App facade/history override. Twenty-four actual-router/guard cases, targeted
+  ESLint and root typecheck pass. Unified interception, resolved target admission and host
+  reservation/projection atomicity are still required before a retained-router takeover.
+- `NativeNavigationIdentifier` models source Number coercion for identifier text only. Its
+  exact-source five-test proof passes, with 49 Number/backend oracle cases; binary64 never
+  carries money. Valid numeric aliases now reach native matched screens/Portfolio typed load.
+  A 32-test scoped routing proof passes at `/workspace/scratch/native-valid-alias-check`.
+  Invalid import review context, source retry/cache identity and error/query policy remain
+  explicit gates. Default renderer branches are unchanged; native authority is still disabled.
+- [[docs/adr/207-vision-native-helper-document|Proposed ADR-207]] records an isolated default-off
+  Debug Demo helper document, with unchanged TypeScript financial modules and no React UI/router.
+  No such SDK configuration is active. Locale/readiness, startup/native commands, cold CSV/new
+  transaction, vibrancy and fail-closed artifact serving must be implemented and tested first.
+
+Continue from these bounded chunks rather than re-running immutable proofs in place. The next
+parallel work prepares helper bootstrap/asset serving and resolves remaining import-route policy;
+actual Mac diagnostics take priority whenever they become available.
 
 ## Phase-4 dependency recheck (2026-10-15)
 

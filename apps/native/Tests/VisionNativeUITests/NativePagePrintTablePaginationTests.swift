@@ -206,22 +206,7 @@
             return own + view.subviews.flatMap { find(id, in: $0) }
         }
         private func render(_ pages: NativePagePrintPagesView) throws -> [PDFDocument] {
-            _ = NSApplication.shared
-            let canvas = PrintTablePDFCanvas(frame: pages.frame)
-            canvas.addSubview(pages)
-            let window = NSWindow(contentRect: pages.frame, styleMask: .borderless, backing: .buffered, defer: false)
-            window.isReleasedWhenClosed = false
-            window.contentView = canvas
-            defer {
-                window.contentView = nil
-                window.close()
-            }
-            pages.layoutSubtreeIfNeeded()
-            return try (1...range(pages).length).map { index in
-                let document = try #require(PDFDocument(data: canvas.dataWithPDF(inside: pages.rectForPage(index))))
-                #expect(document.pageCount == 1)
-                return document
-            }
+            try NativePrintPDFRenderer.render(pages)
         }
     }
 

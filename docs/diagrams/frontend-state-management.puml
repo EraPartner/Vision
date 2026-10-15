@@ -383,8 +383,18 @@ package "Staged phase 4 (SDK takeover disabled)" {
   class NativeNavigationLocation
   class NativeNavigationStartup <<unwired policy>>
   class NativeRawStateStore <<dormant actor>>
+  class NativeRawStateCaptureBridge <<unwired read-only>>
+  class NativeNavigationIdentifier <<identifier coercion>>
+  class "nativeRouteAdapter.ts" as NativeRouteAdapter <<detached proof>>
 }
+NativeRawStateCaptureBridge --> NativeRawStateStore : strict complete typed capture / host admission still required
+note right of NativeRouteAdapter
+  Native preflight lease, then source-router acceptance.
+  Existing leave guard remains sole blocker.
+  No SDK, App or global history wiring.
+end note
 NativeNavigationHistory --> NativeNavigationLocation : exact raw query / decoded route
+NativeNavigationLocation --> NativeNavigationIdentifier : native numeric aliases / consumer ID bounds
 NativeNavigationStartup ..> NativeNavigationHistory : raw seed or document replacement / admission deferred
 note right of NativeNavigationLocation
   Raw location and matched parameters stay separate.

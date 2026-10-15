@@ -61,7 +61,11 @@ public struct PortfolioImportReviewView: View {
     private func load() async {
         if shell.nativeNavigation != nil {
             guard case .native(.portfolioImportReview(let batchId)) = shell.detail else { return }
-            await model.load(rawBatchId: batchId)
+            if let id = shell.nativeNavigationLocation?.match?.supportedBatchId {
+                await model.load(batchId: id)
+            } else {
+                await model.load(rawBatchId: batchId)
+            }
             return
         }
         let parts = shell.route.path.split(separator: "/", omittingEmptySubsequences: false)

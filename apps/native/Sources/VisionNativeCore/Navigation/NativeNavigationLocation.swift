@@ -6,6 +6,14 @@ public struct NativeNavigationLocation: Equatable, Sendable {
     public struct Match: Equatable, Sendable {
         public let screen: NativeScreen?
         public let parameters: [String: String]
+
+        /// The supported preview identifier used by native import consumers. The
+        /// original matched parameter remains available for the staged error context.
+        public var supportedBatchId: Int? {
+            parameters["batchId"].flatMap {
+                NativeNavigationIdentifier($0).positiveInteger(upTo: 9_007_199_254_740_991)
+            }
+        }
     }
     public static let home = NativeNavigationLocation("/")!
     public let raw: String
@@ -27,7 +35,8 @@ public struct NativeNavigationLocation: Equatable, Sendable {
 
     /// Native-only `matchRoutes` input. Parameters belong to the match, never to a
     /// rewritten pathname: a decoded slash, question mark or hash remains data.
-    /// Numeric consumers retain their current identifier policy in this staged adapter.
+    /// Supported numeric aliases use Number coercion; invalid review query/error
+    /// context remains a separate gate in this staged adapter.
     public var match: Match? {
         let original = path.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
         let decoded = original.map { $0.removingPercentEncoding?.replacingOccurrences(of: "/", with: "%2F") }
@@ -43,7 +52,8 @@ public struct NativeNavigationLocation: Equatable, Sendable {
         func parameter(_ index: Int) -> String { parts[index].replacingOccurrences(of: "%2F", with: "/") }
         if parts.count == 3, normalized[1] == "accounts", !parts[2].isEmpty {
             let value = parameter(2)
-            return Match(screen: .accountDetail(id: TransactionFilters.parseId(value) ?? 0), parameters: ["id": value])
+            let id = NativeNavigationIdentifier(value).positiveInteger(upTo: Int(Int32.max)) ?? 0
+            return Match(screen: .accountDetail(id: id), parameters: ["id": value])
         }
         if parts.count == 4, normalized[1] == "admin", normalized[2] == "db", !parts[3].isEmpty {
             let value = parameter(3)
@@ -52,7 +62,8 @@ public struct NativeNavigationLocation: Equatable, Sendable {
         if parts.count == 4, normalized[1] == "import", normalized[3] == "review", !parts[2].isEmpty {
             let value = parameter(2)
             let screen = ImportRoutes.reviewIsNative
-                ? ImportRoutes.reviewBatchId(forPath: "/import/\(value)/review").map { NativeScreen.importReview(batchId: $0) }
+                ? NativeNavigationIdentifier(value).positiveInteger(upTo: 9_007_199_254_740_991)
+                    .map { NativeScreen.importReview(batchId: $0) }
                 : nil
             return Match(screen: screen, parameters: ["batchId": value])
         }
