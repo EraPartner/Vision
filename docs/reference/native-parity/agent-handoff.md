@@ -24,8 +24,10 @@ do not ask the owner to perform those steps as an intermission.
 Phase **3o**, Settings and shared shell behaviour, has a hash-matched Foundation proof
 of 1,173 tests. Phase **3p**, remaining shell overlays and report parity, is in progress;
 its first full mounted integration checkpoint is **`fcd7ee95`**, pushed and verified.
-The latest combined continuation checkpoint is **`1ba95571`**, pushed and remote-verified;
-its [macOS run](https://github.com/EraPartner/Vision/actions/runs/38697290750) is pending.
+The combined continuation checkpoint is **`1ba95571`**, pushed and remote-verified;
+its [macOS run](https://github.com/EraPartner/Vision/actions/runs/38697290750) built the app
+but stopped at a print-test fixture compiler diagnostic. **`598d8fd3`** adds the final
+navigation/window review fixes; the next follow-up repairs that fixture expression.
 The dated checkpoints below preserve historical evidence; use this continuation's results
 before treating any earlier phase or test count as current.
 This handoff records both implemented and unfinished work; it does not certify that
@@ -132,8 +134,12 @@ this combined work. Its Tax fixture failure precisely required `CategoryList.lin
 its other failures are the notice deadline, watchdog, SettingsAI replay and two-write fixture cases
 addressed in this combined save. Do not describe new UI/SDK source as compiled until its own Mac run completes.
 
-The `1ba95571` macOS app build passed. Its package compilation/test result is still pending.
-Final review also prepared a follow-up: the PDF test window explicitly retains ownership on
+The `1ba95571` macOS app build passed. Package compilation then stopped at
+`NativePrintRenderFixtures.swift:92`: the compiler could not type-check the combined
+Net-worth row expression in reasonable time. No package tests ran. The fixture follow-up
+uses typed scalar/Decimal intermediates and explicit row/pagination loops with unchanged
+synthetic values. `598d8fd3` predates that fix and will encounter the same diagnostic.
+Final review also published a follow-up: the PDF test window explicitly retains ownership on
 close, and staged history preserves deferred Settings-open ownership and matches encoded
 static paths using the installed React Router 8.3 all-or-nothing decoding behavior. Four
 regressions bring navigation coverage to 27 tests; an installed-router oracle passed 16
@@ -141,6 +147,12 @@ encoded/malformed/slash cases. The new Swift regressions still need the follow-u
 Existing dynamic-parameter consumers (including raw Portfolio import identifiers and
 double-encoded slashes) remain an explicit parity gate before native routing activation;
 the follow-up does not change renderer-mode `NativeRoute` consumers.
+
+Additional scoped Linux evidence: all 13 exact Settings AI tests pass using the exact model
+with explicit API/transport/domain excerpts/adapters. Removing only the paused-lane membership
+guard reproduces the duplicate desktop-read failure. The exact watchdog body also completed
+100 executions with event-domain stubs. Preserve `/workspace/scratch/ai-final-review` logs and
+metadata; these checks supplement, and do not replace, the full macOS package gate.
 
 The official Swift 6.2.3 Linux toolchain is now installed at
 `/workspace/.vision-tools/swift623/swift-6.2.3-RELEASE-ubuntu24.04/usr/bin` (official detached

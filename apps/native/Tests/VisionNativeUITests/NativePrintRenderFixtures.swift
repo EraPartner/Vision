@@ -89,12 +89,25 @@ actor PrintNetWorthService: NetWorthService {
     private(set) var calls = 0
     func netWorth(currency: String, limit: Int?, offset: Int?) async throws -> OpenAPI.NetWorthResponse {
         calls += 1
-        let rows = (0..<48).map { index in
-            OpenAPI.NetWorthSnapshot(
-                date: String(format: "2026-%02d-%02d", index < 24 ? 8 : 9, index % 24 + 1),
-                liquid: 100, liabilities: 10, investments: Decimal(900 + index), netWorth: Decimal(990 + index))
+        var rows: [OpenAPI.NetWorthSnapshot] = []
+        for index in 0..<48 {
+            let month: Int = index < 24 ? 8 : 9
+            let day: Int = index % 24 + 1
+            let date: String = String(format: "2026-%02d-%02d", month, day)
+            let investments: Decimal = Decimal(900 + index)
+            let netWorth: Decimal = Decimal(990 + index)
+            let row = OpenAPI.NetWorthSnapshot(
+                date: date, liquid: 100, liabilities: 10, investments: investments, netWorth: netWorth)
+            rows.append(row)
         }
-        let visible = limit.map { Array(rows.reversed().dropFirst(offset ?? 0).prefix($0)) } ?? rows
+        let visible: [OpenAPI.NetWorthSnapshot]
+        if let limit {
+            let reversed: [OpenAPI.NetWorthSnapshot] = Array(rows.reversed())
+            let start: Int = offset ?? 0
+            visible = Array(reversed.dropFirst(start).prefix(limit))
+        } else {
+            visible = rows
+        }
         return .init(
             current: .init(liquid: 100, liabilities: 10, investments: 947, netWorth: 1037, currency: currency),
             monthlyChange: 24, monthlyChangePercent: 2, snapshots: visible,
