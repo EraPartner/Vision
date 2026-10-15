@@ -255,11 +255,12 @@ public struct AdminScreens: Sendable {
     @MainActor
     public static func make(
         service: any AdminService, database: any DatabaseAdminService, token: AdminTokenAccess,
-        audit: any AuditHistoryService
+        audit: any AuditHistoryService, now: @escaping @Sendable () -> Date = { Date() }
     ) -> AdminScreens {
-        let overview = AdminOverviewModel(service: service, token: token, audit: AuditHistoryModel(service: audit))
+        let overview = AdminOverviewModel(
+            service: service, token: token, audit: AuditHistoryModel(service: audit), now: now)
         let providers = ProviderHealthModel(
-            service: service, onProvidersChanged: { [weak overview] in overview?.providers.invalidate() })
+            service: service, now: now, onProvidersChanged: { [weak overview] in overview?.providers.invalidate() })
         let databaseScreens = DatabaseScreens(
             service: database, onStatsChanged: { [weak overview] in overview?.dbStats.invalidate() })
         return AdminScreens(

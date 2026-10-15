@@ -237,7 +237,7 @@ struct HomeModelTests {
     @Test func invalidationDuringAnOlderRequestCannotOverwriteFreshFinancialData() async {
         let service = HomeFixtureService()
         await service.pauseFirstMonthly()
-        let model = HomeModel(service: service)
+        let model = HomeModel(service: service, now: { PlannedFixture.today })
         let old = Task { await model.appear(settings: .defaults, route: .home) }
         await service.waitForPausedMonthly()
         model.invalidate()
@@ -250,7 +250,7 @@ struct HomeModelTests {
     }
     @Test func changingExclusionsDoesNotDisplayTotalsFromThePreviousScopeAfterFailure() async {
         let service = HomeFixtureService()
-        let model = HomeModel(service: service)
+        let model = HomeModel(service: service, now: { PlannedFixture.today })
         await model.appear(settings: .defaults, route: .home)
         await service.chooseExclusions([8])
         await service.failMonthly()
@@ -268,7 +268,7 @@ struct HomeModelTests {
 
     @Test func failedRefreshKeepsLastSuccessfulMoney() async {
         let service = HomeFixtureService()
-        let model = HomeModel(service: service)
+        let model = HomeModel(service: service, now: { PlannedFixture.today })
         await model.appear(settings: .defaults, route: .home)
         #expect(model.monthly?.latest?.total_income == Decimal(string: "1000.99"))
         await service.failMonthly()
@@ -282,7 +282,7 @@ struct HomeModelTests {
     @Test func exclusionsFailureDoesNotExposeUnfilteredFinancialTotals() async {
         let service = HomeFixtureService()
         await service.failExclusions()
-        let model = HomeModel(service: service)
+        let model = HomeModel(service: service, now: { PlannedFixture.today })
         await model.appear(settings: .defaults, route: .home)
         #expect(model.monthly == nil)
         #expect(model.isFullPageError)
@@ -291,7 +291,7 @@ struct HomeModelTests {
 
     @Test func failedWidgetSaveRollsBackAndPreservesBaseline() async {
         let service = HomeFixtureService()
-        let model = HomeModel(service: service)
+        let model = HomeModel(service: service, now: { PlannedFixture.today })
         await model.appear(settings: .defaults, route: .home)
         #expect(model.isVisible("hero"))
         await service.failWidgetSave()
@@ -304,7 +304,7 @@ struct HomeModelTests {
 
     @Test func successfulWidgetSaveUsesCompareAndSwapAndRetainsOtherPages() async {
         let service = HomeFixtureService()
-        let model = HomeModel(service: service)
+        let model = HomeModel(service: service, now: { PlannedFixture.today })
         await model.appear(settings: .defaults, route: .home)
         await model.setWidget("hero", visible: false)
         #expect(!model.isVisible("hero"))
@@ -319,7 +319,7 @@ struct HomeModelTests {
 
     @Test func repeatedAppearanceReusesFreshQueries() async {
         let service = HomeFixtureService()
-        let model = HomeModel(service: service)
+        let model = HomeModel(service: service, now: { PlannedFixture.today })
         await model.appear(settings: .defaults, route: .home)
         let calls = await service.monthlyCalls
         await model.appear(settings: .defaults, route: .home)

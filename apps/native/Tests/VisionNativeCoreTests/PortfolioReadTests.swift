@@ -39,7 +39,7 @@ struct PortfolioReadTests {
 
     @Test func archivedPresentationNeverContaminatesActiveTotalsOrUsesCanonicalInactiveMoney() async {
         let transport = PortfolioReadTransport()
-        let model = PortfolioModel(service: portfolioReadClient(transport))
+        let model = PortfolioModel(service: portfolioReadClient(transport), now: { PlannedFixture.today })
         await model.load(currency: "EUR")
         #expect(model.summary?.totals.totalPortfolioValue == 100)
         #expect(model.archiveSummary?.totals.totalPortfolioValue == 150)
@@ -53,7 +53,7 @@ struct PortfolioReadTests {
     @Test func missingArchivePolicyRemainsUnavailableInsteadOfFallingBackToCanonicalInactiveRows() async {
         let transport = PortfolioReadTransport()
         await transport.omitArchivePresentation()
-        let model = PortfolioModel(service: portfolioReadClient(transport))
+        let model = PortfolioModel(service: portfolioReadClient(transport), now: { PlannedFixture.today })
         await model.load(currency: "EUR")
         #expect(model.archived.isEmpty)
         #expect(model.archiveSummary == nil)
@@ -63,7 +63,7 @@ struct PortfolioReadTests {
 
     @Test func changedCurrencyFailureCannotLabelOldAmountsWithTheNewCurrency() async {
         let transport = PortfolioReadTransport()
-        let model = PortfolioModel(service: portfolioReadClient(transport))
+        let model = PortfolioModel(service: portfolioReadClient(transport), now: { PlannedFixture.today })
         await model.load(currency: "EUR")
         await transport.returnWrongCurrency()
         await model.load(currency: "USD")
@@ -76,7 +76,7 @@ struct PortfolioReadTests {
 
     @Test func delayedOldCurrencyResponseCannotReplaceNewerScope() async {
         let transport = PortfolioReadTransport()
-        let model = PortfolioModel(service: portfolioReadClient(transport))
+        let model = PortfolioModel(service: portfolioReadClient(transport), now: { PlannedFixture.today })
         await transport.pauseNext("summary")
         let old = Task { await model.load(currency: "EUR") }
         await transport.waitForPause()
@@ -91,7 +91,7 @@ struct PortfolioReadTests {
 
     @Test func urlPeriodAndFxStateReuseTheRightPerformanceCacheWithoutRefetchingHoldings() async throws {
         let transport = PortfolioReadTransport()
-        let model = PortfolioModel(service: portfolioReadClient(transport))
+        let model = PortfolioModel(service: portfolioReadClient(transport), now: { PlannedFixture.today })
         let initialRoute = try #require(NativeRoute("/portfolio?period=all&fx_neutral=true"))
         await model.load(currency: "EUR", route: initialRoute)
         #expect(model.showFxNeutral)
@@ -133,7 +133,7 @@ struct PortfolioReadTests {
     @Test func yahooQuotesUseOnlyEligibleConfiguredProviderIdentities() async {
         let transport = PortfolioReadTransport()
         await transport.addProviderIdentityCases()
-        let model = PortfolioModel(service: portfolioReadClient(transport))
+        let model = PortfolioModel(service: portfolioReadClient(transport), now: { PlannedFixture.today })
         await model.load(currency: "EUR")
         #expect(model.quoteSymbols == ["EMPTY-ID-SYMBOL", "REAL.YAHOO"])
         let quotes = await transport.requests.filter { $0.url.path == "/api/market/quote" }
@@ -144,7 +144,7 @@ struct PortfolioReadTests {
 
     @Test func periodChangesDoNotDuplicateAnInFlightProviderRequestInTheSameSymbolScope() async {
         let transport = PortfolioReadTransport()
-        let model = PortfolioModel(service: portfolioReadClient(transport))
+        let model = PortfolioModel(service: portfolioReadClient(transport), now: { PlannedFixture.today })
         await model.load(currency: "EUR")
         await transport.pauseNext("quotes")
         let quote = Task { await model.refreshQuotes(force: true) }
@@ -160,7 +160,7 @@ struct PortfolioReadTests {
 
     @Test func completeHistoryUses1000RowPagesAndMakesMutationsAvailableOnlyAfterAllPages() async throws {
         let transport = PortfolioReadTransport(transactionCount: 2001)
-        let model = PortfolioModel(service: portfolioReadClient(transport))
+        let model = PortfolioModel(service: portfolioReadClient(transport), now: { PlannedFixture.today })
         #expect(await model.loadHistory(investmentId: 7))
         #expect(model.historyComplete)
         #expect(model.transactions.count == 2001)
@@ -174,7 +174,7 @@ struct PortfolioReadTests {
         for mode in ["empty", "duplicate", "wrong-investment", "changed-total"] {
             let transport = PortfolioReadTransport(transactionCount: 1001)
             await transport.setHistoryMode(mode)
-            let model = PortfolioModel(service: portfolioReadClient(transport))
+            let model = PortfolioModel(service: portfolioReadClient(transport), now: { PlannedFixture.today })
             #expect(!(await model.loadHistory(investmentId: 7)))
             #expect(!model.historyComplete)
             #expect(model.transactions.isEmpty)
@@ -198,7 +198,7 @@ struct PortfolioReadTests {
     @Test func hiddenWidgetsAndOfflineStateDoNotConsumeNewsOrQuoteProviders() async {
         let transport = PortfolioReadTransport()
         await transport.hideRemoteWidgets()
-        let model = PortfolioModel(service: portfolioReadClient(transport))
+        let model = PortfolioModel(service: portfolioReadClient(transport), now: { PlannedFixture.today })
         await model.load(currency: "EUR")
         #expect(
             await transport.requests.allSatisfy {
@@ -260,7 +260,7 @@ struct PortfolioReadTests {
 
     @Test func priceRefreshProvenanceDoesNotRepriceLocallyAndReloadsAfterUnknownAcknowledgement() async {
         let transport = PortfolioReadTransport()
-        let model = PortfolioModel(service: portfolioReadClient(transport))
+        let model = PortfolioModel(service: portfolioReadClient(transport), now: { PlannedFixture.today })
         await model.load(currency: "EUR")
         var receipts: [PortfolioPriceRefreshReceipt] = []
         var valueAtReceipt: Decimal?
@@ -282,7 +282,7 @@ struct PortfolioReadTests {
 
     @Test func identicalPriceRefreshCompletionsEachPublishANoticeAndOfflineAttemptsDoNot() async {
         let transport = PortfolioReadTransport()
-        let model = PortfolioModel(service: portfolioReadClient(transport))
+        let model = PortfolioModel(service: portfolioReadClient(transport), now: { PlannedFixture.today })
         var receipts: [PortfolioPriceRefreshReceipt] = []
         model.didPriceRefresh = { receipts.append($0) }
         #expect(model.usesExternalPriceNotices)
@@ -303,7 +303,7 @@ struct PortfolioReadTests {
 
     @Test func failedSameCurrencyRefreshExposesErrorWithRetainedServerFiguresAndClearsOnRetry() async {
         let transport = PortfolioReadTransport()
-        let model = PortfolioModel(service: portfolioReadClient(transport))
+        let model = PortfolioModel(service: portfolioReadClient(transport), now: { PlannedFixture.today })
         await model.load(currency: "EUR")
         #expect(model.error == nil)
         await transport.failSummaryReads(true)
@@ -359,7 +359,7 @@ struct PortfolioReadTests {
 
     @Test func failedRawInvestmentRefreshExposesMainErrorDespiteSuccessfulSummaryAndClearsOnRetry() async {
         let transport = PortfolioReadTransport()
-        let model = PortfolioModel(service: portfolioReadClient(transport))
+        let model = PortfolioModel(service: portfolioReadClient(transport), now: { PlannedFixture.today })
         await model.load(currency: "EUR")
         #expect(model.investment(id: 1)?.name == "Synthetic holding 1")
         await transport.failInvestmentReads(true)

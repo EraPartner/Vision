@@ -204,7 +204,8 @@ enum AdminFixture {
         service: FakeAdminService = FakeAdminService(), database: FakeDatabaseService = FakeDatabaseService()
     ) -> AdminScreens {
         AdminScreens.make(
-            service: service, database: database, token: FakeTokenStorage().access, audit: FakeAuditHistory())
+            service: service, database: database, token: FakeTokenStorage().access, audit: FakeAuditHistory(),
+            now: { PlannedFixture.today })
     }
 
     static let auth = APIError.client(APIClientError(status: 401, code: .unauthorized, message: "Admin token required"))

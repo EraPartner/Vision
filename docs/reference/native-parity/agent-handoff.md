@@ -91,6 +91,14 @@ and UI test targets in separate processes in both macOS workflows. No tests are 
 second invocation uses `--skip-build --filter VisionNativeUITests`; the first skips only that
 target. Full package results are pending, not inferred from elapsed time or the earlier proof.
 
+The combined `fa1f2bf3` package result is now available: **1,631 tests / 226 suites / 13 issues**
+(down from 50). Notice expiry, midnight-sensitive strip and Statistics failures are gone.
+Remaining failures exposed further real-time cache tests (Home/Admin/Portfolio), three Investigation
+poll assertions, the MainActor watchdog test and the Tax print fixture's hidden-category reads.
+The next save supplies the two empty category responses and shared fixture cache clocks; normal
+production clocks and TTLs remain unchanged. `2ffce6fe` is pushed and verified, with its isolated
+Core/UI macOS run in progress. Read its actual results before counting any remaining issue fixed.
+
 Next: inspect the automatic macOS run for this continuation, repair remaining actual
 failures (including stream-watchdog and Investigation polling tests if reproduced), then
 complete the phase-3p lifecycle/printing validation below. Earlier isolated proof directories

@@ -11,12 +11,12 @@ public final class PortfolioScreens {
     public let netWorth: NetWorthModel
     public let tax: PortfolioTaxModel
 
-    public init(client: APIClient) {
-        model = PortfolioModel(service: client)
+    public init(client: APIClient, now: @escaping @Sendable () -> Date = { Date() }) {
+        model = PortfolioModel(service: client, now: now)
         editing = PortfolioEditingModel(service: client)
-        rebalance = RebalanceModel(service: client)
-        netWorth = NetWorthModel(service: client)
-        tax = PortfolioTaxModel(service: client)
+        rebalance = RebalanceModel(service: client, now: now)
+        netWorth = NetWorthModel(service: client, now: now)
+        tax = PortfolioTaxModel(service: client, now: now)
         model.pricesDidChange = { [weak self] in
             guard let self else { return }
             netWorth.invalidate()

@@ -3,6 +3,7 @@ title: CI/CD Pipelines
 type: guide
 status: active
 date: 2026-10-13
+updated: 2026-10-15
 tags:
   [
     guide,

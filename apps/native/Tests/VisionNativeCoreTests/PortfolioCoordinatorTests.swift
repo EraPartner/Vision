@@ -8,7 +8,7 @@ struct PortfolioCoordinatorTests {
     @Test func siblingWritesInvalidateTheCachedPortfolioTaxRead() async throws {
         let transport = PortfolioCoordinatorTransport()
         let client = APIClient(baseURL: { URL(string: "http://127.0.0.1:3002") }, transport: transport, maxRetries: 0)
-        let portfolio = PortfolioScreens(client: client)
+        let portfolio = PortfolioScreens(client: client, now: { PlannedFixture.today })
         await portfolio.tax.load(year: 2025, liveYear: 2026, currency: "EUR")
         #expect(portfolio.tax.dashboard?.totals.totalTaxes == 1)
         await portfolio.tax.load(year: 2025, liveYear: 2026, currency: "EUR")
@@ -23,7 +23,7 @@ struct PortfolioCoordinatorTests {
     @Test func taxOverviewInvalidationRejectsAnOlderPortfolioTaxResponse() async throws {
         let transport = PortfolioCoordinatorTransport()
         let client = APIClient(baseURL: { URL(string: "http://127.0.0.1:3002") }, transport: transport, maxRetries: 0)
-        let portfolio = PortfolioScreens(client: client)
+        let portfolio = PortfolioScreens(client: client, now: { PlannedFixture.today })
         let tax = TaxScreens(client: client)
         var invalidations = 0
         tax.didInvalidate = { [weak portfolio] in
@@ -48,7 +48,7 @@ struct PortfolioCoordinatorTests {
     @Test func siblingInvalidationKeepsAnActiveAdjustmentFormAndItsOriginalCAS() async throws {
         let transport = PortfolioCoordinatorTransport()
         let client = APIClient(baseURL: { URL(string: "http://127.0.0.1:3002") }, transport: transport, maxRetries: 0)
-        let portfolio = PortfolioScreens(client: client)
+        let portfolio = PortfolioScreens(client: client, now: { PlannedFixture.today })
         await portfolio.tax.load(year: 2025, liveYear: 2026, currency: "EUR")
         let original = try #require(portfolio.tax.dashboard?.records.first?.expected)
         #expect(portfolio.tax.beginAdjustments(numberFormat: .eu))
