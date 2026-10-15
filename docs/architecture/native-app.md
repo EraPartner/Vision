@@ -1026,14 +1026,15 @@ Decimal precision, escaped fields, and spreadsheet-formula protection. Deduction
 use server-returned partner shares, include the incomplete-year confirmation, and persist the
 structural household patch with CAS. Dismissals retain the existing `dismissed_deduction_candidates_v1` localStorage behavior through the shell bridge.
 
-The Tax PDF menu sets `export=pdf` on `/tax`, preserving `year` and other query values, and opens
-the shared React report dialog. Closing removes only `export` and restores the native Tax view.
-The report dialog and browser-print surface remain web. This is a native screen implementation,
-not a phase exit: the full macOS build and the owner's synthetic Demo visual/keyboard review
-remain pending. The action mapping is [[docs/reference/native-parity/tax|Tax parity]].
+The Tax PDF menu sets `export=pdf` on `/tax`, preserving `year` and other query values. Phase 3p
+mounts the shared native report sheet; closing removes only `export` and retains the native Tax
+view. File Print/Cmd-P captures the loaded page through `NativeTaxPrintSnapshot`, independently of
+PDF export. These implementations do not establish rendered print, visual or keyboard parity;
+see [[docs/reference/native-parity/tax|Tax parity]] and the phase-3p validation notes below.
 
 The cloud checks cover portable models, API adapters, generated outputs, and the web handoff.
-The full macOS app/package build and the owner's Demo visual pass have not run in this workspace.
+Those phase-3h checks did not include a full macOS app/package run or the owner's Demo visual pass;
+subsequent automated build evidence is recorded in [[docs/reference/native-parity/agent-handoff|the handoff]].
 See [[docs/reference/native-parity/home-and-statistics|the action mapping]] and
 [[docs/features/statistics|Statistics]] for the remaining review surface.
 
@@ -1086,11 +1087,11 @@ data revision, including when navigation happens during the request. A lost ackn
 still triggers authoritative reads and retains the request error; cached values cannot imply
 that the mutation succeeded.
 
-The shared PDF dialog remains in React on overview and asset routes. `export=pdf` preserves all
-other parameters, and closing removes only that key with replace. The legacy performance redirect
-remains owned by the web router, which reports the resulting native Portfolio route. Browser print,
-full macOS compilation and the owner's synthetic Demo visual/keyboard review remain open gates;
-see [[docs/reference/native-parity/portfolio-holdings|Portfolio parity]] and
+Phase 3p mounts the shared native PDF sheet on overview and asset routes. `export=pdf` preserves
+all other parameters, and closing removes only that key with replace. The legacy performance redirect
+remains owned by the web router, which reports the resulting native Portfolio route. Net worth has
+its own loaded-page native print snapshot. Rendered print and synthetic Demo visual/keyboard review
+remain open gates; see [[docs/reference/native-parity/portfolio-holdings|Portfolio parity]] and
 [[docs/reference/native-parity/portfolio-wealth-tools|Wealth tools parity]]. Portfolio import and
 Portfolio Tax were still web surfaces at phase 3i; the following phase ports them.
 
@@ -1553,7 +1554,8 @@ and `NativeTaxPrintDocument` reuse section views without query lifecycle hooks o
 Printer-only tables render all columns without horizontal scroll clipping. The SDK checks the route,
 generation, restore state and overlays again before paginated `NSPrintOperation` presentation. This
 implementation does not claim verified printer pagination or rendered macOS parity; those checks remain
-pending. Statistics and Net worth print preparation is tracked separately until their own proof passes.
+pending. Statistics and Net worth have their own immutable snapshots, inert documents and focused tests;
+platform verification of those current-page layouts remains pending.
 
 The immutable combined Foundation proof passed **1,271 tests in 161 suites** for the mounted phase-3p
 Core graph (239 production and 86 test files); it excludes subsequent current-page print additions.

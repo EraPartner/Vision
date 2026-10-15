@@ -44,7 +44,11 @@ stage and keeps a stable branch-protection name. A skipped path-filtered job is 
 an absent or failed required result is not treated as green.
 
 Swift continuation branches also run `.github/workflows/native-branch.yml` on pushes to
-`codex/native-phase-*`. It builds the unsigned Debug app and runs the Swift package tests on
+`codex/native-phase-*`. The branch and main CI jobs run Core tests and AppKit/SwiftUI layout tests
+in separate processes: the first excludes `VisionNativeUITests`, and the second selects that target
+with `--skip-build`. Both must pass, and the interop artifact check still runs afterward. This keeps
+synchronous AppKit layouts from blocking Core watchdog/polling tests on MainActor. The branch job
+builds the unsigned Debug app and runs the Swift package tests on
 `macos-26`, with the same pinned XcodeGen digest as the main CI job. Frequent safety saves do
 not cancel a running verification before its package tests finish; GitHub retains the newest
 pending snapshot. This branch workflow supplies development evidence and does not publish,

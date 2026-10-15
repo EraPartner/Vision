@@ -3,7 +3,7 @@ title: "Native parity inventory: Net worth, brokerage import and portfolio tax"
 type: reference
 status: active
 date: 2026-10-13
-updated: 2026-10-13
+updated: 2026-10-15
 tags:
   [
     reference,
@@ -38,7 +38,7 @@ Component: `apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx`. Featu
 
 Native implementation: [[apps/native/Sources/VisionNativeUI/NetWorthView.swift|NetWorthView]] renders the page using [[apps/native/Sources/VisionNativeCore/Screens/Portfolio/NetWorthModel.swift|NetWorthModel]], [[apps/native/Sources/VisionNativeCore/Screens/Portfolio/NetWorthData.swift|NetWorthData]] and [[apps/native/Sources/VisionNativeCore/Screens/Portfolio/NetWorthService.swift|NetWorthService]]. Current totals and history still come from the existing TypeScript backend. Native amounts decode as `Decimal`; chart coordinates alone convert to floating point. The full chart history and the newest-first paginated table remain separate reads, with date deduplication and response guards.
 
-The native mapping is: page rows **1–4 and 15** in `NetWorthView` (`refreshButton`, `accounts`, `chart`, `table`) with request state in `NetWorthModel`; chart rows **5–9** in [[apps/native/Sources/VisionNativeUI/InsightCharts.swift|InsightTimelineChart]]; table rows **10–14** in [[apps/native/Sources/VisionNativeUI/Components/LocalDataTable.swift|LocalDataTable]]; every Column filter row in [[apps/native/Sources/VisionNativeUI/Components/ColumnFilterPopover.swift|ColumnFilterPopover]]. Source columns below retain the web baseline references. Browser print (**row 16**) remains on the retained web page. Native print, the macOS package build and the synthetic Vision Demo visual/keyboard pass are pending; the `native` statuses record implemented controls, not completed phase-exit verification.
+The native mapping is: page rows **1–4 and 15** in `NetWorthView` (`refreshButton`, `accounts`, `chart`, `table`) with request state in `NetWorthModel`; chart rows **5–9** in [[apps/native/Sources/VisionNativeUI/InsightCharts.swift|InsightTimelineChart]]; table rows **10–14** in [[apps/native/Sources/VisionNativeUI/Components/LocalDataTable.swift|LocalDataTable]]; every Column filter row in [[apps/native/Sources/VisionNativeUI/Components/ColumnFilterPopover.swift|ColumnFilterPopover]]. Source columns below retain the web baseline references. File Print/Cmd-P (**row 16**) uses the loaded-page native snapshot in phase 3p. Rendered print, the full macOS package gate and the synthetic Vision Demo visual/keyboard pass remain pending; the `native` statuses record implemented controls, not completed phase-exit verification.
 
 **Regions shown:**
 
@@ -74,7 +74,15 @@ The native mapping is: page rows **1–4 and 15** in `NetWorthView` (`refreshBut
 | 13  | Daily breakdown            | Active filter chip clear, aria `aria.clearNamedFilter`; `table.clearAll` "Clear all"                                                                                                 | click   | Removes one column filter / all filters and search                                                                                                          | `apps/frontend/src/components/shared/VirtualDataTable.tsx:1385`, `apps/frontend/src/components/shared/VirtualDataTable.tsx:1348`          | native |
 | 14  | Daily breakdown            | Column edge separator                                                                                                                                                                | drag    | Resizes the column                                                                                                                                          | `apps/frontend/src/components/shared/VirtualDataTable.tsx:1554`                                                                           | native |
 | 15  | Daily breakdown            | Scroll near the end                                                                                                                                                                  | scroll  | Infinite scroll loads the next page (`GET /api/info/net-worth?currency&limit&offset`), de-duplicated by date                                                | `apps/frontend/src/components/shared/VirtualDataTable.tsx:1080`, `apps/frontend/src/pages/portfolio/net-worth/useNetWorthTableData.ts:61` | native |
-| 16  | Page                       | Browser print (Cmd/Ctrl+P)                                                                                                                                                           | key     | Prints the route-scoped report layout; the period selector is hidden                                                                                        | `apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx:342`                                                                        | web    |
+| 16  | Page                       | Browser print (Cmd/Ctrl+P)                                                                                                                                                           | key     | Prints the route-scoped report layout; the period selector is hidden                                                                                        | `apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx:342`                                                                        | native |
+
+**Phase 3p current-page print.** File Print/Cmd-P captures `NativeNetWorthPrintSnapshot` from the
+active loaded route, keeping period/currency, account allocations, loaded table state, chart
+selections and existing partial/error states. `NativeNetWorthPrintDocument` consumes the immutable
+presentation; printing does not read services or recompute financial values. The native row records
+implementation; actual printer pagination and rendered/keyboard/accessibility parity remain
+unverified. See [[docs/features/pdf-report-export|PDF and current-page print]] and
+[[docs/architecture/native-app|native architecture]].
 
 #### Popover: Column filter (`ColumnFilter`)
 
@@ -422,7 +430,7 @@ No `useHotkeys` or page-level `onKeyDown` handlers exist in the four page direct
 - **Unsaved-work guard.** Both the advanced importer (file selected or parser config dirty) and the session (any statement not staged or completed) register with `UnsavedChangesContext`, which blocks in-app navigation with an alert and guards `beforeunload`. A review navigation after a single-file import bypasses it (`apps/frontend/src/pages/portfolio/PortfolioImportPage.tsx:336`).
 - **Session persistence.** Staged statements and review settings survive reload in tab-scoped `sessionStorage`; file bytes do not, so unstaged statements are lost on reload. Native shares the same two metadata keys through the retained web page, with typed validation and serialized checkpoint writes.
 - **Detection.** Web detection runs on the complete file; native uses the read-only `/api/portfolio/import/probe` endpoint with the same shared TypeScript predicates, including XLSX/XLS parsing and all account identities. Header preview remains bounded and independent of maintained detection.
-- **Electron.** No `window.electronAPI` or `ElectronBridge` calls in scope. The only Electron-specific behaviour is the Go menu accelerator to Net worth. Printing uses the browser print path.
+- **Electron.** No `window.electronAPI` or `ElectronBridge` calls in scope. The only Electron-specific behaviour is the Go menu accelerator to Net worth. The source browser print action now maps to the native loaded-page print snapshot described above.
 - **Toasts.** Import, rollback, parser, price refresh and adjustment outcomes are reported through Sonner toasts; a native screen needs an equivalent transient notification.
 
 ## Gaps and unsure

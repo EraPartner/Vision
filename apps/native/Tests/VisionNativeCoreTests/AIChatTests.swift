@@ -128,7 +128,9 @@ struct AIChatTests {
         #expect(store.details["a"]?.messages.last?.id == "done")
         #expect(await service.requests.count == 2)
     }
-    @Test func rawUnknownFramesResetStallWatchdogAndSilentStreamTimesOut() async throws {
+    // The reader is an actor, not UI state. Keep its short watchdog off the MainActor,
+    // which the concurrent AppKit layout suites can occupy longer than the stall interval.
+    @Test nonisolated func rawUnknownFramesResetStallWatchdogAndSilentStreamTimesOut() async throws {
         let reader = AIChatStreamReader(stallNanoseconds: 200_000_000)
         let value = try await reader.read(onEvent: { _ in }) { receive in
             for _ in 0..<3 {

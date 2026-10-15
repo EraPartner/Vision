@@ -60,5 +60,7 @@ jobs:
           VISION_NATIVE_INTEROP_DIR: ${{ runner.temp }}/native-branch-interop
         run: |
           mkdir -p "$VISION_NATIVE_INTEROP_DIR"
-          swift test --package-path apps/native
+          # Run AppKit layouts separately so they cannot starve Core watchdogs/polling on MainActor.
+          swift test --package-path apps/native --skip VisionNativeUITests
+          swift test --package-path apps/native --skip-build --filter VisionNativeUITests
           test -f "$VISION_NATIVE_INTEROP_DIR/expected.json"

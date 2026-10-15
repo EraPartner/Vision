@@ -85,11 +85,44 @@ the follow-up uses a distinct internal parameter name. The follow-up also synchr
 three printing diagrams and existing visualizer flow for all three current-page print routes;
 five visualizer tests pass, with coverage unchanged at 106 components/79 flows.
 
+The follow-up app build at `fa1f2bf3` passed; its combined package run is still in progress.
+The next checkpoint also moves the standalone stream watchdog test off MainActor and runs Core
+and UI test targets in separate processes in both macOS workflows. No tests are removed: the
+second invocation uses `--skip-build --filter VisionNativeUITests`; the first skips only that
+target. Full package results are pending, not inferred from elapsed time or the earlier proof.
+
 Next: inspect the automatic macOS run for this continuation, repair remaining actual
 failures (including stream-watchdog and Investigation polling tests if reproduced), then
 complete the phase-3p lifecycle/printing validation below. Earlier isolated proof directories
 and the phase-4 audit under `/workspace/vision-*` are absent in this fresh environment;
 the historical results below are prior evidence, not newly reproduced checks.
+
+## Phase-4 dependency recheck (2026-10-15)
+
+The former scratch audit is absent, so these source-confirmed dependencies replace its
+unavailable path as the continuation starting point. They are outstanding work, not a
+claim that web retirement has happened:
+
+- `ShellRootView.swift` keeps `webContent` mounted under native screens. Removing that
+  presentation alone does not remove its routing, storage or helper dependencies.
+- `ShellController.makeShellModel` still delegates `onNavigate` to renderer menu messages.
+  Native route/history ownership must preserve push/replace/back behavior, settings/report
+  query state, legacy `/portfolio/performance` redirects and admin-mode redirects before
+  the retained router can retire. `NativeShellModel.detail` still delegates those last two
+  cases to web presentation.
+- Narrow local/session storage callbacks in `ShellController` require the ready web view.
+  Preserve the existing key allowlists, missing-versus-null/string semantics, backup registry,
+  session lifetime, accepted-write drains and generation ownership when replacing them.
+- Palette answers and report fiscal context use fixed `__visionNativePaletteAnswer`,
+  `__visionNativeTaxReportProfile` and `__visionNativeTaxReportContext` callbacks. Retain
+  the shared TypeScript source calculations and its input contracts; do not recompute them
+  in Swift or replace them with a broad arbitrary-code bridge.
+- `reloadNativeSettingsFrontend`, graph reconstruction and `rendererReady` still use document
+  readiness to sequence startup, successful/failed restore and fresh onboarding authority.
+  Decouple that readiness only with matching lifecycle tests; hiding a web view is insufficient.
+- Keep phase-3p accepted-action drains and immutable print snapshots intact. Prepare the
+  new switch-over ADR and verify the native route/storage/helper replacement before claiming
+  phase 4 complete. Real data migration is outside this continuation.
 
 ## Current continuation work
 
