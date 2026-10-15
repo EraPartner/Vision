@@ -10,7 +10,12 @@ struct NativeShellOverlayHost: View {
             .disabled(shell.isReloadingGraph || shell.nativeSettings?.isSuspendedForRestore == true)
             .interactiveDismissDisabled(preventsInteractiveDismissal)
             .environment(\.nativeNoticeCenter, shell.notices)
-            .background { NativeOverlayFocusBridge(kind: shell.nativeOverlayKind).frame(width: 0, height: 0) }
+            .background {
+                NativeOverlayFocusBridge(
+                    kind: shell.nativeOverlayKind, context: NativeOverlayFocusContext(shell: shell)
+                )
+                .frame(width: 0, height: 0)
+            }
             .overlay(alignment: .bottom) {
                 if needsNoticeHost {
                     NativeNoticeHost(center: shell.notices, strings: shell.strings)
@@ -90,11 +95,13 @@ struct NativeShellOverlayHost: View {
         guard let view = responder as? NSView else { return nil }
         return .init(view: view)
     }
+    func isAvailable(in window: NSWindow) -> Bool {
+        guard let view else { return false }
+        return view.window === window && !view.isHiddenOrHasHiddenAncestor
+            && view.acceptsFirstResponder && (view as? NSControl)?.isEnabled != false
+    }
     func restore(in window: NSWindow) {
-        guard let view, view.window === window, !view.isHiddenOrHasHiddenAncestor,
-            view.acceptsFirstResponder, (view as? NSControl)?.isEnabled != false,
-            window.makeFirstResponder(view)
-        else { return }
+        guard isAvailable(in: window), let view, window.makeFirstResponder(view) else { return }
         guard let selection, let editor = window.firstResponder as? NSTextView,
             Self.capture(editor)?.view === view, let length = editor.textStorage?.length,
             selection.location <= length, selection.length <= length - selection.location
@@ -103,29 +110,38 @@ struct NativeShellOverlayHost: View {
     }
 }
 
-private struct NativeOverlayFocusBridge: NSViewRepresentable {
+struct NativeOverlayFocusBridge: NSViewRepresentable {
     let kind: NativeShellOverlayKind?
-    func makeCoordinator() -> Coordinator { .init(kind: kind) }
+    let context: NativeOverlayFocusContext
+    func makeCoordinator() -> Coordinator { .init(kind: kind, context: context) }
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
         view.setAccessibilityElement(false)
         context.coordinator.attach(view)
         return view
     }
-    func updateNSView(_ view: NSView, context: Context) { context.coordinator.update(kind) }
+    func updateNSView(_ view: NSView, context: Context) {
+        context.coordinator.update(kind, context: self.context)
+    }
     static func dismantleNSView(_ view: NSView, coordinator: Coordinator) { coordinator.stop() }
     @MainActor final class Coordinator {
         private weak var marker: NSView?
         private var kind: NativeShellOverlayKind?
+        private var context: NativeOverlayFocusContext
         private var snapshots: [String: NativeOverlayFocusSnapshot] = [:]
         private var monitor: Any?
         private var restoring: Task<Void, Never>?
-        init(kind: NativeShellOverlayKind?) { self.kind = kind }
+        init(kind: NativeShellOverlayKind?, context: NativeOverlayFocusContext) {
+            self.kind = kind
+            self.context = context
+        }
         func attach(_ view: NSView) {
             marker = view
-            monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .leftMouseDown]) { [weak self] event in
+            monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .leftMouseDown]) {
+                [weak self] event in
                 MainActor.assumeIsolated {
-                    if let self, let window = self.marker?.window, NSApp.keyWindow === window,
+                    if let self, !self.context.isBlocked, let window = self.marker?.window,
+                        NSApp.keyWindow === window,
                         event.window == nil || event.window === window
                     {
                         self.capture(window)
@@ -135,23 +151,33 @@ private struct NativeOverlayFocusBridge: NSViewRepresentable {
             }
         }
         private func capture(_ window: NSWindow) {
-            guard let kind, let snapshot = NativeOverlayFocusSnapshot.capture(window.firstResponder) else { return }
+            guard let kind, let snapshot = NativeOverlayFocusSnapshot.capture(window.firstResponder)
+            else { return }
             snapshots[kind.rawValue] = snapshot
         }
-        func update(_ next: NativeShellOverlayKind?) {
-            guard next != kind else { return }
+        @discardableResult
+        func update(_ next: NativeShellOverlayKind?, context: NativeOverlayFocusContext) -> Task<Void, Never>? {
+            if context != self.context || context.isBlocked {
+                restoring?.cancel()
+                snapshots.removeAll()
+                self.context = context
+                kind = next
+                return nil
+            }
+            guard next != kind else { return nil }
             if let kind, snapshots[kind.rawValue] == nil, let window = marker?.window { capture(window) }
             kind = next
             restoring?.cancel()
-            guard let next, let snapshot = snapshots[next.rawValue] else { return }
+            guard let next, let snapshot = snapshots[next.rawValue] else { return nil }
             restoring = Task { [weak self] in
                 await Task.yield()
-                guard let self, !Task.isCancelled, self.kind == next,
+                guard let self, !Task.isCancelled, self.kind == next, self.context == context,
                     let window = self.marker?.window, NSApp.keyWindow === window
                 else { return }
                 window.contentView?.layoutSubtreeIfNeeded()
                 snapshot.restore(in: window)
             }
+            return restoring
         }
         func stop() {
             restoring?.cancel()

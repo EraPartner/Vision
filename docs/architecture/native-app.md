@@ -1508,6 +1508,9 @@ model identity and generation between each awaited stage. Reconstructed graphs p
 without constructor I/O; seeded detail and Settings/report presentation activate after readiness and
 settings, and a newer renderer route report supersedes that seed. Accepted restore keeps its existing
 mounted wizard/Backup view alive while readiness is false.
+Rebuilt graphs also retain their input/reload gate until checked startup. Acquiring that gate
+resigns a WebKit descendant responder and hides the retained view, preventing direct web input
+from reopening while the fresh native graph is still awaiting its document.
 
 Native-owned restore tracks fresh frontend writes and fresh-database onboarding completion in
 separate sessions. Its delayed reload drains actual callback/transport completion, including a callback
@@ -1544,6 +1547,17 @@ navigation and native shortcuts help. The fixed retained TypeScript answer callb
 calculator and currency parsing; Swift does not recreate those calculations. `NativeShellNotificationsModel`
 owns the global FX state, Home upcoming-payment reminders and backup reminder. Their dismissal state
 uses the app-lifetime local-state queue, which drains accepted writes before restore.
+
+`lib/nativeHelperRuntime.ts` installs and retires the three existing fixed source callbacks and
+overlay keyboard bridge. `NativePaletteAnswerBridge.tsx` still owns its React lifetime, QueryClient
+and live translation reference; extraction does not retire the renderer or change financial logic.
+
+`NativeOverlayFocusReturn.swift` captures a weak route-window opener before the shared sheet
+presents and restores it after final dismissal. Graph, underlying route, window ownership and
+reload/restore checks reject stale returns; field editors retain their owning control and valid
+selection. The sheet-local bridge separately restores covered overlays. Palette Escape is handled
+at the container and its Close control has the cancel shortcut. Synthetic window tests are added;
+their macOS execution, outside-click behavior and VoiceOver remain unverified.
 
 `NativeOnboardingModel` and `NativeOnboardingView` replace the seven-step Welcome, Overview, Categories,
 Bank, Import, Tour and Backup wizard. Draft progress stays in the existing local-storage shape;

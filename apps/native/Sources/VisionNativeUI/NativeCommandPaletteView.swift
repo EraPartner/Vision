@@ -53,12 +53,9 @@ public struct NativeCommandPaletteView: View {
                         model.activate(entry)
                         return .handled
                     }
-                    .onKeyPress(.escape) {
-                        model.close()
-                        return .handled
-                    }
                 Button(shell.strings.t("common.close"), systemImage: "xmark") { model.close() }
                     .labelStyle(.iconOnly).buttonStyle(.plain).foregroundStyle(theme.secondaryLabel)
+                    .keyboardShortcut(.cancelAction)
             }.padding(18)
             Divider().overlay(theme.border)
             ScrollViewReader { proxy in
@@ -91,6 +88,10 @@ public struct NativeCommandPaletteView: View {
             .shadow(color: .black.opacity(0.2), radius: 24, y: 10)
             .accessibilityElement(children: .contain)
             .accessibilityLabel(shell.strings.t("commandPalette.openLabel"))
+            .onKeyPress(.escape) {
+                model.close()
+                return .handled
+            }
             .task {
                 searchFocused = true
                 selectionWasMoved = false

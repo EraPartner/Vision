@@ -7898,13 +7898,13 @@
                 "from": "native.palette",
                 "to": "fe.features",
                 "payload": "fixed callback and exact submitted input",
-                "annotation": "apps/frontend/src/lib/nativePaletteAnswer.ts retains source parsing/calculation; NativeCommandPaletteModel.swift checks selection/visit authority."
+                "annotation": "apps/frontend/src/lib/nativePaletteAnswer.ts retains source parsing/calculation; nativeHelperRuntime.ts installs the unchanged fixed helpers while NativePaletteAnswerBridge.tsx still owns their React lifetime. NativeCommandPaletteModel.swift checks selection/visit authority."
               },
               {
                 "from": "fe.features",
                 "to": "native.palette",
                 "payload": "answer or original failure",
-                "annotation": "apps/native/Sources/VisionNativeUI/NativeCommandPaletteView.swift renders the captured answer; NativeShortcutsHelpView.swift owns native help."
+                "annotation": "apps/native/Sources/VisionNativeUI/NativeCommandPaletteView.swift renders the captured answer and handles container Escape/cancel Close; NativeShortcutsHelpView.swift owns native help. NativeOverlayFocusReturn.swift restores the route-window opener after final sheet dismissal only while graph/route/window authority remains current."
               }
             ],
             "docs": [
@@ -7962,7 +7962,7 @@
                 "from": "native.onboarding",
                 "to": "native.datasession",
                 "payload": "restore drain then fresh graph",
-                "annotation": "apps/native/VisionNative/ShellController.swift drains fresh restored frontend callbacks and onboarding HTTP completion before native-owned delayed reload. NativeRendererReadiness.swift refuses outgoing ready until actual commit; captured document/model/generation fence startup. Failed restore resumes admitted state; legacy web restore owns navigation."
+                "annotation": "apps/native/VisionNative/ShellController.swift drains fresh restored frontend callbacks and onboarding HTTP completion before native-owned delayed reload. NativeRendererReadiness.swift refuses outgoing ready until actual commit; captured document/model/generation fence startup. Fresh graphs keep input gated and WebKit hidden until checked ready. Failed restore resumes admitted state; legacy web restore owns navigation."
               }
             ],
             "docs": [

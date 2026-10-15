@@ -636,11 +636,14 @@ Only the active overlay receives pointer/keyboard interaction, accessibility exp
 announcements. Priority is palette, shortcuts, Settings, reports, then onboarding. Its AppKit
 responder bridge records weak per-overlay controls, including the owning field control and text
 selection instead of the shared field editor. When a covered overlay becomes active again, it
-restores an attached, visible and enabled responder and valid selection. This does not establish
-focus return to the underlying route after the final sheet dismissal.
+restores an attached, visible and enabled responder and valid selection.
+`NativeOverlayFocusReturn.swift` separately captures the route-window opener and returns focus
+after final sheet dismissal, with graph, underlying-route, window and reload/restore fences.
+Detached/reparented controls, a newer overlay or another key window reject the return.
 
 `NativeCommandPaletteView.swift` requests initial search focus and implements Arrow Up/Down,
-Home/End, modifier navigation, Return activation and Escape. `NativeShortcutsHelpView.swift` has a
+Home/End, modifier navigation, Return activation and container-level Escape; Close also has the
+cancel shortcut. `NativeShortcutsHelpView.swift` has a
 cancel-action Close control. `NativeOnboardingView.swift` has default-action Next/Finish,
 cancel-action Close and explicit Escape completion; a step change requests accessibility focus
 on its heading. Close, Escape and Skip setup all complete onboarding through the writer; failed
@@ -649,7 +652,7 @@ submission and graph reload/restore suspension.
 
 These mappings describe implemented controls. The source action tables retain React behavior as
 the comparison baseline; they do not certify macOS sheet outside-click behavior, full keyboard
-routing, route-opener focus restoration, rendered English/Dutch layouts or VoiceOver operation.
+routing, actual route-opener focus restoration, rendered English/Dutch layouts or VoiceOver operation.
 The macOS package and synthetic Demo gates remain open. See [[docs/architecture/native-app#Shell overlays and reports (phase 3p)|native architecture]],
 [[docs/features/onboarding|setup flow]] and [[docs/diagrams/index|structural diagrams]].
 

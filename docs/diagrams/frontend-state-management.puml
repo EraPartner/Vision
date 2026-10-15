@@ -371,6 +371,12 @@ NativeSettingsHost --> NativePagePrintSnapshots : active route / immutable visib
 
 class NativeRendererReadiness
 NativeSettingsHost --> NativeRendererReadiness : actual document commit / checked ready token
+class NativeOverlayFocusReturn
+NativeSettingsHost --> NativeOverlayFocusReturn : route-window opener / final sheet dismissal
+note right of NativeOverlayFocusReturn
+  Weak control/field-editor owner and selection.
+  Reject stale graph, route, window or restore/reload state.
+end note
 
 package "Staged phase 4 (SDK takeover disabled)" {
   class NativeNavigationHistory <<opt-in>>

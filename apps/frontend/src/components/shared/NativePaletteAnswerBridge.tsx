@@ -1,10 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { registerNativePaletteAnswerBridge } from "@/lib/nativePaletteAnswer";
-import { startNativeOverlayKeyboardBridge } from "@/lib/nativeShell";
+import { startNativeHelperRuntime } from "@/lib/nativeHelperRuntime";
 import logger from "@/lib/logger";
-import { registerNativeTaxReportProfileBridge } from "@/lib/nativeTaxReportProfile";
-import { registerNativeTaxReportContextBridge } from "@/lib/nativeTaxReportContext";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 
 export function NativePaletteAnswerBridge() {
@@ -13,18 +10,11 @@ export function NativePaletteAnswerBridge() {
     const translate = useRef(t);
     translate.current = t;
     useEffect(() => {
-        const stopAnswers = registerNativePaletteAnswerBridge(queryClient);
-        const stopTaxProfile = registerNativeTaxReportProfileBridge();
-        const stopTaxContext = registerNativeTaxReportContextBridge((key) => translate.current(key));
-        const stopKeyboard = startNativeOverlayKeyboardBridge(undefined, (error) =>
-            logger.warn("Native overlay request failed", error),
-        );
-        return () => {
-            stopAnswers();
-            stopTaxProfile();
-            stopTaxContext();
-            stopKeyboard();
-        };
+        return startNativeHelperRuntime({
+            queryClient,
+            translate: (key) => translate.current(key),
+            reportOverlayFailure: (error) => logger.warn("Native overlay request failed", error),
+        });
     }, [queryClient]);
     return null;
 }

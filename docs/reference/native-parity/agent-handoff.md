@@ -27,7 +27,8 @@ its first full mounted integration checkpoint is **`fcd7ee95`**, pushed and veri
 The combined continuation checkpoint is **`1ba95571`**, pushed and remote-verified;
 its [macOS run](https://github.com/EraPartner/Vision/actions/runs/38697290750) built the app
 but stopped at a print-test fixture compiler diagnostic. **`598d8fd3`** adds the final
-navigation/window review fixes; the next follow-up repairs that fixture expression.
+navigation/window review fixes; **`a10c3deb`** repairs that fixture expression. Its
+[macOS run](https://github.com/EraPartner/Vision/actions/runs/38698658068) is in progress.
 The dated checkpoints below preserve historical evidence; use this continuation's results
 before treating any earlier phase or test count as current.
 This handoff records both implemented and unfinished work; it does not certify that
@@ -162,6 +163,53 @@ four exact production files (`NativeRawStateStore`, `NativeRendererReadiness`,
 `/workspace/vision-phase4-foundation-check/{verification.log,verification.json,SHA-manifest.json}`;
 manifest SHA `8a5e5917da460da79fef710576c3f88bb951e71123f251161fcfc924d1cf2cce`.
 It does not certify routing/ShellController/AppKit or host storage migration.
+
+### Collected focus/input/helper follow-up (2026-10-15)
+
+This combined follow-up adds final route-opener focus restoration and synthetic AppKit window
+tests, preserving covered-overlay focus and field-editor owner/selection. Palette Escape now
+lives on its container and Close has the cancel shortcut. A route-window marker captures before
+presentation; final `onDismiss` restoration rejects a changed graph/underlying route, detached
+or reparented control, another key window, newer overlay, attached sheet or reload/restore fence.
+Eight new test functions provide 15 synthetic cases; actual AppKit execution remains pending.
+
+Final lifecycle review confirmed fresh graphs reset the prior reload input gate. The follow-up
+holds `isReloadingGraph` across reconstruction, hides WebKit and resigns its descendant responder,
+then releases only at checked current-document/model/generation startup. Initial launch remains
+ungated; fresh restore completion still drains before rebuilding. Source parse/review passed;
+host runtime behavior is not inferred from the earlier app builds.
+
+`apps/frontend/src/lib/nativeHelperRuntime.ts` extracts installation/retirement of the same
+three fixed source helpers and keyboard bridge. The existing React component still owns runtime,
+QueryClient and live locale lifetime. All original calculation/registration modules are unchanged.
+**48 tests / five files**, targeted ESLint and root typecheck pass; logs are
+`/workspace/native-helper-{tests,eslint,typecheck}.log`. No SDK activation or provider calls.
+
+The focused navigation proof passes **18 tests / one suite**, with three full exact production
+files, the full exact permanent test file and nine documented actual route-declaration extracts.
+All three focused mutation variants compiled and were caught by regression assertions.
+`/tmp/vision-navigation-proof-598d8fd3/{manifest.json,test.log,verification.json}`; manifest SHA
+`92cbb7971de7e43e6880b5d6976cf533babf6dd1b0f1009c40e40c9a79f931ec`.
+Zero drift against `a10c3deb`; excludes nine shell integration tests, SDK and UI/macOS.
+Do not count these scoped proofs as the full package gate.
+Combined verification also passes six Swift syntax checks, three changed-note metadata/link
+checks and all five flow-visualizer tests; coverage remains 106 components / 79 flows.
+
+### Next source work after the combined gate
+
+The current paginator measures whole section blocks. Oversized table sections can split rows
+and omit continuation headers. Replace opaque table blocks with measured header/ordered-row/
+footer blocks, resolving columns once from the complete frozen table. Pack whole measured rows
+and repeat headers; retain an explicit forward-progress exception for a row taller than the
+paper. This affects the paginator, all three report print documents, Statistics table helpers,
+Tax breakdown/chart tables and the three SDK print adapters, without new service reads or Core
+snapshot changes. Rendered tests must check whole-row boundaries, repeated headers, single
+footers and identical columns across changed paper/orientation, including wrapped labels and
+large amounts. The current PDF tests do not prove those properties.
+
+Portfolio PDF export is native, but its current-page Print action remains unsupported while
+the native Portfolio screen is active. Distinguish that gap from the three implemented
+Tax/Statistics/Net-worth current-page print paths.
 
 ## Phase-4 dependency recheck (2026-10-15)
 

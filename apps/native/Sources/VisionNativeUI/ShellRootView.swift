@@ -11,6 +11,7 @@ public struct ShellRootView<WebContent: View>: View {
     private let webContent: (_ hidden: Bool) -> WebContent
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var connectivity = PortfolioConnectivity()
+    @State private var overlayFocusReturn = NativeOverlayFocusReturnCoordinator()
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -61,11 +62,21 @@ public struct ShellRootView<WebContent: View>: View {
                 .environment(\.visionTheme, theme)
             }
         }
+        .background {
+            NativeOverlayFocusReturnBridge(
+                owner: overlayFocusReturn, context: NativeOverlayFocusContext(shell: model),
+                isPresented: model.isPresentingNativeOverlay
+            ).frame(width: 0, height: 0)
+        }
         .sheet(
             isPresented: Binding(
                 get: { model.isPresentingNativeOverlay },
                 set: { if !$0 { Task { await model.closeNativeOverlay() } } }
-            )
+            ),
+            onDismiss: {
+                overlayFocusReturn.didDismiss(
+                    context: NativeOverlayFocusContext(shell: model), isPresented: model.isPresentingNativeOverlay)
+            }
         ) {
             NativeShellOverlayHost(shell: model)
                 .environment(\.visionTheme, theme)

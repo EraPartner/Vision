@@ -1086,6 +1086,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         guard expectedGeneration == nativeSettingsGeneration else { return }
         guard let webView = webShell?.webView else { throw APIError.backendUnavailable }
         let old = shellModel
+        holdNativeGraphInput(old)
         await localStateSession.suspendAndDrain()
         await localStateSession.retireForReload()
         await drainNativeLocalWrites(old)
@@ -1120,12 +1121,16 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         settingsWriter = SettingsWriter(transport: settingsTransport)
         // Capture after all teardown awaits. The initializer seeds location without
         // replaying navigation or starting route loads before document readiness.
-        shellModel = makeShellModel(initialRoute: old.route)
+        let model = makeShellModel(initialRoute: old.route)
+        holdNativeGraphInput(model)
+        shellModel = model
         publishNativeOnboardingState(complete: .null, presented: false, generation: nativeSettingsGeneration)
         let hidden = shellHost?.isHidden ?? false
         shellHost?.removeFromSuperview()
         let host = NSHostingView(
-            rootView: ShellRootView(model: shellModel) { hidden in WebViewHost(webView: webView, hidden: hidden) })
+            rootView: ShellRootView(model: model) { hidden in
+                WebViewHost(webView: webView, hidden: hidden || model.isReloadingGraph)
+            })
         host.sizingOptions = []
         host.sceneBridgingOptions = []
         host.frame = container?.bounds ?? .zero
@@ -1581,8 +1586,11 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         let shell = WebShell(controller: self)
         let webView = shell.webView
         webView.underPageBackgroundColor = .hsl(palette.base)
+        let model = shellModel
         let host = NSHostingView(
-            rootView: ShellRootView(model: shellModel) { hidden in WebViewHost(webView: webView, hidden: hidden) })
+            rootView: ShellRootView(model: model) { hidden in
+                WebViewHost(webView: webView, hidden: hidden || model.isReloadingGraph)
+            })
         host.sizingOptions = []
         // The window keeps its own title and has no toolbar; SwiftUI must not add either.
         host.sceneBridgingOptions = []
@@ -1845,6 +1853,19 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         }
     }
 
+    /// Keep AppKit input fenced as well as SwiftUI controls. A represented web
+    /// view can retain its keyboard responder independently of hit testing.
+    private func holdNativeGraphInput(_ model: NativeShellModel) {
+        model.isReloadingGraph = true
+        guard let webView = webShell?.webView else { return }
+        if let window = webView.window, let responder = window.firstResponder as? NSView,
+            responder === webView || responder.isDescendant(of: webView)
+        {
+            window.makeFirstResponder(nil)
+        }
+        webView.isHidden = true
+    }
+
     @discardableResult
     private func reloadCurrentGraph() -> Task<Bool, Never>? {
         guard appURL != nil, webShell?.webView != nil, manualReloadTask == nil,
@@ -1859,7 +1880,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         else { return nil }
         let generation = nativeSettingsGeneration
         let model = shellModel
-        model.isReloadingGraph = true
+        holdNativeGraphInput(model)
         manualReloadTask = Task { [weak self] in
             guard let self else { return false }
             defer { self.manualReloadTask = nil }
@@ -2023,6 +2044,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             }
             guard isCurrentStartup() else { return }
             model.isRendererReady = true
+            model.isReloadingGraph = false
             await self.loadNativeSettingsLegacyTheme(document: document)
             guard isCurrentStartup() else { return }
             await model.nativeSettings?.load()
