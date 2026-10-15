@@ -2112,8 +2112,8 @@
             "kind": "client",
             "x": 20,
             "y": 348,
-            "path": "apps/native/Sources/VisionNativeCore/Screens/Reports/NativeTaxPrintSnapshot.swift",
-            "desc": "Loaded Tax year/widgets/local state; no reads or fiscal recalculation. macOS print rendering pending."
+            "path": "apps/native/VisionNative/ShellController.swift",
+            "desc": "Loaded Tax, Statistics and Net worth snapshots preserve visible state and cached figures without service reads or financial recomputation. Inert documents use native paginated printing; rendered printer parity remains pending."
           }
         ],
         "baseEdges": [
@@ -2743,6 +2743,14 @@
           ],
           [
             "native.taxclient",
+            "native.print"
+          ],
+          [
+            "native.settingsbridge",
+            "native.print"
+          ],
+          [
+            "native.wealthclient",
             "native.print"
           ]
         ],
@@ -8004,21 +8012,21 @@
           },
           {
             "id": "native-tax-visible-page-print",
-            "name": "Print the loaded visible Tax page",
+            "name": "Print the loaded Tax, Statistics or Net worth page",
             "category": "Native migration",
-            "summary": "Current-page print is independent of all-section PDF export; rendered pagination pending.",
+            "summary": "File Print/Cmd-P freezes the active loaded page independently of report export; rendered pagination remains pending.",
             "steps": [
               {
-                "from": "native.taxclient",
+                "from": "native.settingsbridge",
                 "to": "native.print",
-                "payload": "immutable selected year/widgets/disclosures/comparison/deductions",
-                "annotation": "NativeTaxPrintSnapshot.swift captures already loaded models; missing/error/loading/current-year mismatch rejects without querying."
+                "payload": "active route → immutable loaded figures, filters, widgets and local state",
+                "annotation": "ShellController.swift dispatches to NativeTaxPrintSnapshot, NativeStatisticsPrintSnapshot or NativeNetWorthPrintSnapshot. Capture validates the active route and loaded context without new queries; same-context cached failures remain printable where the screen retains its figures."
               },
               {
                 "from": "native.print",
                 "to": "native.print",
                 "payload": "inert section presentation → paginated NSPrintOperation",
-                "annotation": "NativeTaxPrintPresentation.swift and UI/Screens/Reports/NativeTaxPrintDocument.swift reuse views without page load hooks; apps/native/VisionNative/ShellController.swift rechecks generation/route/overlays/restore before print."
+                "annotation": "NativeTaxPrintDocument.swift, NativeStatisticsPrintDocument.swift and NativeNetWorthPrintDocument.swift use frozen presentations without page load hooks. ShellController.swift rechecks generation/route/overlays/restore, measures section blocks and opens NSPrintOperation."
               }
             ],
             "docs": [

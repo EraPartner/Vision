@@ -3,7 +3,7 @@ title: PDF Report Export
 type: feature
 status: active
 date: 2026-10-13
-updated: 2026-10-13
+updated: 2026-10-15
 tags:
   [
     feature,
@@ -85,10 +85,13 @@ extreme custom-year fallback reuse fixed shared TypeScript helpers over current 
 formulas remain shared TypeScript. See [[docs/api/reports|the request contract]] and
 [[docs/architecture/native-app#Shell overlays and reports (phase 3p)|native ownership]].
 
-Current-page File → Print is separate from generating an export PDF: it captures the loaded Tax year,
-visible widgets and local disclosure/comparison state without new reads or calculations. macOS printer
-pagination and rendered parity remain unverified; see [[docs/reference/native-parity/tax|Tax parity]].
-
+Current-page File → Print is separate from generating an export PDF. It freezes the loaded Tax,
+Statistics or Net worth page without new service reads or financial recomputation: Tax keeps its
+selected year, visible widgets and disclosures; Statistics keeps its active tab, filters, chart
+selections and cached data/errors; Net worth keeps its loaded rows, period, currency and selections.
+The native host measures section blocks and paginates them through `NSPrintOperation`. macOS printer
+pagination and rendered parity remain unverified; see [[docs/reference/native-parity/tax|Tax parity]]
+and [[docs/architecture/native-app|native architecture]].
 
 ## Phase 7: Filter Exclusions with Impact Comparison & Dual-Chart Visualization
 

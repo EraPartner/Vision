@@ -79,6 +79,12 @@ with an injected notice center; production still creates its normal expiring cen
 The Tax print HTTP fixture now serves `dashboard_settings`, which the dashboard must read
 before loading figures, and asserts successful page loading before snapshot capture.
 
+`6c1d6f96` is pushed and verified on the remote. Frontend typecheck and seven generator
+tests pass. Its macOS run exposed optional notice-parameter shadowing in shell initialization;
+the follow-up uses a distinct internal parameter name. The follow-up also synchronizes the
+three printing diagrams and existing visualizer flow for all three current-page print routes;
+five visualizer tests pass, with coverage unchanged at 106 components/79 flows.
+
 Next: inspect the automatic macOS run for this continuation, repair remaining actual
 failures (including stream-watchdog and Investigation polling tests if reproduced), then
 complete the phase-3p lifecycle/printing validation below. Earlier isolated proof directories

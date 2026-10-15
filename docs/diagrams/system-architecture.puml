@@ -110,7 +110,7 @@ package "Client to Server" {
   NativeResearch --> Express : existing scoped reads / guarded writes\nstateless submitted presentation
   NativeAnalysis --> Express : existing restricted execution + versions\nreadonly multipart interchange
   NativeMonitors --> Express : existing monitor reads + explicit writes
-  NativeTax --> ReactApp : retained PDF dialog overlay
+  NativeTax --> NativeReports : native PDF form overlay
   Proxy --> Express : Forward
 }
 
@@ -315,7 +315,7 @@ package "Native phase 3p ownership" {
   node "Palette + shortcuts\nFX / upcoming / backup banners" as NativeShellOverlays
   node "Seven-step setup assistant\nsource draft / shared completion writer" as NativeOnboarding
   node "Native PDF form\noriginal source fiscal context\n900s binary response / native save" as NativeReports
-  node "Loaded-page Tax print\nimmutable widgets + local state\nprinter rendering not yet verified" as NativeVisiblePrint
+  node "Tax / Statistics / Net worth print\nimmutable loaded figures + local state\nprinter rendering not yet verified" as NativeVisiblePrint
 }
 NativeShellOverlays --> NativeSettings : app-lifetime preference state
 NativeOnboarding --> NativeSettings : completion / restore owner

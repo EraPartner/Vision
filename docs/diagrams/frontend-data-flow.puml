@@ -185,8 +185,9 @@ package "Native reports and loaded-page print (phase 3p)" {
   class NativeTaxReportContextService
   class "taxReportContext.ts\nfresh five-key snapshot / source engine" as OriginalReportContext
   class "POST /api/reports/{type}\napplication/pdf" as BinaryReportAPI
-  class NativeTaxPrintSnapshot
-  class NativeTaxPrintDocument
+  class "Loaded Tax / Statistics / Net worth snapshots" as NativePagePrintSnapshots
+  class "Inert Tax / Statistics / Net worth documents" as NativePagePrintDocuments
+  class "ShellController current-page print" as NativePagePrintDispatch
 }
 NativeReportSheet --> NativeReportModel : source form / same-page draft
 NativeReportModel --> NativeTaxReportContextService : requested fiscal year
@@ -194,7 +195,9 @@ NativeTaxReportContextService --> OriginalReportContext : fixed callback / extre
 NativeReportModel --> NativeDataSession : one attempt / 900s binary client
 NativeDataSession --> BinaryReportAPI : existing route / raw Decimal body
 BinaryReportAPI --> Repositories : existing PDF source data
-NativeTax --> NativeTaxPrintSnapshot : already loaded year / visible widgets / local state
-NativeTaxPrintSnapshot --> NativeTaxPrintDocument : inert presentation / no reads or fiscal math
+NativePagePrintDispatch --> NativePagePrintSnapshots : capture active route / loaded figures / visible state
+NativeTax --> NativePagePrintSnapshots : selected year / visible widgets / disclosures
+NativePagePrintSnapshots --> NativePagePrintDocuments : immutable presentation / no reads or fiscal math
+NativePagePrintDocuments --> NativePagePrintDispatch : measured section blocks / NSPrintOperation
 
 @enduml

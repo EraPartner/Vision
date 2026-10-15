@@ -356,7 +356,7 @@ package "Native shell overlays and reports (phase 3p)" {
   class NativeShellNotificationsModel
   class NativeOnboardingModel
   class NativeReportModel
-  class NativeTaxPrintSnapshot
+  class "Tax / Statistics / Net worth print snapshots" as NativePagePrintSnapshots
   class "Fixed retained TypeScript callbacks" as NativeSourceCallbacks
 }
 NativeSettingsHost --> NativeCommandPaletteModel : native graph / generation
@@ -367,6 +367,6 @@ NativeCommandPaletteModel --> NativeSourceCallbacks : source answers
 NativeReportModel --> NativeSourceCallbacks : original fiscal projection / extreme context
 NativeReportModel --> NativeDataSession : binary request / restore fence
 NativeOnboardingModel --> NativeSettingsModel : completion writer
-NativeSettingsHost --> NativeTaxPrintSnapshot : loaded visible page / no queries
+NativeSettingsHost --> NativePagePrintSnapshots : active route / immutable visible state / no queries
 
 @enduml

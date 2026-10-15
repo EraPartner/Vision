@@ -134,7 +134,7 @@ public final class NativeShellModel {
     public init(
         strings: any Localizing,
         theme: ThemeSelection,
-        notices: NativeNoticeCenter? = nil,
+        notices noticeCenter: NativeNoticeCenter? = nil,
         exchangeRates: ExchangeRatesModel,
         admin: AdminScreens,
         planned: PlannedPaymentsModel,
@@ -175,7 +175,7 @@ public final class NativeShellModel {
         self.strings = strings
         self.theme = theme
         self.exchangeRates = exchangeRates
-        self.notices = notices ?? NativeNoticeCenter()
+        self.notices = noticeCenter ?? NativeNoticeCenter()
         self.admin = admin
         self.planned = planned
         self.imports = imports
