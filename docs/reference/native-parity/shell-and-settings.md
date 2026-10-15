@@ -2,8 +2,8 @@
 title: "Native parity inventory: App shell, navigation, settings and onboarding"
 type: reference
 status: active
-date: 2026-10-13
-updated: 2026-10-13
+date: 2026-10-15
+updated: 2026-10-15
 tags:
   [
     reference,
@@ -625,9 +625,32 @@ All invoke channels are validated by `packaging/electron/runtime/ipc-schemas.ts`
 The mounted native palette and shortcuts help, FX/upcoming-payment banners and seven-step onboarding
 replace their source overlays under strict capability flags. Fixed TypeScript palette callbacks retain
 source calculation/parsing behavior. App-lifetime dismissal/draft queues drain before restore; setup
-completion joins the common settings writer. Source inventories above describe implemented action
-ownership, with macOS visual, keyboard and accessibility verification still pending.
-See [[docs/architecture/native-app#Shell overlays and reports (phase 3p)|native architecture]],
+completion joins the common settings writer. The shared PDF sheet also replaces `ExportDialog`
+under its capability; its controls are inventoried in
+[[docs/reference/native-parity/home-and-statistics|Home and Statistics]],
+[[docs/reference/native-parity/portfolio-holdings|Portfolio holdings]] and
+[[docs/reference/native-parity/tax|Tax]].
+
+`NativeShellOverlayHost.swift` presents one sheet and keeps covered native overlays mounted.
+Only the active overlay receives pointer/keyboard interaction, accessibility exposure and notice
+announcements. Priority is palette, shortcuts, Settings, reports, then onboarding. Its AppKit
+responder bridge records weak per-overlay controls, including the owning field control and text
+selection instead of the shared field editor. When a covered overlay becomes active again, it
+restores an attached, visible and enabled responder and valid selection. This does not establish
+focus return to the underlying route after the final sheet dismissal.
+
+`NativeCommandPaletteView.swift` requests initial search focus and implements Arrow Up/Down,
+Home/End, modifier navigation, Return activation and Escape. `NativeShortcutsHelpView.swift` has a
+cancel-action Close control. `NativeOnboardingView.swift` has default-action Next/Finish,
+cancel-action Close and explicit Escape completion; a step change requests accessibility focus
+on its heading. Close, Escape and Skip setup all complete onboarding through the writer; failed
+completion retains the wizard. Interactive dismissal is blocked during onboarding, report
+submission and graph reload/restore suspension.
+
+These mappings describe implemented controls. The source action tables retain React behavior as
+the comparison baseline; they do not certify macOS sheet outside-click behavior, full keyboard
+routing, route-opener focus restoration, rendered English/Dutch layouts or VoiceOver operation.
+The macOS package and synthetic Demo gates remain open. See [[docs/architecture/native-app#Shell overlays and reports (phase 3p)|native architecture]],
 [[docs/features/onboarding|setup flow]] and [[docs/diagrams/index|structural diagrams]].
 
 ## Gaps and unsure
@@ -640,7 +663,9 @@ See [[docs/architecture/native-app#Shell overlays and reports (phase 3p)|native 
 - unverified: `menu.addToDictionary` has no entry in `i18n/source/en.json`; the context menu falls back to the literal "Add to Dictionary".
 - unverified: `electronRecovery.onBackendLost` / `onBackendRestored` have no caller in the frontend or `assets/error.js`.
 - unverified: the onboarding restore confirmation is not marked destructive, while the Settings restore confirmation is (`apps/frontend/src/features/onboarding/RestoreFromBackupCard.tsx:42` vs `apps/frontend/src/features/settings/sections/BackupSection.tsx:270`).
-- unverified: closing the onboarding wizard (X, Escape, Skip setup) marks onboarding complete rather than pausing it; docs describe "Skip setup" only implicitly.
+- Closing the onboarding wizard (X, Escape, Skip setup) completes it rather than pausing it.
+  Native phase 3p preserves that behavior through the common settings writer; actual Escape
+  dispatch and heading/return focus still require the macOS keyboard and VoiceOver pass.
 - unverified: `docs/features/onboarding.md` calls the restart action "Restart setup wizard"; the code labels it `settings.app.onboardingWizard` "Setup assistant" with a `settings.app.restart` "Restart" button.
 - unverified: whether the mobile sidebar sheet closes after choosing a link; `components/ui/sidebar.tsx` shows no pathname-driven close.
 - unverified: `settings.appearance.gainLossColorsHint` says classic uses "gold and red" while the docs describe classic as "red loss"; native colour tokens should follow `gainLossPreview.ts`.

@@ -453,27 +453,41 @@ struct NativeSettingsModelTests {
     }
     @Test func repeatedSuspendAndPermanentRetirementKeepTheFenceClosed() async throws {
         let transport = NativeSettingsFixture()
-        let model = NativeSettingsModel(service: settingsClient(transport), debounce: .milliseconds(100))
+        let model = settingsModel(transport)
         await model.load()
         await transport.gateNextWrite()
-        let edit = Task { await model.setCostBasisMethod("fifo") }
+        // Cost basis also schedules an app-envelope debounce; its second accepted write
+        // would make this one-write lifecycle assertion depend on scheduler timing.
+        let edit = Task { await model.setIncludeTransfers(true) }
         await waitSettings { await transport.writeIsGated }
-        let first = Task { await model.suspendForRestore() }
-        let second = Task { await model.suspendForRestore() }
-        await waitSettings { model.isSuspendedForRestore }
-        await model.setCostBasisMethod("lifo")
-        #expect(model.appValue("costBasisMethod") == .string("fifo"))
+        var suspensionsStarted = 0
+        var suspensionsFinished = 0
+        let first = Task {
+            suspensionsStarted += 1
+            await model.suspendForRestore()
+            suspensionsFinished += 1
+        }
+        let second = Task {
+            suspensionsStarted += 1
+            await model.suspendForRestore()
+            suspensionsFinished += 1
+        }
+        await waitSettings { model.isSuspendedForRestore && suspensionsStarted == 2 }
+        #expect(suspensionsFinished == 0)
+        await model.setIncludeTransfers(false)
+        #expect(model.includeTransfers)
         await transport.releaseWrite()
         await edit.value
         await first.value
         await second.value
+        #expect(suspensionsFinished == 2)
         model.retireForReload()
         model.retireForReload()
         model.resumeAfterFailedRestore()
         await model.flush()
         #expect(await transport.writes.count == 1 && model.isSuspendedForRestore)
         await #expect(throws: CancellationError.self) {
-            try await model.persistence.save("cost_basis_method", value: .string("lifo"))
+            try await model.persistence.save("includeTransfers", value: .bool(false))
         }
     }
     @Test func hostServicesFailureRollsBackWithoutWritingAppEnvelope() async throws {

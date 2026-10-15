@@ -105,6 +105,38 @@ complete the phase-3p lifecycle/printing validation below. Earlier isolated proo
 and the phase-4 audit under `/workspace/vision-*` are absent in this fresh environment;
 the historical results below are prior evidence, not newly reproduced checks.
 
+## Parallel continuation checkpoint (2026-10-15)
+
+The owner explicitly requested parallel subagents in this resumed thread. Root coordinated six
+owners; their source is now collected for one combined checkpoint. Latest remote before that save:
+`cb41be8a`. The SDK route/storage takeover remains disabled. Current implementation includes:
+
+- Document-commit readiness authority and captured model/generation checks; fresh restore frontend
+  and onboarding-completion drains; normal About reload uses the shared accepted-action path.
+- Extracted paginator, changed-paper remeasurement, narrow wrapping Statistics pivots and ten new macOS
+  AppKit/PDF rendering cases. Tall blocks can still split rows; physical printer/VoiceOver unverified.
+- Deterministic watchdog/poll receipt tests; a real AI Settings paused-read replay race fixed by
+  rechecking lane ownership; notice clocks fixed and repeated suspension test separated from the
+  legitimate two-write cost-basis debounce.
+- Default-off native history integration with 23 new tests and proposed ADR-206, plus a dormant
+  raw state actor with nine permanent tests. No browser import/retirement or real-data migration.
+- Scoped parity mappings and print/lifecycle architecture diagrams reconciled with actual source.
+
+The separated predecessor `2ffce6fe` app built and ran **1,577 Core tests in 217 suites with eight
+issues**. The platform gate remains open: `cb41be8a` built successfully and ran 1,577 Core tests / 217 suites with seven issues; it excludes
+this combined work. Its Tax fixture failure precisely required `CategoryList.links`, now included;
+its other failures are the notice deadline, watchdog, SettingsAI replay and two-write fixture cases
+addressed in this combined save. Do not describe new UI/SDK source as compiled until its own Mac run completes.
+
+The official Swift 6.2.3 Linux toolchain is now installed at
+`/workspace/.vision-tools/swift623/swift-6.2.3-RELEASE-ubuntu24.04/usr/bin` (official detached
+signature verified). Focused proof **12 tests / two suites / zero drift / zero adapters** includes
+four exact production files (`NativeRawStateStore`, `NativeRendererReadiness`,
+`NativeSettingsStorageBridge`, `JSONValue`) and two exact permanent test files. Preserve
+`/workspace/vision-phase4-foundation-check/{verification.log,verification.json,SHA-manifest.json}`;
+manifest SHA `8a5e5917da460da79fef710576c3f88bb951e71123f251161fcfc924d1cf2cce`.
+It does not certify routing/ShellController/AppKit or host storage migration.
+
 ## Phase-4 dependency recheck (2026-10-15)
 
 The former scratch audit is absent, so these source-confirmed dependencies replace its

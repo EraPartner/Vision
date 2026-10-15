@@ -3,7 +3,7 @@ title: "Native parity inventory"
 type: reference
 status: active
 date: 2026-10-13
-updated: 2026-10-13
+updated: 2026-10-15
 tags: [reference, swift-rewrite, native-parity, index, adr-203]
 description: "Index of the code-derived inventory of every screen, dialog and user action in the web UI. It is the parity checklist for the Swift rewrite (ADR-204): each row is web today and flips to native when a screen PR ports it."
 aliases: [native parity, parity inventory, swift parity checklist]
@@ -54,7 +54,7 @@ the end of phase 1, and counts the gaps that remain for the hand-over
 
 ## Findings that change the plan
 
-- **The Belgian tax engine now has a backend operation**: `POST /api/belgian-tax/compute` runs the shared TypeScript engine in `packages/shared-utils/src/belgianTax/`. The web app uses compatibility exports and retains its lazy loading. This satisfies ADR-204's computation prerequisite. Phase 3h now implements native Tax widgets/charts, the six-step write-through profile sheet, snapshot/freeze/filing/history actions, deductions and CSV. Overview/dashboard APIs preserve frozen figures and keep fiscal derivation server-owned. The PDF dialog/browser print remain web; macOS build and the owner's Demo parity pass remain pending. See [[docs/api/belgian-tax|Belgian Tax API]].
+- **The Belgian tax engine now has a backend operation**: `POST /api/belgian-tax/compute` runs the shared TypeScript engine in `packages/shared-utils/src/belgianTax/`. The web app uses compatibility exports and retains its lazy loading. This satisfies ADR-204's computation prerequisite. Phase 3h now implements native Tax widgets/charts, the six-step write-through profile sheet, snapshot/freeze/filing/history actions, deductions and CSV. Overview/dashboard APIs preserve frozen figures and keep fiscal derivation server-owned. Phase 3p mounts the native PDF report sheet and loaded-page Tax/Statistics/Net worth print documents. App compilation has passed on macOS; the full package gate, rendered print and Demo interaction/accessibility parity remain under verification. See [[docs/api/belgian-tax|Belgian Tax API]].
 - **Two routes were missing from [[docs/reference/frontend-routes|Frontend Routes]]**: `/analysis/monitors` and `/research/dossiers`. Both are in `appRouteManifest` and the sidebar; the routes page now lists them.
 - **Electron-only surfaces** (application and dock menus, badge, CSV open-with, vibrancy, accent colour, the `electronBackup`, `electronAudit`, `electronUpdater`, `electronServices`, `electronAPI` and `electronRecovery` bridges) are inventoried on the shell page. The updater rows are the one deliberate cut (ADR-204 §5).
 

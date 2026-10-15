@@ -42,9 +42,12 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     /// Accepted restore retains its source workflow until frontend state and the
     /// onboarding receipt are applied, then performs the source delayed reload.
     private var pendingRestoreReload: UUID?
+    /// Fresh restore-only storage authority; old graph admission is already retired.
+    private var restoredFrontendSession: NativeLocalStateSession?
+    private var restoredCompletionDataSession: NativeDataSession?
     private var onboardingRestoreIntent: UUID?
     private var nativeSettingsRebuildTask: Task<Void, any Error>?
-    private var manualReloadTask: Task<Void, Never>?
+    private var manualReloadTask: Task<Bool, Never>?
     private var isPrintingCurrentPage = false
     /// The sidebar, route and settings state of the native navigation shell.
     private lazy var shellModel = makeShellModel()
@@ -60,6 +63,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     /// The backend base URL the web view may show; `nil` until the runtime is ready.
     private(set) var appURL: URL?
     private var queue = RendererMessageQueue()
+    private var rendererReadiness = NativeRendererReadiness()
     private var launchTask: Task<Void, Never>?
     private var pageLoadTask: Task<Void, Never>?
     private var revealTask: Task<Void, Never>?
@@ -89,7 +93,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             transport: fenced, timeout: timeout, streamTransport: fenced)
     }
 
-    private func makeShellModel() -> NativeShellModel {
+    private func makeShellModel(initialRoute: NativeRoute = .home) -> NativeShellModel {
         let client = apiClient
         let settingsGeneration = UUID()
         nativeSettingsGeneration = settingsGeneration
@@ -445,6 +449,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             onboarding: onboarding,
             reports: reports,
             nativeFallback: true,
+            initialRoute: initialRoute,
             hiddenSections: Self.loadHiddenSections(),
             loadSettings: {
                 await nativeSettings.load()
@@ -468,7 +473,9 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             guard let self else { return true }
             return (try? await self.nativeSettingsScript(NativeSettingsStorageBridge.editingScript))?.boolValue ?? true
         }
-        model.isRendererReady = queue.isReady
+        // The renderer startup callback publishes readiness only after verifying
+        // the incoming document and this graph's generation.
+        model.isRendererReady = false
         model.setPageZoom(Double(webShell?.webView.pageZoom ?? 1))
         model.home?.useSharedUpcoming()
         notifications.upcoming.didLoadUpcoming = { [weak model] rows in
@@ -545,7 +552,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         let arguments = NativeSettingsStorageBridge.arguments(for: key, value: value)
         let result: JSONValue
         if allowRestored {
-            result = try await nativeSettingsScript(script, arguments: arguments)
+            result = try await restoredFrontendMutationScript(script, arguments: arguments, generation: generation)
         } else {
             let session = localStateSession
             let token = try await session.beginWrite()
@@ -562,6 +569,21 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         }
         try requireNativeGeneration(generation, allowRestored: allowRestored)
         guard try NativeSettingsStorageBridge.mutationReply(result) else { throw APIError.backendUnavailable }
+    }
+
+    private func restoredFrontendMutationScript(
+        _ script: String, arguments: [String: JSONValue], generation: UUID
+    ) async throws -> JSONValue {
+        guard generation == nativeSettingsGeneration, pendingRestoreReload == generation,
+            let session = restoredFrontendSession
+        else { throw CancellationError() }
+        let token = try await session.beginWrite()
+        guard generation == nativeSettingsGeneration, pendingRestoreReload == generation else {
+            await session.finishWrite(token)
+            throw CancellationError()
+        }
+        return try await nativeSettingsScript(
+            script, arguments: arguments, didCompleteActual: { Task { await session.finishWrite(token) } })
     }
 
     private func beginNativeStorageWrite() async throws -> (NativeLocalStateSession, UUID) {
@@ -676,15 +698,11 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     }
 
     private func completeNativeOnboardingAfterRestore(generation: UUID) async throws {
-        guard onboardingRestoreIntent == generation else { throw CancellationError() }
-        let currentGeneration = nativeSettingsGeneration
-        let completionSession = NativeDataSession()
-        let persistence: NativeSettingsPersistence
-        if currentGeneration != generation, let active = shellModel.nativeSettings {
-            persistence = active.persistence
-        } else {
-            persistence = NativeSettingsPersistence(service: makeAPIClient(session: completionSession))
-        }
+        guard onboardingRestoreIntent == generation, generation == nativeSettingsGeneration,
+            let completionSession = restoredCompletionDataSession
+        else { throw CancellationError() }
+        let currentGeneration = generation
+        let persistence = NativeSettingsPersistence(service: makeAPIClient(session: completionSession))
         let record = try await persistence.read("onboarding_complete")
         guard onboardingRestoreIntent == generation, currentGeneration == nativeSettingsGeneration else {
             throw CancellationError()
@@ -695,9 +713,9 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         }
         // The source's draft clear is best effort after the acknowledged completion.
         try? await writeNativeLocalValue(nil, key: .onboardingDraft, generation: currentGeneration, allowRestored: true)
-        onboardingRestoreIntent = nil
-        publishNativeOnboardingState(
+        try? await applyNativeOnboardingState(
             complete: .bool(true), presented: false, generation: currentGeneration, restored: true)
+        onboardingRestoreIntent = nil
     }
 
     private func observeNativeOnboarding(model: NativeOnboardingModel, generation: UUID) {
@@ -724,21 +742,28 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     private func publishNativeOnboardingState(
         complete: JSONValue, presented: Bool, generation: UUID, restored: Bool = false
     ) {
-        let state: JSONValue = .object(["complete": complete, "presented": .bool(presented)])
         Task { [weak self] in
-            guard let self, generation == self.nativeSettingsGeneration, self.queue.isReady else { return }
-            let script = """
-                const current = window.__VISION_NATIVE_ONBOARDING_STATE__;
-                if (current && typeof current === 'object') Object.assign(current, state);
-                window.dispatchEvent(new CustomEvent('vision:native-onboarding', {detail: state}));
-                return true;
-                """
-            if restored {
-                _ = try? await self.nativeSettingsScript(script, arguments: ["state": state])
-            } else {
-                _ = try? await self.nativeFrontendMutationScript(
-                    script, arguments: ["state": state], generation: generation)
-            }
+            try? await self?.applyNativeOnboardingState(
+                complete: complete, presented: presented, generation: generation, restored: restored)
+        }
+    }
+
+    private func applyNativeOnboardingState(
+        complete: JSONValue, presented: Bool, generation: UUID, restored: Bool = false
+    ) async throws {
+        guard generation == nativeSettingsGeneration, queue.isReady else { throw CancellationError() }
+        let state: JSONValue = .object(["complete": complete, "presented": .bool(presented)])
+        let script = """
+            const current = window.__VISION_NATIVE_ONBOARDING_STATE__;
+            if (current && typeof current === 'object') Object.assign(current, state);
+            window.dispatchEvent(new CustomEvent('vision:native-onboarding', {detail: state}));
+            return true;
+            """
+        if restored {
+            _ = try await restoredFrontendMutationScript(
+                script, arguments: ["state": state], generation: generation)
+        } else {
+            _ = try await nativeFrontendMutationScript(script, arguments: ["state": state], generation: generation)
         }
     }
 
@@ -778,15 +803,20 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
                 guard self.pendingRestoreReload == generation, generation == self.nativeSettingsGeneration else {
                     throw CancellationError()
                 }
-                let result = try await self.nativeSettingsScript(
+                let result = try await self.restoredFrontendMutationScript(
                     NativeSettingsStorageBridge.restoreScript,
-                    arguments: NativeSettingsStorageBridge.restoreArguments(state))
+                    arguments: NativeSettingsStorageBridge.restoreArguments(state), generation: generation)
                 guard try NativeSettingsStorageBridge.mutationReply(result) else { throw APIError.backendUnavailable }
             },
             reloadFrontend: { [weak self] in
                 guard let self else { throw APIError.backendUnavailable }
-                try await self.reloadNativeSettingsFrontend(
-                    expectedGeneration: generation, restoreReload: restoreReload)
+                guard generation == self.nativeSettingsGeneration else { throw CancellationError() }
+                if restoreReload {
+                    try await self.reloadNativeSettingsFrontend(expectedGeneration: generation, restoreReload: true)
+                } else {
+                    guard let reload = self.reloadCurrentGraph() else { throw CancellationError() }
+                    guard await reload.value else { throw APIError.backendUnavailable }
+                }
             },
             readBackupReminder: { [weak self] in
                 guard let self else { return false }
@@ -927,12 +957,13 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         }
     }
 
-    private func loadNativeSettingsLegacyTheme() async {
+    private func loadNativeSettingsLegacyTheme(document: NativeRendererReadiness.Document) async {
         guard let model = shellModel.nativeSettings else { return }
         let generation = nativeSettingsGeneration
         guard let reply = try? await nativeSettingsScript(NativeSettingsStorageBridge.legacyThemeScript),
             let text = reply.stringValue, let raw = try? JSONDecoder().decode(TaxValue.self, from: Data(text.utf8)),
-            generation == nativeSettingsGeneration
+            generation == nativeSettingsGeneration, rendererReadiness.isCurrentReady(document),
+            !restoreFenceEntered, pendingRestoreReload == nil, restoredNativeGeneration == nil
         else { return }
         var legacy: [String: TaxValue] = [:]
         if let mode = raw["mode"]?.stringValue, ["light", "dark"].contains(mode) { legacy["mode"] = .string(mode) }
@@ -1018,10 +1049,21 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             return
         }
         guard let webView = webShell?.webView else { throw APIError.backendUnavailable }
-        queue.documentChanged()
-        shellModel.isRendererReady = false
+        if let session = restoredCompletionDataSession {
+            await session.suspendAndDrain()
+            await session.retireForReload()
+        }
+        if let session = restoredFrontendSession {
+            // Logical timeouts do not prove that WebKit stopped the accepted restore writes.
+            await session.suspendAndDrain()
+            await session.retireForReload()
+        }
+        rendererDocumentChanged()
         try await rebuildNativeSettingsGraph(expectedGeneration: expectedGeneration)
         if pendingRestoreReload == expectedGeneration { pendingRestoreReload = nil }
+        // A readiness receipt from the outgoing document may have arrived while
+        // the graph drained. The incoming document must establish its own authority.
+        rendererDocumentChanged()
         webView.reload()
     }
 
@@ -1070,11 +1112,15 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         ])
         nativeSettingsDrafts = [:]
         onboardingRestoreIntent = nil
+        restoredFrontendSession = nil
+        restoredCompletionDataSession = nil
         dataSession = NativeDataSession()
         localStateSession = NativeLocalStateSession()
         apiClient = makeAPIClient()
         settingsWriter = SettingsWriter(transport: settingsTransport)
-        shellModel = makeShellModel()
+        // Capture after all teardown awaits. The initializer seeds location without
+        // replaying navigation or starting route loads before document readiness.
+        shellModel = makeShellModel(initialRoute: old.route)
         publishNativeOnboardingState(complete: .null, presented: false, generation: nativeSettingsGeneration)
         let hidden = shellHost?.isHidden ?? false
         shellHost?.removeFromSuperview()
@@ -1406,8 +1452,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             appURL = url
             let shell = webShell ?? makeWebShell()
             shellHost?.isHidden = true
-            queue.documentChanged()
-            shellModel.isRendererReady = false
+            rendererDocumentChanged()
             // `loadApplicationPage`: the audit session is established before the page
             // loads; the closure timer then runs while the page is up.
             pageLoadTask?.cancel()
@@ -1610,9 +1655,18 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
 
     // MARK: - Web shell callbacks
 
-    func documentDidCommit() {
+    private func rendererDocumentChanged(expectingCommit: Bool = true) {
+        if expectingCommit {
+            rendererReadiness.willNavigate()
+        } else {
+            rendererReadiness.documentDidCommit()
+        }
         queue.documentChanged()
         shellModel.isRendererReady = false
+    }
+
+    func documentDidCommit() {
+        rendererDocumentChanged(expectingCommit: false)
     }
 
     func documentDidFinish() {
@@ -1754,7 +1808,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
                     buildBlocks = { width in
                         snapshot.sections.map {
                             NSHostingView(
-                                rootView: NativeStatisticsPrintDocument(presentation: presentation, sections: [$0])
+                                rootView: NativeStatisticsPrintDocument(presentation: presentation, sections: [$0], pageWidth: width)
                                     .frame(width: width)) as NSView
                         }
                     }
@@ -1791,17 +1845,23 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         }
     }
 
-    private func reloadCurrentGraph() {
+    @discardableResult
+    private func reloadCurrentGraph() -> Task<Bool, Never>? {
         guard appURL != nil, webShell?.webView != nil, manualReloadTask == nil,
             nativeSettingsRebuildTask == nil, !restoreFenceEntered, pendingRestoreReload == nil,
             restoredNativeGeneration == nil, shellModel.nativeSettings?.isSuspendedForRestore != true,
             confirmQuitWithUnsavedChanges()
-        else { return }
+        else { return nil }
+        // The modal leave confirmation can service asynchronous restore requests.
+        guard manualReloadTask == nil, nativeSettingsRebuildTask == nil, !restoreFenceEntered,
+            pendingRestoreReload == nil, restoredNativeGeneration == nil,
+            shellModel.nativeSettings?.isSuspendedForRestore != true
+        else { return nil }
         let generation = nativeSettingsGeneration
         let model = shellModel
         model.isReloadingGraph = true
         manualReloadTask = Task { [weak self] in
-            guard let self else { return }
+            guard let self else { return false }
             defer { self.manualReloadTask = nil }
             await model.onboarding?.flushAcceptedActions()
             await model.analysis?.workspace.flushAcceptedRuns()
@@ -1821,8 +1881,9 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             await self.drainNativeLocalWrites(model)
             do {
                 try await self.reloadNativeSettingsFrontend(expectedGeneration: generation, manualReloadOwned: true)
+                return true
             } catch {
-                guard generation == self.nativeSettingsGeneration else { return }
+                guard generation == self.nativeSettingsGeneration else { return false }
                 await self.localStateSession.resumeAfterFailedRestore()
                 model.nativeSettings?.resumeAfterFailedRestore()
                 await self.settingsWriter.resumeAfterFailedRestore()
@@ -1830,8 +1891,10 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
                 model.isReloadingGraph = false
                 model.isRendererReady = self.queue.isReady
                 self.logger.error("native reload failed: \(error.localizedDescription, privacy: .public)")
+                return false
             }
         }
+        return manualReloadTask
     }
 
     func run(_ command: MenuCommand) {
@@ -1929,29 +1992,44 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     }
 
     func rendererDidBecomeReady() {
+        guard let document = rendererReadiness.markReady() else { return }
         for message in queue.markReady() { evaluate(message.event, message.payload) }
-        shellModel.isRendererReady = true
         deliver(.menuAction, BridgeDispatcher.menuActionPayload(.nativeSidebar(visible: shellModel.isSidebarVisible)))
         let rendererGeneration = nativeSettingsGeneration
         Task { [weak self] in
-            guard let self else { return }
-            // Backend readiness can arrive inside the accepted restore. The
-            // Backup workflow still owns applying frontend state and its wizard
-            // completion; its 3 s callback owns rebuilding and reloading the page.
-            if self.restoreFenceEntered || self.pendingRestoreReload == rendererGeneration { return }
-            if self.restoredNativeGeneration == rendererGeneration || self.nativeSettingsRebuildTask != nil {
+            guard let self, self.rendererReadiness.isCurrentReady(document),
+                rendererGeneration == self.nativeSettingsGeneration
+            else { return }
+            // Native restore applies frontend state and acknowledges onboarding
+            // before its delayed reload. Normal reload also owns its full drain.
+            guard !self.restoreFenceEntered, self.pendingRestoreReload != rendererGeneration,
+                self.manualReloadTask == nil, self.nativeSettingsRebuildTask == nil
+            else { return }
+            // Legacy web restore owns navigation itself. Its next ready document
+            // reconstructs the retired native graph without another web reload.
+            if self.restoredNativeGeneration == rendererGeneration {
                 do { try await self.rebuildNativeSettingsGraph(expectedGeneration: rendererGeneration) } catch {
                     return
                 }
             }
             let generation = self.nativeSettingsGeneration
-            self.shellModel.isRendererReady = self.queue.isReady
-            await self.loadNativeSettingsLegacyTheme()
-            await self.shellModel.nativeSettings?.load()
-            guard generation == self.nativeSettingsGeneration else { return }
-            await self.shellModel.onboarding?.load()
-            guard generation == self.nativeSettingsGeneration else { return }
-            if let onboarding = self.shellModel.onboarding {
+            let model = self.shellModel
+            let isCurrentStartup = {
+                self.rendererReadiness.isCurrentReady(document)
+                    && generation == self.nativeSettingsGeneration && model === self.shellModel
+                    && !self.restoreFenceEntered && self.pendingRestoreReload == nil
+                    && self.restoredNativeGeneration == nil && self.manualReloadTask == nil
+                    && self.nativeSettingsRebuildTask == nil
+            }
+            guard isCurrentStartup() else { return }
+            model.isRendererReady = true
+            await self.loadNativeSettingsLegacyTheme(document: document)
+            guard isCurrentStartup() else { return }
+            await model.nativeSettings?.load()
+            guard isCurrentStartup() else { return }
+            await model.onboarding?.load()
+            guard isCurrentStartup() else { return }
+            if let onboarding = model.onboarding {
                 self.publishNativeOnboarding(model: onboarding, generation: generation)
             }
             for (key, value) in self.nativeSettingsDrafts {
@@ -1960,7 +2038,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             self.publishNativeSettingsSession()
             self.resolveNativeSettingsAppearance()
             self.startNativeSettingsAppearanceWatch()
-            self.shellModel.reloadSettings()
+            model.reloadSettings()
         }
         revealWebView()
     }
@@ -2159,7 +2237,11 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         if restoreFenceEntered, restoreFenceOwner == operation {
             if result["success"] == .bool(true) {
                 restoredNativeGeneration = nativeSettingsGeneration
-                if nativeReloadOwned { pendingRestoreReload = nativeSettingsGeneration }
+                if nativeReloadOwned {
+                    pendingRestoreReload = nativeSettingsGeneration
+                    restoredFrontendSession = NativeLocalStateSession()
+                    restoredCompletionDataSession = NativeDataSession()
+                }
                 await localStateSession.retireForReload()
                 if onboardingRestore, shellModel.onboarding?.isPresented == true {
                     onboardingRestoreIntent = nativeSettingsGeneration
@@ -2175,6 +2257,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
                 shellModel.nativeSettings?.resumeAfterFailedRestore()
                 await settingsWriter.resumeAfterFailedRestore()
                 await dataSession.resumeAfterFailedRestore()
+                shellModel.isRendererReady = queue.isReady
                 if let onboarding = shellModel.onboarding {
                     publishNativeOnboarding(model: onboarding, generation: nativeSettingsGeneration)
                 }
@@ -2200,6 +2283,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         else { return false }
         restoreFenceEntered = true
         restoreFenceOwner = operation
+        shellModel.isRendererReady = false
         await shellModel.nativeSettings?.suspendForRestore()
         await settingsWriter.suspendAndDrain()
         shellModel.closePalette()
@@ -2456,50 +2540,6 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         case .minimize: window.performMiniaturize(nil)
         case .none: break
         }
-    }
-}
-
-/// Frozen page sections laid out in source order. Short sections begin on a fresh page
-/// when needed; sections taller than the paper continue on the following page.
-@MainActor
-private final class NativePagePrintPagesView: NSView {
-    private let pageHeight: CGFloat
-    private let pageCount: Int
-    override var isFlipped: Bool { true }
-
-    init(printInfo: NSPrintInfo, buildBlocks: @MainActor (CGFloat) -> [NSView]) {
-        let width = max(1, printInfo.paperSize.width - printInfo.leftMargin - printInfo.rightMargin)
-        let heightPerPage = max(1, printInfo.paperSize.height - printInfo.topMargin - printInfo.bottomMargin)
-        var blocks: [(NSView, CGFloat, CGFloat)] = []
-        var offset: CGFloat = 0
-        for block in buildBlocks(width) {
-            block.setFrameSize(NSSize(width: width, height: 1))
-            block.layoutSubtreeIfNeeded()
-            let height = max(1, block.fittingSize.height)
-            let remaining = heightPerPage - offset.truncatingRemainder(dividingBy: heightPerPage)
-            if height <= heightPerPage, height > remaining { offset += remaining }
-            blocks.append((block, offset, height))
-            offset += height + 16
-        }
-        let count = max(1, Int(ceil(max(1, offset - 16) / heightPerPage)))
-        pageHeight = heightPerPage
-        pageCount = count
-        super.init(frame: NSRect(x: 0, y: 0, width: width, height: CGFloat(count) * heightPerPage))
-        for (block, offset, height) in blocks {
-            block.frame = NSRect(x: 0, y: offset, width: width, height: height)
-            addSubview(block)
-        }
-    }
-
-    required init?(coder: NSCoder) { nil }
-
-    override func knowsPageRange(_ range: NSRangePointer) -> Bool {
-        range.pointee = NSRange(location: 1, length: pageCount)
-        return true
-    }
-
-    override func rectForPage(_ page: Int) -> NSRect {
-        NSRect(x: 0, y: CGFloat(page - 1) * pageHeight, width: bounds.width, height: pageHeight)
     }
 }
 

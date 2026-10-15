@@ -2,8 +2,8 @@
 title: "Native parity inventory: Portfolio overview and holdings"
 type: reference
 status: active
-date: 2026-10-13
-updated: 2026-10-13
+date: 2026-10-15
+updated: 2026-10-15
 tags:
   [
     reference,
@@ -17,7 +17,7 @@ tags:
     savings,
     rebalance,
   ]
-description: "Code-derived Portfolio, five asset pages and Rebalance parity inventory with phase-3i native mappings, shared investment/trade forms, broker lot tagging, charts and the retained web PDF/print surfaces. macOS and Demo verification remain pending."
+description: "Code-derived Portfolio, five asset pages and Rebalance parity inventory with phase-3i native mappings, shared investment/trade forms, broker lot tagging, charts and the phase-3p shared native PDF sheet. The Portfolio current-page print surface remains web; macOS and Demo verification remain pending."
 aliases: [native parity portfolio holdings]
 ---
 
@@ -65,11 +65,16 @@ broker metadata disables assignment. Explicit Cancel resets edit/trade drafts; c
 retain them. The coordinator closes a previously active detail after successful archive while
 keeping direct archived-detail opens read-only.
 
-The native PDF menu is a handoff to the retained web `ExportDialog` through `?export=pdf`, including
-on asset routes and loading/error/empty web states. `useReportDialogState` removes only that flag on
-close; other route parameters survive. PDF options, serialization and download remain web. The
-React `data-print-page="portfolio"` print surface remains web; native print parity is pending.
-Portfolio import and research links continue to their existing web routes. See
+Phase 3p replaces the PDF handoff with `NativeReportSheet` and `NativeReportModel`, mounted by
+`NativeShellOverlayHost` over the existing native screen. The Portfolio overview and asset-route
+menus retain `?export=pdf`; closing removes only that flag with replace, preserving the other query
+parameters and the underlying visit. The shared sheet owns report type, period, sections, currency,
+validation, binary PDF submission and native save-panel handoff. Same-page reopening retains its
+form draft; leaving the page resets it. Save-panel cancellation leaves the sheet open without a
+success notice. The source `ExportDialog` remains the fallback when the capability is absent.
+The React `data-print-page="portfolio"` current-page print surface remains web; native Portfolio
+print parity is pending. This is separate from the implemented PDF export. Import and research
+links retain their existing route targets. See [[docs/features/pdf-report-export]],
 [[docs/architecture/native-app]] and [[docs/features/portfolio]].
 
 ## Screens
@@ -156,12 +161,21 @@ Opened from: row 2. Source: `apps/frontend/src/pages/portfolio/PortfolioPage.tsx
 #### Dialog: Export PDF report (`ExportDialog`)
 
 Opened from: More actions row 1 (and the asset pages' header menus). Source: `apps/frontend/src/features/reports/ExportDialog.tsx`. This is a shared reports component; its full inventory belongs with the reports area. On these screens it opens with `defaultType="portfolio"` and no trigger of its own (`apps/frontend/src/pages/portfolio/PortfolioPage.tsx:828`).
-Fields: `export.reportType` "Report type" select (`:377`), `export.period` "Period" select (`:405`), a year input when the period is a year (`:445`, validated by `export.period.year.invalid`), `export.period.from` / `export.period.to` date pickers for a custom range (`:485`, `:514`, validated by `export.period.invalidRange`), `export.sections` "Sections" with an `export.sections.all` "All" checkbox (`:559`) and one checkbox per section (`:590`), and an `export.currency` "Currency" select (`:614`).
+Native mapping: `apps/native/Sources/VisionNativeUI/Screens/Reports/NativeReportSheet.swift`
+and Core `Screens/Reports/NativeReportModel.swift` implement these controls, shared with
+[[docs/reference/native-parity/home-and-statistics|Home and Statistics reports]]. The portfolio
+report retains six sections: executive summary, allocation, top holdings, performance trend,
+asset-class detail and dividend income. All-selected sections serialize as `[]`; the existing
+`POST /api/reports/portfolio` returns PDF bytes. The native SDK passes them to the save panel.
+These action statuses record implementation; macOS save-panel, focus, keyboard and rendered PDF
+verification remain pending.
+
+Source fields: `export.reportType` "Report type" select (`:377`), `export.period` "Period" select (`:405`), a year input when the period is a year (`:445`, validated by `export.period.year.invalid`), `export.period.from` / `export.period.to` date pickers for a custom range (`:485`, `:514`, validated by `export.period.invalidRange`), `export.sections` "Sections" with an `export.sections.all` "All" checkbox (`:559`) and one checkbox per section (`:590`), and an `export.currency` "Currency" select (`:614`).
 
 | #   | Where  | Element                                                                                 | Trigger       | What it does                                                                                                                                                   | Source                                                            | Status |
 | --- | ------ | --------------------------------------------------------------------------------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- | ------ |
-| 1   | Footer | `common.cancel` "Cancel"                                                                | click         | Closes the dialog                                                                                                                                              | `apps/frontend/src/features/reports/ExportDialog.tsx:648`         | web    |
-| 2   | Footer | `export.download` "Download PDF" submit (`export.downloading` "Generating…" while busy) | click / Enter | Downloads the portfolio PDF from the server. Toasts `statsPage.report.downloadSuccess` "Report downloaded" or `statsPage.report.downloadError` "Export failed" | `apps/frontend/src/features/reports/ExportDialog.tsx:654`, `:251` | web    |
+| 1   | Footer | `common.cancel` "Cancel"                                                                | click         | Closes the dialog                                                                                                                                              | `apps/frontend/src/features/reports/ExportDialog.tsx:648`         | native |
+| 2   | Footer | `export.download` "Download PDF" submit (`export.downloading` "Generating…" while busy) | click / Enter | Downloads the portfolio PDF from the server. Toasts `statsPage.report.downloadSuccess` "Report downloaded" or `statsPage.report.downloadError` "Export failed" | `apps/frontend/src/features/reports/ExportDialog.tsx:654`, `:251` | native |
 
 #### Dialog: Customize this page (`WidgetVisibilityDialog`)
 
@@ -657,8 +671,11 @@ The other `/portfolio/*` routes in this scope have no `G`-sequence key (`apps/fr
   view before their visual pass. Check both languages, Decimal money formatting, archived
   read-only actions, keyboard chart selection, dialog focus return, broker filters and complete
   lot assignment before recording the phase-3 exit gate.
-- Native report controls and printed layouts remain web. The legacy `/portfolio/performance`
-  route intentionally uses the retained React router redirect, replacing the history entry while preserving the query before the native shell follows the reported `/portfolio` route (phase-2 routing authority).
+- Shared native PDF report controls are implemented in phase 3p; Portfolio current-page print
+  remains a residual web surface. Actual PDF/save-panel interaction and printed layout checks
+  remain pending. The legacy `/portfolio/performance` route intentionally uses the retained React
+  router redirect, replacing the history entry while preserving the query before the native shell
+  follows the reported `/portfolio` route (phase-2 routing authority).
 - Code-derived currency boundary: active canonical holdings already express `currentPrice`,
   `avgCostBasis`, value and P&L in the reporting currency. Older Stocks/Metals comments describing
   these cells as native-currency readouts are stale. Native display uses the response currency;

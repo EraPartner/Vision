@@ -1501,6 +1501,25 @@ unfenced transport. A successful restore marks the old graph for retirement; nat
 renderer-ready path share one generation-checked rebuild task. Fresh models, the API session and
 preference writers replace the old graph once, including when the retained onboarding page reloads.
 
+`Shell/NativeRendererReadiness.swift` adds document authority alongside graph generation.
+Native load/reload enters an awaiting-commit state: outgoing ready receipts cannot release queues
+or publish UI readiness until WebKit commits the incoming document. Startup rechecks document,
+model identity and generation between each awaited stage. Reconstructed graphs preserve their route
+without constructor I/O; seeded detail and Settings/report presentation activate after readiness and
+settings, and a newer renderer route report supersedes that seed. Accepted restore keeps its existing
+mounted wizard/Backup view alive while readiness is false.
+
+Native-owned restore tracks fresh frontend writes and fresh-database onboarding completion in
+separate sessions. Its delayed reload drains actual callback/transport completion, including a callback
+arriving after the caller's timeout, before retiring those sessions and reconstructing the graph.
+Retained web restore still owns its own navigation. About's ordinary restart uses the same accepted-action
+drains and leave confirmation as Reload. These SDK paths await macOS semantic/runtime verification.
+
+AI Settings reconnect/focus handling rechecks each paused lane before forcing its read. An overlapping
+resume can claim a later lane while another callback awaits an earlier lane; the earlier callback's
+stale pending set must not replay that already-completed read. Controlled receipt tests preserve the
+single-read contract without relying on foreground scheduling speed.
+
 `Shell/NativeNoticeCenter.swift`, `Components/NativeNoticeHost.swift`, and `ActionToast.swift`
 provide app-lifetime notices and consume captured actions before awaiting them. Shell construction accepts an optional notice center so tests can control expiry and clock time; normal app construction retains automatic expiry. `AdminScreens.make` and `PortfolioScreens`
 also accept an optional shared cache clock; their app defaults remain wall-clock time. Transactions,
@@ -1552,7 +1571,12 @@ No report endpoint or fiscal formula changes.
 File → Print is a separate current-page operation. `NativeTaxPrintSnapshot` freezes the already loaded
 Tax year, visible widgets, comparison year, disclosure state and deduction state. The inert presentation
 and `NativeTaxPrintDocument` reuse section views without query lifecycle hooks or fiscal recalculation.
-Printer-only tables render all columns without horizontal scroll clipping. The SDK checks the route,
+Printer-only tables remove horizontal viewport clipping; Statistics pivots receive actual printable
+width. `VisionNativeUI/Screens/Reports/NativePagePrintPagesView.swift` measures frozen sections and
+remeasures when effective paper dimensions or margins change, including print-panel changes.
+Oversized sections can still cross page boundaries without row-aware break avoidance. New AppKit/PDF
+bounds tests cover narrow paper, orientation, long labels/large values and loaded Tax/Statistics/Net worth documents; execution
+is pending on macOS. The SDK checks the route,
 generation, restore state and overlays again before paginated `NSPrintOperation` presentation. This
 implementation does not claim verified printer pagination or rendered macOS parity; those checks remain
 pending. Statistics and Net worth have their own immutable snapshots, inert documents and focused tests;
@@ -1566,6 +1590,24 @@ checks do not verify SwiftUI/AppKit compilation, accessibility, visual layout or
 See [[docs/reference/native-parity/shell-and-settings|shell parity]],
 [[docs/reference/native-parity/tax|Tax parity]], [[docs/features/onboarding|onboarding]],
 [[docs/features/pdf-report-export|PDF export]] and [[docs/diagrams/index|structural diagrams]].
+
+### Staged native route and storage authority (phase 4 preparation)
+
+[[docs/adr/206-vision-native-staged-web-retirement|Proposed ADR-206]] introduces opt-in
+`NativeNavigationHistory`/`NativeNavigationLocation` and dormant `NativeRawStateStore` boundaries.
+The SDK retains renderer routing and browser storage. Native history tests cover exact raw queries,
+guarded push/replace/back/forward, Settings ownership, admin hydration and legacy redirects. The
+raw store requires an explicit origin, website-store identity, caller-selected file URL and complete
+capture provenance; atomic commits preserve unknown/raw local strings while session values remain
+in memory. It exports the existing 15-key backup subset and accepts only already-source-normalized
+restore strings. Missing, corrupt or incomplete migration state never silently becomes empty state.
+
+The original fixed TypeScript palette and fiscal helpers still require their retained React owner,
+shared cache, locale and lifetime checks. These staged APIs do not retire that owner or the web view,
+and do not migrate real data. A focused exact-source proof passes 12 raw-store/readiness tests; native
+routing integration and macOS rendering remain separate gates.
+
+
 
 ## Install
 

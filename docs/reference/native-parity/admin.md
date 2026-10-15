@@ -2,8 +2,8 @@
 title: "Native parity inventory: Admin and developer tools"
 type: reference
 status: active
-date: 2026-10-12
-updated: 2026-10-12
+date: 2026-10-15
+updated: 2026-10-15
 tags:
   [
     reference,
@@ -358,7 +358,13 @@ Admin pages have no go-to shortcuts in the command palette (admin items render w
 - `dbEditor.rowsOnPage` has both a flat `{n}` string and plural forms in en.json; code uses `tc` (plural) so the `.one`/`.other` forms apply. unverified whether the flat key is still used anywhere.
 - `features/admin/` holds only hooks (`useAdminQueries.ts`, `useTableDataEditorData.ts`); no admin components live there.
 - React Query Devtools panel contents are third-party and not inventoried.
-- Table editor row 28 in Vision Native: the Leave this page? alert holds sidebar clicks, native links and shortcuts, the menu bar's Go items and Quit (an `NSAlert` with the same strings; Stay on page cancels the quit). Remaining gap: a move the web page makes on its own, such as a command-palette navigation, is not blocked; the pending changes stay with that table's editor until they are discarded.
+- Table editor row 28 in Vision Native: the Leave this page? alert holds sidebar clicks, native
+  links and shortcuts, the native command palette, the menu bar's Go items and Quit (an `NSAlert`
+  with the same strings; Stay on page cancels the quit). In phase 3p,
+  `NativeShellModel.activatePaletteAction` sends route selection through the same guarded
+  `navigate(to:)` path. A route change initiated independently by the retained web page is still
+  outside this native navigation guard; pending changes stay with that table's editor until
+  discarded. The macOS interaction gate remains pending.
 - Table editor in Vision Native: Refresh (row 3) is also disabled while changes are pending, because a reload could change the staged rows' `__xmin` under the change list; the web page only disables it while fetching. While Preview SQL runs or the Review dialog is open, cell edits, Add row, Discard changes, the row menus and Refresh are disabled, and Commit sends exactly the previewed change list (a list that changed since asks for a new preview with `dbEditor.previewFailed`). Commit is not the dialog's default button.
 
 ## Counts

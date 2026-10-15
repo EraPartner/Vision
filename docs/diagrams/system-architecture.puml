@@ -324,4 +324,7 @@ NativeReports --> Routes : existing POST /api/reports/{type}
 NativeReports --> ReactApp : fixed TS projection / original context
 NativeTax --> NativeVisiblePrint : loaded snapshot / no new computation
 
+node "Renderer document readiness\nawait commit / reject outgoing ready" as NativeDocumentReadiness
+NativeTax --> NativeDocumentReadiness : SDK startup / restore graph boundary
+
 @enduml

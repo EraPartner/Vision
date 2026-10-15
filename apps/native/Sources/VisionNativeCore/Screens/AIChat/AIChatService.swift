@@ -77,12 +77,23 @@ extension APIClient: AIChatService {
 /// Chat-specific terminal and stall semantics over the common production SSE transport.
 public actor AIChatStreamReader {
     private let stallNanoseconds: UInt64
+    private let sleep: @Sendable (UInt64) async throws -> Void
     private var watchdog: Task<Void, Never>?
     private var requestTask: Task<Void, Error>?
     private var timedOut = false
     private var complete: AIChatComplete?
     private var terminalError: AIChatStreamError?
-    public init(stallNanoseconds: UInt64 = 120_000_000_000) { self.stallNanoseconds = stallNanoseconds }
+    public init(stallNanoseconds: UInt64 = 120_000_000_000) {
+        self.stallNanoseconds = stallNanoseconds
+        self.sleep = { try await Task.sleep(nanoseconds: $0) }
+    }
+    init(
+        stallNanoseconds: UInt64,
+        sleep: @escaping @Sendable (UInt64) async throws -> Void
+    ) {
+        self.stallNanoseconds = stallNanoseconds
+        self.sleep = sleep
+    }
     public func read(
         onEvent: @escaping @Sendable (AIChatEvent) async -> Void,
         frames: @escaping @Sendable (@escaping @Sendable (ServerSentEvent) async throws -> Void) async throws -> Void
@@ -113,7 +124,7 @@ public actor AIChatStreamReader {
     private func armWatchdog() {
         watchdog?.cancel()
         watchdog = Task {
-            do { try await Task.sleep(nanoseconds: stallNanoseconds) } catch { return }
+            do { try await sleep(stallNanoseconds) } catch { return }
             timedOut = true
             requestTask?.cancel()
         }

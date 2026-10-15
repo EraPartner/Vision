@@ -2,7 +2,7 @@
 title: "Native parity inventory: Home, Statistics and reports"
 type: reference
 status: active
-date: 2026-10-13
+date: 2026-10-15
 updated: 2026-10-15
 tags:
   [
@@ -44,7 +44,10 @@ and inactivity/upcoming dismissals use the web app's existing local-storage keys
 The `native` rows below identify implemented controls. A macOS app build and the owner's visual
 pass on Vision Native Demo are still required before this screen meets ADR-204's exit gate.
 The cloud verification runs the portable model/adapter tests; it does not exercise SwiftUI,
-AppKit, WebKit, or real runtime services. Insights now draws natively; its shared PDF report dialog remains web. The tax computation operation is now available; native report forms and serialization remain follow-up work.
+AppKit, WebKit, or real runtime services. Insights and its phase-3p shared report sheet now render
+natively. `NativeReportModel` owns report forms and serialization through the existing PDF APIs;
+its tax context still delegates fiscal computation to shared TypeScript. macOS save-panel,
+keyboard/accessibility and rendered PDF verification remain pending.
 
 **Regions shown:** (widget id in brackets; every widget can be hidden through Customize)
 

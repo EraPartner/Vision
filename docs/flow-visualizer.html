@@ -7962,7 +7962,7 @@
                 "from": "native.onboarding",
                 "to": "native.datasession",
                 "payload": "restore drain then fresh graph",
-                "annotation": "apps/native/VisionNative/ShellController.swift retires old graph on successful shared restore; failed restore resumes admitted state."
+                "annotation": "apps/native/VisionNative/ShellController.swift drains fresh restored frontend callbacks and onboarding HTTP completion before native-owned delayed reload. NativeRendererReadiness.swift refuses outgoing ready until actual commit; captured document/model/generation fence startup. Failed restore resumes admitted state; legacy web restore owns navigation."
               }
             ],
             "docs": [
@@ -8026,7 +8026,7 @@
                 "from": "native.print",
                 "to": "native.print",
                 "payload": "inert section presentation → paginated NSPrintOperation",
-                "annotation": "NativeTaxPrintDocument.swift, NativeStatisticsPrintDocument.swift and NativeNetWorthPrintDocument.swift use frozen presentations without page load hooks. ShellController.swift rechecks generation/route/overlays/restore, measures section blocks and opens NSPrintOperation."
+                "annotation": "NativeTaxPrintDocument.swift, NativeStatisticsPrintDocument.swift and NativeNetWorthPrintDocument.swift use frozen presentations without page load hooks. NativePagePrintPagesView.swift remeasures effective paper dimensions/margins; Statistics receives actual printable width. ShellController.swift rechecks generation/route/overlays/restore before NSPrintOperation. Physical printer and row-aware tall-block breaks remain unverified."
               }
             ],
             "docs": [

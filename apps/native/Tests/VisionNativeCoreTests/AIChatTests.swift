@@ -128,22 +128,50 @@ struct AIChatTests {
         #expect(store.details["a"]?.messages.last?.id == "done")
         #expect(await service.requests.count == 2)
     }
-    // The reader is an actor, not UI state. Keep its short watchdog off the MainActor,
-    // which the concurrent AppKit layout suites can occupy longer than the stall interval.
-    @Test nonisolated func rawUnknownFramesResetStallWatchdogAndSilentStreamTimesOut() async throws {
-        let reader = AIChatStreamReader(stallNanoseconds: 200_000_000)
-        let value = try await reader.read(onEvent: { _ in }) { receive in
-            for _ in 0..<3 {
-                try await Task.sleep(for: .milliseconds(80))
-                try await receive(.init(event: "unknown", data: "malformed"))
+    @Test(.timeLimit(.minutes(1)))
+    nonisolated func rawUnknownFramesResetStallWatchdogAndSilentStreamTimesOut() async throws {
+        let clock = ChatWatchdogClock()
+        let frames = AsyncStream<ServerSentEvent>.makeStream()
+        let reader = AIChatStreamReader(stallNanoseconds: 200_000_000, sleep: { try await clock.sleep($0) })
+        let reading = Task {
+            try await reader.read(onEvent: { _ in }) { receive in
+                for await frame in frames.stream { try await receive(frame) }
             }
-            try await receive(.init(event: "complete", data: "{}"))
         }
+        defer {
+            reading.cancel()
+            frames.continuation.finish()
+        }
+        try await clock.waitForSleeps(1)
+        // Every raw frame must retire the previous deadline, including undecodable frames.
+        for count in 2...4 {
+            frames.continuation.yield(.init(event: "unknown", data: "malformed"))
+            try await clock.waitForSleeps(count)
+            try await clock.waitForCancellations(count - 1)
+            #expect(await clock.pendingCount == 1)
+        }
+        #expect(await clock.intervals == Array(repeating: 200_000_000, count: 4))
+        frames.continuation.yield(.init(event: "complete", data: "{}"))
+        frames.continuation.finish()
+        let value = try await reading.value
         #expect(value.raw == .object([:]))
+        let silentClock = ChatWatchdogClock()
+        let silentFrames = AsyncStream<ServerSentEvent>.makeStream()
+        let silentReading = Task {
+            try await AIChatStreamReader(stallNanoseconds: 10_000_000, sleep: { try await silentClock.sleep($0) })
+                .read(onEvent: { _ in }) { receive in
+                    for await frame in silentFrames.stream { try await receive(frame) }
+                }
+        }
+        defer {
+            silentReading.cancel()
+            silentFrames.continuation.finish()
+        }
+        try await silentClock.waitForSleeps(1)
+        #expect(await silentClock.intervals == [10_000_000])
+        await silentClock.expireCurrentSleep()
         do {
-            _ = try await AIChatStreamReader(stallNanoseconds: 10_000_000).read(onEvent: { _ in }) { _ in
-                try await Task.sleep(for: .seconds(5))
-            }
+            _ = try await silentReading.value
             Issue.record("silent stream should time out")
         } catch { #expect(error as? AIChatStreamError == .timedOut) }
     }
@@ -376,6 +404,84 @@ private func chatComplete(_ id: String, assistant: String) -> TaxValue {
     }
     Issue.record("Expected asynchronous state did not arrive")
 }
+private actor ChatWatchdogClock {
+    private enum Counter: Equatable { case sleeps, cancellations }
+    private struct Waiter {
+        var counter: Counter
+        var target: Int
+        var continuation: CheckedContinuation<Void, Error>
+    }
+    private var pending: [UUID: CheckedContinuation<Void, Error>] = [:]
+    private var latest: UUID?
+    private var cancellations = 0
+    private var waiters: [UUID: Waiter] = [:]
+    private(set) var intervals: [UInt64] = []
+    var pendingCount: Int { pending.count }
+
+    func sleep(_ nanoseconds: UInt64) async throws {
+        let id = UUID()
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                guard !Task.isCancelled else {
+                    continuation.resume(throwing: CancellationError())
+                    return
+                }
+                intervals.append(nanoseconds)
+                pending[id] = continuation
+                latest = id
+                resolveWaiters()
+            }
+        } onCancel: {
+            Task { await self.cancelSleep(id) }
+        }
+    }
+    func waitForSleeps(_ target: Int) async throws { try await wait(for: .sleeps, target: target) }
+    func waitForCancellations(_ target: Int) async throws { try await wait(for: .cancellations, target: target) }
+    func expireCurrentSleep() {
+        guard let latest, let continuation = pending.removeValue(forKey: latest) else {
+            preconditionFailure("Expected an armed watchdog")
+        }
+        continuation.resume()
+    }
+    private func cancelSleep(_ id: UUID) {
+        guard let continuation = pending.removeValue(forKey: id) else { return }
+        cancellations += 1
+        continuation.resume(throwing: CancellationError())
+        resolveWaiters()
+    }
+    private func reached(_ counter: Counter, target: Int) -> Bool {
+        (counter == .sleeps ? intervals.count : cancellations) >= target
+    }
+    private func wait(for counter: Counter, target: Int) async throws {
+        let id = UUID()
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                guard !Task.isCancelled else {
+                    continuation.resume(throwing: CancellationError())
+                    return
+                }
+                if reached(counter, target: target) {
+                    continuation.resume()
+                } else {
+                    waiters[id] = .init(counter: counter, target: target, continuation: continuation)
+                }
+            }
+        } onCancel: {
+            Task { await self.cancelWaiter(id) }
+        }
+    }
+    private func cancelWaiter(_ id: UUID) {
+        waiters.removeValue(forKey: id)?.continuation.resume(throwing: CancellationError())
+    }
+    private func resolveWaiters() {
+        let ready = waiters.filter { reached($0.value.counter, target: $0.value.target) }
+        for (id, waiter) in ready {
+            waiters[id] = nil
+            waiter.continuation.resume()
+        }
+    }
+}
+
 private actor ChatFixtureService: AIChatService {
     var requests: [AIChatSendRequest] = []
     var deleted: [String] = []

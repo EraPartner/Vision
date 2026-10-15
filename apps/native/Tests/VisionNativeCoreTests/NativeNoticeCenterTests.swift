@@ -29,7 +29,7 @@ struct NativeNoticeCenterTests {
         #expect(center.entries.count == 1)
     }
     @Test func sourceCountersDoNotCollideAndActionUpgradeDoesNotDuplicateNotice() {
-        let center = NativeNoticeCenter(automaticExpiry: false)
+        let center = NativeNoticeCenter(now: { Date(timeIntervalSince1970: 100) }, automaticExpiry: false)
         let first = UUID()
         let second = UUID()
         let notice = ScreenNotice(id: 1, kind: .success, key: "common.saved")
@@ -42,7 +42,7 @@ struct NativeNoticeCenterTests {
     }
 
     @Test func onlyNewestUndoAnswersShortcutAndDoubleDispatchCannotReplay() async {
-        let center = NativeNoticeCenter(automaticExpiry: false)
+        let center = NativeNoticeCenter(now: { Date(timeIntervalSince1970: 100) }, automaticExpiry: false)
         var restored: [String] = []
         center.publish(
             .init(id: 1, kind: .success, key: "older"), source: UUID(), lifetime: 8,
@@ -63,7 +63,7 @@ struct NativeNoticeCenterTests {
     }
 
     @Test func olderToastKeepsItsCapturedActionButClearsNewestShortcutSlot() async {
-        let center = NativeNoticeCenter(automaticExpiry: false)
+        let center = NativeNoticeCenter(now: { Date(timeIntervalSince1970: 100) }, automaticExpiry: false)
         var restored: [String] = []
         let older = center.publish(
             .init(id: 1, kind: .success, key: "older"), source: UUID(), lifetime: 8,

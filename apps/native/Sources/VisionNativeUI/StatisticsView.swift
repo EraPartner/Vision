@@ -7,6 +7,7 @@ public struct StatisticsView: View {
     @State private var customize = false
     private let printSection: NativeStatisticsPrintSection?
     @Environment(\.visionTheme) private var theme
+    @Environment(\.nativePrintPageWidth) private var printPageWidth
 
     public init(screens: StatisticsScreens, shell: NativeShellModel) {
         self.screens = screens
@@ -32,7 +33,15 @@ public struct StatisticsView: View {
         guard case .pivotTable(let page) = printSection else { return model.pivotPeriods }
         return Array(model.pivotPeriods.dropFirst(page * 4).prefix(4))
     }
-    private var pivotColumnWidth: CGFloat { isPrinting ? 72 : 110 }
+    private var pivotLabelWidth: CGFloat {
+        guard isPrinting else { return 200 }
+        return min(120, max(0, (printPageWidth ?? 544) - 32) * 0.25)
+    }
+    private var pivotColumnWidth: CGFloat {
+        guard isPrinting else { return 110 }
+        let available = max(0, (printPageWidth ?? 544) - 32 - pivotLabelWidth)
+        return min(72, available / CGFloat(displayedPivotPeriods.count + 1))
+    }
     private var isPrinting: Bool { printSection != nil }
     private func includes(_ section: NativeStatisticsPrintSection) -> Bool {
         printSection == nil || printSection == section
@@ -334,76 +343,125 @@ public struct StatisticsView: View {
                         model.pivotPage == 0)
                 }
             }
-            // The label column stays outside the scrolling month columns, preserving the
-            // web table's sticky category labels in narrow windows.
-            HStack(alignment: .top, spacing: 0) {
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(strings.t("categories.title")).font(.caption.weight(.semibold)).frame(height: 32)
-                    ForEach(model.pivotGroups) { group in
-                        HStack {
-                            if group.isExpandable, !isPrinting {
-                                Button {
-                                    model.toggleGroup(group.id)
-                                } label: {
-                                    Image(
-                                        systemName: model.expandedGroups.contains(group.id)
-                                            ? "chevron.down" : "chevron.right")
-                                }.buttonStyle(.plain)
-                                    .accessibilityLabel(
-                                        strings.t(
-                                            model.expandedGroups.contains(group.id)
-                                                ? "statsPage.pivot.collapseGroup" : "statsPage.pivot.expandGroup",
-                                            ["name": group.name]))
-                            }
-                            Text(group.name).fontWeight(.semibold)
-                        }.frame(height: 32)
-                        if model.expandedGroups.contains(group.id) {
-                            ForEach(group.children) { child in
-                                Text(child.name).padding(.leading, CGFloat(max(1, child.path.count - 1)) * 10).frame(
-                                    height: 32)
-                            }
-                        }
-                    }
-                    Text(strings.t("statsPage.total")).fontWeight(.semibold).frame(height: 32)
-                }.frame(width: isPrinting ? 120 : 200, alignment: .leading)
-                horizontalContent {
+            if isPrinting {
+                printPivotGrid
+            } else {
+                // The label column stays outside the scrolling month columns, preserving the
+                // web table's sticky category labels in narrow windows.
+                HStack(alignment: .top, spacing: 0) {
                     VStack(alignment: .leading, spacing: 0) {
-                        HStack(spacing: 0) {
-                            ForEach(displayedPivotPeriods, id: \.self) { period in
-                                Text(period).frame(width: pivotColumnWidth, height: 32)
-                            }
-                            Text(strings.t("statsPage.total")).frame(width: pivotColumnWidth, height: 32)
-                        }.font(.caption.weight(.semibold))
+                        Text(strings.t("categories.title")).font(.caption.weight(.semibold)).frame(height: 32)
                         ForEach(model.pivotGroups) { group in
-                            pivotRow(
-                                values: group.values, ids: group.categoryIds, name: group.name,
-                                uncategorised: group.categoryIds.isEmpty)
+                            HStack {
+                                if group.isExpandable, !isPrinting {
+                                    Button {
+                                        model.toggleGroup(group.id)
+                                    } label: {
+                                        Image(
+                                            systemName: model.expandedGroups.contains(group.id)
+                                                ? "chevron.down" : "chevron.right")
+                                    }.buttonStyle(.plain)
+                                        .accessibilityLabel(
+                                            strings.t(
+                                                model.expandedGroups.contains(group.id)
+                                                    ? "statsPage.pivot.collapseGroup" : "statsPage.pivot.expandGroup",
+                                                ["name": group.name]))
+                                }
+                                Text(group.name).fontWeight(.semibold)
+                            }.frame(height: 32)
                             if model.expandedGroups.contains(group.id) {
                                 ForEach(group.children) { child in
-                                    pivotRow(values: child.values, ids: child.categoryIds, name: child.name)
+                                    Text(child.name).padding(.leading, CGFloat(max(1, child.path.count - 1)) * 10)
+                                        .frame(
+                                            height: 32)
                                 }
                             }
                         }
-                        HStack(spacing: 0) {
-                            ForEach(displayedPivotPeriods, id: \.self) { period in
-                                pivotCell(
-                                    model.pivotGroups.reduce(0) { $0 + ($1.values[period] ?? 0) }, ids: [],
-                                    period: period, name: strings.t("statsPage.total"))
-                            }
-                            if isPrinting {
-                                Text(money(model.pivotGroups.reduce(0) { $0 + $1.total })).frame(
-                                    width: pivotColumnWidth, height: 32)
-                            } else {
-                                Button(money(model.pivotGroups.reduce(0) { $0 + $1.total })) {
-                                    shell.navigate(to: "/transactions")
+                        Text(strings.t("statsPage.total")).fontWeight(.semibold).frame(height: 32)
+                    }.frame(width: pivotLabelWidth, alignment: .leading)
+                    horizontalContent {
+                        VStack(alignment: .leading, spacing: 0) {
+                            HStack(spacing: 0) {
+                                ForEach(displayedPivotPeriods, id: \.self) { period in
+                                    Text(period).frame(width: pivotColumnWidth, height: 32)
                                 }
-                                .buttonStyle(.link).frame(width: pivotColumnWidth, height: 32)
+                                Text(strings.t("statsPage.total")).frame(width: pivotColumnWidth, height: 32)
+                            }.font(.caption.weight(.semibold))
+                            ForEach(model.pivotGroups) { group in
+                                pivotRow(
+                                    values: group.values, ids: group.categoryIds, name: group.name,
+                                    uncategorised: group.categoryIds.isEmpty)
+                                if model.expandedGroups.contains(group.id) {
+                                    ForEach(group.children) { child in
+                                        pivotRow(values: child.values, ids: child.categoryIds, name: child.name)
+                                    }
+                                }
                             }
-                        }.fontWeight(.semibold)
+                            HStack(spacing: 0) {
+                                ForEach(displayedPivotPeriods, id: \.self) { period in
+                                    pivotCell(
+                                        model.pivotGroups.reduce(0) { $0 + ($1.values[period] ?? 0) }, ids: [],
+                                        period: period, name: strings.t("statsPage.total"))
+                                }
+                                if isPrinting {
+                                    Text(money(model.pivotGroups.reduce(0) { $0 + $1.total })).frame(
+                                        width: pivotColumnWidth, height: 32)
+                                } else {
+                                    Button(money(model.pivotGroups.reduce(0) { $0 + $1.total })) {
+                                        shell.navigate(to: "/transactions")
+                                    }
+                                    .buttonStyle(.link).frame(width: pivotColumnWidth, height: 32)
+                                }
+                            }.fontWeight(.semibold)
+                        }
                     }
                 }
             }
         }
+    }
+    private var printPivotGrid: some View {
+        Grid(alignment: .topLeading, horizontalSpacing: 0, verticalSpacing: 10) {
+            GridRow {
+                printPivotLabel(strings.t("categories.title"))
+                ForEach(displayedPivotPeriods, id: \.self) { period in
+                    Text(period).frame(width: pivotColumnWidth).fixedSize(horizontal: false, vertical: true)
+                }
+                Text(strings.t("statsPage.total")).frame(width: pivotColumnWidth)
+                    .fixedSize(horizontal: false, vertical: true)
+            }.font(.caption.weight(.semibold))
+            ForEach(model.pivotGroups) { group in
+                printPivotRow(name: group.name, values: group.values).fontWeight(.semibold)
+                if model.expandedGroups.contains(group.id) {
+                    ForEach(group.children) { child in
+                        printPivotRow(
+                            name: child.name, values: child.values,
+                            indentation: CGFloat(max(1, child.path.count - 1)) * 10)
+                    }
+                }
+            }
+            GridRow {
+                printPivotLabel(strings.t("statsPage.total"))
+                ForEach(displayedPivotPeriods, id: \.self) { period in
+                    printPivotAmount(model.pivotGroups.reduce(0) { $0 + ($1.values[period] ?? 0) })
+                }
+                printPivotAmount(model.pivotGroups.reduce(0) { $0 + $1.total })
+            }.fontWeight(.semibold)
+        }
+    }
+    private func printPivotRow(name: String, values: [String: Decimal], indentation: CGFloat = 0) -> some View {
+        GridRow {
+            printPivotLabel(name, indentation: indentation)
+            ForEach(displayedPivotPeriods, id: \.self) { period in printPivotAmount(values[period] ?? 0) }
+            printPivotAmount(values.values.reduce(0, +))
+        }
+    }
+    private func printPivotLabel(_ text: String, indentation: CGFloat = 0) -> some View {
+        Text(text).padding(.leading, indentation).frame(width: pivotLabelWidth, alignment: .leading)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+    private func printPivotAmount(_ value: Decimal) -> some View {
+        Text(money(value)).monospacedDigit().frame(width: pivotColumnWidth, alignment: .trailing)
+            .fixedSize(horizontal: false, vertical: true)
     }
     private func pivotRow(values: [String: Decimal], ids: [Int], name: String, uncategorised: Bool = false) -> some View
     {
@@ -419,8 +477,7 @@ public struct StatisticsView: View {
     {
         Group {
             if isPrinting {
-                Text(money(value)).lineLimit(1).minimumScaleFactor(0.5).frame(width: pivotColumnWidth, height: 32)
-                    .monospacedDigit()
+                printPivotAmount(value)
             } else {
                 Button(money(value)) {
                     shell.navigate(

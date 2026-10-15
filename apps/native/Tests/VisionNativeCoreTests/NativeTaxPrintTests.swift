@@ -12,7 +12,7 @@ private actor NativeTaxPrintTransport: APITransport {
         case "/api/belgian-tax/overview": data = NativeTaxPrintFixtures.overview
         case "/api/belgian-tax/dashboard": data = NativeTaxPrintFixtures.dashboard
         case "/api/categories/tree", "/api/categories":
-            data = #"{"items":[],"total":0,"limit":1000,"offset":0}"#
+            data = #"{"items":[],"total":0,"limit":1000,"offset":0,"links":[]}"#
         case "/api/settings/dashboard_settings":
             data = #"{"key":"dashboard_settings","value":{},"expected":{"exists":true,"value":{}}}"#
         case "/api/settings/widget_visibility":

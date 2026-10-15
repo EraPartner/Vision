@@ -188,6 +188,7 @@ package "Native reports and loaded-page print (phase 3p)" {
   class "Loaded Tax / Statistics / Net worth snapshots" as NativePagePrintSnapshots
   class "Inert Tax / Statistics / Net worth documents" as NativePagePrintDocuments
   class "ShellController current-page print" as NativePagePrintDispatch
+  class NativePagePrintPagesView
 }
 NativeReportSheet --> NativeReportModel : source form / same-page draft
 NativeReportModel --> NativeTaxReportContextService : requested fiscal year
@@ -198,6 +199,10 @@ BinaryReportAPI --> Repositories : existing PDF source data
 NativePagePrintDispatch --> NativePagePrintSnapshots : capture active route / loaded figures / visible state
 NativeTax --> NativePagePrintSnapshots : selected year / visible widgets / disclosures
 NativePagePrintSnapshots --> NativePagePrintDocuments : immutable presentation / no reads or fiscal math
-NativePagePrintDocuments --> NativePagePrintDispatch : measured section blocks / NSPrintOperation
+NativePagePrintDocuments --> NativePagePrintPagesView : frozen section blocks / actual content width
+NativePagePrintPagesView --> NativePagePrintDispatch : remeasured paper bounds / NSPrintOperation
+
+class NativeRendererReadiness
+NativeSettingsWindow --> NativeRendererReadiness : await actual document commit before ready startup
 
 @enduml

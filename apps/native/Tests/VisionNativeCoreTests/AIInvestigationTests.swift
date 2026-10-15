@@ -350,23 +350,26 @@ struct AIInvestigationTests {
         #expect(model.openAiEnabled)
         model.didDisappear()
     }
-    @Test func slowJobReadsOverlapAtSourceIntervalWithoutRestoringADeletedJob() async throws {
+    @Test(.timeLimit(.minutes(1)))
+    func slowJobReadsOverlapAtSourceIntervalWithoutRestoringADeletedJob() async throws {
         let service = InvestigationFixtureService()
         let model = AIInvestigationModel(service: service, pollDelay: .milliseconds(10))
+        defer {
+            model.didDisappear()
+            Task { await service.release() }
+        }
         await model.load()
         model.question = "q"
         await service.pause("get")
         await model.run()
-        let clock = ContinuousClock()
-        let deadline = clock.now.advanced(by: .seconds(5))
-        while await service.getReads < 2, clock.now < deadline { try await Task.sleep(for: .milliseconds(1)) }
+        // Both reads must be outstanding before the delete, regardless of executor scheduling.
+        try await service.waitForPausedGets(2)
         #expect(await service.getReads >= 2)
         await model.deleteJob()
         await service.release()
         await Task.yield()
         await Task.yield()
         #expect(model.job == nil)
-        model.didDisappear()
     }
     @Test func staleBackgroundReconnectStartsANewOnlineQueryWithoutFocusRefetch() async throws {
         let service = InvestigationFixtureService()
@@ -482,10 +485,33 @@ private actor InvestigationFixtureService: AIInvestigationService {
     private var failingDocument = false
     private var pauseKind: String?
     private var continuations: [CheckedContinuation<Void, Never>] = []
+    private var pausedGets = 0
+    private var getWaiters: [UUID: (count: Int, continuation: CheckedContinuation<Void, Error>)] = [:]
     private var paused = false
     private var failCreate = false
     func pause(_ kind: String) { pauseKind = kind }
     func waitForPause() async { while !paused { await Task.yield() } }
+    func waitForPausedGets(_ count: Int) async throws {
+        let id = UUID()
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                guard !Task.isCancelled else {
+                    continuation.resume(throwing: CancellationError())
+                    return
+                }
+                if pausedGets >= count {
+                    continuation.resume()
+                } else {
+                    getWaiters[id] = (count, continuation)
+                }
+            }
+        } onCancel: {
+            Task { await self.cancelGetWaiter(id) }
+        }
+    }
+    private func cancelGetWaiter(_ id: UUID) {
+        getWaiters.removeValue(forKey: id)?.continuation.resume(throwing: CancellationError())
+    }
     func release() {
         pauseKind = nil
         paused = false
@@ -499,7 +525,17 @@ private actor InvestigationFixtureService: AIInvestigationService {
     private func gate(_ kind: String) async {
         guard pauseKind == kind else { return }
         paused = true
-        await withCheckedContinuation { continuations.append($0) }
+        await withCheckedContinuation {
+            continuations.append($0)
+            if kind == "get" {
+                pausedGets += 1
+                let ready = getWaiters.filter { $0.value.count <= pausedGets }
+                for (id, waiter) in ready {
+                    getWaiters[id] = nil
+                    waiter.continuation.resume()
+                }
+            }
+        }
     }
     func investigationStatus() throws -> AIResearchStatus {
         statusReads += 1

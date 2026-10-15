@@ -338,7 +338,7 @@ package "Native Settings and retained WK state (phase 3o)" {
   }
 }
 NativeSettingsHost --> NativeSettingsModel : suspend drafts / failure resume / success retire
-NativeSettingsHost --> NativeDataSession : drain / resume / retire shared transport
+NativeSettingsHost --> NativeDataSession : drain / resume / retire shared + fresh-completion transports
 NativeSettingsPersistence ..> NativeDataSession : shared APIClient transport admission
 NativeSettingsModel --> NativeSettingsPersistence : existing conditional settings API
 NativeSettingsModel --> NativeSettingsMirror : draft then receipt
@@ -368,5 +368,20 @@ NativeReportModel --> NativeSourceCallbacks : original fiscal projection / extre
 NativeReportModel --> NativeDataSession : binary request / restore fence
 NativeOnboardingModel --> NativeSettingsModel : completion writer
 NativeSettingsHost --> NativePagePrintSnapshots : active route / immutable visible state / no queries
+
+class NativeRendererReadiness
+NativeSettingsHost --> NativeRendererReadiness : actual document commit / checked ready token
+
+package "Staged phase 4 (SDK takeover disabled)" {
+  class NativeNavigationHistory <<opt-in>>
+  class NativeNavigationLocation
+  class NativeRawStateStore <<dormant actor>>
+}
+NativeNavigationHistory --> NativeNavigationLocation : exact raw query / decoded route
+note right of NativeRawStateStore
+  Explicit origin + website-store identity + complete capture.
+  Atomic raw local strings; session map stays in memory.
+  Existing host admission and TypeScript helpers remain required.
+end note
 
 @enduml

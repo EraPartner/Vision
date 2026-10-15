@@ -6,9 +6,14 @@ import VisionNativeCore
 public struct NativeStatisticsPrintDocument: View {
     private let presentation: NativeStatisticsPrintPresentation
     private let sections: [NativeStatisticsPrintSection]
-    public init(presentation: NativeStatisticsPrintPresentation, sections: [NativeStatisticsPrintSection]? = nil) {
+    private let pageWidth: CGFloat?
+    public init(
+        presentation: NativeStatisticsPrintPresentation, sections: [NativeStatisticsPrintSection]? = nil,
+        pageWidth: CGFloat? = nil
+    ) {
         self.presentation = presentation
         self.sections = sections ?? presentation.snapshot.sections
+        self.pageWidth = pageWidth
     }
     public var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -19,7 +24,21 @@ public struct NativeStatisticsPrintDocument: View {
             .fixedSize(horizontal: false, vertical: true).allowsHitTesting(false)
             .environment(\.locale, presentation.snapshot.settings.numberFormat.locale)
             .environment(\.visionTheme, VisionTheme(selection: presentation.snapshot.theme, isPrintReport: true))
+            .environment(\.nativePrintPageWidth, pageWidth)
             .preferredColorScheme(.light)
+    }
+}
+
+private struct NativePrintPageWidthKey: EnvironmentKey {
+    static let defaultValue: CGFloat? = nil
+}
+
+extension EnvironmentValues {
+    /// Supplied before AppKit measures a frozen section, so table sizing does not
+    /// depend on an asynchronous geometry callback or a mounted screen's width.
+    var nativePrintPageWidth: CGFloat? {
+        get { self[NativePrintPageWidthKey.self] }
+        set { self[NativePrintPageWidthKey.self] = newValue }
     }
 }
 

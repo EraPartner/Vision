@@ -2,8 +2,8 @@
 title: Feature - Onboarding
 type: feature
 status: active
-date: 2026-10-13
-updated: 2026-10-13
+date: 2026-10-15
+updated: 2026-10-15
 tags:
   [
     feature,
@@ -36,7 +36,13 @@ Its strict capability suppresses the web wizard before its state/query hooks run
 the source local-storage format; completing or skipping uses the shared settings writer. CSV review
 and backup restore reuse the existing import and restore owners, including the one-time fresh graph
 rebuild after successful restore. Source dialogs remain available when the capability is absent.
-Foundation and source checks do not establish macOS visual or keyboard parity.
+Close, Escape and Skip setup complete onboarding through that writer; a failed completion keeps
+the wizard open. Interactive dismissal is blocked so it cannot bypass the completion write.
+Next/Finish use the default action, Close uses the cancel action, and changing steps requests
+accessibility focus on the new heading. Covered overlays stay mounted, with only the active one
+exposed to interaction and accessibility. The shell records the covered overlay's owning field
+control and selection for restoration when it is revealed again. Foundation and source checks do
+not establish final-dismissal focus return, macOS keyboard dispatch, VoiceOver or visual parity.
 See [[docs/architecture/native-app#Shell overlays and reports (phase 3p)|native ownership]],
 [[docs/reference/native-parity/shell-and-settings|shell parity]] and [[docs/diagrams/index|flow diagrams]].
 

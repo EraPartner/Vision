@@ -210,7 +210,11 @@ import Observation
     private func resumePausedReads() async {
         guard active, isOnline, isForeground else { return }
         let pending = pausedReads
-        for lane in pending where lane != .models || ollamaStatus?.ok == true { await read(lane, force: true) }
+        for lane in pending where lane != .models || ollamaStatus?.ok == true {
+            // A concurrent reconnect/focus continuation may have resumed this lane while we awaited another.
+            guard pausedReads.contains(lane) else { continue }
+            await read(lane, force: true)
+        }
     }
     public func pollStatus() async {
         guard active, isOnline, isForeground, statusPollInterval != nil else { return }
