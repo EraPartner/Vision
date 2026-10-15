@@ -8,6 +8,10 @@
 
     @MainActor @Suite("Frozen net-worth row-aware print rendering")
     struct NativeNetWorthRowPrintRenderTests {
+        init() throws {
+            try NativeAppKitTestApplication.prepare()
+        }
+
         @Test(arguments: [CGFloat(451), CGFloat(540)])
         func historyRepeatsHeadersAndKeepsEveryLoadedRowWholeWithFrozenPartialError(_ width: CGFloat) async throws {
             let service = NetWorthRowPrintService()
@@ -159,7 +163,8 @@
             let service = NetWorthRowPrintService(unavailableAccounts: true, unavailablePrices: true)
             let model = await loaded(service)
             let snapshot = try NativeNetWorthPrintSnapshot.capture(
-                model: model, settings: .defaults, strings: CatalogStrings(language: .en), theme: .init(appearance: .dark))
+                model: model, settings: .defaults, strings: CatalogStrings(language: .en),
+                theme: .init(appearance: .dark))
             #expect(snapshot.accounts == nil && snapshot.accountsError != nil)
             let error = try #require(snapshot.pricesError)
             let before = await service.calls

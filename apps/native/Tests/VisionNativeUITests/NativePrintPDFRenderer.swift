@@ -6,11 +6,12 @@
     import Testing
     @testable import VisionNativeUI
 
-    /// Synthetic vector-PDF rendering with an actual AppKit display transaction.
-    /// An unordered window can measure NSHostingView but export an empty display list.
+    /// Synthetic vector-PDF rendering through AppKit's printing lifecycle.
+    /// A measured NSHostingView is insufficient: its real PDF text must also be ready.
     @MainActor enum NativePrintPDFRenderer {
         static func render(_ pages: NativePagePrintPagesView) throws -> [PDFDocument] {
             let diagnostics = try diagnosticDirectory()
+            try NativeAppKitTestApplication.prepare()
             let application = NSApplication.shared
             let originalKeyWindow = application.keyWindow
             var range = NSRange()
@@ -51,24 +52,36 @@
                 let deadline = Date(timeIntervalSinceNow: 1)
                 var isReady = false
                 var probeData = Data()
+                var probeSucceeded = false
                 repeat {
                     // Advance the display transaction, then observe its actual vector
                     // output. The deadline bounds failure; it is not a fixed sleep.
-                    _ = RunLoop.main.run(mode: .default, before: Date(timeIntervalSinceNow: 0.005))
+                    NativeAppKitTestApplication.pumpEvents(until: Date(timeIntervalSinceNow: 0.005))
                     root.layoutSubtreeIfNeeded()
                     window.displayIfNeeded()
                     root.display()
                     CATransaction.flush()
-                    probeData = readiness.dataWithPDF(inside: readiness.bounds)
+                    let probeOutput = vectorPDF(readiness)
+                    probeData = probeOutput.data
+                    probeSucceeded = probeOutput.succeeded
                     let probe = PDFDocument(data: probeData)
-                    isReady = probe?.string?.contains(marker) == true
+                    isReady = probeSucceeded && probe?.string?.contains(marker) == true
                 } while !isReady && Date() < deadline
-                let pageData = canvas.dataWithPDF(inside: canvas.bounds)
+                let pageOutput = vectorPDF(canvas)
+                let pageData = pageOutput.data
                 if let diagnostics {
                     try probeData.write(to: diagnostics.appendingPathComponent("page-\(index)-readiness.pdf"))
                     try pageData.write(to: diagnostics.appendingPathComponent("page-\(index).pdf"))
+                    try NativeAppKitTestApplication.diagnostics(window: window).write(
+                        to: diagnostics.appendingPathComponent("page-\(index)-appkit.txt"),
+                        atomically: true, encoding: .utf8)
                 }
-                try #require(isReady, "SwiftUI produced no vector PDF text after its display transaction")
+                try #require(probeSucceeded, "The SwiftUI readiness PDF print operation failed")
+                try #require(pageOutput.succeeded, "The page PDF print operation failed")
+                try #require(
+                    isReady,
+                    "SwiftUI produced no vector PDF text after its display transaction: "
+                        + NativeAppKitTestApplication.diagnostics(window: window))
                 #expect(application.keyWindow === originalKeyWindow)
                 let document = try #require(PDFDocument(data: pageData))
                 #expect(document.pageCount == 1)
@@ -77,6 +90,25 @@
                 #expect(abs(output.bounds(for: .mediaBox).height - rect.height) < 1)
                 return document
             }
+        }
+
+        private static func vectorPDF(_ view: NSView) -> (data: Data, succeeded: Bool) {
+            let info = NSPrintInfo(dictionary: [:])
+            info.paperSize = view.bounds.size
+            info.leftMargin = 0
+            info.rightMargin = 0
+            info.topMargin = 0
+            info.bottomMargin = 0
+            info.isHorizontallyCentered = false
+            info.isVerticallyCentered = false
+            let data = NSMutableData()
+            // Use AppKit's actual printing hooks, as the application does, while
+            // the wrapper canvas keeps its frozen paginator out of a new layout pass.
+            let operation = NSPrintOperation.pdfOperation(with: view, inside: view.bounds, to: data, printInfo: info)
+            operation.showsPrintPanel = false
+            operation.showsProgressPanel = false
+            let succeeded = operation.run()
+            return (data as Data, succeeded)
         }
 
         private static func diagnosticDirectory() throws -> URL? {

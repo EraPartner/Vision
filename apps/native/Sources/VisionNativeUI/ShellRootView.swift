@@ -33,8 +33,9 @@ public struct ShellRootView<WebContent: View>: View {
             VStack(spacing: 0) {
                 shellBanners
                 ZStack {
-                    webContent(model.detail != .web)
-                        .ignoresSafeArea()
+                    NativeShellWebPresentation(mode: model.presentationMode, hidden: model.isWebContentHidden) {
+                        webContent($0)
+                    }.ignoresSafeArea()
                     if case .native(let screen) = model.detail {
                         NativePageZoomView(factor: model.pageZoom) {
                             NativeScreenContainer(screen: screen, model: model)
@@ -45,6 +46,11 @@ public struct ShellRootView<WebContent: View>: View {
                             NativeNotFoundView(shell: model)
                                 .environment(\.colorScheme, theme.colorScheme)
                         }
+                    } else if model.detail == .loading || model.detail == .unavailable {
+                        NativeShellUnavailableView(
+                            detail: model.detail, strings: model.strings,
+                            retry: model.canRetryInitialSettings ? { model.reloadSettings() } : nil
+                        ).environment(\.colorScheme, theme.colorScheme)
                     }
                 }
             }

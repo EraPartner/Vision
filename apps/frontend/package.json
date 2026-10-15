@@ -9,6 +9,7 @@
     "dev": "vite",
     "build": "bun ../../scripts/generate-locales.ts && vite build",
     "build:dev": "vite build --mode development",
+    "build:native-helper": "bun scripts/build-native-helper.ts",
     "preview": "vite preview",
     "size:check": "bun scripts/check-bundle-size.ts",
     "lint": "eslint .",

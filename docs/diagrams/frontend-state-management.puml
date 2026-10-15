@@ -386,7 +386,28 @@ package "Staged phase 4 (SDK takeover disabled)" {
   class NativeRawStateCaptureBridge <<unwired read-only>>
   class NativeNavigationIdentifier <<identifier coercion>>
   class "nativeRouteAdapter.ts" as NativeRouteAdapter <<detached proof>>
+  class NativeShellPresentationMode <<fixed opt-in>>
+  class NativeShellIntentCoordinator <<optional session owner>>
+  class NativeHelperDocumentSession <<unwired host authority>>
+  class NativeHelperDocumentBridge <<fixed ABI-1 scripts>>
+  class "native-helper.ts" as NativeHelperEntry <<inert optional artifact>>
+  class "nativeHelperDocument.ts" as NativeHelperDocument <<dormant owner>>
 }
+NativeHelperDocumentSession --> NativeHelperDocumentBridge : current native observation / strict receipt
+NativeShellIntentCoordinator --> NativeNavigationHistory : graph lease / committed raw history
+note right of NativeShellIntentCoordinator
+  Pending CSV / transaction and native menu commands.
+  Explicit startup gates and destination acknowledgment.
+  SDK ingress and UI consumer wiring remain disabled.
+end note
+NativeHelperEntry --> NativeHelperDocument : explicit host bootstrap / typed locale / dispose
+NativeHelperDocument --> QueryClient : App defaults / document-owned cache
+NativeHelperEntry ..> NativeHelperDocumentBridge : ABI-1 contract; SDK not integrated
+note right of NativeShellPresentationMode
+  Retained web remains default.
+  Helper branch stays hidden; native loading/error/notFound.
+  SDK print checks disposition before and after preparation.
+end note
 NativeRawStateCaptureBridge --> NativeRawStateStore : strict complete typed capture / host admission still required
 note right of NativeRouteAdapter
   Native preflight lease, then source-router acceptance.

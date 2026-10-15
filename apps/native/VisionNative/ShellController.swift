@@ -1761,7 +1761,8 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     }
 
     private func capturePagePrintSnapshot() -> PagePrintSnapshot? {
-        switch shellModel.route.path {
+        guard shellModel.printDisposition == .nativePage else { return nil }
+        return switch shellModel.route.path {
         case "/tax": (try? NativeTaxPrintSnapshot.capture(shell: shellModel)).map(PagePrintSnapshot.tax)
         case "/statistics":
             (try? NativeStatisticsPrintSnapshot.capture(shell: shellModel)).map(PagePrintSnapshot.statistics)
@@ -1776,13 +1777,16 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             restoredNativeGeneration == nil, shellModel.nativeSettings?.isSuspendedForRestore != true,
             !shellModel.isReloadingGraph, !shellModel.isPresentingNativeOverlay, queue.isReady
         else { return false }
-        if shellModel.detail == .web { return webShell?.webView != nil }
-        return capturePagePrintSnapshot() != nil
+        switch shellModel.printDisposition {
+        case .webDocument: return webShell?.webView != nil
+        case .nativePage: return capturePagePrintSnapshot() != nil
+        case .unavailable: return false
+        }
     }
 
     private func printCurrentPage() {
         guard canPrintCurrentPage else { return }
-        if shellModel.detail == .web {
+        if shellModel.printDisposition == .webDocument {
             let operation = webShell?.webView.printOperation(with: NSPrintInfo.shared)
             operation?.showsPrintPanel = true
             operation?.showsProgressPanel = true
@@ -1821,6 +1825,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
                 }
                 try self.requireNativeGeneration(generation)
                 guard self.shellModel.route.string == route, !self.restoreFenceEntered,
+                    self.shellModel.printDisposition == .nativePage,
                     self.pendingRestoreReload == nil, !self.shellModel.isPresentingNativeOverlay,
                     !self.shellModel.isReloadingGraph, self.shellModel.nativeSettings?.isSuspendedForRestore != true
                 else { return }

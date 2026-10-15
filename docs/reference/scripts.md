@@ -1,7 +1,7 @@
 ---
 title: Scripts Reference
 type: reference
-date: 2026-10-12
+date: 2026-10-15
 tags:
   [
     reference,
@@ -87,6 +87,15 @@ Electron readers ([[docs/architecture/native-app|Vision Native App Architecture]
 | `dist`           | Build the frontend and Electron distribution                              |
 | `version:bump`   | Update versioned manifests atomically                                     |
 | `native:prepare` | Prepare the pinned PostgreSQL, migration, Bun, and report-browser payload |
+
+The frontend workspace also provides the optional
+`bun run --filter vision-frontend build:native-helper` command. Run it **after** the ordinary
+frontend build. Its isolated Vite configuration adds `dist/native-helper.html` and confines
+all bootstrap/lazy chunks to `dist/native-helper-assets/`, preserving ordinary index/assets
+and their budgets. It loads no normal preload plugin or public files. The entry stays inert
+until a trusted native host explicitly bootstraps it; building does not enable the SDK mode.
+See [[docs/adr/207-vision-native-helper-document|ADR-207]] and
+[[docs/architecture/native-app|native integration gates]].
 
 ## Static and generated checks
 

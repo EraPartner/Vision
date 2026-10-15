@@ -8,6 +8,10 @@
 
     @MainActor @Suite("Frozen Statistics table rows across printed pages")
     struct NativeStatisticsRowPrintRenderTests {
+        init() throws {
+            try NativeAppKitTestApplication.prepare()
+        }
+
         private let strings = CatalogStrings(language: .en)
         private let settings = NativeAppSettings(showDecimalPlaces: 12)
 

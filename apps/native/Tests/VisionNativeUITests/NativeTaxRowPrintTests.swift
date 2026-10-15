@@ -8,6 +8,10 @@
 
     @MainActor @Suite("Frozen Tax table rows and repeated print headers")
     struct NativeTaxRowPrintTests {
+        init() throws {
+            try NativeAppKitTestApplication.prepare()
+        }
+
         @Test(arguments: [NativeLanguage.en, .nl])
         func expandedHouseholdKeepsVariableHeightRowsWholeAndFooterOnce(_ language: NativeLanguage) async throws {
             let presentation = try await makePresentation(language: language)

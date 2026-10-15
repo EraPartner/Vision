@@ -1657,10 +1657,62 @@ resolved-target admission, unified interception and host projection atomicity ar
 Debug Demo helper-document strategy that avoids mounting React UI/router in a fresh session.
 It is not enabled and still requires explicit native command, locale/readiness and startup owners.
 
-The original fixed TypeScript palette and fiscal helpers still require their retained React owner,
-shared cache, locale and lifetime checks. These staged APIs do not retire that owner or the web view,
-and do not migrate real data. A focused exact-source proof passes 12 raw-store/readiness tests; native
-routing integration and macOS rendering remain separate gates.
+Production artifact serving now reserves `/native-helper.html` and `/native-helper-assets`
+before generic static/SPA fallback. Missing helper files and noncanonical namespace requests
+terminate with 4xx instead of mounting the React app. Seven synthetic real-Express cases,
+backend typecheck/lint and a compile-only backend build pass. This serving boundary is active
+independently of the unenabled helper SDK configuration; normal routes and assets are unchanged.
+See [[docs/architecture/backend-architecture|backend artifact ownership]].
+
+The default runtime's fixed TypeScript palette and fiscal helpers retain their React owner.
+The dormant `lib/nativeHelperDocument.ts` can instead own their unchanged callbacks, a QueryClient
+with the App's defaults and directly loaded English/Dutch resources. It requires explicit immutable
+document/generation provenance, a current-owner check and a host readiness acknowledgment after
+locale and callback installation. Typed locale updates preserve cache/callback identity; retirement
+rejects pending work and disposes the cache. It subscribes to no unproven settings event and does
+not mount itself, load HTML, authorize a host acknowledgment or activate an SDK mode. Nineteen
+source helper/bootstrap tests pass with synthetic hosts and no provider requests, alongside
+frontend typecheck. These staged APIs do not retire the default React owner or the web view,
+and do not migrate real data. A focused exact-source proof passes 12 raw-store/readiness tests;
+native routing integration and macOS rendering remain separate gates.
+
+The separate optional `build:native-helper` frontend command runs after the ordinary build
+without its Vite config, HTML preloads or public directory. It emits one helper HTML and nine
+JavaScript chunks in the reserved namespace; all 196 normal index/assets hashes remain unchanged.
+The immutable ABI-1 entry stays inert until a fixed native bootstrap invocation. It captures
+document-start ready/failure wrappers, validates provenance for locale/dispose operations and
+never calls generic renderer readiness. Six tests build and execute the actual emitted modules
+with a synthetic DOM/host transport, unchanged source callbacks and no storage/provider access.
+The combined frontend regression passes 80 tests in seven files, plus typecheck, lint and unchanged
+ordinary bundle budgets. This verifies the artifact, not WebKit host authorization or activation.
+See [[docs/reference/scripts|build commands]].
+
+`NativeShellPresentationMode` is fixed at model construction and defaults to `retainedWeb`.
+The optional helper presentation requires native history, maps startup to native loading and
+failure/missing native owners to native unavailable, and returns native Not Found for unknown
+routes. Its infrastructure is enclosed by a hidden AppKit parent that rejects hit testing and
+accessibility children. `printDisposition` blocks helper/loading/error snapshots; the SDK checks
+it both before capture and after asynchronous print preparation. Five Core tests and four UI
+cases are authored; actual macOS validation remains required. No SDK selects helper mode yet.
+
+The dormant `NativeHelperDocumentSession` and `NativeHelperDocumentBridge` separate host authority
+from display state. Session construction requires exact Debug/Demo eligibility, an explicitly
+supervisor-sourced Demo receipt and expected origin/store identity. Its navigation state machine
+requires matching native commit/finish observations, a current ABI-1 ready callback and the
+physical bootstrap receipt. Fixed scripts and strict callback/receipt decoding cannot authorize
+an arbitrary page or replace the existing reload/restore drains. A healthy Debug backend override
+does not prove supervisor-owned Demo provenance. The SDK still needs actual WKNavigation identity,
+bounded callback/locale ownership and current-document reconciliation before selecting this mode.
+
+Optional `NativeShellIntentCoordinator` ownership keeps cold CSV/new-transaction actions and
+native menu commands outside renderer queues. A graph lease rejects retired consumers; readiness
+requires document/settings/onboarding/input gates and an explicit destination acknowledgment.
+Committed raw history and pending actions survive ordinary graph replacement; registered CSV
+expiry remains absolute, consumed drafts do not replay, and a replacement drops old Leave prompts.
+The first attachment preserves a legitimate initial pending startup request. The optional model
+parameter defaults to nil; SDK ingress/consumer wiring and fresh restore authority are still gates.
+Seven scoped coordinator tests pass with declared route/value adapters; seven full shell integration
+tests await macOS. No existing renderer event owner is retired by this preparatory code.
 
 
 

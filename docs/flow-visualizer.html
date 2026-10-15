@@ -5840,6 +5840,45 @@
             ]
           },
           {
+            "id": "native-helper-artifacts",
+            "name": "Serve optional native helper artifacts without SPA fallback",
+            "category": "Deployment",
+            "summary": "Reserve optional helper HTML and asset URLs before normal production static serving; missing or noncanonical helper requests terminate with 4xx. The SDK mode remains disabled.",
+            "steps": [
+              {
+                "from": "browser",
+                "to": "be.middleware",
+                "title": "Request a reserved artifact",
+                "payload": "GET or HEAD /native-helper.html or /native-helper-assets/<built file>",
+                "annotation": "apps/node-backend/src/main.ts mounts middleware/nativeHelperArtifacts.ts before generic static files and the non-/api SPA fallback."
+              },
+              {
+                "from": "be.middleware",
+                "to": "be.routes",
+                "title": "Check the fixed namespace",
+                "payload": "canonical path and configured dist root; reject aliases, traversal, directories and missing files",
+                "annotation": "apps/node-backend/src/middleware/nativeHelperArtifacts.ts; apps/node-backend/tests/nativeHelperArtifacts.test.ts uses real Express and raw HTTP paths with synthetic files."
+              },
+              {
+                "from": "be.routes",
+                "to": "browser",
+                "title": "Return the artifact or an explicit failure",
+                "payload": "HTML: no-cache; built assets: immutable; failures: 4xx, never index.html",
+                "annotation": "apps/node-backend/src/middleware/nativeHelperArtifacts.ts; middleware/errorHandler.ts preserves missing-file 404. This static surface adds no financial API operation or SDK activation."
+              }
+            ],
+            "docs": [
+              {
+                "path": "architecture/backend-architecture.md",
+                "label": "Backend artifact serving"
+              },
+              {
+                "path": "architecture/native-app.md",
+                "label": "Native ownership gates"
+              }
+            ]
+          },
+          {
             "id": "native-startup",
             "name": "Open Vision and reach the first page",
             "category": "Deployment",

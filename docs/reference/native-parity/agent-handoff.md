@@ -2,7 +2,7 @@
 title: "Vision Native agent handoff"
 type: reference
 status: active
-date: 2026-10-13
+date: 2026-10-15
 updated: 2026-10-15
 tags: [reference, swift-rewrite, native-parity, handoff]
 description: "Resumable checkpoint for the Swift port: published branch, current phase, ownership, remaining work, verification evidence and subsequent-phase gates."
@@ -28,11 +28,18 @@ work while platform checks run and keep their actual results distinct from imple
 Phase **3o**, Settings and shared shell behaviour, has a hash-matched Foundation proof
 of 1,173 tests. Phase **3p**, remaining shell overlays and report parity, is in progress;
 its first full mounted integration checkpoint is **`fcd7ee95`**, pushed and verified.
-The combined continuation checkpoint is **`1ba95571`**, pushed and remote-verified;
-its [macOS run](https://github.com/EraPartner/Vision/actions/runs/38697290750) built the app
-but stopped at a print-test fixture compiler diagnostic. **`598d8fd3`** adds the final
-navigation/window review fixes; **`a10c3deb`** repairs that fixture expression. Its
-[macOS run](https://github.com/EraPartner/Vision/actions/runs/38698658068) is in progress.
+The latest combined continuation checkpoint is **`bb67c6f2`**, pushed and remote-verified.
+Its [macOS run](https://github.com/EraPartner/Vision/actions/runs/38706224180) built the
+app and passed all **1,652 Core tests in 226 suites**. The preceding **`ca7a25ea`** run passed
+all **1,617 Core tests in 221 suites**, then exposed print-render fixture and positive focus-restoration
+failures. **`4ddaa2c7`** added row-aware printing and startup routing; its package compile
+found two new fixture diagnostics, repaired in `bb67c6f2`. The latest snapshot also serializes
+AppKit UI suites, captures synthetic PDF diagnostics on failure and stages detached route,
+numeric-ID and raw-storage capture boundaries. The latest UI process ran **91 tests in
+14 suites with 44 issues**: every print readiness probe remained blank, including the
+independent SwiftUI canary, and all 15 focus cases failed actual application/key-window
+ownership setup. Dedicated agents are investigating the AppKit execution context and saved
+PDF artifact; no repaired rendering/focus pass is claimed.
 The dated checkpoints below preserve historical evidence; use this continuation's results
 before treating any earlier phase or test count as current.
 This handoff records both implemented and unfinished work; it does not certify that
@@ -315,6 +322,96 @@ Additional dormant Phase-4 preparation is collected in this follow-up:
 Continue from these bounded chunks rather than re-running immutable proofs in place. The next
 parallel work prepares helper bootstrap/asset serving and resolves remaining import-route policy;
 actual Mac diagnostics take priority whenever they become available.
+
+### Dormant helper bootstrap continuation (2026-10-15)
+
+`lib/nativeHelperDocument.ts` and its tests prepare a document owner without an HTML entry or
+SDK activation. The caller supplies copied/frozen document and generation identity, language,
+current-owner checks and a host readiness acknowledgment. The owner loads actual generated
+locale resources directly, mounts a QueryClient with App defaults and installs the unchanged
+three fixed callbacks. It acknowledges only after locale and callbacks are present. Explicit
+typed locale updates preserve the cache and callback identity; superseded/disposed owners
+reject pending work and cannot finish readiness. No settings event is trusted implicitly,
+and client provenance checks do not replace the future host's current-document authorization.
+
+The new/bootstrap predecessor suites pass **19 tests**; a combined source regression run passes
+**74 tests in six files**, including the detached router and actual fiscal/palette callbacks.
+Targeted ESLint, formatting and full frontend typecheck pass. Checks use synthetic hosts and
+mocked provider access. Evidence: `/workspace/vision-native-helper-document-proof.json`.
+The optional artifact build and native presentation policy are now prepared; actual
+host/menu/startup integration remains in progress. The default SDK still loads the retained
+React document.
+
+The production backend now reserves `/native-helper.html` and `/native-helper-assets` before
+generic static/SPA fallback. Seven real-Express synthetic tests pass, including raw HTTP
+encoded traversal, missing HTML/bootstrap/lazy assets, GET/HEAD MIME/cache and normal-route
+preservation. Backend source/tests/scripts typecheck, full lint (36 existing monetary-arithmetic
+warnings) and compile-only Bun build pass; no server/database/provider ran. The static namespace
+adds no OpenAPI operation. Architecture diagrams and the visualizer now cover this boundary
+(106 components / 80 flows); five visualizer tests pass. Build/entry and SDK activation are
+separate. Evidence: `/workspace/native-helper-artifacts-{tests,typecheck,lint,build}.log`.
+
+The latest actual Mac run `38706224180` passed the app build and all 1,652 Core tests / 226 suites,
+then failed UI application/display setup (91 tests / 14 suites / 44 issues). Synthetic PDF ZIP:
+artifact `11959402105`, SHA256
+`012aa33f399f1cd4c1e762fb2acd6ec6db7de403adfb2d78016684e4043da6f9`.
+All original content/focus assertions remain. Shared AppKit launch context takes priority over
+changing individual report expectations. The ordinary frontend build, full typecheck and bundle
+budgets pass (474.74 KiB boot / 1,373.83 KiB all gzip); helper artifacts must remain separate.
+
+The optional frontend command `bun run --filter vision-frontend build:native-helper` adds the
+inert ABI-1 entry and nine namespaced chunks after the ordinary build. Actual emitted-module
+tests and the fixed-helper/route regression pass **80 tests in seven files**. All 196 normal
+index/assets SHA256 hashes remain unchanged. The separate build uses no normal Vite config,
+preload plugin, public directory or environment file. Evidence:
+`/workspace/vision-native-helper-normal-hashes.json` and
+`/workspace/vision-helper-combined80.log`.
+
+`NativeHelperDocumentSession`/`NativeHelperDocumentBridge` and their tests are dormant Core
+authority/ABI foundations. Eleven exact-source Swift tests in two suites pass. The actual
+Swift-emitted existing bridge, narrow document-start script and fixed commands pass 75 checks
+against byte-identical built helper entry/chunks; Swift codecs accept 14 emitted wire messages.
+Separate script VM checks pass 43 assertions. No provider, storage or generic bridge call occurs.
+Evidence: `/workspace/vision-native-helper-host-proof/verification.json`; manifest SHA256
+`e19899de5bbc068e05e692b592c3b6672d774b5c177677b5f6a44bb193d33d09`.
+These are Foundation/Node synthetic checks, not WebKit. Actual navigation/store admission,
+supervisor-owned Demo eligibility, bounded physical callback and per-document locale ownership
+must still be wired. A healthy developer backend override is not a Demo launch receipt.
+
+The immutable default `retainedWeb` presentation remains. Optional helper presentation never
+returns `.web`: native loading/unavailable/Not Found and an AppKit-hidden, noninteractive,
+accessibility-excluded helper enclosure replace its fallback. The SDK's print policy now checks
+native eligibility before capture and again after asynchronous preparation. Five Core tests
+and four UI cases are authored; their macOS run is pending.
+
+Actual PDF inspection found all 29 readiness probes contain only empty drawing streams,
+while custom NSView pages retain correct text. The follow-up initializes AppKit via a genuine
+`NSApplication.run()` launch turn and actual event dispatch before print/focus hosts, and renders
+PDFs through no-panel `NSPrintOperation.pdfOperation`, matching production print hooks. It keeps
+all activation/key-window/content/media assertions and adds process/window diagnostics to the
+failure artifact. Syntax/format checks pass; no repaired AppKit/render result is claimed yet.
+
+The next SDK seams are source-confirmed: preserve supervised Demo provenance currently lost in
+`.ready(URL)`; forward actual WKNavigation/store identity; install only the narrow helper handler;
+separately accept current ready callback and physical launch receipt; reconcile locale before
+native startup/input; native cold intents/menus, vibrancy and titlebar; drain-based fresh-document
+retry/reload/restore. The helper remains default-off and no session migrates real data.
+Packaging must build the helper into `VISION_FRONTEND_DIST` after its staged ordinary build and
+before runtime copying; the standalone helper command targets repository dist. Existing
+`install-native.sh` builds Release, which cannot enable the proposed Debug-only experiment.
+
+`NativeShellIntentCoordinator` plus optional `nativeIntents` model integration now owns gated
+cold CSV/new-transaction and native Settings/theme commands when explicitly supplied. Retain
+one coordinator across ordinary rebuilds: leases reject old graphs, committed raw history and
+unconsumed actions survive, registered CSV expiry is not renewed, and consumed Add/import state
+does not replay. A replacement cancels its old Leave prompt while preserving a cold destination;
+first attachment retains a legitimate initial pending startup request. Native consumers must
+explicitly acknowledge readiness; an attempted navigation is insufficient. Default nil behavior
+is unchanged. Seven coordinator tests, a four-case source CSV oracle and lease/expiry mutation
+checks pass at `/workspace/scratch/native-intent-check/verification.json`, with exact five
+routing/coordinator sources plus documented ImportFile/route adapters. Seven shell integration
+tests are authored and parsed, not yet semantically checked on macOS. SDK ingress/UI consumer
+hooks and the separate successful-restore fresh-authority policy remain unwired.
 
 ## Phase-4 dependency recheck (2026-10-15)
 

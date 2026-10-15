@@ -65,6 +65,17 @@ private actor ShellSettingsReadGate {
     }
 }
 
+private actor ShellInitialSettingsFailure {
+    private var hasFailed = false
+    func read() throws -> NativeAppSettings {
+        if !hasFailed {
+            hasFailed = true
+            throw APIError.network("synthetic initial read failure")
+        }
+        return .defaults
+    }
+}
+
 @MainActor
 final class ShellRecorder {
     var actions: [MenuAction] = []
@@ -86,6 +97,8 @@ final class ShellRecorder {
         aiChat: AIChatScreens? = nil, nativeSettings: NativeSettingsModel? = nil,
         commandPalette: NativeCommandPaletteModel? = nil, reports: NativeReportModel? = nil,
         nativeFallback: Bool = false,
+        presentationMode: NativeShellPresentationMode = .retainedWeb,
+        nativeNavigation: NativeNavigationHistory? = nil,
         loadSettings: (@Sendable () async throws -> NativeAppSettings)? = nil
     ) -> NativeShellModel {
         NativeShellModel(
@@ -112,6 +125,8 @@ final class ShellRecorder {
             commandPalette: commandPalette,
             reports: reports,
             nativeFallback: nativeFallback,
+            presentationMode: presentationMode,
+            nativeNavigation: nativeNavigation,
             hiddenSections: hidden,
             loadSettings: loadSettings ?? { settings },
             saveHiddenSections: { recorder.saved.append($0) },
@@ -123,6 +138,81 @@ final class ShellRecorder {
             },
             onSidebarVisibilityChange: { recorder.sidebar.append($0) },
             settingsReloadDelay: .milliseconds(1))
+    }
+
+    @Test func helperPresentationFailsClosedWithoutNativeRouteAuthority() async {
+        let model = makeModel(recorder: ShellRecorder(), presentationMode: .helperDocument)
+        model.setHelperDocumentState(.ready)
+        model.reloadSettings()
+        await model.settingsSettled()
+        #expect(model.detail == .unavailable)
+        #expect(model.isWebContentHidden && model.printDisposition == .unavailable)
+    }
+
+    @Test func helperStartupAndFailureCannotRevealOrPrintCachedNativePage() async throws {
+        let history = NativeNavigationHistory(initial: try #require(NativeNavigationLocation("/planned")))
+        let model = makeModel(
+            recorder: ShellRecorder(), presentationMode: .helperDocument, nativeNavigation: history)
+        #expect(model.detail == .loading && model.printDisposition == .unavailable)
+        model.reloadSettings()
+        await model.settingsSettled()
+        #expect(model.detail == .loading)
+        model.setHelperDocumentState(.ready)
+        #expect(model.detail == .native(.plannedPayments) && model.printDisposition == .nativePage)
+        model.isReloadingGraph = true
+        #expect(model.detail == .loading && model.printDisposition == .unavailable)
+        model.isReloadingGraph = false
+        model.setHelperDocumentState(.failed)
+        #expect(model.detail == .unavailable && model.printDisposition == .unavailable)
+        model.setHelperDocumentState(.loading)
+        #expect(model.detail == .loading && model.isWebContentHidden)
+        model.setHelperDocumentState(.ready)
+        #expect(model.detail == .native(.plannedPayments))
+    }
+
+    @Test func helperMissingNativeOwnersAndUnknownRoutesNeverFallBackToWeb() async throws {
+        let model = makeModel(
+            recorder: ShellRecorder(), presentationMode: .helperDocument, nativeNavigation: NativeNavigationHistory())
+        model.reloadSettings()
+        await model.settingsSettled()
+        model.setHelperDocumentState(.ready)
+        // The fixture deliberately has no Home, Tax, Settings, or report owner.
+        #expect(model.detail == .unavailable)
+        for route in ["/tax", "/planned?settings=general", "/planned?export=pdf", "/tax?export=pdf"] {
+            model.navigate(to: route)
+            #expect(model.detail == .unavailable && model.printDisposition == .unavailable)
+        }
+        model.navigate(to: "/no-such-route?unrelated=keep")
+        #expect(model.detail == .notFound && model.printDisposition == .unavailable)
+        #expect(model.isWebContentHidden)
+    }
+
+    @Test func helperInitialSettingsFailureIsNativeAndRetryCanRecover() async throws {
+        let script = ShellInitialSettingsFailure()
+        let history = NativeNavigationHistory(initial: try #require(NativeNavigationLocation("/planned")))
+        let model = makeModel(
+            recorder: ShellRecorder(), presentationMode: .helperDocument, nativeNavigation: history,
+            loadSettings: { try await script.read() })
+        model.setHelperDocumentState(.ready)
+        model.reloadSettings()
+        await model.settingsSettled()
+        #expect(model.detail == .unavailable && model.canRetryInitialSettings)
+        #expect(model.printDisposition == .unavailable)
+        model.reloadSettings()
+        #expect(model.detail == .loading && !model.canRetryInitialSettings)
+        await model.settingsSettled()
+        #expect(model.detail == .native(.plannedPayments) && !model.canRetryInitialSettings)
+    }
+
+    @Test func retainedWebRemainsDefaultAndIgnoresHelperDisplaySignals() async {
+        let model = makeModel(recorder: ShellRecorder())
+        #expect(model.presentationMode == .retainedWeb && model.detail == .web)
+        #expect(!model.isWebContentHidden && model.printDisposition == .webDocument)
+        model.setHelperDocumentState(.failed)
+        #expect(model.helperDocumentState == .loading && model.detail == .web)
+        model.reloadSettings()
+        await model.settingsSettled()
+        #expect(model.detail == .web)
     }
 
     @Test func nativeOverlayPriorityPreservesSettingsRouteAndPaletteCopyAcknowledgement() async throws {

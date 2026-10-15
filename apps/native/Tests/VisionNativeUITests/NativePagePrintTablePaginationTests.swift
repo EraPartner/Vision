@@ -6,6 +6,10 @@
 
     @MainActor @Suite("Measured table print pagination")
     struct NativePagePrintTablePaginationTests {
+        init() throws {
+            try NativeAppKitTestApplication.prepare()
+        }
+
         @Test func fittingTableMovesIntactAndKeepsItsFooterWithItsRows() throws {
             let pages = NativePagePrintPagesView(printInfo: paper(height: 160)) { _ in
                 [

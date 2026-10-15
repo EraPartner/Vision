@@ -7,6 +7,8 @@ public enum NativeShellDetail: Equatable, Sendable {
     case web
     case native(NativeScreen)
     case notFound
+    case loading
+    case unavailable
 }
 
 public enum NativeShellOverlayKind: String, Identifiable, Sendable {
@@ -46,6 +48,10 @@ public final class NativeShellModel {
     public private(set) var settings: NativeAppSettings = .defaults
     /// `false` until `app_settings` has been read once; native screens wait for it.
     public private(set) var settingsLoaded = false
+    /// Chosen before document construction; never switches authority during a session.
+    public let presentationMode: NativeShellPresentationMode
+    public private(set) var helperDocumentState: NativeHelperDocumentState = .loading
+    private var initialSettingsLoadFailed = false
     public var isRendererReady = false
     public var isReloadingGraph = false
     public private(set) var pageZoom: Double = 1
@@ -130,6 +136,9 @@ public final class NativeShellModel {
     @ObservationIgnored private var leaveGuard: NativeLeaveGuard?
     @ObservationIgnored private var needsInitialRouteActivation = false
     @ObservationIgnored private let priceNoticeSource = UUID()
+    @ObservationIgnored private let nativeIntents: NativeShellIntentCoordinator?
+    @ObservationIgnored private var nativeIntentLease: NativeShellIntentCoordinator.Lease?
+    @ObservationIgnored private var nativeIntentConsumer: NativeScreen?
 
     /// - Parameters:
     ///   - hiddenSections: the stored section choices; `nil` uses the `defaultHidden` flags.
@@ -171,8 +180,10 @@ public final class NativeShellModel {
         onboarding: NativeOnboardingModel? = nil,
         reports: NativeReportModel? = nil,
         nativeFallback: Bool = false,
+        presentationMode: NativeShellPresentationMode = .retainedWeb,
         initialRoute: NativeRoute = .home,
         nativeNavigation: NativeNavigationHistory? = nil,
+        nativeIntents: NativeShellIntentCoordinator? = nil,
         hiddenSections: [NavSectionID: Bool]? = nil,
         loadSettings: @escaping @Sendable () async throws -> NativeAppSettings,
         saveHiddenSections: @escaping @MainActor ([NavSectionID: Bool]) -> Void = { _ in },
@@ -213,7 +224,9 @@ public final class NativeShellModel {
         self.onboarding = onboarding
         self.reports = reports
         self.nativeFallback = nativeFallback
+        self.presentationMode = presentationMode
         self.nativeNavigation = nativeNavigation
+        self.nativeIntents = nativeNavigation == nil ? nil : nativeIntents
         self.route = nativeNavigation?.location.route ?? initialRoute
         self.needsInitialRouteActivation = nativeNavigation == nil && initialRoute != .home
         self.hiddenSections = hiddenSections ?? Self.defaultHiddenSections
@@ -223,6 +236,12 @@ public final class NativeShellModel {
         self.copyToClipboard = copyToClipboard
         self.onSidebarVisibilityChange = onSidebarVisibilityChange
         self.settingsReloadDelay = settingsReloadDelay
+        if let nativeIntents = self.nativeIntents, let nativeNavigation {
+            let attachment = nativeIntents.attach(initialHistory: nativeNavigation)
+            self.nativeIntentLease = attachment.lease
+            self.nativeNavigation = attachment.history
+            self.route = attachment.history.location.route
+        }
         commandPalette?.onAction = { [weak self] action in self?.activatePaletteAction(action) }
         shellNotifications?.fx.attachNotices(notices)
         onboarding?.attachNotices(notices)
@@ -296,6 +315,46 @@ public final class NativeShellModel {
     /// while it says admin mode is on, otherwise the page shows the route and its
     /// `RequireAdmin` redirects, which the page then reports.
     public var detail: NativeShellDetail {
+        guard presentationMode == .helperDocument else { return retainedWebDetail }
+        // A hidden helper cannot supply route authority or a visible fallback.
+        guard nativeNavigation != nil else { return .unavailable }
+        guard helperDocumentState != .failed, !initialSettingsLoadFailed else { return .unavailable }
+        guard helperDocumentState == .ready, settingsLoaded, !isReloadingGraph else { return .loading }
+        guard !isPresentingWeb, onboarding != nil || !isPresentingOnboarding,
+            route.value("settings") == nil || nativeSettings != nil,
+            route.value("export") != "pdf" || reports != nil
+        else { return .unavailable }
+        guard matchedScreen != nil else { return .notFound }
+        let resolved = retainedWebDetail
+        return resolved == .web ? .unavailable : resolved
+    }
+
+    /// Infrastructure is permanently hidden in helper mode, independently of route state.
+    public var isWebContentHidden: Bool { presentationMode == .helperDocument || detail != .web }
+
+    /// The SDK must also apply its existing overlay, restore and operation fences.
+    /// In particular a cached native snapshot must not print while helper startup is pending.
+    public var printDisposition: NativeShellPrintDisposition {
+        switch detail {
+        case .web: return presentationMode == .retainedWeb ? .webDocument : .unavailable
+        case .native: return .nativePage
+        case .notFound, .loading, .unavailable: return .unavailable
+        }
+    }
+
+    /// Called only by the native document owner after its independent document/generation
+    /// checks. This display state neither authenticates a document nor releases SDK gates.
+    public func setHelperDocumentState(_ state: NativeHelperDocumentState) {
+        guard presentationMode == .helperDocument else { return }
+        helperDocumentState = state
+    }
+
+    public var canRetryInitialSettings: Bool {
+        presentationMode == .helperDocument && initialSettingsLoadFailed
+            && helperDocumentState == .ready
+    }
+
+    private var retainedWebDetail: NativeShellDetail {
         guard !needsInitialRouteActivation, !isPresentingWeb,
             onboarding != nil || !isPresentingOnboarding, settingsLoaded
         else {
@@ -323,7 +382,9 @@ public final class NativeShellModel {
         if screen == .researchChartBuilder && researchChartBuilder == nil { return .web }
         if screen == .researchDossiers && researchDossiers == nil { return .web }
         if screen == .aiChat && aiChat == nil { return .web }
-        if [.researchHome, .researchMarkets, .researchMarketLookup, .researchWatchlist, .researchCompare].contains(
+        if [
+            .researchHome, .researchMarkets, .researchMarketLookup, .researchWatchlist, .researchCompare,
+        ].contains(
             screen),
             research == nil
         {
@@ -357,7 +418,11 @@ public final class NativeShellModel {
 
     private func applyRouteChange(_ next: NativeRoute) {
         let pathChanged = next.path != route.path
+        if next.path != TransactionsRoutes.path, let nativeIntents, let nativeIntentLease {
+            nativeIntents.cancelNewTransaction(for: nativeIntentLease)
+        }
         if pathChanged {
+            nativeIntentConsumer = nil
             reports?.didLeavePage()
             if route.path == "/analysis" { analysis?.didDisappear() }
             research?.didDisappear(route: route)
@@ -491,6 +556,9 @@ public final class NativeShellModel {
     }
 
     private func applyNativeNavigation(_ outcome: NativeNavigationHistory.Outcome) {
+        if let nativeIntents, let nativeIntentLease, let nativeNavigation {
+            nativeIntents.checkpoint(nativeNavigation, for: nativeIntentLease)
+        }
         switch outcome {
         case .committed(let location):
             leaveConfirmation = nil
@@ -521,6 +589,7 @@ public final class NativeShellModel {
     /// Before that it returns `false`: the web app takes the file too (`app:csv-opened`) and
     /// navigates, in case `/import` stays a web page.
     public func openImportFile(_ file: ImportFile) -> Bool {
+        if nativeIntents != nil { return enqueueNativeIntent(.openCSV(file)) }
         guard NativeScreen.screen(forPath: ImportRoutes.path) != nil else { return false }
         imports.handoff(file)
         guard settingsLoaded else { return false }
@@ -534,7 +603,10 @@ public final class NativeShellModel {
     /// navigation leaves out `new=1`: the page behind the native screen would open its own
     /// sheet for it too. Returns `false` when the page handles it.
     public func newTransaction() -> Bool {
-        guard settingsLoaded, NativeScreen.screen(forPath: TransactionsRoutes.path) != nil else { return false }
+        if nativeIntents != nil { return enqueueNativeIntent(.newTransaction) }
+        guard settingsLoaded, NativeScreen.screen(forPath: TransactionsRoutes.path) != nil else {
+            return false
+        }
         if detail == .native(.transactions) {
             transactions.requestAdd()
         } else {
@@ -542,6 +614,118 @@ public final class NativeShellModel {
             navigate(to: TransactionsRoutes.path)
         }
         return true
+    }
+
+    /// Explicit native-authority menu admission. The SDK still uses its renderer path by
+    /// default; this optional session executes Settings/theme commands through native owners.
+    /// Invalid payloads of known source commands are ignored, as in ElectronBridge.
+    @discardableResult
+    public func acceptNativeMenuAction(_ action: MenuAction) -> Bool {
+        guard hasCurrentNativeIntentLease else { return false }
+        let intent: NativeShellIntentCoordinator.Intent
+        switch action.action {
+        case "new-transaction": intent = .newTransaction
+        case "open-settings":
+            guard nativeSettings != nil else { return false }
+            intent = .openSettings(section: "general")
+        case "close-settings":
+            guard nativeSettings != nil else { return false }
+            intent = .closeSettings
+        case "set-theme":
+            guard nativeSettings != nil else { return false }
+            guard let mode = action.payload, ApplicationMenu.themeModes.contains(where: { $0.id == mode })
+            else {
+                return true
+            }
+            intent = .setTheme(mode)
+        case "navigate", "replace-route":
+            guard let raw = action.payload, let location = NativeNavigationLocation(raw) else {
+                return true
+            }
+            intent = .navigate(location, replace: action.action == "replace-route")
+        case "toggle-sidebar": intent = .toggleSidebar
+        case "open-palette":
+            guard commandPalette != nil else { return false }
+            intent = .openPalette
+        case "open-shortcuts":
+            guard commandPalette != nil else { return false }
+            intent = .openShortcuts
+        default: return false
+        }
+        return enqueueNativeIntent(intent)
+    }
+
+    private var hasCurrentNativeIntentLease: Bool {
+        guard let nativeIntents, let nativeIntentLease else { return false }
+        return nativeIntents.isCurrent(nativeIntentLease)
+    }
+
+    private var nativeIntentReadiness: NativeShellIntentCoordinator.Readiness {
+        .init(
+            document: presentationMode == .helperDocument
+                ? helperDocumentState == .ready : isRendererReady,
+            settings: settingsLoaded && (nativeSettings?.isLoaded ?? true),
+            onboarding: (onboarding?.isLoaded ?? true) && onboarding?.isPresented != true
+                && !isPresentingOnboarding,
+            acceptingInput: !isReloadingGraph && nativeSettings?.isSuspendedForRestore != true)
+    }
+
+    private func enqueueNativeIntent(_ intent: NativeShellIntentCoordinator.Intent) -> Bool {
+        guard hasCurrentNativeIntentLease, let nativeIntents else { return false }
+        nativeIntents.enqueue(intent)
+        nativeIntentReadinessDidChange()
+        return true
+    }
+
+    /// The host calls this after document/settings/onboarding/input readiness changes.
+    /// It must retain its independent document and generation checks before opening gates.
+    public func nativeIntentReadinessDidChange() {
+        guard let nativeIntents, let nativeIntentLease else { return }
+        let readiness = nativeIntentReadiness
+        nativeIntents.drain(for: nativeIntentLease, readiness: readiness) { [self] intent in
+            switch intent {
+            case .openCSV: navigate(to: ImportRoutes.path)
+            case .newTransaction: navigate(to: TransactionsRoutes.path)
+            case .navigate(let location, let replace):
+                requestNativeNavigation(replace ? .replace(location) : .push(location))
+            case .openSettings(let section): openNativeSettings(section: section)
+            case .closeSettings: closeSettings()
+            case .setTheme(let mode): nativeSettings?.updateTheme(["mode": .string(mode)])
+            case .toggleSidebar: toggleSidebar()
+            case .openPalette: openPalette()
+            case .openShortcuts: openShortcuts()
+            case .traverse(let delta): requestNativeNavigation(.traverse(delta))
+            }
+            switch intent {
+            case .openCSV, .newTransaction:
+                if let pending = nativeNavigation?.pending {
+                    nativeIntents.preserveBlockedColdNavigation(
+                        pending, newTransaction: intent == .newTransaction, for: nativeIntentLease)
+                }
+            default: break
+            }
+        }
+        guard readiness.isReady, nativeIntents.isCurrent(nativeIntentLease), let nativeIntentConsumer,
+            detail == .native(nativeIntentConsumer), !isPresentingNativeOverlay
+        else { return }
+        if nativeIntentConsumer == .importExport, !imports.isImporting,
+            let file = nativeIntents.consumeCSV(for: nativeIntentLease, consumerReady: true)
+        {
+            imports.chooseFile(file)
+        }
+        if nativeIntentConsumer == .transactions,
+            nativeIntents.consumeNewTransaction(for: nativeIntentLease, consumerReady: true)
+        {
+            transactions.requestAdd()
+        }
+    }
+
+    /// The mounted native destination acknowledges readiness only for its current route.
+    /// A replacement graph must establish its own consumer readiness before delivery.
+    public func nativeIntentConsumerDidBecomeReady(for screen: NativeScreen) {
+        guard hasCurrentNativeIntentLease, detail == .native(screen) else { return }
+        nativeIntentConsumer = screen
+        nativeIntentReadinessDidChange()
     }
 
     /// `/owes`.
@@ -630,6 +814,10 @@ public final class NativeShellModel {
     /// Stay on page (`blocker.reset`): the navigation is cancelled.
     public func stayOnPage() {
         nativeNavigation?.cancelPending()
+        if let nativeIntents, let nativeIntentLease {
+            nativeIntents.cancelNewTransaction(for: nativeIntentLease)
+            if let nativeNavigation { nativeIntents.checkpoint(nativeNavigation, for: nativeIntentLease) }
+        }
         leaveConfirmation = nil
         transactions.cancelAddOnArrival()
     }
@@ -869,6 +1057,7 @@ public final class NativeShellModel {
         }
         settings = next
         settingsLoaded = true
+        initialSettingsLoadFailed = false
         settingsRevision &+= 1
         theme.colorblindGainLoss = next.colorblindGainLoss
         commandPalette?.configure(settings: next)
@@ -888,11 +1077,18 @@ public final class NativeShellModel {
     /// replaces a pending one, and a failure keeps the last known settings.
     public func reloadSettings() {
         settingsTask?.cancel()
+        initialSettingsLoadFailed = false
         let load = loadSettings
         let revision = settingsRevision
         settingsTask = Task { [weak self] in
-            guard let loaded = try? await load(), !Task.isCancelled, self?.settingsRevision == revision else { return }
-            self?.apply(settings: loaded)
+            do {
+                let loaded = try await load()
+                guard !Task.isCancelled, self?.settingsRevision == revision else { return }
+                self?.apply(settings: loaded)
+            } catch {
+                guard !Task.isCancelled, let self, self.settingsRevision == revision else { return }
+                self.initialSettingsLoadFailed = !self.settingsLoaded
+            }
         }
     }
 

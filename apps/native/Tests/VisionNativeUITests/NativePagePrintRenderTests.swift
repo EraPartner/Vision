@@ -10,6 +10,10 @@
     /// This exercises AppKit/SwiftUI layout, not a printer driver or the system print panel.
     @MainActor @Suite("Current-page print layout and PDF rendering")
     struct NativePagePrintRenderTests {
+        init() throws {
+            try NativeAppKitTestApplication.prepare()
+        }
+
         @Test func swiftUITextDrawsAsVectorTextOnEveryPageWithoutChangingTheKeyWindow() throws {
             let keyWindow = NSApplication.shared.keyWindow
             let pages = NativePagePrintPagesView(printInfo: paper(width: 240, height: 120)) { width in

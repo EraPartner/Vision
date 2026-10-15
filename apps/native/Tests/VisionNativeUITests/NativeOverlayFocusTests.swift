@@ -6,6 +6,10 @@
 
     @MainActor @Suite("Native overlay responder ownership", .serialized)
     struct NativeOverlayFocusTests {
+        init() throws {
+            try NativeAppKitTestApplication.prepare()
+        }
+
         @Test func sharedFieldEditorCapturesItsOwnerAndCaretRatherThanTheSharedEditor() throws {
             let owner = OverlayFieldEditorOwner(frame: .zero)
             let editor = NSTextView(frame: .zero)
@@ -236,24 +240,13 @@
     }
 
     @MainActor private struct OverlayFocusWindow {
-        private static var applicationPrepared = false
         let window: NSWindow
         let content = NSView(frame: NSRect(x: 0, y: 0, width: 320, height: 240))
         let marker = NSView(frame: .zero)
         let opener = OverlayFocusableControl(frame: NSRect(x: 10, y: 10, width: 80, height: 24))
         let other = OverlayFocusableControl(frame: NSRect(x: 10, y: 50, width: 80, height: 24))
         init() throws {
-            let application = NSApplication.shared
-            if !Self.applicationPrepared {
-                // A command-line swift-test process starts without the app target's
-                // activation policy and application event loop. An ordered window
-                // alone is not evidence that AppKit granted it keyboard ownership.
-                if application.activationPolicy() == .prohibited {
-                    try #require(application.setActivationPolicy(.accessory))
-                }
-                application.finishLaunching()
-                Self.applicationPrepared = true
-            }
+            try NativeAppKitTestApplication.prepare()
             window = NSWindow(
                 contentRect: NSRect(x: -10_000, y: -10_000, width: 320, height: 240),
                 styleMask: [.titled], backing: .buffered, defer: false)
@@ -276,17 +269,13 @@
             while (!application.isActive || application.keyWindow !== window || !window.isKeyWindow)
                 && Date() < deadline
             {
-                if let event = application.nextEvent(
-                    matching: .any, until: Date().addingTimeInterval(0.01), inMode: .default, dequeue: true)
-                {
-                    application.sendEvent(event)
-                }
-                application.updateWindows()
+                NativeAppKitTestApplication.pumpEvents(until: Date().addingTimeInterval(0.01))
                 window.makeKey()
             }
             try #require(
                 application.isActive && application.keyWindow === window && window.isKeyWindow,
-                "Synthetic fixture must activate and own AppKit's actual key window before testing responder restoration")
+                "Synthetic fixture must activate and own AppKit's actual key window before testing responder restoration: \(NativeAppKitTestApplication.diagnostics(window: window))"
+            )
         }
         func close() {
             window.orderOut(nil)
