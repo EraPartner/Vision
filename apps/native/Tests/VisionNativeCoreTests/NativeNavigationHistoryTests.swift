@@ -158,6 +158,83 @@ struct NativeNavigationHistoryTests {
         }
     }
 
+    @Test func encodedStaticSegmentsMatchRouterWithoutTurningEncodedSlashesIntoBoundaries() {
+        // Confirmed against installed react-router 8.3.0 matchRoutes/decodePath.
+        for (raw, expected) in [
+            ("/tr%61nsactions/?q=a+b&x=%2f&flag", "/transactions?q=a+b&x=%2f&flag"),
+            ("/acc%6Funts/42/", "/accounts/42"),
+            ("/im%70ort/123/rev%69ew/", "/import/123/review"),
+            ("/%61dmin/d%62/Transactions%2fArchive/", "/admin/db/Transactions%2fArchive"),
+            ("/p%6Frtfolio/perf%6Frmance?period=1y&flag", "/portfolio?period=1y&flag"),
+            ("/portf%6Flio/im%70ort/AbC%2fDeF/rev%69ew/", "/portfolio/import/AbC%2fDeF/review"),
+        ] {
+            let original = location(raw)
+            #expect(original.raw == raw && original.path == raw.split(separator: "?").first.map(String.init))
+            let resolved = NativeNavigationHistory.resolve(original, adminMode: true)
+            #expect(resolved?.raw == expected)
+            #expect(resolved.map { NativeScreen.screen(forPath: $0.path) != nil } == true)
+        }
+        for raw in ["/admin%2Fdb/Transactions", "/%74ransactions%2f", "/transactions/%2f", "/%2561dmin"] {
+            let resolved = NativeNavigationHistory.resolve(location(raw), adminMode: false)
+            #expect(resolved?.raw == raw)
+            #expect(resolved.flatMap { NativeScreen.screen(forPath: $0.path) } == nil)
+        }
+        let table = NativeNavigationHistory.resolve(location("/admin/db/one%2ftwo"), adminMode: true)
+        #expect(table?.raw == "/admin/db/one%2ftwo")
+        #expect(table.flatMap { NativeScreen.screen(forPath: $0.path) } == .tableEditor(table: "one/two"))
+    }
+
+    @Test func oneMalformedPathSegmentPreventsDecodingEveryOtherSegment() {
+        for raw in ["/%61dmin/db/%zz", "/%61dmin/db/%C3%28", "/%61dmin/db/%ED%A0%80", "/%61dmin/db/%"] {
+            let resolved = NativeNavigationHistory.resolve(location(raw), adminMode: false)
+            #expect(resolved?.raw == raw)
+            #expect(resolved.flatMap { NativeScreen.screen(forPath: $0.path) } == nil)
+        }
+        // The same malformed parameter still matches when the static segments
+        // need no decoding; RequireAdmin then redirects normally.
+        #expect(NativeNavigationHistory.resolve(location("/admin/db/%zz"), adminMode: false) == .home)
+    }
+
+    @Test func settingsOpenDeferredForHydrationStillOwnsItsPushedEntry() {
+        let initial = location("/admin/db?q=a+b&flag")
+        var history = NativeNavigationHistory(initial: initial)
+        #expect(history.openSettings(section: "backup", adminMode: nil) == .waitingForSettings)
+        #expect(history.location == initial && history.count == 1)
+        #expect(
+            history.settingsDidLoad(adminMode: true, hasUnsavedChanges: false)
+                == .committed(location("/admin/db?q=a+b&flag=&settings=backup")))
+        #expect(history.count == 2 && history.index == 1)
+        history.closeSettings(adminMode: true)
+        #expect(history.location == initial && history.count == 2 && history.index == 0)
+    }
+
+    @Test func deferredSettingsOwnershipSurvivesLeaveConfirmationButNotCancellationOrRedirect() {
+        var guarded = NativeNavigationHistory(initial: location("/ADMIN/DB?keep=1"))
+        #expect(guarded.openSettings(adminMode: nil, hasUnsavedChanges: true) == .waitingForSettings)
+        #expect(
+            guarded.settingsDidLoad(adminMode: true, hasUnsavedChanges: true)
+                == .blocked(location("/admin/db?keep=1&settings=general")))
+        guarded.confirmPending(adminMode: true)
+        #expect(guarded.count == 2 && guarded.index == 1)
+        guarded.closeSettings(adminMode: true)
+        #expect(guarded.index == 0 && guarded.location.raw == "/admin/db?keep=1")
+
+        var cancelled = NativeNavigationHistory(initial: location("/admin/db"))
+        cancelled.openSettings(adminMode: nil)
+        cancelled.cancelPending()
+        cancelled.request(.push(location("/planned?settings=about")), adminMode: true, hasUnsavedChanges: false)
+        cancelled.closeSettings(adminMode: true)
+        #expect(cancelled.index == 1 && cancelled.location.raw == "/planned" && cancelled.count == 2)
+
+        var redirected = NativeNavigationHistory(initial: location("/admin/db"))
+        redirected.openSettings(adminMode: nil)
+        redirected.settingsDidLoad(adminMode: false, hasUnsavedChanges: false)
+        #expect(redirected.location == .home && redirected.count == 2)
+        redirected.request(.push(location("/planned?settings=about")), adminMode: false, hasUnsavedChanges: false)
+        redirected.closeSettings(adminMode: false)
+        #expect(redirected.index == 2 && redirected.location.raw == "/planned" && redirected.count == 3)
+    }
+
     @Test func settingsFirstOpenPushesSectionChangesReplaceAndCloseReturnsExactly() {
         let initial = location("/transactions?q=a+b&flag&settingsOther=keep")
         var history = NativeNavigationHistory(initial: initial)

@@ -25,6 +25,7 @@ public struct NativeNavigationHistory: Sendable {
     public private(set) var index = 0
     public private(set) var pending: Intent?
     private var pendingNeedsSettings = false
+    private var pendingOpensSettings = false
     private var settingsEntryID: UUID?
     public var location: NativeNavigationLocation { entries[index].location }
     public var count: Int { entries.count }
@@ -39,23 +40,29 @@ public struct NativeNavigationHistory: Sendable {
     /// intent holds its operation as well as its destination so a confirmed Back stays Back.
     @discardableResult
     public mutating func request(_ intent: Intent, adminMode: Bool?, hasUnsavedChanges: Bool) -> Outcome {
+        performRequest(intent, adminMode: adminMode, hasUnsavedChanges: hasUnsavedChanges, opensSettings: false)
+    }
+
+    private mutating func performRequest(
+        _ intent: Intent, adminMode: Bool?, hasUnsavedChanges: Bool, opensSettings: Bool
+    ) -> Outcome {
         guard let proposed = destination(for: intent) else {
-            pending = nil
-            pendingNeedsSettings = false
+            cancelPending()
             return .unchanged
         }
         guard let next = Self.resolve(proposed, adminMode: adminMode) else {
             pending = intent
             pendingNeedsSettings = true
+            pendingOpensSettings = opensSettings
             return .waitingForSettings
         }
         if hasUnsavedChanges, next.path != location.path {
             pending = intent
             pendingNeedsSettings = false
+            pendingOpensSettings = opensSettings
             return .blocked(next)
         }
-        pending = nil
-        pendingNeedsSettings = false
+        cancelPending()
         switch intent {
         case .push:
             if canGoForward { entries.removeSubrange((index + 1)..<entries.count) }
@@ -68,19 +75,25 @@ public struct NativeNavigationHistory: Sendable {
             // React's legacy/admin Navigate replaces the entry reached by Back or Forward.
             entries[index].location = next
         }
-        if !Self.isSettingsOpen(next) { settingsEntryID = nil }
+        if !Self.isSettingsOpen(next) {
+            settingsEntryID = nil
+        } else if opensSettings {
+            settingsEntryID = entries[index].id
+        }
         return .committed(next)
     }
 
     public mutating func cancelPending() {
         pending = nil
         pendingNeedsSettings = false
+        pendingOpensSettings = false
     }
 
     @discardableResult
     public mutating func confirmPending(adminMode: Bool?) -> Outcome {
         guard let pending else { return .unchanged }
-        return request(pending, adminMode: adminMode, hasUnsavedChanges: false)
+        return performRequest(
+            pending, adminMode: adminMode, hasUnsavedChanges: false, opensSettings: pendingOpensSettings)
     }
 
     /// Resolve an initial location or a settings-mode change without creating an entry.
@@ -88,7 +101,9 @@ public struct NativeNavigationHistory: Sendable {
     @discardableResult
     public mutating func settingsDidLoad(adminMode: Bool, hasUnsavedChanges: Bool) -> Outcome {
         if pendingNeedsSettings, let pending {
-            return request(pending, adminMode: adminMode, hasUnsavedChanges: hasUnsavedChanges)
+            return performRequest(
+                pending, adminMode: adminMode, hasUnsavedChanges: hasUnsavedChanges, opensSettings: pendingOpensSettings
+            )
         }
         guard let next = Self.resolve(location, adminMode: adminMode), next != location else { return .unchanged }
         return request(.replace(next), adminMode: adminMode, hasUnsavedChanges: hasUnsavedChanges)
@@ -101,10 +116,9 @@ public struct NativeNavigationHistory: Sendable {
         let section = Self.settingsSections.contains(section) ? section : "general"
         guard let next = location.setting("settings", to: section) else { return .unchanged }
         let alreadyOpen = Self.isSettingsOpen(location)
-        let result = request(
-            alreadyOpen ? .replace(next) : .push(next), adminMode: adminMode, hasUnsavedChanges: hasUnsavedChanges)
-        if case .committed = result, !alreadyOpen { settingsEntryID = entries[index].id }
-        return result
+        return performRequest(
+            alreadyOpen ? .replace(next) : .push(next), adminMode: adminMode,
+            hasUnsavedChanges: hasUnsavedChanges, opensSettings: !alreadyOpen)
     }
 
     @discardableResult
@@ -152,14 +166,22 @@ public struct NativeNavigationHistory: Sendable {
     }
 
     private static func canonicalPath(_ path: String) -> String {
-        var trimmed = path
-        while trimmed.count > 1, trimmed.hasSuffix("/") { trimmed.removeLast() }
-        let lower = trimmed.lowercased()
+        let original = path.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
+        // React Router 8.3 decodePath is all-or-nothing. Encoded slashes remain in
+        // their segment for matching; one malformed escape/UTF-8 segment falls
+        // back to the complete original pathname, not a partly decoded path.
+        let decoded = original.map { $0.removingPercentEncoding?.replacingOccurrences(of: "/", with: "%2F") }
+        var matching = decoded.allSatisfy({ $0 != nil }) ? decoded.compactMap { $0 } : original
+        var parts = original
+        while matching.count > 1, matching.last == "" {
+            matching.removeLast()
+            parts.removeLast()
+        }
+        let lower = matching.joined(separator: "/").lowercased()
         if lower == "/portfolio/performance" { return lower }
         if let fixed = NativeScreen.fixedScreens.first(where: { $0.path.lowercased() == lower }) { return fixed.path }
         if lower == "/owes" { return lower }
-        var parts = trimmed.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
-        let normalized = parts.map { $0.lowercased() }
+        let normalized = matching.map { $0.lowercased() }
         if parts.count == 3, normalized[1] == "accounts" {
             parts[1] = "accounts"
         } else if parts.count == 4, normalized[1] == "admin", normalized[2] == "db" {

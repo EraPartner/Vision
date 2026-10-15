@@ -258,6 +258,7 @@
             let canvas = PrintPDFCanvas(frame: view.frame)
             canvas.addSubview(view)
             let window = NSWindow(contentRect: view.frame, styleMask: .borderless, backing: .buffered, defer: false)
+            window.isReleasedWhenClosed = false
             window.contentView = canvas
             defer {
                 window.contentView = nil

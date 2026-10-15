@@ -24,6 +24,10 @@ do not ask the owner to perform those steps as an intermission.
 Phase **3o**, Settings and shared shell behaviour, has a hash-matched Foundation proof
 of 1,173 tests. Phase **3p**, remaining shell overlays and report parity, is in progress;
 its first full mounted integration checkpoint is **`fcd7ee95`**, pushed and verified.
+The latest combined continuation checkpoint is **`1ba95571`**, pushed and remote-verified;
+its [macOS run](https://github.com/EraPartner/Vision/actions/runs/38697290750) is pending.
+The dated checkpoints below preserve historical evidence; use this continuation's results
+before treating any earlier phase or test count as current.
 This handoff records both implemented and unfinished work; it does not certify that
 in-progress files compile or that macOS validation has passed. Inspect `git log`,
 `git status` and the actual diff before continuing.
@@ -108,7 +112,7 @@ the historical results below are prior evidence, not newly reproduced checks.
 ## Parallel continuation checkpoint (2026-10-15)
 
 The owner explicitly requested parallel subagents in this resumed thread. Root coordinated six
-owners; their source is now collected for one combined checkpoint. Latest remote before that save:
+owners; their source is collected in **`1ba95571`**, pushed and remote-verified after
 `cb41be8a`. The SDK route/storage takeover remains disabled. Current implementation includes:
 
 - Document-commit readiness authority and captured model/generation checks; fresh restore frontend
@@ -127,6 +131,16 @@ issues**. The platform gate remains open: `cb41be8a` built successfully and ran 
 this combined work. Its Tax fixture failure precisely required `CategoryList.links`, now included;
 its other failures are the notice deadline, watchdog, SettingsAI replay and two-write fixture cases
 addressed in this combined save. Do not describe new UI/SDK source as compiled until its own Mac run completes.
+
+The `1ba95571` macOS app build passed. Its package compilation/test result is still pending.
+Final review also prepared a follow-up: the PDF test window explicitly retains ownership on
+close, and staged history preserves deferred Settings-open ownership and matches encoded
+static paths using the installed React Router 8.3 all-or-nothing decoding behavior. Four
+regressions bring navigation coverage to 27 tests; an installed-router oracle passed 16
+encoded/malformed/slash cases. The new Swift regressions still need the follow-up Mac run.
+Existing dynamic-parameter consumers (including raw Portfolio import identifiers and
+double-encoded slashes) remain an explicit parity gate before native routing activation;
+the follow-up does not change renderer-mode `NativeRoute` consumers.
 
 The official Swift 6.2.3 Linux toolchain is now installed at
 `/workspace/.vision-tools/swift623/swift-6.2.3-RELEASE-ubuntu24.04/usr/bin` (official detached
@@ -164,12 +178,12 @@ claim that web retirement has happened:
   new switch-over ADR and verify the native route/storage/helper replacement before claiming
   phase 4 complete. Real data migration is outside this continuation.
 
-## Current continuation work
+## Historical continuation work (2026-10-13)
 
-Latest full remote checkpoint: **`368a0317`**, pushed and verified after **`2ef06366`**.
-The next full save must include all subsequent dirty/new task files, this handoff and
-the current printing/readiness work. Root owns publication; never wait for manual owner
-verification or a Demo intermission to proceed.
+At this checkpoint, the latest full remote save was **`368a0317`**, pushed and verified
+after **`2ef06366`**. The later resume and parallel-continuation sections above supersede
+its source status, ownership and next-save instructions. Root owns publication; never
+wait for manual owner verification or a Demo intermission to proceed.
 
 The definitive phase-3p Foundation proof passes **1,271 tests in 161 suites**, with zero
 source drift: 239 actual production sources (229 exact, ten documented platform
@@ -180,7 +194,7 @@ predecessor file from the 1,173-test phase-3o proof. Manifest SHA
 **Keep this proof immutable.** It includes the Print menu and restricted storage-key
 fixture, but excludes subsequent Tax printable-page preparation, SDK and rendered UI.
 
-Remaining phase-3p work, in priority order:
+The phase-3p priorities recorded at that checkpoint were:
 
 1. Follow automatic macOS app/package builds and repair actual compiler diagnostics.
    The app build passed at `2ef06366`; its package run was cancelled by a later safety push.
@@ -205,11 +219,11 @@ Remaining phase-3p work, in priority order:
 6. Proceed autonomously to phase 4's new ADR and staged native web-presentation retirement,
    preserving financial computations, navigation/history, storage/restore and active drafts.
 
-Current owners: `palette_cont` SDK; `palette_ts_cont` frontend/shared-source bridges;
+Owners at that checkpoint: `palette_cont` SDK; `palette_ts_cont` frontend/shared-source bridges;
 `docs_reports_cont` Reports/print/parity/diagrams; `onboarding_cont` Onboarding/overlay UI;
 `banners_cont` Home/rates/notifications; `verify_cont` proofs and read-only phase-4 dependency
-audit; Root shared Core/menu/tests/catalogs/handoff/commits/pushes. Below is historical
-checkpoint context; this section and current source override older unfinished assignments.
+audit; Root shared Core/menu/tests/catalogs/handoff/commits/pushes. These historical
+assignments do not supersede the parallel continuation above.
 
 ## Completed checkpoints
 
