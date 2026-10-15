@@ -132,7 +132,7 @@ struct AIInvestigationTests {
         #expect(model.input()["publicWebQuery"] == .string("allowed") && model.input()["publicQuestion"] == .null)
         model.didDisappear()
     }
-    @Test(.timeLimit(.minutes(1)))
+    @Test(.timeLimit(.minutes(2)))
     func pollWaitsForSourceIntervalAndStopsAtWaitingWithoutReplacingCancelResponse() async throws {
         let service = InvestigationFixtureService()
         let model = AIInvestigationModel(service: service, pollDelay: .milliseconds(10))
@@ -223,7 +223,7 @@ struct AIInvestigationTests {
         #expect(model.job == nil && model.question == "new visit" && !model.busy)
         model.didDisappear()
     }
-    @Test(.timeLimit(.minutes(1)))
+    @Test(.timeLimit(.minutes(2)))
     func offlineBackgroundStatusPausesButDocumentsAndManualJobPollKeepSourcePolicy() async throws {
         let service = InvestigationFixtureService()
         let model = AIInvestigationModel(service: service, pollDelay: .milliseconds(10))

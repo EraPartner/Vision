@@ -154,7 +154,7 @@ public struct NativeNavigationHistory: Sendable {
     public static func resolve(_ location: NativeNavigationLocation, adminMode: Bool?) -> NativeNavigationLocation? {
         let path = canonicalPath(location.path)
         if path == "/portfolio/performance" { return location.replacingPath("/portfolio") }
-        if NativeScreen.screen(forPath: path)?.requiresAdmin == true {
+        if NativeNavigationLocation(path)?.match?.screen?.requiresAdmin == true {
             guard let adminMode else { return nil }
             if !adminMode { return .home }
         }
@@ -198,6 +198,6 @@ public struct NativeNavigationHistory: Sendable {
             return path
         }
         let candidate = parts.joined(separator: "/")
-        return NativeScreen.screen(forPath: candidate) == nil ? path : candidate
+        return NativeNavigationLocation(candidate)?.match == nil ? path : candidate
     }
 }

@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import VisionNativeCore
 
@@ -493,6 +494,39 @@ public struct StatisticsView: View {
 
     private var recipients: some View {
         VStack(alignment: .leading, spacing: 20) {
+            recipientOverview
+            if let data = model.filtered?.recipients {
+                if isPrinting {
+                    recipientPrintTable
+                } else {
+                    LocalDataTable(
+                        title: strings.t("insights.detailsTitle"), subtitle: strings.t("insights.detailsSubtitle"),
+                        columns: recipientColumns,
+                        rows: Array(model.recipientRows.prefix(model.recipientVisibleCount)),
+                        totalCount: data.topMerchants.count,
+                        query: Binding(get: { model.recipientQuery }, set: { model.recipientQuery = $0 }),
+                        filterValues: model.recipientFilterValues, strings: strings,
+                        serverTotal: model.recipientRows.count,
+                        hasMore: model.recipientVisibleCount < model.recipientRows.count
+                    ) {
+                        Text(
+                            strings.t(
+                                model.recipientQuery.isNarrowed ? "table.noFilterResults" : "insights.detailsEmpty"))
+                    }.rowAppeared { id in
+                        if model.recipientRows.prefix(model.recipientVisibleCount).suffix(5).contains(where: {
+                            $0.id == id
+                        }
+                        ) {
+                            model.loadMoreRecipients(pageSize: settings.defaultPageSize)
+                        }
+                    }
+                }
+            }
+            recipientMonthChanges
+        }
+    }
+    private var recipientOverview: some View {
+        VStack(alignment: .leading, spacing: 20) {
             if model.isVisible("topRecipients") {
                 card("statsPage.widget.topRecipients", graph: "topRecipients") {
                     yearPicker(Binding(get: { model.recipientYear }, set: { model.recipientYear = $0 }))
@@ -520,38 +554,17 @@ public struct StatisticsView: View {
                                 ? data.topMerchants.prefix(10).reduce(0) { $0 + $1.totalSpend } / Decimal(transactions)
                                 : 0))
                 }
-                if isPrinting {
-                    recipientPrintTable
-                } else {
-                    LocalDataTable(
-                        title: strings.t("insights.detailsTitle"), subtitle: strings.t("insights.detailsSubtitle"),
-                        columns: recipientColumns,
-                        rows: Array(model.recipientRows.prefix(model.recipientVisibleCount)),
-                        totalCount: data.topMerchants.count,
-                        query: Binding(get: { model.recipientQuery }, set: { model.recipientQuery = $0 }),
-                        filterValues: model.recipientFilterValues, strings: strings,
-                        serverTotal: model.recipientRows.count,
-                        hasMore: model.recipientVisibleCount < model.recipientRows.count
-                    ) {
-                        Text(
-                            strings.t(
-                                model.recipientQuery.isNarrowed ? "table.noFilterResults" : "insights.detailsEmpty"))
-                    }.rowAppeared { id in
-                        if model.recipientRows.prefix(model.recipientVisibleCount).suffix(5).contains(where: {
-                            $0.id == id
-                        }
-                        ) {
-                            model.loadMoreRecipients(pageSize: settings.defaultPageSize)
-                        }
-                    }
-                }
-                ForEach(data.monthOverMonth) { change in
-                    LabeledContent(
-                        change.name,
-                        value: money(change.currentSpend) + " · "
-                            + VisionFormat.decimal(
-                                change.changePercent, fractionDigits: 1, locale: settings.numberFormat.locale) + "%")
-                }
+            }
+        }
+    }
+    @ViewBuilder private var recipientMonthChanges: some View {
+        if let data = model.filtered?.recipients {
+            ForEach(data.monthOverMonth) { change in
+                LabeledContent(
+                    change.name,
+                    value: money(change.currentSpend) + " · "
+                        + VisionFormat.decimal(
+                            change.changePercent, fractionDigits: 1, locale: settings.numberFormat.locale) + "%")
             }
         }
     }
@@ -726,6 +739,126 @@ public struct StatisticsView: View {
             }
         }
     }
+
+    /// Only frozen print instances enter this path; live tables retain their
+    /// existing controls, scrolling and loaded-row behavior.
+    @MainActor func rowAwarePrintBlocks(presentation: NativeStatisticsPrintPresentation, width: CGFloat) -> [NSView]? {
+        guard let printSection else { return nil }
+        switch printSection {
+        case .pivotTable(let page):
+            guard model.isVisible("pivotTable") else { return [] }
+            let periods = displayedPivotPeriods
+            let groups = model.pivotGroups
+            var rows: [NativeStatisticsPrintTable.Row] = []
+            for group in groups {
+                rows.append(
+                    .init(
+                        id: group.id,
+                        values: [group.name] + periods.map { money(group.values[$0] ?? 0) } + [money(group.total)],
+                        emphasized: true))
+                if model.expandedGroups.contains(group.id) {
+                    rows += group.children.map { child in
+                        .init(
+                            id: group.id + "." + child.id,
+                            values: [child.name] + periods.map { money(child.values[$0] ?? 0) } + [money(child.total)],
+                            indentation: CGFloat(max(1, child.path.count - 1)) * 10)
+                    }
+                }
+            }
+            var headings = [strings.t("statsPage.pivotTitle")]
+            if model.hasExclusions {
+                headings.append(
+                    strings.t(
+                        model.graphExclusions["pivotTable"] != false
+                            ? "exclusion.filtersActive" : "exclusion.filtersIgnored"))
+            }
+            headings += [
+                strings.t("statsPage.pivot.metric.\(model.categoryMetric.rawValue)") + " · "
+                    + (model.pivotYear.map(String.init) ?? strings.t("statsPage.allYears")),
+                (periods.first ?? "") + " – " + (periods.last ?? ""),
+            ]
+            let footer = NativeStatisticsPrintTable.Row(
+                id: "total",
+                values: [strings.t("statsPage.total")]
+                    + periods.map { period in money(groups.reduce(0) { $0 + ($1.values[period] ?? 0) }) }
+                    + [money(groups.reduce(0) { $0 + $1.total })], emphasized: true)
+            return [
+                NativeStatisticsPrintTable(
+                    id: "statistics.pivotTable:\(page)", headings: headings,
+                    columns: [strings.t("categories.title")] + periods + [strings.t("statsPage.total")],
+                    rows: rows, footer: footer
+                ).block(presentation: presentation, width: width)
+            ]
+        case .yearlySummary:
+            guard model.isVisible("yearlySummary") else { return [] }
+            let years = model.filtered?.years ?? []
+            let table = NativeStatisticsPrintTable(
+                id: "statistics.yearlySummary", headings: [strings.t("statsPage.yearly.title")],
+                columns: ["year", "income", "spending", "net", "transactions"].map {
+                    strings.t("statsPage.yearly.\($0)")
+                },
+                rows: years.map { year in
+                    .init(
+                        id: String(year.year),
+                        values: [
+                            String(year.year), money(year.income), money(year.spending), money(year.net),
+                            String(year.count),
+                        ])
+                })
+            return [table.block(presentation: presentation, width: width)]
+        case .recipients:
+            guard model.filtered?.recipients != nil else { return [] }
+            let visible = Array(model.recipientRows.prefix(model.recipientVisibleCount))
+            let totalCount = model.filtered?.recipients.topMerchants.count ?? 0
+            var headings = [strings.t("insights.detailsTitle"), strings.t("insights.detailsSubtitle")]
+            if !model.recipientQuery.search.isEmpty { headings.append(model.recipientQuery.search) }
+            headings += model.recipientQuery.filters.map { $0.key + ": " + $0.value }
+            var notes = [
+                visible.count != totalCount
+                    ? strings.t(
+                        "table.shownOfFiltered",
+                        ["shown": String(visible.count), "total": String(model.recipientRows.count)])
+                    : strings.t(
+                        "table.loadedOf", ["loaded": String(totalCount), "total": String(model.recipientRows.count)])
+            ]
+            if model.recipientRows.isEmpty {
+                notes.append(
+                    strings.t(model.recipientQuery.isNarrowed ? "table.noFilterResults" : "insights.detailsEmpty"))
+            }
+            let table = NativeStatisticsPrintTable(
+                id: "statistics.recipients", headings: headings, columns: recipientColumns.map(\.title),
+                rows: visible.map { row in
+                    .init(
+                        id: String(row.recipientId),
+                        values: [
+                            row.name, money(row.totalSpend), String(row.transactionCount), money(row.avgAmount),
+                            VisionFormat.appDate(row.firstSeen, format: settings.dateFormat),
+                            VisionFormat.appDate(row.lastSeen, format: settings.dateFormat),
+                        ])
+                }, notes: notes)
+            return [
+                printHost(recipientOverview, presentation: presentation, width: width),
+                table.block(presentation: presentation, width: width),
+                printHost(
+                    VStack(alignment: .leading, spacing: 20) { recipientMonthChanges }, presentation: presentation,
+                    width: width),
+            ]
+        default: return nil
+        }
+    }
+
+    @MainActor private func printHost<Content: View>(
+        _ content: Content, presentation: NativeStatisticsPrintPresentation, width: CGFloat
+    ) -> NSView {
+        NSHostingView(
+            rootView: content.frame(width: width, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .environment(\.locale, presentation.snapshot.settings.numberFormat.locale)
+                .environment(\.visionTheme, VisionTheme(selection: presentation.snapshot.theme, isPrintReport: true))
+                .environment(\.nativePrintPageWidth, width)
+                .preferredColorScheme(.light))
+    }
+
     @ViewBuilder private func printContent(_ section: NativeStatisticsPrintSection) -> some View {
         switch section {
         case .header:

@@ -3,6 +3,10 @@ import Foundation
 /// A validated router location which preserves the original query spelling. `NativeRoute`
 /// remains the decoded screen input; reserializing it must not rewrite saved deep links.
 public struct NativeNavigationLocation: Equatable, Sendable {
+    public struct Match: Equatable, Sendable {
+        public let screen: NativeScreen?
+        public let parameters: [String: String]
+    }
     public static let home = NativeNavigationLocation("/")!
     public let raw: String
     public let route: NativeRoute
@@ -20,6 +24,46 @@ public struct NativeNavigationLocation: Equatable, Sendable {
     }
 
     public var path: String { route.path }
+
+    /// Native-only `matchRoutes` input. Parameters belong to the match, never to a
+    /// rewritten pathname: a decoded slash, question mark or hash remains data.
+    /// Numeric consumers retain their current identifier policy in this staged adapter.
+    public var match: Match? {
+        let original = path.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
+        let decoded = original.map { $0.removingPercentEncoding?.replacingOccurrences(of: "/", with: "%2F") }
+        var parts = decoded.allSatisfy({ $0 != nil }) ? decoded.compactMap { $0 } : original
+        while parts.count > 1, parts.last == "" { parts.removeLast() }
+        let lower = (parts.count == 1 ? "/" : parts.joined(separator: "/")).lowercased()
+        if let screen = NativeScreen.fixedScreens.first(where: { $0.path.lowercased() == lower }) {
+            return Match(screen: screen, parameters: [:])
+        }
+        if lower == "/owes", TransactionsRoutes.owesIsNative { return Match(screen: .owes, parameters: [:]) }
+        let normalized = parts.map { $0.lowercased() }
+        // React Router's final parameter replacement is deliberately case-sensitive.
+        func parameter(_ index: Int) -> String { parts[index].replacingOccurrences(of: "%2F", with: "/") }
+        if parts.count == 3, normalized[1] == "accounts", !parts[2].isEmpty {
+            let value = parameter(2)
+            return Match(screen: .accountDetail(id: TransactionFilters.parseId(value) ?? 0), parameters: ["id": value])
+        }
+        if parts.count == 4, normalized[1] == "admin", normalized[2] == "db", !parts[3].isEmpty {
+            let value = parameter(3)
+            return Match(screen: .tableEditor(table: value), parameters: ["table": value])
+        }
+        if parts.count == 4, normalized[1] == "import", normalized[3] == "review", !parts[2].isEmpty {
+            let value = parameter(2)
+            let screen = ImportRoutes.reviewIsNative
+                ? ImportRoutes.reviewBatchId(forPath: "/import/\(value)/review").map { NativeScreen.importReview(batchId: $0) }
+                : nil
+            return Match(screen: screen, parameters: ["batchId": value])
+        }
+        if parts.count == 5, normalized[1] == "portfolio", normalized[2] == "import", normalized[4] == "review",
+            !parts[3].isEmpty
+        {
+            let value = parameter(3)
+            return Match(screen: .portfolioImportReview(batchId: value), parameters: ["batchId": value])
+        }
+        return nil
+    }
 
     /// React's retired-page redirect passes `location.search` through unchanged.
     public func replacingPath(_ path: String) -> NativeNavigationLocation? {

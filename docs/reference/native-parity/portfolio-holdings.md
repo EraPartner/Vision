@@ -17,7 +17,7 @@ tags:
     savings,
     rebalance,
   ]
-description: "Code-derived Portfolio, five asset pages and Rebalance parity inventory with phase-3i native mappings, shared investment/trade forms, broker lot tagging, charts and the phase-3p shared native PDF sheet. The Portfolio current-page print surface remains web; macOS and Demo verification remain pending."
+description: "Code-derived Portfolio, five asset pages and Rebalance parity inventory with phase-3i native mappings, shared investment/trade forms, broker lot tagging, charts and the phase-3p shared native PDF sheet. macOS and Demo verification remain pending."
 aliases: [native parity portfolio holdings]
 ---
 
@@ -33,7 +33,7 @@ aliases: [native parity portfolio holdings]
 ## Native implementation (phase 3i)
 
 The seven rendered routes now have SwiftUI implementations. Table statuses describe code coverage;
-the macOS build, synthetic Demo walkthrough, English/Dutch visual review, focus return, and printed
+the macOS build, synthetic Demo walkthrough, English/Dutch visual review, focus return, and generated PDF
 output checks remain pending. This inventory does not record completion of the phase-3 exit gate.
 The React descriptions below remain the source baseline for checking parity.
 
@@ -72,10 +72,15 @@ parameters and the underlying visit. The shared sheet owns report type, period, 
 validation, binary PDF submission and native save-panel handoff. Same-page reopening retains its
 form draft; leaving the page resets it. Save-panel cancellation leaves the sheet open without a
 success notice. The source `ExportDialog` remains the fallback when the capability is absent.
-The React `data-print-page="portfolio"` current-page print surface remains web; native Portfolio
-print parity is pending. This is separate from the implemented PDF export. Import and research
-links retain their existing route targets. See [[docs/features/pdf-report-export]],
-[[docs/architecture/native-app]] and [[docs/features/portfolio]].
+Portfolio PDF export remains separate from the source's optimized current-page print contract.
+[[apps/frontend/src/pages/portfolio/PortfolioPage.tsx|PortfolioPage]] uses a plain `PageShell`, without
+`data-print-page` hooks. [[apps/frontend/src/components/layout/AppLayout.tsx|AppLayout]] enables report
+print mode only for `/tax`, `/statistics` and `/portfolio/net-worth`; the
+[[apps/frontend/src/test/printReports.contract.test.ts|print contract tests]] pin those three routes
+and their page/action hooks. Generic browser printing is a browser facility, rather than a
+Portfolio-specific report workflow. The Electron File menu in [[packaging/electron/main.ts]] has
+no Print action. Import and research links retain their existing route targets. See
+[[docs/features/pdf-report-export]], [[docs/architecture/native-app]] and [[docs/features/portfolio]].
 
 ## Screens
 
@@ -671,11 +676,12 @@ The other `/portfolio/*` routes in this scope have no `G`-sequence key (`apps/fr
   view before their visual pass. Check both languages, Decimal money formatting, archived
   read-only actions, keyboard chart selection, dialog focus return, broker filters and complete
   lot assignment before recording the phase-3 exit gate.
-- Shared native PDF report controls are implemented in phase 3p; Portfolio current-page print
-  remains a residual web surface. Actual PDF/save-panel interaction and printed layout checks
-  remain pending. The legacy `/portfolio/performance` route intentionally uses the retained React
-  router redirect, replacing the history entry while preserving the query before the native shell
-  follows the reported `/portfolio` route (phase-2 routing authority).
+- Shared native PDF report controls are implemented in phase 3p. Actual PDF/save-panel interaction
+  and rendered PDF checks remain pending. The optimized source current-page print contract covers
+  Tax, Statistics and Net worth as described above; Portfolio uses the separate PDF export workflow.
+  The legacy `/portfolio/performance` route intentionally uses the retained React router redirect,
+  replacing the history entry while preserving the query before the native shell follows the
+  reported `/portfolio` route (phase-2 routing authority).
 - Code-derived currency boundary: active canonical holdings already express `currentPrice`,
   `avgCostBasis`, value and P&L in the reporting currency. Older Stocks/Metals comments describing
   these cells as native-currency readouts are stale. Native display uses the response currency;

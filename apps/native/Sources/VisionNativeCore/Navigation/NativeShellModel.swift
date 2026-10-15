@@ -286,6 +286,11 @@ public final class NativeShellModel {
 
     // MARK: Route
 
+    private var matchedScreen: NativeScreen? {
+        if let location = nativeNavigation?.location { return location.match?.screen }
+        return NativeScreen.screen(forPath: route.path)
+    }
+
     /// The native screen for the route, or the web app. A native screen is shown once
     /// `app_settings` has been read (its formats and default currency); an admin screen only
     /// while it says admin mode is on, otherwise the page shows the route and its
@@ -296,7 +301,7 @@ public final class NativeShellModel {
         else {
             return .web
         }
-        guard let screen = NativeScreen.screen(forPath: route.path) else {
+        guard let screen = matchedScreen else {
             if route.path == "/portfolio/performance" { return .web }
             return nativeFallback ? .notFound : .web
         }
@@ -379,7 +384,12 @@ public final class NativeShellModel {
             }
         }
         if pathChanged { leaveConfirmation = nil }
-        admin.database.routeDidChange(path: next.path)
+        if nativeNavigation != nil {
+            if case .some(.tableEditor(let table)) = matchedScreen { admin.database.routeDidChange(table: table) }
+            else { admin.database.routeDidChange(table: nil) }
+        } else {
+            admin.database.routeDidChange(path: next.path)
+        }
         // ⌘N's pending Add sheet belongs to the arrival at `/transactions`; landing elsewhere
         // (a redirect, the page's own prompt) drops it.
         if next.path != TransactionsRoutes.path { transactions.cancelAddOnArrival() }
@@ -454,7 +464,7 @@ public final class NativeShellModel {
     }
 
     public func openPortfolioReport() {
-        switch NativeScreen.screen(forPath: route.path) {
+        switch matchedScreen {
         case .portfolio, .portfolioHoldings: break
         default: return
         }

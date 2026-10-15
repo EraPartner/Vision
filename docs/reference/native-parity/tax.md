@@ -2,8 +2,8 @@
 title: "Native parity inventory: Belgian tax"
 type: reference
 status: active
-date: 2026-10-13
-updated: 2026-10-13
+date: 2026-10-15
+updated: 2026-10-15
 tags: [reference, swift-rewrite, native-parity, tax, belgian-tax, household]
 description: "Code-derived inventory of the /tax route (TaxOverviewPage): year switcher, year actions, as-filed snapshots, exports, widget customisation, the six-step tax profile sheet with every household, income, home, deduction and region input, and the deduction review cards."
 aliases: [native parity tax]
@@ -388,8 +388,20 @@ No page-specific shortcuts: `features/tax/` and `TaxOverviewPage.tsx` register n
 
 The macOS build, rendered visual/keyboard checks and printer pagination remain pending. PDF export is
 native; current-page print freezes the loaded year, visible widgets, comparison year, disclosure state
-and deductions without queries or fiscal recalculation. Its new print Core proof is separate from the
-1,271-test combined phase-3p proof. Native markers record implementation, not rendered verification.
+and deductions without queries or fiscal recalculation. `NativeTaxPrintDocument.printBlocks`
+materializes the expanded PIT and household tables and the captured-year comparison as measured
+rows. Continuation pages repeat the table header and retain column widths resolved from the full
+frozen table. PIT bracket notes stay in their row; recorded-income rows keep their order, and the
+household assessment/quotient/legal-basis footer prints once, with the final row when the pair fits.
+Collapsed disclosures remain collapsed. Rows fitting below a fresh header do not split; an oversized
+single row/footer can continue in clipped slices, while a header consuming the usable paper height
+falls back to ordinary blocks without repeated headers. See [[docs/architecture/native-app|native architecture]].
+
+Focused AppKit/PDF tests cover both languages, row boundaries, complete text, footer placement,
+captured comparison year and changed paper width. Those new cases have not run on macOS for this
+slice. The earlier print Core proof remains separate from the 1,271-test combined phase-3p proof.
+Native markers record source implementation, without claiming rendered or physical printer
+verification or a completed phase exit.
 
 - Resolved computation prerequisite (ADR-204 §6): the backend operation uses the shared TypeScript engine. SwiftUI must display these results, preserve frozen filings, and keep the implemented profile workflows; it must not reproduce tax formulas.
 - Doc/code conflict: `docs/features/belgian-tax.md` (overview-page composition) says `TaxYearSwitcher` and `YearActionsMenu` live inside `TaxFilingMasthead`; in code they are in the page header actions, and the masthead header comment says so (`apps/frontend/src/features/tax/TaxFilingMasthead.tsx:11-12`, `apps/frontend/src/pages/TaxOverviewPage.tsx:157-176`).

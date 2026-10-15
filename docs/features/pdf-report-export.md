@@ -2,7 +2,7 @@
 title: PDF Report Export
 type: feature
 status: active
-date: 2026-10-13
+date: 2026-10-15
 updated: 2026-10-15
 tags:
   [
@@ -89,9 +89,16 @@ Current-page File → Print is separate from generating an export PDF. It freeze
 Statistics or Net worth page without new service reads or financial recomputation: Tax keeps its
 selected year, visible widgets and disclosures; Statistics keeps its active tab, filters, chart
 selections and cached data/errors; Net worth keeps its loaded rows, period, currency and selections.
-The native host measures section blocks and paginates them through `NSPrintOperation`. macOS printer
-pagination and rendered parity remain unverified; see [[docs/reference/native-parity/tax|Tax parity]]
-and [[docs/architecture/native-app|native architecture]].
+The native host paginates ordinary sections and measured table rows through `NSPrintOperation`.
+Tax PIT/household/comparison, Statistics pivot/payee/yearly-summary and Net-worth account/history
+tables repeat headers on continuation pages, reuse columns resolved from the complete frozen table
+per printable width, and emit their optional footer once. Rows fitting below a fresh header stay
+whole; a final row/footer pair stays together when it fits. Oversized single rows/footers can
+continue in clipped slices; a header consuming the usable paper height falls back to ordinary
+blocks without repeated headers. Paper and margin changes rebuild the frozen layout. The new
+focused AppKit/PDF cases await macOS execution; rendered and physical printer parity remain
+unverified. See [[docs/reference/native-parity/tax|Tax parity]],
+[[docs/features/net-worth|Net worth]] and [[docs/architecture/native-app|native architecture]].
 
 ## Phase 7: Filter Exclusions with Impact Comparison & Dual-Chart Visualization
 

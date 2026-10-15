@@ -8026,7 +8026,7 @@
                 "from": "native.print",
                 "to": "native.print",
                 "payload": "inert section presentation → paginated NSPrintOperation",
-                "annotation": "NativeTaxPrintDocument.swift, NativeStatisticsPrintDocument.swift and NativeNetWorthPrintDocument.swift use frozen presentations without page load hooks. NativePagePrintPagesView.swift remeasures effective paper dimensions/margins; Statistics receives actual printable width. ShellController.swift rechecks generation/route/overlays/restore before NSPrintOperation. Physical printer and row-aware tall-block breaks remain unverified."
+                "annotation": "NativeTaxPrintDocument.swift, NativeStatisticsPrintDocument.swift and NativeNetWorthPrintDocument.swift emit frozen sections and NativePagePrintTableBlock.swift header/row/footer factories. NativePagePrintPagesView.swift measures whole rows, repeats continuation headers and remeasures changed paper/margins; columns are resolved from the full frozen table. Oversized single rows/footers may continue; a paper-sized header uses ordinary-block fallback. ShellController.swift rechecks route/generation/overlays/restore before NSPrintOperation. Actual Mac rendering and physical printer output remain unverified."
               }
             ],
             "docs": [

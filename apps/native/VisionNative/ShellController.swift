@@ -1804,31 +1804,19 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
                     let presentation = try await NativeTaxPrintPresentation.prepare(snapshot)
                     title = snapshot.strings.t("tax.page.title") + " · " + String(snapshot.year)
                     buildBlocks = { width in
-                        snapshot.sections.map {
-                            NSHostingView(
-                                rootView: NativeTaxPrintDocument(presentation: presentation, sections: [$0])
-                                    .frame(width: width)) as NSView
-                        }
+                        NativeTaxPrintDocument.printBlocks(presentation: presentation, width: width)
                     }
                 case .statistics(let snapshot):
                     let presentation = NativeStatisticsPrintPresentation.prepare(snapshot)
                     title = snapshot.strings.t("statsPage.title")
                     buildBlocks = { width in
-                        snapshot.sections.map {
-                            NSHostingView(
-                                rootView: NativeStatisticsPrintDocument(presentation: presentation, sections: [$0], pageWidth: width)
-                                    .frame(width: width)) as NSView
-                        }
+                        NativeStatisticsPrintDocument.printBlocks(presentation: presentation, width: width)
                     }
                 case .netWorth(let snapshot):
                     let presentation = NativeNetWorthPrintPresentation.prepare(snapshot)
                     title = snapshot.strings.t("networth.title")
                     buildBlocks = { width in
-                        snapshot.sections.map {
-                            NSHostingView(
-                                rootView: NativeNetWorthPrintDocument(presentation: presentation, sections: [$0])
-                                    .frame(width: width)) as NSView
-                        }
+                        NativeNetWorthPrintDocument.printBlocks(presentation: presentation, width: width)
                     }
                 }
                 try self.requireNativeGeneration(generation)

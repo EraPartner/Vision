@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import VisionNativeCore
 
@@ -10,6 +11,41 @@ public struct NativeTaxPrintDocument: View {
         self.presentation = presentation
         self.sections = sections ?? presentation.snapshot.sections
     }
+    /// Table factories keep the frozen column geometry while the common paginator repeats headers.
+    @MainActor public static func printBlocks(
+        presentation: NativeTaxPrintPresentation, width: CGFloat,
+        sections: [NativeTaxPrintSection]? = nil
+    ) -> [NSView] {
+        let snapshot = presentation.snapshot
+        let overview = snapshot.overview
+        let data = snapshot.dashboard
+        let shell = presentation.shell
+        return (sections ?? snapshot.sections).compactMap { section -> NSView? in
+            switch section {
+            case .pitBreakdown where snapshot.localState.pitExpanded:
+                return TaxPITBreakdownView(
+                    overview: overview, shell: shell, portfolioTaxes: data.portfolioTaxesForYear,
+                    totalIncludingPortfolio: data.totalTaxIncludingPortfolio,
+                    totalIncludingProperty: data.totalTaxIncludingPropertyEstimate,
+                    initiallyExpanded: true
+                ).printTable(width: width)
+            case .householdBreakdown where snapshot.localState.householdExpanded:
+                return TaxHouseholdBreakdownView(
+                    overview: overview, data: data, shell: shell, initiallyExpanded: true, printLayout: true
+                ).printTable(width: width)
+            case .yearComparison:
+                return TaxYearComparisonView(
+                    model: presentation.dashboard, overview: overview, shell: shell,
+                    initialComparisonYear: snapshot.localState.comparisonYear, printLayout: true
+                ).printTable(width: width)
+            default:
+                return NSHostingView(
+                    rootView: NativeTaxPrintDocument(presentation: presentation, sections: [section])
+                        .frame(width: width))
+            }
+        }
+    }
+
     public var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             ForEach(sections) { section in NativeTaxPrintSectionView(presentation: presentation, section: section) }
@@ -124,5 +160,138 @@ public struct NativeTaxPrintSectionView: View {
     private var uniqueIssues: [OpenAPI.BelgianTaxHouseholdTaxIssue] {
         var seen = Set<String>()
         return overview.result.issues.filter { seen.insert($0.code).inserted }
+    }
+}
+
+/// Presentation-only cells. Values are formatted from the immutable snapshot; no fiscal work runs here.
+struct NativeTaxPrintCell {
+    var text: String
+    var detail: String? = nil
+    var strong = false
+    var tone: NativeTaxPrintTone = .normal
+    var pill = false
+    var symbol: String? = nil
+    var symbolTone: NativeTaxPrintTone = .secondary
+}
+
+enum NativeTaxPrintTone {
+    case normal, secondary, gain, loss, warning, info
+    func color(_ theme: VisionTheme) -> Color {
+        switch self {
+        case .normal: theme.foreground
+        case .secondary: theme.secondaryLabel
+        case .gain: theme.gain
+        case .loss: theme.loss
+        case .warning: theme.warning
+        case .info: theme.info
+        }
+    }
+}
+
+@MainActor enum NativeTaxPrintTable {
+    static let inset: CGFloat = 20
+    static let spacing: CGFloat = 10
+
+    static func make(
+        id: String, title: String, description: String, notes: [String] = [],
+        columns: [NativeTaxPrintCell], rows: [[NativeTaxPrintCell]],
+        shell: NativeShellModel, width: CGFloat, footer: NativePagePrintRow? = nil
+    ) -> NSView {
+        let widths = columnWidths(columns: columns, rows: rows, width: width)
+        let header = NativePagePrintRow { width in
+            host(
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(title).font(.headline)
+                    Text(description).font(.callout).foregroundStyle(.secondary)
+                    ForEach(Array(notes.enumerated()), id: \.offset) { _, note in
+                        Text(note).font(.caption).foregroundStyle(.secondary)
+                    }
+                    NativeTaxPrintCells(cells: columns, widths: widths, header: true)
+                }.padding(.horizontal, inset).padding(.vertical, 12),
+                shell: shell, width: width, id: id + ".header")
+        }
+        let printedRows = rows.enumerated().map { index, cells in
+            NativePagePrintRow { width in
+                host(
+                    VStack(alignment: .leading, spacing: 6) {
+                        NativeTaxPrintCells(cells: cells, widths: widths)
+                        Divider()
+                    }.padding(.horizontal, inset).padding(.vertical, 4),
+                    shell: shell, width: width, id: id + ".row.\(index)")
+            }
+        }
+        return NativePagePrintTableBlock(header: header, rows: printedRows, footer: footer, spacing: 0)
+    }
+
+    static func host<Content: View>(
+        _ content: Content, shell: NativeShellModel, width: CGFloat, id: String
+    ) -> NSView {
+        let view = NSHostingView(
+            rootView:
+                content
+                .frame(width: width, alignment: .leading).fixedSize(horizontal: false, vertical: true)
+                .environment(\.locale, shell.settings.numberFormat.locale)
+                .environment(\.visionTheme, VisionTheme(selection: shell.theme, isPrintReport: true))
+                .preferredColorScheme(.light).allowsHitTesting(false))
+        view.identifier = NSUserInterfaceItemIdentifier(id)
+        return view
+    }
+
+    /// All frozen rows participate once per printable width; a page subset never changes columns.
+    private static func columnWidths(
+        columns: [NativeTaxPrintCell], rows: [[NativeTaxPrintCell]], width: CGFloat
+    ) -> [CGFloat] {
+        guard !columns.isEmpty else { return [] }
+        let available = max(1, width - inset * 2 - spacing * CGFloat(columns.count - 1))
+        let font = NSFont.systemFont(ofSize: NSFont.systemFontSize)
+        var preferred = columns.map { ($0.text as NSString).size(withAttributes: [.font: font]).width + 20 }
+        for cells in rows {
+            for (index, cell) in cells.enumerated() where preferred.indices.contains(index) {
+                let measured = (cell.text as NSString).size(withAttributes: [.font: font]).width
+                let detail = cell.detail.map { ($0 as NSString).size(withAttributes: [.font: font]).width + 12 } ?? 0
+                preferred[index] = max(preferred[index], measured + (cell.pill ? 20 : 4), detail)
+            }
+        }
+        let minimum = (0..<columns.count).map { min($0 == 0 ? 80 : 60, available / CGFloat(columns.count)) }
+        let remaining = max(0, available - minimum.reduce(0, +))
+        let weights = zip(preferred, minimum).map { max(1, $0 - $1) }
+        let total = weights.reduce(0, +)
+        return zip(minimum, weights).map { $0 + remaining * $1 / total }
+    }
+}
+
+private struct NativeTaxPrintCells: View {
+    let cells: [NativeTaxPrintCell]
+    let widths: [CGFloat]
+    var header = false
+    @Environment(\.visionTheme) private var theme
+    var body: some View {
+        HStack(alignment: .top, spacing: NativeTaxPrintTable.spacing) {
+            ForEach(Array(cells.enumerated()), id: \.offset) { index, cell in
+                VStack(alignment: index == 0 ? .leading : .trailing, spacing: 3) {
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        Text(cell.text)
+                            .font(header || cell.pill ? .caption : .body)
+                            .fontWeight(header || cell.strong ? .semibold : .regular)
+                            .monospacedDigit()
+                            .foregroundStyle(cell.tone.color(theme))
+                            .fixedSize(horizontal: false, vertical: true)
+                        if let symbol = cell.symbol {
+                            Image(systemName: symbol).foregroundStyle(cell.symbolTone.color(theme))
+                        }
+                    }
+                    .padding(.horizontal, cell.pill ? 8 : 0).padding(.vertical, cell.pill ? 4 : 0)
+                    .background(cell.pill ? cell.tone.color(theme).opacity(0.1) : Color.clear, in: Capsule())
+                    if let detail = cell.detail {
+                        Text(detail).font(.caption2.weight(.medium))
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.horizontal, 6).padding(.vertical, 1)
+                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(theme.border.opacity(0.7)))
+                    }
+                }
+                .frame(width: widths[index], alignment: index == 0 ? .leading : .trailing)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+        }
     }
 }

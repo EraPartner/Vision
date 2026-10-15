@@ -321,7 +321,12 @@ public final class DatabaseScreens {
     /// page remounts with fresh state); any other route drops an editor without pending
     /// changes, so coming back starts fresh.
     public func routeDidChange(path: String) {
-        if let table = TableEditorRoute.table(forPath: path) {
+        routeDidChange(table: TableEditorRoute.table(forPath: path))
+    }
+
+    /// A native router match already owns decoding; do not decode its parameter again.
+    public func routeDidChange(table: String?) {
+        if let table {
             if editor?.table != table {
                 editor = TableDataEditorModel(table: table, service: service)
                 if let noticeCenter { editor?.attachNotices(noticeCenter) }

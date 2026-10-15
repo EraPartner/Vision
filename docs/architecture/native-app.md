@@ -2,7 +2,7 @@
 title: Vision Native App Architecture
 type: architecture-doc
 status: active
-date: 2026-10-13
+date: 2026-10-15
 updated: 2026-10-15
 tags:
   [
@@ -1586,15 +1586,30 @@ File → Print is a separate current-page operation. `NativeTaxPrintSnapshot` fr
 Tax year, visible widgets, comparison year, disclosure state and deduction state. The inert presentation
 and `NativeTaxPrintDocument` reuse section views without query lifecycle hooks or fiscal recalculation.
 Printer-only tables remove horizontal viewport clipping; Statistics pivots receive actual printable
-width. `VisionNativeUI/Screens/Reports/NativePagePrintPagesView.swift` measures frozen sections and
-remeasures when effective paper dimensions or margins change, including print-panel changes.
-Oversized sections can still cross page boundaries without row-aware break avoidance. New AppKit/PDF
-bounds tests cover narrow paper, orientation, long labels/large values and loaded Tax/Statistics/Net worth documents; execution
-is pending on macOS. The SDK checks the route,
-generation, restore state and overlays again before paginated `NSPrintOperation` presentation. This
-implementation does not claim verified printer pagination or rendered macOS parity; those checks remain
-pending. Statistics and Net worth have their own immutable snapshots, inert documents and focused tests;
-platform verification of those current-page layouts remains pending.
+width. Each document's `printBlocks(presentation:width:)` factory returns ordinary section views and
+`NativePagePrintTableBlock` markers to `VisionNativeUI/Screens/Reports/NativePagePrintPagesView.swift`.
+The paginator measures each table's header, ordered variable-height rows and optional final footer.
+Rows that fit below a fresh header move whole to the next page when needed, and each continuation
+repeats the header. Column widths come from the complete frozen table once per printable width,
+so page subsets cannot shift columns. The footer appears once and stays with the final row when
+the pair fits. Effective paper or margin changes rebuild the frozen layout, including changes in
+the print panel.
+
+Tax adapters preserve expanded PIT/household tables, bracket notes, recorded-income rows and the
+captured comparison year. Statistics adapters cover pivot, payee and yearly-summary tables; Net worth
+adapters cover account allocations and loaded daily history. They preserve captured formatting,
+filters, totals, failures and footer notes without new reads or financial recomputation.
+An individual row or footer taller than the space below a fresh header can continue in clipped
+slices with repeated headers. If the header consumes the usable paper height, the paginator falls
+back to ordinary blocks to preserve the content; that fallback cannot repeat table headers.
+Ordinary non-table sections retain section-block pagination.
+
+Focused AppKit/PDF tests are on disk for row bounds, repeated headers, footer placement, long labels,
+narrow paper, changed margins/orientation and the three frozen documents. Their macOS execution for
+this slice remains pending; source implementation and parsing do not establish rendered or physical
+printer parity. The SDK checks route, generation, restore state and overlays again before paginated
+`NSPrintOperation` presentation. Statistics and Net worth retain their own immutable snapshots and
+inert documents. These additions do not complete the phase-3 exit gate.
 
 The immutable combined Foundation proof passed **1,271 tests in 161 suites** for the mounted phase-3p
 Core graph (239 production and 86 test files); it excludes subsequent current-page print additions.
@@ -1611,6 +1626,11 @@ See [[docs/reference/native-parity/shell-and-settings|shell parity]],
 `NativeNavigationHistory`/`NativeNavigationLocation` and dormant `NativeRawStateStore` boundaries.
 The SDK retains renderer routing and browser storage. Native history tests cover exact raw queries,
 guarded push/replace/back/forward, Settings ownership, admin hydration and legacy redirects. The
+new `NativeNavigationStartup` selects the source boot mirror/last route without doing I/O or
+route admission, distinguishing a new-session seed from replacement after document reload.
+`NativeNavigationLocation.match` keeps decoded parameters separate from raw path/query;
+opt-in shell/table/Portfolio consumers use those values without decoding again. Numeric-ID
+coercion parity and the host request/commit/leave-guard protocol remain activation gates. The
 raw store requires an explicit origin, website-store identity, caller-selected file URL and complete
 capture provenance; atomic commits preserve unknown/raw local strings while session values remain
 in memory. It exports the existing 15-key backup subset and accepts only already-source-normalized

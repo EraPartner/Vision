@@ -175,9 +175,14 @@ exclusion inputs, uses the original TypeScript fiscal context, and saves the exi
 response. Closing removes only `export` with replace, retaining the native tab/window. The report
 rows below now map to that native sheet/model, not the retired React handoff. File Print/Cmd-P is a
 separate workflow: `NativeStatisticsPrintSnapshot` freezes the currently loaded tab, filters,
-widgets, selections and cached failures, and `NativeStatisticsPrintDocument` renders inert sections
-without new queries. Implementation status does not certify macOS runtime, keyboard, accessibility
-or rendered printer parity; see [[docs/architecture/native-app|native architecture]].
+widgets, selections and cached failures. `NativeStatisticsPrintDocument.printBlocks` supplies inert
+section views and measured pivot, payee and yearly-summary table rows without new queries. Table
+continuations repeat headers and reuse columns resolved from the complete frozen table at the
+printable width; optional totals/notes print once as a footer, kept with the last row when they fit.
+Rows that fit below a fresh header stay whole. Oversized single rows/footers and a header consuming
+the paper height retain the explicit fallback limits in [[docs/architecture/native-app|native architecture]].
+The focused AppKit/PDF cases for this slice await macOS execution. Implementation status does not
+certify runtime, keyboard, accessibility, rendered output or physical printer parity.
 
 **Regions shown:**
 

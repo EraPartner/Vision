@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import VisionNativeCore
 
@@ -414,5 +415,58 @@ private struct TaxChartLoadView: View {
         } else {
             ProgressView().frame(maxWidth: .infinity).padding(.vertical, 30)
         }
+    }
+}
+
+extension TaxYearComparisonView {
+    @MainActor func printTable(width: CGFloat) -> NSView? {
+        guard let data, data.yearCalculations.count > 1, let selected else { return nil }
+        let selectedColumn = NativeTaxPrintCell(
+            text: String(selected.year),
+            symbol: selected.isFiled ? "lock.fill" : selected.hasFrozenCalculation ? "snowflake" : nil,
+            symbolTone: selected.isFiled ? .warning : .info)
+        let columns: [NativeTaxPrintCell] = [
+            .init(text: shell.strings.t("tax.comparison.header.metric")),
+            .init(text: String(overview.year)), selectedColumn,
+            .init(text: shell.strings.t("tax.comparison.header.delta")),
+        ]
+        let rows: [[NativeTaxPrintCell]] = [
+            printRow(
+                "grossIncome", a: overview.calculation.grossIncome, b: selected.calculation.grossIncome,
+                higherIsBetter: true),
+            printRow(
+                "totalPIT", a: overview.calculation.totalPIT, b: selected.calculation.totalPIT, higherIsBetter: false),
+            printRow(
+                "effectiveRate", a: overview.calculation.effectiveRate, b: selected.calculation.effectiveRate,
+                higherIsBetter: false, isPercent: true),
+            printRow(
+                "netTakeHome", a: overview.calculation.netTakeHome, b: selected.calculation.netTakeHome,
+                higherIsBetter: true),
+        ]
+        return NativeTaxPrintTable.make(
+            id: "tax.comparison", title: shell.strings.t("tax.comparison.title", ["year": String(overview.year)]),
+            description: shell.strings.t("tax.comparison.description"),
+            notes: [shell.strings.t("tax.comparison.versus") + " " + String(selected.year)],
+            columns: columns, rows: rows, shell: shell, width: width)
+    }
+
+    private func printRow(
+        _ key: String, a: Decimal?, b: Decimal?, higherIsBetter: Bool, isPercent: Bool = false
+    ) -> [NativeTaxPrintCell] {
+        let delta: NativeTaxPrintCell
+        if let a, let b {
+            let difference = a - b
+            let zero = abs(difference) < Decimal(5) / 1000
+            let tone: NativeTaxPrintTone = zero ? .secondary : ((difference > 0) == higherIsBetter ? .gain : .loss)
+            delta = .init(
+                text: deltaLabel(difference, baseline: b, percent: isPercent, zero: zero), tone: tone, pill: true)
+        } else {
+            delta = .init(text: "—", tone: .secondary)
+        }
+        return [
+            .init(text: shell.strings.t("tax.comparison.row." + key)),
+            .init(text: format(a, percent: isPercent), strong: true),
+            .init(text: format(b, percent: isPercent), tone: .secondary), delta,
+        ]
     }
 }

@@ -2,8 +2,8 @@
 title: Net Worth Feature
 type: feature
 status: active
-date: 2026-10-08
-updated: 2026-10-08
+date: 2026-10-15
+updated: 2026-10-15
 tags:
   [
     feature,
@@ -329,6 +329,18 @@ Printing `/portfolio/net-worth` produces a report view of the visible net-worth 
 chrome and interactive header actions are hidden, glass materials become light paper surfaces, and
 cards, tables, and charts avoid internal page breaks where possible. The print rules are scoped to
 this route and do not affect the normal screen layout.
+
+In Vision Native, File → Print captures the loaded period, currency, chart selections, account
+allocations, history rows and existing partial/error state. `NativeNetWorthPrintDocument.printBlocks`
+feeds measured table rows to the shared paginator without fetching or recomputing financial values.
+Continuation pages repeat headers and retain columns resolved from the entire frozen table at the
+printable width. Rows fitting below a fresh header stay whole; reconciliation and history footers
+print once and stay with the final row when possible. An oversized single row/footer can continue
+in clipped slices. A header consuming the usable paper height instead falls back to ordinary
+blocks without repeated headers. Focused AppKit/PDF tests are added but their macOS execution,
+rendered parity and physical printer verification for this slice remain pending. See
+[[docs/reference/native-parity/portfolio-wealth-tools|Net-worth parity]] and
+[[docs/architecture/native-app|native architecture]].
 
 ## Performance Optimizations
 

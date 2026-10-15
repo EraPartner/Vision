@@ -210,7 +210,11 @@ Production TTL and polling policies are unchanged. A scoped Linux proof passes *
 two suites** using exact Investigation/TaxOverview models with documented boundary adapters;
 it excludes the HTTP Investigation case and uses a reduced Tax result fixture. Artifacts:
 `/workspace/scratch/ai-poll-tax-check` and `/workspace/scratch/ai-poll-tax-check.log`.
-The full Mac gate remains authoritative; `afed3bcc` is still running.
+The full Mac gate remains authoritative. `afed3bcc` built the app/package and ran
+**1,617 Core tests / 221 suites / one issue**, the old Investigation publication deadline.
+`ca7a25ea` publishes both test fixes and its Mac run is in progress. The next combined save
+also makes the two deadlock guards two minutes: the real passing sibling took 61.86 seconds
+under aggregate MainActor load. Exact publication/count assertions remain unchanged.
 
 Parallel owners now implement measured row-aware pagination and adapters for Tax, Statistics
 and Net worth. Root integrates SDK calls; the paginator retains the existing `[NSView]` builder
@@ -218,21 +222,49 @@ interface and recognizes explicit table blocks. Another owner audits staged Phas
 history, storage and readiness dependencies. Neither unfinished work nor a pending CI run
 establishes phase completion. Continue from actual `git log` and collect all task files at saves.
 
-### Next source work after the combined gate
+### Row-aware print and staged navigation checkpoint (2026-10-15)
 
-The current paginator measures whole section blocks. Oversized table sections can split rows
-and omit continuation headers. Replace opaque table blocks with measured header/ordered-row/
-footer blocks, resolving columns once from the complete frozen table. Pack whole measured rows
-and repeat headers; retain an explicit forward-progress exception for a row taller than the
-paper. This affects the paginator, all three report print documents, Statistics table helpers,
-Tax breakdown/chart tables and the three SDK print adapters, without new service reads or Core
-snapshot changes. Rendered tests must check whole-row boundaries, repeated headers, single
-footers and identical columns across changed paper/orientation, including wrapped labels and
-large amounts. The current PDF tests do not prove those properties.
+This snapshot adds `NativePagePrintRow`/`NativePagePrintTableBlock`, retaining the existing
+`[NSView]` builder boundary. The paginator measures actual variable-height rows, moves fitting
+tables intact, repeats fresh continuation headers, keeps the final footer with the last row
+when possible, and resolves columns from the full frozen table. Oversized individual rows or
+footers use explicit clipped continuations; a header occupying the paper falls back to ordinary
+blocks without repeated headers. All three SDK print adapters call the new document factories.
+Tax expanded PIT/household/comparison, Statistics pivot/recipient/yearly and Net-worth loaded
+account/history tables use the structured blocks without new reads or financial recalculation.
+Generic and document-specific AppKit/PDF tests cover row bounds, headers, footer count, columns,
+long labels/amounts, frozen state and request counters. Their actual Mac execution remains pending.
 
-Portfolio PDF export is native, but its current-page Print action remains unsupported while
-the native Portfolio screen is active. Distinguish that gap from the three implemented
-Tax/Statistics/Net-worth current-page print paths.
+Algorithm-only proof compiles the two exact production files against an AppKit geometry stand-in
+and passes 1,000 seeded layouts. Artifacts `/tmp/vision-print-table-algorithm`, manifest SHA
+`166721c14562a247ab6a1e0f4820d98b0ca199e4f26120c43acda24eb5c5e712`.
+This is not an AppKit/PDF/physical-printer result.
+
+New dormant `NativeNavigationStartup` preserves source boot-mirror/last-route selection,
+settings-arrival location, root-query behavior, and new-session seed versus document-reload
+replacement. Raw selection deliberately defers route admission/admin/legacy handling.
+Its exact-source proof passes nine tests, and the actual `StartupRedirect` component/effect
+oracle matches 21,842 scenarios / 28,084 evaluations. Preserve
+`/workspace/vision-native-startup-proof`, manifest SHA
+`1198aa4c1549d4251227ba53e7408920ed7bf856876e2c8ecf7046e09f6732a6`.
+
+Native-only matched parameters now remain separate from raw pathname/search. Opt-in shell,
+database table and Portfolio review consumers use decoded match values without decoding again;
+renderer-mode behavior is unchanged. The new matcher/18 prior history tests pass a scoped
+24-test proof and 68 installed React Router oracle cases. Artifacts:
+`/workspace/scratch/native-parameter-check`. Two shell integration tests and SwiftUI need Mac
+execution. JavaScript numeric-ID coercion remains a separate activation gate; SDK takeover is off.
+
+Source audit corrected a stale Portfolio-print claim: `PortfolioPage` has no optimized print
+markers, `AppLayout` and `printReports.contract.test.ts` explicitly cover Tax/Statistics/Net worth,
+and Electron defines no Print menu/call. Generic browser printing is separate from that contract.
+Portfolio PDF export remains implemented; do not invent a missing optimized Portfolio print port.
+
+Next Phase-4 chunks: default-off request/commit adapter preserving the single web leave guard;
+strict raw-state capture codec/script before any live migration; numeric route-ID parity; then
+typed host bootstrap, history continuity and restore/menu integration. Startup resolution and
+matched parameters alone do not enable a new SDK route owner. Continue independent preparation
+while full package checks run; do not end work merely because a snapshot was published.
 
 ## Phase-4 dependency recheck (2026-10-15)
 

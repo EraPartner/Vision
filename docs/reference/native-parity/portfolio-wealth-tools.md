@@ -2,7 +2,7 @@
 title: "Native parity inventory: Net worth, brokerage import and portfolio tax"
 type: reference
 status: active
-date: 2026-10-13
+date: 2026-10-15
 updated: 2026-10-15
 tags:
   [
@@ -79,9 +79,16 @@ The native mapping is: page rows **1–4 and 15** in `NetWorthView` (`refreshBut
 **Phase 3p current-page print.** File Print/Cmd-P captures `NativeNetWorthPrintSnapshot` from the
 active loaded route, keeping period/currency, account allocations, loaded table state, chart
 selections and existing partial/error states. `NativeNetWorthPrintDocument` consumes the immutable
-presentation; printing does not read services or recompute financial values. The native row records
-implementation; actual printer pagination and rendered/keyboard/accessibility parity remain
-unverified. See [[docs/features/pdf-report-export|PDF and current-page print]] and
+presentation; printing does not read services or recompute financial values. Its `printBlocks`
+factory provides measured account-allocation and daily-history rows to the shared paginator.
+Headers repeat on continuation pages; columns are resolved once from the complete frozen table
+per printable width. Rows fitting below a fresh header stay whole, and account reconciliation or
+history count/error footers appear once, kept with the final row when the pair fits. Oversized
+single rows/footers can continue in clipped slices; a header consuming the usable paper height
+falls back to ordinary blocks without repeated headers.
+The native row records implementation. New focused AppKit/PDF cases await macOS execution;
+physical printer output and rendered/keyboard/accessibility parity remain unverified. See
+[[docs/features/pdf-report-export|PDF and current-page print]] and
 [[docs/architecture/native-app|native architecture]].
 
 #### Popover: Column filter (`ColumnFilter`)

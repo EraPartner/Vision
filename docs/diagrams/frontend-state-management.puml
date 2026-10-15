@@ -381,9 +381,16 @@ end note
 package "Staged phase 4 (SDK takeover disabled)" {
   class NativeNavigationHistory <<opt-in>>
   class NativeNavigationLocation
+  class NativeNavigationStartup <<unwired policy>>
   class NativeRawStateStore <<dormant actor>>
 }
 NativeNavigationHistory --> NativeNavigationLocation : exact raw query / decoded route
+NativeNavigationStartup ..> NativeNavigationHistory : raw seed or document replacement / admission deferred
+note right of NativeNavigationLocation
+  Raw location and matched parameters stay separate.
+  Native-only consumers avoid repeated decoding.
+  Numeric-coercion parity remains an activation gate.
+end note
 note right of NativeRawStateStore
   Explicit origin + website-store identity + complete capture.
   Atomic raw local strings; session map stays in memory.

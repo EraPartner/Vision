@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import VisionNativeCore
 
@@ -356,5 +357,119 @@ struct TaxHouseholdBreakdownView: View {
         )
         .monospacedDigit().foregroundStyle(tone == "reduction" ? theme.gain : theme.foreground)
         .fontWeight(tone == "total" ? .semibold : .regular)
+    }
+}
+
+extension TaxPITBreakdownView {
+    /// This is called only for the frozen, expanded print disclosure.
+    @MainActor func printTable(width: CGFloat) -> NSView {
+        let printedRows: [[NativeTaxPrintCell]] = rows.map { key, amount, tone in
+            let strong = tone == "grand" || tone == "total"
+            let detail =
+                key.hasPrefix("bracket") ? key.last.map { strings.t("tax.pit.bracketRange" + String($0)) } : nil
+            let label = NativeTaxPrintCell(
+                text: strings.t("tax.pit.row." + key, ["year": String(overview.year)]), detail: detail, strong: strong)
+            let value =
+                amount.map {
+                    MoneyText.text(
+                        $0, currency: shell.settings.defaultCurrency, settings: shell.settings,
+                        signed: tone == "reduction")
+                } ?? "—"
+            let numeric = NativeTaxPrintCell(
+                text: value, strong: strong, tone: tone == "reduction" ? .gain : tone == "tax" ? .loss : .normal)
+            return [label, numeric]
+        }
+        return NativeTaxPrintTable.make(
+            id: "tax.pit", title: strings.t("tax.pit.title"), description: strings.t("tax.pit.description"),
+            notes: [strings.t("tax.pit.tooltip")],
+            columns: [
+                .init(text: strings.t("tax.pit.table.component")), .init(text: strings.t("tax.pit.table.amount")),
+            ],
+            rows: printedRows, shell: shell, width: width)
+    }
+}
+
+extension TaxHouseholdBreakdownView {
+    @MainActor func printTable(width: CGFloat) -> NSView? {
+        guard !data.householdBreakdownRows.isEmpty, partners.count > 1 else { return nil }
+        var columns = [NativeTaxPrintCell(text: strings.t("tax.pit.table.component"))]
+        columns += partners.map {
+            NativeTaxPrintCell(text: TaxYearPresentation.partner($0.partnerId, overview: overview, strings: strings))
+        }
+        columns.append(.init(text: strings.t("tax.householdBreakdown.column.household")))
+        var printedRows: [[NativeTaxPrintCell]] = data.householdBreakdownRows.map { row in
+            let title = strings.t(
+                row.key == "taxableIncome" ? "tax.pit.row.taxableIncome" : "tax.householdBreakdown.row." + row.key)
+            var cells = [NativeTaxPrintCell(text: title)]
+            cells += partners.map { printAmount(row.partnerAmounts[$0.partnerId], tone: row.tone) }
+            cells.append(printAmount(row.household, tone: row.tone))
+            return cells
+        }
+        if let recorded = data.recordedIncomeByPartner {
+            var heading = [NativeTaxPrintCell(text: strings.t("tax.householdBreakdown.recorded.title"), strong: true)]
+            heading += Array(repeating: NativeTaxPrintCell(text: ""), count: columns.count - 1)
+            printedRows.append(heading)
+            var entered = [NativeTaxPrintCell(text: strings.t("tax.householdBreakdown.recorded.entered"))]
+            entered += partners.map { printAmount($0.grossIncome) }
+            entered.append(printAmount(overview.result.totals.grossIncome))
+            printedRows.append(entered)
+            var transactions = [NativeTaxPrintCell(text: strings.t("tax.householdBreakdown.recorded.transactions"))]
+            transactions += partners.map { printAmount($0.partnerId == "A" ? recorded.A : recorded.B) }
+            transactions.append(printAmount(recorded.A + recorded.B))
+            printedRows.append(transactions)
+        }
+        let footer = NativePagePrintRow { width in
+            NativeTaxPrintTable.host(
+                TaxHouseholdPrintFooter(
+                    overview: overview, shell: shell, hasRecordedIncome: data.recordedIncomeByPartner != nil,
+                    quotientDescription: quotientDescription),
+                shell: shell, width: width, id: "tax.household.footer")
+        }
+        return NativeTaxPrintTable.make(
+            id: "tax.household", title: strings.t("tax.householdBreakdown.title"),
+            description: strings.t("tax.householdBreakdown.description", ["year": String(overview.year)]),
+            columns: columns, rows: printedRows, shell: shell, width: width, footer: footer)
+    }
+
+    private func printAmount(_ value: Decimal?, tone: String = "base") -> NativeTaxPrintCell {
+        let text =
+            value.map {
+                MoneyText.text(
+                    tone == "reduction" ? -$0 : $0, currency: shell.settings.defaultCurrency,
+                    settings: shell.settings, signed: tone == "reduction" || tone == "adjustment")
+            } ?? "—"
+        return .init(text: text, strong: tone == "total", tone: tone == "reduction" ? .gain : .normal)
+    }
+}
+
+private struct TaxHouseholdPrintFooter: View {
+    let overview: OpenAPI.BelgianTaxOverview
+    let shell: NativeShellModel
+    let hasRecordedIncome: Bool
+    let quotientDescription: String
+    @Environment(\.visionTheme) private var theme
+    private var strings: any Localizing { shell.strings }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if hasRecordedIncome {
+                Text(strings.t("tax.householdBreakdown.recorded.note")).font(.caption).foregroundStyle(
+                    theme.secondaryLabel)
+            }
+            LabeledContent(
+                strings.t("tax.householdBreakdown.assessment"),
+                value: strings.t("tax.household.assessment.mode." + overview.result.assessment.mode))
+            if overview.result.assessment.mode == "joint" {
+                LabeledContent(strings.t("tax.householdBreakdown.quotient"), value: quotientDescription)
+                if overview.result.quotient.applied {
+                    TaxMoneyRow(
+                        title: strings.t("tax.householdBreakdown.quotient.benefit"),
+                        amount: overview.result.quotient.benefit, shell: shell, tone: theme.gain)
+                }
+            }
+            Text(overview.result.assessment.legalBasis).font(.caption)
+                .padding(6).overlay(RoundedRectangle(cornerRadius: 8).stroke(theme.border))
+            Text(strings.t("tax.household.assessment.reason." + overview.result.assessment.reason))
+                .font(.caption).foregroundStyle(theme.secondaryLabel)
+        }.padding(NativeTaxPrintTable.inset).frame(maxWidth: .infinity, alignment: .leading)
     }
 }

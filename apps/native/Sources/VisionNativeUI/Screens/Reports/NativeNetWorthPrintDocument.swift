@@ -1,3 +1,4 @@
+import AppKit
 import Charts
 import SwiftUI
 import VisionNativeCore
@@ -24,6 +25,267 @@ public struct NativeNetWorthPrintDocument: View {
     }
     private var printTheme: VisionTheme {
         VisionTheme(selection: presentation.snapshot.theme, isPrintReport: true)
+    }
+}
+
+
+/// Row-aware blocks use only already-captured values. Column measurement sees the
+/// whole frozen table before the paginator divides it into pages.
+extension NativeNetWorthPrintDocument {
+    @MainActor public static func printBlocks(
+        presentation: NativeNetWorthPrintPresentation, width: CGFloat
+    ) -> [NSView] {
+        let snapshot = presentation.snapshot
+        return snapshot.sections.map { section in
+            switch section {
+            case .accounts:
+                guard let accounts = snapshot.accounts, !accounts.isEmpty else {
+                    return hostedSection(presentation, section: section, width: width)
+                }
+                let columns = NativeNetWorthPrintTableLayout.accountColumns(presentation, width: width)
+                let block = NativePagePrintTableBlock(
+                    header: row(presentation, part: .accountsHeader, columns: columns, id: "networth-accounts-header"),
+                    rows: accounts.map { account in
+                        row(
+                            presentation, part: .account(account), columns: columns,
+                            id: "networth-account-" + account.id)
+                    },
+                    footer: snapshot.accountTotal != nil && snapshot.accountDifference != nil
+                        ? row(presentation, part: .accountsFooter, columns: columns, id: "networth-accounts-footer")
+                        : nil,
+                    spacing: 0)
+                block.identifier = NSUserInterfaceItemIdentifier("networth-accounts-table")
+                return block
+            case .table:
+                let columns = NativeNetWorthPrintTableLayout.historyColumns(presentation, width: width)
+                let rows = snapshot.tableRows.map { value in
+                    row(presentation, part: .history(value), columns: columns, id: "networth-history-" + value.id)
+                }
+                let block = NativePagePrintTableBlock(
+                    header: row(presentation, part: .historyHeader, columns: columns, id: "networth-history-header"),
+                    rows: rows.isEmpty
+                        ? [row(presentation, part: .historyEmpty, columns: columns, id: "networth-history-empty")]
+                        : rows,
+                    footer: row(presentation, part: .historyFooter, columns: columns, id: "networth-history-footer"),
+                    spacing: 0)
+                block.identifier = NSUserInterfaceItemIdentifier("networth-history-table")
+                return block
+            default:
+                return hostedSection(presentation, section: section, width: width)
+            }
+        }
+    }
+
+    @MainActor private static func hostedSection(
+        _ presentation: NativeNetWorthPrintPresentation, section: NativeNetWorthPrintSection, width: CGFloat
+    ) -> NSView {
+        let hosted = NSHostingView(
+            rootView: NativeNetWorthPrintDocument(presentation: presentation, sections: [section]).frame(width: width))
+        hosted.identifier = NSUserInterfaceItemIdentifier("networth-section-" + section.rawValue)
+        return hosted
+    }
+
+    @MainActor private static func row(
+        _ presentation: NativeNetWorthPrintPresentation, part: NativeNetWorthPrintTablePart,
+        columns: [CGFloat], id: String
+    ) -> NativePagePrintRow {
+        NativePagePrintRow { width in
+            let snapshot = presentation.snapshot
+            let hosted = NSHostingView(
+                rootView: NativeNetWorthPrintTablePartView(presentation: presentation, part: part, columns: columns)
+                    .frame(width: width, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .allowsHitTesting(false)
+                    .environment(\.locale, snapshot.settings.numberFormat.locale)
+                    .environment(\.visionTheme, VisionTheme(selection: snapshot.theme, isPrintReport: true))
+                    .preferredColorScheme(.light))
+            hosted.identifier = NSUserInterfaceItemIdentifier(id)
+            return hosted
+        }
+    }
+}
+
+private enum NativeNetWorthPrintTablePart {
+    case accountsHeader, account(NativeNetWorthPrintAccount), accountsFooter
+    case historyHeader, history(NetWorthTableRow), historyEmpty, historyFooter
+}
+
+@MainActor private enum NativeNetWorthPrintTableLayout {
+    static let padding: CGFloat = 12
+    static let spacing: CGFloat = 8
+
+    static func historyValue(
+        _ row: NetWorthTableRow, key: String, presentation: NativeNetWorthPrintPresentation
+    ) -> String {
+        if key == "date" { return presentation.date(row.snapshot.date) }
+        guard case .number(let value) = row.rawValue(key) else { return "—" }
+        return presentation.money(value, signed: key == "change")
+    }
+
+    static func historyColumns(_ presentation: NativeNetWorthPrintPresentation, width: CGFloat) -> [CGFloat] {
+        let snapshot = presentation.snapshot
+        let cells = snapshot.tableKeys.map { key in
+            [snapshot.strings.t(key == "netWorth" ? "networth.title" : "networth." + key)]
+                + snapshot.tableRows.map { historyValue($0, key: key, presentation: presentation) }
+        }
+        return columns(width: width, cells: cells, minimums: snapshot.tableKeys.map { $0 == "date" ? 72 : 48 })
+    }
+
+    static func accountColumns(_ presentation: NativeNetWorthPrintPresentation, width: CGFloat) -> [CGFloat] {
+        let snapshot = presentation.snapshot
+        let labels =
+            (snapshot.accounts ?? []).map { $0.label ?? snapshot.strings.t("networth.byAccount.unassigned") }
+            + [snapshot.strings.t("networth.byAccount.displayedTotal")]
+        let amounts =
+            (snapshot.accounts ?? []).map { presentation.money($0.total) }
+            + (snapshot.accountTotal.map { [presentation.money($0)] } ?? [])
+        return columns(width: width, cells: [labels, amounts], minimums: [120, 100])
+    }
+
+    private static func columns(width: CGFloat, cells: [[String]], minimums: [CGFloat]) -> [CGFloat] {
+        guard !cells.isEmpty else { return [] }
+        let available = max(CGFloat(cells.count), width - padding * 2 - spacing * CGFloat(cells.count - 1))
+        let font = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .semibold)
+        let desired = cells.map { values in
+            values.map { ($0 as NSString).size(withAttributes: [.font: font]).width + 4 }.max() ?? 1
+        }
+        let scale = min(1, available / max(1, minimums.reduce(0, +)))
+        let base = minimums.map { max(1, $0 * scale) }
+        let extra = max(0, available - base.reduce(0, +))
+        let demand = zip(desired, base).map { max(0, $0 - $1) }
+        let totalDemand = demand.reduce(0, +)
+        return zip(base, demand).map { minimum, wanted in
+            minimum + extra * (totalDemand > 0 ? wanted / totalDemand : 1 / CGFloat(cells.count))
+        }
+    }
+}
+
+private struct NativeNetWorthPrintTablePartView: View {
+    let presentation: NativeNetWorthPrintPresentation
+    let part: NativeNetWorthPrintTablePart
+    let columns: [CGFloat]
+    @Environment(\.visionTheme) private var theme
+    private var snapshot: NativeNetWorthPrintSnapshot { presentation.snapshot }
+    private var strings: any Localizing { snapshot.strings }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) { content }
+            .padding(.horizontal, NativeNetWorthPrintTableLayout.padding)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(theme.card)
+    }
+
+    @ViewBuilder private var content: some View {
+        switch part {
+        case .accountsHeader:
+            VStack(alignment: .leading, spacing: 6) {
+                Text(strings.t("networth.byAccount.title")).font(.headline)
+                Text(strings.t("networth.byAccount.description")).font(.callout).foregroundStyle(theme.secondaryLabel)
+                Divider()
+            }
+        case .account(let row):
+            HStack(alignment: .top, spacing: NativeNetWorthPrintTableLayout.spacing) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(row.label ?? strings.t("networth.byAccount.unassigned")).font(.headline)
+                    if row.accountId == nil {
+                        Text(strings.t("networth.byAccount.unassignedHint")).font(.caption).foregroundStyle(
+                            theme.secondaryLabel)
+                    } else if let type = row.type {
+                        Text(strings.t("accounts.type." + type)).font(.caption).foregroundStyle(theme.secondaryLabel)
+                    }
+                    if abs(row.cash) > Decimal(string: "0.005")!, abs(row.holdings) > Decimal(string: "0.005")! {
+                        Text(
+                            strings.t("networth.byAccount.cash") + " " + presentation.money(row.cash)
+                                + " · " + strings.t("networth.byAccount.holdings") + " "
+                                + presentation.money(row.holdings)
+                        ).font(.caption).foregroundStyle(theme.secondaryLabel)
+                    }
+                }
+                .frame(width: columns[0], alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+                Text(presentation.money(row.total)).font(.callout).monospacedDigit()
+                    .frame(width: columns[1], alignment: .trailing)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Divider()
+        case .accountsFooter:
+            if let total = snapshot.accountTotal, let difference = snapshot.accountDifference {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(alignment: .top, spacing: NativeNetWorthPrintTableLayout.spacing) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(strings.t("networth.byAccount.displayedTotal")).font(.headline)
+                            Text(
+                                abs(difference) < Decimal(string: "0.005")!
+                                    ? strings.t("networth.byAccount.matches")
+                                    : strings.t(
+                                        difference > 0 ? "networth.byAccount.above" : "networth.byAccount.below")
+                                        + " " + presentation.money(abs(difference))
+                            ).font(.caption).foregroundStyle(
+                                abs(difference) < Decimal(string: "0.005")! ? theme.secondaryLabel : theme.warning)
+                        }.frame(width: columns[0], alignment: .leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text(presentation.money(total)).font(.callout).monospacedDigit()
+                            .frame(width: columns[1], alignment: .trailing)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if abs(difference) >= Decimal(string: "0.005")! {
+                        Text(strings.t("networth.byAccount.differenceHint")).font(.caption).foregroundStyle(
+                            theme.secondaryLabel)
+                    }
+                }
+            }
+        case .historyHeader:
+            VStack(alignment: .leading, spacing: 6) {
+                Text(strings.t("networth.dailyBreakdown")).font(.headline)
+                historyCells(row: nil)
+                Divider()
+            }
+        case .history(let row):
+            historyCells(row: row)
+            Divider()
+        case .historyEmpty:
+            Text(strings.t(snapshot.tableQuery.isNarrowed ? "table.noFilterResults" : "table.noData"))
+        case .historyFooter:
+            VStack(alignment: .leading, spacing: 6) {
+                if snapshot.tableFetchingMore { Text(strings.t("table.loadingMore")).font(.footnote) }
+                Text(historyFooter).font(.footnote).foregroundStyle(theme.secondaryLabel)
+                if let error = snapshot.tableError { Text(verbatim: error).foregroundStyle(theme.destructive) }
+            }
+        }
+    }
+
+    private func historyCells(row: NetWorthTableRow?) -> some View {
+        HStack(alignment: .top, spacing: NativeNetWorthPrintTableLayout.spacing) {
+            ForEach(Array(snapshot.tableKeys.enumerated()), id: \.offset) { index, key in
+                Text(
+                    row.map { NativeNetWorthPrintTableLayout.historyValue($0, key: key, presentation: presentation) }
+                        ?? strings.t(key == "netWorth" ? "networth.title" : "networth." + key)
+                )
+                .font(.caption).monospacedDigit()
+                .fontWeight(row == nil ? .semibold : key == "netWorth" ? .bold : .regular)
+                .foregroundStyle(historyColor(row, key: key))
+                .frame(width: columns[index], alignment: key == "date" ? .leading : .trailing)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func historyColor(_ row: NetWorthTableRow?, key: String) -> Color {
+        guard key == "change", let change = row?.change else { return theme.foreground }
+        return change < 0 ? theme.loss : theme.gain
+    }
+
+    private var historyFooter: String {
+        var text =
+            snapshot.tableRows.count != snapshot.tableLoadedCount
+            ? strings.t(
+                "table.shownOfFiltered",
+                ["shown": String(snapshot.tableRows.count), "total": String(snapshot.tableTotal)])
+            : strings.t(
+                "table.loadedOf", ["loaded": String(snapshot.tableLoadedCount), "total": String(snapshot.tableTotal)])
+        if snapshot.tableHasMore { text += " · " + strings.t("table.scrollForMore") }
+        return text
     }
 }
 

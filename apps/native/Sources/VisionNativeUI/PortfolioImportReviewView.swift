@@ -59,6 +59,11 @@ public struct PortfolioImportReviewView: View {
         }.task(id: shell.route.path) { await load() }
     }
     private func load() async {
+        if shell.nativeNavigation != nil {
+            guard case .native(.portfolioImportReview(let batchId)) = shell.detail else { return }
+            await model.load(rawBatchId: batchId)
+            return
+        }
         let parts = shell.route.path.split(separator: "/", omittingEmptySubsequences: false)
         await model.load(rawBatchId: parts.count == 5 ? String(parts[3]) : "")
     }
