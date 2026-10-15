@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 import Testing
 
 @testable import VisionNativeCore
@@ -131,9 +132,11 @@ struct AIInvestigationTests {
         #expect(model.input()["publicWebQuery"] == .string("allowed") && model.input()["publicQuestion"] == .null)
         model.didDisappear()
     }
-    @Test func pollWaitsForSourceIntervalAndStopsAtWaitingWithoutReplacingCancelResponse() async throws {
+    @Test(.timeLimit(.minutes(1)))
+    func pollWaitsForSourceIntervalAndStopsAtWaitingWithoutReplacingCancelResponse() async throws {
         let service = InvestigationFixtureService()
         let model = AIInvestigationModel(service: service, pollDelay: .milliseconds(10))
+        defer { model.didDisappear() }
         await model.load()
         model.question = "q"
         await service.pause("get")
@@ -147,7 +150,6 @@ struct AIInvestigationTests {
         model.clarification = " clarify "
         await model.resume()
         #expect(await service.resumes.first?["clarification"] == .string("clarify"))
-        model.didDisappear()
     }
     @Test func deleteRetiresInFlightPollAndCannotRestoreDeletedJob() async throws {
         let service = InvestigationFixtureService()
@@ -221,9 +223,11 @@ struct AIInvestigationTests {
         #expect(model.job == nil && model.question == "new visit" && !model.busy)
         model.didDisappear()
     }
-    @Test func offlineBackgroundStatusPausesButDocumentsAndManualJobPollKeepSourcePolicy() async throws {
+    @Test(.timeLimit(.minutes(1)))
+    func offlineBackgroundStatusPausesButDocumentsAndManualJobPollKeepSourcePolicy() async throws {
         let service = InvestigationFixtureService()
         let model = AIInvestigationModel(service: service, pollDelay: .milliseconds(10))
+        defer { model.didDisappear() }
         model.isOnline = false
         model.isForeground = false
         await model.load()
@@ -240,7 +244,6 @@ struct AIInvestigationTests {
         await model.refreshStatusIfStale()
         #expect(await service.statusReads == 1)
         #expect(await service.documentReads == 1)
-        model.didDisappear()
     }
     @Test func failedStatusRecoversOnReconnectWithoutRetryingFailedDocumentMountRead() async throws {
         let service = InvestigationFixtureService()
@@ -386,11 +389,13 @@ struct AIInvestigationTests {
         model.didDisappear()
     }
     private func waitForPublishedState(_ model: AIInvestigationModel, _ state: String) async throws {
-        let clock = ContinuousClock()
-        let deadline = clock.now.advanced(by: .seconds(5))
-        while model.job?.state != state, clock.now < deadline {
-            try await Task.sleep(for: .milliseconds(1))
-        }
+        guard model.job?.state != state else { return }
+        let publication = AsyncStream<Void>.makeStream()
+        defer { publication.continuation.finish() }
+        withObservationTracking { _ = model.job } onChange: { publication.continuation.yield(()) }
+        var updates = publication.stream.makeAsyncIterator()
+        _ = await updates.next()
+        try Task.checkCancellation()
         try #require(model.job?.state == state, "Expected the acknowledged poll snapshot to publish")
     }
     @Test func actualAPIAdapterUsesExistingOperationsAndOriginalMultipartBytes() async throws {

@@ -62,7 +62,8 @@ struct TaxComputationTests {
 struct TaxOverviewModelTests {
     @Test func freshLoadsReuseTheSameYearAndInvalidationRefreshesIt() async {
         let service = TaxOverviewFixtureService()
-        let model = TaxOverviewModel(service: service)
+        let date = Date(timeIntervalSince1970: 100)
+        let model = TaxOverviewModel(service: service, now: { date })
         await model.load(year: 2025)
         await model.load(year: 2025)
         #expect(await service.years.count == 1)

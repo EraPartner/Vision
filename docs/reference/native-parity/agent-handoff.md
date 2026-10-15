@@ -20,6 +20,10 @@ and styling while keeping the source colours, navigation and chart layouts.
 The user also explicitly said to continue without requiring manual verification or Demo
 steps between phases. Carry out available automated checks and continue independent work;
 do not ask the owner to perform those steps as an intermission.
+The owner's latest instruction explicitly requires continuing through the plan with parallel
+agents **until stopped**, making intermediate snapshot commits along the way. A snapshot is a
+save point, not a reason to end work or ask for a phase-start approval. Continue independent
+work while platform checks run and keep their actual results distinct from implementation.
 
 Phase **3o**, Settings and shared shell behaviour, has a hash-matched Foundation proof
 of 1,173 tests. Phase **3p**, remaining shell overlays and report parity, is in progress;
@@ -166,7 +170,7 @@ It does not certify routing/ShellController/AppKit or host storage migration.
 
 ### Collected focus/input/helper follow-up (2026-10-15)
 
-This combined follow-up adds final route-opener focus restoration and synthetic AppKit window
+**`afed3bcc`** is pushed and remote-verified. This combined follow-up adds final route-opener focus restoration and synthetic AppKit window
 tests, preserving covered-overlay focus and field-editor owner/selection. Palette Escape now
 lives on its container and Close has the cancel shortcut. A route-window marker captures before
 presentation; final `onDismiss` restoration rejects a changed graph/underlying route, detached
@@ -194,6 +198,25 @@ Zero drift against `a10c3deb`; excludes nine shell integration tests, SDK and UI
 Do not count these scoped proofs as the full package gate.
 Combined verification also passes six Swift syntax checks, three changed-note metadata/link
 checks and all five flow-visualizer tests; coverage remains 106 components / 79 flows.
+
+### Continuous phase-plan continuation (2026-10-15)
+
+The `a10c3deb` package compiled successfully and ran **1,617 Core tests / 221 suites /
+three issues**. Tax's same-year cache-count assertions crossed its real 30-second TTL;
+Investigation's five-second polling-publication loop expired before its acknowledged waiting
+snapshot reached MainActor. The next test-only save injects the existing fixed Tax clock and
+awaits actual Observable job publication with cancellation and one-minute deadlock guards.
+Production TTL and polling policies are unchanged. A scoped Linux proof passes **23 tests /
+two suites** using exact Investigation/TaxOverview models with documented boundary adapters;
+it excludes the HTTP Investigation case and uses a reduced Tax result fixture. Artifacts:
+`/workspace/scratch/ai-poll-tax-check` and `/workspace/scratch/ai-poll-tax-check.log`.
+The full Mac gate remains authoritative; `afed3bcc` is still running.
+
+Parallel owners now implement measured row-aware pagination and adapters for Tax, Statistics
+and Net worth. Root integrates SDK calls; the paginator retains the existing `[NSView]` builder
+interface and recognizes explicit table blocks. Another owner audits staged Phase-4 startup,
+history, storage and readiness dependencies. Neither unfinished work nor a pending CI run
+establishes phase completion. Continue from actual `git log` and collect all task files at saves.
 
 ### Next source work after the combined gate
 
