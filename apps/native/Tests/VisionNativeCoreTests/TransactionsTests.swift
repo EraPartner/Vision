@@ -271,6 +271,7 @@ enum TxFixture {
     ) -> NativeShellModel {
         NativeShellModel(
             strings: strings, theme: ThemeSelection(appearance: .light),
+            notices: NativeNoticeCenter(now: { PlannedFixture.today }, automaticExpiry: false),
             exchangeRates: ExchangeRatesModel(service: FakeExchangeRatesService()), admin: AdminFixture.screens(),
             planned: PlannedFixture.idleModel(), imports: ImportFixture.idleModel(), transactions: model,
             accounts: AccountsFixture.idleModel(),

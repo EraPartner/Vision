@@ -172,6 +172,7 @@ enum RecipientsFixture {
     static func shell(_ model: RecipientsModel, recorder: ShellRecorder, settings: NativeAppSettings) -> NativeShellModel {
         NativeShellModel(
             strings: strings, theme: ThemeSelection(appearance: .light),
+            notices: NativeNoticeCenter(now: { PlannedFixture.today }, automaticExpiry: false),
             exchangeRates: ExchangeRatesModel(service: FakeExchangeRatesService()), admin: AdminFixture.screens(),
             planned: PlannedFixture.idleModel(), imports: ImportFixture.idleModel(),
             transactions: TransactionsFixture.idleModel(), accounts: AccountsFixture.idleModel(),

@@ -11,6 +11,8 @@ private actor NativeTaxPrintTransport: APITransport {
         switch request.url.path {
         case "/api/belgian-tax/overview": data = NativeTaxPrintFixtures.overview
         case "/api/belgian-tax/dashboard": data = NativeTaxPrintFixtures.dashboard
+        case "/api/settings/dashboard_settings":
+            data = #"{"key":"dashboard_settings","value":{},"expected":{"exists":true,"value":{}}}"#
         case "/api/settings/widget_visibility":
             data =
                 #"{"key":"widget_visibility","value":{"budgetTax":{"trendStrip":false,"pitBreakdown":false}},"expected":{"exists":true,"value":{"budgetTax":{"trendStrip":false,"pitBreakdown":false}}}}"#
@@ -97,6 +99,8 @@ private actor NativeTaxPrintTransport: APITransport {
         let shell = NativeShellModelTests().makeModel(recorder: ShellRecorder(), tax: tax)
         shell.routeDidChange(NativeRoute("/tax?year=2025")!)
         await tax.load(year: 2025, currency: "EUR")
+        try #require(tax.overview.error == nil && tax.dashboard.error == nil)
+        try #require(tax.dashboard.data != nil)
         tax.printLocalState = .init(comparisonYear: 2024, rulesExpanded: true)
         let before = await transport.requests.count
         let captured = try NativeTaxPrintSnapshot.capture(shell: shell)

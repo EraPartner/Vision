@@ -618,7 +618,7 @@ struct StatisticsModelTests {
     @Test func invalidationDuringAnOlderWindowRequestCannotReplaceTheNewSnapshot() async {
         let service = HomeFixtureService()
         await service.pauseFirstMonthly()
-        let model = StatisticsModel(service: service)
+        let model = StatisticsModel(service: service, now: { PlannedFixture.today })
         let old = Task { await model.appear(settings: .defaults, route: NativeRoute("/statistics")!) }
         await service.waitForPausedMonthly()
         model.invalidate()
@@ -631,7 +631,7 @@ struct StatisticsModelTests {
     }
     @Test func changingExclusionsDoesNotRetainMoneyFromThePreviousScope() async {
         let service = HomeFixtureService()
-        let model = StatisticsModel(service: service)
+        let model = StatisticsModel(service: service, now: { PlannedFixture.today })
         await model.appear(settings: .defaults, route: NativeRoute("/statistics")!)
         await service.chooseExclusions([8])
         await service.failMonthly()
@@ -641,7 +641,7 @@ struct StatisticsModelTests {
     }
     @Test func tabChangesReuseTheSameAggregationSnapshot() async {
         let service = HomeFixtureService()
-        let model = StatisticsModel(service: service)
+        let model = StatisticsModel(service: service, now: { PlannedFixture.today })
         await model.appear(settings: .defaults, route: NativeRoute("/statistics")!)
         let calls = await service.monthlyCalls
         await model.appear(settings: .defaults, route: NativeRoute("/statistics?tab=categories")!)
@@ -653,7 +653,7 @@ struct StatisticsModelTests {
     }
     @Test func failedRefreshKeepsPriorFilteredTotalsAndReportsTheFailure() async {
         let service = HomeFixtureService()
-        let model = StatisticsModel(service: service)
+        let model = StatisticsModel(service: service, now: { PlannedFixture.today })
         await model.appear(settings: .defaults, route: NativeRoute("/statistics")!)
         let previous = model.filtered
         await service.failMonthly()
@@ -664,7 +664,7 @@ struct StatisticsModelTests {
     }
     @Test func metricDrillsIncludeUncategorisedAndSelectedMonthBoundaries() async {
         let service = HomeFixtureService()
-        let model = StatisticsModel(service: service)
+        let model = StatisticsModel(service: service, now: { PlannedFixture.today })
         await model.appear(settings: .defaults, route: NativeRoute("/statistics?window=all")!)
         model.categoryMetric = .income
         let route = model.pivotDrill(

@@ -145,7 +145,7 @@ struct NativeOnboardingTests {
         let fixture = OnboardingFixture()
         let store = OnboardingDraftFixture()
         let model = makeOnboarding(fixture, store)
-        let notices = NativeNoticeCenter()
+        let notices = NativeNoticeCenter(now: { PlannedFixture.today }, automaticExpiry: false)
         model.attachNotices(notices)
         var invalidations = 0
         model.didMutateCategories = { invalidations += 1 }
@@ -266,7 +266,7 @@ struct NativeOnboardingTests {
         let store = OnboardingDraftFixture()
         store.cancelWrite = true
         let model = makeOnboarding(fixture, store)
-        let notices = NativeNoticeCenter()
+        let notices = NativeNoticeCenter(now: { PlannedFixture.today }, automaticExpiry: false)
         model.attachNotices(notices)
         await model.load()
         await model.flushDraft()
@@ -278,7 +278,7 @@ struct NativeOnboardingTests {
         let store = OnboardingDraftFixture()
         store.failWrite = true
         let model = makeOnboarding(fixture, store)
-        let notices = NativeNoticeCenter()
+        let notices = NativeNoticeCenter(now: { PlannedFixture.today }, automaticExpiry: false)
         model.attachNotices(notices)
         await model.load()
         await model.flushDraft()
@@ -342,7 +342,7 @@ struct NativeOnboardingTests {
         let fixture = OnboardingFixture()
         let store = OnboardingDraftFixture()
         let model = makeOnboarding(fixture, store)
-        let notices = NativeNoticeCenter()
+        let notices = NativeNoticeCenter(now: { PlannedFixture.today }, automaticExpiry: false)
         model.attachNotices(notices)
         await model.load()
         model.selectBank("fixture")

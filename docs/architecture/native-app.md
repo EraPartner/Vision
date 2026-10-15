@@ -3,7 +3,7 @@ title: Vision Native App Architecture
 type: architecture-doc
 status: active
 date: 2026-10-13
-updated: 2026-10-13
+updated: 2026-10-15
 tags:
   [
     architecture,
@@ -1501,7 +1501,7 @@ renderer-ready path share one generation-checked rebuild task. Fresh models, the
 preference writers replace the old graph once, including when the retained onboarding page reloads.
 
 `Shell/NativeNoticeCenter.swift`, `Components/NativeNoticeHost.swift`, and `ActionToast.swift`
-provide app-lifetime notices and consume captured actions before awaiting them. Transactions,
+provide app-lifetime notices and consume captured actions before awaiting them. Shell construction accepts an optional notice center so tests can control expiry and clock time; normal app construction retains automatic expiry. Transactions,
 Planned payments, Categories, Recipients, Chart Builder, and Life Scenario retain eight-second
 Undo actions and the source one-slot shortcut registry. Editor typing keeps its own Undo; route
 changes preserve eligible notices. Retry, Create rule, and Import actions remain non-Undo actions

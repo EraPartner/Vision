@@ -3,7 +3,7 @@ title: "Vision Native agent handoff"
 type: reference
 status: active
 date: 2026-10-13
-updated: 2026-10-13
+updated: 2026-10-15
 tags: [reference, swift-rewrite, native-parity, handoff]
 description: "Resumable checkpoint for the Swift port: published branch, current phase, ownership, remaining work, verification evidence and subsequent-phase gates."
 ---
@@ -63,6 +63,28 @@ writers, collect their exact state, update this note, stage all task changes (in
 files), commit and push this branch. Label incomplete work and failed or pending checks
 explicitly. Do not leave the handoff or unfinished task files only in the workspace.
 
+## Resume verification (2026-10-15)
+
+Resumed from remote **`fd68b492`** on `codex/native-phase-3g`, with a clean worktree.
+Its actual [macOS run](https://github.com/EraPartner/Vision/actions/runs/38486890925)
+**built the app successfully** and compiled the full package, then ran **1,631 tests in
+226 suites with 50 issues**. The failure is not an app compiler failure. Do not advance
+phase-completion claims until the package gate passes.
+
+That run crossed UTC midnight. Planned UI fixtures generated dates before midnight but
+read the strip after it; Statistics tests also used different real dates within one
+scenario. Many receipt assertions ran after the shared notice host's four-second expiry.
+The continuation supplies fixed clocks to those fixtures and permits shell construction
+with an injected notice center; production still creates its normal expiring center.
+The Tax print HTTP fixture now serves `dashboard_settings`, which the dashboard must read
+before loading figures, and asserts successful page loading before snapshot capture.
+
+Next: inspect the automatic macOS run for this continuation, repair remaining actual
+failures (including stream-watchdog and Investigation polling tests if reproduced), then
+complete the phase-3p lifecycle/printing validation below. Earlier isolated proof directories
+and the phase-4 audit under `/workspace/vision-*` are absent in this fresh environment;
+the historical results below are prior evidence, not newly reproduced checks.
+
 ## Current continuation work
 
 Latest full remote checkpoint: **`368a0317`**, pushed and verified after **`2ef06366`**.
@@ -112,17 +134,17 @@ checkpoint context; this section and current source override older unfinished as
 
 ## Completed checkpoints
 
-| Commit | Work |
-| --- | --- |
-| `821504e3` | Home and Insights, phase 3g |
-| `039e6b4e` | TypeScript Belgian-tax prerequisite |
-| `a0f82b22`, `719f1bab` | Tax frozen overview and phase 3h |
-| `33d6bbad` | Portfolio, Holdings, Rebalance and Net worth, phase 3i |
-| `11d3102e` | Portfolio import and Tax, phase 3j |
-| `198a29cd` | Analysis and Monitors, phase 3k |
-| `1aa760ba` | Research home, Markets, Lookup, Watchlist and Compare, phase 3l |
-| `a9957d4e` | Forecast and Chart Builder, phase 3m |
-| `17158f6d` | Dossiers and AI Chat/Investigation, phase 3n |
+| Commit                 | Work                                                            |
+| ---------------------- | --------------------------------------------------------------- |
+| `821504e3`             | Home and Insights, phase 3g                                     |
+| `039e6b4e`             | TypeScript Belgian-tax prerequisite                             |
+| `a0f82b22`, `719f1bab` | Tax frozen overview and phase 3h                                |
+| `33d6bbad`             | Portfolio, Holdings, Rebalance and Net worth, phase 3i          |
+| `11d3102e`             | Portfolio import and Tax, phase 3j                              |
+| `198a29cd`             | Analysis and Monitors, phase 3k                                 |
+| `1aa760ba`             | Research home, Markets, Lookup, Watchlist and Compare, phase 3l |
+| `a9957d4e`             | Forecast and Chart Builder, phase 3m                            |
+| `17158f6d`             | Dossiers and AI Chat/Investigation, phase 3n                    |
 
 All Research/AI inventory actions have native implementations. Per-screen visual approval
 and the full macOS compiler/runtime checks remain pending; implementation status alone
@@ -319,15 +341,15 @@ Agents share a filesystem. Assign disjoint files and coordinate public interface
 editing another owner's files. Root alone integrates shared APIs, generated files,
 localization catalogs, shell/router/factory, top-level docs and publishing.
 
-| Owner | Current assignment |
-| --- | --- |
-| `tax_overview_ui` | New `Core/Settings/NativeSettings*.swift` main raw-settings model/service and tests, excluding desktop/AI/backup/about files |
-| `tax_deductions` | Settings window/rail, General and Appearance UI; shared Settings UI primitives |
-| `tax_charts_ui` | Settings Insights/statistics and Behavior UI |
-| `tax_charts_backend` | Settings AI, provider keys and AgentCloak Core/UI and tests |
-| `review_native` | Settings Backup/About Core/UI; Foundation desktop-service interface and tests |
-| `tax_profile` | Independent source-parity review and new combined verification harness |
-| Root | Global notices/Undo, six undo adapters, native Settings hosting/navigation, desktop SDK callbacks, shared settings projection/API/catalog, integration and commit/push |
+| Owner                | Current assignment                                                                                                                                                     |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tax_overview_ui`    | New `Core/Settings/NativeSettings*.swift` main raw-settings model/service and tests, excluding desktop/AI/backup/about files                                           |
+| `tax_deductions`     | Settings window/rail, General and Appearance UI; shared Settings UI primitives                                                                                         |
+| `tax_charts_ui`      | Settings Insights/statistics and Behavior UI                                                                                                                           |
+| `tax_charts_backend` | Settings AI, provider keys and AgentCloak Core/UI and tests                                                                                                            |
+| `review_native`      | Settings Backup/About Core/UI; Foundation desktop-service interface and tests                                                                                          |
+| `tax_profile`        | Independent source-parity review and new combined verification harness                                                                                                 |
+| Root                 | Global notices/Undo, six undo adapters, native Settings hosting/navigation, desktop SDK callbacks, shared settings projection/API/catalog, integration and commit/push |
 
 Ownership has expanded after the initial parallel slices:
 

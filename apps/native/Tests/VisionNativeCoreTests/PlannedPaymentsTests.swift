@@ -690,7 +690,7 @@ enum PlannedFixture {
     @Test func globalUndoRestoresCapturedStatusAfterNavigationAndAReadThatOmitsThePausedRow() async {
         let service = FakePlannedService(rows: Self.rows)
         let model = PlannedFixture.model(service)
-        let center = NativeNoticeCenter(automaticExpiry: false)
+        let center = NativeNoticeCenter(now: { PlannedFixture.today }, automaticExpiry: false)
         model.attachNotices(center)
         await model.appear(showAll: false, defaultCurrency: "EUR")
         await model.toggleActive(model.payments[0])
@@ -927,6 +927,7 @@ enum PlannedFixture {
     func makeShell(settings: NativeAppSettings, recorder: ShellRecorder) -> NativeShellModel {
         NativeShellModel(
             strings: DictionaryStrings(language: .en, table: [:]), theme: ThemeSelection(appearance: .light),
+            notices: NativeNoticeCenter(now: { PlannedFixture.today }, automaticExpiry: false),
             exchangeRates: ExchangeRatesModel(service: FakeExchangeRatesService()), admin: AdminFixture.screens(),
             planned: PlannedFixture.idleModel(), imports: ImportFixture.idleModel(),
             transactions: TransactionsFixture.idleModel(), accounts: AccountsFixture.idleModel(),

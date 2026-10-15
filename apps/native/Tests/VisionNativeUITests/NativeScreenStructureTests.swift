@@ -341,9 +341,11 @@ actor StaticPlannedService: PlannedPaymentsService {
     }
 
     /// The local day `offset` days from today, as `planned_date`.
+    static let today = Date(timeIntervalSince1970: 1_791_806_400)
+
     static func day(_ offset: Int) -> String {
         let calendar = PlannedDates.local
-        let date = calendar.date(byAdding: .day, value: offset, to: calendar.startOfDay(for: Date())) ?? Date()
+        let date = calendar.date(byAdding: .day, value: offset, to: calendar.startOfDay(for: today)) ?? today
         let parts = calendar.dateComponents([.year, .month, .day], from: date)
         return String(format: "%04d-%02d-%02d", parts.year ?? 2026, parts.month ?? 1, parts.day ?? 1)
     }
@@ -801,12 +803,14 @@ actor StaticAccountsService: AccountsService {
         return NativeShellModel(
             strings: CatalogStrings(language: language),
             theme: ThemeSelection(appearance: appearance),
+            notices: NativeNoticeCenter(now: { StaticPlannedService.today }, automaticExpiry: false),
             exchangeRates: rates,
             admin: AdminScreens.make(
                 service: StaticAdminService(failing: failing), database: database,
                 token: AdminTokenAccess(read: { "token" }, write: { _ in true }), audit: StaticAuditHistory()),
             planned: PlannedPaymentsModel(
-                service: planned, editing: planned, pickers: planned, rates: rates, dismissals: .memory()),
+                service: planned, editing: planned, pickers: planned, rates: rates, dismissals: .memory(),
+                now: { StaticPlannedService.today }),
             imports: ImportsModel(service: imports, exports: imports, review: imports, pickers: planned),
             transactions: TransactionsModel(
                 service: transactions, attachments: transactions, pickers: planned, bulk: splits, splits: splits),

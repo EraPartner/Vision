@@ -91,6 +91,7 @@ final class ShellRecorder {
         NativeShellModel(
             strings: DictionaryStrings(language: .en, table: [:]),
             theme: ThemeSelection(appearance: .light),
+            notices: NativeNoticeCenter(now: { PlannedFixture.today }, automaticExpiry: false),
             exchangeRates: ExchangeRatesModel(service: FakeExchangeRatesService()),
             admin: AdminFixture.screens(),
             planned: PlannedFixture.idleModel(), imports: ImportFixture.idleModel(),
@@ -545,6 +546,7 @@ final class ShellRecorder {
         let model = NativeShellModel(
             strings: DictionaryStrings(language: .en, table: [:]),
             theme: ThemeSelection(appearance: .light),
+            notices: NativeNoticeCenter(now: { PlannedFixture.today }, automaticExpiry: false),
             exchangeRates: ExchangeRatesModel(service: FakeExchangeRatesService()),
             admin: AdminFixture.screens(),
             planned: PlannedFixture.idleModel(), imports: ImportFixture.idleModel(),
