@@ -104,7 +104,7 @@ struct NativeShellPresentationStructureTests {
     }
 
     private func accessibilityStrings(_ object: Any, depth: Int = 0) -> [String] {
-        guard depth < 30, let element = object as? any NSAccessibility else { return [] }
+        guard depth < 30, let element = object as? any NSAccessibilityProtocol else { return [] }
         let own = [element.accessibilityLabel(), element.accessibilityValue() as? String].compactMap { $0 }
         return own + (element.accessibilityChildren() ?? []).flatMap { accessibilityStrings($0, depth: depth + 1) }
     }

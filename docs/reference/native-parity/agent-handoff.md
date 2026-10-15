@@ -28,8 +28,13 @@ work while platform checks run and keep their actual results distinct from imple
 Phase **3o**, Settings and shared shell behaviour, has a hash-matched Foundation proof
 of 1,173 tests. Phase **3p**, remaining shell overlays and report parity, is in progress;
 its first full mounted integration checkpoint is **`fcd7ee95`**, pushed and verified.
-The latest combined continuation checkpoint is **`bb67c6f2`**, pushed and remote-verified.
-Its [macOS run](https://github.com/EraPartner/Vision/actions/runs/38706224180) built the
+The latest combined continuation checkpoint is **`02303479`**, pushed and remote-verified.
+Its [macOS run](https://github.com/EraPartner/Vision/actions/runs/38709674772) built the app,
+then package compilation stopped at two UI fixture diagnostics: a concatenated String where
+Swift Testing requires a Comment literal, and `NSAccessibility` namespace used instead of
+the formal `NSAccessibilityProtocol`. The narrow follow-up uses an interpolated literal and
+the correct protocol without changing assertions. No package tests ran in this run.
+The preceding **`bb67c6f2`** [macOS run](https://github.com/EraPartner/Vision/actions/runs/38706224180) built the
 app and passed all **1,652 Core tests in 226 suites**. The preceding **`ca7a25ea`** run passed
 all **1,617 Core tests in 221 suites**, then exposed print-render fixture and positive focus-restoration
 failures. **`4ddaa2c7`** added row-aware printing and startup routing; its package compile

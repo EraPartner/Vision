@@ -80,8 +80,8 @@
                 try #require(pageOutput.succeeded, "The page PDF print operation failed")
                 try #require(
                     isReady,
-                    "SwiftUI produced no vector PDF text after its display transaction: "
-                        + NativeAppKitTestApplication.diagnostics(window: window))
+                    "SwiftUI produced no vector PDF text after its display transaction: \(NativeAppKitTestApplication.diagnostics(window: window))"
+                )
                 #expect(application.keyWindow === originalKeyWindow)
                 let document = try #require(PDFDocument(data: pageData))
                 #expect(document.pageCount == 1)
