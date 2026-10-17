@@ -122,6 +122,9 @@ public actor NativeRawStateStore {
         let version: Int
         let source: Source
         let migrationCaptureID: UUID
+        /// A complete capture that found no browser storage: the synthetic Demo started empty
+        /// (owner decision 2026-10-17), recorded rather than implied.
+        var startedEmpty: Bool?
         var localValues: [String: String]
     }
 
@@ -149,11 +152,30 @@ public actor NativeRawStateStore {
 
     public var isMigrated: Bool { document != nil }
 
+    /// Whether the migration captured no browser storage at all.
+    public var startedEmpty: Bool { document?.startedEmpty == true }
+
+    /// The source an existing store file was captured from, or `nil` when there is no file.
+    /// Once migrated the store is the source of truth: the host opens it under this recorded
+    /// source even if the backend port changed since (owner decision 2026-10-17); only an
+    /// unmigrated capture stays bound to the current origin.
+    public static func recordedSource(at persistenceURL: URL, persistence: Persistence = .atomicFile) throws -> Source? {
+        guard persistenceURL.isFileURL else { throw StoreError.invalidPersistenceURL }
+        guard let data = try persistence.load(persistenceURL) else { return nil }
+        let loaded = try JSONDecoder().decode(Document.self, from: data)
+        guard loaded.version == 1 else { throw StoreError.unsupportedVersion }
+        return loaded.source
+    }
+
     public func migrate(_ capture: MigrationCapture) throws {
         guard document == nil else { throw StoreError.alreadyMigrated }
         guard capture.source == source else { throw StoreError.sourceMismatch }
         guard capture.status == .complete else { throw StoreError.incompleteCapture }
-        try commit(Document(version: 1, source: source, migrationCaptureID: capture.identifier, localValues: capture.localValues))
+        try commit(
+            Document(
+                version: 1, source: source, migrationCaptureID: capture.identifier,
+                startedEmpty: capture.localValues.isEmpty && capture.sessionValues.isEmpty ? true : nil,
+                localValues: capture.localValues))
         sessionValues = capture.sessionValues
     }
 

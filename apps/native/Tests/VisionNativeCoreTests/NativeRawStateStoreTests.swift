@@ -54,6 +54,40 @@ import Testing
         }
     }
 
+    @Test func anEmptyCompleteCaptureIsRecordedAsAnEmptyStart() async throws {
+        try await withFile { url in
+            let source = try source()
+            let store = try NativeRawStateStore(persistenceURL: url, source: source)
+            try await store.migrate(capture([:], source: source))
+            #expect(await store.startedEmpty)
+            let reopened = try NativeRawStateStore(persistenceURL: url, source: source)
+            #expect(await reopened.startedEmpty)
+        }
+        try await withFile { url in
+            let source = try source()
+            let store = try NativeRawStateStore(persistenceURL: url, source: source)
+            try await store.migrate(capture(["vision_theme": "dark"], source: source))
+            #expect(await store.startedEmpty == false)
+        }
+    }
+
+    @Test func aMigratedStoreReportsTheSourceItWasCapturedFrom() async throws {
+        try await withFile { url in
+            #expect(try NativeRawStateStore.recordedSource(at: url) == nil)
+            let original = try source(port: 43123)
+            let store = try NativeRawStateStore(persistenceURL: url, source: original)
+            try await store.migrate(capture(["vision_theme": "dark"], source: original))
+            let recorded = try #require(try NativeRawStateStore.recordedSource(at: url))
+            #expect(recorded == original)
+            // After a port change the host opens the store under its recorded source.
+            #expect(throws: NativeRawStateStore.StoreError.sourceMismatch) {
+                _ = try NativeRawStateStore(persistenceURL: url, source: try source(port: 50000))
+            }
+            let reopened = try NativeRawStateStore(persistenceURL: url, source: recorded)
+            #expect(try await reopened.value(for: .theme) == "dark")
+        }
+    }
+
     @Test func rawStringsUnknownKeysAndCaptureProvenanceSurviveReload() async throws {
         try await withFile { url in
             let source = try source()
