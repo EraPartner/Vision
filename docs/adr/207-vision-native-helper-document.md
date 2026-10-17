@@ -1,10 +1,10 @@
 ---
 title: "ADR-207: Isolate a helper document for native Demo presentation"
 type: adr
-status: proposed
-date: 2026-10-15
+status: accepted
+date: 2026-10-17
 tags: [adr, architecture, swift, native-app, phase-4, demo, webkit, typescript]
-description: "Proposes a default-off Debug Demo experiment with native presentation and routing plus a same-origin helper document for unchanged TypeScript calculations and scoped storage, without React UI, live authority handover or real-data migration."
+description: "Accepted on 2026-10-17 with the phase-4 go. A default-off Debug Demo experiment with native presentation and routing plus a same-origin helper document for unchanged TypeScript calculations and scoped storage, without React UI, live authority handover or real-data migration."
 aliases: [adr-207, native helper document]
 ---
 
@@ -12,8 +12,10 @@ aliases: [adr-207, native helper document]
 
 ## Status
 
-Proposed. This records the next bounded implementation strategy; no helper-only SDK mode
-or configuration is enabled by this ADR. Phase 3p and phase 4 completion still require their
+Accepted on 2026-10-17 (proposed 2026-10-15) with Tor's phase-4 go, default-off. The SDK
+implements the mode behind an explicit `VISION_NATIVE_HELPER_DOCUMENT=1` opt-in that only a
+Debug build of the Demo variant with a supervised backend honours (see *Implementation* below);
+every other launch keeps the retained web document. Phase 3p and phase 4 completion still require their
 actual validation gates. The separate switch-over in
 [[docs/adr/205-vision-native-hand-over|ADR-205]] remains unchanged.
 
@@ -144,6 +146,35 @@ restore. Test stale document callbacks, failed bootstrap, physical completion af
 and rejected onboarding acknowledgments. Source-only Core proofs and a successful HTML build
 do not establish AppKit/WebKit integration. Keep the flag off until these gates pass and
 record the exact verified commit and evidence in the handoff.
+
+## Implementation (2026-10-17)
+
+The SDK side lives in `apps/native/VisionNative/ShellController.swift` and `WebShell.swift`:
+
+- **Selection.** `ShellState.ready` carries `NativeShellBackendSource` (supervised runtime
+  identifier or Debug developer override). `NativeHelperDocumentSelection.select` builds the
+  helper source once, before the first document and graph exist. A cold menu or Finder action
+  that already built a renderer-mode graph keeps the retained web document.
+- **Document authority.** The helper web view installs only the fixed document-start script and
+  the `visionNativeHelper` reply handler, never the generic `electronAPI` bridge. Each load,
+  reload and crash reload records its `WKNavigation` object; commit and finish observations come
+  from WebKit. A matching finish issues provenance for the fixed bootstrap call, and the bootstrap
+  receipt and the page's ready callback are accepted independently. Only both together stand in
+  for the renderer's `ready()`. A changed backend origin, rejected receipt or failed bootstrap shows
+  the native unavailable state.
+- **Native owners.** The graph uses `helperDocument` presentation and native history. One
+  controller-owned `NativeShellIntentCoordinator` survives graph rebuilds; every renderer menu
+  action goes through `acceptNativeMenuAction`, and the mounted native screen acknowledges intent
+  consumer readiness. Startup captures `vision.startupSection` and `vision.lastRoute`, resolves
+  once through `NativeNavigationStartup` and then mirrors both keys as `StartupRedirect` does.
+  Language changes send the fixed locale command; the effective `enhanced` tier drives vibrancy.
+- **Artifact.** `scripts/lib/native-mac-build.sh` runs `build-native-helper.ts --out-dir` into the
+  staged frontend, so the packaged runtime serves `/native-helper.html`. The Release build and the
+  standard variant cannot select it.
+
+Remaining before the experiment can be called verified: an actual macOS run of the opted-in Demo
+(startup, menus, cold CSV, reload, successful and failed restore, print), and window-drag behaviour
+on native screens. The handoff records each CI result.
 
 ## Consequences
 

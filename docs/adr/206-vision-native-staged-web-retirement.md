@@ -1,10 +1,10 @@
 ---
 title: "ADR-206: Stage native route authority before web retirement"
 type: adr
-status: proposed
-date: 2026-10-15
+status: accepted
+date: 2026-10-17
 tags: [adr, architecture, swift, native-app, phase-4, navigation]
-description: "Proposes staged retirement of the retained renderer, beginning with default-off native routing and preserving storage, shared calculations, restore lifetime and the separate real-data switch-over gate."
+description: "Accepted on 2026-10-17 with the phase-4 go, default-off. Stages retirement of the retained renderer, beginning with default-off native routing and preserving storage, shared calculations, restore lifetime and the separate real-data switch-over gate."
 aliases: [adr-206, staged native web retirement]
 ---
 
@@ -12,8 +12,12 @@ aliases: [adr-206, staged native web retirement]
 
 ## Status
 
-Proposed. The preparatory routing implementation is opt-in and the SDK keeps the
-renderer as route authority. This ADR does not certify phase 3p or phase 4 complete,
+Accepted on 2026-10-17 (proposed 2026-10-15). Tor gave the phase-4 go on 2026-10-17
+on the condition that every new authority stays default-off until CI proves parity.
+The preparatory routing implementation is opt-in and the SDK keeps the
+renderer as route authority by default. The helper-document mode of
+[[docs/adr/207-vision-native-helper-document|ADR-207]] is the first SDK consumer of
+native history. This ADR does not certify phase 3p or phase 4 complete,
 authorize real-data migration, or replace the switch-over runbook in
 [[docs/adr/205-vision-native-hand-over|ADR-205]].
 
