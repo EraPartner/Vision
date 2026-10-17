@@ -115,7 +115,7 @@ struct PageScrollObserver: NSViewRepresentable {
                 document.isFlipped
                 ? clip.bounds.minY + clip.contentInsets.top
                 : document.frame.height - clip.bounds.maxY
-            onChange(max(0, offset))
+            onChange?(max(0, offset))
         }
     }
 }
