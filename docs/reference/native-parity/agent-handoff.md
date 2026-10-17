@@ -145,6 +145,25 @@ which only the retained `BridgeScript` defined. The helper's document-start scri
 both. On run 39067544790 (branch suites green, run 39067544787) native-only passed again and the
 helper's bootstrap call itself then threw; the shell now logs that error with the stage.
 
+**All four modes pass (run 39069586078, `96c21ab`, branch suites run 39069586079, 2026-10-17)**
+
+Native-only is the Debug Demo default and passed with no variable set; the retained control
+(`VISION_NATIVE_WEB_FREE=0`) and the helper (`VISION_NATIVE_HELPER_DOCUMENT=1`, "helper document
+ready" in 3.4 s) passed too. The helper's earlier bootstrap throw did not recur; if it does, the
+log now names WebKit's error. Metrics (KiB):
+
+| Mode                | Bundle  | App RSS | Process tree RSS | WebKit RSS | Processes |
+| ------------------- | ------- | ------- | ---------------- | ---------- | --------- |
+| Native, retained    | 458,616 | 388,016 | 956,288          | 210,400    | 21        |
+| Native, helper      | 458,616 | 467,440 | 992,256          | 98,576     | 21        |
+| Native, native-only | 458,616 | 466,816 | 940,912          | 233,536    | 18        |
+| Electron Demo       | 648,716 | 171,216 | 1,181,584        | 0          | 24        |
+
+The WebKit column sums every WebKit service on the runner, including ones the earlier modes left
+behind in the same job, so it is not attributable per mode; the process tree and bundle are.
+Native-only has the smallest tree and process count; the app's own RSS (~390–470 MB, about 2.5×
+Electron's main process) is the next thing to profile.
+
 **Next**
 
 1. Read the latest `Native Branch Verification` and `Native End-to-End Smoke` runs; fix any
