@@ -138,12 +138,15 @@
         static func lines(_ page: PDFPage) -> [[Glyph]] {
             // page.string and characterBounds(at:) use different index spaces; a one-character
             // selection reports its text and bounds from the same character.
-            let glyphs: [Glyph] = (0..<page.numberOfCharacters).compactMap { index in
+            var glyphs: [Glyph] = []
+            for index in 0..<page.numberOfCharacters {
                 guard let selection = page.selection(for: NSRange(location: index, length: 1)),
                     let character = selection.string?.first, !character.isWhitespace
-                else { return nil }
+                else { continue }
                 let bounds = selection.bounds(for: page)
-                return bounds.isEmpty ? nil : (character, bounds)
+                // A synthesized separator index selects the preceding glyph again.
+                guard !bounds.isEmpty, bounds != glyphs.last?.bounds else { continue }
+                glyphs.append((character, bounds))
             }
             // Ink bounds differ between ascenders and x-height glyphs: a glyph joins a line when
             // its centre lies within the line's vertical extent.

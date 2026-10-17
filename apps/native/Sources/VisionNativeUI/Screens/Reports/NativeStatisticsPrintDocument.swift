@@ -126,6 +126,12 @@ struct NativeStatisticsPrintTableLayout {
         let available = max(1, width - 32)
         spacing = min(8, available / CGFloat(count * 3))
         let contentWidth = max(1, available - spacing * CGFloat(count - 1))
+        // Values only: a heading may wrap, but a count or date split mid-value misreads.
+        let natural: [CGFloat] = columns.indices.map { index in
+            let font = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .semibold)
+            let values = rows.compactMap { $0.values.indices.contains(index) ? $0.values[index] : nil }
+            return values.map { ($0 as NSString).size(withAttributes: [.font: font]).width }.max() ?? 0
+        }
         let weights: [CGFloat] = columns.enumerated().map { index, heading in
             let font =
                 index == 0
@@ -134,8 +140,21 @@ struct NativeStatisticsPrintTableLayout {
             let maximum = values.map { ($0 as NSString).size(withAttributes: [.font: font]).width }.max() ?? 0
             return min(index == 0 ? 200 : 140, max(index == 0 ? 90 : 44, maximum))
         }
-        let total = max(1, weights.reduce(0, +))
-        widths = weights.map { contentWidth * $0 / total }
+        // Short value columns keep their whole single-line width; only long columns (names,
+        // high-precision amounts) share the rest and may wrap. Fall back to proportional
+        // widths when the reserved columns would leave too little for the others.
+        let reserved = Set(columns.indices.filter { $0 > 0 && natural[$0] > 0 && natural[$0] + 4 <= 72 })
+        let reservedWidth = reserved.reduce(CGFloat.zero) { $0 + natural[$1] + 4 }
+        let flexibleWeight = columns.indices.filter { !reserved.contains($0) }.reduce(CGFloat.zero) { $0 + weights[$1] }
+        if !reserved.isEmpty, flexibleWeight > 0, reservedWidth <= contentWidth * 0.6 {
+            let rest = contentWidth - reservedWidth
+            widths = columns.indices.map {
+                reserved.contains($0) ? natural[$0] + 4 : rest * weights[$0] / flexibleWeight
+            }
+        } else {
+            let total = max(1, weights.reduce(0, +))
+            widths = weights.map { contentWidth * $0 / total }
+        }
     }
 }
 
