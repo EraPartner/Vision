@@ -272,8 +272,7 @@ struct ResearchForecastStat: View {
             if loading {
                 RoundedRectangle(cornerRadius: 5).fill(theme.muted).frame(height: 30).accessibilityLabel(title)
             } else {
-                Text(value).font(.title2.weight(.semibold)).monospacedDigit().contentTransition(.numericText())
-                    .animation(rolling && !reducedMotion ? .easeOut(duration: 0.25) : nil, value: value)
+                RollingNumber(value: value, animate: rolling).font(.title2.weight(.semibold))
             }
             if let subtitle { Text(subtitle).font(.caption).foregroundStyle(theme.secondaryLabel) }
         }

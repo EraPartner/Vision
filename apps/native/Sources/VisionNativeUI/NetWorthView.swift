@@ -116,8 +116,9 @@ public struct NetWorthView: View {
     private func identity(_ data: OpenAPI.NetWorthResponse) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(strings.t("networth.title")).font(.caption).foregroundStyle(theme.secondaryLabel)
-            MoneyText(
-                amount: data.current.netWorth, currency: currency, settings: settings, signed: false, colored: false
+            RollingNumber(
+                value: MoneyText.text(data.current.netWorth, currency: currency, settings: settings, signed: false),
+                decimalSeparator: settings.numberFormat.locale.decimalSeparator?.first
             )
             .font(.system(size: 40, weight: .semibold))
             HStack {
@@ -361,7 +362,8 @@ public struct NetWorthView: View {
     private func stat(_ key: String, value: String, symbol: String) -> some View {
         AdminCard {
             Label(strings.t(key), systemImage: symbol).font(.caption).foregroundStyle(theme.secondaryLabel)
-            Text(value).font(.title2).monospacedDigit()
+            RollingNumber(value: value, decimalSeparator: settings.numberFormat.locale.decimalSeparator?.first)
+                .font(.title2)
         }
     }
     private func signedPercent(_ value: Decimal) -> String {

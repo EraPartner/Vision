@@ -372,6 +372,9 @@ struct NativeScreenContainer: View {
 
     var body: some View {
         content
+            // PageTransition keys on the pathname; the canvas behind it stays put.
+            .modifier(PageEntrance())
+            .id(model.route.path)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(DetailGlassBackground())
             .focusable()

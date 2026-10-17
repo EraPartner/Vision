@@ -140,10 +140,9 @@ struct ImportCommitReceiptCard: View {
                     .font(.title3.weight(.semibold))
                     .accessibilityAddTraits(.isHeader)
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    Text(verbatim: String(receipt.imported))
+                    RollingNumber(value: String(receipt.imported))
                         .fontWeight(.semibold)
                         .foregroundStyle(theme.foreground)
-                        .contentTransition(.numericText())
                     Text(strings.tc("importPage.commitReceiptImported", receipt.imported))
                         .foregroundStyle(theme.secondaryLabel)
                 }
