@@ -66,7 +66,9 @@ struct NativeShellPresentationStructureTests {
         let expected = detail == .loading ? "Synthetic loading" : "Synthetic unavailable"
         let fixture = ShellPresentationWindow(NativeShellUnavailableView(detail: detail, strings: strings))
         defer { fixture.close() }
-        try fixture.settle(until: { accessibilityStrings(fixture.host).contains(expected) })
+        try fixture.settle(
+            until: { accessibilityStrings(fixture.host).contains(expected) },
+            diagnostics: { accessibilityDump(fixture.host) })
         #expect(accessibilityStrings(fixture.host).contains(expected))
     }
 
@@ -103,10 +105,34 @@ struct NativeShellPresentationStructureTests {
         return nil
     }
 
+    /// Reads both the NSAccessibility protocol and the attribute API, which some SwiftUI
+    /// nodes still answer through, including titles as well as labels and values.
     private func accessibilityStrings(_ object: Any, depth: Int = 0) -> [String] {
-        guard depth < 30, let element = object as? any NSAccessibilityProtocol else { return [] }
-        let own = [element.accessibilityLabel(), element.accessibilityValue() as? String].compactMap { $0 }
-        return own + (element.accessibilityChildren() ?? []).flatMap { accessibilityStrings($0, depth: depth + 1) }
+        guard depth < 30 else { return [] }
+        var own: [String] = []
+        var children: [Any] = []
+        if let element = object as? any NSAccessibilityProtocol {
+            own += [element.accessibilityLabel(), element.accessibilityTitle(), element.accessibilityValue() as? String]
+                .compactMap { $0 }
+            children += element.accessibilityChildren() ?? []
+        }
+        if children.isEmpty, let legacy = object as? NSObject,
+            legacy.responds(to: #selector(NSObject.accessibilityAttributeValue(_:)))
+        {
+            own += [NSAccessibility.Attribute.description, .title, .value].compactMap {
+                legacy.accessibilityAttributeValue($0) as? String
+            }
+            children += legacy.accessibilityAttributeValue(.children) as? [Any] ?? []
+        }
+        return own + children.flatMap { accessibilityStrings($0, depth: depth + 1) }
+    }
+
+    private func accessibilityDump(_ object: Any, depth: Int = 0) -> String {
+        guard depth < 8 else { return "" }
+        let element = object as? any NSAccessibilityProtocol
+        let children = element?.accessibilityChildren() ?? []
+        let line = String(repeating: "  ", count: depth) + "\(type(of: object)) role=\(element?.accessibilityRole()?.rawValue ?? "-") children=\(children.count) strings=\(accessibilityStrings(object, depth: 29))"
+        return ([line] + children.map { accessibilityDump($0, depth: depth + 1) }).joined(separator: "\n")
     }
 }
 
@@ -147,7 +173,7 @@ private final class ShellPresentationWindow<Content: View> {
         window.contentView = host
         window.orderFront(nil)
     }
-    func settle(until ready: () -> Bool) throws {
+    func settle(until ready: () -> Bool, diagnostics: () -> String = { "" }) throws {
         let deadline = Date().addingTimeInterval(2)
         repeat {
             host.layoutSubtreeIfNeeded()
@@ -155,7 +181,7 @@ private final class ShellPresentationWindow<Content: View> {
             if ready() { return }
             NativeAppKitTestApplication.pumpEvents(until: Date().addingTimeInterval(0.01))
         } while Date() < deadline
-        try #require(ready())
+        try #require(ready(), "\(diagnostics())")
     }
     func close() {
         window.orderOut(nil)
