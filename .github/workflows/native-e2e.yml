@@ -105,6 +105,9 @@ jobs:
           VISION_NATIVE_PAYLOAD_ROOT="$payload/native-runtime" node out/scripts/build-demo-seed.js
           ditto "$REPO_PATH/packaging/electron/demo-seed" "$payload/demo-seed"
           echo "VISION_NATIVE_PAYLOAD_DIR=$payload" >> "$GITHUB_ENV"
+          # The Electron baseline step packages from the same staged frontend and Chromium.
+          echo "VISION_FRONTEND_DIST=$VISION_FRONTEND_DIST" >> "$GITHUB_ENV"
+          echo "VISION_CHROMIUM_SOURCE=${VISION_CHROMIUM_SOURCE:-}" >> "$GITHUB_ENV"
 
       - name: Build the Debug Demo app with its payload
         run: |
