@@ -2,8 +2,8 @@
 title: "Native parity inventory: Planned payments"
 type: reference
 status: active
-date: 2026-10-12
-updated: 2026-10-12
+date: 2026-10-17
+updated: 2026-10-17
 tags: [reference, swift-rewrite, native-parity, planned, recurring, bills]
 description: "Every region, control, menu, sheet and dialog on the /planned route: the next-7-days strip, match suggestions, recurring detection, the payments table, the planned-payment sheet (recurrence and loan fields), the Mark as paid link dialog and the payment history dialog."
 aliases: [native parity planned payments]
@@ -270,7 +270,7 @@ There is no page-specific hotkey and no `g`-then-key go-to shortcut for `/planne
 - unverified: The Currency select offers only six hard-coded currencies. Editing a row stored in another currency shows a value with no matching option (`apps/frontend/src/features/planned/PlannedPaymentForm.tsx:474`).
 - unverified: The DatePicker, combobox and TagInput internals were read only for labels and keys, not walked in full.
 - Native gap (phase 3c part A, not fixed): the web app's React Query `staleTime` is 30 s (`apps/frontend/src/App.tsx:88`) and nothing tells the page's cache about a native mutation. A web page revisited within 30 s of a native Pause, Resume or Delete (the Home upcoming list, account pages, the `planned-due` sidebar badge) can show the old rows; the reverse holds for the native list after a web edit. There is no cache-invalidation bridge message yet.
-- Native gap (phase 3c part A): the native list does not retry a failed load once on its own (the web query has `retry: 1`); the error state's Retry does. Its message is the humanized `APIErrorMessage` text rather than the raw error message.
+- Native list loads (appear and Retry) retry a failed attempt once after 1 s, as the web query's `retry: 1` does, before the error state shows. The error message is the humanized `APIErrorMessage` text rather than the raw error message.
 - Native gap (phase 3c part B, not fixed): the 30 s cache gap above also covers the native sheet's create and update, Mark as paid and Track. A web page revisited soon after can show the old rows, suggestions or patterns.
 - Native gap (phase 3c part B): dismissed recurring payees live in two copies, as on the web: the `dismissed_recurring_patterns` setting and a per-device list. The native per-device list is the app's user defaults, not the web view's `localStorage`. A reset from the web Settings clears the setting and the web list only; the native list still holds the ids, merges them back on its next load, and writes them to the setting on its next dismissal.
 - Native gap (phase 3c part B, mirrors the web): an edit cannot clear Payee, Category, Notes, Link or Tags. `mapToUpdateAPI` leaves an emptied field out of the `PATCH` body, so the stored value stays. Only End date and Max occurrences send an explicit `null`.

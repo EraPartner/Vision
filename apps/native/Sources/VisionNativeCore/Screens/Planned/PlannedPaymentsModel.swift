@@ -122,6 +122,7 @@ public final class PlannedPaymentsModel {
     /// The suggestions refetch Mark as paid starts after it closes (tests await it).
     @ObservationIgnored private(set) var suggestionsRefresh: Task<Void, Never>?
     @ObservationIgnored private let now: @Sendable () -> Date
+    @ObservationIgnored private let retryDelay: Duration
     @ObservationIgnored public let calendar: Calendar
     @ObservationIgnored private var defaultCurrency = NativeAppSettings.defaults.defaultCurrency
     @ObservationIgnored private var inFlight: [Bool: Task<Void, Never>] = [:]
@@ -131,9 +132,11 @@ public final class PlannedPaymentsModel {
     public init(
         service: any PlannedPaymentsService, editing: any PlannedEditingService, pickers: any PickerDataService,
         rates: ExchangeRatesModel, dismissals: PlannedDismissalStore = .userDefaults,
-        calendar: Calendar = PlannedDates.local, now: @escaping @Sendable () -> Date = { Date() }
+        calendar: Calendar = PlannedDates.local, now: @escaping @Sendable () -> Date = { Date() },
+        retryDelay: Duration = .seconds(1)
     ) {
         self.service = service
+        self.retryDelay = retryDelay
         self.editing = editing
         pickerService = pickers
         self.rates = rates
@@ -201,9 +204,22 @@ public final class PlannedPaymentsModel {
         inFlight[key] = nil
     }
 
+    /// The query's `retry: 1`: a failed load is tried once more after React Query's first
+    /// retry delay before the page shows its error.
+    private func load(_ key: Bool) async throws -> [OpenAPI.PlannedTransaction] {
+        do {
+            return try await service.plannedPayments(includePaused: key)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            try await Task.sleep(for: retryDelay)
+            return try await service.plannedPayments(includePaused: key)
+        }
+    }
+
     private func run(_ key: Bool) async {
         do {
-            let rows = try await service.plannedPayments(includePaused: key)
+            let rows = try await load(key)
             let currency = defaultCurrency
             var state = lists[key] ?? ListState()
             state.payments = rows.map { PlannedPayment($0, defaultCurrency: currency) }

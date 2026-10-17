@@ -175,7 +175,7 @@ enum PlannedFixture {
         return PlannedPaymentsModel(
             service: service, editing: editing, pickers: pickers,
             rates: ExchangeRatesModel(service: FakeExchangeRatesService(rates: rates)), dismissals: dismissals,
-            calendar: calendar, now: { time.now })
+            calendar: calendar, now: { time.now }, retryDelay: .zero)
     }
 
     @MainActor
@@ -556,22 +556,34 @@ enum PlannedFixture {
 
     @Test func aFailedLoadShowsTheErrorUntilRetrySucceeds() async {
         let service = FakePlannedService(rows: Self.rows)
-        await service.failLoads(1)
+        // `retry: 1`: the error shows only after the second attempt fails too.
+        await service.failLoads(2)
         let model = PlannedFixture.model(service)
         await model.appear(showAll: false, defaultCurrency: "EUR")
         #expect(model.error == .network("offline"))
         #expect(!model.isLoading)
         #expect(model.payments.isEmpty)
+        #expect(await service.loads.count == 2)
         // A failed answer is never fresh: appearing again fetches.
         await model.appear(showAll: false, defaultCurrency: "EUR")
         #expect(model.error == nil)
         #expect(model.payments.count == 2)
-        await service.failLoads(1)
+        await service.failLoads(2)
         await model.retry()
         #expect(model.error == .network("offline"))
         await model.retry()
         #expect(model.error == nil)
-        #expect(await service.loads.count == 4)
+        #expect(await service.loads.count == 6)
+    }
+
+    @Test func oneFailedAttemptIsRetriedOnceWithoutAnError() async {
+        let service = FakePlannedService(rows: Self.rows)
+        await service.failLoads(1)
+        let model = PlannedFixture.model(service)
+        await model.appear(showAll: false, defaultCurrency: "EUR")
+        #expect(model.error == nil)
+        #expect(model.payments.count == 2)
+        #expect(await service.loads == [false, false])
     }
 
     @Test func aDefaultCurrencyChangeMapsTheCachedRowsAgain() async {
