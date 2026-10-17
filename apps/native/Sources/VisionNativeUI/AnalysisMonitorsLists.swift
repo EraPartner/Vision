@@ -40,7 +40,7 @@ struct AnalysisMonitorsRulesView: View {
                                 Menu {
                                     Button(strings.t("monitors.checkNow"), systemImage: "checklist") {
                                         Task { await model.check(rule) }
-                                    }.disabled(!rule.enabled)
+                                    }.disabled(model.isBusy)
                                     Button(
                                         strings.t(rule.enabled ? "monitors.disable" : "monitors.enable"),
                                         systemImage: rule.enabled ? "pause" : "play"

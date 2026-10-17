@@ -347,7 +347,10 @@ public struct StatisticsView: View {
                         + (model.pivotYear.map(String.init) ?? strings.t("statsPage.allYears")))
             }
             if isPrinting {
-                Text((displayedPivotPeriods.first ?? "") + " – " + (displayedPivotPeriods.last ?? "")).font(.caption)
+                Text(
+                    displayedPivotPeriods.first.map { periodShort($0) + " – " + periodShort(displayedPivotPeriods.last ?? $0) }
+                        ?? "—"
+                ).font(.caption)
             } else if model.pivotPageCount > 1 {
                 HStack {
                     Button(strings.t("common.previous")) { model.pivotPage += 1 }
@@ -442,7 +445,7 @@ public struct StatisticsView: View {
             GridRow {
                 printPivotLabel(strings.t("categories.title"))
                 ForEach(displayedPivotPeriods, id: \.self) { period in
-                    Text(period).frame(width: pivotColumnWidth).fixedSize(horizontal: false, vertical: true)
+                    Text(periodShort(period)).frame(width: pivotColumnWidth).fixedSize(horizontal: false, vertical: true)
                 }
                 Text(strings.t("statsPage.total")).frame(width: pivotColumnWidth)
                     .fixedSize(horizontal: false, vertical: true)
@@ -792,7 +795,7 @@ public struct StatisticsView: View {
             headings += [
                 strings.t("statsPage.pivot.metric.\(model.categoryMetric.rawValue)") + " · "
                     + (model.pivotYear.map(String.init) ?? strings.t("statsPage.allYears")),
-                (periods.first ?? "") + " – " + (periods.last ?? ""),
+                periods.first.map { periodShort($0) + " – " + periodShort(periods.last ?? $0) } ?? "—",
             ]
             let footer = NativeStatisticsPrintTable.Row(
                 id: "total",
@@ -802,7 +805,7 @@ public struct StatisticsView: View {
             return [
                 NativeStatisticsPrintTable(
                     id: "statistics.pivotTable:\(page)", headings: headings,
-                    columns: [strings.t("categories.title")] + periods + [strings.t("statsPage.total")],
+                    columns: [strings.t("categories.title")] + periods.map(periodShort) + [strings.t("statsPage.total")],
                     rows: rows, footer: footer
                 ).block(presentation: presentation, width: width)
             ]

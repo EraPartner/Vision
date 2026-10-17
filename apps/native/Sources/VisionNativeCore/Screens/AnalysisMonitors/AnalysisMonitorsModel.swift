@@ -297,7 +297,7 @@ public final class AnalysisMonitorsModel {
         }
     }
     public func check(_ rule: AnalysisMonitorRule) async {
-        guard !isBusy, rule.enabled else { return }
+        guard !isBusy else { return }
         clearAction()
         await perform {
             let result = try await service.monitorCheck(id: rule.id)

@@ -16,7 +16,7 @@ struct AnalysisMonitorsDetailsView: View {
                         HStack {
                             Button(strings.t("monitors.checkNow"), systemImage: "checklist") {
                                 Task { await model.check(rule) }
-                            }.disabled(model.isBusy || !rule.enabled)
+                            }.disabled(model.isBusy)
                             Button(strings.t("monitors.delete"), role: .destructive) { model.deletingRule = rule }
                                 .disabled(model.isBusy)
                         }.buttonStyle(.bordered).controlSize(.small)

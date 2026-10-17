@@ -122,13 +122,14 @@ public struct PortfolioTaxView: View {
                     overview: overview, availableYears: taxData?.yearCalculations.map(\.year) ?? [],
                     actions: tax.actions, shell: shell)
                 actionsMenu(overview)
-                Button(strings.t("tax.manualAdjustments"), systemImage: "slider.horizontal.3") {
-                    model.beginAdjustments(numberFormat: shell.settings.numberFormat)
-                }.buttonStyle(.borderedProminent)
-                    .disabled(
-                        !model.settingsLoaded || model.isSavingAdjustments || tax.actions.isSaving || data == nil
-                            || model.error != nil)
             }
+            // PortfolioTaxPage always shows the button; the sheet needs loaded data, so it waits for it.
+            Button(strings.t("tax.manualAdjustments"), systemImage: "slider.horizontal.3") {
+                model.beginAdjustments(numberFormat: shell.settings.numberFormat)
+            }.buttonStyle(.borderedProminent)
+                .disabled(
+                    !model.settingsLoaded || model.isSavingAdjustments || tax.actions.isSaving || data == nil
+                        || model.error != nil)
         }
     }
 

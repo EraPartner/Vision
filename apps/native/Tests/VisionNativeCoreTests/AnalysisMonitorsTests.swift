@@ -223,7 +223,7 @@ struct AnalysisMonitorsModelTests {
         await model.poll()
         #expect(model.rulesError == nil && model.notificationsError == nil && model.editDraft?.title == "Unsaved title")
     }
-    @Test func failedDomainCheckIsAnObservationAndDisabledRulesDoNotSendRequests() async throws {
+    @Test func failedDomainCheckIsAnObservationAndDisabledRulesCanBeCheckedManually() async throws {
         let service = try MonitorTestService()
         let model = AnalysisMonitorsModel(service: service)
         await model.load()
@@ -235,8 +235,9 @@ struct AnalysisMonitorsModelTests {
         #expect(model.observationOffset == 0 && model.observations?.items.first?.status == .failed)
         var raw = monitorRuleValue(id: monitorSecondID)
         raw["enabled"] = .bool(false)
+        // AnalysisMonitorsPage gates Check now only on busy; the backend checks disabled rules on request.
         await model.check(try raw.decode(AnalysisMonitorRule.self))
-        #expect(await service.checks == 1)
+        #expect(await service.checks == 2 && model.actionError == nil)
     }
     @Test func deleteRequiresConfirmationAndClearsOnlyTheDeletedSelection() async throws {
         let service = try MonitorTestService()
