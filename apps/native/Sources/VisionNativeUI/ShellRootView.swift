@@ -42,6 +42,58 @@ public struct ShellRootView<WebContent: View>: View {
             .accessibilityHidden(true)
     }
 
+    /// The detail column: banners, the web presentation and the native screen, the topbar.
+    @ViewBuilder
+    private func detailColumn(_ theme: VisionTheme) -> some View {
+        VStack(spacing: 0) {
+            shellBanners
+            ZStack {
+                NativeShellWebPresentation(mode: model.presentationMode, hidden: model.isWebContentHidden) {
+                    webContent($0)
+                }.ignoresSafeArea()
+                if case .native(let screen) = model.detail {
+                    NativePageZoomView(factor: model.pageZoom) {
+                        NativeScreenContainer(screen: screen, model: model)
+                            .overlay(alignment: .topLeading) { contentLanding }
+                            .background { PageScrollObserver { pageScroll = $0 } }
+                            .environment(\.colorScheme, theme.colorScheme)
+                            // The mounted destination receives cold CSV/new-transaction intents.
+                            .task(id: screen) { model.nativeIntentConsumerDidBecomeReady(for: screen) }
+                    }
+                } else if case .notFound = model.detail {
+                    NativePageZoomView(factor: model.pageZoom) {
+                        NativeNotFoundView(shell: model)
+                            .environment(\.colorScheme, theme.colorScheme)
+                    }
+                } else if model.detail == .loading || model.detail == .unavailable {
+                    unavailableView(theme)
+                }
+            }
+            .overlay(alignment: .top) {
+                if case .native = model.detail, let inspector = model.apiInspector {
+                    BackgroundQueryIndicator(inspector: inspector)
+                }
+            }
+        }
+        .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.top } action: { titlebarHeight = max($0, 28) }
+        .overlay(alignment: .top) {
+            if isNativeDetail {
+                NativeTopbar(
+                    model: model, height: titlebarHeight, scrolled: pageScroll > NativeTopbar.titleThreshold
+                )
+                .ignoresSafeArea(.container, edges: .top)
+            }
+        }
+        .onChange(of: model.route.path) { pageScroll = 0 }
+    }
+
+    private func unavailableView(_ theme: VisionTheme) -> some View {
+        let retry: (() -> Void)? = model.canRetryInitialSettings ? { model.reloadSettings() } : nil
+        let reload: (@MainActor () -> Void)? = model.detail == .unavailable ? model.reloadPage : nil
+        return NativeShellUnavailableView(detail: model.detail, strings: model.strings, retry: retry, reload: reload)
+            .environment(\.colorScheme, theme.colorScheme)
+    }
+
     public var body: some View {
         let theme = VisionTheme(selection: model.theme)
         NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -52,50 +104,7 @@ public struct ShellRootView<WebContent: View>: View {
                 // lights); NativeTopbar, View › Toggle Sidebar and ⌃⌘S toggle the sidebar instead.
                 .toolbar(removing: .sidebarToggle)
         } detail: {
-            VStack(spacing: 0) {
-                shellBanners
-                ZStack {
-                    NativeShellWebPresentation(mode: model.presentationMode, hidden: model.isWebContentHidden) {
-                        webContent($0)
-                    }.ignoresSafeArea()
-                    if case .native(let screen) = model.detail {
-                        NativePageZoomView(factor: model.pageZoom) {
-                            NativeScreenContainer(screen: screen, model: model)
-                                .overlay(alignment: .topLeading) { contentLanding }
-                                .background { PageScrollObserver { pageScroll = $0 } }
-                                .environment(\.colorScheme, theme.colorScheme)
-                                // The mounted destination receives cold CSV/new-transaction intents.
-                                .task(id: screen) { model.nativeIntentConsumerDidBecomeReady(for: screen) }
-                        }
-                    } else if case .notFound = model.detail {
-                        NativePageZoomView(factor: model.pageZoom) {
-                            NativeNotFoundView(shell: model)
-                                .environment(\.colorScheme, theme.colorScheme)
-                        }
-                    } else if model.detail == .loading || model.detail == .unavailable {
-                        NativeShellUnavailableView(
-                            detail: model.detail, strings: model.strings,
-                            retry: model.canRetryInitialSettings ? { model.reloadSettings() } : nil,
-                            reload: model.detail == .unavailable ? model.reloadPage : nil
-                        ).environment(\.colorScheme, theme.colorScheme)
-                    }
-                }
-                .overlay(alignment: .top) {
-                    if case .native = model.detail, let inspector = model.apiInspector {
-                        BackgroundQueryIndicator(inspector: inspector)
-                    }
-                }
-            }
-            .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.top } action: { titlebarHeight = max($0, 28) }
-            .overlay(alignment: .top) {
-                if isNativeDetail {
-                    NativeTopbar(
-                        model: model, height: titlebarHeight, scrolled: pageScroll > NativeTopbar.titleThreshold
-                    )
-                    .ignoresSafeArea(.container, edges: .top)
-                }
-            }
-            .onChange(of: model.route.path) { pageScroll = 0 }
+            detailColumn(theme)
         }
         .environment(\.visionTheme, theme)
         .environment(\.visionVisualEffects, model.nativeSettings?.effectiveVisualEffects ?? "standard")

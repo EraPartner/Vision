@@ -7,7 +7,7 @@ struct NativeShellUnavailableView: View {
     let detail: NativeShellDetail
     let strings: any Localizing
     var retry: (() -> Void)?
-    var reload: (() -> Void)?
+    var reload: (@MainActor () -> Void)?
     @Environment(\.visionTheme) private var theme
 
     var body: some View {
