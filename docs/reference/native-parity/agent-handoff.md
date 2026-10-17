@@ -56,6 +56,15 @@ Opt-in: `VISION_NATIVE_HELPER_DOCUMENT=1` with a Debug build of the Demo variant
 supervised backend; anything else keeps the retained web document. **No opted-in Demo run has
 happened**; none of the helper flows has run on a Mac.
 
+**Accessible-content test outcome (owner-approved fallback applied).** Attempt 1 (`50ce61b`)
+showed `NSHostingView<NativeShellUnavailableView>` exposing an AXGroup with no SwiftUI nodes;
+attempt 2 (`5ccecd1`) showed the process cannot enable client accessibility for itself
+(`AXEnhancedUserInterface` −25208, `AXManualAccessibility` −25205). The test now asserts that the
+native loading/unavailable views render their localized text. **Manual Mac check still owed:**
+VoiceOver reads "Loading…" and the unavailable message on the native startup/failure screens.
+The same run's glyph dump showed the test helper mixed `page.string` and `characterBounds`
+index spaces; it now reads each character through a one-character selection.
+
 **Next**
 
 1. Read the CI result for `50ce61b`; if the tree dump shows SwiftUI exposes no nodes in-process,

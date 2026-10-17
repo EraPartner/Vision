@@ -1,4 +1,5 @@
 import AppKit
+import PDFKit
 import SwiftUI
 import Testing
 import VisionNativeCore
@@ -56,21 +57,34 @@ struct NativeShellPresentationStructureTests {
         #expect(!requests.hidden.isEmpty && requests.hidden.allSatisfy { !$0 })
     }
 
+    /// SwiftUI builds no accessibility tree inside the SwiftPM test process on the macOS runner:
+    /// the hosting view exposes one empty node, and the process cannot enable client
+    /// accessibility for itself (AXEnhancedUserInterface -25208, AXManualAccessibility -25205).
+    /// This asserts the native views render their localized content; VoiceOver exposure of the
+    /// same text is a manual Mac check recorded in the native handoff.
     @Test(arguments: [NativeShellDetail.loading, .unavailable])
-    func startupAndFailureHaveNativeAccessibleContent(_ detail: NativeShellDetail) throws {
+    func startupAndFailureRenderTheirNativeLocalizedContent(_ detail: NativeShellDetail) throws {
         let strings = DictionaryStrings(
             language: .en,
             table: [
                 "common.loading": "Synthetic loading", "common.error": "Synthetic unavailable",
             ])
         let expected = detail == .loading ? "Synthetic loading" : "Synthetic unavailable"
-        let request = NativeAppKitTestApplication.requestAccessibilityClientMode()
-        let fixture = ShellPresentationWindow(NativeShellUnavailableView(detail: detail, strings: strings))
-        defer { fixture.close() }
-        try fixture.settle(
-            until: { accessibilityStrings(fixture.host).contains(expected) },
-            diagnostics: { request + "\n" + accessibilityDump(fixture.host) })
-        #expect(accessibilityStrings(fixture.host).contains(expected))
+        let info = NSPrintInfo(dictionary: [:])
+        info.paperSize = NSSize(width: 480, height: 240)
+        info.leftMargin = 0
+        info.rightMargin = 0
+        info.topMargin = 0
+        info.bottomMargin = 0
+        let pages = NativePagePrintPagesView(printInfo: info) { width in
+            [
+                NativePrintHostingView(
+                    rootView: NativeShellUnavailableView(detail: detail, strings: strings)
+                        .frame(width: width, height: 200))
+            ]
+        }
+        let text = try NativePrintPDFRenderer.render(pages).compactMap(\.string).joined()
+        #expect(text.contains(expected), "Rendered: \(text)")
     }
 
     private func makeHelperShell() -> NativeShellModel {
@@ -127,14 +141,6 @@ struct NativeShellPresentationStructureTests {
         }
         return own + children.flatMap { accessibilityStrings($0, depth: depth + 1) }
     }
-
-    private func accessibilityDump(_ object: Any, depth: Int = 0) -> String {
-        guard depth < 8 else { return "" }
-        let element = object as? any NSAccessibilityProtocol
-        let children = element?.accessibilityChildren() ?? []
-        let line = String(repeating: "  ", count: depth) + "\(type(of: object)) role=\(element?.accessibilityRole()?.rawValue ?? "-") children=\(children.count) strings=\(accessibilityStrings(object, depth: 29))"
-        return ([line] + children.map { accessibilityDump($0, depth: depth + 1) }).joined(separator: "\n")
-    }
 }
 
 @MainActor
@@ -174,7 +180,7 @@ private final class ShellPresentationWindow<Content: View> {
         window.contentView = host
         window.orderFront(nil)
     }
-    func settle(until ready: () -> Bool, diagnostics: () -> String = { "" }) throws {
+    func settle(until ready: () -> Bool) throws {
         let deadline = Date().addingTimeInterval(2)
         repeat {
             host.layoutSubtreeIfNeeded()
@@ -182,7 +188,7 @@ private final class ShellPresentationWindow<Content: View> {
             if ready() { return }
             NativeAppKitTestApplication.pumpEvents(until: Date().addingTimeInterval(0.01))
         } while Date() < deadline
-        try #require(ready(), "\(diagnostics())")
+        try #require(ready())
     }
     func close() {
         window.orderOut(nil)

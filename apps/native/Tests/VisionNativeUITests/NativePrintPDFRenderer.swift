@@ -136,19 +136,25 @@
         typealias Glyph = (character: Character, bounds: NSRect)
 
         static func lines(_ page: PDFPage) -> [[Glyph]] {
-            let text = (page.string ?? "") as NSString
-            let glyphs: [Glyph] = (0..<min(text.length, page.numberOfCharacters)).compactMap { index in
-                guard let character = text.substring(with: NSRange(location: index, length: 1)).first,
-                    !character.isWhitespace
+            // page.string and characterBounds(at:) use different index spaces; a one-character
+            // selection reports its text and bounds from the same character.
+            let glyphs: [Glyph] = (0..<page.numberOfCharacters).compactMap { index in
+                guard let selection = page.selection(for: NSRange(location: index, length: 1)),
+                    let character = selection.string?.first, !character.isWhitespace
                 else { return nil }
-                return (character, page.characterBounds(at: index))
+                let bounds = selection.bounds(for: page)
+                return bounds.isEmpty ? nil : (character, bounds)
             }
-            var lines: [(midY: CGFloat, glyphs: [Glyph])] = []
+            // Ink bounds differ between ascenders and x-height glyphs: a glyph joins a line when
+            // its centre lies within the line's vertical extent.
+            var lines: [(minY: CGFloat, maxY: CGFloat, glyphs: [Glyph])] = []
             for glyph in glyphs.sorted(by: { $0.bounds.midY > $1.bounds.midY }) {
-                if let last = lines.last, abs(last.midY - glyph.bounds.midY) <= max(1, glyph.bounds.height * 0.4) {
+                if let last = lines.last, glyph.bounds.midY >= last.minY - 0.5, glyph.bounds.midY <= last.maxY + 0.5 {
+                    lines[lines.count - 1].minY = min(last.minY, glyph.bounds.minY)
+                    lines[lines.count - 1].maxY = max(last.maxY, glyph.bounds.maxY)
                     lines[lines.count - 1].glyphs.append(glyph)
                 } else {
-                    lines.append((glyph.bounds.midY, [glyph]))
+                    lines.append((glyph.bounds.minY, glyph.bounds.maxY, [glyph]))
                 }
             }
             return lines.map { $0.glyphs.sorted { $0.bounds.minX < $1.bounds.minX } }
