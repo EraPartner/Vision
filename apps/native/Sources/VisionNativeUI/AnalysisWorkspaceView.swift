@@ -155,6 +155,11 @@ public struct AnalysisWorkspaceView: View {
                 strings.t(templatesOpen ? "analysis.startTitle" : "analysis.chooseTemplate"), isExpanded: $templatesOpen
             ) {
                 VStack(alignment: .leading, spacing: 12) {
+                    Text(strings.t("analysis.taskStartHelp"))
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: 560, alignment: .leading)
+                        .fixedSize(horizontal: false, vertical: true)
                     ForEach(AnalysisTemplate.all) { template in
                         Button {
                             model.applyTemplate(template, name: strings.t(template.titleKey))

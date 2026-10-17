@@ -1040,6 +1040,9 @@ public final class NativeShellModel {
         case .openShortcuts:
             openShortcuts()
             return true
+        case .toggleSidebar:
+            toggleSidebar()
+            return true
         }
     }
 

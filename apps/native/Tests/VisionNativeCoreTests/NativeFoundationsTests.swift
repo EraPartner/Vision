@@ -193,6 +193,14 @@ import Testing
         #expect(shortcuts.handle(key: "x", command: true, path: "/", now: start) == .ignored)
     }
 
+    @Test func commandBTogglesTheSidebarLikeTheShadcnSidebar() {
+        var shortcuts = NativeShortcuts()
+        #expect(shortcuts.handle(key: "b", command: true, path: "/", now: start) == .toggleSidebar)
+        #expect(shortcuts.handle(key: "B", control: true, path: "/", now: start) == .toggleSidebar)
+        #expect(shortcuts.handle(key: "b", command: true, shift: true, path: "/", now: start) == .ignored)
+        #expect(shortcuts.handle(key: "b", path: "/", now: start) == .ignored)
+    }
+
     @Test func singleKeyShortcuts() {
         var shortcuts = NativeShortcuts()
         #expect(shortcuts.handle(key: "n", path: "/", now: start) == .navigate("/transactions?new=1"))

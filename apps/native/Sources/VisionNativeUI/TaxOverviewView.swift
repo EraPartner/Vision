@@ -181,7 +181,8 @@ public struct TaxOverviewView: View {
                 TaxCurrentInputsView(overview: overview, data: data, shell: shell)
                 SuggestedDeductionsView(
                     suggestions: data.suggestions, shell: shell,
-                    onEditProfile: { openLiveProfile(overview) })
+                    // SuggestedDeductionsCard opens the live profile on its Deductions step.
+                    onEditProfile: { openLiveProfile(overview, step: .exemptions) })
                 deductions(overview)
                 if screens.widgets.isVisible("yearComparison") {
                     TaxYearComparisonView(
@@ -235,8 +236,8 @@ public struct TaxOverviewView: View {
     private func openProfile(_ overview: OpenAPI.BelgianTaxOverview, step: TaxProfileStep = .household) {
         screens.profile.begin(overview: overview, initialStep: step)
     }
-    private func openLiveProfile(_ overview: OpenAPI.BelgianTaxOverview) {
-        Task { await screens.openLiveProfile() }
+    private func openLiveProfile(_ overview: OpenAPI.BelgianTaxOverview, step: TaxProfileStep = .household) {
+        Task { await screens.openLiveProfile(initialStep: step) }
     }
     private func perform(_ action: TaxYearAction) async {
         if await screens.actions.perform(action) { await reload(force: true) }

@@ -86,16 +86,14 @@ public struct AIChatView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(conversationTitle)
                         .font(.headline).lineLimit(1).accessibilityAddTraits(.isHeader)
-                    HStack(spacing: 6) {
-                        Circle().fill(model.status?.ok == true ? theme.gain : theme.tertiaryLabel).frame(
-                            width: 6, height: 6)
-                        Text(
-                            strings.t(
-                                statusLoading
-                                    ? "aiChat.checkingOllama"
-                                    : model.status?.ok == true ? "aiChat.ollamaReady" : "aiChat.ollamaUnreachable")
-                        )
-                        .font(.caption).foregroundStyle(theme.secondaryLabel)
+                    // `(statusLoading || status?.ok)`: when Ollama is unreachable only the banner says so.
+                    if statusLoading || model.status?.ok == true {
+                        HStack(spacing: 6) {
+                            Circle().fill(model.status?.ok == true ? theme.gain : theme.tertiaryLabel).frame(
+                                width: 6, height: 6)
+                            Text(strings.t(statusLoading ? "aiChat.checkingOllama" : "aiChat.ollamaReady"))
+                                .font(.caption).foregroundStyle(theme.secondaryLabel)
+                        }
                     }
                 }
                 Spacer(minLength: 0)

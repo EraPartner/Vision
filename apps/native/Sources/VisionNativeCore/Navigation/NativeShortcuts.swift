@@ -10,6 +10,8 @@ public enum ShortcutOutcome: Equatable, Sendable {
     case openPalette
     /// `?`: ShortcutsOverlay.
     case openShortcuts
+    /// ⌘B / Ctrl+B: the shadcn sidebar's toggle shortcut.
+    case toggleSidebar
 }
 
 /// The page's keyboard shortcuts for native screens, which take key events away from the
@@ -44,6 +46,10 @@ public struct NativeShortcuts: Sendable {
         if lower == "k" && (command || control) {
             armedAt = nil
             return .openPalette
+        }
+        if lower == "b" && (command || control) && !option && !shift {
+            armedAt = nil
+            return .toggleSidebar
         }
         if command || control || option {
             armedAt = nil

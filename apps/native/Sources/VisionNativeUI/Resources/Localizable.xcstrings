@@ -17281,6 +17281,24 @@
         }
       }
     },
+    "analysis.taskStartHelp": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a question to start with a ready-made analysis. Review its columns and filters, then run it to see your results."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kies een vraag om met een vooraf ingestelde analyse te beginnen. Controleer de kolommen en filters en voer de analyse uit om je resultaten te bekijken."
+          }
+        }
+      }
+    },
     "analysis.technicalFields": {
       "comment": "Generated from i18n/source by scripts/native-strings.ts.",
       "extractionState": "manual",

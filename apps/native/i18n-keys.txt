@@ -3234,6 +3234,7 @@ analysis.catalogError
 analysis.catalogLoading
 analysis.chart
 analysis.chooseTemplate
+analysis.taskStartHelp
 analysis.completeRows
 analysis.configurationScope
 analysis.configurationScopeValue
