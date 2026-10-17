@@ -179,6 +179,22 @@ struct NativeShellIntentIntegrationTests {
         #expect(model.route.path == "/planned" && recorder.actions.isEmpty)
         await model.settingsSettled()
     }
+
+    @Test func scrollOffsetsBelongToAVisitAndAreRestoredOnlyOnBackOrForward() async {
+        let model = makeModel(initial: "/transactions", loaded: true, documentReady: true, recorder: ShellRecorder())
+        model.recordScrollOffset(640)
+        #expect(model.restorableScrollOffset() == nil)
+        model.navigate(to: "/planned")
+        #expect(model.restorableScrollOffset() == nil)
+        model.recordScrollOffset(80)
+        model.goBack()
+        #expect(model.route.path == "/transactions" && model.restorableScrollOffset() == 640)
+        model.goForward()
+        #expect(model.route.path == "/planned" && model.restorableScrollOffset() == 80)
+        model.navigate(to: "/transactions")
+        #expect(model.restorableScrollOffset() == nil)
+        await model.settingsSettled()
+    }
 }
 
 private actor NativeIntentSettingsService: NativeSettingsService {
@@ -206,20 +222,4 @@ private actor NativeIntentSettingsService: NativeSettingsService {
     }
     func nativeSettingsCategories() async throws -> [OpenAPI.CategoryNode] { [] }
     func nativeSettingsRecipients() async throws -> [OpenAPI.Recipient] { [] }
-
-    @Test func scrollOffsetsBelongToAVisitAndAreRestoredOnlyOnBackOrForward() async {
-        let model = makeModel(initial: "/transactions", loaded: true, documentReady: true, recorder: ShellRecorder())
-        model.recordScrollOffset(640)
-        #expect(model.restorableScrollOffset() == nil)
-        model.navigate(to: "/planned")
-        #expect(model.restorableScrollOffset() == nil)
-        model.recordScrollOffset(80)
-        model.goBack()
-        #expect(model.route.path == "/transactions" && model.restorableScrollOffset() == 640)
-        model.goForward()
-        #expect(model.route.path == "/planned" && model.restorableScrollOffset() == 80)
-        model.navigate(to: "/transactions")
-        #expect(model.restorableScrollOffset() == nil)
-        await model.settingsSettled()
-    }
 }

@@ -32,7 +32,7 @@ private actor FakeSidebarBadgeService: NativeSidebarBadgeService {
     }
 }
 
-private final class TestClock: @unchecked Sendable {
+private final class BadgesTestClock: @unchecked Sendable {
     private let lock = NSLock()
     private var value = Date(timeIntervalSince1970: 1_800_000_000)
     var now: Date { lock.withLock { value } }
@@ -52,7 +52,7 @@ private final class TestClock: @unchecked Sendable {
 
     @Test func freshCountsAreNotReadAgainUntilTheirPolicyExpires() async {
         let service = FakeSidebarBadgeService()
-        let clock = TestClock()
+        let clock = BadgesTestClock()
         let model = NativeSidebarBadgesModel(service: service, now: { clock.now })
         await model.refresh()
         clock.advance(29)
@@ -74,7 +74,7 @@ private final class TestClock: @unchecked Sendable {
     @Test func aPendingProjectionShowsNoCountAndIsPolledEveryTwoSeconds() async {
         let service = FakeSidebarBadgeService()
         await service.set(insights: .success(.init(count: 9, status: "pending")))
-        let clock = TestClock()
+        let clock = BadgesTestClock()
         let model = NativeSidebarBadgesModel(service: service, now: { clock.now })
         await model.refresh()
         #expect(model.insights == 0)
