@@ -24,7 +24,7 @@
             root.addSubview(canvas)
             let originalFrame = pages.frame
             canvas.addSubview(pages)
-            let readiness = NSHostingView(rootView: readinessText("initial"))
+            let readiness = NativePrintHostingView(rootView: readinessText("initial"))
             readiness.frame = NSRect(x: pageSize.width + 8, y: 0, width: 224, height: 32)
             root.addSubview(readiness)
             let window = NativePrintPDFWindow(

@@ -39,7 +39,7 @@ public struct NativeStatisticsPrintDocument: View {
             let view = StatisticsView(screens: presentation.screens, shell: presentation.shell, printSection: section)
             if let blocks = view.rowAwarePrintBlocks(presentation: presentation, width: width) { return blocks }
             return [
-                NSHostingView(
+                NativePrintHostingView(
                     rootView: NativeStatisticsPrintDocument(
                         presentation: presentation, sections: [section], pageWidth: width
                     ).frame(width: width)) as NSView
@@ -68,7 +68,7 @@ struct NativeStatisticsPrintTable {
         let layout = NativeStatisticsPrintTableLayout(
             width: width, columns: columns, rows: rows + (footer.map { [$0] } ?? []))
         func host<Content: View>(_ content: Content, id: String) -> NSView {
-            let view = NSHostingView(
+            let view = NativePrintHostingView(
                 rootView: content.frame(width: width, alignment: .leading)
                     .fixedSize(horizontal: false, vertical: true)
                     .environment(\.locale, presentation.snapshot.settings.numberFormat.locale)

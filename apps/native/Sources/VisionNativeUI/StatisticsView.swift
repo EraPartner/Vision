@@ -850,7 +850,7 @@ public struct StatisticsView: View {
     @MainActor private func printHost<Content: View>(
         _ content: Content, presentation: NativeStatisticsPrintPresentation, width: CGFloat
     ) -> NSView {
-        NSHostingView(
+        NativePrintHostingView(
             rootView: content.frame(width: width, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
                 .environment(\.locale, presentation.snapshot.settings.numberFormat.locale)

@@ -18,7 +18,7 @@
             let keyWindow = NSApplication.shared.keyWindow
             let pages = NativePagePrintPagesView(printInfo: paper(width: 240, height: 120)) { width in
                 ["First SwiftUI page", "Second SwiftUI page"].map { marker in
-                    NSHostingView(
+                    NativePrintHostingView(
                         rootView: Text(marker).font(.system(size: 14)).foregroundStyle(.black)
                             .frame(width: width, height: 100, alignment: .topLeading))
                 }
@@ -128,7 +128,7 @@
             let sections: [NativeTaxPrintSection] = [.header, .yearComparison, .householdBreakdown]
             let pages = NativePagePrintPagesView(printInfo: paper(width: width)) { width in
                 sections.map {
-                    NSHostingView(
+                    NativePrintHostingView(
                         rootView: NativeTaxPrintDocument(presentation: presentation, sections: [$0])
                             .frame(width: width)) as NSView
                 }
@@ -165,7 +165,7 @@
             #expect(sections.count == 3)
             let pages = NativePagePrintPagesView(printInfo: paper(width: width)) { width in
                 sections.map {
-                    NSHostingView(
+                    NativePrintHostingView(
                         rootView: NativeStatisticsPrintDocument(
                             presentation: presentation, sections: [$0], pageWidth: width
                         ).frame(width: width)) as NSView
@@ -200,7 +200,7 @@
             let width: CGFloat = 451
             let pages = NativePagePrintPagesView(printInfo: paper(width: width)) { width in
                 [
-                    NSHostingView(
+                    NativePrintHostingView(
                         rootView: NativeStatisticsPrintDocument(
                             presentation: presentation, sections: [.pivotTable(0)], pageWidth: width
                         ).frame(width: width))
@@ -245,7 +245,7 @@
             let sections: [NativeNetWorthPrintSection] = [.header, .chart, .table]
             let pages = NativePagePrintPagesView(printInfo: paper(width: 451, height: 600)) { width in
                 sections.map {
-                    NSHostingView(
+                    NativePrintHostingView(
                         rootView: NativeNetWorthPrintDocument(presentation: presentation, sections: [$0])
                             .frame(width: width)) as NSView
                 }

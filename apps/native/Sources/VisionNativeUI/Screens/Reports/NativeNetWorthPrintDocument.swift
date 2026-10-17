@@ -79,7 +79,7 @@ extension NativeNetWorthPrintDocument {
     @MainActor private static func hostedSection(
         _ presentation: NativeNetWorthPrintPresentation, section: NativeNetWorthPrintSection, width: CGFloat
     ) -> NSView {
-        let hosted = NSHostingView(
+        let hosted = NativePrintHostingView(
             rootView: NativeNetWorthPrintDocument(presentation: presentation, sections: [section]).frame(width: width))
         hosted.identifier = NSUserInterfaceItemIdentifier("networth-section-" + section.rawValue)
         return hosted
@@ -91,7 +91,7 @@ extension NativeNetWorthPrintDocument {
     ) -> NativePagePrintRow {
         NativePagePrintRow { width in
             let snapshot = presentation.snapshot
-            let hosted = NSHostingView(
+            let hosted = NativePrintHostingView(
                 rootView: NativeNetWorthPrintTablePartView(presentation: presentation, part: part, columns: columns)
                     .frame(width: width, alignment: .leading)
                     .fixedSize(horizontal: false, vertical: true)

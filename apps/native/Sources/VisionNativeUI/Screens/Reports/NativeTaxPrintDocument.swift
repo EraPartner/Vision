@@ -39,7 +39,7 @@ public struct NativeTaxPrintDocument: View {
                     initialComparisonYear: snapshot.localState.comparisonYear, printLayout: true
                 ).printTable(width: width)
             default:
-                return NSHostingView(
+                return NativePrintHostingView(
                     rootView: NativeTaxPrintDocument(presentation: presentation, sections: [section])
                         .frame(width: width))
             }
@@ -226,7 +226,7 @@ enum NativeTaxPrintTone {
     static func host<Content: View>(
         _ content: Content, shell: NativeShellModel, width: CGFloat, id: String
     ) -> NSView {
-        let view = NSHostingView(
+        let view = NativePrintHostingView(
             rootView:
                 content
                 .frame(width: width, alignment: .leading).fixedSize(horizontal: false, vertical: true)
