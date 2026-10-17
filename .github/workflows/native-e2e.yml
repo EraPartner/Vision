@@ -121,6 +121,10 @@ jobs:
         if: ${{ !cancelled() }}
         run: bash .github/scripts/native-e2e-smoke.sh "$VISION_E2E_APP" "$RUNNER_TEMP/e2e" helper
 
+      - name: Smoke the native-only mode (no web view)
+        if: ${{ !cancelled() }}
+        run: bash .github/scripts/native-e2e-smoke.sh "$VISION_E2E_APP" "$RUNNER_TEMP/e2e" native
+
       # Non-blocking: the Electron Demo's bundle size and memory, measured the same way, are
       # the baseline ADR-204's phase-4 exit compares the native numbers with.
       - name: Measure the Electron Demo baseline

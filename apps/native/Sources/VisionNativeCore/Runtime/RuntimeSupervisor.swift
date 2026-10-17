@@ -403,6 +403,13 @@ public actor RuntimeSupervisor: BackupSettingsStore {
         try fileSystem.writeFile(layout.settings, try JSONValue.object(settings).serialized(), mode: 0o600)
     }
 
+    /// `RuntimeLayout.rawState`: the native-only mode's raw-state store (ADR-208).
+    public nonisolated var rawStatePath: String {
+        PathUtilities.join(
+            configuration.variant.userDataDirectory(homeDirectory: configuration.homeDirectory), "native",
+            configuration.variant.runtimeId, "raw-state.json")
+    }
+
     /// The runtime's log folder (`activeRuntime.paths.logs`), which `recovery:open-logs` opens.
     public nonisolated var logsDirectory: String {
         PathUtilities.join(

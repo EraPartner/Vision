@@ -26,6 +26,9 @@ sleep 2
 
 if [ "$mode" = "helper" ]; then
   VISION_NATIVE_HELPER_DOCUMENT=1 "$binary" >"$out/app-$mode.log" 2>&1 &
+elif [ "$mode" = "native" ]; then
+  # ADR-208: no web document; the first run captures the origin's storage once.
+  VISION_NATIVE_WEB_FREE=1 "$binary" >"$out/app-$mode.log" 2>&1 &
 else
   "$binary" >"$out/app-$mode.log" 2>&1 &
 fi
@@ -54,9 +57,15 @@ for _ in $(seq 1 100); do
     echo "::error::the helper document failed"
     break
   fi
+  if [ "$mode" = "native" ] && grep -q "native-only storage unavailable" <<<"$current"; then
+    echo "::error::the native-only storage failed"
+    break
+  fi
   backend_healthy || continue
   if [ "$mode" = "helper" ]; then
     grep -q "helper document ready" <<<"$current" && { status=0; break; }
+  elif [ "$mode" = "native" ]; then
+    grep -q "native-only document ready" <<<"$current" && { status=0; break; }
   else
     status=0
     break

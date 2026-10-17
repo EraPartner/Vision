@@ -1065,7 +1065,8 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             try await running.value
             return
         }
-        guard let webShell else { throw APIError.backendUnavailable }
+        let webShell = self.webShell
+        guard webShell != nil || nativeStorage != nil else { throw APIError.backendUnavailable }
         if let session = restoredCompletionDataSession {
             await session.suspendAndDrain()
             await session.retireForReload()
@@ -1081,7 +1082,12 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         // A readiness receipt from the outgoing document may have arrived while
         // the graph drained. The incoming document must establish its own authority.
         rendererDocumentChanged()
-        webShell.reload()
+        if let webShell {
+            webShell.reload()
+        } else {
+            // Native-only: a reload is the graph rebuild; the new graph is ready at once.
+            nativeOnlyDocumentReady()
+        }
     }
 
     private func rebuildNativeSettingsGraph(expectedGeneration: UUID) async throws {
@@ -1101,7 +1107,8 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
 
     private func performNativeSettingsGraphRebuild(expectedGeneration: UUID) async throws {
         guard expectedGeneration == nativeSettingsGeneration else { return }
-        guard let webView = webShell?.webView else { throw APIError.backendUnavailable }
+        let webView = webShell?.webView
+        guard webView != nil || nativeStorage != nil else { throw APIError.backendUnavailable }
         let old = shellModel
         holdNativeGraphInput(old)
         await localStateSession.suspendAndDrain()
@@ -1146,7 +1153,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         shellHost?.removeFromSuperview()
         let host = NSHostingView(
             rootView: ShellRootView(model: model) { hidden in
-                WebViewHost(webView: webView, hidden: hidden || model.isReloadingGraph)
+                if let webView { WebViewHost(webView: webView, hidden: hidden || model.isReloadingGraph) }
             })
         host.sizingOptions = []
         host.sceneBridgingOptions = []
@@ -1519,16 +1526,18 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
                 // presentation never changes under an existing graph.
                 if selection != .retainedWeb, hasMadeShellModel {
                     logger.warning("[shell] helper document ineligible: the shell graph already exists")
-                } else if case .nativeOnly = selection {
-                    // ADR-208: the web-free host lands in later steps; until then the opt-in
-                    // keeps the retained document rather than a half-built mode.
-                    logger.warning("[shell] native-only mode is not available in this build")
                 } else {
                     documentSelection = selection
                 }
-                if documentSelection != .retainedWeb {
+                if case .nativeOnly = documentSelection {
+                    logger.log("[shell] Debug Demo native-only mode selected (ADR-208)")
+                } else if documentSelection != .retainedWeb {
                     logger.log("[shell] Debug Demo helper document selected (ADR-207)")
                 }
+            }
+            if case .nativeOnly(let source) = documentSelection {
+                startNativeOnly(url: url, source: source)
+                return
             }
             let documentURL: URL
             if case .helperDocument(let source) = documentSelection {
@@ -1565,11 +1574,12 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
 
     private func revealWebView() {
         revealTask?.cancel()
-        guard let host = shellHost, host.isHidden, let webView = webShell?.webView, case .ready = launchModel.state
+        guard let host = shellHost, host.isHidden, webShell != nil || nativeStorage != nil,
+            case .ready = launchModel.state
         else { return }
         host.isHidden = false
         launchView?.isHidden = true
-        if shellModel.detail == .web { window?.makeFirstResponder(webView) }
+        if shellModel.detail == .web, let webView = webShell?.webView { window?.makeFirstResponder(webView) }
         if announceRunning {
             announceRunning = false
             post(strings.t("app.running", fallback: "Vision is running."))
@@ -1692,6 +1702,73 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
 
     /// The web view inside the native navigation shell; the launch view covers both until
     /// the page is ready.
+    // MARK: - Native-only mode (ADR-208)
+
+    /// Opens the raw-state store (capturing the origin's browser storage once), builds a host
+    /// without a web view and marks the graph's document ready. Any store or capture failure
+    /// shows the unavailable state; the mode never starts from an assumed empty store.
+    private func startNativeOnly(url: URL, source: NativeHelperDocumentSession.Source) {
+        pageLoadTask?.cancel()
+        pageLoadTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                if self.nativeStorage == nil {
+                    self.nativeStorage = try await self.openNativeStorage(source: source)
+                }
+            } catch {
+                self.logger.error(
+                    "[shell] native-only storage unavailable: \(String(describing: error), privacy: .public)")
+                self.apply(.unavailable(self.strings.t("app.errorPageMessage")))
+                return
+            }
+            guard !Task.isCancelled, self.appURL == url else { return }
+            await self.auditChannels.applicationWillLoad()
+            guard !Task.isCancelled, self.appURL == url else { return }
+            if self.shellHost == nil { self.makeNativeOnlyHost() }
+            self.shellHost?.isHidden = true
+            self.nativeOnlyDocumentReady()
+            self.logger.log("[shell] native-only document ready")
+            self.startHealthWatchdog(url)
+        }
+    }
+
+    private func openNativeStorage(source: NativeHelperDocumentSession.Source) async throws -> NativeShellStorage {
+        let fileURL = URL(fileURLWithPath: supervisor.rawStatePath)
+        let current = try NativeRawStateStore.Source(
+            webOrigin: source.backendOrigin, storeIdentifier: source.websiteDataStoreIdentifier)
+        // A migrated store is the source of truth under the origin it was captured from.
+        let recorded = try NativeRawStateStore.recordedSource(at: fileURL)
+        let store = try NativeRawStateStore(persistenceURL: fileURL, source: recorded ?? current)
+        if !(await store.isMigrated) {
+            let capture = try await NativeStorageCapture.capture(source: current, origin: source.backendOrigin)
+            try await store.migrate(capture)
+            logger.log(
+                "[shell] native-only storage captured (\(capture.localValues.count, privacy: .public) local keys)")
+        }
+        return NativeShellStorage(store: store)
+    }
+
+    private func makeNativeOnlyHost() {
+        let model = shellModel
+        let host = NSHostingView(rootView: ShellRootView(model: model) { _ in EmptyView() })
+        host.sizingOptions = []
+        host.sceneBridgingOptions = []
+        host.frame = container?.bounds ?? .zero
+        host.autoresizingMask = [.width, .height]
+        host.isHidden = true
+        container?.addSubview(host, positioned: .below, relativeTo: launchView)
+        shellHost = host
+        model.setPageZoom(PageZoom.persisted(initialSettings[PageZoom.settingsKey]))
+    }
+
+    /// The renderer-ready sequence without a renderer: a fresh document token for this graph,
+    /// the display state, then the shared startup (settings, onboarding, StartupRedirect).
+    private func nativeOnlyDocumentReady() {
+        rendererDocumentChanged(expectingCommit: false)
+        shellModel.setHelperDocumentState(.ready)
+        rendererDidBecomeReady()
+    }
+
     private func makeWebShell() -> WebShell {
         var helperSource: NativeHelperDocumentSession.Source?
         if case .helperDocument(let source) = documentSelection { helperSource = source }
@@ -2460,7 +2537,13 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     }
 
     func setVibrancy(_ enabled: Bool) -> Bool {
-        guard let effectView, let webView = webShell?.webView else { return false }
+        guard let effectView else { return false }
+        guard let webView = webShell?.webView else {
+            // Native-only: no page background to clear, only the window's material.
+            guard nativeStorage != nil else { return false }
+            effectView.isHidden = !enabled
+            return true
+        }
         effectView.isHidden = !enabled
         webView.setDrawsPageBackground(!enabled)
         return true
