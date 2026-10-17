@@ -249,6 +249,13 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 
 ## Recent Decisions
 
+### 2026-10-17: Finish phase 4 without web content (accepted)
+
+[[docs/adr/208-vision-native-without-web-content|ADR-208]] amends ADR-207: the helper document's
+calculations (palette answers, tax report profile and context) and its storage move to Swift,
+and a default-off native-only mode stops creating the WKWebView until CI and the macOS smoke
+prove it. The e2e smoke measures the Electron Demo as the missing phase-0 baseline.
+
 ### 2026-10-17: Phase-4 go for ADR-206 and ADR-207 (accepted, default-off)
 
 Tor gave the phase-4 go on 2026-10-17 on the condition that new authorities stay default-off.

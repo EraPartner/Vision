@@ -147,6 +147,10 @@ and rejected onboarding acknowledgments. Source-only Core proofs and a successfu
 do not establish AppKit/WebKit integration. Keep the flag off until these gates pass and
 record the exact verified commit and evidence in the handoff.
 
+> [!note] Amended by [[docs/adr/208-vision-native-without-web-content|ADR-208]] (2026-10-17)
+> The helper document is a transition step: its calculations and storage move to Swift and a
+> native-only mode removes the web view.
+
 ## Implementation (2026-10-17)
 
 The SDK side lives in `apps/native/VisionNative/ShellController.swift` and `WebShell.swift`:
