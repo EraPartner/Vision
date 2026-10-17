@@ -3,14 +3,70 @@ title: "Vision Native agent handoff"
 type: reference
 status: active
 date: 2026-10-15
-updated: 2026-10-15
+updated: 2026-10-17
 tags: [reference, swift-rewrite, native-parity, handoff]
 description: "Resumable checkpoint for the Swift port: published branch, current phase, ownership, remaining work, verification evidence and subsequent-phase gates."
 ---
 
 # Vision Native agent handoff
 
-## Resume here
+## Resume here (2026-10-17 continuation)
+
+Branch **`codex/native-phase-3g`**; push only to this branch, no PR (owner's choice on
+2026-10-17). The owner gave the **phase-4 go** on 2026-10-17 with every new authority
+**default-off**, and asked to fix the macOS UI gate first. ADR-206 and ADR-207 are now
+accepted on that basis. This container had no Swift toolchain (download.swift.org is denied
+by the environment's network policy), so the macOS workflow is the only compiler; each
+result below is from an actual `Native Branch Verification` run.
+
+**UI gate (phase 3p) — what changed and what CI showed**
+
+- `7bf8630`: SwiftUI print blocks were blank because `NSPrintOperation` does not capture
+  `NSHostingView` layers. `NativePrintHostingView` draws the same root via `ImageRenderer`
+  off-screen; all Tax/Statistics/Net-worth print hosts and the PDF canary use it.
+  Run 31: print-readiness issues 29 → 0; Core 1,682 passed; UI 21 issues left.
+- `7498aff`: the SwiftPM test helper was never active (cooperative activation refused), so
+  every focus fixture failed. The harness now falls back to `activate(ignoringOtherApps:)`.
+  Run 36: "Native overlay responder ownership" passes (15 issues → 0).
+- `5599a5b`: `DisclosureGroup` is AppKit-backed and `ImageRenderer` cannot print it;
+  `VisionDisclosure` prints the three Tax disclosures as plain SwiftUI. Run 40: household
+  print check passes.
+- `c1f27ff`: test-only — `NativePDFGlyphs` reads printed text by glyph position grouped into
+  lines (content order interleaves cells; `selection(for:)` selects whole lines). Pivot and
+  recipient expectations are unchanged. Pending CI.
+- `50ce61b`: accessible-content test attempt 1 (owner-approved plan: up to two attempts that
+  keep the assertion, then assert rendered content and leave VoiceOver to a manual Mac check).
+  Its walker now also reads titles and the attribute API and dumps the tree on failure.
+  Pending CI.
+
+Run 40 (`eb59813`): app build passed; Core **1,687 tests / 231 suites passed**; UI **94 tests,
+5 issues** (pivot ×2, recipients ×1 — addressed by `c1f27ff`; accessible content ×2).
+
+**Phase 4 (default-off) — implemented in the SDK**
+
+| Commit    | Change                                                                                                                                    | CI                      |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
+| `4a4933c` | `ShellState.ready` carries `NativeShellBackendSource`; `NativeHelperDocumentSelection`                                                    | built (run 36), 5 tests |
+| `1e1e91c` | `WebShell` helper mode (fixed script + `visionNativeHelper` handler, WKNavigation tracking); controller session lifecycle, native history | built (run 36)          |
+| `d3fa8e4` | native menu admission, one retained intent coordinator, consumer readiness, locale command, vibrancy                                      | built (run 36)          |
+| `a5960a6` | `native-mac-build.sh` builds the helper into the staged frontend (`--out-dir`)                                                            | local build + 25 tests  |
+| `bca9993` | helper-mode `StartupRedirect` (`vision.startupSection`, `vision.lastRoute` allowlisted)                                                   | built (run 40)          |
+
+Opt-in: `VISION_NATIVE_HELPER_DOCUMENT=1` with a Debug build of the Demo variant and a
+supervised backend; anything else keeps the retained web document. **No opted-in Demo run has
+happened**; none of the helper flows has run on a Mac.
+
+**Next**
+
+1. Read the CI result for `50ce61b`; if the tree dump shows SwiftUI exposes no nodes in-process,
+   make attempt 2 or fall back as agreed.
+2. Run the opted-in Debug Demo (startup, menus, cold CSV, reload, successful/failed restore,
+   print, window drag on native screens) and record the results here.
+3. Remaining phase-4 gates from ADR-206/207: storage takeover, restore/legacy-call policy in
+   helper mode, retiring the retained renderer by default, bundle size and memory against the
+   phase-0 baseline (ADR-204 exit). Real-data switch-over stays under ADR-205.
+
+## Resume here (2026-10-15, historical)
 
 Continue the Swift frontend port on **`codex/native-phase-3g`**, remote
 `https://github.com/EraPartner/Vision.git`. Do not merge or push `main`.
