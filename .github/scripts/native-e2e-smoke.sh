@@ -10,9 +10,13 @@ app="$1"
 out="$2"
 mode="${3:-helper}"
 mkdir -p "$out"
-binary="$app/Contents/MacOS/Vision Native Demo"
+# `electron` measures the Electron Vision Demo with the same readiness and metrics, as the
+# phase-0 baseline that ADR-204's phase-4 exit compares with.
+name="Vision Native Demo"
+[ "$mode" = "electron" ] && name="Vision Demo"
+binary="$app/Contents/MacOS/$name"
 [ -x "$binary" ] || { echo "missing app binary: $binary"; exit 1; }
-data="$HOME/Library/Application Support/Vision Native Demo"
+data="$HOME/Library/Application Support/$name"
 
 stream="$out/stream-$mode.log"
 log stream --style compact --level debug \
@@ -98,7 +102,7 @@ fi
 
 # A graceful Quit runs the app's own shutdown (quit backup, runtime stop); Apple events may be
 # blocked on the runner, so it is bounded and falls back to signals. Not part of the verdict.
-perl -e 'alarm 20; exec @ARGV' osascript -e 'tell application "Vision Native Demo" to quit' \
+perl -e 'alarm 20; exec @ARGV' osascript -e "tell application \"$name\" to quit" \
   >/dev/null 2>&1 || echo "graceful quit unavailable; falling back to SIGTERM"
 for _ in $(seq 1 45); do kill -0 "$pid" 2>/dev/null || break; sleep 1; done
 kill -TERM "$pid" 2>/dev/null || true

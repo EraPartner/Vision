@@ -121,6 +121,22 @@ jobs:
         if: ${{ !cancelled() }}
         run: bash .github/scripts/native-e2e-smoke.sh "$VISION_E2E_APP" "$RUNNER_TEMP/e2e" helper
 
+      # Non-blocking: the Electron Demo's bundle size and memory, measured the same way, are
+      # the baseline ADR-204's phase-4 exit compares the native numbers with.
+      - name: Measure the Electron Demo baseline
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          cd packaging/electron
+          VISION_BUN_BIN="$(command -v bun)"
+          export VISION_BUN_BIN
+          CSC_IDENTITY_AUTO_DISCOVERY=false node out/scripts/build-native-package.js --demo --dir
+          app="$(find "$PWD/dist-demo" -maxdepth 3 -name "Vision Demo.app" -type d | head -1)"
+          [ -n "$app" ] || { echo "::error::Electron Demo app not built"; exit 1; }
+          cd "$GITHUB_WORKSPACE"
+          bash .github/scripts/native-e2e-smoke.sh "$app" "$RUNNER_TEMP/e2e" electron
+
       - name: Upload smoke logs and screenshots
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4
