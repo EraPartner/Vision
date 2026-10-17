@@ -97,10 +97,15 @@ import Testing
     }
 
     @Test func identicalCurrenciesSkipTheRateRead() async {
-        var reads = 0
+        let loads = PaletteRatesLoads()
         let same = await NativePaletteCalculator.answer(
-            query: "5 EUR", format: .us, currency: "EUR", decimals: 2, readRates: { reads += 1; return nil })
-        #expect(same == nil && reads == 0)
+            query: "5 EUR", format: .us, currency: "EUR", decimals: 2,
+            readRates: {
+                _ = try? await loads.next()
+                return nil
+            })
+        #expect(same == nil)
+        #expect(await loads.count == 0)
     }
 
     @Test func ratesStayFreshForTenMinutesAndSurviveAFailedRefetch() async {

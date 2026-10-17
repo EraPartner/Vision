@@ -47,7 +47,7 @@ public enum NativePaletteCalculator {
     /// rate keeps the source amount, as `useCurrencyConverter` does.
     public static func answer(
         query: String, format: NumberFormat, currency: String, decimals: Int,
-        readRates: () async -> OpenAPI.ExchangeRates?
+        readRates: @Sendable () async -> OpenAPI.ExchangeRates?
     ) async -> NativeCommandPaletteAnswer? {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let fx = parseFX(trimmed, format: format) else {
