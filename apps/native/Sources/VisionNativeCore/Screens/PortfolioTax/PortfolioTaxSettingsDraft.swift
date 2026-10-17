@@ -112,7 +112,8 @@ public struct PortfolioTaxSettingsDraft: Equatable, Sendable {
             cls["etfStructure"] = row.etfStructure.map { .string($0.rawValue) }
             cls["subjectToReynders"] = row.reynders == .auto ? nil : .bool(row.reynders == .yes)
             let percent = LocaleNumber.parseOrZero(row.interestPortion, format: format)
-            cls["reyndersInterestPortion"] = percent > 0 && percent < 100 ? .number(percent / 100) : nil
+            // `portionPct > 0 && portionPct <= 100`: 100% is a full interest portion.
+            cls["reyndersInterestPortion"] = percent > 0 && percent <= 100 ? .number(percent / 100) : nil
             classifications[classKey] = cls.objectValue?.isEmpty == true ? nil : cls
         }
     }

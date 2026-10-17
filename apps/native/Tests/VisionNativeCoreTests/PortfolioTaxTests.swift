@@ -37,7 +37,8 @@ struct PortfolioTaxDataTests {
         #expect(settings.adjustments["2026:99"] == source.records[0].value["2026:99"])
         #expect(settings.classifications["1"]?["future"] == .string("keep"))
         #expect(settings.classifications["1"]?["subjectToReynders"] == .bool(false))
-        #expect(settings.classifications["1"]?["reyndersInterestPortion"] == nil)
+        // PortfolioTaxAdjustmentsDialog keeps 0 < portion <= 100, so 100% is stored as 1.
+        #expect(settings.classifications["1"]?["reyndersInterestPortion"] == .number(1))
         #expect(settings.classifications["99"] == source.records[1].value["99"])
     }
     @Test func zeroDefaultAndAutomaticClassificationsStripOnlyOwnedFields() throws {
