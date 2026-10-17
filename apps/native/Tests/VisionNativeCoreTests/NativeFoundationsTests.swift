@@ -211,6 +211,17 @@ import Testing
         #expect(shortcuts.handle(key: "q", path: "/", now: start) == .ignored)
     }
 
+    @Test func typingKeepsSingleKeysInertButNotCommandShortcuts() {
+        var shortcuts = NativeShortcuts()
+        _ = shortcuts.handle(key: "g", path: "/", now: start)
+        for key in ["h", "n", "?", "[", "]", "g"] {
+            #expect(shortcuts.handle(key: key, path: "/", typing: true, now: start) == .ignored)
+        }
+        #expect(shortcuts.handle(key: "h", path: "/", now: start) == .ignored)
+        #expect(shortcuts.handle(key: "k", command: true, path: "/", typing: true, now: start) == .openPalette)
+        #expect(shortcuts.handle(key: "b", command: true, path: "/", typing: true, now: start) == .toggleSidebar)
+    }
+
     @Test func goToRoutesFollowTheShortcutKeys() {
         let routes = NativeShortcuts.goToRoutes
         #expect(routes.first { $0.key == "t" }?.url == "/transactions")

@@ -1021,11 +1021,12 @@ public final class NativeShellModel {
     /// A key press on a native screen. Returns `false` when the key is not a shortcut.
     public func handleKey(
         _ key: String, command: Bool = false, control: Bool = false, option: Bool = false, shift: Bool = false,
-        now: Date = Date()
+        typing: Bool = false, now: Date = Date()
     ) -> Bool {
         guard !isReloadingGraph else { return true }
         switch shortcuts.handle(
-            key: key, command: command, control: control, option: option, shift: shift, path: route.path, now: now)
+            key: key, command: command, control: control, option: option, shift: shift, path: route.path,
+            typing: typing, now: now)
         {
         case .ignored:
             return false

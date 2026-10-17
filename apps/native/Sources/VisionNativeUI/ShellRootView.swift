@@ -500,7 +500,9 @@ struct NativeScreenContainer: View {
                 let modifiers = press.modifiers
                 let handled = model.handleKey(
                     press.characters, command: modifiers.contains(.command), control: modifiers.contains(.control),
-                    option: modifiers.contains(.option), shift: modifiers.contains(.shift))
+                    option: modifiers.contains(.option), shift: modifiers.contains(.shift),
+                    // A focused TextField or TextEditor edits through an NSText field editor.
+                    typing: NSApp.keyWindow?.firstResponder is NSText)
                 return handled ? .handled : .ignored
             }
             .onAppear { focused = true }
