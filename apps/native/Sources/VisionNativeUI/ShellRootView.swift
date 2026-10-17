@@ -14,6 +14,10 @@ public struct ShellRootView<WebContent: View>: View {
     @State private var overlayFocusReturn = NativeOverlayFocusReturnCoordinator()
     /// The landing point at the top of a native screen (`<main>` for the skip link).
     @FocusState private var contentFocused: Bool
+    /// The page-level scroll offset of the current native screen (the topbar's title).
+    @State private var pageScroll: CGFloat = 0
+    /// The titlebar strip the topbar occupies.
+    @State private var titlebarHeight: CGFloat = 28
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -45,7 +49,7 @@ public struct ShellRootView<WebContent: View>: View {
                 .navigationSplitViewColumnWidth(min: 200, ideal: 248, max: 340)
                 .environment(\.colorScheme, theme.colorScheme)
                 // The window has no toolbar (the page draws its topbar under the traffic
-                // lights); View › Toggle Sidebar and ⌃⌘S toggle the sidebar instead.
+                // lights); NativeTopbar, View › Toggle Sidebar and ⌃⌘S toggle the sidebar instead.
                 .toolbar(removing: .sidebarToggle)
         } detail: {
             VStack(spacing: 0) {
@@ -58,6 +62,7 @@ public struct ShellRootView<WebContent: View>: View {
                         NativePageZoomView(factor: model.pageZoom) {
                             NativeScreenContainer(screen: screen, model: model)
                                 .overlay(alignment: .topLeading) { contentLanding }
+                                .background { PageScrollObserver { pageScroll = $0 } }
                                 .environment(\.colorScheme, theme.colorScheme)
                                 // The mounted destination receives cold CSV/new-transaction intents.
                                 .task(id: screen) { model.nativeIntentConsumerDidBecomeReady(for: screen) }
@@ -81,6 +86,16 @@ public struct ShellRootView<WebContent: View>: View {
                     }
                 }
             }
+            .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.top } action: { titlebarHeight = max($0, 28) }
+            .overlay(alignment: .top) {
+                if isNativeDetail {
+                    NativeTopbar(
+                        model: model, height: titlebarHeight, scrolled: pageScroll > NativeTopbar.titleThreshold
+                    )
+                    .ignoresSafeArea(.container, edges: .top)
+                }
+            }
+            .onChange(of: model.route.path) { pageScroll = 0 }
         }
         .environment(\.visionTheme, theme)
         .environment(\.visionVisualEffects, model.nativeSettings?.effectiveVisualEffects ?? "standard")
