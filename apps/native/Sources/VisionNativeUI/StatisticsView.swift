@@ -211,7 +211,9 @@ public struct StatisticsView: View {
                 if let index = months.firstIndex(where: { $0.id == chosen.id }), index > 0 {
                     let before = months[index - 1].total_income - abs(months[index - 1].total_spending)
                     HStack {
-                        MoneyText(amount: net - before, currency: currency, settings: settings)
+                        DeltaPill(
+                            net - before,
+                            label: MoneyText.text(net - before, currency: currency, settings: settings))
                         Text(strings.t("statsPage.rhythm.vsPrevious"))
                     }
                 }

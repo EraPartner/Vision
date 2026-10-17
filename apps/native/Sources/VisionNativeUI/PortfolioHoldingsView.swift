@@ -154,13 +154,12 @@ public struct PortfolioHoldingsView: View {
                         let returned = total { $0.totalAppreciation + $0.totalIncome - $0.totalFees - $0.totalTaxes }
                         figure("portfolio.totalReturn", returned, signed: true)
                         let cost = total { $0.totalBuyCost }
+                        let roi = cost > 0 ? returned / cost * 100 : 0
                         VStack(alignment: .leading, spacing: 5) {
                             Text(strings.t("portfolio.totalROI")).font(.caption).foregroundStyle(theme.secondaryLabel)
-                            Text(
-                                VisionFormat.percent(
-                                    cost > 0 ? returned / cost * 100 : 0,
-                                    digits: 1, locale: shell.settings.numberFormat.locale)
-                            ).font(.headline).monospacedDigit()
+                            DeltaPill(
+                                roi,
+                                label: VisionFormat.percent(roi, digits: 1, locale: shell.settings.numberFormat.locale))
                         }
                     } else {
                         let weightedRate = value > 0 ? total { $0.currentValue * $0.interestRate } / value : 0
@@ -315,11 +314,14 @@ public struct PortfolioHoldingsView: View {
                             Text(money(h.unrealizedGain, signed: true)).foregroundStyle(
                                 h.unrealizedGain >= 0 ? theme.gain : theme.loss
                             ).monospacedDigit()
-                            Text(
-                                (assetClass == "crypto" ? h.gainLossPercent : h.unrealizedGainPercent).map {
-                                    VisionFormat.percent($0, digits: 2, locale: shell.settings.numberFormat.locale)
-                                } ?? "—"
-                            ).font(.caption).monospacedDigit()
+                            if let percent = (assetClass == "crypto" ? h.gainLossPercent : h.unrealizedGainPercent) {
+                                DeltaPill(
+                                    percent,
+                                    label: VisionFormat.percent(
+                                        percent, digits: 2, locale: shell.settings.numberFormat.locale))
+                            } else {
+                                Text("—").font(.caption).monospacedDigit()
+                            }
                         })
                 }))
         if optionalColumns.contains("realized") {

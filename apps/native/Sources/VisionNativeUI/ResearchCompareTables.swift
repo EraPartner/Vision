@@ -32,16 +32,15 @@ struct ResearchCompareStatisticsView: View {
                                     ).font(.caption).foregroundStyle(theme.secondaryLabel)
                                 }
                             }
-                            Text(
-                                ResearchCompareStyle.percent(stats?.totalReturn, settings: shell.settings, signed: true)
-                            )
-                            .foregroundStyle(
-                                stats?.totalReturn.map { $0 >= 0 ? theme.gain : theme.loss } ?? theme.secondaryLabel
-                            )
-                            .padding(.horizontal, 7).padding(.vertical, 4)
-                            .background(
-                                (stats?.totalReturn.map { $0 >= 0 ? theme.gain : theme.loss } ?? .clear).opacity(0.1),
-                                in: Capsule())
+                            if let totalReturn = stats?.totalReturn {
+                                DeltaPill(
+                                    totalReturn,
+                                    label: ResearchCompareStyle.percent(
+                                        totalReturn, settings: shell.settings, signed: true))
+                            } else {
+                                Text(ResearchCompareStyle.percent(nil, settings: shell.settings, signed: true))
+                                    .foregroundStyle(theme.secondaryLabel)
+                            }
                             Text(
                                 ResearchCompareStyle.percent(stats?.volatility, settings: shell.settings, signed: true))
                             Text(

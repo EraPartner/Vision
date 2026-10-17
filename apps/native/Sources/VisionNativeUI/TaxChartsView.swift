@@ -322,11 +322,9 @@ struct TaxYearComparisonView: View {
     private func deltaCell(a: Decimal, b: Decimal, higherIsBetter: Bool, percent: Bool) -> some View {
         let delta = a - b
         let zero = abs(delta) < Decimal(5) / 1000
-        let color = zero ? theme.secondaryLabel : ((delta > 0) == higherIsBetter ? theme.gain : theme.loss)
-        return Text(deltaLabel(delta, baseline: b, percent: percent, zero: zero))
-            .font(.caption.weight(.medium)).monospacedDigit().foregroundStyle(color)
-            .padding(.horizontal, 8).padding(.vertical, 4)
-            .background(color.opacity(0.1), in: Capsule())
+        return DeltaPill(
+            zero ? 0 : delta, label: deltaLabel(delta, baseline: b, percent: percent, zero: zero),
+            invert: !higherIsBetter)
     }
     private func format(_ value: Decimal?, percent: Bool = false, signed: Bool = false) -> String {
         guard let value else { return "—" }

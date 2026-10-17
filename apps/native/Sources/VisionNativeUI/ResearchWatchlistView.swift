@@ -167,8 +167,8 @@ private struct ResearchWatchlistRow: View {
                         strings.t(
                             "watchlist.sinceAdded",
                             ["date": VisionFormat.appDate(item.createdAt, format: shell.settings.dateFormat)]))
-                    Text((value > 0 ? "+" : "") + ResearchWatchlistUI.percent(value, digits: 1, shell: shell))
-                        .foregroundStyle(value >= 0 ? theme.gain : theme.loss)
+                    DeltaPill(
+                        value, label: (value > 0 ? "+" : "") + ResearchWatchlistUI.percent(value, digits: 1, shell: shell))
                 }.font(.caption)
             }
             if let notes = item.notes, !notes.isEmpty {
@@ -196,11 +196,10 @@ private struct ResearchWatchlistRow: View {
                 )
                 .help(strings.t("watchlist.atTarget"))
             } else if let percent = metric?.absoluteDistancePercent, let signed = metric?.distancePercent, signed > 0 {
-                Text(
-                    ResearchWatchlistUI.percent(percent, digits: 1, shell: shell) + " "
-                        + strings.t("watchlist.aboveTarget")
-                )
-                .font(.caption).foregroundStyle(theme.loss)
+                DeltaPill(
+                    signed,
+                    label: ResearchWatchlistUI.percent(percent, digits: 1, shell: shell) + " "
+                        + strings.t("watchlist.aboveTarget"), invert: true)
             }
         }.fixedSize(horizontal: false, vertical: true)
     }

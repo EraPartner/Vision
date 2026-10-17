@@ -59,11 +59,12 @@ struct StatisticsDigestView: View {
                                 amount(row.previousAmount, currency: row.currency)
                                 Image(systemName: "arrow.right")
                                 amount(row.newAmount, currency: row.currency)
-                                Text(
-                                    VisionFormat.decimal(
+                                DeltaPill(
+                                    row.percentChange,
+                                    label: VisionFormat.decimal(
                                         row.percentChange, fractionDigits: 1, locale: settings.numberFormat.locale)
-                                        + "%"
-                                ).font(.caption)
+                                        + "%",
+                                    invert: true)
                             }
                         }
                         ForEach(data.categoryOutliers) { row in

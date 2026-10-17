@@ -167,9 +167,6 @@ public struct ResearchHomeView: View {
         }.padding(.vertical, 12).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
     }
     private func delta(_ value: Decimal) -> some View {
-        Text((value > 0 ? "+" : "") + VisionFormat.percent(value, digits: 2, locale: locale))
-            .font(.caption.weight(.medium)).monospacedDigit().foregroundStyle(value >= 0 ? theme.gain : theme.loss)
-            .padding(.horizontal, 6).padding(.vertical, 3)
-            .background((value >= 0 ? theme.gain : theme.loss).opacity(0.12), in: Capsule())
+        DeltaPill(value, label: (value > 0 ? "+" : "") + VisionFormat.percent(value, digits: 2, locale: locale))
     }
 }

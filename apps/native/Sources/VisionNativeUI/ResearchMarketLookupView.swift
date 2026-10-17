@@ -174,25 +174,29 @@ public struct ResearchMarketLookupView: View {
                     .largeTitle.weight(.semibold)
                 ).monospacedDigit()
             }
-            HStack(spacing: 6) {
-                let change = quote.change ?? 0
-                Image(systemName: change >= 0 ? "arrow.up.right" : "arrow.down.right").accessibilityHidden(true)
-                if let amount = quote.change {
-                    Text(
-                        (amount >= 0 ? "+" : "")
-                            + ResearchMarketDisplay.money(amount, currency: quote.currency, shell: shell, digits: 2))
-                }
-                if let percentage = quote.changePercent {
-                    Text(
-                        "(" + (percentage >= 0 ? "+" : "")
-                            + VisionFormat.percent(percentage, digits: 2, locale: shell.settings.numberFormat.locale)
-                            + ")")
-                }
-            }.foregroundStyle((quote.change ?? 0) >= 0 ? theme.primary : theme.destructive).monospacedDigit()
+            let changeLabel = quoteChangeLabel(quote)
+            if !changeLabel.isEmpty {
+                DeltaPill(quote.changePercent ?? quote.change ?? 0, label: changeLabel)
+            }
             if !model.isProviderAsset {
                 Text(strings.t("market.autoRefresh")).font(.caption).foregroundStyle(theme.secondaryLabel)
             }
         }
+    }
+    private func quoteChangeLabel(_ quote: ResearchQuote) -> String {
+        var parts: [String] = []
+        if let amount = quote.change {
+            parts.append(
+                (amount >= 0 ? "+" : "")
+                    + ResearchMarketDisplay.money(amount, currency: quote.currency, shell: shell, digits: 2))
+        }
+        if let percentage = quote.changePercent {
+            parts.append(
+                "(" + (percentage >= 0 ? "+" : "")
+                    + VisionFormat.percent(percentage, digits: 2, locale: shell.settings.numberFormat.locale)
+                    + ")")
+        }
+        return parts.joined(separator: " ")
     }
     private func tradingInfo(_ quote: ResearchQuote) -> some View {
         ResearchCard(title: strings.t("market.tradingInfo")) {

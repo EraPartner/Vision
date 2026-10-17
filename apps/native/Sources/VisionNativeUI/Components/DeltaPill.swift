@@ -40,6 +40,10 @@ struct DeltaPill: View {
 }
 
 extension DeltaPill {
+    init(_ value: Double, label: String, invert: Bool = false) {
+        self.init(value: value, label: label, invert: invert)
+    }
+
     init(_ value: Decimal, label: String, invert: Bool = false) {
         self.init(value: NSDecimalNumber(decimal: value).doubleValue, label: label, invert: invert)
     }

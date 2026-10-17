@@ -133,11 +133,12 @@ struct PortfolioAssetCard: View {
                     }
                     let returnAmount =
                         holding.totalAppreciation + holding.totalIncome - holding.totalFees - holding.totalTaxes
-                    LabeledContent(
-                        strings.t("portfolio.totalROI"),
-                        value: VisionFormat.percent(
-                            holding.totalBuyCost > 0 ? returnAmount / holding.totalBuyCost * 100 : 0,
-                            digits: 2, locale: shell.settings.numberFormat.locale))
+                    let roi = holding.totalBuyCost > 0 ? returnAmount / holding.totalBuyCost * 100 : 0
+                    LabeledContent(strings.t("portfolio.totalROI")) {
+                        DeltaPill(
+                            roi,
+                            label: VisionFormat.percent(roi, digits: 2, locale: shell.settings.numberFormat.locale))
+                    }
                 } else {
                     TaxMoneyRow(
                         title: strings.t("portfolio.currentBalance"), amount: holding.currentValue, shell: shell,
