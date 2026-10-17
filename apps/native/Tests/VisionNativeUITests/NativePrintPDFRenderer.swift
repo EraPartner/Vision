@@ -128,6 +128,38 @@
         }
     }
 
+    /// Printed glyphs located by their own bounds. PDFPage.selection(for:) behaves like a drag
+    /// selection over reading order, and findString needs contiguous extracted text; neither
+    /// isolates one printed column or a value that glyph positioning splits with spaces.
+    enum NativePDFGlyphs {
+        static func glyphs(_ page: PDFPage) -> [(character: Character, bounds: NSRect)] {
+            let text = (page.string ?? "") as NSString
+            return (0..<min(text.length, page.numberOfCharacters)).compactMap { index in
+                guard let character = text.substring(with: NSRange(location: index, length: 1)).first,
+                    !character.isWhitespace
+                else { return nil }
+                return (character, page.characterBounds(at: index))
+            }
+        }
+
+        /// Non-whitespace text whose glyph centres fall inside the horizontal band, in content order.
+        static func text(_ page: PDFPage, from minX: CGFloat, to maxX: CGFloat) -> String {
+            String(glyphs(page).filter { $0.bounds.midX >= minX && $0.bounds.midX <= maxX }.map(\.character))
+        }
+
+        /// The union of the glyph bounds of the first occurrence, ignoring whitespace.
+        static func bounds(of needle: String, in page: PDFPage) -> NSRect? {
+            let target = Array(needle.filter { !$0.isWhitespace })
+            let glyphs = glyphs(page)
+            guard !target.isEmpty, glyphs.count >= target.count else { return nil }
+            for start in 0...(glyphs.count - target.count)
+            where target.indices.allSatisfy({ glyphs[start + $0].character == target[$0] }) {
+                return glyphs[start..<(start + target.count)].reduce(NSRect.null) { $0.union($1.bounds) }
+            }
+            return nil
+        }
+    }
+
     @MainActor private final class NativePrintPDFCanvas: NSView {
         override var isFlipped: Bool { true }
     }

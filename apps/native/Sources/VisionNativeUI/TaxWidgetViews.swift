@@ -96,8 +96,8 @@ struct TaxRulesView: View {
     ]
     var body: some View {
         TaxCard {
-            DisclosureGroup(
-                strings.t("tax.rules.title"),
+            VisionDisclosure(
+                title: strings.t("tax.rules.title"),
                 isExpanded: Binding(
                     get: { expanded },
                     set: { value in

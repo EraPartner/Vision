@@ -130,12 +130,9 @@
             let text = compact(documents.compactMap(\.string).joined())
             #expect(!text.contains("PayeeBegin9"))
             let xs = try (1...8).map { index -> CGFloat in
-                let document = try #require(
-                    documents.first { $0.findString(String(771_000 + index), withOptions: []).first != nil })
-                let page = try #require(document.page(at: 0))
-                return try #require(document.findString(String(771_000 + index), withOptions: []).first).bounds(
-                    for: page
-                ).maxX
+                let bounds = documents.compactMap { $0.page(at: 0) }
+                    .compactMap { NativePDFGlyphs.bounds(of: String(771_000 + index), in: $0) }.first
+                return try #require(bounds, "Count \(771_000 + index) missing from: \(text)").maxX
             }
             #expect((xs.max() ?? 0) - (xs.min() ?? 0) < 1)
             for page in Set(rowPages.values) {

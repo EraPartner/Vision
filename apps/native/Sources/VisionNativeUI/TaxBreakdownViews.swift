@@ -127,8 +127,8 @@ struct TaxPITBreakdownView: View {
     }
     var body: some View {
         TaxCard {
-            DisclosureGroup(
-                strings.t("tax.pit.title"),
+            VisionDisclosure(
+                title: strings.t("tax.pit.title"),
                 isExpanded: Binding(
                     get: { expanded },
                     set: { value in
@@ -250,8 +250,8 @@ struct TaxHouseholdBreakdownView: View {
     var body: some View {
         if !data.householdBreakdownRows.isEmpty, partners.count > 1 {
             TaxCard {
-                DisclosureGroup(
-                    strings.t("tax.householdBreakdown.title"),
+                VisionDisclosure(
+                    title: strings.t("tax.householdBreakdown.title"),
                     isExpanded: Binding(
                         get: { expanded },
                         set: { value in

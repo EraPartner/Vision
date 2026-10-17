@@ -208,21 +208,19 @@
             }
             let rendered = try render(pages)
             let page = try #require(rendered.first?.page(at: 0))
-            let header = try #require(rendered.first?.findString("2026-01", withOptions: []).first)
-            let headerBounds = header.bounds(for: page)
-            let paper = page.bounds(for: .mediaBox)
-            // Select one complete printed column so adjacent wrapped numbers cannot
-            // interleave in PDFKit's full-page reading order and hide a missing suffix.
+            let headerBounds = try #require(NativePDFGlyphs.bounds(of: "2026-01", in: page))
+            // Read one complete printed column by glyph position so adjacent wrapped numbers
+            // cannot interleave in PDFKit's full-page reading order and hide a missing suffix.
             let columnWidth = (width - 32) * 0.75 / 5
-            let column = NSRect(
-                x: headerBounds.midX - columnWidth / 2, y: paper.minY,
-                width: columnWidth, height: paper.height)
-            let printedAmount = try #require(page.selection(for: column)?.string)
+            let printedAmount = NativePDFGlyphs.text(
+                page, from: headerBounds.midX - columnWidth / 2, to: headerBounds.midX + columnWidth / 2)
             let expected = MoneyText.text(Decimal(string: amount)!, currency: "EUR", settings: settings, signed: false)
-            #expect(printedAmount.filter { !$0.isWhitespace }.contains(expected.filter { !$0.isWhitespace }))
-            let labelColumn = NSRect(x: 16, y: paper.minY, width: (width - 32) * 0.25, height: paper.height)
-            let printedLabel = try #require(page.selection(for: labelColumn)?.string)
-            #expect(printedLabel.filter { !$0.isWhitespace }.contains(label.filter { !$0.isWhitespace }))
+            #expect(
+                printedAmount.contains(expected.filter { !$0.isWhitespace }),
+                "Amount column \(headerBounds): \(printedAmount)")
+            let printedLabel = NativePDFGlyphs.text(page, from: 16, to: 16 + (width - 32) * 0.25)
+            #expect(
+                printedLabel.contains(label.filter { !$0.isWhitespace }), "Label column: \(printedLabel)")
             expectTextFitsHorizontally(rendered)
             #expect(await transport.requests == reads)
         }
