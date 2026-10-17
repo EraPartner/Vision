@@ -1851,6 +1851,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     /// Both receipts accepted: the helper stands in for the renderer's `ready()` call.
     private func helperDocumentAdvanced() {
         guard helperSession?.phase == .ready, !rendererReadiness.isReady else { return }
+        logger.log("[shell] helper document ready")
         shellModel.setHelperDocumentState(.ready)
         rendererDidBecomeReady()
         // A language change during bootstrap reached neither command.
