@@ -2,8 +2,8 @@
 title: "Native parity inventory: Portfolio overview and holdings"
 type: reference
 status: active
-date: 2026-10-15
-updated: 2026-10-15
+date: 2026-10-17
+updated: 2026-10-17
 tags:
   [
     reference,
@@ -634,7 +634,9 @@ Component: `LegacyRedirect` in `apps/frontend/src/App.tsx:51`, registered from `
 
 | #   | Where | Element                               | Trigger    | What it does                                     | Source                          | Status |
 | --- | ----- | ------------------------------------- | ---------- | ------------------------------------------------ | ------------------------------- | ------ |
-| 1   | Route | Visiting `/portfolio/performance[?…]` | navigation | Replaces the history entry with `/portfolio[?…]` | `apps/frontend/src/App.tsx:130` | web    |
+| 1   | Route | Visiting `/portfolio/performance[?…]` | navigation | Replaces the history entry with `/portfolio[?…]` | `apps/frontend/src/App.tsx:130` | native |
+
+Native mapping: `NativeNavigationHistory.resolve(_:adminMode:)` in `apps/native/Sources/VisionNativeCore/Navigation/NativeNavigationHistory.swift` replaces `/portfolio/performance` with `/portfolio`, keeping the query.
 
 ## Keyboard shortcuts
 

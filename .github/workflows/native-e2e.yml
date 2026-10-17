@@ -56,7 +56,8 @@ jobs:
           echo "$RUNNER_TEMP/xcodegen/bin" >> "$GITHUB_PATH"
 
       # The packaged runtime pins PostgreSQL 18.6 exactly; build that release from source
-      # (C locale only, so no ICU) instead of relying on a runner package version.
+      # (C locale only, so no ICU) instead of relying on a runner package version. OpenSSL
+      # is required for the pgcrypto extension the migrations create.
       - name: Build PostgreSQL ${{ env.POSTGRES_VERSION }}
         run: |
           set -euo pipefail
@@ -68,7 +69,9 @@ jobs:
           (cd "$RUNNER_TEMP" && awk '{print $1"  pg.tar.bz2"}' pg.tar.bz2.sha256 | shasum -a 256 -c -)
           tar -xjf "$RUNNER_TEMP/pg.tar.bz2" -C "$RUNNER_TEMP"
           cd "$src"
-          ./configure --prefix="$RUNNER_TEMP/pg18" --without-icu --without-readline >/dev/null
+          ssl="$(brew --prefix openssl@3)"
+          ./configure --prefix="$RUNNER_TEMP/pg18" --without-icu --without-readline --with-openssl \
+            --with-includes="$ssl/include" --with-libraries="$ssl/lib" >/dev/null
           make -j"$(sysctl -n hw.ncpu)" world-bin >/dev/null
           make install-world-bin >/dev/null
           "$RUNNER_TEMP/pg18/bin/postgres" --version
