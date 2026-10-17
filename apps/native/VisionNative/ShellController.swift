@@ -85,6 +85,11 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     private var launchTask: Task<Void, Never>?
     private var pageLoadTask: Task<Void, Never>?
     private var revealTask: Task<Void, Never>?
+    /// Electron's `notify`, for the launch, audit and quit notices.
+    private lazy var notifier = SystemNotifier(appName: Self.appName, logger: logger)
+    /// Set when a launch or Retry reaches the backend; the reveal that follows posts
+    /// `app.running`, as `pollAndLoad` does once the application page has loaded.
+    private var announceRunning = false
     private var frameSaveTask: Task<Void, Never>?
     private var languageRequest = 0
     private var accentObserver: NSObjectProtocol?
@@ -1516,6 +1521,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             }
             let shell = webShell ?? makeWebShell()
             shellHost?.isHidden = true
+            announceRunning = true
             rendererDocumentChanged()
             // `loadApplicationPage`: the audit session is established before the page
             // loads; the closure timer then runs while the page is up.
@@ -1542,6 +1548,15 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         host.isHidden = false
         launchView?.isHidden = true
         if shellModel.detail == .web { window?.makeFirstResponder(webView) }
+        if announceRunning {
+            announceRunning = false
+            post(strings.t("app.running", fallback: "Vision is running."))
+        }
+    }
+
+    private func post(_ body: String) {
+        let notifier = notifier
+        Task { await notifier.post(body) }
     }
 
     /// Stops the debounced frame save and writes the current frame, then runs the
@@ -1551,7 +1566,13 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         stopHealthWatchdog()
         frameSaveTask?.cancel()
         await saveFrame()
-        await runQuitBackup()
+        switch await runQuitBackup() {
+        case .saved?: await notifier.post(strings.t("backup.done", fallback: "Backup saved."), askIfNeeded: false)
+        case .failed?:
+            await notifier.post(
+                strings.t("backup.failed", fallback: "Backup failed. Check the backup folder."), askIfNeeded: false)
+        case nil: break
+        }
         // After the quit backup, before the services stop (Electron's `will-quit`).
         await auditChannels.endSession()
     }
@@ -1577,12 +1598,18 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
 
     /// The `will-quit` backup: the database setting (else the `settings.json` mirror),
     /// resolved with the iCloud Drive default. Skipped when the runtime never became ready.
-    private func runQuitBackup() async {
-        guard await supervisor.backupRuntime() != nil else { return }
+    private func runQuitBackup() async -> QuitBackupOutcome? {
+        guard await supervisor.backupRuntime() != nil else { return nil }
         let supervisor = self.supervisor
         let raw = await BackupSettings.rawForQuit(
             baseURL: appURL, transport: settingsTransport, fallback: { await supervisor.currentSettings() })
-        await backupService.runQuitBackup(rawSettings: raw)
+        return await backupService.runQuitBackup(rawSettings: raw)
+    }
+
+    /// The last of the quit sequence (`app.stopped`), awaited so the request reaches the
+    /// notification center before the process exits. Quit never waits on a permission prompt.
+    func announceStopped() async {
+        await notifier.post(strings.t("app.stopped", fallback: "Vision has been stopped."), askIfNeeded: false)
     }
 
     // MARK: - Window
@@ -2757,10 +2784,18 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         return url.path
     }
 
-    /// Electron's `notify`. Vision Native has no notification entitlement, so the notice
-    /// goes to the log (done by `AuditChannels`) and, while the window is visible, to a
-    /// non-blocking informational sheet.
+    /// Electron's `notify`: a system notification. The notice is also logged (by
+    /// `AuditChannels`); when notifications are not allowed it falls back to a
+    /// non-blocking informational sheet while the window is visible.
     func showAuditNotice(_ message: String) {
+        let notifier = notifier
+        Task { [weak self] in
+            guard !(await notifier.post(message)) else { return }
+            self?.showAuditSheet(message)
+        }
+    }
+
+    private func showAuditSheet(_ message: String) {
         guard let window, window.isVisible, window.attachedSheet == nil else { return }
         let alert = NSAlert()
         alert.alertStyle = .informational

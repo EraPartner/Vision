@@ -2,7 +2,7 @@
 title: Vision Native App Architecture
 type: architecture-doc
 status: active
-date: 2026-10-15
+date: 2026-10-17
 updated: 2026-10-17
 tags:
   [
@@ -468,7 +468,17 @@ anchor]].
 effective settings enable it and the runtime is running. It writes a bundle without frontend state.
 A backup already in progress is awaited instead of starting a second one. The app delegate's
 45-second hard limit, Electron's will-quit timeout, covers the backup and the shutdown together.
-Failures are logged to the unified log; there are no OS notifications yet.
+Results are logged to the unified log and, like Electron's `notify`, posted as a system notification
+(`backup.done` or `backup.failed`), followed by `app.stopped` once the services stop.
+
+### System notifications
+
+`VisionNative/SystemNotifier.swift` posts Electron's `notify` notices through
+`UNUserNotificationCenter`, titled with the app name: `app.running` when a launch or Retry reveals
+the page, the audit notices (`app.auditFailed`, `app.auditUnavailable`), and the quit notices above.
+Permission is asked on the first launch notice. Quit-time notices post only when permission was
+already granted, so quitting never waits on the prompt. When notifications are not allowed, an
+audit notice falls back to an informational sheet while the window is visible.
 
 ## Audit anchor and Keychain witness (phase 1e)
 

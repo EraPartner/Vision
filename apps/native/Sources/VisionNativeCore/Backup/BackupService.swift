@@ -66,6 +66,9 @@ func runBlocking<T: Sendable>(_ work: @escaping @Sendable () throws -> T) async 
 /// `backup:is-encrypted`, `backup:get-encryption-status`, `backup:set-passphrase`) and the
 /// quit-time backup, following `packaging/electron/main.ts`, `backup/restore.ts` and
 /// `backup/crypto.ts`. Dialogs stay with the app; this type has no AppKit dependency.
+/// The quit-time backup's result, for the system notification.
+public enum QuitBackupOutcome: Equatable, Sendable { case saved, failed }
+
 public actor BackupService {
     private let context: BackupContext
     private let settings: any BackupSettingsStore
@@ -234,25 +237,29 @@ public actor BackupService {
     /// The `will-quit` backup: when the effective settings (with the iCloud Drive default)
     /// enable it, a bundle without frontend state. A backup already running is awaited
     /// instead of starting a second one. Failures are logged; the caller's quit timeout
-    /// bounds the whole step.
-    public func runQuitBackup(rawSettings: JSONValue?) async {
+    /// bounds the whole step. The outcome drives Electron's `backup.done` / `backup.failed`
+    /// notification; `nil` means no quit backup ran.
+    @discardableResult
+    public func runQuitBackup(rawSettings: JSONValue?) async -> QuitBackupOutcome? {
         if restoreInFlight {
             logger.log("warn", "[backup] quit: a restore is in progress; skipping the quit backup")
-            return
+            return nil
         }
         if let running = backupTask {
             logger.log("log", "[backup] quit: waiting for the backup already in progress")
             _ = await running.value
-            return
+            return nil
         }
         let effective = BackupSettings.resolved(rawSettings, defaultDirectory: defaultICloudBackupDirectory)
-        guard effective.backupOnQuit, !effective.backupDir.isEmpty else { return }
+        guard effective.backupOnQuit, !effective.backupDir.isEmpty else { return nil }
         let result = await runBackup(destination: effective.backupDir, frontendStateJson: nil)
         if result["success"] == .bool(true) {
             if let warning = result["warning"]?.stringValue { logger.log("warn", "[backup] \(warning)") }
             logger.log("log", "[backup] quit backup saved: \(result["file"]?.stringValue ?? "")")
+            return .saved
         } else {
             logger.log("error", "[backup] Backup on quit failed: \(result["error"]?.stringValue ?? "unknown error")")
+            return .failed
         }
     }
 

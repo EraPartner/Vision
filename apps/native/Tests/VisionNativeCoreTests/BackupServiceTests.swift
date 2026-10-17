@@ -350,7 +350,7 @@ private struct ServiceFixture {
         #expect(log.lines.contains { $0.contains("quit: waiting") })
         release.open()
         let firstResult = await first.value
-        await quit.value
+        _ = await quit.value
         #expect(firstResult["success"] == .bool(true))
         let calls = await runtime.calls
         #expect(calls.filter { $0 == "dump" }.count == 1)
@@ -359,14 +359,16 @@ private struct ServiceFixture {
     @Test func theQuitBackupFollowsTheEffectiveSettings() async throws {
         let fixture = try ServiceFixture()
         defer { fixture.remove() }
-        await fixture.service.runQuitBackup(
+        let disabled = await fixture.service.runQuitBackup(
             rawSettings: .object(["backupDir": .string(fixture.backups), "backupOnQuit": .bool(false)]))
-        await fixture.service.runQuitBackup(rawSettings: nil)
+        let unset = await fixture.service.runQuitBackup(rawSettings: nil)
+        #expect(disabled == nil && unset == nil)
         let before = await fixture.runtime.calls
         #expect(before.isEmpty)
 
-        await fixture.service.runQuitBackup(
+        let outcome = await fixture.service.runQuitBackup(
             rawSettings: .object(["backupDir": .string(fixture.backups), "backupOnQuit": .bool(true)]))
+        #expect(outcome == .saved)
         let written = try FileManager.default.contentsOfDirectory(atPath: fixture.backups)
         #expect(written.count == 1)
         #expect(fixture.log.lines.contains { $0.contains("quit backup saved") })
