@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import VisionNativeCore
 
@@ -254,9 +255,12 @@ struct NativeSidebar: View {
         .tint(Color.clear)
         .accessibilityLabel(model.strings.t("nav.primary"))
         .safeAreaInset(edge: .top, spacing: 0) {
-            HStack(spacing: 4) {
-                if model.commandPalette != nil { searchField } else { Spacer() }
-                collapseButton
+            VStack(alignment: .leading, spacing: 6) {
+                brandButton
+                HStack(spacing: 4) {
+                    if model.commandPalette != nil { searchField } else { Spacer() }
+                    collapseButton
+                }
             }
             .padding(.horizontal, 10)
             .padding(.top, 6)
@@ -390,6 +394,27 @@ struct NativeSidebar: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(model.strings.t("commandPalette.openLabel"))
+    }
+
+    /// AppSidebar's Vision logo button (`aria.toggleSidebar`): the app's icon and name; a
+    /// click toggles the sidebar like the web logo does.
+    private var brandButton: some View {
+        Button {
+            model.toggleSidebar()
+        } label: {
+            HStack(spacing: 7) {
+                Image(nsImage: NSApplication.shared.applicationIconImage)
+                    .resizable()
+                    .frame(width: 20, height: 20)
+                    .accessibilityHidden(true)
+                Text(verbatim: "Vision").font(.headline)
+                Spacer(minLength: 0)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(model.strings.t("aria.toggleSidebar"))
+        .accessibilityLabel(model.strings.t("aria.toggleSidebar"))
     }
 
     /// AppSidebar's header collapse button; ⌃⌘S and View › Toggle Sidebar bring it back.
