@@ -62,5 +62,9 @@ if (
   process.argv[1] &&
   path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 ) {
-  await buildNativeHelper();
+  const flag = process.argv.indexOf("--out-dir");
+  const outDir = flag === -1 ? undefined : process.argv[flag + 1];
+  if (flag !== -1 && !outDir) throw new Error("--out-dir requires a directory");
+  // The native runtime build passes its staged ordinary build directory.
+  await buildNativeHelper(outDir ? { outDir } : {});
 }

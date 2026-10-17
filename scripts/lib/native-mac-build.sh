@@ -98,4 +98,6 @@ EOF
   "$REPO_PATH/apps/frontend/node_modules/.bin/vite" build \
     --outDir "$VISION_FRONTEND_DIST" \
     --emptyOutDir
+  # The inert ADR-207 helper entry joins the staged build; only an opted-in Debug Demo uses it.
+  bun scripts/build-native-helper.ts --out-dir "$VISION_FRONTEND_DIST"
 }
