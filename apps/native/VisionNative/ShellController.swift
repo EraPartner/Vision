@@ -70,6 +70,9 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     /// The language the current helper document was last told, by bootstrap or locale command.
     private var helperLanguage: NativeHelperDocumentBridge.Language?
     private var hasMadeShellModel = false
+    private var healthWatchdogTask: Task<Void, Never>?
+    private let backendNoticeSource = UUID()
+    private var backendNoticeID: UUID?
     /// Helper mode only: cold CSV, new-transaction and menu intents, retained across graph
     /// rebuilds so committed history and unconsumed intents survive (ADR-207).
     private let nativeIntents = NativeShellIntentCoordinator()
@@ -1476,6 +1479,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         launchModel.state = state
         switch state {
         case .checking, .unavailable:
+            stopHealthWatchdog()
             showLaunchView()
         case .ready(let url, let backendSource):
             appURL = url
@@ -1516,6 +1520,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
                 await self?.auditChannels.applicationWillLoad()
                 guard !Task.isCancelled, let self, self.appURL == url else { return }
                 shell.load(documentURL)
+                self.startHealthWatchdog(url)
             }
         }
     }
@@ -1539,6 +1544,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     /// quit-time backup when it is enabled; the shutdown task awaits both before the
     /// runtime stops, within the 45-second quit timeout.
     func prepareForQuit() async {
+        stopHealthWatchdog()
         frameSaveTask?.cancel()
         await saveFrame()
         await runQuitBackup()
@@ -2186,6 +2192,45 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             // Role items use AppKit's standard actions (MenuController).
             break
         }
+    }
+
+    /// `startHealthWatchdog`: a lost backend ends the audit session and is announced once;
+    /// recovery re-verifies the audit history and restarts the closure timer. The renderer
+    /// still receives `backend:lost` / `backend:restored`.
+    private func startHealthWatchdog(_ url: URL) {
+        stopHealthWatchdog()
+        healthWatchdogTask = Task { [weak self] in
+            var watchdog = BackendHealthWatchdog()
+            while !Task.isCancelled {
+                try? await Task.sleep(for: BackendHealthWatchdog.interval)
+                guard !Task.isCancelled else { return }
+                let status = try? await BackendHealth.status(
+                    baseURL: url, timeout: BackendHealthWatchdog.probeTimeout)
+                guard !Task.isCancelled, let self, self.appURL == url else { return }
+                switch watchdog.record(healthy: BackendHealthWatchdog.isHealthy(status: status)) {
+                case .lost:
+                    await self.auditChannels.endSession()
+                    let message = self.shellModel.strings.t("app.backendLost")
+                    self.sendToApp(.backendLost, .object(["message": .string(message)]))
+                    self.backendNoticeID = self.shellModel.notices.publish(
+                        .init(id: 0, kind: .warning, key: "app.backendLost"), source: self.backendNoticeSource,
+                        lifetime: 30, replacementKey: "backend-health")
+                case .restored:
+                    await self.auditChannels.checkIntegrity()
+                    await self.auditChannels.startClosureTimer()
+                    self.sendToApp(.backendRestored, .null)
+                    if let id = self.backendNoticeID { self.shellModel.notices.dismiss(id) }
+                    self.backendNoticeID = nil
+                case nil:
+                    break
+                }
+            }
+        }
+    }
+
+    private func stopHealthWatchdog() {
+        healthWatchdogTask?.cancel()
+        healthWatchdogTask = nil
     }
 
     /// Applies a zoom step to the page and native screens and keeps it for the next launch.

@@ -5,6 +5,7 @@
 # Shared
 common.error
 common.retry
+app.backendLost
 layout.settings
 
 # Sidebar (generated from apps/frontend/src/lib/navigation.ts)

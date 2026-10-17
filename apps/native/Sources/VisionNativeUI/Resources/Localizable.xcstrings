@@ -17929,6 +17929,24 @@
         }
       }
     },
+    "app.backendLost": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connection to the Vision backend was lost. Reconnecting…"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verbinding met de Vision-backend verbroken. Opnieuw verbinden…"
+          }
+        }
+      }
+    },
     "aria.cancel": {
       "comment": "Generated from i18n/source by scripts/native-strings.ts.",
       "extractionState": "manual",
