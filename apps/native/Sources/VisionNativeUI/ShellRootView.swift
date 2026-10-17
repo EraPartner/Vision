@@ -40,6 +40,8 @@ public struct ShellRootView<WebContent: View>: View {
                         NativePageZoomView(factor: model.pageZoom) {
                             NativeScreenContainer(screen: screen, model: model)
                                 .environment(\.colorScheme, theme.colorScheme)
+                                // The mounted destination receives cold CSV/new-transaction intents.
+                                .task(id: screen) { model.nativeIntentConsumerDidBecomeReady(for: screen) }
                         }
                     } else if case .notFound = model.detail {
                         NativePageZoomView(factor: model.pageZoom) {

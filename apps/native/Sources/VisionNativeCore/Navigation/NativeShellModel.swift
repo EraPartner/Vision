@@ -252,7 +252,10 @@ public final class NativeShellModel {
             if self.nativeNavigation != nil { self.openNativeSettings(section: section) }
             else { self.onNavigate(.navigate(self.route.setting("settings", to: section).string)) }
         }
-        onboarding?.didComplete = { [weak self] in self?.isPresentingOnboarding = false }
+        onboarding?.didComplete = { [weak self] in
+            self?.isPresentingOnboarding = false
+            self?.nativeIntentReadinessDidChange()
+        }
         onboarding?.didMutateCategories = { [weak self] in
             self?.categories.invalidate()
             self?.home?.invalidate()

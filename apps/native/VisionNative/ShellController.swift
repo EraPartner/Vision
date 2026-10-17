@@ -67,7 +67,12 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     /// The helper document authority of the current graph generation, in helper mode only.
     private var helperSession: NativeHelperDocumentSession?
     private var helperBootstrapTask: Task<Void, Never>?
+    /// The language the current helper document was last told, by bootstrap or locale command.
+    private var helperLanguage: NativeHelperDocumentBridge.Language?
     private var hasMadeShellModel = false
+    /// Helper mode only: cold CSV, new-transaction and menu intents, retained across graph
+    /// rebuilds so committed history and unconsumed intents survive (ADR-207).
+    private let nativeIntents = NativeShellIntentCoordinator()
     private var queue = RendererMessageQueue()
     private var rendererReadiness = NativeRendererReadiness()
     private var launchTask: Task<Void, Never>?
@@ -461,6 +466,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             // The helper document has no router: native history owns every route (ADR-206).
             nativeNavigation: documentSelection == .retainedWeb
                 ? nil : NativeNavigationHistory(initial: NativeNavigationLocation(initialRoute.string) ?? .home),
+            nativeIntents: documentSelection == .retainedWeb ? nil : nativeIntents,
             hiddenSections: Self.loadHiddenSections(),
             loadSettings: {
                 await nativeSettings.load()
@@ -1003,6 +1009,10 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         }
         let changed = selection != shellModel.theme
         shellModel.theme = selection
+        if documentSelection != .retainedWeb {
+            // ElectronBridge's effect in renderer mode: vibrancy only on the effective 'enhanced' tier.
+            _ = setVibrancy(resolved.effectiveVisualEffects == "enhanced")
+        }
         lastSettingsClockRefresh = Date()
         lastSettingsDisplayPixels = pixels
         lastSettingsSystemIsDark = systemDark
@@ -1744,6 +1754,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         guard case .helperDocument(let source) = documentSelection else { return }
         helperBootstrapTask?.cancel()
         helperBootstrapTask = nil
+        helperLanguage = nil
         if helperSession?.generationID != nativeSettingsGeneration {
             helperSession?.retire()
             helperSession = NativeHelperDocumentSession(source: source, generationID: nativeSettingsGeneration)
@@ -1776,7 +1787,9 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             failHelperDocument("finish")
             return
         }
-        let command = NativeHelperDocumentBridge.Command.bootstrap(strings.language == .nl ? .nl : .en)
+        let language: NativeHelperDocumentBridge.Language = strings.language == .nl ? .nl : .en
+        let command = NativeHelperDocumentBridge.Command.bootstrap(language)
+        helperLanguage = language
         let arguments = NativeHelperDocumentBridge.arguments(for: command, provenance: provenance, source: source)
         helperBootstrapTask?.cancel()
         helperBootstrapTask = Task { [weak self] in
@@ -1829,6 +1842,38 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         guard helperSession?.phase == .ready, !rendererReadiness.isReady else { return }
         shellModel.setHelperDocumentState(.ready)
         rendererDidBecomeReady()
+        // A language change during bootstrap reached neither command.
+        updateHelperDocumentLocale()
+    }
+
+    /// The helper's fixed locale command for its unchanged source calculations' formatting.
+    private func updateHelperDocumentLocale() {
+        let language: NativeHelperDocumentBridge.Language = strings.language == .nl ? .nl : .en
+        guard let session = helperSession, session.phase == .ready, let provenance = session.provenance,
+            helperLanguage != language, let webView = webShell?.webView
+        else { return }
+        let command = NativeHelperDocumentBridge.Command.locale(language)
+        let arguments = NativeHelperDocumentBridge.arguments(
+            for: command, provenance: provenance, source: session.source)
+        helperLanguage = language
+        Task { [weak self] in
+            var accepted = false
+            if let bound = try? JSONSerialization.jsonObject(with: JSONValue.object(arguments).serialized())
+                as? [String: Any],
+                let reply = try? await webView.callAsyncJavaScript(
+                    NativeHelperDocumentBridge.script(for: command), arguments: bound, in: nil, contentWorld: .page),
+                let text = reply as? String
+            {
+                accepted =
+                    (try? NativeHelperDocumentBridge.decodeReceipt(.string(text), for: command, provenance: provenance))
+                    != nil
+            }
+            guard let self, self.helperSession?.provenance == provenance else { return }
+            if !accepted {
+                self.helperLanguage = nil
+                self.logger.warning("[shell] helper document locale update was not acknowledged")
+            }
+        }
     }
 
     private func failHelperDocument(_ stage: String) {
@@ -2054,6 +2099,13 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
 
     func run(_ command: MenuCommand) {
         guard !shellModel.isReloadingGraph else { return }
+        if case .renderer(let action) = command, documentSelection != .retainedWeb {
+            // The helper document has no renderer: native owners take every menu action.
+            if !shellModel.acceptNativeMenuAction(action) {
+                logger.warning("[shell] menu action \(action.action, privacy: .public) has no native owner")
+            }
+            return
+        }
         switch command {
         case .print:
             printCurrentPage()
@@ -2195,6 +2247,12 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             self.resolveNativeSettingsAppearance()
             self.startNativeSettingsAppearanceWatch()
             model.reloadSettings()
+            guard self.documentSelection != .retainedWeb else { return }
+            // Helper mode: queued cold and menu intents wait for document, settings and onboarding.
+            model.nativeIntentReadinessDidChange()
+            await model.settingsSettled()
+            guard isCurrentStartup() else { return }
+            model.nativeIntentReadinessDidChange()
         }
         revealWebView()
     }
@@ -2223,6 +2281,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         }
         guard request == languageRequest else { return .superseded }
         installMenus()
+        updateHelperDocumentLocale()
         return .applied
     }
 
