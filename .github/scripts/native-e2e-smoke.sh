@@ -60,11 +60,40 @@ for _ in $(seq 1 100); do
 done
 [ "$status" = "0" ] || echo "::error::$mode smoke did not reach its ready state"
 
+# Resident memory (KiB) of the app, its descendants (backend, PostgreSQL) and WebKit's
+# content/networking services, plus the app bundle size: the ADR-204 phase-4 comparison.
+measure() {
+  local pids=("$pid") frontier=("$pid") next child total=0 app_rss webkit
+  while [ "${#frontier[@]}" -gt 0 ]; do
+    next=()
+    for parent in "${frontier[@]}"; do
+      while read -r child; do [ -n "$child" ] && next+=("$child") && pids+=("$child"); done \
+        < <(pgrep -P "$parent" 2>/dev/null || true)
+    done
+    frontier=("${next[@]+"${next[@]}"}")
+  done
+  for p in "${pids[@]}"; do total=$((total + $(ps -o rss= -p "$p" 2>/dev/null || echo 0))); done
+  app_rss="$(ps -o rss= -p "$pid" 2>/dev/null | tr -d ' ' || echo 0)"
+  webkit="$(ps -axo rss=,comm= | awk '/com\.apple\.WebKit\.(WebContent|Networking|GPU)/ {s+=$1} END {print s+0}')"
+  {
+    echo "mode=$mode"
+    echo "bundle_kib=$(du -sk "$app" | cut -f1)"
+    echo "app_rss_kib=$app_rss"
+    echo "app_tree_rss_kib=$total"
+    echo "webkit_rss_kib=$webkit"
+    echo "processes=${#pids[@]}"
+  } | tee "$out/metrics-$mode.txt"
+  if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+    { echo "### $mode metrics"; echo '```'; cat "$out/metrics-$mode.txt"; echo '```'; } >>"$GITHUB_STEP_SUMMARY"
+  fi
+}
+
 if [ "$status" = "0" ]; then
   # Let native screens settle, then require the process to stay alive.
   sleep 20
   kill -0 "$pid" 2>/dev/null || { echo "::error::the app exited after startup"; status=1; }
   screencapture -x "$out/screen-$mode.png" || true
+  measure || true
 fi
 
 # A graceful Quit runs the app's own shutdown (quit backup, runtime stop); Apple events may be
