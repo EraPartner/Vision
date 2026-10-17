@@ -78,6 +78,18 @@ the diff cannot be classified. It uploads a plain and an encrypted backup bundle
 transfer written by the Swift code, and the `native-interop` job opens them on Linux with the
 Electron readers ([[docs/architecture/native-app|Vision Native App Architecture]]).
 
+The separate `Native End-to-End Smoke` workflow (`.github/workflows/native-e2e.yml`, run by
+`.github/scripts/native-e2e-smoke.sh <app> <out> <mode>`) runs on pushes to `codex/native-phase-*`
+branches and on manual dispatch, on `macos-26`. It builds PostgreSQL 18.6 with OpenSSL, the Demo
+runtime payload and the Debug `Vision Native Demo.app`, then smokes the app in `retained` (control)
+and `helper` (`VISION_NATIVE_HELPER_DOCUMENT=1`) modes. A mode passes when the app stays alive, the
+backend port from `settings.json` answers `/health` and, in helper mode, the log reports
+`helper document ready`. Each run keeps the unified log, a screenshot and a `metrics-<mode>.txt` (bundle
+size and resident memory of the app tree and WebKit services, also written to the step summary) as the
+`native-e2e` artifact. A non-blocking last step builds the Electron Demo (`--demo --dir`) and runs the
+`electron` mode, the phase-0 baseline that ADR-204's phase-4 exit compares the native numbers with
+([[docs/adr/208-vision-native-without-web-content|ADR-208]]).
+
 ## Build and release inputs
 
 | Script           | Purpose                                                                   |

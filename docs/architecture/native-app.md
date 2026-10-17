@@ -341,8 +341,11 @@ Window and Help (Keyboard Shortcuts, Source Code, Documentation). Labels that El
 `Contents/Resources/i18n/`; role items keep Electron's English labels. `app:set-language` reloads
 the strings, persists `nativeLanguage` and rebuilds the menus. Items that act in the page send
 `menu:action` through the bridge, showing the window first. From phase 2, Toggle Sidebar hides and
-shows the native sidebar instead of the page's. The Toggle Developer Tools item is
-left out: Debug builds are inspectable from Safari's Develop menu.
+shows the native sidebar instead of the page's. Debug builds add View › Toggle Developer Tools
+(`⌥⌘I`, `ApplicationMenu.build(includeDeveloperTools:)`), as Electron does for unpackaged builds;
+`WebShell.toggleInspector()` opens or closes the Web Inspector through the `_inspector` SPI and
+logs a warning when it is unavailable, so Safari's Develop menu remains the fallback. Release
+builds omit the item.
 
 The dock menu has New transaction and Home. `app:set-badge` sets the dock badge to the planned-
 payment count (0 clears it), like `app.dock.setBadge`. Electron shows no dock progress, so neither
@@ -1558,13 +1561,18 @@ later phases without a manual Demo-review intermission. See [[docs/features/sett
 ### Shell overlays and reports (phase 3p)
 
 `NativeCommandPaletteModel` and `NativeCommandPaletteView` own palette selection, recent actions,
-navigation and native shortcuts help. The fixed retained TypeScript answer callback preserves source
-calculator and currency parsing; Swift does not recreate those calculations. `NativeShellNotificationsModel`
+navigation and native shortcuts help. Inline answers are native ([[docs/adr/208-vision-native-without-web-content|ADR-208]]):
+`NativePaletteCalculator` (`Navigation/NativePaletteCalculator.swift`) ports the source's locale-aware
+arithmetic and `<amount> <cur> [in|to|naar <cur>]` conversion, and `NativePaletteRates` serves the
+exchange rates from `exchangeRates()` through a shared 10-minute cache. `ShellController` no longer
+calls `__visionNativePaletteAnswer`. `NativeShellNotificationsModel`
 owns the global FX state, Home upcoming-payment reminders and backup reminder. Their dismissal state
 uses the app-lifetime local-state queue, which drains accepted writes before restore.
 
-`lib/nativeHelperRuntime.ts` installs and retires the three existing fixed source callbacks and
-overlay keyboard bridge. `NativePaletteAnswerBridge.tsx` still owns its React lifetime, QueryClient
+`lib/nativeHelperRuntime.ts` installs and retires the fixed source callbacks and
+overlay keyboard bridge. The palette answer and the two tax-report callbacks
+(`__visionNativePaletteAnswer`, `__visionNativeTaxReportProfile`, `__visionNativeTaxReportContext`)
+are no longer called by the shell; their native replacements are described here and in ADR-208. `NativePaletteAnswerBridge.tsx` still owns its React lifetime, QueryClient
 and live translation reference; extraction does not retire the renderer or change financial logic.
 
 `NativeOverlayFocusReturn.swift` captures a weak route-window opener before the shared sheet
@@ -1588,14 +1596,15 @@ produces no success notice. Closing removes only the current route's `export` pa
 
 The hand-written binary request uses the existing `/api/reports/{type}` routes through a dedicated
 900-second client sharing `NativeDataSession`; PDF data and response headers are retained, with no
-retry. `NativeTaxReportContextService` reads the original selected-year overview and invokes the fixed
-shared TypeScript household projection. Frozen PIT/household precedence and legacy missing-household
-fields are preserved, including Decimal values and unknown household fields. For a custom year outside
-the overview API's 1900–2200 bounds, the fixed `__visionNativeTaxReportContext` callback receives a fresh,
-read-only five-key settings snapshot and uses the original source loaders, resolvers and fiscal engine.
-It neither clamps the requested year nor drops configured fiscal blocks: source-valid one-partner
-requests and source-invalid two-partner household requests retain their original result/error behavior.
-No report endpoint or fiscal formula changes.
+retry. `NativeTaxReportContextService` reads the original selected-year overview and projects the
+report's three profile fields natively with `NativeTaxReportProfile` (partner A's primary activity sets
+the employment type; region and tax year are the household's), so no shared TypeScript projection runs
+([[docs/adr/208-vision-native-without-web-content|ADR-208]]). Frozen PIT/household precedence and legacy
+missing-household fields are preserved, including Decimal values and unknown household fields. Every
+four-digit report year reads `GET /api/belgian-tax/overview`: the route now accepts years 0000 through
+9999, and a year outside the storable 1900–2200 snapshot range gets the year-pinned live estimate the
+web report fallback computes ([[docs/api/belgian-tax|Belgian Tax API]]). The former source-context
+fallback (`__visionNativeTaxReportContext`) is gone. No report endpoint or fiscal formula changes.
 
 File → Print is a separate current-page operation. `NativeTaxPrintSnapshot` freezes the already loaded
 Tax year, visible widgets, comparison year, disclosure state and deduction state. The inert presentation
@@ -1749,6 +1758,20 @@ Seven scoped coordinator tests pass with declared route/value adapters; seven fu
 tests await macOS. No existing renderer event owner is retired by this preparatory code.
 
 
+
+### Native topbar and delta chips (phase 4)
+
+`NativeTopbar` (`VisionNativeUI/Components/NativeTopbar.swift`) is AppLayout's topbar drawn by
+`ShellRootView` in the transparent titlebar strip over native detail screens: the sidebar trigger and
+search button while the sidebar is hidden, and the page title once the page scrolls past 96 pt
+(`PageScrollObserver`, reset on route change). It takes no clicks outside its buttons, so the strip
+still drags the window. `DeltaPill` (`Components/DeltaPill.swift`) is the shared change chip (tinted
+capsule with a direction arrow, `invert` for spending); the Portfolio holdings, Research and
+Statistics/Tax chart views use it in place of ad hoc chips. In helper mode, `ShellController.restoreBackup`
+(the bridge entry) refuses with "Restore is not available here" because native Settings owns restore.
+
+The Native End-to-End Smoke workflow (`.github/workflows/native-e2e.yml`) is described in
+[[docs/reference/scripts|Scripts]].
 
 ## Install
 

@@ -3,7 +3,7 @@ title: Feature - Belgian Tax
 type: feature
 status: active
 date: 2026-10-13
-updated: 2026-10-13
+updated: 2026-10-17
 tags:
   [
     feature,
@@ -107,6 +107,8 @@ hydration routines. It preserves frozen PIT and household results verbatim and r
 settings baselines. A fully frozen filing never calls the current engine. Legacy frozen PIT without
 a household breakdown retains its PIT while obtaining that missing breakdown from the engine,
 as the web store does. A read does not write an upgrade, create a snapshot, or file a year.
+The `year` query accepts any four-digit year; a year outside the storable 1900–2200 snapshot range
+gets the year-pinned live estimate, which the native report context uses for custom report periods.
 
 Vision Native now renders `/tax` with native widgets, charts, profile/year actions, deduction
 review, and CSV export. `GET /api/belgian-tax/dashboard` owns chart, attribution, frozen scaling,
