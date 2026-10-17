@@ -529,9 +529,11 @@ Right-click in the Electron window: spelling suggestions, "Add to Dictionary", t
 
 | #   | Where        | Element                                               | Trigger | What it does                             | Source                            | Status |
 | --- | ------------ | ----------------------------------------------------- | ------- | ---------------------------------------- | --------------------------------- | ------ |
-| 1   | Context menu | Spelling suggestion items                             | click   | Replaces the misspelling                 | `packaging/electron/main.ts:1457` | web    |
-| 2   | Context menu | `menu.addToDictionary` (fallback "Add to Dictionary") | click   | Adds word to the spellchecker dictionary | `packaging/electron/main.ts:1464` | web    |
-| 3   | Context menu | Cut / Copy / Paste / Select All roles                 | click   | Native editing (enabled per edit flags)  | `packaging/electron/main.ts:1471` | web    |
+| 1   | Context menu | Spelling suggestion items                             | click   | Replaces the misspelling                 | `packaging/electron/main.ts:1457` | native |
+| 2   | Context menu | `menu.addToDictionary` (fallback "Add to Dictionary") | click   | Adds word to the spellchecker dictionary | `packaging/electron/main.ts:1464` | native |
+| 3   | Context menu | Cut / Copy / Paste / Select All roles                 | click   | Native editing (enabled per edit flags)  | `packaging/electron/main.ts:1471` | native |
+
+Native mapping: native text fields and editors are AppKit-backed (`NSTextField` field editor, `NSTextView`), whose standard context menu lists spelling guesses for a misspelled word, Learn Spelling (AppKit's Add to Dictionary, saved in the system dictionary), and Cut / Copy / Paste / Select All enabled by selection and editability. No custom menu replaces it. The menu's exact contents still need a manual Mac check.
 
 ## Keyboard shortcuts
 
