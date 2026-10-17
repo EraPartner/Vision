@@ -2,8 +2,8 @@
 title: "Native parity inventory: Research and AI chat"
 type: reference
 status: active
-date: 2026-10-13
-updated: 2026-10-13
+date: 2026-10-17
+updated: 2026-10-17
 tags:
   [
     reference,
@@ -408,8 +408,11 @@ Fields:
 | 6   | Actions            | `research.lifeScenario.delete` "Delete scenario" (saved scenario only)                                       | click   | Deletes immediately and shows an undo toast `research.lifeScenario.deleted` "Scenario deleted"                               | `apps/native/Sources/VisionNativeUI/ResearchLifeScenarioViews.swift:83`                                                                      | native |
 | 7   | Undo toast         | `common.undo` "Undo"                                                                                         | click   | Writes the previous scenario list back and reloads the removed scenario                                                      | `apps/native/Sources/VisionNativeUI/ResearchLifeScenarioViews.swift:189; apps/native/Sources/VisionNativeUI/Components/ActionToast.swift:45` | native |
 
-> [!warning] Pending: Undo after leaving the page
-> Life Scenario deletion has the native eight-second Undo button and ⌘Z while its screen is mounted. The web `undoToast` registry remains available across navigation; native `ActionToast` currently belongs to its screen, and `ResearchLifeScenarioModel.didDisappear()` clears the local action. Undo after navigating away during that window is not yet parity-verified. Phase 3o must provide a shared shell toast host and Undo registry for all affected native screens.
+> [!note] Undo after leaving the page
+> Life Scenario deletion publishes its eight-second Undo to the shell's `NativeNoticeCenter`
+> (`apps/native/Sources/VisionNativeCore/Shell/NativeNoticeCenter.swift`), the native `undoToast`
+> registry. The toast and ⌘Z keep the captured restore payload after navigation;
+> `ResearchLifeScenarioModel.didDisappear()` resets only the screen state.
 
 ### `/research/charts` — Chart builder
 
