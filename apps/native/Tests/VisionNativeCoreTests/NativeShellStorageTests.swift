@@ -79,12 +79,14 @@ import Testing
             #expect(await storage.webStorage(key: "dismissed_upcoming_planned_payments", value: ids, session: false) == ids)
             #expect(
                 await storage.webStorage(key: "dismissed_upcoming_planned_payments", value: .null, session: false) == .null)
-            #expect(try await storage.store.value(for: .upcomingDismissals) != nil)
+            let dismissals = try await storage.store.value(for: .upcomingDismissals)
+            #expect(dismissals != nil)
             let review: JSONValue = .object(["mode": .string("strict")])
             let sessionKey = "vision.portfolio-import.latest-review-settings.v1"
             #expect(await storage.webStorage(key: sessionKey, value: review, session: true) == review)
             #expect(await storage.webStorage(key: sessionKey, value: .null, session: true) == .null)
-            #expect(try await storage.store.sessionValue(for: .portfolioReview) == nil)
+            let storedReview = try await storage.store.sessionValue(for: .portfolioReview)
+            #expect(storedReview == nil)
         }
     }
 
