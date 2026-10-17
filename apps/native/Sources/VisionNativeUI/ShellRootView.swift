@@ -198,6 +198,10 @@ struct NativeSidebar: View {
             footer
         }
         .background(SidebarGlassBackground())
+        // The counts' own refetch policies run for the sidebar's lifetime; a route change
+        // re-reads any count that is no longer fresh.
+        .task { await model.sidebarBadges?.run() }
+        .task(id: model.route.path) { await model.sidebarBadges?.refresh() }
     }
 
     /// Selecting a row (click or arrow keys) navigates; the selection follows the reported
@@ -250,8 +254,33 @@ struct NativeSidebar: View {
                     .foregroundStyle(Color(token: theme.glass.icon))
             }
             .tag(item.url as String?)
+            .badge(badgeText(item))
+            .badgeProminence(item.badge == .needsCategory || item.badge == .plannedDue ? .increased : .standard)
+            .accessibilityValue(badgeLabel(item))
             .listRowBackground(SidebarSelectionPill(isActive: isActive))
         }
+    }
+
+    /// `NavItemBadge`: hidden at zero, capped at 99+; "hot" counts use increased prominence.
+    private func badgeText(_ item: NavItem) -> Text? {
+        guard let badge = item.badge else { return nil }
+        let count = model.badgeCount(badge)
+        guard count > 0 else { return nil }
+        return Text(count > 99 ? "99+" : String(count))
+    }
+
+    private func badgeLabel(_ item: NavItem) -> String {
+        guard let badge = item.badge else { return "" }
+        let count = model.badgeCount(badge)
+        guard count > 0 else { return "" }
+        let key =
+            switch badge {
+            case .needsCategory: "nav.needsCategoryCount"
+            case .plannedDue: "nav.plannedDueCount"
+            case .insights: "nav.insightsCount"
+            case .monitors: "monitors.unreadCount"
+            }
+        return model.strings.t(key, ["count": String(count)])
     }
 
     private var footer: some View {

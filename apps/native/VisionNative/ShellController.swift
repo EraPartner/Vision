@@ -488,6 +488,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             onSidebarVisibilityChange: { [weak self] visible in
                 self?.deliver(.menuAction, BridgeDispatcher.menuActionPayload(.nativeSidebar(visible: visible)))
             })
+        model.sidebarBadges = NativeSidebarBadgesModel(service: client)
         model.isEditingWebText = { [weak self] in
             guard let self else { return true }
             return (try? await self.nativeSettingsScript(NativeSettingsStorageBridge.editingScript))?.boolValue ?? true

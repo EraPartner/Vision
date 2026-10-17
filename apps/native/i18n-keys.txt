@@ -9,6 +9,9 @@ layout.settings
 
 # Sidebar (generated from apps/frontend/src/lib/navigation.ts)
 nav.primary
+nav.needsCategoryCount
+nav.plannedDueCount
+nav.insightsCount
 nav.accounts
 nav.admin
 nav.adminEndpoints

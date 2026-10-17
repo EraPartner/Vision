@@ -36307,6 +36307,24 @@
         }
       }
     },
+    "nav.insightsCount": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count} new insights"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count} nieuwe inzichten"
+          }
+        }
+      }
+    },
     "nav.marketLookup": {
       "comment": "Generated from i18n/source by scripts/native-strings.ts.",
       "extractionState": "manual",
@@ -36379,6 +36397,24 @@
         }
       }
     },
+    "nav.needsCategoryCount": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count} need a category"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count} zonder categorie"
+          }
+        }
+      }
+    },
     "nav.netWorth": {
       "comment": "Generated from i18n/source by scripts/native-strings.ts.",
       "extractionState": "manual",
@@ -36393,6 +36429,24 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nettovermogen"
+          }
+        }
+      }
+    },
+    "nav.plannedDueCount": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count} due in the next 7 days"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{count} te betalen in de komende 7 dagen"
           }
         }
       }

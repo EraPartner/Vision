@@ -300,3 +300,6 @@ listAiDisclosureRecords
 deleteAiDisclosureRecords
 
 # aiChatStream uses the JSON SSE adapter; createAiResearchDocument uses MultipartFormData.
+
+# Sidebar badges (NavItemBadge): persisted undismissed insight count
+getInsightsCount

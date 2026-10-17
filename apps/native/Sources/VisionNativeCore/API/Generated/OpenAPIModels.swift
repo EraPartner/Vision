@@ -4082,6 +4082,42 @@ extension OpenAPI {
     /// A oneOf/anyOf schema, decoded as plain JSON.
     public typealias InsightDismissalRequest = JSONValue
 
+    public struct InsightsCountData: Codable, Equatable, Sendable {
+        public let count: Int?
+        public let status: String
+        public let computedAt: String?
+
+        public init(count: Int? = nil, status: String, computedAt: String? = nil) {
+            self.count = count
+            self.status = status
+            self.computedAt = computedAt
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case count = "count"
+            case status = "status"
+            case computedAt = "computed_at"
+        }
+    }
+
+    public struct InsightsCountEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let data: OpenAPI.InsightsCountData?
+        public let error: OpenAPI.ErrorPayload?
+
+        public init(ok: Bool, data: OpenAPI.InsightsCountData? = nil, error: OpenAPI.ErrorPayload? = nil) {
+            self.ok = ok
+            self.data = data
+            self.error = error
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case data = "data"
+            case error = "error"
+        }
+    }
+
     public struct InsightsDigestData: Codable, Equatable, Sendable {
         public let subscriptionCreep: SubscriptionCreep
         public let categoryOutliers: [JSONValue]

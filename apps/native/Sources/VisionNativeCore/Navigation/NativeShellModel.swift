@@ -114,6 +114,13 @@ public final class NativeShellModel {
     public let settingsAbout: NativeSettingsAboutModel?
     public let commandPalette: NativeCommandPaletteModel?
     public let shellNotifications: NativeShellNotificationsModel?
+    /// `NavItemBadge` counts; the SDK supplies it, and the sidebar shows none without it.
+    public var sidebarBadges: NativeSidebarBadgesModel?
+
+    /// The count beside a sidebar row, 0 when none is shown.
+    public func badgeCount(_ badge: NavBadge) -> Int {
+        sidebarBadges?.count(for: badge, plannedDue: shellNotifications?.upcoming.visibleUpcoming.count ?? 0) ?? 0
+    }
     public let onboarding: NativeOnboardingModel?
     public let reports: NativeReportModel?
     public let nativeFallback: Bool
