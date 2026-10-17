@@ -93,6 +93,8 @@ jobs:
           source scripts/lib/native-mac-build.sh
           prepare_native_macos_build
           cd "$REPO_PATH/packaging/electron"
+          VISION_BUN_BIN="$(command -v bun)"
+          export VISION_BUN_BIN
           bun build.ts
           VISION_NATIVE_RUNTIME_DESTINATION="$payload/native-runtime" node out/scripts/prepare-native-runtime.js
           VISION_NATIVE_PAYLOAD_ROOT="$payload/native-runtime" node out/scripts/build-demo-seed.js
