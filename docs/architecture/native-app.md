@@ -3,7 +3,7 @@ title: Vision Native App Architecture
 type: architecture-doc
 status: active
 date: 2026-10-15
-updated: 2026-10-15
+updated: 2026-10-17
 tags:
   [
     architecture,
@@ -1616,6 +1616,13 @@ printer parity. The SDK checks route, generation, restore state and overlays aga
 `NSPrintOperation` presentation. Statistics and Net worth retain their own immutable snapshots and
 inert documents. These additions do not complete the phase-3 exit gate.
 
+Print blocks are hosted in `NativePrintHostingView` (a Tax/Statistics/Net-worth replacement for
+`NSHostingView`): `NSPrintOperation` did not capture `NSHostingView` layers and PDFs were blank, so
+when not drawing to the screen the view draws the same SwiftUI root via `ImageRenderer`. Because
+`ImageRenderer` cannot draw AppKit-backed controls, the three Tax disclosures use `VisionDisclosure`,
+which prints as plain SwiftUI (title plus content when expanded) and is a `DisclosureGroup` on screen.
+macOS print/PDF test execution for this fix is still pending.
+
 The immutable combined Foundation proof passed **1,271 tests in 161 suites** for the mounted phase-3p
 Core graph (239 production and 86 test files); it excludes subsequent current-page print additions.
 Focused Reports proof passed **37 tests in two suites**. The retained source fiscal context and export
@@ -1653,15 +1660,18 @@ The detached `lib/nativeRouteAdapter.ts` delegates explicit requests to the actu
 after a native preflight lease, then observes source acceptance before reporting a commit. It adds
 no blocker, global history override or App wiring. Existing web leave guards remain authoritative;
 resolved-target admission, unified interception and host projection atomicity are still gates.
-[[docs/adr/207-vision-native-helper-document|Proposed ADR-207]] records a separate default-off
-Debug Demo helper-document strategy that avoids mounting React UI/router in a fresh session.
-It is not enabled and still requires explicit native command, locale/readiness and startup owners.
+[[docs/adr/207-vision-native-helper-document|ADR-207]] (accepted 2026-10-17) records a separate
+default-off Debug Demo helper-document strategy that avoids mounting React UI/router in a fresh
+session. The SDK now implements it behind an explicit `VISION_NATIVE_HELPER_DOCUMENT=1` opt-in,
+honoured only by a Debug build of the Demo variant with a supervised backend (see the
+implementation notes below). Default launches keep the retained web document. No opted-in Demo run
+has happened yet.
 
 Production artifact serving now reserves `/native-helper.html` and `/native-helper-assets`
 before generic static/SPA fallback. Missing helper files and noncanonical namespace requests
 terminate with 4xx instead of mounting the React app. Seven synthetic real-Express cases,
 backend typecheck/lint and a compile-only backend build pass. This serving boundary is active
-independently of the unenabled helper SDK configuration; normal routes and assets are unchanged.
+independently of the opt-in helper SDK mode; normal routes and assets are unchanged.
 See [[docs/architecture/backend-architecture|backend artifact ownership]].
 
 The default runtime's fixed TypeScript palette and fiscal helpers retain their React owner.
@@ -1693,7 +1703,8 @@ failure/missing native owners to native unavailable, and returns native Not Foun
 routes. Its infrastructure is enclosed by a hidden AppKit parent that rejects hit testing and
 accessibility children. `printDisposition` blocks helper/loading/error snapshots; the SDK checks
 it both before capture and after asynchronous print preparation. Five Core tests and four UI
-cases are authored; actual macOS validation remains required. No SDK selects helper mode yet.
+cases are authored; actual macOS validation remains required. The SDK selects helper mode only
+through the explicit opt-in described below.
 
 The dormant `NativeHelperDocumentSession` and `NativeHelperDocumentBridge` separate host authority
 from display state. Session construction requires exact Debug/Demo eligibility, an explicitly
@@ -1703,6 +1714,19 @@ physical bootstrap receipt. Fixed scripts and strict callback/receipt decoding c
 an arbitrary page or replace the existing reload/restore drains. A healthy Debug backend override
 does not prove supervisor-owned Demo provenance. The SDK still needs actual WKNavigation identity,
 bounded callback/locale ownership and current-document reconciliation before selecting this mode.
+
+The SDK now wires this behind `VISION_NATIVE_HELPER_DOCUMENT=1`. `ShellState.ready` carries
+`NativeShellBackendSource`, and `NativeHelperDocumentSelection` (`VisionNativeCore/Shell`) selects
+the helper source once, only for a Debug Demo build with a supervised backend. `WebShell` then
+installs only the helper document-start script and the `visionNativeHelper` reply handler (no
+generic bridge) and tracks `WKNavigation` objects; `ShellController` owns the helper session
+lifecycle (bootstrap receipt plus ready callback), native history with one
+`NativeShellIntentCoordinator`, native menu admission, the locale command, vibrancy from the
+effective `enhanced` tier and `StartupRedirect` ownership (`vision.startupSection` and
+`vision.lastRoute` joined `NativeSettingsStorageBridge.LocalKey`). `scripts/lib/native-mac-build.sh`
+runs `build-native-helper.ts --out-dir` into the staged frontend so the packaged runtime serves the
+helper. macOS evidence so far: the app build and 1,687 Core tests passed at `a5960a6`; UI
+print/accessibility tests are still being fixed and the opted-in Demo is unverified.
 
 Optional `NativeShellIntentCoordinator` ownership keeps cold CSV/new-transaction actions and
 native menu commands outside renderer queues. A graph lease rejects retired consumers; readiness

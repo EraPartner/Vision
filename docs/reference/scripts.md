@@ -1,7 +1,7 @@
 ---
 title: Scripts Reference
 type: reference
-date: 2026-10-15
+date: 2026-10-17
 tags:
   [
     reference,
@@ -93,7 +93,10 @@ The frontend workspace also provides the optional
 frontend build. Its isolated Vite configuration adds `dist/native-helper.html` and confines
 all bootstrap/lazy chunks to `dist/native-helper-assets/`, preserving ordinary index/assets
 and their budgets. It loads no normal preload plugin or public files. The entry stays inert
-until a trusted native host explicitly bootstraps it; building does not enable the SDK mode.
+until a trusted native host explicitly bootstraps it; building does not enable the SDK mode, which
+requires `VISION_NATIVE_HELPER_DOCUMENT=1` in a Debug Demo build. The command accepts
+`--out-dir <dir>`; `scripts/lib/native-mac-build.sh` runs it after the ordinary Vite build against
+the staged frontend directory so native runtime payloads include the helper.
 See [[docs/adr/207-vision-native-helper-document|ADR-207]] and
 [[docs/architecture/native-app|native integration gates]].
 

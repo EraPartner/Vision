@@ -3,7 +3,7 @@ title: Backend Architecture
 type: architecture
 status: active
 description: "Node.js backend architecture and diagrams. Phase 3: infoRepository split into 7 domain-specific sub-modules. Phase 9: Decimal.js enforcement on all monetary paths. Phase E: Forecast cache materialization with 6-hour TTL and nightly job. May 2026: Transaction tags as orthogonal dimension (ADR-052). June 2026: Route→service boundary enforced (ADR-067, 14 new thin seams); global API rate limiter + trusted-proxy XFF + VISION_DEV fail-safe (ADR security); mv_recipient_monthly dropped (ADR-068); @vision/shared-utils package + banker's rounding canonical (ADR-069). September 2026: transaction ownership uses the ADR-088 Account entity and canonical account_id foreign keys."
-date: 2026-10-15
+date: 2026-10-17
 last_modified: 2026-10-15
 tags: [architecture, backend, uml, plantuml, phase-3, phase-6, phase-9, phase-e, decimal, money, precision, caching, materialization, nightly-job, startup, dependency-ordering, db-polling, graceful-shutdown, signal-handling, offline-resilience, network-reachability, tags, tagging, orthogonal-dimension, route-service-boundary, thin-seams, global-rate-limiter, trusted-proxies, vision-dev, mv-recipient-monthly-drop, shared-utils, banker-rounding]
 aliases: [backend architecture, node architecture, server design]
@@ -24,7 +24,7 @@ GET/HEAD requests serve HTML with revalidation and built assets with immutable c
 Missing files, namespace aliases, traversal and directory/dotfile requests terminate with
 4xx responses rather than returning the SPA. The router uses only the configured dist root;
 normal application routes and assets retain their existing behavior. This static namespace
-adds no OpenAPI operation and does not enable helper mode in the SDK.
+adds no OpenAPI operation and does not itself enable helper mode; the SDK does so only for an opted-in Debug Demo.
 
 Seven real-Express tests use temporary synthetic artifacts and the existing error handler,
 including raw HTTP traversal requests. See [[docs/architecture/native-app|native ownership]]
