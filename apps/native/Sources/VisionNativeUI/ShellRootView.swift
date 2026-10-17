@@ -61,6 +61,11 @@ public struct ShellRootView<WebContent: View>: View {
         .environment(\.visionVisualEffects, model.nativeSettings?.effectiveVisualEffects ?? "standard")
         .environment(\.locale, Locale(identifier: model.strings.language.rawValue))
         .environment(\.nativeNoticeCenter, model.notices)
+        .overlay(alignment: .bottomTrailing) {
+            if model.settings.adminMode, let inspector = model.apiInspector {
+                NativeAPIInspectorOverlay(model: inspector).environment(\.visionTheme, theme)
+            }
+        }
         .overlay(alignment: .bottom) {
             if !model.isPresentingNativeOverlay {
                 NativeNoticeHost(

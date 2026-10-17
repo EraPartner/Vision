@@ -71,6 +71,8 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     private var helperLanguage: NativeHelperDocumentBridge.Language?
     private var hasMadeShellModel = false
     private var healthWatchdogTask: Task<Void, Never>?
+    /// One request log for the app's lifetime, across graph rebuilds, as the web's module store.
+    private let apiInspector = NativeAPIInspectorModel()
     private let backendNoticeSource = UUID()
     private var backendNoticeID: UUID?
     /// Helper mode only: cold CSV, new-transaction and menu intents, retained across graph
@@ -102,7 +104,8 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
 
     private func makeAPIClient(session: NativeDataSession? = nil, timeout: TimeInterval = 30) -> APIClient {
         let transport = URLSessionAPITransport()
-        let fenced = NativeSessionAPITransport(base: transport, streamBase: transport, session: session ?? dataSession)
+        let inspected = NativeAPIInspectorTransport(base: transport, inspector: apiInspector)
+        let fenced = NativeSessionAPITransport(base: inspected, streamBase: transport, session: session ?? dataSession)
         return APIClient(
             baseURL: { [weak self] in await self?.appURL },
             adminToken: { [weak self] in await self?.adminToken() },
@@ -492,6 +495,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
                 self?.deliver(.menuAction, BridgeDispatcher.menuActionPayload(.nativeSidebar(visible: visible)))
             })
         model.sidebarBadges = NativeSidebarBadgesModel(service: client)
+        model.apiInspector = apiInspector
         model.isEditingWebText = { [weak self] in
             guard let self else { return true }
             return (try? await self.nativeSettingsScript(NativeSettingsStorageBridge.editingScript))?.boolValue ?? true

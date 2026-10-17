@@ -116,6 +116,8 @@ public final class NativeShellModel {
     public let shellNotifications: NativeShellNotificationsModel?
     /// `NavItemBadge` counts; the SDK supplies it, and the sidebar shows none without it.
     public var sidebarBadges: NativeSidebarBadgesModel?
+    /// DevtoolsRoot's API Inspector; shown only in admin mode.
+    public var apiInspector: NativeAPIInspectorModel?
 
     /// Scroll offsets per native history visit, restored only on Back/Forward like the
     /// web table's history-entry scroll restoration.
