@@ -93,6 +93,7 @@ struct DetailGlassBackground: View {
             } else {
                 Color(token: glass.detailTint)
             }
+            AuroraCanvas()
         }
         .ignoresSafeArea()
         .accessibilityHidden(true)

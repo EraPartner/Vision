@@ -59,6 +59,8 @@ public struct ShellRootView<WebContent: View>: View {
         }
         .environment(\.visionTheme, theme)
         .environment(\.visionVisualEffects, model.nativeSettings?.effectiveVisualEffects ?? "standard")
+        .environment(\.visionWealthCanvasTint, model.route.path.hasPrefix("/portfolio"))
+        .environment(\.visionStaticAtmosphere, model.nativeSettings?.isLargeDisplay ?? false)
         .environment(\.locale, Locale(identifier: model.strings.language.rawValue))
         .environment(\.nativeNoticeCenter, model.notices)
         .overlay(alignment: .bottomTrailing) {
