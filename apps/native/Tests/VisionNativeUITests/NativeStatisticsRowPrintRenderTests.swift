@@ -132,7 +132,9 @@
             let xs = try (1...8).map { index -> CGFloat in
                 let bounds = documents.compactMap { $0.page(at: 0) }
                     .compactMap { NativePDFGlyphs.bounds(of: String(771_000 + index), in: $0) }.first
-                return try #require(bounds, "Count \(771_000 + index) missing from: \(text)").maxX
+                let layout = documents.compactMap { $0.page(at: 0).map(NativePDFGlyphs.layout) }
+                    .joined(separator: "\n---\n")
+                return try #require(bounds, "Count \(771_000 + index) missing from:\n\(layout)").maxX
             }
             #expect((xs.max() ?? 0) - (xs.min() ?? 0) < 1)
             for page in Set(rowPages.values) {

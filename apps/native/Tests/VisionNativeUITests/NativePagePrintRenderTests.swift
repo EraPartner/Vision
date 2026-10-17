@@ -219,7 +219,7 @@
             let expected = MoneyText.text(Decimal(string: amount)!, currency: "EUR", settings: settings, signed: false)
             #expect(
                 printedAmount.contains(expected.filter { !$0.isWhitespace }),
-                "Amount column \(headerBounds): \(printedAmount)")
+                "Amount column \(headerBounds): \(printedAmount)\n\(NativePDFGlyphs.layout(page))")
             // The label column is everything left of the first period column.
             let printedLabel = NativePDFGlyphs.text(page, from: 0, to: columnStart)
             #expect(

@@ -64,11 +64,12 @@ struct NativeShellPresentationStructureTests {
                 "common.loading": "Synthetic loading", "common.error": "Synthetic unavailable",
             ])
         let expected = detail == .loading ? "Synthetic loading" : "Synthetic unavailable"
+        let request = NativeAppKitTestApplication.requestAccessibilityClientMode()
         let fixture = ShellPresentationWindow(NativeShellUnavailableView(detail: detail, strings: strings))
         defer { fixture.close() }
         try fixture.settle(
             until: { accessibilityStrings(fixture.host).contains(expected) },
-            diagnostics: { accessibilityDump(fixture.host) })
+            diagnostics: { request + "\n" + accessibilityDump(fixture.host) })
         #expect(accessibilityStrings(fixture.host).contains(expected))
     }
 

@@ -1,7 +1,9 @@
 #if canImport(AppKit)
     import AppKit
+    import ApplicationServices
     import CoreGraphics
     import Testing
+    import os
 
     /// SwiftPM starts an async command-line runner, not an AppKit application.
     /// Initialize AppKit through its real launch/event-loop path before making hosts.
@@ -51,6 +53,27 @@
 
         private static func activateIgnoringOtherApps(_ application: NSApplication) {
             application.activate(ignoringOtherApps: true)
+        }
+
+        /// Asks this process's own application element for client-driven accessibility, as an
+        /// assistive client would, so SwiftUI builds its tree in-process. Runs off the main
+        /// thread while the main thread serves the request. Returns the AX result codes.
+        static func requestAccessibilityClientMode() -> String {
+            let pid = getpid()
+            let results = OSAllocatedUnfairLock<[String]?>(initialState: nil)
+            Thread.detachNewThread {
+                let application = AXUIElementCreateApplication(pid)
+                AXUIElementSetMessagingTimeout(application, 2)
+                let codes = ["AXEnhancedUserInterface", "AXManualAccessibility"].map { name in
+                    "\(name)=\(AXUIElementSetAttributeValue(application, name as CFString, kCFBooleanTrue).rawValue)"
+                }
+                results.withLock { $0 = codes }
+            }
+            let deadline = Date().addingTimeInterval(5)
+            while results.withLock({ $0 }) == nil, Date() < deadline {
+                pumpEvents(until: Date().addingTimeInterval(0.02))
+            }
+            return results.withLock { $0 }?.joined(separator: ", ") ?? "accessibility request timed out"
         }
 
         static func pumpEvents(until deadline: Date) {

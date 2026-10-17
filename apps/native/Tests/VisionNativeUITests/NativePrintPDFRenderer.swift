@@ -175,6 +175,23 @@
         }
 
         static func bounds(of needle: String, in page: PDFPage) -> NSRect? { occurrences(of: needle, in: page).first }
+
+        /// Failure diagnostics: each printed line as runs of adjacent glyphs with their x-extent.
+        static func layout(_ page: PDFPage) -> String {
+            lines(page).map { line in
+                var runs: [(minX: CGFloat, maxX: CGFloat, text: String)] = []
+                for glyph in line {
+                    if let last = runs.last, glyph.bounds.minX - last.maxX <= 3 {
+                        runs[runs.count - 1].maxX = max(last.maxX, glyph.bounds.maxX)
+                        runs[runs.count - 1].text.append(glyph.character)
+                    } else {
+                        runs.append((glyph.bounds.minX, glyph.bounds.maxX, String(glyph.character)))
+                    }
+                }
+                let y = Int(line.first?.bounds.midY ?? 0)
+                return "y\(y): " + runs.map { "[\(Int($0.minX))-\(Int($0.maxX))]\($0.text)" }.joined(separator: " ")
+            }.joined(separator: "\n")
+        }
     }
 
     @MainActor private final class NativePrintPDFCanvas: NSView {
