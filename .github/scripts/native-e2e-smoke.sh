@@ -50,9 +50,15 @@ if [ "$status" = "0" ]; then
   screencapture -x "$out/screen-$mode.png" || true
 fi
 
-logs >"$out/os-$mode.log"
-grep -E "\[shell\]|\[runtime\]|\[renderer\]|helper" "$out/os-$mode.log" | tail -80 || true
+# A graceful Quit runs the app's own shutdown (quit backup, runtime stop); Apple events may be
+# blocked on the runner, so it is bounded and falls back to signals. Not part of the verdict.
+perl -e 'alarm 20; exec @ARGV' osascript -e 'tell application "Vision Native Demo" to quit' \
+  >/dev/null 2>&1 || echo "graceful quit unavailable; falling back to SIGTERM"
+for _ in $(seq 1 45); do kill -0 "$pid" 2>/dev/null || break; sleep 1; done
 kill -TERM "$pid" 2>/dev/null || true
 for _ in $(seq 1 30); do kill -0 "$pid" 2>/dev/null || break; sleep 1; done
 kill -KILL "$pid" 2>/dev/null || true
+
+logs >"$out/os-$mode.log"
+grep -E "\[shell\]|\[runtime\]|\[renderer\]|\[backup\]|\[notify\]|helper|[Ss]hutdown" "$out/os-$mode.log" | tail -100 || true
 exit "$status"
