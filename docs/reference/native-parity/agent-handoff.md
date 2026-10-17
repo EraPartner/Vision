@@ -65,15 +65,37 @@ VoiceOver reads "Loading…" and the unavailable message on the native startup/f
 The same run's glyph dump showed the test helper mixed `page.string` and `characterBounds`
 index spaces; it now reads each character through a one-character selection.
 
+**Parity continuation (2026-10-17, after the owner's "continue until stopped")**
+
+Owner decisions: port the devtools (API Inspector and a query panel), port the visual effects
+faithfully, add a macOS end-to-end smoke job and flip the helper default once it passes, build a
+Debug Developer Tools item, cut the non-macOS About row, build a native topbar, and build the
+skip-link and Reload page equivalents. Native work since the UI gate, each pushed to this branch:
+
+- Shell: sidebar badges, search field, go-to hints, collapse button with saved state, topbar
+  (sidebar trigger, search, scroll-linked title), skip link, Reload page on the shell failure
+  state, page zoom persistence, scroll restoration on Back/Forward, backend health watchdog,
+  Debug Toggle Developer Tools, system notifications for Electron's `notify` notices.
+- Devtools: `NativeAPIInspector` (requests, metrics, queries) behind admin mode, ⌘⇧A.
+- Visual effects: aurora canvas (Metal shader), page entrance, rolling numbers, hero trend hue
+  and sheen, fetch shimmer, `DeltaPill`.
+- Planned payments: a failed list load retries once (`retry: 1`).
+- Phase 4: bridge restore fails closed in helper mode (ADR-207 restore policy); the e2e smoke
+  workflow (`native-e2e.yml`) builds PostgreSQL 18.6 with OpenSSL, the payload, the Debug Demo
+  app, then smokes the retained control and the helper mode with a graceful Quit.
+- Parity inventory: 87 rows moved to `native` by audit, plus the context menu, topbar, skip
+  link, error fallback and Developer Tools rows. Only the sidebar logo button stays `web`.
+
 **Next**
 
-1. Read the CI result for `50ce61b`; if the tree dump shows SwiftUI exposes no nodes in-process,
-   make attempt 2 or fall back as agreed.
-2. Run the opted-in Debug Demo (startup, menus, cold CSV, reload, successful/failed restore,
-   print, window drag on native screens) and record the results here.
-3. Remaining phase-4 gates from ADR-206/207: storage takeover, restore/legacy-call policy in
-   helper mode, retiring the retained renderer by default, bundle size and memory against the
-   phase-0 baseline (ADR-204 exit). Real-data switch-over stays under ADR-205.
+1. Read the latest `Native Branch Verification` and `Native End-to-End Smoke` runs; fix any
+   compile or test failure. When the helper smoke passes, flip the helper default (Debug Demo
+   first) and record the run here.
+2. Manual Mac checks owed: VoiceOver on the startup/failure screens, the text context menu,
+   window drag on native screens, notification permission prompt, topbar title on scroll.
+3. Remaining phase-4 gates from ADR-206/207: storage takeover, retiring the retained renderer
+   by default, bundle size and memory against the phase-0 baseline (ADR-204 exit). Real-data
+   switch-over stays under ADR-205.
 
 ## Resume here (2026-10-15, historical)
 
