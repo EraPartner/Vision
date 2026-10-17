@@ -39,7 +39,18 @@
             prepared = true
             application.activate()
             pumpEvents(until: Date().addingTimeInterval(0.05))
+            if !application.isActive {
+                // Cooperative activation refuses a background command-line runner;
+                // the legacy request is the remaining non-interactive path.
+                print("AppKit cooperative activation refused: \(diagnostics())")
+                activateIgnoringOtherApps(application)
+                pumpEvents(until: Date().addingTimeInterval(0.2))
+            }
             print("AppKit test context after launch: \(diagnostics())")
+        }
+
+        private static func activateIgnoringOtherApps(_ application: NSApplication) {
+            application.activate(ignoringOtherApps: true)
         }
 
         static func pumpEvents(until deadline: Date) {
