@@ -354,11 +354,15 @@ public struct HomeView: View {
                 rangeComparison: false, height: 80, selection: $netSelection, rangeStart: $netRange)
             routeRow(
                 strings.t("dashboard.stat.lastMonthIncome"),
-                route: InsightsRoutes.drill(month: months.last, type: "income").string,
+                route: InsightsRoutes.drill(
+                    month: months.last, type: "income", label: strings.t("dashboard.stat.lastMonthIncome")
+                ).string,
                 trailing: money(months.last?.total_income ?? 0))
             routeRow(
                 strings.t("dashboard.stat.lastMonthSpending"),
-                route: InsightsRoutes.drill(month: months.last, type: "expense").string,
+                route: InsightsRoutes.drill(
+                    month: months.last, type: "expense", label: strings.t("dashboard.stat.lastMonthSpending")
+                ).string,
                 trailing: money(abs(months.last?.total_spending ?? 0)))
             routeRow(
                 strings.t("dashboard.stat.totalTransactions"), route: "/transactions",
@@ -499,15 +503,34 @@ public struct HomeView: View {
                 DisclosureGroup(strings.t("cashflow.compareMethods")) {
                     Text(strings.t("cashflow.compareMethodsHelp")).foregroundStyle(theme.secondaryLabel)
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 190))]) {
+                        // The web's fixed "This month" chip marks the actual line; it never toggles.
+                        HStack(spacing: 6) {
+                            Circle().fill(theme.foreground).frame(width: 8, height: 8)
+                            Text(strings.t("cashflow.thisMonth"))
+                        }
+                        .font(.footnote)
+                        .padding(.horizontal, 8).padding(.vertical, 4)
+                        .overlay(Capsule().strokeBorder(theme.foreground.opacity(0.4)))
+                        .accessibilityElement(children: .combine)
+                        // Every method stays toggleable; a failed one carries the web's Error badge.
                         ForEach(forecast.methods) { method in
                             Toggle(
-                                method.label,
                                 isOn: Binding(
                                     get: { model.visibleMethods.contains(method.id) },
                                     set: { _ in model.toggleMethod(method.id) })
-                            )
-                            .toggleStyle(.button).disabled(method.error != nil || method.daily.isEmpty)
-                            .help(method.error ?? method.label)
+                            ) {
+                                HStack(spacing: 6) {
+                                    Text(method.label)
+                                    if method.error != nil {
+                                        Text(strings.t("cashflow.methodError"))
+                                            .font(.caption2.weight(.semibold))
+                                            .foregroundStyle(theme.destructive)
+                                            .padding(.horizontal, 5).padding(.vertical, 1)
+                                            .background(theme.destructive.opacity(0.15), in: Capsule())
+                                    }
+                                }
+                            }
+                            .toggleStyle(.button)
                         }
                     }
                 }

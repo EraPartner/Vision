@@ -1436,6 +1436,11 @@ cashflow.thisMonth
 cashflow.today
 cashflow.windowDays
 cashflow.withPlanned
+charts.deleteFailed
+charts.deleted
+charts.saveFailed
+charts.saved
+charts.updateFailed
 dashboard.accounts
 dashboard.attention
 dashboard.bankBalances

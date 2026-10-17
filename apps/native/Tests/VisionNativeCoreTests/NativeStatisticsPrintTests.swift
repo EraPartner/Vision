@@ -66,14 +66,14 @@ import Testing
         screens.model.categoryMetric = .net
         screens.model.categoryYear = 2026
         screens.model.pivotYear = 2026
-        screens.model.expandedGroups = ["id:1"]
+        screens.model.collapsedGroups = ["id:1"]
         let snapshot = try capture(screens, route)
         #expect(snapshot.sections == [.header, .pivotTable(0), .pivotTable(1), .pivotTable(2)])
         #expect(snapshot.pivotPeriods.count == 12)
         let presentation = NativeStatisticsPrintPresentation.prepare(snapshot)
         #expect(presentation.screens.model.pivotPeriods == snapshot.pivotPeriods)
         #expect(presentation.screens.model.categoryMetric == .net)
-        #expect(presentation.screens.model.expandedGroups == ["id:1"])
+        #expect(presentation.screens.model.collapsedGroups == ["id:1"])
         #expect(presentation.screens.model.categoryYear == 2026)
         #expect(presentation.screens.model.pivotYear == 2026)
     }

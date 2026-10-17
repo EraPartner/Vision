@@ -88,6 +88,19 @@ struct InsightsTests {
         #expect(NativeRoute(route.string)?.value("filter_label") == "Food & cafés")
     }
 
+    @Test func homeIncomeAndSpendingDrillsCarryTheirCardLabel() throws {
+        let month = try insightFixture(InsightMonthlySummary.self, insightMonthsJSON).months[0]
+        for (type, label) in [("income", "Latest month's income"), ("expense", "Latest month's spending")] {
+            let route = try #require(NativeRoute(InsightsRoutes.drill(month: month, type: type, label: label).string))
+            #expect(route.path == "/transactions")
+            #expect(route.value("start_date") == "2026-09-01")
+            #expect(route.value("end_date") == "2026-09-30")
+            #expect(route.value("transaction_type") == type)
+            #expect(route.value("filter_label") == label)
+            #expect(route.value("category_id") == nil && route.value("uncategorised") == nil)
+        }
+    }
+
     @Test func forecastsDisplayServerTotalsWithoutAddingScheduledPaymentsTwice() throws {
         let forecast = try insightFixture(InsightForecast.self, insightForecastJSON)
         let series = forecast.series(
@@ -675,6 +688,43 @@ struct StatisticsModelTests {
         model.pivotYear = 2026
         #expect(!model.pivotHasPrevious)
         #expect(model.pivotGroups.first?.total == 500)
+    }
+    @Test func pivotGroupsStartExpandedAndTheMasterToggleCollapsesOnlyExpandableGroups() async {
+        let model = StatisticsModel(service: HomeFixtureService(), now: { PlannedFixture.today })
+        await model.appear(settings: .defaults, route: NativeRoute("/statistics?window=all")!)
+        #expect(model.collapsedGroups.isEmpty)
+        #expect(model.pivotExpandableGroupIds == ["id:1"])
+        #expect(model.isGroupExpanded("id:1"))
+        #expect(!model.pivotAllCollapsed)
+        model.toggleAllGroups()
+        #expect(model.collapsedGroups == ["id:1"])
+        #expect(model.pivotAllCollapsed)
+        #expect(!model.isGroupExpanded("id:1"))
+        model.toggleAllGroups()
+        #expect(model.collapsedGroups.isEmpty)
+        model.toggleGroup("id:1")
+        #expect(model.pivotAllCollapsed)
+    }
+    @Test func changingThePivotYearReturnsToTheLatestPeriodWindow() async {
+        let model = StatisticsModel(service: HomeFixtureService(), now: { PlannedFixture.today })
+        await model.appear(settings: .defaults, route: NativeRoute("/statistics?window=all")!)
+        model.pivotPage = 2
+        model.pivotYear = 2026
+        #expect(model.pivotPage == 0)
+        model.pivotPage = 1
+        model.pivotYear = 2026
+        #expect(model.pivotPage == 1)
+        model.pivotYear = nil
+        #expect(model.pivotPage == 0)
+        #expect(model.pivotPageCount == max(1, (model.pivotAllPeriods.count + 11) / 12))
+    }
+    @Test func periodLabelsMatchTheWebMonthPatterns() {
+        let english = Locale(identifier: "en_US")
+        #expect(StatisticsPeriodFormat.label("2026-03", locale: english) == "Mar 2026")
+        #expect(StatisticsPeriodFormat.short("2026-03", locale: english) == "Mar 26")
+        #expect(StatisticsPeriodFormat.label("2026-13", locale: english) == "2026-13")
+        #expect(StatisticsPeriodFormat.short("Q1", locale: english) == "Q1")
+        #expect(StatisticsPeriodFormat.label("2026-01", locale: Locale(identifier: "nl_NL")).hasSuffix("2026"))
     }
 }
 

@@ -20,6 +20,8 @@ public final class SavedChartsModel {
     public private(set) var isSaving = false
     public private(set) var saveError: String?
     public var pendingDelete: OpenAPI.SavedChart?
+    /// The latest `useSavedCharts` toast, also published to the shell's notice center.
+    public private(set) var notice: ScreenNotice?
 
     @ObservationIgnored private let service: any SavedChartsService
     @ObservationIgnored private var snapshot: StatisticsSnapshot?
@@ -29,8 +31,15 @@ public final class SavedChartsModel {
     @ObservationIgnored private var previewTask: Task<Void, Never>?
     @ObservationIgnored private var revision = UUID()
     @ObservationIgnored private var strings: (any Localizing)?
+    @ObservationIgnored private var notices = NoticeCounter()
 
     public init(service: any SavedChartsService) { self.service = service }
+    public func attachNotices(_ center: NativeNoticeCenter) {
+        notices.attach(center) { [weak self] in self?.clearNotice($0) }
+    }
+    public func clearNotice(_ id: Int) {
+        if notice?.id == id { notice = nil }
+    }
     public func appear(snapshot: StatisticsSnapshot, currency: String, strings: any Localizing) async {
         self.strings = strings
         if self.currency != currency || self.snapshot != snapshot {
@@ -135,6 +144,7 @@ public final class SavedChartsModel {
         isLoading = false
         isSaving = true
         saveError = nil
+        let isUpdate = editingId != nil
         do {
             let saved = try await service.saveChart(id: editingId, draft: draft)
             if let index = charts.firstIndex(where: { $0.id == saved.id }) {
@@ -146,9 +156,12 @@ public final class SavedChartsModel {
             close()
             datasets.removeValue(forKey: saved.id)
             errors.removeValue(forKey: saved.id)
+            // The web update mutation invalidates silently; only a create toasts success.
+            if !isUpdate { post(.success, "charts.saved") }
         } catch {
             saveError = error.localizedDescription
             isSaving = false
+            post(.error, isUpdate ? "charts.updateFailed" : "charts.saveFailed", detail: errorText(error))
         }
         if let snapshot, let strings { await appear(snapshot: snapshot, currency: currency, strings: strings) }
     }
@@ -165,9 +178,22 @@ public final class SavedChartsModel {
             datasets.removeValue(forKey: chart.id)
             errors.removeValue(forKey: chart.id)
             pendingDelete = nil
-        } catch { mutationError = error.localizedDescription }
+            post(.success, "charts.deleted")
+        } catch {
+            mutationError = error.localizedDescription
+            post(.error, "charts.deleteFailed", detail: errorText(error))
+        }
         isSaving = false
         if let snapshot, let strings { await appear(snapshot: snapshot, currency: currency, strings: strings) }
         if let mutationError { error = mutationError }
+    }
+
+    private func post(_ kind: ScreenNotice.Kind, _ key: String, detail: String? = nil) {
+        notice = notices.make(kind, key, detail: detail)
+    }
+    /// `apiErrorToMessage`; before the first appear there are no strings, so the raw text stays.
+    private func errorText(_ error: any Error) -> String {
+        guard let strings else { return error.localizedDescription }
+        return APIErrorMessage.text(APIError.wrapping(error), strings: strings)
     }
 }

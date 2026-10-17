@@ -16,9 +16,11 @@ public final class StatisticsModel {
     public var recipientQuery = LocalTableQuery()
     public var categoryMetric: StatisticsMetric = .absolute
     public var categoryYear: Int?
-    public var pivotYear: Int?
+    /// Changing the year returns the pivot to its latest period window, as the web `selectYear` does.
+    public var pivotYear: Int? { didSet { if pivotYear != oldValue { pivotPage = 0 } } }
     public var recipientYear: Int?
-    public var expandedGroups: Set<String> = []
+    /// Groups start expanded; the web pivot tracks the groups a viewer collapsed.
+    public var collapsedGroups: Set<String> = []
     public var pivotPage = 0
     public var recipientVisibleCount = 50
     public var flowYear: Int
@@ -75,7 +77,7 @@ public final class StatisticsModel {
         categoryYear = value.categoryYear
         pivotYear = value.pivotYear
         recipientYear = value.recipientYear
-        expandedGroups = value.expandedGroups
+        collapsedGroups = value.collapsedGroups
         pivotPage = value.pivotPage
         flowYear = value.flowYear
         flow = value.flow
@@ -210,6 +212,7 @@ public final class StatisticsModel {
             pivotYear.map { period.hasPrefix(String($0) + "-") } ?? true
         }
     }
+    public var pivotPageCount: Int { max(1, (pivotAllPeriods.count + 11) / 12) }
     public var pivotHasPrevious: Bool { (pivotPage + 1) * 12 < pivotAllPeriods.count }
     public var pivotPeriods: [String] {
         let periods = pivotAllPeriods
@@ -219,10 +222,18 @@ public final class StatisticsModel {
     public var pivotGroups: [StatisticsCategoryGroup] {
         data(for: "pivotTable")?.categoryGroups(metric: categoryMetric, periods: Set(pivotAllPeriods)) ?? []
     }
-    public func expandAllGroups() { expandedGroups = Set(pivotGroups.filter(\.isExpandable).map(\.id)) }
-    public func collapseAllGroups() { expandedGroups = [] }
+    public var pivotExpandableGroupIds: [String] { pivotGroups.filter(\.isExpandable).map(\.id) }
+    /// `computeMasterToggleState(...).allCollapsed`: false when nothing can expand.
+    public var pivotAllCollapsed: Bool {
+        let ids = pivotExpandableGroupIds
+        return !ids.isEmpty && ids.allSatisfy(collapsedGroups.contains)
+    }
+    public func isGroupExpanded(_ id: String) -> Bool { !collapsedGroups.contains(id) }
+    public func expandAllGroups() { collapsedGroups = [] }
+    public func collapseAllGroups() { collapsedGroups = Set(pivotExpandableGroupIds) }
+    public func toggleAllGroups() { if pivotAllCollapsed { expandAllGroups() } else { collapseAllGroups() } }
     public func toggleGroup(_ id: String) {
-        if expandedGroups.contains(id) { expandedGroups.remove(id) } else { expandedGroups.insert(id) }
+        if collapsedGroups.contains(id) { collapsedGroups.remove(id) } else { collapsedGroups.insert(id) }
     }
     public func pivotDrill(categoryIds: [Int], period: String?, label: String, uncategorised: Bool = false)
         -> NativeRoute

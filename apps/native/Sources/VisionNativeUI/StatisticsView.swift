@@ -24,6 +24,13 @@ public struct StatisticsView: View {
     private var strings: any Localizing { shell.strings }
     private var settings: NativeAppSettings { shell.settings }
     private var currency: String { settings.defaultCurrency }
+    private var languageLocale: Locale { LanguageLocale.locale(strings.language) }
+    private func periodLabel(_ period: String) -> String {
+        StatisticsPeriodFormat.label(period, locale: languageLocale)
+    }
+    private func periodShort(_ period: String) -> String {
+        StatisticsPeriodFormat.short(period, locale: languageLocale)
+    }
 
     private var includesPivot: Bool {
         guard let printSection else { return true }
@@ -107,13 +114,13 @@ public struct StatisticsView: View {
             }.padding(24).frame(maxWidth: 1280, alignment: .leading).frame(maxWidth: .infinity)
         }
         .task(id: shell.route.string + currency + String(shell.settingsRevision)) { await reload() }
+        // Saved-chart toasts go to the shell's notice host, like the screens it wires itself.
         .onDisappear {
             model.printLocalState = .init()
             screens.saved.printLocalState = .init()
         }
         .sheet(isPresented: $customize) { StatisticsWidgetsSheet(model: model, strings: strings) }
         .onChange(of: model.recipientQuery) { _, _ in model.recipientVisibleCount = settings.defaultPageSize }
-        .onChange(of: model.pivotYear) { _, _ in model.pivotPage = 0 }
     }
 
     @ViewBuilder private var content: some View {
@@ -202,7 +209,7 @@ public struct StatisticsView: View {
                     strings.t(
                         "statsPage.rhythm.netIn",
                         [
-                            "month": chosen.id
+                            "month": periodLabel(chosen.id)
                                 + (chosen.id == model.currentPeriod ? " " + strings.t("statsPage.rhythm.soFar") : "")
                         ])
                 )
@@ -230,11 +237,11 @@ public struct StatisticsView: View {
                 HStack {
                     LabeledContent(
                         strings.t("statsPage.rhythm.strongest"),
-                        value: extremes.best.id + " · "
+                        value: periodLabel(extremes.best.id) + " · "
                             + money(extremes.best.total_income - abs(extremes.best.total_spending)))
                     LabeledContent(
                         strings.t("statsPage.rhythm.toughest"),
-                        value: extremes.worst.id + " · "
+                        value: periodLabel(extremes.worst.id) + " · "
                             + money(extremes.worst.total_income - abs(extremes.worst.total_spending)))
                     LabeledContent(
                         strings.t("statsPage.rhythm.inTheBlack"), value: "\(extremes.positive)/\(extremes.count)")
@@ -327,21 +334,29 @@ public struct StatisticsView: View {
                         }
                     }.frame(maxWidth: 220)
                     yearPicker(Binding(get: { model.pivotYear }, set: { model.pivotYear = $0 }))
-                    Button(strings.t("statsPage.pivot.expandAll")) { model.expandAllGroups() }
-                    Button(strings.t("statsPage.pivot.collapseAll")) { model.collapseAllGroups() }
+                    if !model.pivotExpandableGroupIds.isEmpty {
+                        Button(
+                            strings.t(
+                                model.pivotAllCollapsed ? "statsPage.pivot.expandAll" : "statsPage.pivot.collapseAll")
+                        ) { model.toggleAllGroups() }
+                    }
                 }
             } else {
                 Text(
                     strings.t("statsPage.pivot.metric.\(model.categoryMetric.rawValue)") + " · "
                         + (model.pivotYear.map(String.init) ?? strings.t("statsPage.allYears")))
             }
-            HStack {
-                if !isPrinting {
+            if isPrinting {
+                Text((displayedPivotPeriods.first ?? "") + " – " + (displayedPivotPeriods.last ?? "")).font(.caption)
+            } else if model.pivotPageCount > 1 {
+                HStack {
                     Button(strings.t("common.previous")) { model.pivotPage += 1 }
                         .disabled(!model.pivotHasPrevious)
-                }
-                Text((displayedPivotPeriods.first ?? "") + " – " + (displayedPivotPeriods.last ?? "")).font(.caption)
-                if !isPrinting {
+                    Text(
+                        displayedPivotPeriods.first.map { first in
+                            periodShort(first) + " – " + periodShort(displayedPivotPeriods.last ?? first)
+                        } ?? "—"
+                    ).font(.caption).monospacedDigit()
                     Button(strings.t("common.next")) { model.pivotPage = max(0, model.pivotPage - 1) }.disabled(
                         model.pivotPage == 0)
                 }
@@ -361,18 +376,18 @@ public struct StatisticsView: View {
                                         model.toggleGroup(group.id)
                                     } label: {
                                         Image(
-                                            systemName: model.expandedGroups.contains(group.id)
+                                            systemName: model.isGroupExpanded(group.id)
                                                 ? "chevron.down" : "chevron.right")
                                     }.buttonStyle(.plain)
                                         .accessibilityLabel(
                                             strings.t(
-                                                model.expandedGroups.contains(group.id)
+                                                model.isGroupExpanded(group.id)
                                                     ? "statsPage.pivot.collapseGroup" : "statsPage.pivot.expandGroup",
                                                 ["name": group.name]))
                                 }
                                 Text(group.name).fontWeight(.semibold)
                             }.frame(height: 32)
-                            if model.expandedGroups.contains(group.id) {
+                            if group.isExpandable, model.isGroupExpanded(group.id) {
                                 ForEach(group.children) { child in
                                     Text(child.name).padding(.leading, CGFloat(max(1, child.path.count - 1)) * 10)
                                         .frame(
@@ -386,7 +401,7 @@ public struct StatisticsView: View {
                         VStack(alignment: .leading, spacing: 0) {
                             HStack(spacing: 0) {
                                 ForEach(displayedPivotPeriods, id: \.self) { period in
-                                    Text(period).frame(width: pivotColumnWidth, height: 32)
+                                    Text(periodShort(period)).frame(width: pivotColumnWidth, height: 32)
                                 }
                                 Text(strings.t("statsPage.total")).frame(width: pivotColumnWidth, height: 32)
                             }.font(.caption.weight(.semibold))
@@ -394,7 +409,7 @@ public struct StatisticsView: View {
                                 pivotRow(
                                     values: group.values, ids: group.categoryIds, name: group.name,
                                     uncategorised: group.categoryIds.isEmpty)
-                                if model.expandedGroups.contains(group.id) {
+                                if group.isExpandable, model.isGroupExpanded(group.id) {
                                     ForEach(group.children) { child in
                                         pivotRow(values: child.values, ids: child.categoryIds, name: child.name)
                                     }
@@ -434,7 +449,7 @@ public struct StatisticsView: View {
             }.font(.caption.weight(.semibold))
             ForEach(model.pivotGroups) { group in
                 printPivotRow(name: group.name, values: group.values).fontWeight(.semibold)
-                if model.expandedGroups.contains(group.id) {
+                if group.isExpandable, model.isGroupExpanded(group.id) {
                     ForEach(group.children) { child in
                         printPivotRow(
                             name: child.name, values: child.values,
@@ -758,7 +773,7 @@ public struct StatisticsView: View {
                         id: group.id,
                         values: [group.name] + periods.map { money(group.values[$0] ?? 0) } + [money(group.total)],
                         emphasized: true))
-                if model.expandedGroups.contains(group.id) {
+                if group.isExpandable, model.isGroupExpanded(group.id) {
                     rows += group.children.map { child in
                         .init(
                             id: group.id + "." + child.id,

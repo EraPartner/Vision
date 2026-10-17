@@ -300,6 +300,7 @@ public final class NativeShellModel {
         categories.attach(self)
         recipients.attach(self)
         transactions.attachNotices(notices)
+        statistics?.saved.attachNotices(notices)
         recipients.attachNotices(notices)
         categories.attachNotices(notices)
         planned.attachNotices(notices)

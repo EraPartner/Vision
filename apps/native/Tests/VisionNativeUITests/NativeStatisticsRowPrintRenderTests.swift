@@ -43,10 +43,10 @@
             let (screens, transport, route) = try await loaded("categories")
             screens.model.pivotYear = 2026
             screens.model.categoryMetric = .expense
-            screens.model.expandedGroups = ["id:1"]
+            screens.model.collapsedGroups = []
             let presentation = try capture(screens, route: route)
             let before = await transport.requests
-            screens.model.expandedGroups = []
+            screens.model.collapsedGroups = ["id:1"]
             screens.model.pivotYear = 2008
             let pages = NativePagePrintPagesView(printInfo: paper(width: width, height: 340)) { width in
                 NativeStatisticsPrintDocument.printBlocks(
@@ -65,7 +65,7 @@
             try expectSamePage(documents, first: "ChildBegin", last: "ChildEnd")
             let footers = descendants(pages).filter { $0.identifier?.rawValue == "statistics.pivotTable:0.footer" }
             #expect(footers.count == 1)
-            #expect(presentation.snapshot.pivotYear == 2026 && presentation.snapshot.expandedGroups == ["id:1"])
+            #expect(presentation.snapshot.pivotYear == 2026 && presentation.snapshot.collapsedGroups.isEmpty)
             let first = try #require(documents.first)
             let page = try #require(first.page(at: 0))
             let january = try #require(first.findString("2026-01", withOptions: []).last).bounds(for: page)
@@ -85,6 +85,7 @@
 
         @Test func allPivotColumnWindowsAndChangedMarginsReuseOnlyFrozenValues() async throws {
             let (screens, transport, route) = try await loaded("categories")
+            screens.model.collapsedGroups = ["id:1"]
             let presentation = try capture(screens, route: route)
             let before = await transport.requests
             let info = paper(width: 451, height: 800)

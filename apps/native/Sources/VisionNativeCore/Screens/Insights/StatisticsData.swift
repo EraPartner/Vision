@@ -19,6 +19,32 @@ public enum StatisticsWindow: String, Sendable, CaseIterable {
     }
 }
 
+/// `formatPeriodLabel` and `formatPeriodShort` (features/statistics/statisticsUtils.ts): a
+/// `YYYY-MM` period as `MMM yyyy` or `MMM yy` in the app language; anything else unchanged.
+public enum StatisticsPeriodFormat {
+    public static func label(_ period: String, locale: Locale) -> String {
+        format(period, pattern: "MMM yyyy", locale: locale)
+    }
+    public static func short(_ period: String, locale: Locale) -> String {
+        format(period, pattern: "MMM yy", locale: locale)
+    }
+    private static func format(_ period: String, pattern: String, locale: Locale) -> String {
+        let parts = period.split(separator: "-", omittingEmptySubsequences: false)
+        guard parts.count == 2, parts[0].count == 4, parts[1].count == 2, let year = Int(parts[0]),
+            let month = Int(parts[1]), (1...12).contains(month)
+        else { return period }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .gmt
+        guard let date = calendar.date(from: DateComponents(year: year, month: month, day: 1)) else { return period }
+        let formatter = DateFormatter()
+        formatter.calendar = calendar
+        formatter.timeZone = calendar.timeZone
+        formatter.locale = locale
+        formatter.dateFormat = pattern
+        return formatter.string(from: date)
+    }
+}
+
 public enum StatisticsTab: String, CaseIterable, Sendable {
     case overview, categories, recipients, yearly, flow, custom
     public var labelKey: String { self == .custom ? "customChart.tab" : "statsPage.tab.\(rawValue)" }

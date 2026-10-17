@@ -153,6 +153,58 @@ struct InsightsRaceTests {
         #expect(!model.isSaving)
         #expect(mutation == .delete ? model.charts.isEmpty : model.charts.first?.name == "Updated synthetic chart")
     }
+
+    @Test func savedChartMutationsPublishTheWebToasts() async throws {
+        let service = RaceSavedChartsService()
+        let model = SavedChartsModel(service: service)
+        let center = NativeNoticeCenter(automaticExpiry: false)
+        model.attachNotices(center)
+        let strings = DictionaryStrings(language: .en, table: [:])
+        await model.appear(snapshot: try raceSnapshot(), currency: "EUR", strings: strings)
+        let original = try #require(model.charts.first)
+
+        model.begin()
+        model.draft?.name = "Created synthetic chart"
+        model.draft?.allCategories = true
+        await model.save()
+        #expect(model.notice?.key == "charts.saved")
+        #expect(model.notice?.kind == .success)
+        #expect(center.entries.map(\.notice.key) == ["charts.saved"])
+
+        model.begin(chart: original)
+        model.draft?.name = "Updated synthetic chart"
+        await model.save()
+        #expect(center.entries.count == 1)  // The web update succeeds without a toast.
+
+        model.pendingDelete = original
+        await model.confirmDelete()
+        #expect(model.notice?.key == "charts.deleted")
+
+        await service.failNextMutations()
+        let remaining = try #require(model.charts.first)
+        model.begin()
+        model.draft?.name = "Failed synthetic chart"
+        model.draft?.allCategories = true
+        await model.save()
+        #expect(model.notice?.key == "charts.saveFailed")
+        #expect(model.notice?.kind == .error)
+        #expect(model.notice?.detail?.isEmpty == false)
+        model.close()
+        model.begin(chart: remaining)
+        model.draft?.name = "Failed update"
+        await model.save()
+        #expect(model.notice?.key == "charts.updateFailed")
+        model.close()
+        model.pendingDelete = remaining
+        await model.confirmDelete()
+        #expect(model.notice?.key == "charts.deleteFailed")
+        #expect(
+            Array(center.entries.map(\.notice.key).suffix(3))
+                == ["charts.saveFailed", "charts.updateFailed", "charts.deleteFailed"])
+        let last = try #require(model.notice)
+        model.clearNotice(last.id)
+        #expect(model.notice == nil)
+    }
 }
 
 /// Gates capture the response before suspending; releasing a request after a write
@@ -264,6 +316,8 @@ private actor RaceSavedChartsService: SavedChartsService {
     private let readGate = InsightsResponseGate<[OpenAPI.SavedChart]>()
     private let mutationGate = InsightsResponseGate<Bool>()
     private(set) var readCount = 0
+    private var failMutations = false
+    func failNextMutations() { failMutations = true }
     func pauseNextRead() { pauseRead = true }
     func pauseNextMutation() { pauseMutation = true }
     func waitForRead() async { await readGate.wait() }
@@ -284,8 +338,10 @@ private actor RaceSavedChartsService: SavedChartsService {
             pauseMutation = false
             _ = await mutationGate.suspend(true)
         }
-        let saved = raceChart(id: id ?? 1, draft: draft)
-        charts = [saved]
+        if failMutations { throw APIError.invalidRequest("Synthetic chart failure") }
+        let saved = raceChart(id: id ?? charts.count + 1, draft: draft)
+        charts.removeAll { $0.id == saved.id }
+        charts.append(saved)
         return saved
     }
     func deleteSavedChart(id: Int) async throws {
@@ -293,6 +349,7 @@ private actor RaceSavedChartsService: SavedChartsService {
             pauseMutation = false
             _ = await mutationGate.suspend(true)
         }
+        if failMutations { throw APIError.invalidRequest("Synthetic chart failure") }
         charts.removeAll { $0.id == id }
     }
     func customRecipientPivot(currency: String, draft: CustomChartDraft) async throws -> CustomRecipientPivot {

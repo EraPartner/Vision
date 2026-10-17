@@ -39,7 +39,7 @@ public struct NativeStatisticsPrintSnapshot: Sendable {
     public let categoryYear: Int?
     public let pivotYear: Int?
     public let recipientYear: Int?
-    public let expandedGroups: Set<String>
+    public let collapsedGroups: Set<String>
     public let pivotPeriods: [String]
     public let pivotPage: Int
     public let flowYear: Int
@@ -116,7 +116,7 @@ public struct NativeStatisticsPrintSnapshot: Sendable {
         categoryYear = model.categoryYear
         pivotYear = model.pivotYear
         recipientYear = model.recipientYear
-        expandedGroups = model.expandedGroups
+        collapsedGroups = model.collapsedGroups
         pivotPeriods = model.pivotPeriods
         pivotPage = model.pivotPage
         flowYear = model.flowYear
