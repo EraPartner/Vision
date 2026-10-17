@@ -118,6 +118,7 @@ jobs:
         run: bash .github/scripts/native-e2e-smoke.sh "$VISION_E2E_APP" "$RUNNER_TEMP/e2e" retained
 
       - name: Smoke the helper document mode
+        if: ${{ !cancelled() }}
         run: bash .github/scripts/native-e2e-smoke.sh "$VISION_E2E_APP" "$RUNNER_TEMP/e2e" helper
 
       - name: Upload smoke logs and screenshots
