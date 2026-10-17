@@ -208,17 +208,20 @@
             }
             let rendered = try render(pages)
             let page = try #require(rendered.first?.page(at: 0))
-            let headerBounds = try #require(NativePDFGlyphs.bounds(of: "2026-01", in: page))
+            // The page subtitle's period range also starts with 2026-01; the table's column
+            // header is the lowest occurrence on the page.
+            let headerBounds = try #require(NativePDFGlyphs.occurrences(of: "2026-01", in: page).last)
             // Read one complete printed column by glyph position so adjacent wrapped numbers
             // cannot interleave in PDFKit's full-page reading order and hide a missing suffix.
             let columnWidth = (width - 32) * 0.75 / 5
-            let printedAmount = NativePDFGlyphs.text(
-                page, from: headerBounds.midX - columnWidth / 2, to: headerBounds.midX + columnWidth / 2)
+            let columnStart = headerBounds.midX - columnWidth / 2
+            let printedAmount = NativePDFGlyphs.text(page, from: columnStart, to: headerBounds.midX + columnWidth / 2)
             let expected = MoneyText.text(Decimal(string: amount)!, currency: "EUR", settings: settings, signed: false)
             #expect(
                 printedAmount.contains(expected.filter { !$0.isWhitespace }),
                 "Amount column \(headerBounds): \(printedAmount)")
-            let printedLabel = NativePDFGlyphs.text(page, from: 16, to: 16 + (width - 32) * 0.25)
+            // The label column is everything left of the first period column.
+            let printedLabel = NativePDFGlyphs.text(page, from: 0, to: columnStart)
             #expect(
                 printedLabel.contains(label.filter { !$0.isWhitespace }), "Label column: \(printedLabel)")
             expectTextFitsHorizontally(rendered)

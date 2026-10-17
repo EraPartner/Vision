@@ -129,35 +129,52 @@
     }
 
     /// Printed glyphs located by their own bounds. PDFPage.selection(for:) behaves like a drag
-    /// selection over reading order, and findString needs contiguous extracted text; neither
-    /// isolates one printed column or a value that glyph positioning splits with spaces.
+    /// selection over reading order, and findString needs contiguous extracted text; ImageRenderer
+    /// output interleaves neighbouring cells in content order. Glyphs are therefore grouped into
+    /// printed lines by baseline and read left to right, top line first.
     enum NativePDFGlyphs {
-        static func glyphs(_ page: PDFPage) -> [(character: Character, bounds: NSRect)] {
+        typealias Glyph = (character: Character, bounds: NSRect)
+
+        static func lines(_ page: PDFPage) -> [[Glyph]] {
             let text = (page.string ?? "") as NSString
-            return (0..<min(text.length, page.numberOfCharacters)).compactMap { index in
+            let glyphs: [Glyph] = (0..<min(text.length, page.numberOfCharacters)).compactMap { index in
                 guard let character = text.substring(with: NSRange(location: index, length: 1)).first,
                     !character.isWhitespace
                 else { return nil }
                 return (character, page.characterBounds(at: index))
             }
-        }
-
-        /// Non-whitespace text whose glyph centres fall inside the horizontal band, in content order.
-        static func text(_ page: PDFPage, from minX: CGFloat, to maxX: CGFloat) -> String {
-            String(glyphs(page).filter { $0.bounds.midX >= minX && $0.bounds.midX <= maxX }.map(\.character))
-        }
-
-        /// The union of the glyph bounds of the first occurrence, ignoring whitespace.
-        static func bounds(of needle: String, in page: PDFPage) -> NSRect? {
-            let target = Array(needle.filter { !$0.isWhitespace })
-            let glyphs = glyphs(page)
-            guard !target.isEmpty, glyphs.count >= target.count else { return nil }
-            for start in 0...(glyphs.count - target.count)
-            where target.indices.allSatisfy({ glyphs[start + $0].character == target[$0] }) {
-                return glyphs[start..<(start + target.count)].reduce(NSRect.null) { $0.union($1.bounds) }
+            var lines: [(midY: CGFloat, glyphs: [Glyph])] = []
+            for glyph in glyphs.sorted(by: { $0.bounds.midY > $1.bounds.midY }) {
+                if let last = lines.last, abs(last.midY - glyph.bounds.midY) <= max(1, glyph.bounds.height * 0.4) {
+                    lines[lines.count - 1].glyphs.append(glyph)
+                } else {
+                    lines.append((glyph.bounds.midY, [glyph]))
+                }
             }
-            return nil
+            return lines.map { $0.glyphs.sorted { $0.bounds.minX < $1.bounds.minX } }
         }
+
+        /// Non-whitespace text whose glyph centres fall inside the horizontal band, line by line.
+        static func text(_ page: PDFPage, from minX: CGFloat, to maxX: CGFloat) -> String {
+            lines(page).map { line in
+                String(line.filter { $0.bounds.midX >= minX && $0.bounds.midX <= maxX }.map(\.character))
+            }.joined()
+        }
+
+        /// Union bounds of every occurrence within one printed line, top first, ignoring whitespace.
+        static func occurrences(of needle: String, in page: PDFPage) -> [NSRect] {
+            let target = Array(needle.filter { !$0.isWhitespace })
+            guard !target.isEmpty else { return [] }
+            return lines(page).flatMap { line -> [NSRect] in
+                guard line.count >= target.count else { return [] }
+                return (0...(line.count - target.count)).compactMap { start in
+                    guard target.indices.allSatisfy({ line[start + $0].character == target[$0] }) else { return nil }
+                    return line[start..<(start + target.count)].reduce(NSRect.null) { $0.union($1.bounds) }
+                }
+            }
+        }
+
+        static func bounds(of needle: String, in page: PDFPage) -> NSRect? { occurrences(of: needle, in: page).first }
     }
 
     @MainActor private final class NativePrintPDFCanvas: NSView {
