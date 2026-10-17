@@ -1759,6 +1759,37 @@ tests await macOS. No existing renderer event owner is retired by this preparato
 
 
 
+### Native-only mode (ADR-208)
+
+[[docs/adr/208-vision-native-without-web-content|ADR-208]] adds a third presentation,
+`NativeShellPresentationMode.nativeOnly`, that runs the shell with no web view at all.
+`isNative` is true for both `helperDocument` and `nativeOnly`, so the native route, loading and
+unavailable handling apply to either. `VISION_NATIVE_WEB_FREE=1` selects it through
+`NativeHelperDocumentSelection` under the same gate as the helper (Debug build, Demo variant,
+supervised backend) and takes precedence over `VISION_NATIVE_HELPER_DOCUMENT=1`. Otherwise the
+launch stays on the retained web document.
+
+- **Storage.** `NativeShellStorage` answers the helper's fixed storage scripts (typed local keys,
+  backup export/restore) from `NativeRawStateStore`, which persists to
+  `native/<runtimeId>/raw-state.json` (`RuntimeLayout.rawState`, exposed as
+  `RuntimeSupervisor.rawStatePath`).
+- **One-time capture.** On the first run `ShellController` has `NativeStorageCapture` load the
+  backend `/health` document in a transient, unpresented web view. That document runs no
+  application script, so `NativeRawStateCaptureBridge` reads the origin's browser storage
+  exclusively; the view is then released. A capture with no local or session values records the
+  `startedEmpty` marker.
+- **Recorded source.** Once migrated, `NativeRawStateStore.recordedSource(at:)` returns the source
+  the file was captured from and the store opens under it, even if the backend port changed. Only
+  an unmigrated store stays bound to the current origin.
+- **Failure.** A store or capture failure shows the unavailable state (`NativeShellUnavailableView`);
+  the mode never starts from an assumed empty store.
+- **No web view.** `ShellController.startNativeOnly` builds a host without a `WKWebView`
+  (`NativeShellWebPresentation` renders nothing) and marks the document ready, logging
+  `native-only document ready`. A reload is a graph rebuild; the new graph is ready at once.
+
+The sidebar header shows the Vision logo button (`NativeSidebar.brandButton` in
+`ShellRootView.swift`), which toggles the sidebar like the web logo.
+
 ### Native topbar and delta chips (phase 4)
 
 `NativeTopbar` (`VisionNativeUI/Components/NativeTopbar.swift`) is AppLayout's topbar drawn by

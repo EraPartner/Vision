@@ -81,12 +81,15 @@ Electron readers ([[docs/architecture/native-app|Vision Native App Architecture]
 The separate `Native End-to-End Smoke` workflow (`.github/workflows/native-e2e.yml`, run by
 `.github/scripts/native-e2e-smoke.sh <app> <out> <mode>`) runs on pushes to `codex/native-phase-*`
 branches and on manual dispatch, on `macos-26`. It builds PostgreSQL 18.6 with OpenSSL, the Demo
-runtime payload and the Debug `Vision Native Demo.app`, then smokes the app in `retained` (control)
-and `helper` (`VISION_NATIVE_HELPER_DOCUMENT=1`) modes. A mode passes when the app stays alive, the
-backend port from `settings.json` answers `/health` and, in helper mode, the log reports
-`helper document ready`. Each run keeps the unified log, a screenshot and a `metrics-<mode>.txt` (bundle
+runtime payload and the Debug `Vision Native Demo.app`, then smokes the app in `retained` (control),
+`helper` (`VISION_NATIVE_HELPER_DOCUMENT=1`) and `native` (`VISION_NATIVE_WEB_FREE=1`) modes. A mode
+passes when the app stays alive, the backend port from `settings.json` answers `/health` and, in
+helper mode, the log reports `helper document ready` (`native-only document ready` in native mode;
+`native-only storage unavailable` fails it). `native-e2e.yml` and `native-branch.yml` skip
+documentation-only pushes (`paths-ignore: docs/**`). Each run keeps the unified log, a screenshot and a `metrics-<mode>.txt` (bundle
 size and resident memory of the app tree and WebKit services, also written to the step summary) as the
-`native-e2e` artifact. A non-blocking last step builds the Electron Demo (`--demo --dir`) and runs the
+`native-e2e` artifact. A non-blocking last step builds the Electron Demo (`--demo --dir`, with `VISION_FRONTEND_DIST`
+and `VISION_CHROMIUM_SOURCE` exported from the payload step) and runs the
 `electron` mode, the phase-0 baseline that ADR-204's phase-4 exit compares the native numbers with
 ([[docs/adr/208-vision-native-without-web-content|ADR-208]]).
 
@@ -106,7 +109,7 @@ frontend build. Its isolated Vite configuration adds `dist/native-helper.html` a
 all bootstrap/lazy chunks to `dist/native-helper-assets/`, preserving ordinary index/assets
 and their budgets. It loads no normal preload plugin or public files. The entry stays inert
 until a trusted native host explicitly bootstraps it; building does not enable the SDK mode, which
-requires `VISION_NATIVE_HELPER_DOCUMENT=1` in a Debug Demo build. The command accepts
+requires `VISION_NATIVE_HELPER_DOCUMENT=1` (or `VISION_NATIVE_WEB_FREE=1`, which takes precedence) in a Debug Demo build. The command accepts
 `--out-dir <dir>`; `scripts/lib/native-mac-build.sh` runs it after the ordinary Vite build against
 the staged frontend directory so native runtime payloads include the helper.
 See [[docs/adr/207-vision-native-helper-document|ADR-207]] and
