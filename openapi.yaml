@@ -14777,11 +14777,11 @@ paths:
         - name: year
           in: query
           required: false
-          description: Four-digit income year, 1900 through 2200. Omit to select the live household year. A missing historical snapshot uses a year-pinned live estimate without creating a snapshot.
+          description: Four-digit income year, 0000 through 9999. Omit to select the live household year. A missing historical snapshot, including any year outside the storable 1900–2200 range, uses a year-pinned live estimate without creating a snapshot.
           schema:
             type: integer
-            minimum: 1900
-            maximum: 2200
+            minimum: 0
+            maximum: 9999
       responses:
         "200":
           description: Normalized overview, frozen/current sources, original CAS setting baselines, and safe migration warnings.

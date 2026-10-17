@@ -15870,7 +15870,7 @@ export interface operations {
     getBelgianTaxOverview: {
         parameters: {
             query?: {
-                /** @description Four-digit income year, 1900 through 2200. Omit to select the live household year. A missing historical snapshot uses a year-pinned live estimate without creating a snapshot. */
+                /** @description Four-digit income year, 0000 through 9999. Omit to select the live household year. A missing historical snapshot, including any year outside the storable 1900–2200 range, uses a year-pinned live estimate without creating a snapshot. */
                 year?: number;
             };
             header?: never;

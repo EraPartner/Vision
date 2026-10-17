@@ -123,6 +123,23 @@ describe("Read-only native Tax overview", () => {
     );
   });
 
+  it.each([1850, 2300])(
+    "estimates a year outside the storable range (%i) like any unsaved historical year",
+    async (year) => {
+      settings.getAllWithBaselines.mockResolvedValue({
+        settings: { belgian_tax_household_v2: household(2026, 50000) },
+        expected: {},
+      });
+      const response = await api.get(path).query({ year: String(year) }).expect(200);
+      expect(bodyAt(response, "data", "year")).toBe(year);
+      expect(bodyAt(response, "data", "household", "taxYear")).toBe(year);
+      expect(bodyAt(response, "data", "isHistorical")).toBe(true);
+      expect(bodyAt(response, "data", "hasSnapshot")).toBe(false);
+      expect(typeof bodyAt(response, "data", "calculation", "totalPIT")).toBe("number");
+      expect(settings.replaceMany).not.toHaveBeenCalled();
+    },
+  );
+
   it("reports a live-year snapshot while keeping the live household as that year's source", async () => {
     settings.getAllWithBaselines.mockResolvedValue({
       settings: {
@@ -217,7 +234,7 @@ describe("Read-only native Tax overview", () => {
     expect(settings.replaceMany).not.toHaveBeenCalled();
   });
 
-  it.each(["2025abc", "2e3", " 2025", "2025.5", "1899", "2201"])(
+  it.each(["2025abc", "2e3", " 2025", "2025.5", "12025", "-2025"])(
     "rejects malformed year %s",
     async (year) => {
       const response = await api.get(path).query({ year }).expect(400);

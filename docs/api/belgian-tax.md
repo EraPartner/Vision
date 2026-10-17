@@ -2,8 +2,8 @@
 title: Belgian Tax Computation API
 type: endpoint
 status: active
-date: 2026-10-13
-updated: 2026-10-13
+date: 2026-10-17
+updated: 2026-10-17
 method: GET, POST
 path: /api/belgian-tax
 tags: [api, tax, belgian, native, adr-204]
@@ -25,8 +25,9 @@ related_code:
 
 `GET /api/belgian-tax/overview?year=2025` reads the tax settings and CAS baselines in one
 database snapshot. Omit `year` to select the live household year. An explicit year must be
-a single four-digit integer in 1900–2200; malformed, repeated, or out-of-range values return
-`400 VALIDATION_ERROR`. Storage or computation failures return an error, never empty success.
+a single four-digit integer (0000–9999); malformed or repeated values return
+`400 VALIDATION_ERROR`. Snapshots are stored only for 1900–2200, so any other year (a report's
+custom period, for example) is a year-pinned live estimate, as the web report computes it. Storage or computation failures return an error, never empty success.
 
 The response uses the standard envelope. It includes the selected and live households, normalized
 household snapshots, snapshot metadata, the selected year and live year, profile/snapshot flags,

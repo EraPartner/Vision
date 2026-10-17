@@ -163,89 +163,79 @@ import Testing
             })
         #expect(try await service.context(year: 2020) == .object([:]))
     }
-    @Test(arguments: [0, 9999])
-    func extremeYearUsesFreshFiveKeySnapshotAndOriginalSourceContext(_ year: Int) async throws {
-        let fiscal: TaxValue = .object([
-            "belgian_tax_profile": .object(["profileConfigured": .bool(true), "unknownAmount": .number(Self.precise)]),
-            "belgian_tax_profile_snapshots_v1": .object([:]),
-            "belgian_tax_household_v2": .object(["taxYear": .number(2026)]),
-            "belgian_tax_household_snapshots_v2": .string("legacy serialized snapshot"),
-            "belgian_tax_profile_snapshot_meta_v1": .object([:]),
-        ])
-        var stored = fiscal
-        stored["unrelated_setting"] = .string("must not be disclosed to the callback")
-        let transport = ReportTestTransport(
-            APIResponse(status: 200, body: try APIBody.encode(TaxValue.object(["ok": .bool(true), "data": stored]))))
-        let client = APIClient(baseURL: { URL(string: "http://127.0.0.1:54331") }, transport: transport)
-        let original: TaxValue = .object([
-            "taxProfile": .object(["taxYear": .number(Decimal(year))]),
-            "precomputedPIT": .object(["taxableIncome": .number(Self.precise)]),
-        ])
-        var snapshots: [(TaxValue, Int)] = []
-        let service = NativeTaxReportContextService(
-            client: client, localize: { $0 },
-            projectProfile: { _, _ in
-                Issue.record("Extreme years must not request a normal overview/profile projection")
-                return .object([:])
-            },
-            sourceContext: { settings, requested in
-                snapshots.append((settings, requested))
-                return original
-            })
-        #expect(try await service.context(year: year) == original)
-        #expect(snapshots.count == 1 && snapshots.first?.0 == fiscal && snapshots.first?.1 == year)
-        let request = try #require(await transport.requests.first)
-        #expect(request.method == .get && request.url.path == "/api/settings")
-        #expect(URLComponents(url: request.url, resolvingAgainstBaseURL: false)?.queryItems == nil)
-        #expect(await transport.requests.count == 1)
-    }
-    @Test func extremeTwoPartnerHouseholdRemainsUnclampedForOriginalServerValidation() async throws {
-        let transport = ReportTestTransport(APIResponse(status: 200, body: Data(#"{"ok":true,"data":{}}"#.utf8)))
-        let client = APIClient(baseURL: { URL(string: "http://127.0.0.1:54331") }, transport: transport)
-        let original: TaxValue = .object([
-            "household": .object([
-                "taxYear": .number(9999),
-                "partners": .array([.object(["id": .string("A")]), .object(["id": .string("B")])]),
-            ]),
-            "precomputedHousehold": .object(["assessmentMode": .string("joint")]),
-        ])
-        let service = NativeTaxReportContextService(
-            client: client, localize: { $0 }, projectProfile: { _, _ in .object([:]) },
-            sourceContext: { _, _ in original })
-        #expect(try await service.context(year: 9999) == original)
-    }
-    @Test func missingExtremeSourceCallbackDoesNotSilentlyOmitConfiguredFiscalBlocks() async {
-        let transport = ReportTestTransport(APIResponse(status: 200, body: Data()))
-        let client = APIClient(baseURL: { URL(string: "http://127.0.0.1:54331") }, transport: transport)
-        let service = NativeTaxReportContextService(
-            client: client, localize: { $0 }, projectProfile: { _, _ in .object([:]) })
-        await #expect(throws: APIError.self) { try await service.context(year: 0) }
-        #expect(await transport.requests.isEmpty)
-    }
-    @Test(arguments: [1900, 2200])
-    func overviewBoundsRemainInclusive(_ year: Int) async throws {
+    @Test(arguments: [(0, "0000"), (850, "0850"), (2201, "2201"), (9999, "9999")])
+    func everyFourDigitYearReadsThePaddedOverview(_ year: Int, _ query: String) async throws {
         let source: TaxValue = .object(["year": .number(Decimal(year)), "hasProfile": .bool(false)])
         let transport = ReportTestTransport(
             APIResponse(status: 200, body: try APIBody.encode(TaxValue.object(["ok": .bool(true), "data": source]))))
         let client = APIClient(baseURL: { URL(string: "http://127.0.0.1:54331") }, transport: transport)
-        let service = NativeTaxReportContextService(
-            client: client, localize: { $0 }, projectProfile: { _, _ in .object([:]) },
-            sourceContext: { _, _ in
-                Issue.record("Inclusive overview boundary must retain its existing read")
-                return .object([:])
-            })
+        let service = NativeTaxReportContextService(client: client, localize: { $0 })
         #expect(try await service.context(year: year) == .object([:]))
-        #expect(await transport.requests.first?.url.path == "/api/belgian-tax/overview")
+        let request = try #require(await transport.requests.first)
+        #expect(request.url.path == "/api/belgian-tax/overview")
+        #expect(
+            URLComponents(url: request.url, resolvingAgainstBaseURL: false)?.queryItems == [
+                URLQueryItem(name: "year", value: query)
+            ])
+        #expect(await transport.requests.count == 1)
     }
-    @Test func extremeSourceCallbackCannotReturnUnrelatedBodyFields() async {
-        let transport = ReportTestTransport(APIResponse(status: 200, body: Data(#"{"ok":true,"data":{}}"#.utf8)))
+    @Test(arguments: [-1, 10_000])
+    func yearsWithoutFourDigitsAreRejectedBeforeAnyRead(_ year: Int) async {
+        let transport = ReportTestTransport(APIResponse(status: 200, body: Data()))
         let client = APIClient(baseURL: { URL(string: "http://127.0.0.1:54331") }, transport: transport)
-        let service = NativeTaxReportContextService(
-            client: client, localize: { $0 }, projectProfile: { _, _ in .object([:]) },
-            sourceContext: { _, _ in
-                .object(["currency": .string("JPY")])
-            })
-        await #expect(throws: APIError.self) { try await service.context(year: 0) }
+        let service = NativeTaxReportContextService(client: client, localize: { $0 })
+        await #expect(throws: APIError.self) { try await service.context(year: year) }
+        #expect(await transport.requests.isEmpty)
+    }
+    @Test func theDefaultProjectionFeedsTheReportProfile() async throws {
+        var source = overview()
+        source["household"]?["region"] = .string("wallonia")
+        let transport = ReportTestTransport(
+            APIResponse(status: 200, body: try APIBody.encode(TaxValue.object(["ok": .bool(true), "data": source]))))
+        let client = APIClient(baseURL: { URL(string: "http://127.0.0.1:54331") }, transport: transport)
+        let service = NativeTaxReportContextService(client: client, localize: { $0 })
+        let context = try await service.context(year: 2020)
+        #expect(context["taxProfile"]?["region"] == .string("wallonia"))
+        #expect(context["taxProfile"]?["taxYear"] == .number(2020))
+        #expect(context["taxProfile"]?["filingStatus"] != nil)
+    }
+    @Test func projectionPicksPartnerAsPrimaryActivityLikeTheSharedMigration() throws {
+        func household(_ partners: [TaxValue]) -> TaxValue {
+            .object(["region": .string("flanders"), "taxYear": .number(2025), "partners": .array(partners)])
+        }
+        func partner(_ id: String, _ activities: [(String, String)]) -> TaxValue {
+            .object([
+                "id": .string(id),
+                "activities": .array(activities.map { .object(["id": .string($0.0), "kind": .string($0.1)]) }),
+            ])
+        }
+        let explicit = household([
+            partner("B", [("act_B_1", "pension")]),
+            partner("A", [("act_A_2", "employee"), ("act_A_1", "self_employed_fees")]),
+        ])
+        #expect(
+            try NativeTaxReportProfile.project(explicit)
+                == .object([
+                    "employmentType": .string("self_employed"), "region": .string("flanders"),
+                    "taxYear": .number(2025),
+                ]))
+        let firstNonNet = household([partner("A", [("x", "net_professional_amount"), ("y", "director")])])
+        #expect(try NativeTaxReportProfile.project(firstNonNet)["employmentType"] == .string("director"))
+        let onlyNet = household([partner("A", [("x", "net_professional_amount")])])
+        #expect(try NativeTaxReportProfile.project(onlyNet)["employmentType"] == .string("other"))
+        let noActivities = household([partner("A", [])])
+        #expect(try NativeTaxReportProfile.project(noActivities)["employmentType"] == .string("employee"))
+        let noPartnerA = household([partner("B", [("act_B_1", "civil_servant")])])
+        #expect(try NativeTaxReportProfile.project(noPartnerA)["employmentType"] == .string("civil_servant"))
+        #expect(throws: APIError.self) { try NativeTaxReportProfile.project(.object([:])) }
+    }
+    @Test(arguments: [
+        ("employee", "employee"), ("civil_servant", "civil_servant"), ("director", "director"),
+        ("self_employed_profits", "self_employed"), ("self_employed_fees", "self_employed"),
+        ("pension", "retired"), ("unemployment", "other"),
+    ])
+    func employmentTypesFollowEmploymentTypeFor(_ kind: String, _ expected: String) {
+        #expect(NativeTaxReportProfile.employmentType(kind) == expected)
     }
 
 }

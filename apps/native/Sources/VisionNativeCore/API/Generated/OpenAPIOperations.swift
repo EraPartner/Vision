@@ -4045,8 +4045,9 @@ extension OpenAPIOperations {
         public static let method = HTTPMethod.get
         public static let pathTemplate = "/api/belgian-tax/overview"
 
-        /// Four-digit income year, 1900 through 2200. Omit to select the live household year. A missing
-        /// historical snapshot uses a year-pinned live estimate without creating a snapshot.
+        /// Four-digit income year, 0000 through 9999. Omit to select the live household year. A missing
+        /// historical snapshot, including any year outside the storable 1900–2200 range, uses a
+        /// year-pinned live estimate without creating a snapshot.
         public var year: Int?
 
         public init(year: Int? = nil) {

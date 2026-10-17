@@ -682,33 +682,9 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
 
     private func nativeTaxReportContext(year: Int, generation: UUID) async throws -> TaxValue {
         try requireNativeGeneration(generation)
+        // ADR-208: the overview and the native projection; no helper document is involved.
         let context = NativeTaxReportContextService(
-            client: apiClient,
-            localize: { [weak self] key in self?.shellModel.strings.t(key) ?? key },
-            projectProfile: { [weak self] household, year in
-                guard let self else { throw APIError.backendUnavailable }
-                try self.requireNativeGeneration(generation)
-                let householdJSON = String(decoding: try JSONEncoder().encode(household), as: UTF8.self)
-                let reply = try await self.nativeSettingsScript(
-                    """
-                    if (typeof window.__visionNativeTaxReportProfile !== 'function') throw new Error('Tax report profile unavailable');
-                    return await window.__visionNativeTaxReportProfile(householdJSON, year);
-                    """, arguments: ["householdJSON": .string(householdJSON), "year": .int(year)])
-                try self.requireNativeGeneration(generation)
-                return try JSONDecoder().decode(TaxValue.self, from: JSONEncoder().encode(reply))
-            },
-            sourceContext: { [weak self] settings, year in
-                guard let self else { throw APIError.backendUnavailable }
-                try self.requireNativeGeneration(generation)
-                let settingsJSON = String(decoding: try JSONEncoder().encode(settings), as: UTF8.self)
-                let reply = try await self.nativeSettingsScript(
-                    """
-                    if (typeof window.__visionNativeTaxReportContext !== 'function') throw new Error('Tax report context unavailable');
-                    return await window.__visionNativeTaxReportContext(settingsJSON, year);
-                    """, arguments: ["settingsJSON": .string(settingsJSON), "year": .int(year)])
-                try self.requireNativeGeneration(generation)
-                return try JSONDecoder().decode(TaxValue.self, from: JSONEncoder().encode(reply))
-            })
+            client: apiClient, localize: { [weak self] key in self?.shellModel.strings.t(key) ?? key })
         let value = try await context.context(year: year)
         try requireNativeGeneration(generation)
         return value

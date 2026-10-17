@@ -18,12 +18,14 @@ const computationSchema = z.strictObject({
   household: belgianTaxHouseholdV2Schema,
 });
 
+// Any four-digit year: stored snapshots stay within 1900–2200, and other years (report
+// periods) get the same year-pinned live estimate the web report fallback computes.
 const overviewQuerySchema = z.object({
   year: z
     .string()
     .regex(/^\d{4}$/)
     .transform(Number)
-    .pipe(z.number().int().min(1900).max(2200))
+    .pipe(z.number().int())
     .optional(),
 });
 

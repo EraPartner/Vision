@@ -1,6 +1,6 @@
 import Foundation
 
-/// Report presentation only. The existing TypeScript overview selects and computes every fiscal figure.
+/// Report presentation only. The backend overview selects and computes every fiscal figure.
 public enum NativeTaxReportContext {
     public static func make(
         overview: TaxValue, requestedYear: Int, projectedProfile: TaxValue?,
@@ -90,50 +90,67 @@ public enum NativeTaxReportContext {
     }
 }
 
+/// The report's v1 profile fields (`projectHouseholdToProfileV1` in
+/// `@vision/shared-utils/belgian-tax/householdMigration`): partner A's primary activity sets
+/// the employment type; region and tax year are the household's. Only the three fields the
+/// report reads are projected (ADR-208).
+public enum NativeTaxReportProfile {
+    /// `PRIMARY_ACTIVITY_ID`.
+    static let primaryActivityID = "act_A_1"
+
+    public static func project(_ household: TaxValue) throws -> TaxValue {
+        guard household.objectValue != nil, let partners = household["partners"]?.arrayValue else {
+            throw APIError.contract(
+                APIContractError(endpoint: "/api/belgian-tax/overview", issues: ["household: invalid source household"]))
+        }
+        let partnerA = partners.first { $0["id"] == .string("A") } ?? partners.first
+        let activities = partnerA?["activities"]?.arrayValue ?? []
+        let primary =
+            activities.first { $0["id"] == .string(primaryActivityID) }
+            ?? activities.first { $0["kind"] != .string("net_professional_amount") }
+            ?? activities.first
+        let kind = primary?["kind"]?.stringValue ?? "employee"
+        var profile: [String: TaxValue] = ["employmentType": .string(employmentType(kind))]
+        profile["region"] = household["region"]
+        profile["taxYear"] = household["taxYear"]
+        return .object(profile)
+    }
+
+    /// `employmentTypeFor`.
+    static func employmentType(_ kind: String) -> String {
+        switch kind {
+        case "employee": return "employee"
+        case "civil_servant": return "civil_servant"
+        case "director": return "director"
+        case "self_employed_profits", "self_employed_fees": return "self_employed"
+        case "pension": return "retired"
+        default: return "other"
+        }
+    }
+}
+
 @MainActor public struct NativeTaxReportContextService {
     private let client: APIClient
     private let localize: @MainActor (String) -> String
     private let projectProfile: @MainActor (TaxValue, Int) async throws -> TaxValue
-    private let sourceContext: (@MainActor (TaxValue, Int) async throws -> TaxValue)?
-    public static let fiscalSettingKeys = [
-        "belgian_tax_profile", "belgian_tax_profile_snapshots_v1", "belgian_tax_household_v2",
-        "belgian_tax_household_snapshots_v2", "belgian_tax_profile_snapshot_meta_v1",
-    ]
     public init(
         client: APIClient, localize: @escaping @MainActor (String) -> String,
-        projectProfile: @escaping @MainActor (TaxValue, Int) async throws -> TaxValue,
-        sourceContext: (@MainActor (TaxValue, Int) async throws -> TaxValue)? = nil
+        projectProfile: @escaping @MainActor (TaxValue, Int) async throws -> TaxValue = { household, _ in
+            try NativeTaxReportProfile.project(household)
+        }
     ) {
         self.client = client
         self.localize = localize
         self.projectProfile = projectProfile
-        self.sourceContext = sourceContext
     }
+    /// Every four-digit report year reads the overview: years outside the storable 1900–2200
+    /// range are the year-pinned live estimate the web report's fallback computes.
     public func context(year: Int) async throws -> TaxValue {
-        if !(1900...2200).contains(year) {
-            guard let sourceContext else { throw APIError.invalidRequest("Original tax report context unavailable") }
-            let raw = try await client.send(NativeTaxReportSettingsOperation())
-            guard let settings = raw.objectValue else {
-                throw APIError.contract(
-                    APIContractError(endpoint: "/api/settings", issues: ["settings: not an object"]))
-            }
-            // Source custom-date years exceed the overview API's bounds. Shared TS resolves the
-            // fresh original settings; never clamp a year or silently omit configured fiscal blocks.
-            let fiscal = Dictionary(
-                uniqueKeysWithValues: Self.fiscalSettingKeys.compactMap { key in
-                    settings[key].map { (key, $0) }
-                })
-            let value = try await sourceContext(.object(fiscal), year)
-            guard let fields = value.objectValue,
-                Set(fields.keys).isSubset(of: ["taxProfile", "precomputedPIT", "household", "precomputedHousehold"])
-            else { throw APIError.invalidRequest("Invalid original tax report context") }
-            return value
-        }
+        guard (0...9999).contains(year) else { throw APIError.invalidRequest("Report tax year") }
         let overview = try await client.send(NativeTaxReportOverviewOperation(year: year))
         let profile: TaxValue?
         if overview["hasProfile"]?.boolValue == true {
             guard let household = overview["household"] else { throw APIError.invalidRequest("Report household") }
-            // Shared TypeScript supplies the profile projection; Swift only formats the returned fields.
             profile = try await projectProfile(household, year)
         } else {
             profile = nil
@@ -150,13 +167,6 @@ private struct NativeTaxReportOverviewOperation: APIOperation {
     static let pathTemplate = "/api/belgian-tax/overview"
     let year: Int
     var path: String { Self.pathTemplate }
-    var queryItems: [URLQueryItem] { [URLQueryItem(name: "year", value: String(year))] }
-}
-
-private struct NativeTaxReportSettingsOperation: APIOperation {
-    typealias Response = TaxValue
-    static let operationId = "getSettings"
-    static let method = HTTPMethod.get
-    static let pathTemplate = "/api/settings"
-    var path: String { Self.pathTemplate }
+    // The route accepts exactly four digits.
+    var queryItems: [URLQueryItem] { [URLQueryItem(name: "year", value: String(format: "%04d", year))] }
 }
