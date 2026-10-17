@@ -1950,7 +1950,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
                     NativeHelperDocumentBridge.script(for: command), arguments: bound, in: nil, contentWorld: .page)
             } catch {
                 guard !Task.isCancelled else { return }
-                self?.failHelperDocument("bootstrap")
+                self?.failHelperDocument("bootstrap", error: error)
                 return
             }
             guard let self, !Task.isCancelled else { return }
@@ -1964,7 +1964,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
                 return
             }
             do { try self.helperSession?.acceptBootstrapReceipt(receipt, observation: current) } catch {
-                self.failHelperDocument("bootstrap receipt")
+                self.failHelperDocument("bootstrap receipt", error: error)
                 return
             }
             self.helperDocumentAdvanced()
@@ -2064,9 +2064,11 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         }
     }
 
-    private func failHelperDocument(_ stage: String) {
+    /// The error is WebKit's or the bridge's (the Debug Demo only): no user data, so it is public.
+    private func failHelperDocument(_ stage: String, error: (any Error)? = nil) {
         helperSession?.fail()
-        logger.error("[shell] helper document \(stage, privacy: .public) failed")
+        let reason = error.map { ": " + String(describing: $0) } ?? ""
+        logger.error("[shell] helper document \(stage, privacy: .public) failed\(reason, privacy: .public)")
         shellModel.setHelperDocumentState(.failed)
     }
 
