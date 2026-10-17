@@ -41,7 +41,11 @@ struct RollingNumber: View {
     var decimalSeparator: Character?
     var animate = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.visionTheme) private var theme
     @State private var settled = false
+
+    /// Printed pages and reduced motion show the final figures without reels.
+    private var rolls: Bool { animate && !reduceMotion && !theme.isPrintReport }
 
     private enum Role { case plain, currency, minor }
 
@@ -61,7 +65,7 @@ struct RollingNumber: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(value)
         .onAppear {
-            guard animate, !reduceMotion else { return }
+            guard rolls else { return }
             DispatchQueue.main.async { settled = true }
         }
     }
@@ -80,7 +84,7 @@ struct RollingNumber: View {
 
     @ViewBuilder
     private func glyphView(_ character: Character) -> some View {
-        if let digit = character.wholeNumberValue, character.isASCII, animate, !reduceMotion {
+        if let digit = character.wholeNumberValue, character.isASCII, rolls {
             DigitReel(digit: settled ? digit : 0)
         } else {
             Text(String(character))

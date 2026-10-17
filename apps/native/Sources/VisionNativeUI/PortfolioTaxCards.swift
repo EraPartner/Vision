@@ -10,7 +10,10 @@ struct PortfolioTaxSummaryView: View {
     var body: some View {
         TaxCard {
             Text(strings.t("tax.totalCosts")).font(.caption).foregroundStyle(theme.secondaryLabel)
-            Text(money(data.totals.totalTaxesAndFees)).font(.system(size: 40, weight: .semibold))
+            RollingNumber(
+                value: money(data.totals.totalTaxesAndFees),
+                decimalSeparator: shell.settings.numberFormat.locale.decimalSeparator?.first
+            ).font(.system(size: 40, weight: .semibold))
                 .monospacedDigit().foregroundStyle(theme.loss)
             Text(strings.t("tax.combinedTaxesAndFeesYear", ["year": String(data.year)]))
                 .font(.footnote).foregroundStyle(theme.secondaryLabel)
@@ -45,7 +48,9 @@ struct PortfolioTaxSummaryView: View {
     private func metric(_ key: String, amount: Decimal, detail: String, color: Color) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(strings.t(key)).font(.caption).foregroundStyle(theme.secondaryLabel)
-            Text(money(amount)).font(.title3).monospacedDigit().foregroundStyle(color)
+            RollingNumber(
+                value: money(amount), decimalSeparator: shell.settings.numberFormat.locale.decimalSeparator?.first
+            ).font(.title3).foregroundStyle(color)
             Text(detail).font(.footnote).foregroundStyle(theme.secondaryLabel)
         }.accessibilityElement(children: .combine)
     }

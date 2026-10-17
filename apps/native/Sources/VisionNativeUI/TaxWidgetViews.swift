@@ -25,19 +25,26 @@ struct TaxMoneyRow: View {
     var signed = false
     var strong = false
     var tone: Color? = nil
+    /// TaxComputationFlow stages roll their figures.
+    var rolling = false
     @Environment(\.visionTheme) private var theme
 
     var body: some View {
+        let text =
+            amount.map {
+                MoneyText.text($0, currency: shell.settings.defaultCurrency, settings: shell.settings, signed: signed)
+            } ?? "—"
         HStack(alignment: .firstTextBaseline, spacing: 16) {
             Text(title).frame(maxWidth: .infinity, alignment: .leading)
-            Text(
-                amount.map {
-                    MoneyText.text(
-                        $0, currency: shell.settings.defaultCurrency,
-                        settings: shell.settings, signed: signed)
-                } ?? "—"
-            )
-            .monospacedDigit().foregroundStyle(tone ?? theme.foreground)
+            Group {
+                if rolling {
+                    RollingNumber(
+                        value: text, decimalSeparator: shell.settings.numberFormat.locale.decimalSeparator?.first)
+                } else {
+                    Text(text).monospacedDigit()
+                }
+            }
+            .foregroundStyle(tone ?? theme.foreground)
         }.font(strong ? .headline : .body).padding(.vertical, 3)
             .accessibilityElement(children: .combine)
     }

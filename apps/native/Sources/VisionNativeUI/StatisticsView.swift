@@ -207,7 +207,7 @@ public struct StatisticsView: View {
                         ])
                 )
                 .foregroundStyle(theme.secondaryLabel)
-                MoneyText(amount: net, currency: currency, settings: settings).font(.largeTitle)
+                MoneyText(amount: net, currency: currency, settings: settings, rolling: true).font(.largeTitle)
                 if let index = months.firstIndex(where: { $0.id == chosen.id }), index > 0 {
                     let before = months[index - 1].total_income - abs(months[index - 1].total_spending)
                     HStack {

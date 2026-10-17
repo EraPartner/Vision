@@ -64,7 +64,7 @@ struct TaxComputationFlowView: View {
     }
     private func stage(_ key: String, _ amount: Decimal?, tone: Color? = nil, note: String? = nil) -> some View {
         VStack(alignment: .leading, spacing: 3) {
-            TaxMoneyRow(title: strings.t(key), amount: amount, shell: shell, strong: true, tone: tone)
+            TaxMoneyRow(title: strings.t(key), amount: amount, shell: shell, strong: true, tone: tone, rolling: true)
             if let note { Text(strings.t(note)).font(.caption).foregroundStyle(theme.secondaryLabel) }
         }.padding(.top, 4)
     }
