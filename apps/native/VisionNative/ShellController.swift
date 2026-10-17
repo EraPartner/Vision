@@ -38,6 +38,8 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     private var localStateSession = NativeLocalStateSession()
     /// ADR-208: the native-only mode's storage; `nil` while a web document holds it.
     private var nativeStorage: NativeShellStorage?
+    /// The applied page zoom, for graphs built without a web view.
+    private var currentPageZoom: Double?
     private var restoreFenceEntered = false
     private var restoreFenceOwner: UUID?
     private var restoredNativeGeneration: UUID?
@@ -515,7 +517,8 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         // The renderer startup callback publishes readiness only after verifying
         // the incoming document and this graph's generation.
         model.isRendererReady = false
-        model.setPageZoom(Double(webShell?.webView.pageZoom ?? 1))
+        // Native-only has no web view to hold the zoom across graph rebuilds.
+        model.setPageZoom(webShell.map { Double($0.webView.pageZoom) } ?? currentPageZoom ?? 1)
         model.home?.useSharedUpcoming()
         notifications.upcoming.didLoadUpcoming = { [weak model] rows in
             model?.home?.applySharedUpcoming(rows)
@@ -1758,7 +1761,9 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         host.isHidden = true
         container?.addSubview(host, positioned: .below, relativeTo: launchView)
         shellHost = host
-        model.setPageZoom(PageZoom.persisted(initialSettings[PageZoom.settingsKey]))
+        let zoom = currentPageZoom ?? PageZoom.persisted(initialSettings[PageZoom.settingsKey])
+        currentPageZoom = zoom
+        model.setPageZoom(zoom)
     }
 
     /// The renderer-ready sequence without a renderer: a fresh document token for this graph,
@@ -2230,7 +2235,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
 
     @discardableResult
     private func reloadCurrentGraph() -> Task<Bool, Never>? {
-        guard appURL != nil, webShell?.webView != nil, manualReloadTask == nil,
+        guard appURL != nil, webShell?.webView != nil || nativeStorage != nil, manualReloadTask == nil,
             nativeSettingsRebuildTask == nil, !restoreFenceEntered, pendingRestoreReload == nil,
             restoredNativeGeneration == nil, shellModel.nativeSettings?.isSuspendedForRestore != true,
             confirmQuitWithUnsavedChanges()
@@ -2373,6 +2378,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     /// Applies a zoom step to the page and native screens and keeps it for the next launch.
     private func applyPageZoom(_ zoom: Double) {
         webShell?.webView.pageZoom = zoom
+        currentPageZoom = zoom
         shellModel.setPageZoom(zoom)
         let supervisor = supervisor
         Task {

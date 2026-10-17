@@ -56,6 +56,8 @@ struct NativeTopbar: View {
         .padding(.trailing, 16)
         .frame(height: height)
         .frame(maxWidth: .infinity)
+        // The strip drags the window like a titlebar; buttons above it take their own clicks.
+        .background { WindowDragArea() }
         .background {
             Rectangle().fill(.bar)
                 .overlay(alignment: .bottom) { Divider() }
@@ -116,6 +118,31 @@ struct PageScrollObserver: NSViewRepresentable {
                 ? clip.bounds.minY + clip.contentInsets.top
                 : document.frame.height - clip.bounds.maxY
             onChange?(max(0, offset))
+        }
+    }
+}
+
+/// A titlebar-like region: dragging moves the window and a double-click zooms or minimises
+/// it per the system's "double-click a window's title bar" setting.
+struct WindowDragArea: NSViewRepresentable {
+    func makeNSView(context: Context) -> DragView { DragView() }
+    func updateNSView(_ view: DragView, context: Context) {}
+
+    final class DragView: NSView {
+        override var mouseDownCanMoveWindow: Bool { true }
+
+        override func mouseDown(with event: NSEvent) {
+            guard let window else { return }
+            if event.clickCount == 2 {
+                let action = UserDefaults.standard.string(forKey: "AppleActionOnDoubleClick") ?? "Maximize"
+                if action == "Minimize" {
+                    window.performMiniaturize(nil)
+                } else if action != "None" {
+                    window.performZoom(nil)
+                }
+            } else {
+                window.performDrag(with: event)
+            }
         }
     }
 }

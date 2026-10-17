@@ -270,6 +270,11 @@ struct NativeSidebar: View {
             footer
         }
         .overlay(alignment: .top) { skipLink }
+        .overlay(alignment: .top) {
+            // The titlebar strip over the sidebar drags the window; the traffic lights sit
+            // above it in the window's own titlebar view.
+            WindowDragArea().frame(height: 28).ignoresSafeArea(.container, edges: .top)
+        }
         .background(SidebarGlassBackground())
         // The counts' own refetch policies run for the sidebar's lifetime; a route change
         // re-reads any count that is no longer fresh.
