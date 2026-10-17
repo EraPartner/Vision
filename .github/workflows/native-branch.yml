@@ -3,6 +3,8 @@ name: Native Branch Verification
 on:
   push:
     branches: ["codex/native-phase-*"]
+    # Documentation-only pushes must not start or replace a macOS run.
+    paths-ignore: ["docs/**"]
 
 permissions: {}
 

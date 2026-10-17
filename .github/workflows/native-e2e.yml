@@ -6,6 +6,8 @@ name: Native End-to-End Smoke
 on:
   push:
     branches: ["codex/native-phase-*"]
+    # Documentation-only pushes must not start or replace a macOS run.
+    paths-ignore: ["docs/**"]
   workflow_dispatch:
 
 permissions: {}
