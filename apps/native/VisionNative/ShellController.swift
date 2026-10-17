@@ -991,7 +991,9 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     }
 
     private func resolveNativeSettingsAppearance() {
-        guard let settings = shellModel.nativeSettings, settings.isLoaded else { return }
+        // Reading `shellModel` builds the graph; appearance must not do that before launch has
+        // chosen the document presentation (the accent observer runs at start).
+        guard hasMadeShellModel, let settings = shellModel.nativeSettings, settings.isLoaded else { return }
         let screen = window?.screen ?? NSScreen.main
         let scale = screen?.backingScaleFactor ?? 1
         let pixels = Double((screen?.frame.width ?? 0) * (screen?.frame.height ?? 0) * scale * scale)

@@ -105,6 +105,23 @@ Tor chose to port the helper document's work to Swift and add a web-free mode, d
 - The helper-default flip waits on a passing helper smoke; it is prepared on the local branch
   `local/flip-helper-default-2` (not pushed).
 
+**First end-to-end evidence (run 39062704573, 2026-10-17)**
+
+The Debug Demo app and its payload built on `macos-26`; the retained control reached `phase
+running` and answered `/health`. The helper and native-only smokes never selected their mode: the
+accent-colour observer resolved appearance at start, which built the shell graph before launch,
+so selection logged "helper document ineligible: the shell graph already exists". Fixed by not
+resolving appearance before a graph exists. Notifications are not allowed on the runner, as
+expected for an unsigned build. First metrics (KiB, after startup):
+
+| Mode                | Bundle  | App RSS | Process tree RSS | WebKit RSS |
+| ------------------- | ------- | ------- | ---------------- | ---------- |
+| Native, retained    | 458,292 | 466,720 | 1,099,984        | 207,664    |
+| Electron Demo       | 648,716 | 169,488 | 1,154,080        | 0          |
+
+The Electron tree includes its renderer and GPU helpers; the native tree's WebKit services run
+outside the process tree and are counted separately.
+
 **Next**
 
 1. Read the latest `Native Branch Verification` and `Native End-to-End Smoke` runs; fix any
