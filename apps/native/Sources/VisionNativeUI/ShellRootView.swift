@@ -55,6 +55,11 @@ public struct ShellRootView<WebContent: View>: View {
                         ).environment(\.colorScheme, theme.colorScheme)
                     }
                 }
+                .overlay(alignment: .top) {
+                    if case .native = model.detail, let inspector = model.apiInspector {
+                        BackgroundQueryIndicator(inspector: inspector)
+                    }
+                }
             }
         }
         .environment(\.visionTheme, theme)

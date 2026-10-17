@@ -249,7 +249,7 @@ public struct HomeView: View {
             if let worth = model.netWorth, worth.hasData {
                 MoneyText(
                     amount: worth.current.netWorth, currency: currency, settings: settings, signed: false,
-                    colored: false
+                    colored: false, rolling: true
                 ).font(.title)
                 HStack {
                     MoneyText(amount: worth.monthlyChange, currency: currency, settings: settings)
@@ -325,15 +325,12 @@ public struct HomeView: View {
         }
     }
     private var summary: some View {
-        card("dashboard.statCards") {
-            let months = Array(
-                (model.monthly?.orderedMonths ?? []).filter { $0.transaction_count > 0 }.suffix(12))
-            let selected = months.first { $0.id == netSelection } ?? months.last
+        let months = Array((model.monthly?.orderedMonths ?? []).filter { $0.transaction_count > 0 }.suffix(12))
+        let selected = months.first { $0.id == netSelection } ?? months.last
+        let net = selected.map { $0.total_income - abs($0.total_spending) } ?? 0
+        return card("dashboard.statCards", hero: net >= 0 ? .gain : .loss) {
             Text(strings.t("dashboard.stat.lastMonthNet")).font(.caption)
-            MoneyText(
-                amount: selected.map { $0.total_income - abs($0.total_spending) } ?? 0,
-                currency: currency, settings: settings
-            ).font(.title)
+            MoneyText(amount: net, currency: currency, settings: settings, rolling: true).font(.title)
             Text(selected?.id ?? strings.t("dashboard.stat.mostRecentMonth")).foregroundStyle(
                 theme.secondaryLabel)
             if let latest = months.last, latest.total_income > 0 {
@@ -591,7 +588,7 @@ public struct HomeView: View {
         }.buttonStyle(.plain)
     }
     private func card<Content: View>(
-        _ titleKey: String, action: (String, String)? = nil, exclusion: String? = nil,
+        _ titleKey: String, action: (String, String)? = nil, exclusion: String? = nil, hero: TrendHue.Tone? = nil,
         @ViewBuilder content: () -> Content
     ) -> some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -613,6 +610,16 @@ public struct HomeView: View {
             }
             content()
         }.padding(18).frame(maxWidth: .infinity, alignment: .leading)
+            // NetSummaryCard: TrendHue then the hero CardSheen (ADR-172), above the card fill.
+            .background {
+                if let hero {
+                    ZStack {
+                        TrendHue(tone: hero)
+                        CardSheen(tier: .hero)
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.card))
+                }
+            }
             .background(theme.card, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.card))
             .overlay(
                 RoundedRectangle(cornerRadius: DesignTokens.Radius.card).stroke(theme.border.opacity(0.6)))
