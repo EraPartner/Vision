@@ -101,6 +101,13 @@ measure() {
   if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
     { echo "### $mode metrics"; echo '```'; cat "$out/metrics-$mode.txt"; echo '```'; } >>"$GITHUB_STEP_SUMMARY"
   fi
+  # Where the app's own memory goes: RSS counts shared frameworks, the footprint does not.
+  footprint -p "$pid" >"$out/footprint-$mode.txt" 2>&1 || true
+  vmmap --summary "$pid" >"$out/vmmap-$mode.txt" 2>&1 || true
+  echo "::group::$mode memory breakdown (app process)"
+  head -n 40 "$out/footprint-$mode.txt" || true
+  sed -n '/^REGION TYPE/,/^TOTAL/p' "$out/vmmap-$mode.txt" | head -n 70 || true
+  echo "::endgroup::"
 }
 
 if [ "$status" = "0" ]; then

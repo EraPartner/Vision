@@ -87,7 +87,8 @@ variable: the Debug Demo default) modes. A mode
 passes when the app stays alive, the backend port from `settings.json` answers `/health` and, in
 helper mode, the log reports `helper document ready` (`native-only document ready` in native mode;
 `native-only storage unavailable` fails it). `native-e2e.yml` and `native-branch.yml` skip
-documentation-only pushes (`paths-ignore: docs/**`). Each run keeps the unified log, a screenshot and a `metrics-<mode>.txt` (bundle
+documentation-only pushes (`paths-ignore: docs/**`). Each run keeps the unified log, a screenshot, the app process's `footprint` and `vmmap --summary`
+(printed in a log group), and a `metrics-<mode>.txt` (bundle
 size and resident memory of the app tree and WebKit services, also written to the step summary) as the
 `native-e2e` artifact. A non-blocking last step builds the Electron Demo (`--demo --dir`, with `VISION_FRONTEND_DIST`
 and `VISION_CHROMIUM_SOURCE` exported from the payload step) and runs the
