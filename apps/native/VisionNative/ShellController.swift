@@ -62,8 +62,12 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     private var shellHost: NSView?
     /// The backend base URL the web view may show; `nil` until the runtime is ready.
     private(set) var appURL: URL?
-    /// Fixed per launch before the document is created (ADR-207); not yet consumed.
+    /// Fixed once, before the first document and shell graph are created (ADR-207).
     private(set) var documentSelection = NativeHelperDocumentSelection.retainedWeb
+    /// The helper document authority of the current graph generation, in helper mode only.
+    private var helperSession: NativeHelperDocumentSession?
+    private var helperBootstrapTask: Task<Void, Never>?
+    private var hasMadeShellModel = false
     private var queue = RendererMessageQueue()
     private var rendererReadiness = NativeRendererReadiness()
     private var launchTask: Task<Void, Never>?
@@ -96,6 +100,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     }
 
     private func makeShellModel(initialRoute: NativeRoute = .home) -> NativeShellModel {
+        hasMadeShellModel = true
         let client = apiClient
         let settingsGeneration = UUID()
         nativeSettingsGeneration = settingsGeneration
@@ -451,7 +456,11 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             onboarding: onboarding,
             reports: reports,
             nativeFallback: true,
+            presentationMode: documentSelection.presentationMode,
             initialRoute: initialRoute,
+            // The helper document has no router: native history owns every route (ADR-206).
+            nativeNavigation: documentSelection == .retainedWeb
+                ? nil : NativeNavigationHistory(initial: NativeNavigationLocation(initialRoute.string) ?? .home),
             hiddenSections: Self.loadHiddenSections(),
             loadSettings: {
                 await nativeSettings.load()
@@ -1050,7 +1059,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             try await running.value
             return
         }
-        guard let webView = webShell?.webView else { throw APIError.backendUnavailable }
+        guard let webShell else { throw APIError.backendUnavailable }
         if let session = restoredCompletionDataSession {
             await session.suspendAndDrain()
             await session.retireForReload()
@@ -1066,7 +1075,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         // A readiness receipt from the outgoing document may have arrived while
         // the graph drained. The incoming document must establish its own authority.
         rendererDocumentChanged()
-        webView.reload()
+        webShell.reload()
     }
 
     private func rebuildNativeSettingsGraph(expectedGeneration: UUID) async throws {
@@ -1457,13 +1466,32 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             showLaunchView()
         case .ready(let url, let backendSource):
             appURL = url
-            documentSelection = NativeHelperDocumentSelection.select(
-                environment: ProcessInfo.processInfo.environment, isDebugBuild: AppRuntime.isDebugBuild,
-                rawVariant: AppRuntime.variant.rawValue, backendSource: backendSource, backendURL: url,
-                websiteDataStoreIdentifier: "default")
-            if documentSelection != .retainedWeb {
-                // ADR-207: selection is recorded only; the SDK still loads the retained web document.
-                logger.log("[shell] helper document selected; retained web remains active until it is integrated")
+            if webShell == nil {
+                let selection = NativeHelperDocumentSelection.select(
+                    environment: ProcessInfo.processInfo.environment, isDebugBuild: AppRuntime.isDebugBuild,
+                    rawVariant: AppRuntime.variant.rawValue, backendSource: backendSource, backendURL: url,
+                    websiteDataStoreIdentifier: "default")
+                // A cold menu or Finder action may already have built a renderer-mode graph;
+                // presentation never changes under an existing graph.
+                if selection != .retainedWeb, hasMadeShellModel {
+                    logger.warning("[shell] helper document ineligible: the shell graph already exists")
+                } else {
+                    documentSelection = selection
+                }
+                if documentSelection != .retainedWeb {
+                    logger.log("[shell] Debug Demo helper document selected (ADR-207)")
+                }
+            }
+            let documentURL: URL
+            if case .helperDocument(let source) = documentSelection {
+                // The helper is bound to its supervised origin; a changed origin fails closed.
+                guard WebShell.origin(of: url) == source.backendOrigin else {
+                    apply(.unavailable(strings.t("app.errorPageMessage")))
+                    return
+                }
+                documentURL = source.helperURL
+            } else {
+                documentURL = url
             }
             let shell = webShell ?? makeWebShell()
             shellHost?.isHidden = true
@@ -1474,7 +1502,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             pageLoadTask = Task { [weak self] in
                 await self?.auditChannels.applicationWillLoad()
                 guard !Task.isCancelled, let self, self.appURL == url else { return }
-                shell.load(url)
+                shell.load(documentURL)
             }
         }
     }
@@ -1593,7 +1621,9 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     /// The web view inside the native navigation shell; the launch view covers both until
     /// the page is ready.
     private func makeWebShell() -> WebShell {
-        let shell = WebShell(controller: self)
+        var helperSource: NativeHelperDocumentSession.Source?
+        if case .helperDocument(let source) = documentSelection { helperSource = source }
+        let shell = WebShell(controller: self, helperSource: helperSource)
         let webView = shell.webView
         webView.underPageBackgroundColor = .hsl(palette.base)
         let model = shellModel
@@ -1704,6 +1734,107 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     /// `CrashReloadPolicy` gave up reloading; Try again loads the page afresh.
     func webContentKeepsTerminating() {
         apply(.unavailable(strings.t("app.errorPageMessage")))
+    }
+
+    // MARK: - Helper document (ADR-207)
+
+    /// A load or reload of the helper starts a new navigation authority. Graph replacement
+    /// retires the old session; a reload within one generation keeps its session.
+    func helperDocumentWillNavigate(_ navigationID: UUID) {
+        guard case .helperDocument(let source) = documentSelection else { return }
+        helperBootstrapTask?.cancel()
+        helperBootstrapTask = nil
+        if helperSession?.generationID != nativeSettingsGeneration {
+            helperSession?.retire()
+            helperSession = NativeHelperDocumentSession(source: source, generationID: nativeSettingsGeneration)
+        }
+        do { try helperSession?.beginNavigation(navigationID) } catch {
+            failHelperDocument("navigation")
+            return
+        }
+        shellModel.setHelperDocumentState(.loading)
+    }
+
+    func helperDocumentDidCommit(_ observation: NativeHelperDocumentSession.Observation?) {
+        // A commit of a superseded navigation has no observation and changes nothing.
+        guard helperSession != nil, let observation else { return }
+        do { try helperSession?.didCommit(observation) } catch { failHelperDocument("commit") }
+    }
+
+    /// Only the matching finish issues bootstrap authority; the fixed bootstrap call and the
+    /// page's ready callback are then checked independently before startup proceeds.
+    func helperDocumentDidFinish(_ observation: NativeHelperDocumentSession.Observation?) {
+        guard helperSession != nil, let observation, let webView = webShell?.webView else { return }
+        let provenance: NativeHelperDocumentSession.Provenance
+        let source: NativeHelperDocumentSession.Source
+        do {
+            guard let issued = try helperSession?.didFinish(observation), let current = helperSession?.source
+            else { return }
+            provenance = issued
+            source = current
+        } catch {
+            failHelperDocument("finish")
+            return
+        }
+        let command = NativeHelperDocumentBridge.Command.bootstrap(strings.language == .nl ? .nl : .en)
+        let arguments = NativeHelperDocumentBridge.arguments(for: command, provenance: provenance, source: source)
+        helperBootstrapTask?.cancel()
+        helperBootstrapTask = Task { [weak self] in
+            let reply: Any?
+            do {
+                let bound =
+                    try JSONSerialization.jsonObject(with: JSONValue.object(arguments).serialized())
+                    as? [String: Any] ?? [:]
+                reply = try await webView.callAsyncJavaScript(
+                    NativeHelperDocumentBridge.script(for: command), arguments: bound, in: nil, contentWorld: .page)
+            } catch {
+                guard !Task.isCancelled else { return }
+                self?.failHelperDocument("bootstrap")
+                return
+            }
+            guard let self, !Task.isCancelled else { return }
+            guard let text = reply as? String,
+                let receipt = try? NativeHelperDocumentBridge.decodeReceipt(
+                    .string(text), for: command, provenance: provenance),
+                let current = self.webShell?.helperObservation(for: nil),
+                current.navigationID == observation.navigationID
+            else {
+                self.failHelperDocument("bootstrap receipt")
+                return
+            }
+            do { try self.helperSession?.acceptBootstrapReceipt(receipt, observation: current) } catch {
+                self.failHelperDocument("bootstrap receipt")
+                return
+            }
+            self.helperDocumentAdvanced()
+        }
+    }
+
+    /// The page's fixed ready/failed callback; `false` rejects the acknowledgement.
+    func helperDocumentCallback(
+        _ callback: NativeHelperDocumentBridge.Callback, observation: NativeHelperDocumentSession.Observation
+    ) -> Bool {
+        guard helperSession != nil else { return false }
+        do { try helperSession?.acceptCallback(callback, observation: observation) } catch { return false }
+        if case .failed = callback {
+            failHelperDocument("bootstrap reported")
+            return true
+        }
+        helperDocumentAdvanced()
+        return true
+    }
+
+    /// Both receipts accepted: the helper stands in for the renderer's `ready()` call.
+    private func helperDocumentAdvanced() {
+        guard helperSession?.phase == .ready, !rendererReadiness.isReady else { return }
+        shellModel.setHelperDocumentState(.ready)
+        rendererDidBecomeReady()
+    }
+
+    private func failHelperDocument(_ stage: String) {
+        helperSession?.fail()
+        logger.error("[shell] helper document \(stage, privacy: .public) failed")
+        shellModel.setHelperDocumentState(.failed)
     }
 
     // MARK: - Renderer messages
