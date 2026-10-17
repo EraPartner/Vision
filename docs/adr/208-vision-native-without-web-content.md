@@ -57,6 +57,30 @@ UI".
    helper and native-only modes and for the Electron Demo as the phase-0 baseline, which was
    never recorded.
 
+## Implementation (2026-10-17)
+
+- **Palette answers:** `NativePaletteCalculator` and `NativePaletteRates`
+  (`apps/native/Sources/VisionNativeCore/Navigation/NativePaletteCalculator.swift`) in every mode.
+- **Tax report:** `NativeTaxReportProfile` projects the three report fields;
+  `GET /api/belgian-tax/overview` now accepts every four-digit year, so the TypeScript fallback for
+  years outside 1900–2200 is gone (`NativeTaxReportContext.swift`).
+- **Selection:** `VISION_NATIVE_WEB_FREE=1` selects `NativeHelperDocumentSelection.nativeOnly` under
+  the helper's eligibility rules (Debug build, Demo variant, supervised loopback runtime) and takes
+  precedence over the helper opt-in. `NativeShellPresentationMode.nativeOnly` shares the helper's
+  readiness rules.
+- **Storage:** `NativeShellStorage` answers each fixed page-storage script from `NativeRawStateStore`
+  at `native/<runtimeId>/raw-state.json`; the shell keeps every admission, generation and restore
+  fence. On first use `NativeStorageCapture` (app target) loads the backend's `/health` document in
+  a transient, unpresented web view, captures the origin's storage once and releases the view. A
+  complete capture with no data is recorded as an empty start; a migrated store opens under its
+  recorded source after a port change; any failure shows the unavailable state (Tor's decisions,
+  2026-10-17).
+- **Host:** the shell builds its root view without a web view, marks the graph's document ready
+  and runs the shared startup; reload is the graph rebuild.
+- **Evidence:** the e2e smoke's `native` mode launches the Debug Demo with
+  `VISION_NATIVE_WEB_FREE=1`, waits for `/health` and "native-only document ready", and records
+  bundle size and memory beside the retained, helper and Electron numbers.
+
 ## Consequences
 
 - Phase 4 can meet ADR-204's exit literally. The retained web document and the helper remain
