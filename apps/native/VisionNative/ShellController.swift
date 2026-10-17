@@ -1638,6 +1638,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         if case .helperDocument(let source) = documentSelection { helperSource = source }
         let shell = WebShell(controller: self, helperSource: helperSource)
         let webView = shell.webView
+        webView.pageZoom = PageZoom.persisted(initialSettings[PageZoom.settingsKey])
         webView.underPageBackgroundColor = .hsl(palette.base)
         let model = shellModel
         let host = NSHostingView(
@@ -1653,6 +1654,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         container?.addSubview(host, positioned: .below, relativeTo: launchView)
         shellHost = host
         webShell = shell
+        model.setPageZoom(Double(webView.pageZoom))
         return shell
     }
 
@@ -2173,19 +2175,28 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         case .reload:
             if appURL != nil { reloadCurrentGraph() } else { launch() }
         case .resetZoom:
-            webShell?.webView.pageZoom = 1
-            shellModel.setPageZoom(1)
+            applyPageZoom(1)
         case .zoomIn:
-            let zoom = PageZoom.zoomedIn(from: webShell.map { Double($0.webView.pageZoom) } ?? shellModel.pageZoom)
-            webShell?.webView.pageZoom = zoom
-            shellModel.setPageZoom(zoom)
+            applyPageZoom(
+                PageZoom.zoomedIn(from: webShell.map { Double($0.webView.pageZoom) } ?? shellModel.pageZoom))
         case .zoomOut:
-            let zoom = PageZoom.zoomedOut(from: webShell.map { Double($0.webView.pageZoom) } ?? shellModel.pageZoom)
-            webShell?.webView.pageZoom = zoom
-            shellModel.setPageZoom(zoom)
+            applyPageZoom(
+                PageZoom.zoomedOut(from: webShell.map { Double($0.webView.pageZoom) } ?? shellModel.pageZoom))
         default:
             // Role items use AppKit's standard actions (MenuController).
             break
+        }
+    }
+
+    /// Applies a zoom step to the page and native screens and keeps it for the next launch.
+    private func applyPageZoom(_ zoom: Double) {
+        webShell?.webView.pageZoom = zoom
+        shellModel.setPageZoom(zoom)
+        let supervisor = supervisor
+        Task {
+            do { try await supervisor.updateSettings { $0[PageZoom.settingsKey] = .double(zoom) } } catch {
+                AppRuntime.shellLogger.warning("page zoom save failed (non-fatal)")
+            }
         }
     }
 

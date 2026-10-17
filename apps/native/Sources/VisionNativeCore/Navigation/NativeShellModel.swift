@@ -117,6 +117,21 @@ public final class NativeShellModel {
     /// `NavItemBadge` counts; the SDK supplies it, and the sidebar shows none without it.
     public var sidebarBadges: NativeSidebarBadgesModel?
 
+    /// Scroll offsets per native history visit, restored only on Back/Forward like the
+    /// web table's history-entry scroll restoration.
+    @ObservationIgnored private var scrollOffsets: [UUID: Double] = [:]
+
+    /// The offset to restore for the current visit: only when it was reached by Back/Forward.
+    public func restorableScrollOffset() -> Double? {
+        guard let history = nativeNavigation, history.lastCommitWasTraversal else { return nil }
+        return scrollOffsets[history.entryID]
+    }
+
+    public func recordScrollOffset(_ offset: Double) {
+        guard let history = nativeNavigation else { return }
+        scrollOffsets[history.entryID] = max(0, offset)
+    }
+
     /// The count beside a sidebar row, 0 when none is shown.
     public func badgeCount(_ badge: NavBadge) -> Int {
         sidebarBadges?.count(for: badge, plannedDue: shellNotifications?.upcoming.visibleUpcoming.count ?? 0) ?? 0

@@ -33,7 +33,12 @@ public struct TransactionsView: View {
     private var inspectorIsSheet: Bool { model.inspectorIsSheet(pageWidth: Double(pageWidth)) }
 
     public var body: some View {
-        AdminPage {
+        AdminPage(
+            restoration: NativeScrollRestoration(
+                target: { shell.restorableScrollOffset() }, record: { shell.recordScrollOffset($0) },
+                isLoading: { model.isLoading || model.isFetchingMore }, canGrow: { model.hasMore },
+                grow: { await model.loadMore() })
+        ) {
             content
         }
         .onGeometryChange(for: CGFloat.self) { proxy in

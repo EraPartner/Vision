@@ -28,6 +28,10 @@ public struct NativeNavigationHistory: Sendable {
     private var pendingOpensSettings = false
     private var settingsEntryID: UUID?
     public var location: NativeNavigationLocation { entries[index].location }
+    /// The current visit's identity; a replace keeps it, a push creates a new one.
+    public var entryID: UUID { entries[index].id }
+    /// Whether the last committed change was Back or Forward (scroll restoration).
+    public private(set) var lastCommitWasTraversal = false
     public var count: Int { entries.count }
     public var canGoBack: Bool { index > 0 }
     public var canGoForward: Bool { index + 1 < entries.count }
@@ -63,6 +67,7 @@ public struct NativeNavigationHistory: Sendable {
             return .blocked(next)
         }
         cancelPending()
+        if case .traverse = intent { lastCommitWasTraversal = true } else { lastCommitWasTraversal = false }
         switch intent {
         case .push:
             if canGoForward { entries.removeSubrange((index + 1)..<entries.count) }

@@ -271,4 +271,17 @@ struct NativeNavigationHistoryTests {
         history.closeSettings(adminMode: true)
         #expect(history.index == 0 && history.location.raw == "/tax?year=2024&widget=income&widget=refund")
     }
+
+    @Test func entriesKeepTheirIdentityAndOnlyTraversalCountsAsBackOrForward() {
+        var history = NativeNavigationHistory(initial: location("/transactions?q=a"))
+        let first = history.entryID
+        history.request(.replace(location("/transactions?q=b")), adminMode: false, hasUnsavedChanges: false)
+        #expect(history.entryID == first && !history.lastCommitWasTraversal)
+        history.request(.push(location("/planned")), adminMode: false, hasUnsavedChanges: false)
+        #expect(history.entryID != first && !history.lastCommitWasTraversal)
+        history.request(.traverse(-1), adminMode: false, hasUnsavedChanges: false)
+        #expect(history.entryID == first && history.lastCommitWasTraversal)
+        history.request(.push(location("/accounts")), adminMode: false, hasUnsavedChanges: false)
+        #expect(!history.lastCommitWasTraversal)
+    }
 }

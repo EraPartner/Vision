@@ -139,6 +139,21 @@ public enum PageZoom {
     public static func zoomedOut(from factor: Double) -> Double {
         self.factor(forLevel: level(forFactor: factor) - 0.5)
     }
+
+    /// Chromium remembers the page zoom across launches; native keeps it in settings.json.
+    public static let settingsKey = "nativePageZoom"
+
+    /// A stored factor snapped to a zoom step; anything missing or invalid is 100%.
+    public static func persisted(_ value: JSONValue?) -> Double {
+        let raw: Double
+        switch value {
+        case .double(let number): raw = number
+        case .int(let number): raw = Double(number)
+        default: return 1
+        }
+        guard raw.isFinite, raw > 0 else { return 1 }
+        return factor(forLevel: level(forFactor: raw))
+    }
 }
 
 /// What a double-click on the drag region does: the system setting "Double-click a window's

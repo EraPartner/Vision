@@ -167,3 +167,15 @@ import Testing
                 == .object(["name": .string("bank.csv"), "content": .string("a,b\n1,2\n")]))
     }
 }
+
+@Suite struct PageZoomPersistenceTests {
+    @Test func storedFactorsSnapToAZoomStepAndInvalidValuesAreActualSize() {
+        #expect(PageZoom.persisted(.double(1.2)) == PageZoom.factor(forLevel: 1))
+        #expect(abs(PageZoom.persisted(.double(1.19)) - 1.2) < 0.0001)
+        #expect(PageZoom.persisted(.int(1)) == 1)
+        #expect(PageZoom.persisted(.double(50)) == PageZoom.maximumFactor)
+        for invalid: JSONValue? in [nil, .null, .string("2"), .double(0), .double(-1), .double(.nan), .bool(true)] {
+            #expect(PageZoom.persisted(invalid) == 1)
+        }
+    }
+}

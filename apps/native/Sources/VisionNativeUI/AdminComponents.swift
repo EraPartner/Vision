@@ -180,9 +180,28 @@ struct NoticeToast: View {
 }
 
 /// The scrolling page frame of the admin screens.
+/// A page's history scroll restoration: the offset to restore (only on Back/Forward),
+/// where to record it, and how to load more rows until the content can reach it.
+struct NativeScrollRestoration {
+    let target: @MainActor () -> Double?
+    let record: @MainActor (Double) -> Void
+    var isLoading: @MainActor () -> Bool = { false }
+    var canGrow: @MainActor () -> Bool = { false }
+    var grow: @MainActor () async -> Void = {}
+}
+
 struct AdminPage<Content: View>: View {
-    @ViewBuilder var content: () -> Content
+    private let restoration: NativeScrollRestoration?
+    private let content: () -> Content
     @Environment(\.visionTheme) var theme
+    @State private var position = ScrollPosition(edge: .top)
+    @State private var maximumOffset: CGFloat = 0
+    @State private var isRestoring = true
+
+    init(restoration: NativeScrollRestoration? = nil, @ViewBuilder content: @escaping () -> Content) {
+        self.restoration = restoration
+        self.content = content
+    }
 
     var body: some View {
         ScrollView {
@@ -193,6 +212,36 @@ struct AdminPage<Content: View>: View {
             .frame(maxWidth: 1200, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .scrollPosition($position)
+        .onScrollGeometryChange(for: CGFloat.self) { geometry in
+            geometry.contentOffset.y
+        } action: { _, offset in
+            if let restoration, !isRestoring { restoration.record(Double(offset)) }
+        }
+        .onScrollGeometryChange(for: CGFloat.self) { geometry in
+            max(0, geometry.contentSize.height - geometry.containerSize.height)
+        } action: { _, maximum in
+            maximumOffset = maximum
+        }
+        .task { await restore() }
         .foregroundStyle(theme.foreground)
+    }
+
+    /// VirtualDataTable: Back/Forward returns to the entry's offset, loading further pages
+    /// until the content is tall enough (bounded), then hands recording back to scrolling.
+    private func restore() async {
+        defer { isRestoring = false }
+        guard let restoration, let target = restoration.target(), target > 0 else { return }
+        for _ in 0..<80 {
+            if maximumOffset >= CGFloat(target) { break }
+            if !restoration.isLoading(), restoration.canGrow() {
+                await restoration.grow()
+            } else if !restoration.isLoading() {
+                break
+            }
+            try? await Task.sleep(for: .milliseconds(50))
+            if Task.isCancelled { return }
+        }
+        position.scrollTo(y: min(CGFloat(target), maximumOffset))
     }
 }
