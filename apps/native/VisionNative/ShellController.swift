@@ -73,6 +73,8 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     /// Helper mode only: cold CSV, new-transaction and menu intents, retained across graph
     /// rebuilds so committed history and unconsumed intents survive (ADR-207).
     private let nativeIntents = NativeShellIntentCoordinator()
+    /// The first helper startup seeds a new session; later documents are reloads.
+    private var helperStartupResolved = false
     private var queue = RendererMessageQueue()
     private var rendererReadiness = NativeRendererReadiness()
     private var launchTask: Task<Void, Never>?
@@ -1876,6 +1878,45 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         }
     }
 
+    private func applyHelperStartup(_ startup: inout NativeNavigationStartup, model: NativeShellModel) {
+        guard !startup.hasResolved, let current = model.nativeNavigationLocation?.raw else { return }
+        let settings: NativeNavigationStartup.Settings =
+            model.settingsLoaded ? .loaded(startupSection: model.settings.startupSection) : .loading
+        switch startup.evaluate(currentLocation: current, settings: settings) {
+        case .seedNewSession(let target), .replaceCurrentEntry(let target):
+            // Selections are raw; the route validator still admits them, as in the source.
+            guard target != current, NativeNavigationLocation(target) != nil else { return }
+            model.replace(with: target)
+        case .waitingForSettings, .unchanged:
+            break
+        }
+    }
+
+    /// StartupRedirect's mirror of the hydrated startup section and the current page.
+    private func persistHelperNavigation(model: NativeShellModel, generation: UUID) {
+        let route = model.nativeNavigationLocation?.raw
+        let section = model.settingsLoaded ? model.settings.startupSection : nil
+        Task { [weak self] in
+            if let route { try? await self?.writeNativeLocalValue(route, key: .lastRoute, generation: generation) }
+            if let section {
+                try? await self?.writeNativeLocalValue(section, key: .startupSection, generation: generation)
+            }
+        }
+    }
+
+    private func trackHelperNavigation(model: NativeShellModel, generation: UUID) {
+        withObservationTracking {
+            _ = model.nativeNavigationLocation?.raw
+            _ = model.settings.startupSection
+        } onChange: { [weak self, weak model] in
+            Task { @MainActor in
+                guard let self, let model, generation == self.nativeSettingsGeneration else { return }
+                self.persistHelperNavigation(model: model, generation: generation)
+                self.trackHelperNavigation(model: model, generation: generation)
+            }
+        }
+    }
+
     private func failHelperDocument(_ stage: String) {
         helperSession?.fail()
         logger.error("[shell] helper document \(stage, privacy: .public) failed")
@@ -2246,13 +2287,29 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             self.publishNativeSettingsSession()
             self.resolveNativeSettingsAppearance()
             self.startNativeSettingsAppearanceWatch()
+            guard self.documentSelection != .retainedWeb else {
+                model.reloadSettings()
+                return
+            }
+            // Helper mode owns StartupRedirect: capture its two raw values before tracking
+            // overwrites them, then resolve once from the mirror or the loaded settings.
+            let mirror = try? await self.nativeLocalValue(.startupSection, generation: generation)
+            let lastRoute = try? await self.nativeLocalValue(.lastRoute, generation: generation)
+            guard isCurrentStartup() else { return }
+            var startup = NativeNavigationStartup(
+                context: self.helperStartupResolved ? .documentReload : .newSession,
+                mirroredStartupSection: mirror ?? nil, lastRoute: lastRoute ?? nil)
+            self.helperStartupResolved = true
+            self.applyHelperStartup(&startup, model: model)
             model.reloadSettings()
-            guard self.documentSelection != .retainedWeb else { return }
-            // Helper mode: queued cold and menu intents wait for document, settings and onboarding.
+            // Queued cold and menu intents wait for document, settings and onboarding.
             model.nativeIntentReadinessDidChange()
             await model.settingsSettled()
             guard isCurrentStartup() else { return }
+            self.applyHelperStartup(&startup, model: model)
             model.nativeIntentReadinessDidChange()
+            self.persistHelperNavigation(model: model, generation: generation)
+            self.trackHelperNavigation(model: model, generation: generation)
         }
         revealWebView()
     }

@@ -20,6 +20,9 @@ public enum NativeSettingsStorageBridge {
         case paletteRecents = "vision.palette.recents"
         case fxDismissedAt = "fx-status-banner-dismissed-at"
         case upcomingDismissals = "dismissed_upcoming_planned_payments"
+        /// StartupRedirect's boot mirror and last page; only the helper-document host owns them.
+        case startupSection = "vision.startupSection"
+        case lastRoute = "vision.lastRoute"
     }
     public enum ReplyError: Error, Equatable, Sendable { case invalidReply }
 
