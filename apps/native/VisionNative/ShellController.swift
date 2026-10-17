@@ -1705,8 +1705,6 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         NSApp.activate()
     }
 
-    /// The web view inside the native navigation shell; the launch view covers both until
-    /// the page is ready.
     // MARK: - Native-only mode (ADR-208)
 
     /// Opens the raw-state store (capturing the origin's browser storage once), builds a host
@@ -1776,6 +1774,8 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         rendererDidBecomeReady()
     }
 
+    /// The web view inside the native navigation shell; the launch view covers both until
+    /// the page is ready.
     private func makeWebShell() -> WebShell {
         var helperSource: NativeHelperDocumentSession.Source?
         if case .helperDocument(let source) = documentSelection { helperSource = source }
