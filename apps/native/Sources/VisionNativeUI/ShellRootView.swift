@@ -194,6 +194,9 @@ struct NativeSidebar: View {
         // while keeping the list's selection and arrow-key movement.
         .tint(Color.clear)
         .accessibilityLabel(model.strings.t("nav.primary"))
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if model.commandPalette != nil { searchField }
+        }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             footer
         }
@@ -254,6 +257,10 @@ struct NativeSidebar: View {
                     .foregroundStyle(Color(token: theme.glass.icon))
             }
             .tag(item.url as String?)
+            // The web row's hover hint and rail tooltip, "<title> · G X".
+            .help(
+                item.shortcutKey.map { model.strings.t(item.titleKey) + " · G " + $0.uppercased() }
+                    ?? model.strings.t(item.titleKey))
             .badge(badgeText(item))
             .badgeProminence(item.badge == .needsCategory || item.badge == .plannedDue ? .increased : .standard)
             .accessibilityValue(badgeLabel(item))
@@ -281,6 +288,30 @@ struct NativeSidebar: View {
             case .monitors: "monitors.unreadCount"
             }
         return model.strings.t(key, ["count": String(count)])
+    }
+
+    /// AppSidebar's search field: opens the command palette (⌘K).
+    private var searchField: some View {
+        Button {
+            model.openPalette()
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass")
+                Text(model.strings.t("commandPalette.hint"))
+                Spacer(minLength: 4)
+                Text("⌘K").font(.caption).foregroundStyle(.tertiary)
+            }
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(RoundedRectangle(cornerRadius: DesignTokens.Radius.chip).fill(.quaternary))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 10)
+        .padding(.top, 6)
+        .padding(.bottom, 4)
+        .accessibilityLabel(model.strings.t("commandPalette.openLabel"))
     }
 
     private var footer: some View {

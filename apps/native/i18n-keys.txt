@@ -4641,6 +4641,7 @@ commandPalette.lookingUp
 commandPalette.market
 commandPalette.noResults
 commandPalette.openLabel
+commandPalette.hint
 commandPalette.placeholder
 commandPalette.recent
 commandPalette.result
