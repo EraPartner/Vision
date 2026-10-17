@@ -497,8 +497,11 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
                 return NSPasteboard.general.setString(value, forType: .string)
             },
             onSidebarVisibilityChange: { [weak self] visible in
+                UserDefaults.standard.set(!visible, forKey: Self.sidebarCollapsedKey)
                 self?.deliver(.menuAction, BridgeDispatcher.menuActionPayload(.nativeSidebar(visible: visible)))
             })
+        // `vision.sidebar.collapsed`: the sidebar comes back as it was left.
+        if UserDefaults.standard.bool(forKey: Self.sidebarCollapsedKey) { model.setSidebarVisible(false) }
         model.sidebarBadges = NativeSidebarBadgesModel(service: client)
         model.apiInspector = apiInspector
         model.isEditingWebText = { [weak self] in
@@ -1179,6 +1182,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
 
     /// The sections the user hid (`SIDEBAR_HIDDEN_SECTIONS` of the web sidebar), per Mac.
     private static let hiddenSectionsKey = "nativeSidebarHiddenSections"
+    private static let sidebarCollapsedKey = "nativeSidebarCollapsed"
 
     private static func loadHiddenSections() -> [NavSectionID: Bool]? {
         guard let stored = UserDefaults.standard.dictionary(forKey: hiddenSectionsKey) as? [String: Bool] else {

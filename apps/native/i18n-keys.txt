@@ -4635,6 +4635,7 @@ transfers.includeTransfersHint
 
 # Remaining native shell overlays and shared banners (phase 3p).
 aria.close
+aria.collapseSidebar
 aria.toggleSidebar
 commandPalette.actions
 commandPalette.copyHint

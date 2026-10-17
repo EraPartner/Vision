@@ -18,6 +18,7 @@ public struct ShellRootView<WebContent: View>: View {
     public init(model: NativeShellModel, @ViewBuilder webContent: @escaping (_ hidden: Bool) -> WebContent) {
         self.model = model
         self.webContent = webContent
+        _columnVisibility = State(initialValue: model.isSidebarVisible ? .all : .detailOnly)
     }
 
     public var body: some View {
@@ -207,7 +208,13 @@ struct NativeSidebar: View {
         .tint(Color.clear)
         .accessibilityLabel(model.strings.t("nav.primary"))
         .safeAreaInset(edge: .top, spacing: 0) {
-            if model.commandPalette != nil { searchField }
+            HStack(spacing: 4) {
+                if model.commandPalette != nil { searchField } else { Spacer() }
+                collapseButton
+            }
+            .padding(.horizontal, 10)
+            .padding(.top, 6)
+            .padding(.bottom, 4)
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             footer
@@ -320,10 +327,22 @@ struct NativeSidebar: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .padding(.horizontal, 10)
-        .padding(.top, 6)
-        .padding(.bottom, 4)
         .accessibilityLabel(model.strings.t("commandPalette.openLabel"))
+    }
+
+    /// AppSidebar's header collapse button; ⌃⌘S and View › Toggle Sidebar bring it back.
+    private var collapseButton: some View {
+        Button {
+            model.setSidebarVisible(false)
+        } label: {
+            Image(systemName: "sidebar.left")
+                .foregroundStyle(.secondary)
+                .frame(width: 24, height: 24)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(model.strings.t("aria.collapseSidebar"))
+        .accessibilityLabel(model.strings.t("aria.collapseSidebar"))
     }
 
     private var footer: some View {
