@@ -163,6 +163,53 @@ public struct NativeShellStorage: Sendable {
         try? await store.setSessionValue(nil, for: .dashboardArrival)
     }
 
+    // MARK: The fixed scripts, answered natively
+
+    public enum ScriptError: Error, Equatable, Sendable { case unsupportedScript }
+
+    /// The reply the native-only shell gives in place of `callAsyncJavaScript` for one of the
+    /// shell's fixed storage scripts, in the same JSON shape the page returns. Event scripts
+    /// for React or helper listeners have no listener and answer `true`; any other script is
+    /// refused rather than guessed.
+    public func answer(script: String, arguments: [String: JSONValue]) async throws -> JSONValue {
+        switch script {
+        case NativeSettingsStorageBridge.readScript, NativeSettingsStorageBridge.writeScript,
+            NativeSettingsStorageBridge.removeScript:
+            guard let raw = arguments["key"]?.stringValue,
+                let key = NativeSettingsStorageBridge.LocalKey(rawValue: raw)
+            else { throw ScriptError.unsupportedScript }
+            if script == NativeSettingsStorageBridge.readScript {
+                return (try? await value(for: key)).map(JSONValue.string) ?? .null
+            }
+            let next = script == NativeSettingsStorageBridge.writeScript ? arguments["value"]?.stringValue : nil
+            if script == NativeSettingsStorageBridge.writeScript, next == nil { return .bool(false) }
+            do {
+                try await setValue(next, for: key)
+                return .bool(true)
+            } catch {
+                return .bool(false)
+            }
+        case NativeSettingsStorageBridge.exportScript:
+            return (try? await exportReply()) ?? .null
+        case NativeSettingsStorageBridge.restoreScript:
+            guard let text = arguments["stateJSON"]?.stringValue, let state = try? JSONValue.parse(Data(text.utf8))
+            else { return .bool(false) }
+            return .bool(await restore(state))
+        case NativeSettingsStorageBridge.legacyThemeScript:
+            return await legacyThemeReply()
+        case NativeSettingsStorageBridge.editingScript:
+            // No web text field exists, so a shell shortcut never steals an editor's key.
+            return .bool(false)
+        default:
+            if script.contains("vision.dashboardArrivalSeen") {
+                await clearDashboardArrival()
+                return .bool(true)
+            }
+            if script.contains("window.dispatchEvent(new CustomEvent('vision:native-") { return .bool(true) }
+            throw ScriptError.unsupportedScript
+        }
+    }
+
     // MARK: JavaScript `String(value)`
 
     /// `String(value)` for a JSON value: strings verbatim, `null` as "null", numbers as

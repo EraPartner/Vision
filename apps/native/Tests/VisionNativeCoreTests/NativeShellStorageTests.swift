@@ -97,6 +97,39 @@ import Testing
         }
     }
 
+    @Test func theFixedScriptsAreAnsweredInThePagesReplyShape() async throws {
+        try await withStorage(["vision_theme": "dark"]) { storage, _ in
+            let bridge = NativeSettingsStorageBridge.self
+            let write = try await storage.answer(
+                script: bridge.writeScript, arguments: bridge.arguments(for: .paletteRecents, value: "[\"/a\"]"))
+            #expect(try bridge.mutationReply(write))
+            let read = try await storage.answer(script: bridge.readScript, arguments: bridge.arguments(for: .paletteRecents))
+            #expect(try bridge.readLocalReply(read) == "[\"/a\"]")
+            #expect(
+                try bridge.mutationReply(
+                    try await storage.answer(script: bridge.removeScript, arguments: bridge.arguments(for: .paletteRecents))))
+            #expect(
+                try await storage.answer(script: bridge.readScript, arguments: bridge.arguments(for: .paletteRecents))
+                    == .null)
+            #expect(try bridge.readReply(try await storage.answer(script: bridge.exportScript, arguments: [:])) != nil)
+            let restore = try await storage.answer(
+                script: bridge.restoreScript,
+                arguments: try bridge.restoreArguments(.object(["keys": .object(["vision.language": .string("nl")])])))
+            #expect(try bridge.mutationReply(restore))
+            #expect(try await storage.store.value(for: .language) == "nl")
+            #expect(try await storage.answer(script: bridge.editingScript, arguments: [:]) == .bool(false))
+            #expect(try await storage.answer(script: bridge.legacyThemeScript, arguments: [:]).stringValue != nil)
+            let event = "window.dispatchEvent(new CustomEvent('vision:native-settings', {detail}));"
+            #expect(try await storage.answer(script: event, arguments: [:]) == .bool(true))
+            await #expect(throws: NativeShellStorage.ScriptError.unsupportedScript) {
+                try await storage.answer(script: "return document.title;", arguments: [:])
+            }
+            await #expect(throws: NativeShellStorage.ScriptError.unsupportedScript) {
+                try await storage.answer(script: bridge.readScript, arguments: ["key": .string("vision_theme")])
+            }
+        }
+    }
+
     @Test(arguments: [
         (1.0, "1"), (1.5, "1.5"), (-2.25, "-2.25"), (0.00001, "0.00001"), (0.0000001, "1e-7"), (1.5e-7, "1.5e-7"),
         (1e16, "10000000000000000"), (1e21, "1e+21"), (1.2345e22, "1.2345e+22"), (0.0, "0"),

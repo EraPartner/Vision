@@ -36,6 +36,8 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     private lazy var apiClient = makeAPIClient()
     private var dataSession = NativeDataSession()
     private var localStateSession = NativeLocalStateSession()
+    /// ADR-208: the native-only mode's storage; `nil` while a web document holds it.
+    private var nativeStorage: NativeShellStorage?
     private var restoreFenceEntered = false
     private var restoreFenceOwner: UUID?
     private var restoredNativeGeneration: UUID?
@@ -864,6 +866,13 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     private func nativeSettingsScript(
         _ script: String, arguments: [String: JSONValue] = [:], didCompleteActual: (@Sendable () -> Void)? = nil
     ) async throws -> JSONValue {
+        if let storage = nativeStorage {
+            // Native-only: the same fixed scripts answered by the raw-state store; the store's
+            // own completion is the physical completion the fences wait for.
+            defer { didCompleteActual?() }
+            guard queue.isReady else { throw APIError.backendUnavailable }
+            return try await storage.answer(script: script, arguments: arguments)
+        }
         guard queue.isReady, let webView = webShell?.webView else {
             didCompleteActual?()
             throw APIError.backendUnavailable
@@ -1174,6 +1183,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     /// read it from the page; without one the backend's loopback allowlist applies.
     /// A page that never answers (hung or reloading) gives no token after `adminTokenTimeout`.
     private func adminToken() async -> String? {
+        if let storage = nativeStorage { return queue.isReady ? await storage.adminToken() : nil }
         guard queue.isReady, let webView = webShell?.webView else { return nil }
         return await withCheckedContinuation { (continuation: CheckedContinuation<String?, Never>) in
             // Whichever comes first, the page's answer or the timeout, resumes exactly once.
@@ -1227,6 +1237,22 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         try requireNativeGeneration(generation)
         let readSession = localStateSession
         if value == nil { try await readSession.checkRead() }
+        if let storage = nativeStorage {
+            guard queue.isReady else { throw APIError.backendUnavailable }
+            let admission = value == nil ? nil : try await beginNativeStorageWrite()
+            let stored: String?
+            do {
+                try requireNativeGeneration(generation)
+                stored = try await storage.chartLayouts(writing: value)
+                if let (session, token) = admission { await session.finishWrite(token) }
+            } catch {
+                if let (session, token) = admission { await session.finishWrite(token) }
+                throw error
+            }
+            try requireNativeGeneration(generation)
+            if value == nil { try await readSession.checkRead() }
+            return stored
+        }
         guard queue.isReady, let webView = webShell?.webView else { throw APIError.backendUnavailable }
         let admission = value == nil ? nil : try await beginNativeStorageWrite()
         do { try requireNativeGeneration(generation) } catch {
@@ -1283,6 +1309,18 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
                 "vision.home.dismissedAccountInactivity", "dismissed_upcoming_planned_payments",
                 TaxDeductionsModel.dismissalStorageKey, "vision.analysis.sqlHistory",
             ]
+        if let storage = nativeStorage {
+            guard permitted.contains(key), queue.isReady else { return nil }
+            let admission = value == nil ? nil : try? await beginNativeStorageWrite()
+            guard value == nil || admission != nil else { return nil }
+            if let generation, (try? requireNativeGeneration(generation)) == nil {
+                if let (session, token) = admission { await session.finishWrite(token) }
+                return nil
+            }
+            let answer = await storage.webStorage(key: key, value: value, session: session)
+            if let (session, token) = admission { await session.finishWrite(token) }
+            return answer
+        }
         guard permitted.contains(key),
             queue.isReady, let webView = webShell?.webView
         else { return nil }
@@ -1343,6 +1381,13 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     /// storage is then unchanged as far as the card knows.
     private func writeAdminToken(_ token: String, generation: UUID) async -> Bool {
         guard (try? requireNativeGeneration(generation)) != nil else { return false }
+        if let storage = nativeStorage {
+            guard queue.isReady, let (session, writeToken) = try? await beginNativeStorageWrite() else { return false }
+            let stored = await storage.setAdminToken(token)
+            await session.finishWrite(writeToken)
+            guard (try? requireNativeGeneration(generation)) != nil else { return false }
+            return stored
+        }
         guard queue.isReady, let webView = webShell?.webView else { return false }
         guard let (session, writeToken) = try? await beginNativeStorageWrite() else { return false }
         guard (try? requireNativeGeneration(generation)) != nil else {
