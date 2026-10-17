@@ -27,11 +27,19 @@ import Testing
         #expect(select().presentationMode == .helperDocument)
     }
 
-    @Test func withoutTheExactOptInTheRetainedWebStays() {
+    @Test func withoutTheExactHelperOptInTheNativeOnlyDefaultApplies() {
         for value in [nil, "", "0", "true", "yes", " 1"] as [String?] {
             let environment = value.map { [NativeHelperDocumentSelection.environmentKey: $0] } ?? [:]
-            #expect(select(environment: environment) == .retainedWeb)
+            #expect(select(environment: environment).presentationMode == .nativeOnly)
         }
+    }
+
+    @Test func anExactWebFreeZeroOptsOutToTheHelperOrTheRetainedWeb() {
+        let key = NativeHelperDocumentSelection.nativeOnlyEnvironmentKey
+        #expect(select(environment: [key: "0"]) == .retainedWeb)
+        let helper = [key: "0", NativeHelperDocumentSelection.environmentKey: "1"]
+        #expect(select(environment: helper).presentationMode == .helperDocument)
+        #expect(select(environment: [key: " 0"]).presentationMode == .nativeOnly)
     }
 
     @Test func theWebFreeOptInSelectsNativeOnlyUnderTheSameEligibility() {
@@ -44,8 +52,9 @@ import Testing
         #expect(select(environment: [key: "1"]).presentationMode == .nativeOnly)
         let both = [key: "1", NativeHelperDocumentSelection.environmentKey: "1"]
         #expect(select(environment: both).presentationMode == .nativeOnly)
-        for value in ["", "0", "true", " 1"] {
-            #expect(select(environment: [key: value]).presentationMode != .nativeOnly)
+        for value in ["", "true", " 1"] {
+            let helper = [key: value, NativeHelperDocumentSelection.environmentKey: "1"]
+            #expect(select(environment: helper).presentationMode == .helperDocument)
         }
         #expect(select(environment: [key: "1"], debug: false) == .retainedWeb)
         #expect(select(environment: [key: "1"], variant: "standard") == .retainedWeb)
@@ -55,6 +64,7 @@ import Testing
     @Test func aDeveloperOverrideNeverVouchesForTheDemoRuntime() {
         #expect(select(source: .developerOverride) == .retainedWeb)
         #expect(select(source: .supervised(runtimeIdentifier: "vision_native")) == .retainedWeb)
+        #expect(select(environment: [:], source: .developerOverride) == .retainedWeb)
     }
 
     @Test func releaseAndStandardBuildsCannotOptIn() {
@@ -62,6 +72,8 @@ import Testing
         #expect(select(variant: "standard") == .retainedWeb)
         #expect(select(variant: nil) == .retainedWeb)
         #expect(select(debug: false).presentationMode == .retainedWeb)
+        #expect(select(environment: [:], debug: false) == .retainedWeb)
+        #expect(select(environment: [:], variant: "standard") == .retainedWeb)
     }
 
     @Test func nonLoopbackOrMalformedBackendsKeepTheRetainedWeb() {

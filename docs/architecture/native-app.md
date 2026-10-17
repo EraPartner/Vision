@@ -1765,10 +1765,11 @@ tests await macOS. No existing renderer event owner is retired by this preparato
 [[docs/adr/208-vision-native-without-web-content|ADR-208]] adds a third presentation,
 `NativeShellPresentationMode.nativeOnly`, that runs the shell with no web view at all.
 `isNative` is true for both `helperDocument` and `nativeOnly`, so the native route, loading and
-unavailable handling apply to either. `VISION_NATIVE_WEB_FREE=1` selects it through
-`NativeHelperDocumentSelection` under the same gate as the helper (Debug build, Demo variant,
-supervised backend) and takes precedence over `VISION_NATIVE_HELPER_DOCUMENT=1`. Otherwise the
-launch stays on the retained web document.
+unavailable handling apply to either. `NativeHelperDocumentSelection` selects it by default under
+the same gate as the helper (Debug build, Demo variant, supervised backend): an exact
+`VISION_NATIVE_WEB_FREE=0` opts out, `VISION_NATIVE_HELPER_DOCUMENT=1` selects the helper instead,
+and `VISION_NATIVE_WEB_FREE=1` takes precedence over both. Ineligible launches, and opted-out ones
+without the helper opt-in, stay on the retained web document.
 
 - **Storage.** `NativeShellStorage` answers the helper's fixed storage scripts (typed local keys,
   backup export/restore) from `NativeRawStateStore`, which persists to

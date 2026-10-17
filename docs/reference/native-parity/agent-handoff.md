@@ -93,7 +93,8 @@ Tor chose to port the helper document's work to Swift and add a web-free mode, d
 - Palette answers (`NativePaletteCalculator`) and the tax report context (`NativeTaxReportProfile`
   plus the overview for every four-digit year; the backend overview's year bound widened) no
   longer use the helper document, in any mode.
-- `VISION_NATIVE_WEB_FREE=1` (Debug Demo, supervised runtime) selects the native-only mode: storage
+- The native-only mode is the eligible Debug Demo default (supervised runtime;
+  `VISION_NATIVE_WEB_FREE=0` opts out, `VISION_NATIVE_HELPER_DOCUMENT=1` selects the helper): storage
   via `NativeShellStorage` over `NativeRawStateStore` (`native/<runtimeId>/raw-state.json`), a
   one-time capture through a transient web view (`NativeStorageCapture`), no web view afterwards.
   Owner decisions: transient-view capture; a complete empty capture is an explicit empty start;
@@ -102,8 +103,8 @@ Tor chose to port the helper document's work to Swift and add a web-free mode, d
   native store does not see. Pick one mode per Demo until the helper is retired.
 - The e2e smoke runs `retained`, `helper` and `native` modes plus the Electron Demo baseline and
   records bundle size and resident memory per mode (job summary and artifact).
-- The helper-default flip waits on a passing helper smoke; it is prepared on the local branch
-  `local/flip-helper-default-4` (not pushed).
+- The helper-default flip is superseded by the native-only default; the helper stays an explicit
+  opt-in until the owner retires it.
 
 **First end-to-end evidence (run 39062704573, 2026-10-17)**
 
@@ -141,14 +142,15 @@ the app's own footprint, not WebKit, dominates it; profiling it is a follow-up.
 The helper smoke selected its mode, then the helper page reported `bootstrap-failed`:
 `startNativeHelperDocument` requires `__VISION_NATIVE_PALETTE__` and `__VISION_NATIVE_REPORTS__`,
 which only the retained `BridgeScript` defined. The helper's document-start script now defines
-both.
+both. On run 39067544790 (branch suites green, run 39067544787) native-only passed again and the
+helper's bootstrap call itself then threw; the shell now logs that error with the stage.
 
 **Next**
 
 1. Read the latest `Native Branch Verification` and `Native End-to-End Smoke` runs; fix any
-   compile or test failure. When the helper smoke passes, apply the helper-default flip and
-   record the run here; when the native smoke passes, record its metrics against the Electron
-   baseline and propose making native-only the Debug Demo default.
+   compile or test failure. Native-only is the Debug Demo default (suites run 39067544787); the
+   helper-default flip is superseded. Confirm the helper smoke passes with its capability flags,
+   then retire the helper and retained modes for the Demo with the owner (ADR-208 end state).
 2. Manual Mac checks owed: VoiceOver on the startup/failure screens, the text context menu,
    window drag on native screens, notification permission prompt, topbar title on scroll.
 3. Remaining phase-4 gates from ADR-206/207: storage takeover, retiring the retained renderer

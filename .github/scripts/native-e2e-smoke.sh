@@ -27,10 +27,12 @@ sleep 2
 if [ "$mode" = "helper" ]; then
   VISION_NATIVE_HELPER_DOCUMENT=1 "$binary" >"$out/app-$mode.log" 2>&1 &
 elif [ "$mode" = "native" ]; then
-  # ADR-208: no web document; the first run captures the origin's storage once.
-  VISION_NATIVE_WEB_FREE=1 "$binary" >"$out/app-$mode.log" 2>&1 &
-else
+  # ADR-208: the Debug Demo default has no web document; the first run captures the origin's
+  # storage once. No variable is set, so this also proves the default.
   "$binary" >"$out/app-$mode.log" 2>&1 &
+else
+  # The retained control (and the Electron baseline, which ignores it) opts out explicitly.
+  VISION_NATIVE_WEB_FREE=0 "$binary" >"$out/app-$mode.log" 2>&1 &
 fi
 pid=$!
 

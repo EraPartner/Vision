@@ -8,12 +8,13 @@ public enum NativeShellBackendSource: Equatable, Sendable {
 }
 
 /// Chooses the document presentation once, before the session creates its web document.
-/// The helper experiment needs an explicit opt-in on top of every ADR-207 eligibility rule;
-/// everything else, including any ineligible opt-in, keeps the retained web presentation.
+/// Within every ADR-207 eligibility rule, ADR-208's native-only mode is the default: an exact
+/// `VISION_NATIVE_WEB_FREE=0` opts out, and an explicit helper opt-in selects the helper document
+/// instead. Everything else, including any ineligible launch, keeps the retained web presentation.
 public enum NativeHelperDocumentSelection: Equatable, Sendable {
     public static let environmentKey = "VISION_NATIVE_HELPER_DOCUMENT"
-    /// ADR-208's default-off opt-in for the mode without any web document; it takes
-    /// precedence over the helper document under the same eligibility rules.
+    /// ADR-208's mode without any web document: the eligible default, `0` opts out and `1`
+    /// takes precedence over the helper opt-in.
     public static let nativeOnlyEnvironmentKey = "VISION_NATIVE_WEB_FREE"
 
     case retainedWeb
@@ -34,8 +35,10 @@ public enum NativeHelperDocumentSelection: Equatable, Sendable {
         environment: [String: String], isDebugBuild: Bool, rawVariant: String?,
         backendSource: NativeShellBackendSource, backendURL: URL, websiteDataStoreIdentifier: String
     ) -> NativeHelperDocumentSelection {
-        let nativeOnly = environment[nativeOnlyEnvironmentKey] == "1"
-        guard environment[environmentKey] == "1" || nativeOnly,
+        let webFree = environment[nativeOnlyEnvironmentKey]
+        let helper = environment[environmentKey] == "1"
+        let nativeOnly = webFree == "1" || (webFree != "0" && !helper)
+        guard helper || nativeOnly,
             case .supervised(let runtimeIdentifier) = backendSource
         else { return .retainedWeb }
         let receipt = NativeHelperDocumentSession.SupervisorDemoReceipt(

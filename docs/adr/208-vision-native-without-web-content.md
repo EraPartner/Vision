@@ -82,6 +82,10 @@ UI".
   bundle size and memory beside the retained, helper and Electron numbers. It first passed on run
   39065530611 (2026-10-17); the numbers are in
   [[docs/reference/native-parity/agent-handoff|the agent handoff]].
+- **Default (2026-10-17):** with the native suites green (run 39067544787) and the smoke passing, the
+  native-only mode is the eligible Debug Demo default, as decision 3 provides. `VISION_NATIVE_WEB_FREE=0`
+  opts out; an explicit `VISION_NATIVE_HELPER_DOCUMENT=1` still selects the helper. The smoke's
+  `native` mode now launches with no variable, and the retained control opts out.
 
 ## Consequences
 
