@@ -5,8 +5,10 @@
 # Shared
 common.error
 common.retry
+common.reload
 app.backendLost
 layout.settings
+layout.skipToContent
 
 # Sidebar (generated from apps/frontend/src/lib/navigation.ts)
 nav.primary

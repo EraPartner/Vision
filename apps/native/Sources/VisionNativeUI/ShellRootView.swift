@@ -12,6 +12,8 @@ public struct ShellRootView<WebContent: View>: View {
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var connectivity = PortfolioConnectivity()
     @State private var overlayFocusReturn = NativeOverlayFocusReturnCoordinator()
+    /// The landing point at the top of a native screen (`<main>` for the skip link).
+    @FocusState private var contentFocused: Bool
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -21,10 +23,25 @@ public struct ShellRootView<WebContent: View>: View {
         _columnVisibility = State(initialValue: model.isSidebarVisible ? .all : .detailOnly)
     }
 
+    private var isNativeDetail: Bool {
+        if case .native = model.detail { return true }
+        return false
+    }
+
+    /// Focus lands here from Skip to content, so the next Tab moves into the page.
+    private var contentLanding: some View {
+        Color.clear
+            .frame(width: 1, height: 1)
+            .focusable()
+            .focused($contentFocused)
+            .focusEffectDisabled()
+            .accessibilityHidden(true)
+    }
+
     public var body: some View {
         let theme = VisionTheme(selection: model.theme)
         NavigationSplitView(columnVisibility: $columnVisibility) {
-            NativeSidebar(model: model)
+            NativeSidebar(model: model, skipToContent: isNativeDetail ? { contentFocused = true } : nil)
                 .navigationSplitViewColumnWidth(min: 200, ideal: 248, max: 340)
                 .environment(\.colorScheme, theme.colorScheme)
                 // The window has no toolbar (the page draws its topbar under the traffic
@@ -40,6 +57,7 @@ public struct ShellRootView<WebContent: View>: View {
                     if case .native(let screen) = model.detail {
                         NativePageZoomView(factor: model.pageZoom) {
                             NativeScreenContainer(screen: screen, model: model)
+                                .overlay(alignment: .topLeading) { contentLanding }
                                 .environment(\.colorScheme, theme.colorScheme)
                                 // The mounted destination receives cold CSV/new-transaction intents.
                                 .task(id: screen) { model.nativeIntentConsumerDidBecomeReady(for: screen) }
@@ -52,7 +70,8 @@ public struct ShellRootView<WebContent: View>: View {
                     } else if model.detail == .loading || model.detail == .unavailable {
                         NativeShellUnavailableView(
                             detail: model.detail, strings: model.strings,
-                            retry: model.canRetryInitialSettings ? { model.reloadSettings() } : nil
+                            retry: model.canRetryInitialSettings ? { model.reloadSettings() } : nil,
+                            reload: model.detail == .unavailable ? model.reloadPage : nil
                         ).environment(\.colorScheme, theme.colorScheme)
                     }
                 }
@@ -193,7 +212,10 @@ public struct ShellRootView<WebContent: View>: View {
 /// emerald pill for the active page instead of the system selection highlight.
 struct NativeSidebar: View {
     let model: NativeShellModel
+    /// AppLayout's skip link; `nil` while no native screen is shown.
+    var skipToContent: (() -> Void)?
     @Environment(\.visionTheme) private var theme
+    @FocusState private var skipFocused: Bool
 
     var body: some View {
         List(selection: selection) {
@@ -219,6 +241,7 @@ struct NativeSidebar: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             footer
         }
+        .overlay(alignment: .top) { skipLink }
         .background(SidebarGlassBackground())
         // The counts' own refetch policies run for the sidebar's lifetime; a route change
         // re-reads any count that is no longer fresh.
@@ -307,6 +330,21 @@ struct NativeSidebar: View {
             case .monitors: "monitors.unreadCount"
             }
         return model.strings.t(key, ["count": String(count)])
+    }
+
+    /// `layout.skipToContent`: first in keyboard order and shown only while focused, as the
+    /// web's `sr-only focus:not-sr-only` link; it moves focus to the page content.
+    @ViewBuilder
+    private var skipLink: some View {
+        if let skipToContent {
+            Button(model.strings.t("layout.skipToContent"), action: skipToContent)
+                .buttonStyle(.borderedProminent)
+                .focused($skipFocused)
+                .opacity(skipFocused ? 1 : 0)
+                // Invisible, it must not take clicks meant for the search field below.
+                .allowsHitTesting(skipFocused)
+                .padding(.top, 6)
+        }
     }
 
     /// AppSidebar's search field: opens the command palette (⌘K).

@@ -7,6 +7,7 @@ struct NativeShellUnavailableView: View {
     let detail: NativeShellDetail
     let strings: any Localizing
     var retry: (() -> Void)?
+    var reload: (() -> Void)?
     @Environment(\.visionTheme) private var theme
 
     var body: some View {
@@ -15,7 +16,11 @@ struct NativeShellUnavailableView: View {
                 ProgressView(strings.t("common.loading"))
             } else {
                 Text(strings.t("common.error")).font(.title3).accessibilityAddTraits(.isHeader)
-                if let retry { Button(strings.t("common.retry"), action: retry) }
+                // ErrorBoundary's fallback: Retry, then Reload page.
+                HStack(spacing: 8) {
+                    if let retry { Button(strings.t("common.retry"), action: retry).buttonStyle(.borderedProminent) }
+                    if let reload { Button(strings.t("common.reload"), action: reload) }
+                }
             }
         }
         .padding(32)

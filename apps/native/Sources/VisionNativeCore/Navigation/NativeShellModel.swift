@@ -143,6 +143,8 @@ public final class NativeShellModel {
     public let nativeFallback: Bool
     public private(set) var isPresentingShortcuts = false
     public var isEditingWebText: (@MainActor () async -> Bool)?
+    /// ErrorBoundary's Reload page: View › Reload for the current graph (set by the app).
+    public var reloadPage: (@MainActor () -> Void)?
     /// The navigation the Leave this page? alert holds while it asks (`blocker.location`).
     public private(set) var leaveConfirmation: NativeRoute?
 

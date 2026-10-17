@@ -502,6 +502,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             })
         // `vision.sidebar.collapsed`: the sidebar comes back as it was left.
         if UserDefaults.standard.bool(forKey: Self.sidebarCollapsedKey) { model.setSidebarVisible(false) }
+        model.reloadPage = { [weak self] in self?.run(.reload) }
         model.sidebarBadges = NativeSidebarBadgesModel(service: client)
         model.apiInspector = apiInspector
         model.isEditingWebText = { [weak self] in
