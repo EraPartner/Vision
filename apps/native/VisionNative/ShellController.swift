@@ -2576,8 +2576,17 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
 
     /// `backup:restore`: the localized confirmation, then the restore, which stops and
     /// restarts the backend itself.
+    /// The legacy `electronBackup.restore` bridge call. ADR-207's mode policy: only the retained
+    /// web document owns it (its page applies the frontend state and reloads); the helper
+    /// document never installs the bridge, and a call that still arrives fails closed so native
+    /// Settings stays the only restore owner.
     func restoreBackup(_ path: String, passphrase: String?) async -> JSONValue {
-        await restoreNativeBackup(path, passphrase: passphrase, onboardingRestore: false, nativeReloadOwned: false)
+        guard documentSelection == .retainedWeb else {
+            logger.warning("[shell] bridge restore refused: native Settings owns restore in helper mode")
+            return .object(["success": .bool(false), "error": .string("Restore is not available here")])
+        }
+        return await restoreNativeBackup(
+            path, passphrase: passphrase, onboardingRestore: false, nativeReloadOwned: false)
     }
 
     private func restoreNativeBackup(

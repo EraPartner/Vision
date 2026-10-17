@@ -168,6 +168,9 @@ The SDK side lives in `apps/native/VisionNative/ShellController.swift` and `WebS
   consumer readiness. Startup captures `vision.startupSection` and `vision.lastRoute`, resolves
   once through `NativeNavigationStartup` and then mirrors both keys as `StartupRedirect` does.
   Language changes send the fixed locale command; the effective `enhanced` tier drives vibrancy.
+- **Restore policy.** Native Settings owns restore in helper mode (frontend state applied through
+  the fixed storage script, then the native reload). The legacy `electronBackup.restore` bridge
+  call belongs to the retained web document only; in helper mode it fails closed.
 - **Artifact.** `scripts/lib/native-mac-build.sh` runs `build-native-helper.ts --out-dir` into the
   staged frontend, so the packaged runtime serves `/native-helper.html`. The Release build and the
   standard variant cannot select it.
