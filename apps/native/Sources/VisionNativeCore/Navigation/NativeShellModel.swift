@@ -344,7 +344,7 @@ public final class NativeShellModel {
     /// while it says admin mode is on, otherwise the page shows the route and its
     /// `RequireAdmin` redirects, which the page then reports.
     public var detail: NativeShellDetail {
-        guard presentationMode == .helperDocument else { return retainedWebDetail }
+        guard presentationMode.isNative else { return retainedWebDetail }
         // A hidden helper cannot supply route authority or a visible fallback.
         guard nativeNavigation != nil else { return .unavailable }
         guard helperDocumentState != .failed, !initialSettingsLoadFailed else { return .unavailable }
@@ -359,7 +359,7 @@ public final class NativeShellModel {
     }
 
     /// Infrastructure is permanently hidden in helper mode, independently of route state.
-    public var isWebContentHidden: Bool { presentationMode == .helperDocument || detail != .web }
+    public var isWebContentHidden: Bool { presentationMode.isNative || detail != .web }
 
     /// The SDK must also apply its existing overlay, restore and operation fences.
     /// In particular a cached native snapshot must not print while helper startup is pending.
@@ -374,12 +374,12 @@ public final class NativeShellModel {
     /// Called only by the native document owner after its independent document/generation
     /// checks. This display state neither authenticates a document nor releases SDK gates.
     public func setHelperDocumentState(_ state: NativeHelperDocumentState) {
-        guard presentationMode == .helperDocument else { return }
+        guard presentationMode.isNative else { return }
         helperDocumentState = state
     }
 
     public var canRetryInitialSettings: Bool {
-        presentationMode == .helperDocument && initialSettingsLoadFailed
+        presentationMode.isNative && initialSettingsLoadFailed
             && helperDocumentState == .ready
     }
 
@@ -691,7 +691,7 @@ public final class NativeShellModel {
 
     private var nativeIntentReadiness: NativeShellIntentCoordinator.Readiness {
         .init(
-            document: presentationMode == .helperDocument
+            document: presentationMode.isNative
                 ? helperDocumentState == .ready : isRendererReady,
             settings: settingsLoaded && (nativeSettings?.isLoaded ?? true),
             onboarding: (onboarding?.isLoaded ?? true) && onboarding?.isPresented != true

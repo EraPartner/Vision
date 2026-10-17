@@ -12,14 +12,21 @@ public enum NativeShellBackendSource: Equatable, Sendable {
 /// everything else, including any ineligible opt-in, keeps the retained web presentation.
 public enum NativeHelperDocumentSelection: Equatable, Sendable {
     public static let environmentKey = "VISION_NATIVE_HELPER_DOCUMENT"
+    /// ADR-208's default-off opt-in for the mode without any web document; it takes
+    /// precedence over the helper document under the same eligibility rules.
+    public static let nativeOnlyEnvironmentKey = "VISION_NATIVE_WEB_FREE"
 
     case retainedWeb
     case helperDocument(NativeHelperDocumentSession.Source)
+    /// The source identifies the supervised origin and website data store whose storage the
+    /// native raw-state store captures once.
+    case nativeOnly(NativeHelperDocumentSession.Source)
 
     public var presentationMode: NativeShellPresentationMode {
         switch self {
         case .retainedWeb: return .retainedWeb
         case .helperDocument: return .helperDocument
+        case .nativeOnly: return .nativeOnly
         }
     }
 
@@ -27,7 +34,8 @@ public enum NativeHelperDocumentSelection: Equatable, Sendable {
         environment: [String: String], isDebugBuild: Bool, rawVariant: String?,
         backendSource: NativeShellBackendSource, backendURL: URL, websiteDataStoreIdentifier: String
     ) -> NativeHelperDocumentSelection {
-        guard environment[environmentKey] == "1",
+        let nativeOnly = environment[nativeOnlyEnvironmentKey] == "1"
+        guard environment[environmentKey] == "1" || nativeOnly,
             case .supervised(let runtimeIdentifier) = backendSource
         else { return .retainedWeb }
         let receipt = NativeHelperDocumentSession.SupervisorDemoReceipt(
@@ -37,6 +45,6 @@ public enum NativeHelperDocumentSelection: Equatable, Sendable {
                 isDebugBuild: isDebugBuild, rawVariant: rawVariant, supervisorReceipt: receipt,
                 websiteDataStoreIdentifier: websiteDataStoreIdentifier)
         else { return .retainedWeb }
-        return .helperDocument(source)
+        return nativeOnly ? .nativeOnly(source) : .helperDocument(source)
     }
 }

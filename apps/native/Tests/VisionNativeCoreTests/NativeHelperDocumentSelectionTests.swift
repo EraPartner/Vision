@@ -34,6 +34,24 @@ import Testing
         }
     }
 
+    @Test func theWebFreeOptInSelectsNativeOnlyUnderTheSameEligibility() {
+        let key = NativeHelperDocumentSelection.nativeOnlyEnvironmentKey
+        guard case .nativeOnly(let source) = select(environment: [key: "1"]) else {
+            Issue.record("An eligible web-free opt-in must select the native-only mode")
+            return
+        }
+        #expect(source.backendOrigin.absoluteString.hasPrefix("http://127.0.0.1:49123"))
+        #expect(select(environment: [key: "1"]).presentationMode == .nativeOnly)
+        let both = [key: "1", NativeHelperDocumentSelection.environmentKey: "1"]
+        #expect(select(environment: both).presentationMode == .nativeOnly)
+        for value in ["", "0", "true", " 1"] {
+            #expect(select(environment: [key: value]).presentationMode != .nativeOnly)
+        }
+        #expect(select(environment: [key: "1"], debug: false) == .retainedWeb)
+        #expect(select(environment: [key: "1"], variant: "standard") == .retainedWeb)
+        #expect(select(environment: [key: "1"], source: .developerOverride) == .retainedWeb)
+    }
+
     @Test func aDeveloperOverrideNeverVouchesForTheDemoRuntime() {
         #expect(select(source: .developerOverride) == .retainedWeb)
         #expect(select(source: .supervised(runtimeIdentifier: "vision_native")) == .retainedWeb)

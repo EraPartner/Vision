@@ -170,6 +170,19 @@ final class ShellRecorder {
         #expect(model.detail == .native(.plannedPayments))
     }
 
+    @Test func nativeOnlyPresentationFollowsTheHelperReadinessRulesWithoutAWebDocument() async throws {
+        let history = NativeNavigationHistory(initial: try #require(NativeNavigationLocation("/planned")))
+        let model = makeModel(recorder: ShellRecorder(), presentationMode: .nativeOnly, nativeNavigation: history)
+        #expect(model.presentationMode.isNative && model.isWebContentHidden)
+        #expect(model.detail == .loading && model.printDisposition == .unavailable)
+        model.reloadSettings()
+        await model.settingsSettled()
+        model.setHelperDocumentState(.ready)
+        #expect(model.detail == .native(.plannedPayments) && model.printDisposition == .nativePage)
+        model.setHelperDocumentState(.failed)
+        #expect(model.detail == .unavailable && model.printDisposition == .unavailable)
+    }
+
     @Test func helperMissingNativeOwnersAndUnknownRoutesNeverFallBackToWeb() async throws {
         let model = makeModel(
             recorder: ShellRecorder(), presentationMode: .helperDocument, nativeNavigation: NativeNavigationHistory())

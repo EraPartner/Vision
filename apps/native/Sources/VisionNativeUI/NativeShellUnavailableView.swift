@@ -38,7 +38,9 @@ struct NativeShellWebPresentation<Content: View>: View {
     @ViewBuilder let content: (Bool) -> Content
 
     var body: some View {
-        if mode == .helperDocument {
+        if mode == .nativeOnly {
+            EmptyView()
+        } else if mode == .helperDocument {
             NativeHiddenHelperDocument(content: content(true))
                 .frame(width: 0, height: 0)
                 .allowsHitTesting(false)

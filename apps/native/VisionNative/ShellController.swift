@@ -1474,6 +1474,10 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
                 // presentation never changes under an existing graph.
                 if selection != .retainedWeb, hasMadeShellModel {
                     logger.warning("[shell] helper document ineligible: the shell graph already exists")
+                } else if case .nativeOnly = selection {
+                    // ADR-208: the web-free host lands in later steps; until then the opt-in
+                    // keeps the retained document rather than a half-built mode.
+                    logger.warning("[shell] native-only mode is not available in this build")
                 } else {
                     documentSelection = selection
                 }
