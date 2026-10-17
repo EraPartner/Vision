@@ -69,6 +69,26 @@ final class WebShell: NSObject {
         #endif
     }
 
+    /// View › Toggle Developer Tools (Debug builds). WebKit has no public call that opens the
+    /// inspector, so this uses the `_inspector` SPI behind `responds(to:)` checks; `false`
+    /// when it is unavailable (Safari's Develop menu still reaches the inspectable view).
+    func toggleInspector() -> Bool {
+        #if DEBUG
+            guard webView.responds(to: NSSelectorFromString("_inspector")),
+                let inspector = webView.value(forKey: "_inspector") as? NSObject
+            else { return false }
+            let visible =
+                inspector.responds(to: NSSelectorFromString("isVisible"))
+                && (inspector.value(forKey: "isVisible") as? Bool ?? false)
+            let selector = NSSelectorFromString(visible ? "close" : "show")
+            guard inspector.responds(to: selector) else { return false }
+            inspector.perform(selector)
+            return true
+        #else
+            return false
+        #endif
+    }
+
     func load(_ url: URL) {
         crashPolicy.reset()
         track(webView.load(URLRequest(url: url)))

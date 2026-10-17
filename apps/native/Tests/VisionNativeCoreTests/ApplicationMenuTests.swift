@@ -94,6 +94,19 @@ import Testing
         #expect(view.filter(\.isHidden).count == 1)
     }
 
+    @Test func developerToolsAreOnlyInTheDebugMenu() {
+        let release = items(submenu(ApplicationMenu.build(appName: "Vision Native", strings: Self.english), "View"))
+        #expect(!release.contains { $0.command == .toggleDeveloperTools })
+        let debugMenu = ApplicationMenu.build(appName: "Vision Native", strings: Self.english, includeDeveloperTools: true)
+        let debug = items(submenu(debugMenu, "View"))
+        let tools = debug.filter { $0.command == .toggleDeveloperTools }
+        #expect(tools.map(\.keyEquivalent) == [KeyEquivalent("i", [.command, .option])])
+        let reload = debug.firstIndex { $0.command == .reload }
+        #expect(reload.map { debug[$0 + 1].command } == .toggleDeveloperTools)
+        let keys = ApplicationMenu.keyEquivalents(debugMenu)
+        #expect(Set(keys.map(\.key)).count == keys.count)
+    }
+
     @Test func keyEquivalentsAreUnique() {
         let keys = ApplicationMenu.keyEquivalents(
             ApplicationMenu.build(appName: "Vision Native", strings: Self.english))

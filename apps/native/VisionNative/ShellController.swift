@@ -2019,7 +2019,9 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     private func installMenus() {
         menuController.shell = self
         NSApp.mainMenu = menuController.makeMenu(
-            title: "Main Menu", entries: ApplicationMenu.build(appName: Self.appName, strings: strings))
+            title: "Main Menu",
+            entries: ApplicationMenu.build(
+                appName: Self.appName, strings: strings, includeDeveloperTools: AppRuntime.isDebugBuild))
     }
 
     func dockMenu() -> NSMenu {
@@ -2216,6 +2218,10 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             showAboutPanel()
         case .reload:
             if appURL != nil { reloadCurrentGraph() } else { launch() }
+        case .toggleDeveloperTools:
+            if webShell?.toggleInspector() != true {
+                logger.warning("[shell] the web inspector is unavailable; use Safari's Develop menu")
+            }
         case .resetZoom:
             applyPageZoom(1)
         case .zoomIn:

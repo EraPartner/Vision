@@ -51,6 +51,8 @@ public enum MenuCommand: Hashable, Sendable {
     case selectAll
     case print
     case reload
+    /// Debug builds only: the web view's inspector (Electron's unpackaged `toggleDevTools`).
+    case toggleDeveloperTools
     case resetZoom
     case zoomIn
     case zoomOut
@@ -136,7 +138,11 @@ public enum ApplicationMenu {
         ("schedule", "layout.schedule"),
     ]
 
-    public static func build(appName: String, strings: ShellStrings) -> [MenuEntry] {
+    /// `includeDeveloperTools`: Electron adds Toggle Developer Tools (⌥⌘I) to unpackaged
+    /// builds only; Vision Native adds it to Debug builds.
+    public static func build(
+        appName: String, strings: ShellStrings, includeDeveloperTools: Bool = false
+    ) -> [MenuEntry] {
         let t = { (key: String) in strings.t(key) }
         let app: [MenuEntry] = [
             .item(MenuItemModel("About \(appName)", .about)),
@@ -173,8 +179,13 @@ public enum ApplicationMenu {
         let appearance: [MenuEntry] = themeModes.map { mode in
             .item(MenuItemModel(t(mode.titleKey), .renderer(.setTheme(mode.id))))
         }
-        // Electron adds Toggle Developer Tools in unpackaged builds only; Debug builds of
-        // Vision Native are inspectable from Safari's Develop menu instead.
+        let developerTools: [MenuEntry] =
+            includeDeveloperTools
+            ? [
+                .item(
+                    MenuItemModel(
+                        "Toggle Developer Tools", .toggleDeveloperTools, KeyEquivalent("i", [.command, .option])))
+            ] : []
         let view: [MenuEntry] = [
             .item(
                 MenuItemModel(
@@ -183,6 +194,7 @@ public enum ApplicationMenu {
             .submenu(title: t("menu.appearance"), role: .plain, entries: appearance),
             .separator,
             .item(MenuItemModel("Reload", .reload, KeyEquivalent("r"))),
+        ] + developerTools + [
             .separator,
             .item(MenuItemModel("Actual Size", .resetZoom, KeyEquivalent("0"))),
             .item(MenuItemModel("Zoom In", .zoomIn, KeyEquivalent("+"))),

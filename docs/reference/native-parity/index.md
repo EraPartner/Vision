@@ -2,8 +2,8 @@
 title: "Native parity inventory"
 type: reference
 status: active
-date: 2026-10-13
-updated: 2026-10-15
+date: 2026-10-17
+updated: 2026-10-17
 tags: [reference, swift-rewrite, native-parity, index, adr-203]
 description: "Index of the code-derived inventory of every screen, dialog and user action in the web UI. It is the parity checklist for the Swift rewrite (ADR-204): each row is web today and flips to native when a screen PR ports it."
 aliases: [native parity, parity inventory, swift parity checklist]
@@ -63,6 +63,7 @@ the end of phase 1, and counts the gaps that remain for the hand-over
 | Rows                                                                                    | Decision                                                                        |
 | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
 | Shell: Updates section of Settings › About, `electronUpdater` bridge, update menu items | Not ported; the install script is the update path (ADR-204 §5, Tor 2026-10-11). |
+| Shell: Help › About on non-macOS (app menu row 16)                                       | Not applicable; Vision Native is macOS-only and its app menu has About (owner 2026-10-17). |
 
 ## Doc and code conflicts
 
