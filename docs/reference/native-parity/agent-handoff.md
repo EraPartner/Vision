@@ -86,11 +86,31 @@ skip-link and Reload page equivalents. Native work since the UI gate, each pushe
 - Parity inventory: 87 rows moved to `native` by audit, plus the context menu, topbar, skip
   link, error fallback and Developer Tools rows. Only the sidebar logo button stays `web`.
 
+**ADR-208 (accepted 2026-10-17): finish phase 4 without web content**
+
+Tor chose to port the helper document's work to Swift and add a web-free mode, default-off:
+
+- Palette answers (`NativePaletteCalculator`) and the tax report context (`NativeTaxReportProfile`
+  plus the overview for every four-digit year; the backend overview's year bound widened) no
+  longer use the helper document, in any mode.
+- `VISION_NATIVE_WEB_FREE=1` (Debug Demo, supervised runtime) selects the native-only mode: storage
+  via `NativeShellStorage` over `NativeRawStateStore` (`native/<runtimeId>/raw-state.json`), a
+  one-time capture through a transient web view (`NativeStorageCapture`), no web view afterwards.
+  Owner decisions: transient-view capture; a complete empty capture is an explicit empty start;
+  a migrated store opens under its recorded source after a port change; errors fail closed.
+- Known divergence: helper or retained runs after the capture write the web store, which the
+  native store does not see. Pick one mode per Demo until the helper is retired.
+- The e2e smoke runs `retained`, `helper` and `native` modes plus the Electron Demo baseline and
+  records bundle size and resident memory per mode (job summary and artifact).
+- The helper-default flip waits on a passing helper smoke; it is prepared on the local branch
+  `local/flip-helper-default-2` (not pushed).
+
 **Next**
 
 1. Read the latest `Native Branch Verification` and `Native End-to-End Smoke` runs; fix any
-   compile or test failure. When the helper smoke passes, flip the helper default (Debug Demo
-   first) and record the run here.
+   compile or test failure. When the helper smoke passes, apply the helper-default flip and
+   record the run here; when the native smoke passes, record its metrics against the Electron
+   baseline and propose making native-only the Debug Demo default.
 2. Manual Mac checks owed: VoiceOver on the startup/failure screens, the text context menu,
    window drag on native screens, notification permission prompt, topbar title on scroll.
 3. Remaining phase-4 gates from ADR-206/207: storage takeover, retiring the retained renderer
