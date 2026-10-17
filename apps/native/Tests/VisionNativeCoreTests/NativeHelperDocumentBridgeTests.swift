@@ -105,6 +105,9 @@ import Testing
         }
         #expect(Bridge.documentStartScript.contains("const post = handler.postMessage.bind(handler)"))
         #expect(!Bridge.documentStartScript.contains("electronAPI"))
+        // nativeHelperDocument.ts throws "Missing native helper capabilities" without these.
+        #expect(Bridge.documentStartScript.contains("Object.defineProperty(window, '__VISION_NATIVE_PALETTE__', {value: true})"))
+        #expect(Bridge.documentStartScript.contains("Object.defineProperty(window, '__VISION_NATIVE_REPORTS__', {value: true})"))
         #expect(!Bridge.documentStartScript.contains("app:renderer-ready"))
     }
 }

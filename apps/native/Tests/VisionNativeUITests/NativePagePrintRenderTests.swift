@@ -173,7 +173,11 @@
             }
             let rendered = try render(pages)
             let text = rendered.compactMap(\.string).joined(separator: "\n")
-            for month in 1...12 { #expect(text.contains(String(format: "2026-%02d", month))) }
+            for month in 1...12 {
+                let label = StatisticsPeriodFormat.short(
+                    String(format: "2026-%02d", month), locale: LanguageLocale.locale(.en))
+                #expect(text.filter { !$0.isWhitespace }.contains(label.filter { !$0.isWhitespace }))
+            }
             #expect(text.contains("Synthetic Food"))
             expectTextFitsHorizontally(rendered)
             #expect(await transport.requests == reads)
@@ -208,9 +212,10 @@
             }
             let rendered = try render(pages)
             let page = try #require(rendered.first?.page(at: 0))
-            // The page subtitle's period range also starts with 2026-01; the table's column
+            // The page subtitle's period range also starts with January; the table's column
             // header is the lowest occurrence on the page.
-            let headerBounds = try #require(NativePDFGlyphs.occurrences(of: "2026-01", in: page).last)
+            let january = StatisticsPeriodFormat.short("2026-01", locale: LanguageLocale.locale(.en))
+            let headerBounds = try #require(NativePDFGlyphs.occurrences(of: january, in: page).last)
             // Read one complete printed column by glyph position so adjacent wrapped numbers
             // cannot interleave in PDFKit's full-page reading order and hide a missing suffix.
             let columnWidth = (width - 32) * 0.75 / 5

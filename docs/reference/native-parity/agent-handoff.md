@@ -103,7 +103,7 @@ Tor chose to port the helper document's work to Swift and add a web-free mode, d
 - The e2e smoke runs `retained`, `helper` and `native` modes plus the Electron Demo baseline and
   records bundle size and resident memory per mode (job summary and artifact).
 - The helper-default flip waits on a passing helper smoke; it is prepared on the local branch
-  `local/flip-helper-default-2` (not pushed).
+  `local/flip-helper-default-4` (not pushed).
 
 **First end-to-end evidence (run 39062704573, 2026-10-17)**
 
@@ -121,6 +121,27 @@ expected for an unsigned build. First metrics (KiB, after startup):
 
 The Electron tree includes its renderer and GPU helpers; the native tree's WebKit services run
 outside the process tree and are counted separately.
+
+**Native-only smoke passes (run 39065530611, `c1b8d39`, 2026-10-17)**
+
+With `VISION_NATIVE_WEB_FREE=1` the Debug Demo selected the native-only document, captured the
+origin's storage once ("native-only storage captured (7 local keys)"), logged "native-only
+document ready" and answered `/health`. The retained control passed again. Metrics (KiB):
+
+| Mode                | Bundle  | App RSS | Process tree RSS | WebKit RSS | Processes |
+| ------------------- | ------- | ------- | ---------------- | ---------- | --------- |
+| Native, retained¹   | 458,292 | 466,720 | 1,099,984        | 207,664    | —         |
+| Native, native-only | 458,616 | 467,264 | 963,120          | 55,600     | 19        |
+| Electron Demo       | 648,716 | 169,408 | 1,165,376        | 0          | 24        |
+
+¹ From run 39062704573. The native-only WebKit figure is the transient capture view's services,
+which outlive the view after the first launch. App RSS is unchanged from the retained mode, so
+the app's own footprint, not WebKit, dominates it; profiling it is a follow-up.
+
+The helper smoke selected its mode, then the helper page reported `bootstrap-failed`:
+`startNativeHelperDocument` requires `__VISION_NATIVE_PALETTE__` and `__VISION_NATIVE_REPORTS__`,
+which only the retained `BridgeScript` defined. The helper's document-start script now defines
+both.
 
 **Next**
 

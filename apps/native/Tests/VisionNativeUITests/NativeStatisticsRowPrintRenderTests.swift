@@ -56,7 +56,7 @@
             #expect(Set(rowPages.values).count > 1)
             let documents = try render(pages)
             for page in Set(rowPages.values) {
-                #expect(documents[page - 1].string?.contains("2026-01") == true)
+                #expect(compact(documents[page - 1].string ?? "").contains(compact(month(1))))
                 #expect(documents[page - 1].string?.contains(strings.t("categories.title")) == true)
             }
             for index in 1...9 {
@@ -68,8 +68,8 @@
             #expect(presentation.snapshot.pivotYear == 2026 && presentation.snapshot.collapsedGroups.isEmpty)
             let first = try #require(documents.first)
             let page = try #require(first.page(at: 0))
-            let january = try #require(first.findString("2026-01", withOptions: []).last).bounds(for: page)
-            let february = try #require(first.findString("2026-02", withOptions: []).last).bounds(for: page)
+            let january = try #require(first.findString(month(1), withOptions: []).last).bounds(for: page)
+            let february = try #require(first.findString(month(2), withOptions: []).last).bounds(for: page)
             let columnWidth = february.maxX - january.maxX - 8
             let column = NSRect(
                 x: january.maxX - columnWidth - 1, y: 0, width: columnWidth + 2,
@@ -83,6 +83,11 @@
             #expect(await transport.requests == before)
         }
 
+        /// The pivot's column label for a 2026 month, as the screen prints it.
+        private func month(_ index: Int) -> String {
+            StatisticsPeriodFormat.short(String(format: "2026-%02d", index), locale: LanguageLocale.locale(.en))
+        }
+
         @Test func allPivotColumnWindowsAndChangedMarginsReuseOnlyFrozenValues() async throws {
             let (screens, transport, route) = try await loaded("categories")
             screens.model.collapsedGroups = ["id:1"]
@@ -94,7 +99,7 @@
             }
             var rendered = try render(pages)
             var text = rendered.compactMap(\.string).joined(separator: "\n")
-            for month in 1...12 { #expect(text.contains(String(format: "2026-%02d", month))) }
+            for index in 1...12 { #expect(compact(text).contains(compact(month(index)))) }
             for window in 0..<3 {
                 _ = try expectWholeRows(pages, prefix: "statistics.pivotTable:\(window)", expected: 9)
             }
@@ -103,7 +108,7 @@
             #expect(pages.rectForPage(1).width == 416)
             rendered = try render(pages)
             text = rendered.compactMap(\.string).joined(separator: "\n")
-            for month in 1...12 { #expect(text.contains(String(format: "2026-%02d", month))) }
+            for index in 1...12 { #expect(compact(text).contains(compact(month(index)))) }
             expectHorizontalBounds(rendered)
             #expect(await transport.requests == before)
         }

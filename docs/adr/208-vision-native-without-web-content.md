@@ -79,7 +79,9 @@ UI".
   and runs the shared startup; reload is the graph rebuild.
 - **Evidence:** the e2e smoke's `native` mode launches the Debug Demo with
   `VISION_NATIVE_WEB_FREE=1`, waits for `/health` and "native-only document ready", and records
-  bundle size and memory beside the retained, helper and Electron numbers.
+  bundle size and memory beside the retained, helper and Electron numbers. It first passed on run
+  39065530611 (2026-10-17); the numbers are in
+  [[docs/reference/native-parity/agent-handoff|the agent handoff]].
 
 ## Consequences
 

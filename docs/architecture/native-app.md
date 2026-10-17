@@ -1737,7 +1737,8 @@ bounded callback/locale ownership and current-document reconciliation before sel
 The SDK now wires this behind `VISION_NATIVE_HELPER_DOCUMENT=1`. `ShellState.ready` carries
 `NativeShellBackendSource`, and `NativeHelperDocumentSelection` (`VisionNativeCore/Shell`) selects
 the helper source once, only for a Debug Demo build with a supervised backend. `WebShell` then
-installs only the helper document-start script and the `visionNativeHelper` reply handler (no
+installs only the helper document-start script (the ready/failed callbacks and the palette and
+reports capability flags the helper entry requires) and the `visionNativeHelper` reply handler (no
 generic bridge) and tracks `WKNavigation` objects; `ShellController` owns the helper session
 lifecycle (bootstrap receipt plus ready callback), native history with one
 `NativeShellIntentCoordinator`, native menu admission, the locale command, vibrancy from the

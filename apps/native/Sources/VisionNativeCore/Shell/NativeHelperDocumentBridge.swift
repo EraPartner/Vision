@@ -45,6 +45,9 @@ public enum NativeHelperDocumentBridge {
               if (!reply || reply.success !== true) throw new Error('Helper acknowledgement rejected');
             });
           };
+          // startNativeHelperDocument refuses to start without the two capabilities it serves.
+          Object.defineProperty(window, '__VISION_NATIVE_PALETTE__', {value: true});
+          Object.defineProperty(window, '__VISION_NATIVE_REPORTS__', {value: true});
           Object.defineProperty(window, '__visionNativeHelperReady', {value: provenance => send('ready', provenance)});
           Object.defineProperty(window, '__visionNativeHelperFailed', {value: (provenance, code) => send('failed', provenance, code)});
         })();
