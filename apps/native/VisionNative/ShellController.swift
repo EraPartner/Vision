@@ -62,6 +62,8 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     private var shellHost: NSView?
     /// The backend base URL the web view may show; `nil` until the runtime is ready.
     private(set) var appURL: URL?
+    /// Fixed per launch before the document is created (ADR-207); not yet consumed.
+    private(set) var documentSelection = NativeHelperDocumentSelection.retainedWeb
     private var queue = RendererMessageQueue()
     private var rendererReadiness = NativeRendererReadiness()
     private var launchTask: Task<Void, Never>?
@@ -1453,8 +1455,16 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         switch state {
         case .checking, .unavailable:
             showLaunchView()
-        case .ready(let url):
+        case .ready(let url, let backendSource):
             appURL = url
+            documentSelection = NativeHelperDocumentSelection.select(
+                environment: ProcessInfo.processInfo.environment, isDebugBuild: AppRuntime.isDebugBuild,
+                rawVariant: AppRuntime.variant.rawValue, backendSource: backendSource, backendURL: url,
+                websiteDataStoreIdentifier: "default")
+            if documentSelection != .retainedWeb {
+                // ADR-207: selection is recorded only; the SDK still loads the retained web document.
+                logger.log("[shell] helper document selected; retained web remains active until it is integrated")
+            }
             let shell = webShell ?? makeWebShell()
             shellHost?.isHidden = true
             rendererDocumentChanged()
