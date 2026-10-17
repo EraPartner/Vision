@@ -27,6 +27,8 @@ public final class PortfolioEditingModel {
     public private(set) var brokerHistoryError: String?
     public private(set) var retagReceipt: OpenAPI.PortfolioBrokerRetagReceipt?
     public var settings = NativeAppSettings.defaults
+    /// Humanizes failures (`apiErrorToMessage`) for the toasts of mutations without a `strings` argument.
+    public var strings: any Localizing = DictionaryStrings(language: .en, table: [:])
     public var hasUnsavedChanges: Bool {
         (investmentDraft?.isEditing == true && investmentDraft != investmentBaseline) || tradeDraft != tradeBaseline
     }
@@ -52,7 +54,10 @@ public final class PortfolioEditingModel {
         self.service = service
         self.now = now
     }
-    public func configure(settings: NativeAppSettings) { self.settings = settings }
+    public func configure(settings: NativeAppSettings, strings: (any Localizing)? = nil) {
+        self.settings = settings
+        if let strings { self.strings = strings }
+    }
     public func bindChanged(_ action: @escaping @MainActor () async -> Void) { onChanged = action }
     public func bindInvestments(_ value: [PortfolioInvestment]) {
         let ids = value.map(\.id).sorted()
@@ -250,6 +255,8 @@ public final class PortfolioEditingModel {
         error = nil
         issue = nil
         defer { isSaving = false }
+        // The web hook that failed names the toast (`useInvestments` `onError`).
+        var failureKey = "common.error"
         do {
             switch presentation {
             case .investment:
@@ -258,13 +265,16 @@ public final class PortfolioEditingModel {
                 var purchase = try draft.initialPurchase(format: settings.numberFormat, defaultBroker: defaultBrokerId)
                 if purchase != nil { purchase?.fields["note"] = .string(strings.t("addInv.initialPurchaseNote")) }
                 if let id = draft.investmentId {
+                    failureKey = "portfolio.updateInvestmentFailedTitle"
                     _ = try await service.portfolioUpdateInvestment(id: id, payload: body)
                     post("invEdit.toast.updated", ["name": draft.name.trimmingCharacters(in: .whitespacesAndNewlines)])
                 } else {
                     if createdInvestmentId == nil {
+                        failureKey = "portfolio.createInvestmentFailedTitle"
                         createdInvestmentId = try await service.portfolioCreateInvestment(body).id
                     }
                     if let id = createdInvestmentId, let purchase {
+                        failureKey = "portfolio.recordTxnFailedTitle"
                         _ = try await service.portfolioCreateTransaction(investmentId: id, payload: purchase)
                     }
                     post(
@@ -277,6 +287,7 @@ public final class PortfolioEditingModel {
             case .transaction:
                 guard let draft = tradeDraft else { return false }
                 let body = try draft.payload(format: settings.numberFormat, defaultBroker: defaultBrokerId)
+                failureKey = "portfolio.recordTxnFailedTitle"
                 if let id = draft.transactionId {
                     _ = try await service.portfolioUpdateTransaction(id: id, payload: body)
                 } else {
@@ -297,7 +308,9 @@ public final class PortfolioEditingModel {
             issue = value
             return false
         } catch {
-            self.error = error.localizedDescription
+            let text = Self.message(error, strings: strings)
+            self.error = text
+            notice = notices.make(.error, failureKey, detail: text)
             return false
         }
     }
@@ -323,30 +336,36 @@ public final class PortfolioEditingModel {
         }
     }
     @discardableResult public func archiveInvestment(id: Int) async -> Bool {
-        await mutation(key: nil) {
+        await mutation(key: nil, failureKey: "portfolio.updateInvestmentFailedTitle") {
             _ = try await service.portfolioUpdateInvestment(id: id, payload: .init(["is_active": .bool(false)]))
         }
     }
     @discardableResult public func restoreInvestment(id: Int) async -> Bool {
-        await mutation(key: nil) {
+        await mutation(key: nil, failureKey: "portfolio.updateInvestmentFailedTitle") {
             _ = try await service.portfolioUpdateInvestment(id: id, payload: .init(["is_active": .bool(true)]))
         }
     }
     @discardableResult public func deleteInvestment(id: Int) async -> Bool {
-        await mutation(key: nil) { try await service.portfolioDeleteInvestment(id: id) }
+        await mutation(key: nil, failureKey: "portfolio.deleteInvestmentFailedTitle") {
+            try await service.portfolioDeleteInvestment(id: id)
+        }
     }
     @discardableResult public func deleteTransaction(id: Int) async -> Bool {
-        await mutation(key: nil) { try await service.portfolioDeleteTransaction(id: id) }
+        await mutation(key: nil, failureKey: "portfolio.deleteTxnFailedTitle") {
+            try await service.portfolioDeleteTransaction(id: id)
+        }
     }
     @discardableResult public func setTicker(id: Int, visible: Bool) async -> Bool {
-        await mutation(key: nil) {
+        await mutation(key: nil, failureKey: "portfolio.updateInvestmentFailedTitle") {
             _ = try await service.portfolioUpdateInvestment(id: id, payload: .init(["show_in_ticker": .bool(visible)]))
         }
     }
+    /// The exposure card reports a failed import inline (`error`), without a toast.
     @discardableResult public func importExposure(data: Data) async -> Bool {
-        await mutation(key: nil) { try await service.portfolioImportExposure(data) }
+        await mutation(key: nil, failureKey: nil) { try await service.portfolioImportExposure(data) }
     }
-    private func mutation(key: String?, operation: () async throws -> Void) async -> Bool {
+    /// `failureKey` titles the error toast over the humanized detail; `nil` reports only `error`.
+    private func mutation(key: String?, failureKey: String?, operation: () async throws -> Void) async -> Bool {
         guard !isMutating, !isSaving else { return false }
         isMutating = true
         error = nil
@@ -358,10 +377,15 @@ public final class PortfolioEditingModel {
             await onChanged?()
             return true
         } catch {
-            self.error = error.localizedDescription
-            notice = notices.make(.error, "common.error", detail: error.localizedDescription)
+            let text = Self.message(error, strings: strings)
+            self.error = text
+            if let failureKey { notice = notices.make(.error, failureKey, detail: text) }
             return false
         }
+    }
+    /// `apiErrorToMessage`.
+    static func message(_ error: any Error, strings: any Localizing) -> String {
+        APIErrorMessage.text(APIError.wrapping(error), strings: strings)
     }
     /// The caller supplies a reviewed complete history; never assign a partial page.
     @discardableResult public func assignUnassignedLots(
@@ -378,7 +402,7 @@ public final class PortfolioEditingModel {
             "transaction_ids": .array(ids.map { .number(Decimal($0)) }), "from_account_id": .null,
             "to_account_id": .number(Decimal(brokerId)), "idempotency_key": .string(retagKeys[fingerprint]!),
         ])
-        return await mutation(key: nil) {
+        return await mutation(key: nil, failureKey: "portfolio.assignLotsFailedTitle") {
             let receipt = try await service.portfolioRetagLots(body)
             retagReceipt = receipt
             retagKeys[fingerprint] = nil

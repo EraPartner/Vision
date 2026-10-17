@@ -268,7 +268,7 @@ public struct PortfolioOverviewView: View {
                         Text(option.id == "unassigned" ? strings.t("portfolio.brokerFilter.unassigned") : option.name)
                             .tag(option.id)
                     }
-                }.frame(maxWidth: 300)
+                }.frame(maxWidth: 300).disabled(model.brokerFilterStatusKey != nil)
             }
             if model.filteredHoldings.isEmpty {
                 Text(strings.t("portfolio.brokerFilter.empty")).foregroundStyle(theme.secondaryLabel).padding(20)
@@ -331,8 +331,15 @@ public struct PortfolioOverviewView: View {
                 }
             }
             Divider()
-            moneyRow("portfolio.brokerFilter.holdingsSubtotal", model.brokerSubtotal.currentValue)
-            moneyRow("portfolio.brokerFilter.pnlSubtotal", model.brokerSubtotal.gainLoss, signed: true)
+            if let status = model.brokerFilterStatusKey {
+                let unavailable = status == "portfolio.brokerFilter.unavailable"
+                Text(strings.t(status)).font(.footnote)
+                    .foregroundStyle(unavailable ? theme.warning : theme.secondaryLabel)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            } else {
+                moneyRow("portfolio.brokerFilter.holdingsSubtotal", model.brokerSubtotal.currentValue)
+                moneyRow("portfolio.brokerFilter.pnlSubtotal", model.brokerSubtotal.gainLoss, signed: true)
+            }
         }
     }
     private var allocation: some View {

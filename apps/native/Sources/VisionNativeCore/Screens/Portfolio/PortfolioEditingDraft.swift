@@ -150,6 +150,17 @@ public struct PortfolioInvestmentDraft: Equatable, Sendable {
     public var initialAccountId: Int?
     public var brokerWasChosen = false
     public var isEditing: Bool { investmentId != nil }
+    /// Typed text for the form field `field` as the web inputs accept it
+    /// (`InvestmentFormFields` `maxLength` and the upper-cased ticker).
+    public static func input(_ value: String, field: String) -> String {
+        switch field {
+        case "symbol": String(value.uppercased().prefix(20))
+        case "name": String(value.prefix(100))
+        case "location", "municipality": String(value.prefix(200))
+        case "notes": String(value.prefix(500))
+        default: value
+        }
+    }
     public init(settings: NativeAppSettings, today: String, allowedAssetClasses: [String] = PortfolioAssetKinds.all) {
         investmentId = nil
         currency = settings.defaultCurrency

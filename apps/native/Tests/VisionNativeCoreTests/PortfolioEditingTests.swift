@@ -5,6 +5,16 @@ import Testing
 
 @Suite("Portfolio draft money and patch semantics")
 struct PortfolioEditingDraftTests {
+    @Test func typedInputFollowsTheWebLimitsAndUpperCasesTheTicker() {
+        #expect(PortfolioInvestmentDraft.input("vwce.de", field: "symbol") == "VWCE.DE")
+        #expect(PortfolioInvestmentDraft.input(String(repeating: "a", count: 25), field: "symbol").count == 20)
+        #expect(PortfolioInvestmentDraft.input(String(repeating: "n", count: 120), field: "name").count == 100)
+        #expect(PortfolioInvestmentDraft.input(String(repeating: "l", count: 250), field: "location").count == 200)
+        #expect(PortfolioInvestmentDraft.input(String(repeating: "m", count: 250), field: "municipality").count == 200)
+        #expect(PortfolioInvestmentDraft.input(String(repeating: "x", count: 600), field: "notes").count == 500)
+        #expect(PortfolioInvestmentDraft.input("1.234,5", field: "initialAmount") == "1.234,5")
+        #expect(PortfolioInvestmentDraft.input("lower", field: "name") == "lower")
+    }
     @Test func unitDerivationMatchesPrecisionAndAcceptsBrokerCentRounding() {
         let math = PortfolioUnitInput(amount: 100, units: 3, price: Decimal(string: "33.33"))
         #expect(math.consistent)
@@ -390,7 +400,65 @@ struct PortfolioEditingModelTests {
         #expect(await model.archiveInvestment(id: 71) == false)
         #expect(reloads == 0)
         #expect(model.notice?.kind == .error)
-        #expect(model.error != nil)
+        #expect(model.notice?.key == "portfolio.updateInvestmentFailedTitle")
+        #expect(model.notice?.detail == "apiError.network")
+        #expect(model.error == "apiError.network")
+        #expect(await model.setTicker(id: 71, visible: false) == false)
+        #expect(model.notice?.key == "portfolio.updateInvestmentFailedTitle")
+    }
+    @Test func mutationFailuresUseTheirWebToastTitlesWithHumanizedDetail() async throws {
+        let service = EditingFixtureService()
+        await service.failDeletes()
+        let model = PortfolioEditingModel(service: service)
+        model.configure(settings: .init(numberFormat: .us), strings: strings)
+        #expect(await model.deleteInvestment(id: 71) == false)
+        #expect(model.notice?.key == "portfolio.deleteInvestmentFailedTitle")
+        #expect(model.notice?.detail == "apiError.network")
+        #expect(await model.deleteTransaction(id: 9) == false)
+        #expect(model.notice?.key == "portfolio.deleteTxnFailedTitle")
+        await model.loadOptions()
+        await service.failFirstRetag()
+        let lot = try editingTransaction(account: nil)
+        #expect(
+            await model.assignUnassignedLots(
+                investmentId: 71, completeHistory: [lot], historyComplete: true, brokerId: 1) == false)
+        #expect(model.notice?.key == "portfolio.assignLotsFailedTitle")
+    }
+    @Test func exposureImportFailureIsReportedInlineWithoutAToast() async {
+        let service = EditingFixtureService()
+        await service.failExposureImport()
+        let model = PortfolioEditingModel(service: service)
+        #expect(await model.importExposure(data: Data("{}".utf8)) == false)
+        #expect(model.notice == nil)
+        #expect(model.error == "apiError.network")
+    }
+    @Test func formSaveFailuresToastTheFailedStepAndKeepTheInlineError() async throws {
+        let service = EditingFixtureService()
+        await service.failFirstTrade()
+        let model = PortfolioEditingModel(service: service)
+        model.configure(settings: .init(numberFormat: .us))
+        model.beginAddInvestment(allowedAssetClasses: ["stock"])
+        model.investmentDraft?.name = "Synthetic holding"
+        model.investmentDraft?.initialAmount = "100"
+        model.investmentDraft?.initialUnits = "2"
+        #expect(await model.saveEditor(strings: strings) == false)
+        #expect(model.notice?.kind == .error)
+        #expect(model.notice?.key == "portfolio.recordTxnFailedTitle")
+        #expect(model.notice?.detail == "apiError.network")
+        #expect(model.error == "apiError.network")
+        model.discardDrafts()
+        await service.failUpdates()
+        let investment = try editingInvestment()
+        model.beginEditInvestment(investment: investment)
+        #expect(await model.saveEditor(strings: strings) == false)
+        #expect(model.notice?.key == "portfolio.updateInvestmentFailedTitle")
+        await service.failFirstCreate()
+        model.discardDrafts()
+        model.beginAddInvestment(allowedAssetClasses: ["stock"])
+        model.investmentDraft?.name = "Synthetic holding"
+        model.investmentDraft?.addInitialPurchase = false
+        #expect(await model.saveEditor(strings: strings) == false)
+        #expect(model.notice?.key == "portfolio.createInvestmentFailedTitle")
     }
 }
 
@@ -422,6 +490,9 @@ private actor EditingFixtureService: PortfolioEditingService {
     private var tradeFails = false
     private var retagFails = false
     private var updateFails = false
+    private var deleteFails = false
+    private var createFails = false
+    private var exposureFails = false
     var bulkCalls = 0
     private var bulkRows: [PortfolioTransaction] = []
     private var bulkFails = false
@@ -443,7 +514,14 @@ private actor EditingFixtureService: PortfolioEditingService {
     func failFirstTrade() { tradeFails = true }
     func failFirstRetag() { retagFails = true }
     func failUpdates() { updateFails = true }
+    func failDeletes() { deleteFails = true }
+    func failFirstCreate() { createFails = true }
+    func failExposureImport() { exposureFails = true }
     func portfolioCreateInvestment(_ payload: PortfolioEditingPayload) async throws -> PortfolioInvestment {
+        if createFails {
+            createFails = false
+            throw APIError.backendUnavailable
+        }
         createdInvestmentCalls += 1
         return try editingInvestment()
     }
@@ -451,7 +529,9 @@ private actor EditingFixtureService: PortfolioEditingService {
         if updateFails { throw APIError.backendUnavailable }
         return try editingInvestment()
     }
-    func portfolioDeleteInvestment(id: Int) async throws {}
+    func portfolioDeleteInvestment(id: Int) async throws {
+        if deleteFails { throw APIError.backendUnavailable }
+    }
     func portfolioCreateTransaction(investmentId: Int, payload: PortfolioEditingPayload) async throws
         -> PortfolioTransaction
     {
@@ -465,7 +545,9 @@ private actor EditingFixtureService: PortfolioEditingService {
     func portfolioUpdateTransaction(id: Int, payload: PortfolioEditingPayload) async throws -> PortfolioTransaction {
         try editingTransaction()
     }
-    func portfolioDeleteTransaction(id: Int) async throws {}
+    func portfolioDeleteTransaction(id: Int) async throws {
+        if deleteFails { throw APIError.backendUnavailable }
+    }
     func portfolioPriceProviders() async throws -> [PortfolioPriceProvider] { PortfolioPriceProvider.fallback }
     func portfolioEditingTransactions(investmentIds: [Int]) async throws -> [PortfolioTransaction] {
         bulkCalls += 1
@@ -494,7 +576,9 @@ private actor EditingFixtureService: PortfolioEditingService {
             receiptId: 1, idempotencyKey: "synthetic", transactionIds: [9], previousAssignments: [], selectedCount: 1,
             changedCount: 1, createdAt: "2026-10-13", replayed: false)
     }
-    func portfolioImportExposure(_ data: Data) async throws {}
+    func portfolioImportExposure(_ data: Data) async throws {
+        if exposureFails { throw APIError.backendUnavailable }
+    }
 }
 
 private actor PortfolioEditingTransport: APITransport {

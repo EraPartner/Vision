@@ -304,17 +304,21 @@ struct PortfolioReadTests {
     @Test func failedSameCurrencyRefreshExposesErrorWithRetainedServerFiguresAndClearsOnRetry() async {
         let transport = PortfolioReadTransport()
         let model = PortfolioModel(service: portfolioReadClient(transport), now: { PlannedFixture.today })
+        #expect(model.brokerFilterStatusKey == "portfolio.brokerFilter.loading")
         await model.load(currency: "EUR")
         #expect(model.error == nil)
+        #expect(model.brokerFilterStatusKey == nil)
         await transport.failSummaryReads(true)
         await model.refreshAfterWrite()
         #expect(model.summary?.totals.totalPortfolioValue == 100)
         #expect(model.error != nil)
         #expect(!model.isLoading)
+        #expect(model.brokerFilterStatusKey == "portfolio.brokerFilter.unavailable")
         await transport.failSummaryReads(false)
         await model.load(currency: "EUR", force: true)
         #expect(model.error == nil)
         #expect(model.summary?.totals.totalPortfolioValue == 100)
+        #expect(model.brokerFilterStatusKey == nil)
     }
 
     @Test func netWorthPriceRefreshInvalidatesThePreviouslyLoadedPortfolioCache() async {

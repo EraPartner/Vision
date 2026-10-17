@@ -17,11 +17,13 @@ struct PortfolioInvestmentForm: View {
         guard let current = draft?.currency, !choices.contains(current) else { return choices }
         return choices + [current]
     }
-    private func text(_ path: WritableKeyPath<PortfolioInvestmentDraft, String>) -> Binding<String> {
+    private func text(_ path: WritableKeyPath<PortfolioInvestmentDraft, String>, field: String = "") -> Binding<
+        String
+    > {
         Binding(
             get: { draft?[keyPath: path] ?? "" },
             set: {
-                model.investmentDraft?[keyPath: path] = $0
+                model.investmentDraft?[keyPath: path] = PortfolioInvestmentDraft.input($0, field: field)
                 model.clearIssue()
             })
     }
@@ -94,84 +96,27 @@ struct PortfolioInvestmentForm: View {
         }.frame(width: 550, height: 700).disabled(model.isSaving).interactiveDismissDisabled(model.isSaving)
             .task { await model.loadOptions() }
     }
+    private var fixedIncome: Bool { PortfolioAssetKinds.fixedIncome(draft?.assetClass ?? "") }
+    private var realEstate: Bool { draft?.assetClass == "real_estate" }
+    /// `InvestmentFormFields` order: identity, class fields, initial purchase, price source, notes.
     @ViewBuilder private var fields: some View {
         field("addInv.label.name", \.name, "name")
-        if unitBased { field("addInv.label.ticker", \.symbol, "symbol") }
+        if unitBased { field("addInv.label.ticker", \.symbol, "symbol", monospaced: true) }
         Picker(strings.t("addInv.label.currency"), selection: text(\.currency)) {
             ForEach(currencies, id: \.self) { Text($0).tag($0) }
         }
         if !isEditing {
-            if PortfolioAssetKinds.fixedIncome(draft?.assetClass ?? "") {
+            if fixedIncome {
                 field("addInv.label.interestRate", \.interestRate, "interestRate")
                 dateField("addInv.label.maturityDate", \.maturityDate, "maturityDate", allowClear: true)
             }
-            if draft?.assetClass == "real_estate" {
+            if realEstate {
                 field("addInv.label.location", \.location, "location")
                 field("addInv.label.municipality", \.municipality, "municipality")
                 field("addInv.label.cadastralIncome", \.cadastralIncome, "cadastralIncome")
                 field("addInv.label.municipalityTaxRate", \.municipalityTaxRate, "municipalityTaxRate")
             }
-            VStack(alignment: .leading, spacing: 5) {
-                Text(strings.t("addInv.label.notes")).font(.callout)
-                TextEditor(text: text(\.notes)).frame(minHeight: 64).focused($focused, equals: "notes")
-                    .accessibilityLabel(strings.t("addInv.label.notes"))
-            }.id("notes")
-            Toggle(
-                strings.t(
-                    "addInv.initial.label",
-                    [
-                        "txType": strings.t(
-                            PortfolioAssetKinds.fixedIncome(draft?.assetClass ?? "")
-                                ? "addInv.initial.deposit"
-                                : (draft?.assetClass == "real_estate"
-                                    ? "addInv.initial.purchase" : "addInv.initial.buy"))
-                    ]),
-                isOn: Binding(
-                    get: { draft?.addInitialPurchase ?? false }, set: { model.investmentDraft?.addInitialPurchase = $0 }
-                ))
-            Text(
-                strings.t(
-                    "addInv.initial.desc",
-                    [
-                        "txWord": strings.t(
-                            PortfolioAssetKinds.fixedIncome(draft?.assetClass ?? "")
-                                ? "addInv.initial.depositWord"
-                                : (draft?.assetClass == "real_estate"
-                                    ? "addInv.initial.purchaseWord" : "addInv.initial.transactionWord"))
-                    ])
-            ).font(.footnote).foregroundStyle(theme.secondaryLabel)
-            if draft?.addInitialPurchase == true {
-                field(
-                    PortfolioAssetKinds.fixedIncome(draft?.assetClass ?? "")
-                        ? "addInv.label.depositAmount"
-                        : (draft?.assetClass == "real_estate"
-                            ? "addInv.label.purchasePrice" : "addInv.label.totalCost"), \.initialAmount, "initialAmount"
-                )
-                if unitBased {
-                    field("addInv.label.units", \.initialUnits, "initialUnits")
-                    Text(strings.t("addInv.initial.unitHelp")).font(.footnote).foregroundStyle(theme.secondaryLabel)
-                    if let amount = PortfolioTradeDraft.positive(
-                        draft?.initialAmount ?? "", format: shell.settings.numberFormat),
-                        let units = PortfolioTradeDraft.positive(
-                            draft?.initialUnits ?? "", format: shell.settings.numberFormat), units > 0
-                    {
-                        Text(
-                            strings.t("addInv.label.pricePerUnit") + ": "
-                                + LocaleNumber.editable(amount / units, format: shell.settings.numberFormat)
-                        )
-                        .font(.footnote).monospacedDigit().foregroundStyle(theme.secondaryLabel)
-                    }
-                }
-                dateField("addInv.label.date", \.initialDate, "initialDate", allowClear: false)
-                field("addInv.label.fees", \.initialFees, "initialFees")
-                PortfolioBrokerField(
-                    model: model, shell: shell, selected: draft?.initialAccountId,
-                    wasChosen: draft?.brokerWasChosen ?? false,
-                    onChoose: {
-                        model.investmentDraft?.initialAccountId = $0
-                        model.investmentDraft?.brokerWasChosen = true
-                    }, compact: true)
-            }
+            initialPurchase
         }
         if isEditing || unitBased {
             Divider()
@@ -180,13 +125,86 @@ struct PortfolioInvestmentForm: View {
                 field("addInv.label.currentPrice", \.currentPrice, "currentPrice")
             }
         }
+        if !isEditing {
+            VStack(alignment: .leading, spacing: 5) {
+                Text(strings.t("addInv.label.notes")).font(.callout)
+                TextEditor(text: text(\.notes, field: "notes")).frame(minHeight: 64).focused($focused, equals: "notes")
+                    .accessibilityLabel(strings.t("addInv.label.notes"))
+            }.id("notes")
+        }
     }
-    private func field(_ key: String, _ path: WritableKeyPath<PortfolioInvestmentDraft, String>, _ id: String)
-        -> some View
-    {
+    @ViewBuilder private var initialPurchase: some View {
+        Toggle(
+            strings.t(
+                "addInv.initial.label",
+                [
+                    "txType": strings.t(
+                        realEstate
+                            ? "addInv.initial.purchase"
+                            : (fixedIncome ? "addInv.initial.deposit" : "addInv.initial.buy"))
+                ]),
+            isOn: Binding(
+                get: { draft?.addInitialPurchase ?? false }, set: { model.investmentDraft?.addInitialPurchase = $0 }
+            )
+        ).toggleStyle(.switch)
+        Text(
+            strings.t(
+                "addInv.initial.desc",
+                [
+                    "txWord": strings.t(
+                        realEstate
+                            ? "addInv.initial.purchaseWord"
+                            : (fixedIncome ? "addInv.initial.depositWord" : "addInv.initial.transactionWord"))
+                ])
+        ).font(.footnote).foregroundStyle(theme.secondaryLabel)
+        if draft?.addInitialPurchase == true {
+            if unitBased {
+                Text(strings.t("addInv.initial.unitHelp")).font(.footnote).foregroundStyle(theme.secondaryLabel)
+            }
+            dateField("addInv.label.date", \.initialDate, "initialDate", allowClear: false)
+            field(
+                realEstate
+                    ? "addInv.label.purchasePrice"
+                    : (fixedIncome ? "addInv.label.depositAmount" : "addInv.label.totalCost"), \.initialAmount,
+                "initialAmount")
+            if unitBased {
+                field("addInv.label.units", \.initialUnits, "initialUnits")
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(strings.t("addInv.label.pricePerUnit")).font(.callout)
+                    Text(computedPricePerUnit ?? "—")
+                        .font(.body.monospaced()).monospacedDigit().foregroundStyle(theme.secondaryLabel)
+                        .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 8).padding(.vertical, 5)
+                        .background(theme.secondaryLabel.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
+                        .accessibilityLabel(strings.t("addInv.label.pricePerUnit"))
+                        .accessibilityValue(computedPricePerUnit ?? "—")
+                        .textSelection(.enabled)
+                }
+            }
+            field("addInv.label.fees", \.initialFees, "initialFees")
+            PortfolioBrokerField(
+                model: model, shell: shell, selected: draft?.initialAccountId,
+                wasChosen: draft?.brokerWasChosen ?? false,
+                onChoose: {
+                    model.investmentDraft?.initialAccountId = $0
+                    model.investmentDraft?.brokerWasChosen = true
+                }, compact: true)
+        }
+    }
+    private var computedPricePerUnit: String? {
+        let format = shell.settings.numberFormat
+        guard let amount = PortfolioTradeDraft.positive(draft?.initialAmount ?? "", format: format),
+            let units = PortfolioTradeDraft.positive(draft?.initialUnits ?? "", format: format), units > 0
+        else { return nil }
+        return LocaleNumber.editable(amount / units, format: format)
+    }
+    private func field(
+        _ key: String, _ path: WritableKeyPath<PortfolioInvestmentDraft, String>, _ id: String, monospaced: Bool = false
+    ) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             Text(strings.t(key)).font(.callout)
-            TextField("", text: text(path)).textFieldStyle(.roundedBorder).focused($focused, equals: id).onSubmit(save)
+            TextField("", text: text(path, field: id)).textFieldStyle(.roundedBorder)
+                .font(monospaced ? .body.monospaced() : .body)
+                .focused($focused, equals: id).onSubmit(save)
                 .accessibilityLabel(strings.t(key))
             if model.issue?.field == id {
                 Text(strings.t(model.issue!.key)).font(.footnote).foregroundStyle(theme.destructive)

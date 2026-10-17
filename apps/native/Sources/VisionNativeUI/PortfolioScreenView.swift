@@ -21,7 +21,9 @@ struct PortfolioScreenView: View {
                 PortfolioOverviewView(model: screens.model, editing: screens.editing, shell: shell)
             }
         }
-        .task(id: String(shell.settingsRevision)) { screens.editing.configure(settings: shell.settings) }
+        .task(id: "\(shell.settingsRevision)|\(shell.strings.language.rawValue)") {
+            screens.editing.configure(settings: shell.settings, strings: shell.strings)
+        }
         .task(id: screens.dataRevision) {
             await screens.model.load(currency: shell.settings.defaultCurrency, route: shell.route)
         }

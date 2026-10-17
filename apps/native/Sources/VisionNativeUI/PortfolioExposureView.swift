@@ -178,7 +178,11 @@ struct PortfolioExposureView: View {
                     }
                     _ = try JSONSerialization.jsonObject(with: bytes)
                     importError = nil
-                    if await editing.importExposure(data: bytes) { await model.loadExposure(force: true) }
+                    if await editing.importExposure(data: bytes) {
+                        await model.loadExposure(force: true)
+                    } else {
+                        importError = editing.error
+                    }
                 } catch {
                     if (error as? CocoaError)?.code != .userCancelled { importError = error.localizedDescription }
                 }

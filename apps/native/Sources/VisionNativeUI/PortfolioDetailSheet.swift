@@ -37,9 +37,12 @@ struct PortfolioDetailSheet: View {
                     HStack {
                         Spacer()
                         Button(strings.t("form.addTransaction.title"), systemImage: "plus") {
-                            editing.bindTransactions(model.transactions)
+                            // Only a complete history may seed the instrument's broker default.
+                            if model.historyComplete && !model.historyLoading {
+                                editing.bindTransactions(model.transactions)
+                            }
                             editing.beginAddTransaction(investment: investment, bookingCurrency: holding.currency)
-                        }.buttonStyle(.borderedProminent).disabled(!model.historyComplete || model.historyLoading)
+                        }.buttonStyle(.borderedProminent)
                     }
                 }
             } else {

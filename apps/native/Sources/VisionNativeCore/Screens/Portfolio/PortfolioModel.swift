@@ -91,6 +91,14 @@ public final class PortfolioModel {
     public private(set) var historyError: String?
     public var error: String? { errors["investments"] ?? errors["summary"] }
     public var isLoading: Bool { summary == nil && error == nil }
+    /// The footer line that replaces the broker subtotals, which also disables the broker
+    /// filter: `portfolio.brokerFilter.loading` while the summary for `currency` is not yet
+    /// read, `portfolio.brokerFilter.unavailable` when it failed (web `portfolioSummaryQuery`).
+    public var brokerFilterStatusKey: String? {
+        if errors["summary"] != nil { return "portfolio.brokerFilter.unavailable" }
+        if summary?.currency != currency { return "portfolio.brokerFilter.loading" }
+        return nil
+    }
     public var active: [PortfolioHolding] { summary?.summaries.filter(\.isActive) ?? [] }
     public var priceFreshness: PortfolioPriceFreshness { .aggregate(active) }
     public var stalePriceCount: Int { active.filter { PortfolioPriceFreshness.isStale($0, now: now()) }.count }

@@ -224,7 +224,11 @@ private struct PortfolioEditingPresenter: ViewModifier {
         }
     }
     private var confirmLabel: String {
-        destructive ? strings.t("invDetail.delete.confirm") : strings.t("portfolio.archiveInvestment")
+        switch model.confirmation {
+        case .archive: strings.t("portfolio.archiveInvestment")
+        case .deleteInvestment: strings.t("common.delete")
+        case .deleteTransaction, nil: strings.t("invDetail.delete.confirm")
+        }
     }
     private var destructive: Bool {
         if case .archive = model.confirmation { return false }

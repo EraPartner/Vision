@@ -118,7 +118,6 @@ struct PortfolioTickerView: View {
             .font(.caption).foregroundStyle(theme.secondaryLabel)
             ForEach(quotable) { investment in
                 Toggle(
-                    investment.name,
                     isOn: Binding(
                         get: { overrides[investment.id] ?? (investment.showInTicker != false) },
                         set: { value in
@@ -128,7 +127,17 @@ struct PortfolioTickerView: View {
                                 if !saved { overrides.removeValue(forKey: investment.id) }
                             }
                         })
-                )
+                ) {
+                    HStack(spacing: 8) {
+                        if let symbol = investment.symbol, !symbol.isEmpty {
+                            Text(symbol).font(.caption.monospaced().weight(.medium))
+                        }
+                        Text(investment.name).font(.footnote).foregroundStyle(theme.secondaryLabel)
+                            .lineLimit(1).truncationMode(.tail)
+                    }
+                }
+                .toggleStyle(.switch)
+                .accessibilityLabel(investment.name)
                 .disabled(editing.isMutating)
             }
         }.padding(20).frame(width: 340)
