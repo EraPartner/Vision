@@ -126,12 +126,13 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         let settingsAI = NativeSettingsAIModel(service: client)
         let desktopSettings = makeNativeSettingsDesktopCallbacks(generation: settingsGeneration)
         let settingsBackup = NativeSettingsBackupModel(service: desktopSettings)
+        let paletteRates = NativePaletteRates(load: { try await client.exchangeRates() })
         let commandPalette = NativeCommandPaletteModel(
             service: client,
             answers: NativeCommandPaletteAnswerProvider { [weak self] query, format, currency, decimals in
                 guard let self else { throw APIError.backendUnavailable }
                 return try await self.nativePaletteAnswer(
-                    query: query, format: format, currency: currency, decimals: decimals,
+                    query: query, format: format, currency: currency, decimals: decimals, rates: paletteRates,
                     generation: settingsGeneration)
             },
             readRecents: { [weak self] in
@@ -647,26 +648,17 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         return result
     }
 
+    /// The palette's inline answers, computed natively (ADR-208); rates come from the
+    /// graph's shared 10-minute cache.
     private func nativePaletteAnswer(
-        query: String, format: NumberFormat, currency: String, decimals: Int, generation: UUID
+        query: String, format: NumberFormat, currency: String, decimals: Int, rates: NativePaletteRates,
+        generation: UUID
     ) async throws -> NativeCommandPaletteAnswer? {
         try requireNativeGeneration(generation)
-        let reply = try await nativeSettingsScript(
-            """
-            if (typeof window.__visionNativePaletteAnswer !== 'function') return null;
-            return await window.__visionNativePaletteAnswer(query, numberFormat, currency, decimals);
-            """,
-            arguments: [
-                "query": .string(query), "numberFormat": .string(format.rawValue), "currency": .string(currency),
-                "decimals": .int(decimals),
-            ])
+        let answer = await NativePaletteCalculator.answer(
+            query: query, format: format, currency: currency, decimals: decimals, readRates: { await rates.read() })
         try requireNativeGeneration(generation)
-        if reply == .null { return nil }
-        guard let fields = reply.objectValue, Set(fields.keys) == ["kind", "text"],
-            let raw = fields["kind"]?.stringValue,
-            let kind = NativeCommandPaletteAnswer.Kind(rawValue: raw), let text = fields["text"]?.stringValue
-        else { throw APIError.invalidRequest("Invalid palette answer") }
-        return .init(kind: kind, text: text)
+        return answer
     }
 
     private func nativeReportTheme() -> TaxValue {
