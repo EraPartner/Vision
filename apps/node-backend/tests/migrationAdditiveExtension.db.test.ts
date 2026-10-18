@@ -18,7 +18,7 @@ const isolated =
   Boolean(process.env.TEST_DATABASE_URL);
 const prior = "0124_portfolio_income_recognition";
 const cashOrigin = "0125_brokerage_cash_origin";
-const target = "0126_income_recognition_check_name";
+const target = "0127_bank_chronology";
 interface ScratchDatabase {
   client: pg.Client;
   connectionString: string;
@@ -97,6 +97,75 @@ async function retained(client: pg.Client) {
 describe.skipIf(!isolated)(
   "automatic reviewed additive migration registration",
   () => {
+    it("upgrades 0126 chronology only from consistent retained source records and rolls metadata back", async () => {
+      await disposable(async ({ client, connectionString, alembic, boot }) => {
+        await installFreshBaseline({ repoRoot: root, connectionString });
+        await alembic("upgrade", "0126_income_recognition_check_name");
+        const batchId = (
+          await client.query(
+            "INSERT INTO import_batches(adapter_name,status) VALUES('belfius','complete') RETURNING id",
+          )
+        ).rows[0].id;
+        const known = "a".repeat(64);
+        const ambiguous = "b".repeat(64);
+        const unknown = "c".repeat(64);
+        await client.query(
+          `INSERT INTO import_staging_rows(batch_id,row_index,status,raw_data,source_record_hash,tx_date,amount,currency)
+          VALUES ($1,0,'committed','BE123;date;1;2;rest',$2,'2026-01-01',10,'EUR'),
+          ($1,1,'duplicate','BE123;date;1;2;rest',$2,'2026-01-01',10,'EUR'),
+          ($1,2,'committed','BE123;date;2;1;rest',$3,'2026-01-01',20,'EUR'),
+          ($1,3,'duplicate','BE123;date;2;2;rest',$3,'2026-01-01',20,'EUR'),
+          ($1,4,'committed','unrecognized retained record',$4,'2026-01-01',30,'EUR')`,
+          [batchId, known, ambiguous, unknown],
+        );
+        await client.query(
+          `INSERT INTO transactions(date,amount,currency,import_batch_id,source_record_hash,comment)
+          VALUES ('2026-01-01',10,'EUR',$1,$2,'Editable note'),('2026-01-01',20,'EUR',$1,$3,'Editable note'),('2026-01-01',30,'EUR',$1,$4,'Statement 9 transaction 9')`,
+          [batchId, known, ambiguous, unknown],
+        );
+        const before = (
+          await client.query(
+            "SELECT amount,comment,source_record_hash FROM transactions ORDER BY id",
+          )
+        ).rows;
+        await boot();
+        expect(await revision(client)).toBe(target);
+        expect(
+          (
+            await client.query(
+              "SELECT bank_sequence FROM transactions ORDER BY id",
+            )
+          ).rows,
+        ).toEqual([
+          { bank_sequence: "1000000002" },
+          { bank_sequence: null },
+          { bank_sequence: null },
+        ]);
+        expect(
+          (
+            await client.query(
+              "SELECT amount,comment,source_record_hash FROM transactions ORDER BY id",
+            )
+          ).rows,
+        ).toEqual(before);
+        await alembic("downgrade", "0126_income_recognition_check_name");
+        expect(
+          (
+            await client.query(
+              "SELECT amount,comment,source_record_hash FROM transactions ORDER BY id",
+            )
+          ).rows,
+        ).toEqual(before);
+        expect(
+          (
+            await client.query(
+              "SELECT column_name FROM information_schema.columns WHERE table_name='transactions' AND column_name='bank_sequence'",
+            )
+          ).rowCount,
+        ).toBe(0);
+      });
+    }, 120000);
+
     it("guards brokerage-origin downgrade and preserves raw receipts after guarded cash removal", async () => {
       await disposable(async ({ client, connectionString, alembic, boot }) => {
         await installFreshBaseline({ repoRoot: root, connectionString });
@@ -140,7 +209,7 @@ describe.skipIf(!isolated)(
         await expect(alembic("downgrade", prior)).rejects.toThrow(
           /before downgrade/,
         );
-        // Each migration commits on its own, so 0126 has already stepped down.
+        // Each migration commits on its own, so 0127 and 0126 have already stepped down.
         expect(await revision(client)).toBe(cashOrigin);
         await client.query(
           "UPDATE transactions SET is_active=false WHERE account_id=$1",
@@ -292,7 +361,7 @@ describe.skipIf(!isolated)(
         },
       );
     }, 120000);
-    it("keeps existing0118 profiles deferred without installing0120-0126 or executing0119", async () => {
+    it("keeps existing0118 profiles deferred without installing0120-0127 or executing0119", async () => {
       await disposable(async ({ client, connectionString, alembic, boot }) => {
         await installFreshBaseline({ repoRoot: root, connectionString });
         await alembic("downgrade", "0118_audit_retention_pruner");

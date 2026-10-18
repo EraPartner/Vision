@@ -77,6 +77,8 @@ export const transactionRowSchema = z
     currency: z.string().nullable(),
     /** NUMERIC(18,4) since migration 0088 (ADR-060 D7); NULL on manually-created rows (import pipeline only — ADR-094). */
     balance: pgNumeric.nullable(),
+    /** Internal bank chronology; omitted from API rows. */
+    bank_sequence: pgNumeric.nullable().optional(),
     memo: z.string().nullable(),
     comment: z.string().nullable(),
     /** Compatibility label projected from accounts.name; not stored after the ADR-088 contract operation. */
@@ -164,7 +166,7 @@ export const transferSuggestionRowSchema = transactionRowSchema
 
 /** A `lockTransferLegs` row. */
 export const transferLegRowSchema = transactionRowSchema
-  .pick({ id: true, amount: true, account_id: true, is_active: true })
+  .pick({ id: true, amount: true, account_id: true, is_active: true, transfer_source: true })
   .describe("transfer leg row");
 
 // ---------------------------------------------------------------------------

@@ -158,6 +158,14 @@ function parseTransactionLine(
     // Statement/transaction counters are not proven globally immutable across
     // export periods, so they remain descriptive fields rather than identity.
     sourceId: null,
+    bankSequence:
+      /^[0-9]{1,9}$/.test(statementNumber) &&
+      /^[0-9]{1,9}$/.test(transactionNumber)
+        ? (
+            BigInt(statementNumber) * 1000000000n +
+            BigInt(transactionNumber)
+          ).toString()
+        : null,
     // Statement + transaction number: the export's own ordering, used (and
     // stripped again) by applyRunningBalances.
     _seq: [

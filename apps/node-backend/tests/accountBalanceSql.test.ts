@@ -1,3 +1,4 @@
+import { bankChronologySql } from "../src/repositories/bankChronologySql.ts";
 /**
  * Shape tests for the shared computed-balance lateral (ADR-094 / WP-A1).
  *
@@ -47,11 +48,11 @@ describe("BALANCE_PROVENANCE_LATERAL", () => {
     expect(BALANCE_PROVENANCE_LATERAL).toContain("WITH anchor AS");
     expect(BALANCE_PROVENANCE_LATERAL).toContain("t.balance IS NOT NULL");
     expect(BALANCE_PROVENANCE_LATERAL).toContain(
-      "ORDER BY t.date DESC, t.id DESC",
+      `ORDER BY t.date DESC, ${bankChronologySql("t")} DESC, t.id DESC`,
     );
     // Strictly-after tuple comparison + the no-stamp (count everything) fallback.
     expect(BALANCE_PROVENANCE_LATERAL).toContain(
-      "(t2.date, t2.id) > (SELECT date, id FROM anchor)",
+      `(t2.date, ${bankChronologySql("t2")}, t2.id) > (SELECT date, chronology, id FROM anchor)`,
     );
     expect(BALANCE_PROVENANCE_LATERAL).toContain(
       "NOT EXISTS (SELECT 1 FROM anchor)",
@@ -107,9 +108,11 @@ describe("computedBalanceByCurrencyLateral", () => {
 
   it("keeps the anchor+delta structure, per partition", () => {
     expect(sql).toContain("t.balance IS NOT NULL");
-    expect(sql).toContain("ORDER BY t.date DESC, t.id DESC");
     expect(sql).toContain(
-      "(anch.date IS NULL OR (t2.date, t2.id) > (anch.date, anch.id))",
+      `ORDER BY t.date DESC, ${bankChronologySql("t")} DESC, t.id DESC`,
+    );
+    expect(sql).toContain(
+      `(anch.date IS NULL OR (t2.date, ${bankChronologySql("t2")}, t2.id) > (anch.date, anch.chronology, anch.id))`,
     );
     expect(sql.match(/is_active = true/g)?.length).toBe(3);
   });
@@ -416,10 +419,10 @@ describe("computedBalanceSeriesCtes", () => {
     // The partition follows the mode; the cross-currency form carries no
     // constant column in its sort keys.
     expect(perCcy).toContain(
-      "WINDOW bs_w AS (PARTITION BY account_id, currency ORDER BY date, id)",
+      "WINDOW bs_w AS (PARTITION BY account_id, currency ORDER BY date, chronology, id)",
     );
     expect(cross).toContain(
-      "WINDOW bs_w AS (PARTITION BY account_id ORDER BY date, id)",
+      "WINDOW bs_w AS (PARTITION BY account_id ORDER BY date, chronology, id)",
     );
     // …and only the per-currency form confines a partition to one currency.
     expect(perCcy).toContain(`AND COALESCE(t.currency, 'EUR') = p.currency`);

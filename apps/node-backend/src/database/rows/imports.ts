@@ -131,6 +131,7 @@ export const importStagingRowSchema = z
     currency: z.string().nullable(),
     /** NUMERIC(20,4) */
     balance: pgNumeric.nullable(),
+    bank_sequence: pgNumeric.nullable().optional(),
     recipient_account: z.string().nullable(),
     recipient_address: z.string().nullable(),
     recipient_bank_name: z.string().nullable(),
@@ -205,6 +206,7 @@ export const commitStagingRowSchema = importStagingRowSchema
     memo: true,
     currency: true,
     balance: true,
+    bank_sequence: true,
     comment: true,
     resolved_recipient_id: true,
   })
