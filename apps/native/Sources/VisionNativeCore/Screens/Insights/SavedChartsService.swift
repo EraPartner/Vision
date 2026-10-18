@@ -35,17 +35,15 @@ extension APIClient: SavedChartsService {
         if !draft.allRecipients {
             items += draft.recipientIds.map { URLQueryItem(name: "recipient_ids", value: String($0)) }
         }
-        return try await send(
-            InsightRequest<OpenAPIOperations.GetRecipientPivot, CustomRecipientPivot>(
-                OpenAPIOperations.GetRecipientPivot(), query: items))
+        return try await sendAggregation(
+            OpenAPIOperations.GetRecipientPivot(), query: items)
     }
     public func customTagPivot(currency: String, draft: CustomChartDraft) async throws -> CustomTagPivot {
         var items = customPivotQuery(currency: currency, draft: draft)
         items.append(URLQueryItem(name: "all", value: draft.allTags ? "true" : "false"))
         if !draft.allTags { items += draft.tagIds.map { URLQueryItem(name: "tag_ids", value: String($0)) } }
-        return try await send(
-            InsightRequest<OpenAPIOperations.GetTagPivot, CustomTagPivot>(
-                OpenAPIOperations.GetTagPivot(), query: items))
+        return try await sendAggregation(
+            OpenAPIOperations.GetTagPivot(), query: items)
     }
     public func customChartRecipients() async throws -> [OpenAPI.Recipient] {
         try await send(OpenAPIOperations.GetRecipients(limit: 200, active: true)).items

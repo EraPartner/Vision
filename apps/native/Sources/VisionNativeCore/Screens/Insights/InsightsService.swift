@@ -23,6 +23,22 @@ public struct InsightRequest<Operation: APIOperation, Value: Decodable & Sendabl
     }
 }
 
+/// `/api/aggregations/*` answer `{ data, meta }` inside the transport envelope (the calc
+/// layer's buildEnvelope; packages/types/src/contracts/aggregations.ts), so the payload is
+/// one level deeper than for other endpoints.
+public struct AggregationEnvelope<Value: Decodable & Sendable>: Decodable, Sendable {
+    public let data: Value
+}
+
+extension APIClient {
+    /// Sends an aggregation operation and returns the payload inside its `{ data, meta }`.
+    func aggregation<Operation: APIOperation, Value: Decodable & Sendable>(
+        _ operation: Operation, query: [URLQueryItem]
+    ) async throws -> Value {
+        try await send(InsightRequest<Operation, AggregationEnvelope<Value>>(operation, query: query)).data
+    }
+}
+
 public protocol HomeService: Sendable {
     func homeMonthly(currency: String, exclusions: InsightExclusions) async throws
         -> InsightMonthlySummary
@@ -58,20 +74,17 @@ extension APIClient: HomeService {
     public func homeMonthly(currency: String, exclusions: InsightExclusions) async throws
         -> InsightMonthlySummary
     {
-        try await send(
-            InsightRequest<OpenAPIOperations.GetMonthlySummary, InsightMonthlySummary>(
-                OpenAPIOperations.GetMonthlySummary(),
-                query: currencyItems(currency) + exclusions.queryItems))
+        try await sendAggregation(
+            OpenAPIOperations.GetMonthlySummary(),
+            query: currencyItems(currency) + exclusions.queryItems)
     }
     public func homePace(currency: String) async throws -> HomeSpendingPace {
-        try await send(
-            InsightRequest<OpenAPIOperations.GetAverageVsCurrent, HomeSpendingPace>(
-                OpenAPIOperations.GetAverageVsCurrent(), query: currencyItems(currency)))
+        try await sendAggregation(
+            OpenAPIOperations.GetAverageVsCurrent(), query: currencyItems(currency))
     }
     public func homeBalances(currency: String) async throws -> HomeBankBalances {
-        try await send(
-            InsightRequest<OpenAPIOperations.GetBankBalances, HomeBankBalances>(
-                OpenAPIOperations.GetBankBalances(), query: currencyItems(currency)))
+        try await sendAggregation(
+            OpenAPIOperations.GetBankBalances(), query: currencyItems(currency))
     }
     public func homeNetWorth(currency: String) async throws -> HomeNetWorth {
         try await send(
@@ -83,13 +96,11 @@ extension APIClient: HomeService {
     ) async throws -> InsightForecast {
         let query = currencyItems(currency) + exclusions.queryItems + options.queryItems
         if options.mode == .month {
-            return try await send(
-                InsightRequest<OpenAPIOperations.GetCashflowForecastMethods, InsightForecast>(
-                    OpenAPIOperations.GetCashflowForecastMethods(), query: query))
+            return try await sendAggregation(
+                OpenAPIOperations.GetCashflowForecastMethods(), query: query)
         }
-        return try await send(
-            InsightRequest<OpenAPIOperations.GetCashflowForecastRolling, InsightForecast>(
-                OpenAPIOperations.GetCashflowForecastRolling(), query: query))
+        return try await sendAggregation(
+            OpenAPIOperations.GetCashflowForecastRolling(), query: query)
     }
     public func homeTransactionCount() async throws -> Int {
         let result = try await send(OpenAPIOperations.GetTransactionCount())
@@ -102,10 +113,9 @@ extension APIClient: HomeService {
         return count
     }
     public func homeForecastAccuracy() async throws -> InsightForecastAccuracy {
-        try await send(
-            InsightRequest<OpenAPIOperations.GetCashflowForecastAccuracy, InsightForecastAccuracy>(
-                OpenAPIOperations.GetCashflowForecastAccuracy(),
-                query: [URLQueryItem(name: "limit_months", value: "24")]))
+        try await sendAggregation(
+            OpenAPIOperations.GetCashflowForecastAccuracy(),
+            query: [URLQueryItem(name: "limit_months", value: "24")])
     }
     public func homeNeedsCategory() async throws -> Int {
         try await send(OpenAPIOperations.GetTransactions(limit: 1, active: true, uncategorised: true))
