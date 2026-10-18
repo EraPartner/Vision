@@ -59,9 +59,16 @@ picks the standard Vision Native variant).
 | ------------------- | ------------------------------------------------------------------------------------------- |
 | `install.sh`        | Build the Electron Vision app and install it to `/Applications/Vision.app`                  |
 | `install-demo.sh`   | Build the Electron Vision Demo app with synthetic data                                      |
-| `install-native.sh` | Build Vision Native Demo (Release) and install it to `/Applications/Vision Native Demo.app` |
+| `install-native.sh` | Build Vision Native Demo (Release; `--debug`/`--measure` for Debug) and install it to `/Applications/Vision Native Demo.app` |
 
-`install-native.sh` needs `xcodegen` and `xcodebuild`. It prepares the runtime payload with the
+`install-native.sh` needs `xcodegen` and `xcodebuild`. `--debug` builds the Debug configuration,
+whose Demo starts in the native-only mode ([[docs/adr/208-vision-native-without-web-content|ADR-208]];
+`VISION_NATIVE_WEB_FREE=0` opens the retained web page). `--measure` implies `--debug` and, after
+installing, runs `.github/scripts/native-e2e-smoke.sh` for the `native` and `retained` modes (and
+`electron` when `/Applications/Vision Demo.app` exists), then prints each mode's footprint, main
+process RSS, app-tree RSS and process count; the per-mode files land in
+`apps/native/build/memory-<timestamp>/`. It quits the apps it starts and uses synthetic Demo data
+only. It prepares the runtime payload with the
 same steps as `install-demo.sh` (`prepare_native_macos_build`, then `prepare-native-runtime` and
 `build-demo-seed` from `packaging/electron/scripts/`) into `apps/native/build/payload/`, and the
 Xcode build stages it into `Contents/Resources/runtime/` and `Contents/Resources/demo-seed/` before
