@@ -15,6 +15,15 @@ aliases: [ADRs, decisions, architecture decisions]
 > [!abstract] What is an ADR?
 > An ADR (Architecture Decision Record) documents a significant architectural decision along with its context, consequences, and status. Use these to understand **why** the system is built the way it is.
 
+## Recovery and report resource bounds
+
+[[docs/adr/200-coordinated-native-recovery|ADR-200]] coordinates native snapshot capture and interrupted restore recovery.
+[[docs/adr/201-bounded-report-pipeline|ADR-201]] bounds complete PDF jobs before data fetching and HTML allocation.
+
+## Bank chronology
+
+[[docs/adr/199-bank-chronology|ADR-199]] preserves bank sequence through import and uses it for same-day balance anchors without guessing missing chronology.
+
 ## Latest visual hierarchy decision
 
 [[docs/adr/172-calm-information-hierarchy|ADR-172]] reserves primary emphasis for selected totals and makes supporting surfaces quieter while preserving the visual identity.

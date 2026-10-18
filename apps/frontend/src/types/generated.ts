@@ -1408,7 +1408,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Ambiguous internal-transfer matches awaiting confirmation (ADR-083) */
+        /**
+         * Paginated ambiguous internal-transfer matches (ADR-083)
+         * @description Candidate edges are ordered by outflow and inflow IDs. An outflow can occur on consecutive pages; combine its candidates across pages. Uniqueness is evaluated against the full ledger, independently of pagination. Pages are live and may change after ledger mutations.
+         */
         get: operations["getTransferSuggestions"];
         put?: never;
         post?: never;
@@ -9660,6 +9663,20 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Reopen the closed account before deleting ledger rows */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Transaction is linked to a planned execution or ownership changed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     updateTransaction: {
@@ -9687,6 +9704,20 @@ export interface operations {
                         data?: components["schemas"]["Transaction"];
                     };
                 };
+            };
+            /** @description Ledger mutation requires an active account; reopen a closed account first */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Transaction ownership changed during locking; reload and retry */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -10659,6 +10690,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Selection contains a planned execution link or changed transaction ownership; nothing is deleted */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Rate limit exceeded */
             429: {
                 headers: {
@@ -10810,14 +10848,19 @@ export interface operations {
     };
     getTransferSuggestions: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description nextCursor from the preceding page; omit for the first page. */
+                cursor?: string;
+                /** @description Maximum candidate edges, not outflow groups. */
+                limit?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Suggested transfer pairs (each an outflow + candidate inflows) */
+            /** @description A page of suggestions. Follow nextCursor until hasMore is false to enumerate all candidate edges. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -10825,10 +10868,19 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
                         data?: {
-                            items?: Record<string, never>[];
+                            items: Record<string, never>[];
+                            hasMore: boolean;
+                            nextCursor: string | null;
                         };
                     };
                 };
+            };
+            /** @description Invalid cursor or limit. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -11706,7 +11758,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description New execution rejected because the recurring series is complete */
+            /** @description Completed plan, inactive ledger row, mismatched currency, or stale automatic occurrence; existing pairs remain replayable */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -13809,8 +13861,17 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Report PDF or data */
+            /** @description Generated PDF download */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            /** @description Report capacity is full (two active and eight queued); retry later. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -13837,8 +13898,17 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Portfolio report */
+            /** @description Generated PDF download */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            /** @description Report capacity is full (two active and eight queued); retry later. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -13866,8 +13936,17 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Tax report */
+            /** @description Generated PDF download */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            /** @description Report capacity is full (two active and eight queued); retry later. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -14563,6 +14642,20 @@ export interface operations {
                     "application/json": components["schemas"]["Envelope"];
                 };
             };
+            /** @description Reopen closed accounts before rolling back their ledger rows */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A committed row is linked to a planned execution or changed ownership */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     previewImportBatch: {
@@ -14635,6 +14728,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Batch is no longer awaiting review; no staging edit is applied */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     overrideImportRowCategory: {
@@ -14682,6 +14782,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Batch is no longer awaiting review; no staging edit is applied */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     commitImportBatch: {
@@ -14703,6 +14810,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Envelope"];
                 };
+            };
+            /** @description Batch is not in a committable state or another commit claimed it */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -15001,6 +15115,13 @@ export interface operations {
             };
             /** @description Batch not found, including at the locked lifecycle recheck */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A cash row is linked to a planned execution or changed ownership; rollback is rejected */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

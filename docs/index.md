@@ -2,9 +2,9 @@
 title: Vision Project Knowledge Base
 type: index
 status: active
-date: 2026-10-08
-updated: 2026-10-08
-last_modified: 2026-10-08
+date: 2026-10-13
+updated: 2026-10-11
+last_modified: 2026-10-11
 tags:
   [
     knowledge-base,
@@ -70,6 +70,8 @@ Recent cross-cutting implementation: [[docs/features/analysis-workspace|Analysis
 current evidence gates are in [[docs/security/ai-assistance-evaluation|AI Assistance Evaluation]].
 Import history is defined by
 [[docs/reference/provider-neutral-transaction-provenance|Provider-Neutral Transaction Provenance]].
+
+Implementation and verification boundaries for the October audit: [[docs/testing/codebase-audit-delivery]].
 
 ## 🎯 Quick Navigation
 
@@ -160,7 +162,7 @@ LIMIT 5
 ## 📊 PlantUML Diagrams
 
 > [!info] All Diagrams
-> Vision uses 23 PlantUML diagrams across backend, frontend, and system categories.
+> The [[docs/diagrams/index|diagram index]] covers the PlantUML sources across backend, frontend, and system categories.
 
 ```dataview
 TABLE WITHOUT FILE
@@ -176,7 +178,7 @@ LIMIT 20
 **View all diagrams:** [[docs/diagrams/index|Diagrams Index]] | [[docs/architecture/index|Architecture Overview]] | [Interactive Flow Visualizer](flow-visualizer.html)
 
 > [!tip] Interactive Flow Visualizer
-> [Open the visualizer](flow-visualizer.html#api-request) for 81 components and 46 flows. Journey view shows one ordered handoff at a time; Architecture map shows the full system. Five learning paths cover foundations, everyday money, portfolio, research/AI, and backup/trust. Each flow links to its notes and keeps payload/source details folded until needed. Start with [[docs/guides/visual-learning|Understand Vision Visually]] for small conceptual diagrams and a reading order.
+> [Open the visualizer](flow-visualizer.html#api-request) for 81 components and 49 flows. Journey view shows one ordered handoff at a time; Architecture map shows the full system. Five learning paths cover foundations, everyday money, portfolio, research/AI, and backup/trust. Each flow links to its notes and keeps payload/source details folded until needed. Start with [[docs/guides/visual-learning|Understand Vision Visually]] for small conceptual diagrams and a reading order.
 
 | Resource                                 | Description                           |
 | ---------------------------------------- | ------------------------------------- |
@@ -203,7 +205,7 @@ LIMIT 20
 | [[docs/reference/agent-navigation-map    | 🗺️ Agent Navigation Map]]             | File navigation by feature, layer, task                          |
 | [[docs/reference/frontend-api-client     | 🔌 Frontend API Client]]              | Transport, types, and facade layers of the HTTP client (Phase 1) |
 | [[docs/reference/schema-initialization   | 🗃️ Schema Initialization (Archived)]] | Legacy database startup schema initialization                    |
-| [[docs/reference/api-endpoint-matrix     | 📊 API Endpoint Matrix]]              | Complete matrix of all 163 API endpoints across 28 route files   |
+| [[docs/reference/api-endpoint-matrix     | 📊 API Endpoint Matrix]]              | HTTP operations checked against OpenAPI, plus native IPC contracts   |
 
 ## Recent Updates
 

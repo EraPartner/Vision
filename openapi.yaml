@@ -6989,6 +6989,10 @@ paths:
                     properties:
                       data:
                         $ref: "#/components/schemas/Transaction"
+        "400":
+          description: Ledger mutation requires an active account; reopen a closed account first
+        "409":
+          description: Transaction ownership changed during locking; reload and retry
     delete:
       summary: Delete transaction
       operationId: deleteTransaction
@@ -6996,6 +7000,10 @@ paths:
       responses:
         "204":
           description: No Content
+        "400":
+          description: Reopen the closed account before deleting ledger rows
+        "409":
+          description: Transaction is linked to a planned execution or ownership changed
 
   /api/categories:
     get:
@@ -7871,6 +7879,8 @@ paths:
             unknown/malformed filter field
         "429":
           description: Rate limit exceeded
+        "409":
+          description: Selection contains a planned execution link or changed transaction ownership; nothing is deleted
 
   /api/transactions/bulk-update:
     post:
@@ -7999,12 +8009,22 @@ paths:
 
   /api/transactions/transfer-suggestions:
     get:
-      summary: Ambiguous internal-transfer matches awaiting confirmation (ADR-083)
+      summary: Paginated ambiguous internal-transfer matches (ADR-083)
+      description: Candidate edges are ordered by outflow and inflow IDs. An outflow can occur on consecutive pages; combine its candidates across pages. Uniqueness is evaluated against the full ledger, independently of pagination. Pages are live and may change after ledger mutations.
       operationId: getTransferSuggestions
       tags: [Transactions]
+      parameters:
+        - name: cursor
+          in: query
+          description: nextCursor from the preceding page; omit for the first page.
+          schema: { type: string, pattern: '^[0-9]+:[0-9]+$' }
+        - name: limit
+          in: query
+          description: Maximum candidate edges, not outflow groups.
+          schema: { type: integer, minimum: 1, maximum: 200, default: 200 }
       responses:
         "200":
-          description: Suggested transfer pairs (each an outflow + candidate inflows)
+          description: A page of suggestions. Follow nextCursor until hasMore is false to enumerate all candidate edges.
           content:
             application/json:
               schema:
@@ -8014,11 +8034,16 @@ paths:
                     properties:
                       data:
                         type: object
+                        required: [items, hasMore, nextCursor]
                         properties:
                           items:
                             type: array
                             items:
                               type: object
+                          hasMore: { type: boolean }
+                          nextCursor: { type: string, nullable: true }
+        "400":
+          description: Invalid cursor or limit.
 
   /api/transactions/transfers:
     post:
@@ -8967,7 +8992,7 @@ paths:
         "404":
           description: Planned transaction not found
         "409":
-          description: New execution rejected because the recurring series is complete
+          description: Completed plan, inactive ledger row, mismatched currency, or stale automatic occurrence; existing pairs remain replayable
 
   # ─── Info ─────────────────────────────────────────────────────────────────────
   /api/info/banks:
@@ -11151,12 +11176,19 @@ paths:
                     minimum: 1
                     maximum: 2147483647
       responses:
-        "200":
-          description: Report PDF or data
+        "503":
+          description: Report capacity is full (two active and eight queued); retry later.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Envelope"
+        "200":
+          description: Generated PDF download
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
 
   /api/reports/portfolio:
     post:
@@ -11187,12 +11219,19 @@ paths:
                     minimum: 1
                     maximum: 2147483647
       responses:
-        "200":
-          description: Portfolio report
+        "503":
+          description: Report capacity is full (two active and eight queued); retry later.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Envelope"
+        "200":
+          description: Generated PDF download
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
 
   /api/reports/tax:
     post:
@@ -11225,12 +11264,19 @@ paths:
                     minimum: 1
                     maximum: 2147483647
       responses:
-        "200":
-          description: Tax report
+        "503":
+          description: Report capacity is full (two active and eight queued); retry later.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Envelope"
+        "200":
+          description: Generated PDF download
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
 
   # ─── AI ──────────────────────────────────────────────────────────────────────
   /api/ai/status:
@@ -11952,6 +11998,10 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Envelope"
+        "400":
+          description: Reopen closed accounts before rolling back their ledger rows
+        "409":
+          description: A committed row is linked to a planned execution or changed ownership
 
   /api/import/batches/{id}/preview:
     parameters:
@@ -12035,6 +12085,8 @@ paths:
           description: Malformed batch id, row id or recipient_id, or a body that is not a JSON object
         "404":
           description: Row not found in this batch, or not in matched status
+        "409":
+          description: Batch is no longer awaiting review; no staging edit is applied
 
   /api/import/batches/{id}/rows/{rowId}/category-override:
     parameters:
@@ -12087,6 +12139,8 @@ paths:
           description: Malformed batch id, row id or category_id, an unknown category, or a body that is not a JSON object
         "404":
           description: Row not found in this batch, or not in matched status
+        "409":
+          description: Batch is no longer awaiting review; no staging edit is applied
 
   /api/import/batches/{id}/commit:
     parameters:
@@ -12111,6 +12165,9 @@ paths:
                 $ref: "#/components/schemas/Envelope"
 
   # ─── Portfolio Import ─────────────────────────────────────────────────────────
+        "409":
+          description: Batch is not in a committable state or another commit claimed it
+
   /api/portfolio/import/csv/custom:
     post:
       summary: One-shot portfolio history import with custom mapping or a supported format
@@ -12390,6 +12447,8 @@ paths:
           description: Malformed id, batch already aborted, or batch still in progress
         "404":
           description: Batch not found, including at the locked lifecycle recheck
+        "409":
+          description: A cash row is linked to a planned execution or changed ownership; rollback is rejected
 
   /api/portfolio/import/batches/{id}/preview:
     parameters:
