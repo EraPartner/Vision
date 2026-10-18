@@ -12,7 +12,7 @@ struct TaxCard<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             if let title {
-                Text(title).font(small ? VisionFonts.display(17, relativeTo: .title3) : .visionCardTitle)
+                Text(title).font(small ? Font.visionTitle3 : .visionCardTitle)
                     .accessibilityAddTraits(.isHeader)
             }
             if let description { Text(description).foregroundStyle(theme.secondaryLabel) }

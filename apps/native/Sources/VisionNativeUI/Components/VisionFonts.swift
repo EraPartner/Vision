@@ -32,6 +32,10 @@ extension Font {
     static var visionLargeTitle: Font { VisionFonts.display(32, relativeTo: .largeTitle) }
     /// `font-display type-headline`: the topbar's scrolled page title.
     static var visionDisplayHeadline: Font { VisionFonts.display(14, relativeTo: .headline) }
+    /// `type-title-1`: stat-card values and the onboarding welcome.
+    static var visionTitle1: Font { VisionFonts.display(24, relativeTo: .title) }
+    /// `type-title-3`: `CardTitle variant="sm"` and `ChartCard` titles.
+    static var visionTitle3: Font { VisionFonts.display(17, relativeTo: .title3) }
     /// `type-title-2`: `CardTitle`'s default.
     static var visionCardTitle: Font { VisionFonts.display(20, relativeTo: .title2) }
 }

@@ -13,7 +13,7 @@ public struct NativeNotFoundView: View {
             VStack(spacing: 8) {
                 Text(shell.strings.t("notFound.title")).font(.visionLargeTitle).monospacedDigit()
                     .accessibilityAddTraits(.isHeader)
-                Text(shell.strings.t("notFound.heading")).font(VisionFonts.display(17, relativeTo: .title3))
+                Text(shell.strings.t("notFound.heading")).font(Font.visionTitle3)
                     .foregroundStyle(theme.secondaryLabel)
             }
             Text(shell.strings.t("notFound.description")).foregroundStyle(theme.secondaryLabel)

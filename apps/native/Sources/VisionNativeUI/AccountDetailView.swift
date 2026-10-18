@@ -200,7 +200,7 @@ struct AccountDetailContent: View {
                             .accessibilityAddTraits(.isHeader)
                         if holdingsOnly {
                             Text(strings.t("accounts.trackedInPortfolio"))
-                                .font(VisionFonts.display(17, relativeTo: .title3))
+                                .font(Font.visionTitle3)
                                 .foregroundStyle(theme.secondaryLabel)
                         } else if let balance = account.computedBalance {
                             MoneyText(amount: balance, currency: account.currency, settings: settings, signed: false, colored: false)
@@ -249,7 +249,7 @@ struct AccountDetailContent: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 8) {
                     Text(strings.t("accounts.detail.holdings"))
-                        .font(VisionFonts.display(17, relativeTo: .title3))
+                        .font(Font.visionTitle3)
                         .accessibilityAddTraits(.isHeader)
                     if metrics?.oversold == true {
                         VisionBadge(text: strings.t("portfolio.oversold.label"), tone: .warning, small: true)
@@ -280,7 +280,7 @@ struct AccountDetailContent: View {
                                 amount: metrics.holdingsValue, currency: model.displayCurrency, settings: settings,
                                 signed: false, colored: false
                             )
-                            .font(VisionFonts.display(24, relativeTo: .title))
+                            .font(Font.visionTitle1)
                         }
                         VStack(alignment: .leading, spacing: 2) {
                             Text(strings.t("accounts.portfolio.pnl"))
@@ -293,7 +293,7 @@ struct AccountDetailContent: View {
                                 color: AccountHubRow.gainColor(metrics.gainLoss, theme: theme)
                             )
                                 .monospacedDigit()
-                                .font(VisionFonts.display(24, relativeTo: .title))
+                                .font(Font.visionTitle1)
                                 .foregroundStyle(AccountHubRow.gainColor(metrics.gainLoss, theme: theme))
                         }
                     }
@@ -312,7 +312,7 @@ struct AccountDetailContent: View {
             VStack(alignment: .leading, spacing: 10) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(strings.t("accounts.detail.upcomingPlanned"))
-                        .font(VisionFonts.display(17, relativeTo: .title3))
+                        .font(Font.visionTitle3)
                         .accessibilityAddTraits(.isHeader)
                     Text(strings.t("accounts.detail.upcomingPlannedHint"))
                         .font(.footnote)
@@ -371,7 +371,7 @@ struct AccountDetailContent: View {
         AdminCard(padding: VisionPageLayout.padding) {
             VStack(alignment: .leading, spacing: 10) {
                 Text(strings.t("accounts.detail.details"))
-                    .font(VisionFonts.display(17, relativeTo: .title3))
+                    .font(Font.visionTitle3)
                     .accessibilityAddTraits(.isHeader)
                 Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 6) {
                     ForEach(model.details(account)) { entry in
@@ -405,7 +405,7 @@ struct AccountLedgerCard: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .firstTextBaseline) {
                     Text(strings.t("accounts.detail.ledgerTitle"))
-                        .font(VisionFonts.display(17, relativeTo: .title3))
+                        .font(Font.visionTitle3)
                         .accessibilityAddTraits(.isHeader)
                     if canView && model.ledgerTotal > 0 {
                         Text(strings.tc("accounts.detail.ledgerCount", model.ledgerTotal))

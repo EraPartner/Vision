@@ -133,7 +133,7 @@ public struct AccountsView: View {
                 switch model.netCash {
                 case .amount(let total):
                     MoneyText(amount: total.amount, currency: model.displayCurrency, settings: settings, signed: false, colored: false)
-                        .font(VisionFonts.display(24, relativeTo: .title))
+                        .font(Font.visionTitle1)
                 case .pending, .unavailable:
                     Text(strings.t("accounts.group.subtotalPending"))
                         .font(.callout)

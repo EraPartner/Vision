@@ -3,7 +3,7 @@ import VisionNativeCore
 
 extension Font {
     /// `type-title-3`: `CardTitle variant="sm"`, the research cards' section titles.
-    static var researchCardTitle: Font { VisionFonts.display(17, relativeTo: .title3) }
+    static var researchCardTitle: Font { .visionTitle3 }
 }
 
 struct ResearchCard<Content: View>: View {

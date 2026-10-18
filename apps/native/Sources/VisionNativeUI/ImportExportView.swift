@@ -138,7 +138,7 @@ struct ImportCommitReceiptCard: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
                 Text(strings.t("importPage.commitReceiptTitle"))
-                    .font(VisionFonts.display(17, relativeTo: .title3))
+                    .font(Font.visionTitle3)
                     .accessibilityAddTraits(.isHeader)
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                     RollingNumber(value: String(receipt.imported))

@@ -11,7 +11,7 @@ struct SavedChartsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             HStack {
-                Text(strings.t("customChart.tab")).font(VisionFonts.display(17, relativeTo: .title3))
+                Text(strings.t("customChart.tab")).font(Font.visionTitle3)
                 if !model.charts.isEmpty {
                     Text(strings.tc("customChart.savedCount", model.charts.count)).foregroundStyle(theme.secondaryLabel)
                 }
@@ -27,7 +27,7 @@ struct SavedChartsView: View {
                 AdminCard(padding: VisionPageLayout.padding) {
                     VStack(alignment: .leading, spacing: 14) {
                         HStack {
-                            Text(chart.name).font(VisionFonts.display(17, relativeTo: .title3)).lineLimit(1)
+                            Text(chart.name).font(Font.visionTitle3).lineLimit(1)
                             Spacer()
                             Menu {
                                 Button(strings.t("common.edit")) { model.begin(chart: chart) }

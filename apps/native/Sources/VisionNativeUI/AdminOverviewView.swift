@@ -115,7 +115,7 @@ public struct AdminOverviewView: View {
                     AdminIconBadge(symbol: "key")
                     VStack(alignment: .leading, spacing: 4) {
                         Text(strings.t("admin.token.title"))
-                            .font(VisionFonts.display(17, relativeTo: .title3))
+                            .font(Font.visionTitle3)
                             .accessibilityAddTraits(.isHeader)
                         Text(strings.t("admin.token.description"))
                             .font(.body)

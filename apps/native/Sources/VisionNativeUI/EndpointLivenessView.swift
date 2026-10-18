@@ -21,7 +21,7 @@ public struct EndpointLivenessView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(spacing: 12) {
                         Text(strings.t("admin.endpoints.tableTitle"))
-                            .font(VisionFonts.display(17, relativeTo: .title3))
+                            .font(Font.visionTitle3)
                             .accessibilityAddTraits(.isHeader)
                         Spacer(minLength: 12)
                         TextField(strings.t("admin.endpoints.filterPlaceholder"), text: filter)

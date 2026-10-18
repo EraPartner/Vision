@@ -11,7 +11,7 @@ struct AnalysisMonitorsCreationView: View {
     var body: some View {
         AdminCard(padding: 24) {
             VStack(alignment: .leading, spacing: 14) {
-                Text(strings.t("monitors.newRule")).font(VisionFonts.display(17, relativeTo: .title3)).accessibilityAddTraits(.isHeader)
+                Text(strings.t("monitors.newRule")).font(Font.visionTitle3).accessibilityAddTraits(.isHeader)
                 VStack(alignment: .leading, spacing: 6) {
                     Text(strings.t("monitors.kind")).font(.caption)
                     ForEach(AnalysisMonitorKind.allCases, id: \.self) { kind in

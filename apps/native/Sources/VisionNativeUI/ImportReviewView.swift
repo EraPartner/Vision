@@ -135,7 +135,7 @@ public struct ImportReviewView: View {
         AdminCard(padding: 0) {
             VStack(alignment: .leading, spacing: 0) {
                 Text(strings.t("importReview.legend.title"))
-                    .font(VisionFonts.display(17, relativeTo: .title3))
+                    .font(Font.visionTitle3)
                     .accessibilityAddTraits(.isHeader)
                     .padding(24)
                 ForEach(ImportMatchKind.allCases) { kind in
@@ -171,7 +171,7 @@ public struct ImportReviewView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(strings.t("importReview.accounts.title"))
-                            .font(VisionFonts.display(17, relativeTo: .title3))
+                            .font(Font.visionTitle3)
                             .accessibilityAddTraits(.isHeader)
                         Text(strings.t("importReview.accounts.desc"))
                             .font(.body)
@@ -212,7 +212,7 @@ public struct ImportReviewView: View {
             VStack(alignment: .leading, spacing: 0) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(strings.t("importReview.groups.title"))
-                        .font(VisionFonts.display(17, relativeTo: .title3))
+                        .font(Font.visionTitle3)
                         .accessibilityAddTraits(.isHeader)
                     Text(strings.t("importReview.groups.desc"))
                         .font(.body)

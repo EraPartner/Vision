@@ -182,7 +182,7 @@ public struct PortfolioHoldingsView: View {
                                     VisionFormat.percent(
                                         value > 0 ? rent * 12 / value * 100 : 0,
                                         digits: 1, locale: shell.settings.numberFormat.locale)
-                                ).font(VisionFonts.display(17, relativeTo: .title3)).monospacedDigit()
+                                ).font(Font.visionTitle3).monospacedDigit()
                                 Text("~" + money(rent) + strings.t("realestate.perMonth")).font(.footnote)
                                     .foregroundStyle(theme.secondaryLabel)
                             }
@@ -205,7 +205,7 @@ public struct PortfolioHoldingsView: View {
                             Text(
                                 VisionFormat.percent(
                                     weightedRate, digits: 2, locale: shell.settings.numberFormat.locale)
-                            ).font(VisionFonts.display(17, relativeTo: .title3)).monospacedDigit()
+                            ).font(Font.visionTitle3).monospacedDigit()
                         }
                         figure("portfolio.interestEarned", total { $0.totalIncome })
                         figure("portfolio.projectedAnnual", total { $0.projectedAnnualInterest })
@@ -220,7 +220,7 @@ public struct PortfolioHoldingsView: View {
     private func figure(_ key: String, _ amount: Decimal, signed: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             Text(strings.t(key)).font(.caption).foregroundStyle(theme.tertiaryLabel)
-            Text(money(amount, signed: signed)).font(VisionFonts.display(17, relativeTo: .title3)).monospacedDigit()
+            Text(money(amount, signed: signed)).font(Font.visionTitle3).monospacedDigit()
                 .foregroundStyle(signed ? (amount >= 0 ? theme.gain : theme.loss) : theme.foreground)
         }
     }
@@ -231,7 +231,7 @@ public struct PortfolioHoldingsView: View {
         return AdminCard(padding: 24) {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text(strings.t("portfolio.holdings")).font(VisionFonts.display(17, relativeTo: .title3))
+                    Text(strings.t("portfolio.holdings")).font(Font.visionTitle3)
                         .accessibilityAddTraits(.isHeader)
                     Spacer()
                     Menu(strings.t("portfolio.columns")) {

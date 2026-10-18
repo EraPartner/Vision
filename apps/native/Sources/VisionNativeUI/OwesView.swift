@@ -365,7 +365,7 @@ struct OwesRecentTransactions: View {
                 AdminCard {
                     VStack(alignment: .leading, spacing: 12) {
                         Text(strings.t("owesPage.recentTransactionsTitle"))
-                            .font(VisionFonts.display(17, relativeTo: .title3))
+                            .font(Font.visionTitle3)
                             .accessibilityAddTraits(.isHeader)
                         VisionEmptyState(symbol: "dollarsign.circle", title: strings.t("owesPage.noRecentTransactions")) {
                             EmptyView()

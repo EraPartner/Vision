@@ -48,7 +48,7 @@ struct TransactionInspectorView: View {
         HStack(alignment: .top, spacing: 8) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(row.recipient(labels))
-                    .font(VisionFonts.display(17, relativeTo: .title3))
+                    .font(Font.visionTitle3)
                     .lineLimit(2)
                     .accessibilityAddTraits(.isHeader)
                 Text(verbatim: subtitle)

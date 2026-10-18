@@ -248,7 +248,7 @@ public struct PortfolioOverviewView: View {
                 Text(strings.t(key)).font(.caption).foregroundStyle(theme.tertiaryLabel)
                 PortfolioFigureInfo(title: strings.t("portfolio.figure.about", ["label": strings.t(key)]), text: hint)
             }
-            Text(value ?? "—").font(VisionFonts.display(17, relativeTo: .title3)).monospacedDigit()
+            Text(value ?? "—").font(Font.visionTitle3).monospacedDigit()
                 .foregroundStyle(value == nil ? theme.tertiaryLabel : (gain ?? 0) >= 0 ? theme.gain : theme.loss)
             if let detail { Text(detail).font(.footnote).foregroundStyle(theme.secondaryLabel).monospacedDigit() }
         }

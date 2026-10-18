@@ -32,7 +32,7 @@ struct PortfolioTaxSummaryView: View {
                         VisionFormat.percent(
                             data.totals.effectiveTaxRate, digits: 1, locale: shell.settings.numberFormat.locale)
                     )
-                    .font(VisionFonts.display(17, relativeTo: .title3)).monospacedDigit()
+                    .font(Font.visionTitle3).monospacedDigit()
                     .foregroundStyle(data.totals.effectiveTaxRate > 25 ? theme.loss : theme.foreground)
                     Text(strings.t("tax.onRealizedGains")).font(.footnote).foregroundStyle(theme.secondaryLabel)
                 }.accessibilityElement(children: .combine)
@@ -50,7 +50,7 @@ struct PortfolioTaxSummaryView: View {
             Text(strings.t(key)).font(.caption).foregroundStyle(theme.tertiaryLabel)
             RollingNumber(
                 value: money(amount), decimalSeparator: shell.settings.numberFormat.locale.decimalSeparator?.first
-            ).font(VisionFonts.display(17, relativeTo: .title3)).foregroundStyle(color)
+            ).font(Font.visionTitle3).foregroundStyle(color)
             Text(detail).font(.footnote).foregroundStyle(theme.secondaryLabel)
         }.accessibilityElement(children: .combine)
     }

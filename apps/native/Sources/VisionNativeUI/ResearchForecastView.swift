@@ -277,7 +277,7 @@ struct ResearchForecastStat: View {
                 RoundedRectangle(cornerRadius: 5).fill(theme.muted).frame(width: 112, height: 30)
                     .accessibilityLabel(title)
             } else {
-                RollingNumber(value: value, animate: rolling).font(VisionFonts.display(24, relativeTo: .title))
+                RollingNumber(value: value, animate: rolling).font(Font.visionTitle1)
             }
             if let subtitle { Text(subtitle).font(.footnote).foregroundStyle(theme.secondaryLabel) }
         }

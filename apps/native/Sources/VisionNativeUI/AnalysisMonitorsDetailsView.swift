@@ -11,7 +11,7 @@ struct AnalysisMonitorsDetailsView: View {
             AdminCard(padding: 24) {
                 VStack(alignment: .leading, spacing: 16) {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(strings.t("monitors.ruleDetails")).font(VisionFonts.display(17, relativeTo: .title3)).accessibilityAddTraits(.isHeader)
+                        Text(strings.t("monitors.ruleDetails")).font(Font.visionTitle3).accessibilityAddTraits(.isHeader)
                         Text(strings.t(rule.kind.labelKey) + " · " + rule.targetLabel).font(.caption).foregroundStyle(
                             theme.secondaryLabel)
                         HStack {

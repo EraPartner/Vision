@@ -44,7 +44,7 @@ struct AuditHistoryCardView: View {
             AdminIconBadge(symbol: "clock.badge.checkmark")
             VStack(alignment: .leading, spacing: 4) {
                 Text(strings.t("admin.audit.title"))
-                    .font(VisionFonts.display(17, relativeTo: .title3))
+                    .font(Font.visionTitle3)
                     .accessibilityAddTraits(.isHeader)
                 Text(strings.t("admin.audit.description"))
                     .font(.body)

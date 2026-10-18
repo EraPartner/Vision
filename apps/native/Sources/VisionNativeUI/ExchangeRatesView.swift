@@ -35,7 +35,7 @@ public struct ExchangeRatesView: View {
         HStack(alignment: .top, spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(strings.t("exchangeRates.title"))
-                    .font(.largeTitle.weight(.semibold))
+                    .font(.visionLargeTitle)
                     .accessibilityAddTraits(.isHeader)
                 Text(strings.t("exchangeRates.subtitle"))
                     .font(.body)
@@ -175,7 +175,7 @@ public struct ExchangeRatesView: View {
                         .accessibilityHidden(true)
                 }
                 Text(summary.value)
-                    .font(VisionFonts.display(24, relativeTo: .title))
+                    .font(Font.visionTitle1)
                     .monospacedDigit()
                 Text(summary.subtext)
                     .font(.footnote)
@@ -209,7 +209,7 @@ public struct ExchangeRatesView: View {
         card(padding: 0) {
             VStack(alignment: .leading, spacing: 0) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(table.title).font(VisionFonts.display(17, relativeTo: .title3))
+                    Text(table.title).font(Font.visionTitle3)
                     Text(table.description)
                         .foregroundStyle(theme.secondaryLabel)
                 }

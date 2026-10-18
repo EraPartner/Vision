@@ -216,7 +216,7 @@ struct PortfolioCard<Content: View>: View {
     var body: some View {
         AdminCard(padding: 24) {
             VStack(alignment: .leading, spacing: 14) {
-                Text(title).font(large ? .visionCardTitle : VisionFonts.display(17, relativeTo: .title3))
+                Text(title).font(large ? .visionCardTitle : Font.visionTitle3)
                     .accessibilityAddTraits(.isHeader)
                 if let description { Text(description).foregroundStyle(theme.secondaryLabel) }
                 content()

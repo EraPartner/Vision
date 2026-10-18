@@ -264,7 +264,7 @@ public struct HomeView: View {
                 MoneyText(
                     amount: worth.current.netWorth, currency: currency, settings: settings, signed: false,
                     colored: false, rolling: true
-                ).font(VisionFonts.display(24, relativeTo: .title))
+                ).font(Font.visionTitle1)
                 HStack(spacing: 4) {
                     MoneyText(amount: worth.monthlyChange, currency: currency, settings: settings)
                     Text(strings.t("home.netWorth.change")).foregroundStyle(theme.secondaryLabel)
@@ -635,7 +635,7 @@ public struct HomeView: View {
     }
     private func card<Content: View>(
         _ titleKey: String, action: (String, String)? = nil, exclusion: String? = nil, hero: TrendHue.Tone? = nil,
-        titleFont: Font = VisionFonts.display(17, relativeTo: .title3),
+        titleFont: Font = Font.visionTitle3,
         @ViewBuilder content: () -> Content
     ) -> some View {
         VStack(alignment: .leading, spacing: 14) {

@@ -12,7 +12,7 @@ struct AdminPageHeader<Trailing: View>: View {
         HStack(alignment: .top, spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                    .font(.largeTitle.weight(.semibold))
+                    .font(.visionLargeTitle)
                     .accessibilityAddTraits(.isHeader)
                 Text(subtitle)
                     .font(.body)

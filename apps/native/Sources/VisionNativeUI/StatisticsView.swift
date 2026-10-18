@@ -904,7 +904,7 @@ public struct StatisticsView: View {
         AdminCard(padding: VisionPageLayout.padding) {
             VStack(alignment: .leading, spacing: 14) {
                 HStack {
-                    Text(strings.t(title)).font(VisionFonts.display(17, relativeTo: .title3)).accessibilityAddTraits(.isHeader)
+                    Text(strings.t(title)).font(Font.visionTitle3).accessibilityAddTraits(.isHeader)
                     Spacer()
                     if let graph, model.hasExclusions, isPrinting {
                         Text(

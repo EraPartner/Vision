@@ -208,7 +208,7 @@ struct ImportSetupReferenceCard: View {
                 HStack(alignment: .top, spacing: 16) {
                     VStack(alignment: .leading, spacing: 6) {
                         Text(strings.t("importPage.setupReference"))
-                            .font(VisionFonts.display(17, relativeTo: .title3))
+                            .font(Font.visionTitle3)
                             .accessibilityAddTraits(.isHeader)
                         Text(strings.t("importPage.setupReferenceDesc"))
                             .font(.body)
@@ -361,7 +361,7 @@ struct SupportedBanksCard: View {
         AdminCard(padding: 16) {
             VStack(alignment: .leading, spacing: 12) {
                 Text(strings.t("importPage.supportedBanks"))
-                    .font(VisionFonts.display(17, relativeTo: .title3))
+                    .font(Font.visionTitle3)
                     .accessibilityAddTraits(.isHeader)
                 if model.isLoadingAdapters {
                     HStack(spacing: 6) {

@@ -143,7 +143,7 @@ public struct RebalanceView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(strings.t("rebalance.commitment.candidateLabel")).font(.caption)
                         .foregroundStyle(theme.tertiaryLabel)
-                    Text(money(value.candidateCashCap)).font(VisionFonts.display(17, relativeTo: .title3))
+                    Text(money(value.candidateCashCap)).font(Font.visionTitle3)
                         .monospacedDigit()
                     Text(strings.t("rebalance.commitment.estimateWarning")).font(.footnote).foregroundStyle(
                         theme.secondaryLabel)
@@ -229,7 +229,7 @@ public struct RebalanceView: View {
                 if label {
                     Text(strings.t(title)).font(.body.weight(.medium)).foregroundStyle(theme.secondaryLabel)
                 } else {
-                    Text(strings.t(title)).font(VisionFonts.display(17, relativeTo: .title3))
+                    Text(strings.t(title)).font(Font.visionTitle3)
                         .accessibilityAddTraits(.isHeader)
                 }
             }

@@ -371,7 +371,7 @@ private struct TaxChartCard<Content: View>: View {
         AdminCard(padding: 24) {
             VStack(alignment: .leading, spacing: 16) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(title).font(small ? VisionFonts.display(17, relativeTo: .title3) : .visionCardTitle)
+                    Text(title).font(small ? Font.visionTitle3 : .visionCardTitle)
                         .accessibilityAddTraits(.isHeader)
                     Text(description).foregroundStyle(theme.secondaryLabel)
                 }

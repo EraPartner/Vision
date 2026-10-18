@@ -10,7 +10,7 @@ struct AnalysisMonitorsRulesView: View {
         {
             AdminCard(padding: 24) {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text(strings.t("monitors.rules")).font(VisionFonts.display(17, relativeTo: .title3)).accessibilityAddTraits(.isHeader)
+                    Text(strings.t("monitors.rules")).font(Font.visionTitle3).accessibilityAddTraits(.isHeader)
                     if model.rulesLoading && model.rules == nil { ProgressView(strings.t("common.loading")) }
                     if model.rulesError != nil {
                         AnalysisMonitorsRetry(
@@ -76,7 +76,7 @@ struct AnalysisMonitorsHistoryView: View {
         if model.selectedId != nil {
             AdminCard(padding: 24) {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text(strings.t("monitors.observations")).font(VisionFonts.display(17, relativeTo: .title3)).accessibilityAddTraits(.isHeader)
+                    Text(strings.t("monitors.observations")).font(Font.visionTitle3).accessibilityAddTraits(.isHeader)
                     if model.observationsLoading && model.observations == nil {
                         ProgressView(strings.t("common.loading"))
                     }
@@ -115,7 +115,7 @@ struct AnalysisMonitorsNotificationsView: View {
         {
             AdminCard(padding: 24) {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text(strings.t("monitors.inbox")).font(VisionFonts.display(17, relativeTo: .title3)).accessibilityAddTraits(.isHeader)
+                    Text(strings.t("monitors.inbox")).font(Font.visionTitle3).accessibilityAddTraits(.isHeader)
                     if model.notificationsLoading && model.notifications == nil {
                         ProgressView(strings.t("common.loading"))
                     }

@@ -21,7 +21,7 @@ public struct NativeOnboardingView: View {
                     Text(strings.t("onboarding.\(model.draft.step.rawValue).title"))
                         .font(
                             model.draft.step == .welcome
-                                ? VisionFonts.display(24, relativeTo: .title) : .visionCardTitle
+                                ? Font.visionTitle1 : .visionCardTitle
                         )
                         .accessibilityAddTraits(.isHeader)
                         .accessibilityFocused($headingFocused)

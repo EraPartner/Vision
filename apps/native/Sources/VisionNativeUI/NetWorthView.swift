@@ -203,7 +203,7 @@ public struct NetWorthView: View {
     }
     @ViewBuilder private func accounts(_ data: OpenAPI.NetWorthResponse) -> some View {
         AdminCard(padding: VisionPageLayout.padding) {
-            Text(strings.t("networth.byAccount.title")).font(VisionFonts.display(17, relativeTo: .title3))
+            Text(strings.t("networth.byAccount.title")).font(Font.visionTitle3)
             Text(strings.t("networth.byAccount.description")).foregroundStyle(theme.secondaryLabel)
             if let rows = model.accountRows {
                 if rows.isEmpty { Text(strings.t("networth.byAccount.none")) }
@@ -272,7 +272,7 @@ public struct NetWorthView: View {
         AdminCard(padding: VisionPageLayout.padding) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(strings.t("networth.overTime")).font(VisionFonts.display(17, relativeTo: .title3))
+                    Text(strings.t("networth.overTime")).font(Font.visionTitle3)
                     Text(strings.t("networth.chartDesc")).font(.callout).foregroundStyle(theme.secondaryLabel)
                 }
                 Spacer()
@@ -384,7 +384,7 @@ public struct NetWorthView: View {
                 Image(systemName: symbol).foregroundStyle(theme.tertiaryLabel).accessibilityHidden(true)
             }
             RollingNumber(value: value, decimalSeparator: settings.numberFormat.locale.decimalSeparator?.first)
-                .font(VisionFonts.display(24, relativeTo: .title))
+                .font(Font.visionTitle1)
         }
     }
     private func signedPercent(_ value: Decimal) -> String {

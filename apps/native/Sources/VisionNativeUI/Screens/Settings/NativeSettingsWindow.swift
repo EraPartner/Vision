@@ -80,7 +80,7 @@ public struct NativeSettingsWindow: View {
             Divider()
             VStack(spacing: 0) {
                 HStack {
-                    Text(strings.t(selected.titleKey)).font(VisionFonts.display(17, relativeTo: .title3))
+                    Text(strings.t(selected.titleKey)).font(Font.visionTitle3)
                         .lineLimit(1).accessibilityAddTraits(.isHeader)
                     Spacer()
                     Button(action: onClose) { Image(systemName: "xmark") }.buttonStyle(.plain)

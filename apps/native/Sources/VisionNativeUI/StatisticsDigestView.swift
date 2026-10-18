@@ -15,7 +15,7 @@ struct StatisticsDigestView: View {
             AdminCard(padding: VisionPageLayout.padding) {
                 VStack(alignment: .leading, spacing: 16) {
                     HStack {
-                        Text(strings.t("insights.panel.title")).font(VisionFonts.display(17, relativeTo: .title3))
+                        Text(strings.t("insights.panel.title")).font(Font.visionTitle3)
                         Spacer()
                         if data.findingCount > 0, !isPrinting {
                             Button(

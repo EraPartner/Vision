@@ -159,7 +159,7 @@ public struct ResearchMarketLookupView: View {
         HStack(alignment: .top, spacing: 16) {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 8) {
-                    Text(quote.symbol).font(VisionFonts.display(24, relativeTo: .title)).accessibilityAddTraits(
+                    Text(quote.symbol).font(Font.visionTitle1).accessibilityAddTraits(
                         .isHeader)
                     if let type = quote.type, !type.isEmpty { VisionBadge(text: type, tone: .secondary, small: true) }
                     if let exchange = quote.exchange {
