@@ -10,7 +10,7 @@
  *   2. that planned payment is matched by exactly one transaction in the batch.
  * Anything else is left untouched and shows up under getMatchSuggestions().
  *
- * Match tolerance (moderate): same recipient cluster, same sign, amount within
+ * Match tolerance (moderate): same recipient cluster and currency, same sign, amount within
  * ±5%, transaction date within ±5 days of the planned date.
  */
 
@@ -21,46 +21,29 @@ import settingsRepository, {
   settingField,
 } from "../repositories/settingsRepository.ts";
 import { executePlanned } from "./plannedExecutionService.ts";
-import {
-  addDaysYmd,
-  differenceInCalendarDaysYmd,
-  todayAppDateString,
-} from "../lib/timezone.ts";
+import { addDaysYmd, todayAppDateString } from "../lib/timezone.ts";
 import { toDecimal, toNumber } from "../lib/money.ts";
 import { normalizeDateLikeToYmd } from "../lib/dateFormat.ts";
 import { logger } from "../config/logger.ts";
 import type { PlannedMatchCandidateRow } from "../types/rows.ts";
 
-const AMOUNT_TOLERANCE_PCT = 5;
-const DATE_WINDOW_DAYS = 5;
+import { matchesTolerance, DATE_WINDOW_DAYS } from "../lib/plannedMatching.ts";
+export type { PlannedLike, TxLike } from "../lib/plannedMatching.ts";
 const SUGGESTION_LOOKBACK_DAYS = 45;
 
-/**
- * The fields `matchesTolerance` reads off a planned-payment side. Deliberately
- * loose (not `HydratedPlannedTransactionRow`): callers also pass the
- * synthetic `{ id, amount, transaction_date, recipient_cluster_id }` shape
- * built in `autoLinkTransactions`, so only the fields this predicate touches
- * are required.
- */
-export type PlannedLike = {
-  recipient_cluster_id?: number | string | null;
-  amount: number | string;
-  planned_date?: Date | string | null;
-};
-
-/**
- * The fields `matchesTolerance` reads off a transaction side — same looseness
- * rationale as `PlannedLike`.
- */
-export type TxLike = {
-  recipient_cluster_id?: number | string | null;
-  amount: number | string;
-  transaction_date?: Date | string | null | undefined;
-};
+function calendarDayOrdinal(value: unknown): number | undefined {
+  const day = normalizeDateLikeToYmd(value);
+  if (!day) return undefined;
+  // Normalize pg DATE values with local getters first, then use a UTC day grid.
+  // Integer offsets cannot cross a daylight-saving boundary by 23 or 25 hours.
+  const ordinal = Date.parse(`${day}T00:00:00.000Z`) / 86_400_000;
+  return Number.isInteger(ordinal) ? ordinal : undefined;
+}
 
 /** An ingested transaction offered to `autoLinkTransactions`. */
 export type AutoLinkTxRow = {
   id: number;
+  currency?: string | null;
   recipient_id?: number | null;
   amount: number | string;
   transaction_date?: Date | string | null;
@@ -97,37 +80,6 @@ export interface PlannedMatchSuggestion {
  * Both objects must carry `recipient_cluster_id`, `amount`, and a date
  * (`planned_date` / `transaction_date`).
  */
-function matchesTolerance(
-  planned: PlannedLike | null | undefined,
-  tx: TxLike | null | undefined,
-): boolean {
-  if (planned?.recipient_cluster_id == null || tx?.recipient_cluster_id == null)
-    return false;
-  if (Number(planned.recipient_cluster_id) !== Number(tx.recipient_cluster_id))
-    return false;
-
-  const pAmt = Number(planned.amount);
-  const tAmt = Number(tx.amount);
-  if (!Number.isFinite(pAmt) || !Number.isFinite(tAmt)) return false;
-  if (pAmt === 0 || tAmt === 0) return false;
-  if (Math.sign(pAmt) !== Math.sign(tAmt)) return false;
-
-  const p = Math.abs(pAmt);
-  const t = Math.abs(tAmt);
-  // Mirror LinkTransactionDialog's amount test (max(1, 5%)) so manual and
-  // automatic matching agree on what "close enough" means.
-  const tol = Math.max(1, p * (AMOUNT_TOLERANCE_PCT / 100));
-  if (Math.abs(t - p) > tol) return false;
-
-  const pDate = normalizeDateLikeToYmd(planned.planned_date);
-  const tDate = normalizeDateLikeToYmd(tx.transaction_date);
-  if (!pDate || !tDate) return false;
-  if (Math.abs(differenceInCalendarDaysYmd(pDate, tDate)) > DATE_WINDOW_DAYS)
-    return false;
-
-  return true;
-}
-
 export { matchesTolerance as __matchesTolerance };
 
 // NOTE: a findAutoLinkTarget(tx, activePlanned) helper used to live here, but
@@ -174,6 +126,7 @@ export async function autoLinkTransactions(
     .map((t) => ({
       id: t.id,
       amount: t.amount,
+      currency: t.currency,
       transaction_date: t.transaction_date ?? t.date,
       recipient_cluster_id: clusterMap.get(t.recipient_id) ?? t.recipient_id,
     }));
@@ -182,10 +135,29 @@ export async function autoLinkTransactions(
   // unambiguous (see the safety rule at the top of this file).
   const candidatesByTx = new Map<number, PlannedMatchCandidateRow[]>();
   const txIdsByPlanned = new Map<number, number[]>();
+  const buckets = new Map<string, PlannedMatchCandidateRow[]>();
+  for (const planned of activePlanned) {
+    const day = calendarDayOrdinal(planned.planned_date);
+    if (day === undefined) continue;
+    const key = `${planned.recipient_cluster_id}:${planned.currency?.toUpperCase()}:${Math.sign(Number(planned.amount))}:${day}`;
+    const bucket = buckets.get(key) ?? [];
+    bucket.push(planned);
+    buckets.set(key, bucket);
+  }
   for (const tx of txs) {
-    const matches = activePlanned.filter((planned) =>
-      matchesTolerance(planned, tx),
-    );
+    const day = calendarDayOrdinal(tx.transaction_date);
+    const matches: PlannedMatchCandidateRow[] = [];
+    if (day !== undefined)
+      for (
+        let offset = -DATE_WINDOW_DAYS;
+        offset <= DATE_WINDOW_DAYS;
+        offset++
+      ) {
+        const key = `${tx.recipient_cluster_id}:${tx.currency?.toUpperCase()}:${Math.sign(Number(tx.amount))}:${day + offset}`;
+        for (const planned of buckets.get(key) ?? []) {
+          if (matchesTolerance(planned, tx)) matches.push(planned);
+        }
+      }
     candidatesByTx.set(tx.id, matches);
     for (const planned of matches) {
       let txIds = txIdsByPlanned.get(planned.id);
@@ -208,6 +180,8 @@ export async function autoLinkTransactions(
         id: planned.id,
         executedTransactionId: tx.id,
         executionDate: normalizeDateLikeToYmd(tx.transaction_date),
+        expectedOccurrence: normalizeDateLikeToYmd(planned.planned_date),
+        hydrateResult: false,
       });
       if (!duplicate) {
         result.autoLinkedCount += 1;

@@ -4,7 +4,7 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/planned-transactions
 description: Scheduled and recurring payment management
-date: 2026-10-08
+date: 2026-10-11
 updated: 2026-10-11
 tags: [api, planned, recurring, schedule, phase-3, idempotency, phase-9, decimal, money, auto-link, planned-match, june-2026]
 status: active
@@ -211,7 +211,7 @@ also a `400`.
 **Behavior:**
 
 - For recurring: Advances one occurrence, or completes the series at its maximum count or end date. A new execution of a completed bounded series returns `409 CONFLICT`.
-- For one-time: Sets `is_executed = true`
+- For one-time: Sets `is_executed = true`; a different new transaction cannot execute an already completed one-off.
 - Records execution in `planned_transaction_executions` table
 - **Idempotency:** Database UNIQUE constraint on `(planned_transaction_id, executed_transaction_id)` prevents duplicate execution rows. A duplicate execution request (same planned ID + transaction ID) returns 200 OK with the current planned state + `Idempotent-Replay: true` header instead of creating a duplicate row or error.
 
@@ -228,7 +228,7 @@ also a `400`.
 | 200  | Execution recorded or replayed (idempotent) |
 | 400  | Missing `executed_transaction_id`           |
 | 404  | Planned transaction not found               |
-| 409  | New execution on a completed bounded series |
+| 409  | New execution on a completed plan, inactive ledger row, stale automatic occurrence, or currency mismatch |
 | 500  | Database or calculation error               |
 
 **Idempotency Guarantee:**
@@ -237,8 +237,10 @@ The endpoint is safe to retry without risk of creating duplicate rows. Multiple 
 Implementation:
 
 - Service method `executeAndAdvance(plannedTransactionId, executedTransactionId, executionDate, updateFields = {}, tagIdsToInherit = null)` wraps the insert-execution, parent advance, and inherited-tag writes in one transaction using client-aware repository primitives.
-- The shared `executePlanned` service locks the parent before reading recurrence state and calculating the next date. This outer transaction includes the nested execute-and-advance call and final read. Concurrent distinct payments advance from successive states.
-- Existing execution pairs are replayed before the completion guard, so the final permitted payment can still be retried safely.
+- The shared `executePlanned` service locks the parent before reading recurrence state and calculating the next date. This outer transaction includes the nested execute-and-advance call and final read. Automatic callers include their expected occurrence and revalidate it after locking, so two candidates for the same occurrence cannot advance successive months. Explicit manual execution retains its existing selection contract.
+- New manual and automatic executions require an active ledger row and matching normalized currencies. Suggestions and automatic matching use the same currency restriction.
+- Existing execution pairs are replayed before eligibility guards, so the final permitted payment can still be retried safely even if its ledger row was later deactivated.
+- Automatic callers read narrow locked state and skip expanded execution/tag history hydration; normal endpoint responses retain expanded state.
 - The optional `updateFields` advances recurring state in the same atomic call; optional tag IDs are copied to the executed transaction before commit.
 - The execution insert uses `ON CONFLICT DO NOTHING`; an existing pair returns `{ duplicate: true }` without advancing the parent or copying tags.
 - Route checks for `duplicate` flag and sets the `Idempotent-Replay` header before responding.

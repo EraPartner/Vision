@@ -2,8 +2,8 @@
 title: Planned Transactions
 type: feature
 status: active
-date: 2026-10-09
-updated: 2026-10-09
+date: 2026-10-11
+updated: 2026-10-11
 tags: [feature, planned, recurring, bills, loans, phase-3, phase-12, calculations, immutability, error-handling, toast, atomic-patch, virtual-data-table, i18n-toasts, upcoming-payments-hook, occurrence-key-dismissal, june-2026, auto-link, planned-match, exchange-rates, fx]
 aliases: [planned-payments, scheduled-payments, recurring-payments, bills, subscriptions, loan-amortization]
 description: "Scheduled and recurring payment tracking - manage bills, subscriptions, and future expenses. June 2026: auto-link & auto-clear planned payments on match — ingested transactions are automatically linked to matching planned payments (same recipient cluster, same sign, ±5% amount, ±5 days); ambiguous matches surface as confirmable suggestions. PlannedPaymentsPage migrated from DataTable to VirtualDataTable; native alert() replaced with toast.error (new i18n keys plannedPage.toggleFailed/deleteFailed). V11: useUpcomingPlannedPayments shared hook (single fetch + shared dismissed-ID store); UpcomingPaymentsNotification renders its dashboard reminder without duplicating the planned-payments page, while native badge synchronization remains active throughout AppLayout. June 2026 (B1 fix): dismissals now keyed per occurrence (id:YYYY-MM-DD) so recurring reminders re-surface each cycle; past-dated keys pruned on load; legacy id-only entries silently dropped on next load. August 2026: Planned aggregates omit payments whose exchange rate is unavailable and visibly report the omission instead of blending currencies."
@@ -845,3 +845,67 @@ The visibility switch is labeled Include paused to match the Paused row status. 
 Since 2026-10-05, successful actions are confirmed with a success toast that names the payment: create, update, delete, pause and resume on the page (`plannedPage.toast.*`), and execution through `LinkTransactionDialog` (`plannedPage.toast.executed`). The toasts offer no Undo, because planned payments have no restore path. The table's loan cell uses the plural-aware `plannedPage.loanTerm` label, for example "Loan (24 months)", and the amount field's zero placeholder follows the number format setting.
 
 Execution history reports failed or partial transaction loads and offers Retry without claiming that failed history is empty. Request versioning prevents an obsolete response from replacing reopened history. The history grid scrolls inside a keyboard-focusable region at narrow widths, with a dedicated amount column. Closing the dialog restores focus to its connected opener.
+
+## Execution integrity and matching
+
+Manual clearing requires the posted transaction currency to match the plan. Suggestions and
+automatic matching use normalized currency together with recipient cluster and direction.
+Automatic matching buckets candidates by recipient, currency, direction and validated calendar-day
+ordinal before comparison and preserves ambiguity across the batch;
+it does not greedily select the first nominal amount match.
+
+Automatic callers carry the expected occurrence into the locked execution. If another payment
+has advanced it, the stale match is rejected rather than clearing the following month. A completed
+one-off rejects a different payment, while the same plan/transaction pair remains an idempotent
+replay. Automatic paths read narrow recurrence/replay state and omit expanded history hydration.
+
+Deleting a posted transaction linked to an execution now returns a conflict. Explicitly deleting
+its planned record is a separate action; transaction deletion and import rollback never rewrite
+recurrence counts or remove execution history implicitly. See [[docs/api/plannedTransactions]]
+and [[docs/api/transactions]].
+
+## Matching performance evidence
+
+`apps/node-backend/tests/plannedMatchPerformance.test.ts` runs the actual
+`autoLinkTransactions` function against an independent exhaustive matcher. The reference uses
+integer cents, UTC calendar-day differences and mutual uniqueness in both directions. Synthetic
+fixtures vary recipient clusters, three currencies, signs, dates and amounts. They include both
+ambiguity directions, non-matching rows and 760 unique links; this is not an empty-match benchmark.
+Repository reads and execution writes are mocked, while the real imported `matchesTolerance`
+predicate is spied on to count candidate evaluations. No production helper exports are added.
+
+The local 2026-10-11 Node/Vitest run used 2,430 plans and 860 transactions. Each of three measured
+samples evaluated 840 production candidates, versus 2,089,800 exhaustive pair comparisons, and
+returned exactly the same 760 links. A second baseline reconstructs the previous exhaustive
+`plans.filter` traversal with the **same production predicate**, both ambiguity maps and mocked
+execution calls. Both traversal paths receive one warm-up before collecting three samples.
+
+| Local CPU path | Trial times (ms) | Median (ms) |
+| --- | --- | --- |
+| Actual bucketed service (integer day keys) | 12.44, 11.91, 11.69 | 11.91 |
+| Previous exhaustive traversal, same predicate | 23.01, 23.43, 22.68 | 23.01 |
+| Independent requirement oracle | 13.29, 6.49, 20.17 | 13.29 |
+
+The initial string-date bucket implementation measured a 24.80 ms median against 24.04 ms for
+its same-predicate exhaustive baseline, so candidate pruning alone did not improve elapsed time.
+The final implementation normalizes each plan/transaction date once for the bucket key, converts
+that validated calendar day to an integer UTC-day ordinal, and uses integer offsets within the
+five-day window. The complete tolerance predicate still validates each candidate.
+
+The final local sample supports lower CPU time on this fixture, as well as candidate pruning
+and exact output parity. It does not establish database or end-to-end latency improvement.
+The actual service includes repository mocks and predicate spy bookkeeping; the reconstructed
+baseline is a local reference traversal, not a separate historical checkout or full database run.
+The independent oracle deliberately performs simpler integer/date checks and is used for correctness,
+not as the previous implementation's timing. All data and execution calls are synthetic.
+
+The targeted suite passed 26 tests in each of `Europe/Brussels` and `America/Los_Angeles`.
+Calendar-window checks include daylight-saving changes, leap day, year boundaries, the Unix epoch,
+six-day exclusion and malformed dates. Local-midnight database `Date` objects are normalized with
+the existing local-calendar helper before UTC-day arithmetic, preserving their calendar day.
+
+The test gates semantic equivalence and a bounded candidate count, never wall-clock duration.
+Repeat measurements under the intended workload before making latency claims. Database execution
+and recurrence-history hydration timings remain unmeasured here: disposable PostgreSQL startup
+was blocked by the host's shared-memory restriction. This does not replace real database or
+end-to-end performance acceptance.

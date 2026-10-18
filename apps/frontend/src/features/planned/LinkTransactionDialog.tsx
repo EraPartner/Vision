@@ -182,6 +182,7 @@ export function LinkTransactionDialog({
     };
 
     const filteredCandidates = candidateTxs.filter((tx) => {
+        if (!payment?.currency || tx.currency?.toUpperCase() !== payment.currency.toUpperCase()) return false;
         if (txSearchQuery) {
             const q = txSearchQuery.toLowerCase();
             if (!(

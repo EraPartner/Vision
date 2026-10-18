@@ -85,6 +85,14 @@ describe("matchesTolerance", () => {
     expect(matchesTolerance(p, tx({ amount: "-11.50" }))).toBe(false);
   });
 
+  it("rejects different or missing currencies", () => {
+    expect(matchesTolerance(planned(), tx({ currency: "USD" }))).toBe(false);
+    expect(matchesTolerance(planned(), tx({ currency: undefined }))).toBe(
+      false,
+    );
+    expect(matchesTolerance(planned({ currency: null }), tx())).toBe(false);
+  });
+
   it("rejects sign mismatch", () => {
     expect(
       matchesTolerance(planned({ amount: "-50.00" }), tx({ amount: "50.00" })),
@@ -140,12 +148,52 @@ describe("autoLinkTransactions", () => {
     mockExecutePlanned.mockResolvedValue({ duplicate: false, current: {} });
   });
 
+  it("preserves mutual ambiguity across currencies, signs, recipients and date boundaries", async () => {
+    const plans = Array.from({ length: 80 }, (_, i) =>
+      planned({
+        id: i + 1,
+        recipient_id: i % 8,
+        recipient_cluster_id: i % 8,
+        currency: i % 3 ? "EUR" : "USD",
+        amount: i % 2 ? -100 : 100,
+        planned_date: `2026-07-${String(1 + ((i * 7) % 28)).padStart(2, "0")}`,
+      }),
+    );
+    const transactions = Array.from({ length: 120 }, (_, i) =>
+      tx({
+        id: i + 1000,
+        recipient_id: i % 8,
+        recipient_cluster_id: i % 8,
+        currency: i % 3 ? "EUR" : "USD",
+        amount: i % 2 ? -102 : 102,
+        transaction_date: `2026-07-${String(1 + ((i * 11) % 28)).padStart(2, "0")}`,
+      }),
+    );
+    mockGetClusterRootMap.mockResolvedValue(new Map());
+    mockListActiveUnexecuted.mockResolvedValue(plans);
+    const expected = transactions.flatMap((transaction) => {
+      const matches = plans.filter((plan) =>
+        matchesTolerance(plan, transaction),
+      );
+      if (matches.length !== 1) return [];
+      const plan = matches[0]!;
+      if (
+        transactions.filter((candidate) => matchesTolerance(plan, candidate))
+          .length !== 1
+      )
+        return [];
+      return [{ plannedTransactionId: plan.id, transactionId: transaction.id }];
+    });
+    expect((await autoLinkTransactions(transactions)).links).toEqual(expected);
+  });
+
   it("auto-executes a single unambiguous match", async () => {
     mockListActiveUnexecuted.mockResolvedValue([planned({ id: 1 })]);
     const res = await autoLinkTransactions([
       {
         id: 1000,
         recipient_id: 42,
+        currency: "EUR",
         amount: "-100.00",
         transaction_date: "2026-07-01",
       },
@@ -158,6 +206,8 @@ describe("autoLinkTransactions", () => {
       id: 1,
       executedTransactionId: 1000,
       executionDate: "2026-07-01",
+      expectedOccurrence: "2026-07-01",
+      hydrateResult: false,
     });
   });
 
@@ -170,6 +220,7 @@ describe("autoLinkTransactions", () => {
       {
         id: 1000,
         recipient_id: 42,
+        currency: "EUR",
         amount: "-100.00",
         transaction_date: "2026-07-01",
       },
@@ -184,12 +235,14 @@ describe("autoLinkTransactions", () => {
       {
         id: 1000,
         recipient_id: 42,
+        currency: "EUR",
         amount: "-100.00",
         transaction_date: "2026-07-01",
       },
       {
         id: 1001,
         recipient_id: 42,
+        currency: "EUR",
         amount: "-100.00",
         transaction_date: "2026-07-02",
       },
@@ -205,6 +258,7 @@ describe("autoLinkTransactions", () => {
       {
         id: 1000,
         recipient_id: 42,
+        currency: "EUR",
         amount: "-100.00",
         transaction_date: "2026-07-01",
       },
@@ -221,6 +275,7 @@ describe("autoLinkTransactions", () => {
       {
         id: 1000,
         recipient_id: 42,
+        currency: "EUR",
         amount: "-100.00",
         transaction_date: "2026-07-01",
       },
@@ -235,6 +290,7 @@ describe("autoLinkTransactions", () => {
       {
         id: 1000,
         recipient_id: 42,
+        currency: "EUR",
         amount: "-100.00",
         transaction_date: "2026-07-01",
       },
