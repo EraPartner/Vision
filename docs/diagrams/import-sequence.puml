@@ -46,7 +46,7 @@ alt Pattern, fuzzy, new or unresolved recipient needs review
   opt User corrects a recipient or category
     User -> Frontend : Choose replacement
     Frontend -> Route : POST .../rows/:rowId/override\nor .../rows/:rowId/category-override
-    Route -> DB : Validate IDs and update matched staging row
+    Route -> DB : Lock batch FOR UPDATE; require awaiting_review;\nvalidate IDs and update staging row
     Route --> Frontend : Applied override
   end
   User -> Frontend : Commit reviewed batch
@@ -60,7 +60,7 @@ group 2. Write canonical transactions
   Pipeline -> DB : Read matched rows; apply overrides;\nmark unresolved recipients as errors
   loop At most 1,000 rows per write transaction
     Pipeline -> DB : Resolve accounts; probe fingerprint / legacy identity
-    Pipeline -> DB : Insert rows with savepoints + provenance;\nretain committed / duplicate / error staging status
+    Pipeline -> DB : Lock active accounts in sorted order;\nbatch fingerprint lookup, insert and staging update;\nper-row savepoint fallback on bulk failure
     DB --> Pipeline : Committed chunk outcomes
     Pipeline -> DB : Checkpoint batch counters
   end

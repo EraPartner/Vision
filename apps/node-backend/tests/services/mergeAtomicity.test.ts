@@ -242,11 +242,37 @@ describe("transfer mark atomicity (ADR-083)", () => {
     client.query.mockImplementation(async (sql, params) => {
       if (sql === "BEGIN" || sql === "ROLLBACK" || sql === "COMMIT")
         return { rows: [] };
-      if (sql.includes("FOR UPDATE")) {
+      if (
+        sql.includes(
+          "SELECT id, amount, account_id, is_active, transfer_source, transfer_peer_id",
+        )
+      ) {
         return {
           rows: [
-            { id: 10, amount: "-100.0000", account_id: 1, is_active: true },
-            { id: 20, amount: "100.0000", account_id: 2, is_active: true },
+            {
+              id: 10,
+              amount: "-100.0000",
+              account_id: 1,
+              is_active: true,
+              transfer_source: "auto",
+              transfer_peer_id: 30,
+            },
+            {
+              id: 20,
+              amount: "100.0000",
+              account_id: 2,
+              is_active: true,
+              transfer_source: null,
+              transfer_peer_id: null,
+            },
+            {
+              id: 30,
+              amount: "100.0000",
+              account_id: 3,
+              is_active: true,
+              transfer_source: "auto",
+              transfer_peer_id: 10,
+            },
           ],
         };
       }
@@ -270,6 +296,15 @@ describe("transfer mark atomicity (ADR-083)", () => {
         s.includes("transfer_peer_id = ANY($1) AND id <> ALL($1)"),
       ),
     ).toBe(true);
+    const peerRelease = client.query.mock.calls.find(
+      ([sql]) =>
+        typeof sql === "string" &&
+        sql.includes("transfer_peer_id = ANY($1) AND id <> ALL($1)"),
+    );
+    expect(peerRelease?.[1]).toEqual([
+      [10, 20],
+      [10, 20, 30],
+    ]);
     const manualMarks = client.query.mock.calls.filter(
       ([sql]) =>
         typeof sql === "string" && sql.includes("transfer_source = 'manual'"),

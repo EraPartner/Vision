@@ -1,3 +1,4 @@
+import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2 } from "lucide-react";
 import { useNavigate } from "react-router";
@@ -38,6 +39,38 @@ export function useImportReviewMutations(
     const queryClient = useQueryClient();
     const navigate = useNavigate();
     const { t } = useLanguage();
+    const committing = useRef(false);
+    const queue = useRef<Promise<void>>(Promise.resolve());
+    const failures = useRef(new Set<string>());
+    const [pendingEdits, setPendingEdits] = useState(0);
+    const [hasEditErrors, setHasEditErrors] = useState(false);
+    function edit(key: string, work: () => Promise<unknown>) {
+        if (committing.current)
+            return Promise.reject(new Error(t("importReview.savingEdits")));
+        setPendingEdits((count) => count + 1);
+        const operation = queue.current.then(async () => {
+            try {
+                await work();
+                failures.current.delete(key);
+            } catch (error) {
+                failures.current.add(key);
+                throw error;
+            } finally {
+                setHasEditErrors(failures.current.size > 0);
+                setPendingEdits((count) => count - 1);
+            }
+        });
+        queue.current = operation.catch(() => undefined);
+        return operation;
+    }
+    async function updateRows(work: Promise<unknown>[]) {
+        const settled = await Promise.allSettled(work);
+        await queryClient.invalidateQueries({
+            queryKey: importKeys.preview(batchId),
+        });
+        const failure = settled.find((result) => result.status === "rejected");
+        if (failure?.status === "rejected") throw failure.reason;
+    }
 
     const overrideRecipient = useMutation({
         mutationFn: ({
@@ -76,8 +109,15 @@ export function useImportReviewMutations(
     });
 
     const commitMutation = useMutation({
-        mutationFn: (_range: ImportDateRange) =>
-            apiClient.commitImportBatch(batchId),
+        onSettled: () => {
+            committing.current = false;
+        },
+        mutationFn: async (_range: ImportDateRange) => {
+            await queue.current;
+            if (failures.current.size)
+                throw new Error(t("importReview.editsFailed"));
+            return apiClient.commitImportBatch(batchId);
+        },
         onSuccess: (data, range) => {
             toast.success(
                 t("importReview.toast.success", {
@@ -154,27 +194,46 @@ export function useImportReviewMutations(
     });
 
     return {
-        overrideRows: async (rowIds: string[], recipientId: number | null) => {
-            await Promise.all(
-                rowIds.map((rowId) =>
-                    overrideRecipient.mutateAsync({ rowId, recipientId }),
+        overrideRows: (rowIds: string[], recipientId: number | null) =>
+            edit(`recipient:${rowIds.join(",")}`, () =>
+                updateRows(
+                    rowIds.map((rowId) =>
+                        overrideRecipient.mutateAsync({ rowId, recipientId }),
+                    ),
                 ),
-            );
-            await queryClient.invalidateQueries({
-                queryKey: importKeys.preview(batchId),
-            });
-        },
+            ),
         overrideCategories: (rowIds: string[], categoryId: number | null) =>
-            Promise.all(
-                rowIds.map((rowId) =>
-                    overrideCategory.mutateAsync({ rowId, categoryId }),
+            edit(`category:${rowIds.join(",")}`, () =>
+                updateRows(
+                    rowIds.map((rowId) =>
+                        overrideCategory.mutateAsync({ rowId, categoryId }),
+                    ),
                 ),
             ),
         persistDefaultCategory: (
             recipientId: number,
             categoryId: number | null,
-        ) => persistDefault.mutateAsync({ recipientId, categoryId }),
-        commit: (range: ImportDateRange = {}) => commitMutation.mutate(range),
+        ) =>
+            edit(`default:${recipientId}`, () =>
+                persistDefault.mutateAsync({ recipientId, categoryId }),
+            ),
+        isSavingEdits: pendingEdits > 0,
+        hasEditErrors,
+        reviewSavedEdits: async () => {
+            await queue.current;
+            await queryClient.fetchQuery({
+                queryKey: importKeys.preview(batchId),
+                queryFn: () => apiClient.getImportPreview(batchId),
+                staleTime: 0,
+            });
+            failures.current.clear();
+            setHasEditErrors(false);
+        },
+        commit: (range: ImportDateRange = {}) => {
+            if (committing.current) return;
+            committing.current = true;
+            commitMutation.mutate(range);
+        },
         isCommitting: commitMutation.isPending,
         discard: () => discardMutation.mutate(),
         isDiscarding: discardMutation.isPending,

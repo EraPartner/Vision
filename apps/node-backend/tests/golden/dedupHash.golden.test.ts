@@ -1,10 +1,9 @@
 /**
  * Dedup hash golden — locks backward-compat of transaction dedup hashes.
  *
- * The import pipeline (services/importPipeline/*) and manual-add paths both
- * depend on these hashes being stable across releases. A drift in the
- * normalization rules would silently break duplicate detection for already-
- * imported rows. Regenerating the fixture must be a deliberate migration.
+ * Import hashes remain stable. Manual-v3 deliberately includes currency and
+ * canonical values; real-DB tests verify fallback for earlier claim recipes.
+ * Its fixture was independently encoded from the reviewed versioned recipe.
  */
 
 import { describe, it } from 'vitest';

@@ -68,10 +68,12 @@ describeDb("manual dedup rolling-deployment savepoints (real DB)", () => {
       `DELETE FROM manual_transaction_dedup_claims m
         USING transactions t
         WHERE m.transaction_id = t.id
-          AND t.memo = 'MIXED REPRESENTATION LOCK PROBE'`,
+          AND t.account_id IN (SELECT id FROM accounts
+            WHERE lower(btrim(name)) = 'mixed representation account')`,
     );
     await pool.query(
-      "DELETE FROM transactions WHERE memo = 'MIXED REPRESENTATION LOCK PROBE'",
+      `DELETE FROM transactions WHERE account_id IN (SELECT id FROM accounts
+         WHERE lower(btrim(name)) = 'mixed representation account')`,
     );
     await pool.query(
       "DELETE FROM recipients WHERE normalized_name = 'mixed representation recipient'",
@@ -168,4 +170,157 @@ describeDb("manual dedup rolling-deployment savepoints (real DB)", () => {
     );
     expect(rows[0].count).toBe(1);
   });
+
+  it("validates claim fields after edits and separates currency identities", async () => {
+    const accountId = await accountRepository.resolveOrCreateByName(
+      "Mixed Representation Account",
+    );
+    const input = {
+      transaction_date: "1901-01-02",
+      account_id: accountId,
+      amount: -50,
+      memo: "mixed representation lock probe",
+      currency: "EUR",
+    };
+    const first = await transactionService.createManualTransaction(input);
+    await transactionService.update(first.transaction.id, { amount: -60 });
+    const second = await transactionService.createManualTransaction(input);
+    expect(second.transaction.id).not.toBe(first.transaction.id);
+    const foreign = await transactionService.createManualTransaction({
+      ...input,
+      currency: "USD",
+    });
+    expect(foreign.transaction.currency).toBe("USD");
+    await expect(
+      transactionService.createManualTransaction(input),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    await expect(
+      transactionService.createManualTransaction({ ...input, currency: "USD" }),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+  });
+
+  it("recognizes existing rows without a current-version claim", async () => {
+    const accountId = await accountRepository.resolveOrCreateByName(
+      "Mixed Representation Account",
+    );
+    const input = {
+      transaction_date: "1901-01-02",
+      account_id: accountId,
+      amount: -50,
+      memo: "mixed representation lock probe",
+      currency: "USD",
+    };
+    const first = await transactionService.createManualTransaction(input);
+    await getTestPool()!.query(
+      "UPDATE manual_transaction_dedup_claims SET deduplication_hash = $1 WHERE transaction_id = $2",
+      ["legacy-v2-claim", first.transaction.id],
+    );
+    await expect(
+      transactionService.createManualTransaction(input),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    await expect(
+      transactionService.createManualTransaction({ ...input, currency: "EUR" }),
+    ).resolves.toHaveProperty("transaction.currency", "EUR");
+  });
+
+  it("serializes equivalent amount/memo encodings, including absent recipients", async () => {
+    const accountId = await accountRepository.resolveOrCreateByName(
+      "Mixed Representation Account",
+    );
+    const input = {
+      transaction_date: "1901-01-02",
+      account_id: accountId,
+      amount: -50,
+      memo: "mixed representation lock probe",
+      currency: "EUR",
+    };
+    const results = await Promise.allSettled([
+      transactionService.createManualTransaction(input),
+      transactionService.createManualTransaction({
+        ...input,
+        amount: "-50.00",
+        memo: input.memo.toUpperCase(),
+      }),
+    ]);
+    expect(
+      results.filter((result) => result.status === "fulfilled"),
+    ).toHaveLength(1);
+    expect(
+      results.filter((result) => result.status === "rejected"),
+    ).toMatchObject([{ reason: { code: "CONFLICT" } }]);
+  });
+
+  it.each(["\t", "\n\r", "\u00a0", "\u2003", "\u2028\u2029", "\ufeff"])(
+    "rejects duplicate live memos padded by %j with and without a versioned claim",
+    async (padding) => {
+      const accountId = await accountRepository.resolveOrCreateByName(
+        "Mixed Representation Account",
+      );
+      const input = {
+        transaction_date: "1901-01-02",
+        account_id: accountId,
+        amount: -50,
+        memo: `${padding}mixed representation lock probe${padding}`,
+        currency: "EUR",
+      };
+      const first = await transactionService.createManualTransaction(input);
+      await expect(
+        transactionService.createManualTransaction(input),
+      ).rejects.toMatchObject({ code: "CONFLICT" });
+      await getTestPool()!.query(
+        "DELETE FROM manual_transaction_dedup_claims WHERE transaction_id = $1",
+        [first.transaction.id],
+      );
+      await expect(
+        transactionService.createManualTransaction({
+          ...input,
+          memo: "MIXED REPRESENTATION LOCK PROBE",
+        }),
+      ).rejects.toMatchObject({ code: "CONFLICT" });
+      const { rows } = await getTestPool()!.query(
+        "SELECT count(*)::integer AS count FROM transactions WHERE account_id = $1",
+        [accountId],
+      );
+      expect(rows[0].count).toBe(1);
+    },
+  );
+
+  it.each([
+    ["1.00001", "1.00002", "1.0000"],
+    ["-1.00005", "-1.0001", "-1.0001"],
+  ])(
+    "serializes amounts %s and %s that PostgreSQL stores identically",
+    async (firstAmount, secondAmount, stored) => {
+      const accountId = await accountRepository.resolveOrCreateByName(
+        "Mixed Representation Account",
+      );
+      const input = {
+        transaction_date: "1901-01-02",
+        account_id: accountId,
+        memo: "mixed representation lock probe",
+        currency: "EUR",
+      };
+      const results = await Promise.allSettled([
+        transactionService.createManualTransaction({
+          ...input,
+          amount: firstAmount,
+        }),
+        transactionService.createManualTransaction({
+          ...input,
+          amount: secondAmount,
+        }),
+      ]);
+      expect(
+        results.filter(({ status }) => status === "fulfilled"),
+      ).toHaveLength(1);
+      expect(
+        results.filter(({ status }) => status === "rejected"),
+      ).toMatchObject([{ reason: { code: "CONFLICT" } }]);
+      const { rows } = await getTestPool()!.query(
+        "SELECT amount::text AS amount FROM transactions WHERE account_id = $1",
+        [accountId],
+      );
+      expect(rows).toEqual([{ amount: stored }]);
+    },
+  );
 });

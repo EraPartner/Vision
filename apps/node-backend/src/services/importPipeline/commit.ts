@@ -1,3 +1,6 @@
+import { commitFingerprintRows } from "../../repositories/importCommitRepository.ts";
+import { z } from "zod";
+import { ConflictError } from "../../middleware/errorHandler.ts";
 /**
  * Import pipeline — COMMIT
  *
@@ -46,6 +49,7 @@ import type { ImportBatchId, ImportProgressCallback } from "./index.ts";
  */
 export type InsertedRow = {
   id: number;
+  currency: string;
   recipient_id: number | null;
   amount: string;
   transaction_date: string;
@@ -202,6 +206,67 @@ async function commitChunkWithFingerprints({
   let duplicates = 0;
   let errors = 0;
   const inserted: InsertedRow[] = [];
+  const derived = chunk.map(deriveRow);
+  if (
+    derived.every(
+      (row) =>
+        row.idValid && row.dedupFingerprint && row.fingerprintVersion != null,
+    )
+  ) {
+    try {
+      const outcomes = await withSavepointIfInTransaction(
+        "sp_commit_bulk",
+        () =>
+          commitFingerprintRows(
+            derived.map((d) => ({
+              stagingId: String(d.row.id),
+              date: d.dateStr,
+              accountId: d.accountId,
+              recipientId: d.recipientId,
+              categoryId: d.categoryId,
+              amount: d.amount,
+              memo: d.row.memo || "",
+              memoNormalized: d.memoNorm,
+              currency: d.currencyKey,
+              balance: d.row.balance ?? null,
+              bankSequence: d.row.bank_sequence ?? null,
+              comment: d.row.comment || null,
+              importBatchId: batchId,
+              matchedPatternId: d.patternId,
+              sourceRecordHash: d.sourceRecordHash,
+              dedupFingerprint: d.dedupFingerprint,
+              fingerprintVersion: d.fingerprintVersion,
+              dedupOccurrence: d.dedupOccurrence,
+            })),
+          ),
+      );
+      const byId = new Map(derived.map((d) => [String(d.row.id), d]));
+      for (const outcome of outcomes) {
+        if (outcome.transactionId == null) {
+          duplicates++;
+          continue;
+        }
+        const d = byId.get(outcome.stagingId)!;
+        inserted.push({
+          id: outcome.transactionId,
+          recipient_id: d.recipientId,
+          amount: d.amount,
+          transaction_date: d.dateStr,
+          currency: d.currencyKey,
+        });
+      }
+      return { imported: inserted.length, duplicates, errors: 0, inserted };
+    } catch (error) {
+      logger.warn(
+        "[pipeline:commit] bulk insert failed; retrying rows with savepoints",
+        {
+          batchId,
+          rows: chunk.length,
+          error: error instanceof Error ? error.message : undefined,
+        },
+      );
+    }
+  }
 
   for (const row of chunk) {
     const d = deriveRow(row);
@@ -224,13 +289,6 @@ async function commitChunkWithFingerprints({
             accountId: d.accountId,
             currency: d.currencyKey,
           });
-    if (modernDuplicate === undefined) {
-      logger.info("[pipeline:commit] legacy identity fallback evaluated", {
-        batchId,
-        stagingRowId: row.id,
-        matches: legacyCount,
-      });
-    }
     if (
       modernDuplicate !== undefined ||
       (d.dedupOccurrence != null && d.dedupOccurrence <= legacyCount)
@@ -251,6 +309,7 @@ async function commitChunkWithFingerprints({
           memo: row.memo || "",
           currency: d.currencyKey,
           balance: row.balance != null ? row.balance : null,
+          bankSequence: row.bank_sequence ?? null,
           comment: row.comment || null,
           importBatchId: batchId,
           matchedPatternId: d.patternId,
@@ -270,6 +329,7 @@ async function commitChunkWithFingerprints({
         recipient_id: d.recipientId,
         amount: d.amount,
         transaction_date: d.dateStr,
+        currency: d.currencyKey,
       });
       await markStagingRowCommitted(row.id);
     } catch (err) {
@@ -335,6 +395,26 @@ async function resolveChunkAccounts(
     }
     row.resolved_account_id = idByLabel.get(key);
   }
+  const accountIds = [
+    ...new Set(
+      [...idByLabel.values()].filter((id): id is number => id != null),
+    ),
+  ].sort((a, b) => a - b);
+  if (accountIds.length) {
+    const active = await queryRows(
+      z.object({ id: z.number(), is_active: z.boolean() }),
+      "SELECT id, is_active FROM accounts WHERE id = ANY($1::int[]) ORDER BY id FOR SHARE",
+      [accountIds],
+    );
+    if (
+      active.length !== accountIds.length ||
+      active.some((account) => !account.is_active)
+    ) {
+      throw new ConflictError(
+        "Reopen the account before importing transactions",
+      );
+    }
+  }
 }
 
 /**
@@ -375,11 +455,15 @@ export async function commitBatch({
 }> {
   const statusRow = await queryOne(
     importBatchAdapterRowSchema,
-    `UPDATE import_batches SET status = 'committing' WHERE id = $1
+    `UPDATE import_batches SET status = 'committing' WHERE id = $1 AND status IN ('awaiting_review', 'matching')
      RETURNING adapter_name`,
     [batchId],
   );
-  const adapter = getAdapter(statusRow?.adapter_name);
+  if (!statusRow)
+    throw new ConflictError(
+      "Import batch is already committing or no longer reviewable",
+    );
+  const adapter = getAdapter(statusRow.adapter_name);
   const capabilities = {
     multiCurrencyCash: adapter?.multiCurrencyCash === true,
   };
@@ -395,6 +479,7 @@ export async function commitBatch({
             isr.amount,
             isr.currency,
             isr.balance,
+            isr.bank_sequence,
             isr.comment,
             isr.source_record_hash,
             isr.dedup_fingerprint,

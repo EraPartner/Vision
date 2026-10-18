@@ -100,6 +100,28 @@ describe("DeduplicationService", () => {
   });
 
   describe("createManualTransactionHash", () => {
+    it.each([
+      ["1.00001", "1.00002", "1"],
+      ["1.00005", "1.0001", "1.0001"],
+      ["-1.00005", "-1.0001", "-1.0001"],
+    ])(
+      "uses the independently specified four-decimal persisted identity for %s",
+      (a, b, stored) => {
+        const common = {
+          date: "2026-02-10",
+          accountId: 3,
+          currency: "EUR",
+          memo: "Rent",
+        };
+        expect(createManualTransactionHash({ ...common, amount: a })).toBe(
+          createManualTransactionHash({ ...common, amount: stored }),
+        );
+        expect(createManualTransactionHash({ ...common, amount: b })).toBe(
+          createManualTransactionHash({ ...common, amount: stored }),
+        );
+      },
+    );
+
     it("creates stable hash for equivalent manual payloads", () => {
       const payload = {
         date: "2026-02-10",
@@ -272,11 +294,12 @@ describe("DeduplicationService", () => {
       expect(query.mock.calls[1]![0]).not.toMatch(/UPPER\(bank_account\)/);
       expect(query.mock.calls[1]![1]).toEqual([
         "2026-02-10",
-        -50,
+        "-50",
         22,
-        "Rent",
+        "RENT",
         "BE123",
         null,
+        "EUR",
       ]);
     });
   });
