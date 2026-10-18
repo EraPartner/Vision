@@ -144,7 +144,7 @@ struct TaxTrendStripView: View {
             let maxPIT = years.map(\.calculation.totalPIT).max() ?? 0
             TaxChartCard(
                 title: shell.strings.t("tax.trendStrip.title"),
-                description: shell.strings.t("tax.trendStrip.description")
+                description: shell.strings.t("tax.trendStrip.description"), small: true
             ) {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), alignment: .leading)], spacing: 8) {
                     ForEach(years, id: \.year) { year in
@@ -239,7 +239,7 @@ struct TaxYearComparisonView: View {
         if let data, data.yearCalculations.count > 1, let selected {
             TaxChartCard(
                 title: shell.strings.t("tax.comparison.title", ["year": String(overview.year)]),
-                description: shell.strings.t("tax.comparison.description")
+                description: shell.strings.t("tax.comparison.description"), small: true
             ) {
                 Picker(
                     shell.strings.t("tax.comparison.versus"),
@@ -363,15 +363,17 @@ struct TaxChartYearStatusView: View {
 private struct TaxChartCard<Content: View>: View {
     let title: String
     let description: String
+    var small = false
     @ViewBuilder let content: () -> Content
     @Environment(\.visionTheme) private var theme
 
     var body: some View {
-        AdminCard {
+        AdminCard(padding: 24) {
             VStack(alignment: .leading, spacing: 16) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title).font(.headline).accessibilityAddTraits(.isHeader)
-                    Text(description).font(.subheadline).foregroundStyle(theme.secondaryLabel)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(title).font(small ? VisionFonts.display(17, relativeTo: .title3) : .visionCardTitle)
+                        .accessibilityAddTraits(.isHeader)
+                    Text(description).foregroundStyle(theme.secondaryLabel)
                 }
                 content()
             }

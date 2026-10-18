@@ -161,7 +161,7 @@ struct PortfolioBreakdownView: View {
         if !data.heatmap.years.isEmpty {
             PortfolioCard(
                 title: shell.strings.t("performance.monthlyHeatmap"),
-                description: shell.strings.t("performance.heatmapDesc")
+                description: shell.strings.t("performance.heatmapDesc"), large: true
             ) {
                 ScrollView(.horizontal) {
                     Grid(horizontalSpacing: 5, verticalSpacing: 5) {

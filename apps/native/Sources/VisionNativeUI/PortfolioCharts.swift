@@ -209,13 +209,16 @@ struct PortfolioSeriesChart: View {
 struct PortfolioCard<Content: View>: View {
     let title: String
     var description: String? = nil
+    /// `CardTitle` default (type-title-2) rather than `variant="sm"` (type-title-3).
+    var large = false
     @ViewBuilder var content: () -> Content
     @Environment(\.visionTheme) private var theme
     var body: some View {
-        AdminCard {
+        AdminCard(padding: 24) {
             VStack(alignment: .leading, spacing: 14) {
-                Text(title).font(.headline).accessibilityAddTraits(.isHeader)
-                if let description { Text(description).font(.subheadline).foregroundStyle(theme.secondaryLabel) }
+                Text(title).font(large ? .visionCardTitle : VisionFonts.display(17, relativeTo: .title3))
+                    .accessibilityAddTraits(.isHeader)
+                if let description { Text(description).foregroundStyle(theme.secondaryLabel) }
                 content()
             }
         }

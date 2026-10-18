@@ -148,18 +148,22 @@ public struct PortfolioHoldingsView: View {
     }
     private var summary: some View {
         let value = total { $0.currentValue }
-        return AdminCard {
+        return AdminCard(padding: 24) {
             VStack(alignment: .leading, spacing: 12) {
                 Text(
                     strings.t(
                         assetClass == "real_estate"
                             ? "portfolio.totalValue"
                             : isUnitBased ? "portfolio.portfolioValue" : "portfolio.totalBalance")
-                ).font(.headline)
-                Text(money(value)).font(.largeTitle).monospacedDigit()
+                ).font(.caption2.weight(.medium)).tracking(1.3).textCase(.uppercase)
+                    .foregroundStyle(Color(token: theme.palette.mutedForeground).opacity(0.8))
+                MoneyText(
+                    amount: value, currency: shell.settings.defaultCurrency, settings: shell.settings, signed: false,
+                    colored: false
+                ).font(.visionLargeTitle)
                 if isUnitBased { PortfolioPriceFreshnessCaption(holdings: holdings, shell: shell) }
                 LazyVGrid(
-                    columns: [GridItem(.adaptive(minimum: 190), alignment: .leading)], alignment: .leading, spacing: 14
+                    columns: [GridItem(.adaptive(minimum: 190), alignment: .leading)], alignment: .leading, spacing: 16
                 ) {
                     if isUnitBased {
                         figure("portfolio.realizedPnl", total { $0.realizedGain }, signed: true)
@@ -173,13 +177,13 @@ public struct PortfolioHoldingsView: View {
                         Group {
                             let rent = rentById.values.reduce(Decimal(0)) { $0 + ($1 ?? 0) }
                             VStack(alignment: .leading, spacing: 5) {
-                                Text(strings.t("portfolio.yield")).font(.caption).foregroundStyle(theme.secondaryLabel)
+                                Text(strings.t("portfolio.yield")).font(.caption).foregroundStyle(theme.tertiaryLabel)
                                 Text(
                                     VisionFormat.percent(
                                         value > 0 ? rent * 12 / value * 100 : 0,
                                         digits: 1, locale: shell.settings.numberFormat.locale)
-                                ).font(.headline).monospacedDigit()
-                                Text("~" + money(rent) + strings.t("realestate.perMonth")).font(.caption)
+                                ).font(VisionFonts.display(17, relativeTo: .title3)).monospacedDigit()
+                                Text("~" + money(rent) + strings.t("realestate.perMonth")).font(.footnote)
                                     .foregroundStyle(theme.secondaryLabel)
                             }
                         }
@@ -188,7 +192,7 @@ public struct PortfolioHoldingsView: View {
                         let cost = total { $0.totalBuyCost }
                         let roi = cost > 0 ? returned / cost * 100 : 0
                         VStack(alignment: .leading, spacing: 5) {
-                            Text(strings.t("portfolio.totalROI")).font(.caption).foregroundStyle(theme.secondaryLabel)
+                            Text(strings.t("portfolio.totalROI")).font(.caption).foregroundStyle(theme.tertiaryLabel)
                             DeltaPill(
                                 roi,
                                 label: VisionFormat.percent(roi, digits: 1, locale: shell.settings.numberFormat.locale))
@@ -197,11 +201,11 @@ public struct PortfolioHoldingsView: View {
                         let weightedRate = value > 0 ? total { $0.currentValue * $0.interestRate } / value : 0
                         VStack(alignment: .leading, spacing: 5) {
                             Text(strings.t("portfolio.avgInterestRate")).font(.caption).foregroundStyle(
-                                theme.secondaryLabel)
+                                theme.tertiaryLabel)
                             Text(
                                 VisionFormat.percent(
                                     weightedRate, digits: 2, locale: shell.settings.numberFormat.locale)
-                            ).font(.headline).monospacedDigit()
+                            ).font(VisionFonts.display(17, relativeTo: .title3)).monospacedDigit()
                         }
                         figure("portfolio.interestEarned", total { $0.totalIncome })
                         figure("portfolio.projectedAnnual", total { $0.projectedAnnualInterest })
@@ -215,8 +219,8 @@ public struct PortfolioHoldingsView: View {
     }
     private func figure(_ key: String, _ amount: Decimal, signed: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 5) {
-            Text(strings.t(key)).font(.caption).foregroundStyle(theme.secondaryLabel)
-            Text(money(amount, signed: signed)).font(.headline).monospacedDigit()
+            Text(strings.t(key)).font(.caption).foregroundStyle(theme.tertiaryLabel)
+            Text(money(amount, signed: signed)).font(VisionFonts.display(17, relativeTo: .title3)).monospacedDigit()
                 .foregroundStyle(signed ? (amount >= 0 ? theme.gain : theme.loss) : theme.foreground)
         }
     }
@@ -224,10 +228,11 @@ public struct PortfolioHoldingsView: View {
         let columns = tableColumns
         let keys = columns.map(\.key)
         let rows = query.apply(holdings, keys: keys, value: rawValue)
-        return AdminCard {
+        return AdminCard(padding: 24) {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text(strings.t("portfolio.holdings")).font(.headline)
+                    Text(strings.t("portfolio.holdings")).font(VisionFonts.display(17, relativeTo: .title3))
+                        .accessibilityAddTraits(.isHeader)
                     Spacer()
                     Menu(strings.t("portfolio.columns")) {
                         ForEach(
