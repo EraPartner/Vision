@@ -187,7 +187,8 @@ actor ReportTestTransport: APITransport {
         model.configure(type: .tax)
         model.periodPreset = .rolling12
         await model.submit()
-        #expect(recorder.contextYears.isEmpty && (await service.requests.count) == 1)
+        let requestCount = await service.requests.count
+        #expect(recorder.contextYears.isEmpty && requestCount == 1)
     }
     @Test func taxContextUsesSelectedFrozenYearAndRetainsDecimalUnknownHouseholdFields() async throws {
         let service = ReportTestService()
