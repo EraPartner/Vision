@@ -187,8 +187,19 @@ main process 48 MB. In both native modes about 349 MB is `MALLOC_SMALL`, of whic
 *empty* (freed but still dirty) regions; live heap is ~37 MB. The cause found: every launch
 verifies the runtime payload manifest by hashing each file (`LocalSystem.sha256`, ~400 MB) in
 1 MiB `FileHandle` reads, whose autoreleased buffers stayed alive until the task ended. The
-hash loop now drains an autorelease pool per chunk; the next e2e run shows whether the empty
-regions are gone.
+hash loop now drains an autorelease pool per chunk.
+
+Confirmed on run 39103892954 (`a936331`):
+
+| Mode                | App footprint | App RSS | App tree RSS | Processes |
+| ------------------- | ------------- | ------- | ------------ | --------- |
+| Native-only, before | 369 MB        | 456 MB  | 919 MB       | 18        |
+| Native-only, after  | 52 MB         | 133 MB  | 630 MB       | 20        |
+| Retained, after     | 53 MB         | 134 MB  | 776 MB       | 21        |
+| Electron Demo       | 120 MB        | 259 MB  | 1,218 MB     | 24        |
+
+`MALLOC_SMALL (empty)` fell from ~312 MB to 0.4 MB. Native-only's whole tree (app, backend,
+PostgreSQL) is now about half of the Electron Demo's.
 
 **Backend direction (2026-10-18):** Tor chose a Mac-only future with a Swift backend
 (Hummingbird 2) inside the app; [[docs/adr/210-vision-native-swift-backend|ADR-210]] records it as
