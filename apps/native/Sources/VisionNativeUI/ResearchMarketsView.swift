@@ -40,7 +40,7 @@ public struct ResearchMarketsView: View {
                         }
                     }
                 }
-            }.padding(24).frame(maxWidth: 1460, alignment: .leading).frame(maxWidth: .infinity)
+            }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
         }
         .onGeometryChange(for: CGFloat.self) {
             $0.size.width

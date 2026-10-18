@@ -64,8 +64,7 @@ struct PortfolioTickerView: View {
                 .accessibilityLabel(shell.strings.t("portfolio.ticker.manage"))
                 .popover(isPresented: $manager) { management }
             }
-            .background(theme.card, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.card))
-            .overlay(RoundedRectangle(cornerRadius: DesignTokens.Radius.card).stroke(theme.border.opacity(0.6)))
+            .visionCardBackground()
             .accessibilityLabel(shell.strings.t("portfolio.ticker.aria"))
             .onHover { hovered = $0 }
             .onScrollVisibilityChange(threshold: 0.1) { visible = $0 }

@@ -125,7 +125,7 @@ public struct PortfolioHoldingsView: View {
                     Text(strings.t(prefix == "metals" ? "stocks.howItWorks" : prefix + ".howItWorks"))
                         .font(.callout).foregroundStyle(theme.secondaryLabel)
                 }
-            }.padding(24).frame(maxWidth: 1440, alignment: .leading).frame(maxWidth: .infinity)
+            }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
         }
         .task(id: shell.settings.defaultCurrency + String(shell.settingsRevision)) { await reload() }
         .task(id: isRealEstate ? rentKey : "") {

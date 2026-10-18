@@ -25,7 +25,8 @@ public struct ImportExportView: View {
     private var strings: any Localizing { shell.strings }
 
     public var body: some View {
-        AdminPage {
+        // ImportPage's `max-w-7xl mx-auto`.
+        AdminPage(maxWidth: 1280) {
             VisionPageHeader(title: strings.t("importPage.title"), subtitle: strings.t("importPage.subtitle"), symbol: symbol)
             if let receipt = model.commitReceipt {
                 ImportCommitReceiptCard(receipt: receipt, strings: strings) {

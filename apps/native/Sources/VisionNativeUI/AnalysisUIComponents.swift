@@ -13,8 +13,7 @@ struct AnalysisPanel<Content: View>: View {
             if let description { Text(description).font(.callout).foregroundStyle(theme.secondaryLabel) }
             content()
         }.padding(20).frame(maxWidth: .infinity, alignment: .leading)
-            .background(theme.card, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.card))
-            .overlay(RoundedRectangle(cornerRadius: DesignTokens.Radius.card).stroke(theme.border.opacity(0.6)))
+            .visionCardBackground()
     }
 }
 

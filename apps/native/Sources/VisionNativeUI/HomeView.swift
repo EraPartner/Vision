@@ -72,7 +72,7 @@ public struct HomeView: View {
                     if model.isVisible("cashflowComparison") { forecast }
                     if model.isVisible("recentTransactions") { recent }
                 }
-            }.padding(24).frame(maxWidth: 1280, alignment: .leading).frame(maxWidth: .infinity)
+            }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
         }
         .task(id: shell.route.string + currency + String(shell.settingsRevision)) { await reload() }
         .onAppear {
@@ -640,12 +640,10 @@ public struct HomeView: View {
                         TrendHue(tone: hero)
                         CardSheen(tier: .hero)
                     }
-                    .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.card))
+                    .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous))
                 }
             }
-            .background(theme.card, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.card))
-            .overlay(
-                RoundedRectangle(cornerRadius: DesignTokens.Radius.card).stroke(theme.border.opacity(0.6)))
+            .visionCardBackground()
     }
 }
 

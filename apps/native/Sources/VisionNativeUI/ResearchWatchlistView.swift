@@ -50,13 +50,10 @@ public struct ResearchWatchlistView: View {
                                 ResearchWatchlistRow(item: item, model: model, shell: shell)
                                 if index < page.items.count - 1 { Divider() }
                             }
-                        }.background(theme.card, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.card))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: DesignTokens.Radius.card).stroke(
-                                    theme.border.opacity(0.6)))
+                        }.visionCardBackground()
                     }
                 }
-            }.padding(24).frame(maxWidth: 1280, alignment: .leading).frame(maxWidth: .infinity)
+            }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
         }
         .sheet(isPresented: Binding(get: { model.add.isPresented }, set: { if !$0 { model.add.close() } })) {
             ResearchWatchlistAddSheet(model: model.add, shell: shell)

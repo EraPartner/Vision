@@ -251,6 +251,40 @@ public enum TransactionColumn: String, CaseIterable, Sendable {
     public static func shown(_ visibility: TransactionColumnVisibility) -> [TransactionColumn] {
         allCases.filter { column in column.optional.map { visibility.isVisible($0) } ?? true }
     }
+
+    /// Widths for `columns` that fit `available` points next to `chrome` (select box, Edit
+    /// column, padding). The category column takes the remaining width from its minimum; the
+    /// other columns keep a `resized` width, else give up the shortfall from their default
+    /// toward their minimum in proportion, as the web table's columns shrink with the page.
+    public static func fittedWidths(
+        _ columns: [TransactionColumn], resized: [String: Double], available: Double, chrome: Double
+    ) -> [String: Double] {
+        var result: [String: Double] = [:]
+        var used = chrome
+        var slack = 0.0
+        for column in columns {
+            if column == .category {
+                used += resized[column.rawValue] ?? column.minWidth
+            } else if let width = resized[column.rawValue] {
+                used += width
+            } else {
+                used += column.width
+                slack += column.width - column.minWidth
+            }
+        }
+        let shortfall = max(0, used - available)
+        let keep = slack > 0 ? max(0, 1 - shortfall / slack) : 1
+        for column in columns {
+            if column == .category {
+                result[column.rawValue] = resized[column.rawValue] ?? column.width
+            } else if let width = resized[column.rawValue] {
+                result[column.rawValue] = width
+            } else {
+                result[column.rawValue] = column.minWidth + (column.width - column.minWidth) * keep
+            }
+        }
+        return result
+    }
 }
 
 /// `OPTIONAL_TRANSACTION_COLUMNS`: hidden by default.

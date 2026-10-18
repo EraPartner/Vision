@@ -120,7 +120,7 @@ public struct ResearchMarketLookupView: View {
                         }.padding(.vertical, 50).frame(maxWidth: .infinity)
                     }
                 }
-            }.padding(24).frame(maxWidth: 1500, alignment: .leading).frame(maxWidth: .infinity)
+            }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
         }
         .overlay(alignment: .bottom) {
             NoticeToast(notice: watchlistAdd.notice ?? actionNotice, strings: strings) {

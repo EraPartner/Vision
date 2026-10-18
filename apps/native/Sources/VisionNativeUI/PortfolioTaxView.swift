@@ -54,7 +54,7 @@ public struct PortfolioTaxView: View {
                     Text(error).foregroundStyle(theme.destructive)
                     Button(strings.t("common.retry")) { Task { await reload(force: true) } }
                 }
-            }.padding(24).frame(maxWidth: 1280, alignment: .leading).frame(maxWidth: .infinity)
+            }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
         }
         .task(id: shell.route.string + currency + String(shell.settingsRevision) + "|" + String(dataRevision)) {
             await reload()

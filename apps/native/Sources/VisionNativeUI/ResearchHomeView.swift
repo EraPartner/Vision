@@ -44,7 +44,7 @@ public struct ResearchHomeView: View {
                             isOnline: model.isOnline, shell: shell
                         ).frame(width: wide ? 380 : nil)
                     }
-                }.padding(24).frame(maxWidth: 1460, alignment: .leading).frame(maxWidth: .infinity)
+                }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .onAppear { visible = true }

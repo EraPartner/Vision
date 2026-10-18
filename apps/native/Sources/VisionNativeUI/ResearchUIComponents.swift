@@ -14,8 +14,7 @@ struct ResearchCard<Content: View>: View {
             if let title { Text(title).font(.headline).accessibilityAddTraits(.isHeader) }
             content()
         }.padding(20).frame(maxWidth: .infinity, alignment: .leading)
-            .background(theme.card, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.card))
-            .overlay(RoundedRectangle(cornerRadius: DesignTokens.Radius.card).stroke(theme.border.opacity(0.6)))
+            .visionCardBackground()
     }
 }
 

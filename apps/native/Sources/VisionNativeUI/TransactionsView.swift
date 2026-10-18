@@ -277,8 +277,8 @@ struct TransactionsToolbar: View {
             dateMenu(filters)
             typeMenu(filters)
             needsCategoryChip(filters)
-            viewMenu
             Spacer(minLength: 0)
+            viewMenu
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(strings.t("txPage.filter.toolbar"))
@@ -289,10 +289,13 @@ struct TransactionsToolbar: View {
             Image(systemName: symbol)
                 .imageScale(.small)
                 .accessibilityHidden(true)
+            // Sized to the label up to 180 pt, like the web chips; a bare flexible frame
+            // stretched every chip to the full 180 pt.
             Text(text)
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .frame(maxWidth: 180, alignment: .leading)
+                .fixedSize(horizontal: true, vertical: false)
             Image(systemName: "chevron.down")
                 .imageScale(.small)
                 .foregroundStyle(theme.tertiaryLabel)

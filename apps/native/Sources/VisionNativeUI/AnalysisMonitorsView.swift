@@ -34,7 +34,7 @@ public struct AnalysisMonitorsView: View {
                         right
                     }
                 }
-            }.padding(24).frame(maxWidth: 1280, alignment: .leading).frame(maxWidth: .infinity)
+            }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
         }
         .task {
             await model.load()
