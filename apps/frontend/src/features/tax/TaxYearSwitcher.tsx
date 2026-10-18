@@ -92,7 +92,8 @@ export function TaxYearSwitcher({ className }: TaxYearSwitcherProps) {
                                 <span
                                     className={cn(
                                         "tabular-nums",
-                                        isActive && "font-medium text-foreground",
+                                        isActive &&
+                                            "font-medium text-foreground",
                                     )}
                                 >
                                     {entry.year}
@@ -134,7 +135,7 @@ interface YearStatusBadgeProps {
 /** One badge per year, by precedence: current > filed > frozen > saved > data only. */
 function YearStatusBadge({ entry }: YearStatusBadgeProps) {
     const { t } = useLanguage();
-    if (entry.isCurrent) {
+    if (entry.isCurrent && !entry.isFiled) {
         return (
             <Badge variant="default" size="sm">
                 {t("tax.yearSwitcher.currentBadge")}

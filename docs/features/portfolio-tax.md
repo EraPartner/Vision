@@ -2,7 +2,7 @@
 title: Portfolio Tax Feature
 type: feature
 status: active
-date: 2026-10-07
+date: 2026-10-11
 updated: 2026-10-07
 tags: [feature, portfolio, tax, belgian, frontend, investments, audit-2026-05-11, etf-structure, reynders-override, tax-classifications, portfolio-tax-pure-module, decimal-migration, url-state]
 description: Portfolio-level tax tracking with recorded taxes, manual adjustments, per-investment breakdowns, and Belgian tax rule integration. May 2026: Added per-investment ETF structure (accumulating/distributing) and Reynders routing override metadata. 2026-05-29: Portfolio-tax estimators extracted to portfolioTax.ts (pure, tested, Decimal-accumulating); PortfolioTaxPage now calls shared functions instead of inlining math.
@@ -80,7 +80,7 @@ Uses `useWidgetVisibility` with 7 configurable widgets:
 
 ### Page header and actions
 
-`PageHeader` carries the year switcher, the shared `YearActionsMenu` ••• menu (freeze, mark as filed, history, CSV, plus _Set up_ / _Edit tax profile_ and _Customize_) and the primary _Manual adjustments_ button. `TaxProfileDialog` and `PortfolioTaxAdjustmentsDialog` are driven in controlled mode from the menu and button, and the Estimates heading repeats a profile button. With no data the page shows an `EmptyState` whose action links to `/portfolio` ([[docs/adr/187-completeness-sweep|ADR-187]]).
+`PageHeader` carries the year switcher, the shared `YearActionsMenu` with visible filing and CSV buttons and a ••• menu (freeze, unmark filed, history, plus _Set up_ / _Edit tax profile_ and _Customize_) and the primary _Manual adjustments_ button. `TaxProfileDialog` and `PortfolioTaxAdjustmentsDialog` are driven in controlled mode from the menu and button, and the Estimates heading repeats a profile button. With no data the page shows an `EmptyState` whose action links to `/portfolio` ([[docs/adr/187-completeness-sweep|ADR-187]]).
 
 ### Summary hero
 

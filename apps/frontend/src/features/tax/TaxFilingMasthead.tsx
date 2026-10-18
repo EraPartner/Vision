@@ -89,14 +89,15 @@ export function TaxFilingMasthead({
             state.snapshotMetas[state.viewedYear]?.filing?.reference,
     }));
 
-    const historical = isViewingHistorical
-        ? resolveHistoricalBannerMode({
-              isFiled,
-              hasFrozenCalculation,
-              hasSnapshot,
-              filingReference,
-          })
-        : undefined;
+    const historical =
+        isViewingHistorical || isFiled || hasFrozenCalculation
+            ? resolveHistoricalBannerMode({
+                  isFiled,
+                  hasFrozenCalculation,
+                  hasSnapshot,
+                  filingReference,
+              })
+            : undefined;
 
     const status: FilingStatus = historical?.mode ?? "live";
     const StatusIcon = STATUS_ICON[status];
@@ -121,7 +122,10 @@ export function TaxFilingMasthead({
                                 </h2>
                                 <Badge
                                     variant={statusBadge.variant}
-                                    className={cn("gap-1.5", statusBadge.className)}
+                                    className={cn(
+                                        "gap-1.5",
+                                        statusBadge.className,
+                                    )}
                                 >
                                     <StatusIcon
                                         className="h-3 w-3"

@@ -16,7 +16,7 @@ import { toast } from "sonner";
 import { useShallow } from "zustand/react/shallow";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { usePreloadedSetting } from "@/contexts/SettingsPreloadContext";
-import { useDebouncedSetting } from "@/hooks/useDebouncedSetting";
+import { scheduleTaxPersistence } from "@/stores/taxPersistence";
 import {
     DEFAULT_BELGIAN_TAX_PROFILE,
     hasMeaningfulBelgianTaxData,
@@ -85,11 +85,6 @@ export function BelgianTaxProfileProvider({
         );
     const hydrate = useSettingsStore((state) => state._hydrate);
     const beginHydration = useSettingsStore((state) => state._beginHydration);
-    const markSaveError = useSettingsStore((state) => state._markSaveError);
-    const profile = useSettingsStore((state) => state.profile);
-    const snapshots = useSettingsStore((state) => state.snapshots);
-    const snapshotMetas = useSettingsStore((state) => state.snapshotMetas);
-    const isLoading = useSettingsStore((state) => state.isLoading);
 
     useEffect(() => beginHydration(), [beginHydration]);
 
@@ -122,26 +117,19 @@ export function BelgianTaxProfileProvider({
         preloadSnapshotsLoading,
     ]);
 
-    useDebouncedSetting(
-        PROFILE_SETTINGS_KEY,
-        profile,
-        isLoading,
-        markSaveError,
-        "Failed to save Belgian tax profile:",
-    );
-    useDebouncedSetting(
-        SNAPSHOTS_SETTINGS_KEY,
-        snapshots,
-        isLoading,
-        markSaveError,
-        "Failed to save Belgian tax profile snapshots:",
-    );
-    useDebouncedSetting(
-        SNAPSHOT_METAS_SETTINGS_KEY,
-        snapshotMetas,
-        isLoading,
-        markSaveError,
-        "Failed to save Belgian tax profile snapshot meta:",
+    useEffect(
+        () =>
+            useSettingsStore.subscribe((state, previous) => {
+                if (state.isLoading || previous.isLoading) return;
+                if (
+                    state.profile !== previous.profile ||
+                    state.snapshots !== previous.snapshots ||
+                    state.snapshotMetas !== previous.snapshotMetas
+                ) {
+                    scheduleTaxPersistence(state);
+                }
+            }),
+        [],
     );
 
     return (
@@ -167,11 +155,11 @@ export function BelgianTaxSaveErrorToaster() {
 }
 
 // Compatibility hook stays beside its provider, matching the other hydration bridges.
-// eslint-disable-next-line react-refresh/only-export-components
 export function useBelgianTaxProfile(): PublicBelgianTaxProfileState;
 export function useBelgianTaxProfile<T>(
     selector: (state: PublicBelgianTaxProfileState) => T,
 ): T;
+// eslint-disable-next-line react-refresh/only-export-components
 export function useBelgianTaxProfile<T = PublicBelgianTaxProfileState>(
     selector?: (state: PublicBelgianTaxProfileState) => T,
 ): T {

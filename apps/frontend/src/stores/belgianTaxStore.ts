@@ -286,32 +286,7 @@ export const createBelgianTaxSlice: StateCreator<
             };
         }),
     markYearAsFiled: (year, reference) =>
-        set((state) => {
-            const existing = state.snapshotMetas[year];
-            const filing = {
-                filedAt: new Date().toISOString(),
-                ...(reference ? { reference } : {}),
-            };
-            return {
-                snapshotMetas: appendHistoryEntry(
-                    {
-                        ...state.snapshotMetas,
-                        [year]: {
-                            ...(existing ?? {}),
-                            filing,
-                            frozenCalculation:
-                                existing?.frozenCalculation ??
-                                computeBelgianPIT(
-                                    resolveBelgianTaxProfile(state, year),
-                                ),
-                        },
-                    },
-                    year,
-                    "filed",
-                    reference ? { reference } : undefined,
-                ),
-            };
-        }),
+        set((state) => buildFiledTaxState(state, year, reference)),
     unmarkYearAsFiled: (year) =>
         set((state) => {
             const existing = state.snapshotMetas[year];
@@ -350,3 +325,44 @@ export const createBelgianTaxSlice: StateCreator<
     _markSaveError: () =>
         set((state) => ({ saveErrorNonce: state.saveErrorNonce + 1 })),
 });
+
+/** Prepare a filing without publishing it before persistence has acknowledged it. */
+export function buildFiledTaxState(
+    state: BelgianTaxSlice,
+    year: number,
+    reference?: string,
+): Partial<BelgianTaxSlice> {
+    const profile = resolveBelgianTaxProfile(state, year);
+    if (
+        state.isLoading ||
+        state.snapshotMetas[year]?.filing ||
+        (year !== state.profile.taxYear && !state.snapshots[year]) ||
+        !hasMeaningfulBelgianTaxData(profile)
+    )
+        return state;
+    const existing = state.snapshotMetas[year];
+    const filing = {
+        filedAt: new Date().toISOString(),
+        ...(reference ? { reference } : {}),
+    };
+    return {
+        snapshots: { ...state.snapshots, [year]: { ...profile } },
+        snapshotMetas: appendHistoryEntry(
+            {
+                ...state.snapshotMetas,
+                [year]: {
+                    ...(existing ?? {}),
+                    filing,
+                    frozenCalculation:
+                        existing?.frozenCalculation ??
+                        computeBelgianPIT(
+                            resolveBelgianTaxProfile(state, year),
+                        ),
+                },
+            },
+            year,
+            "filed",
+            reference ? { reference } : undefined,
+        ),
+    };
+}

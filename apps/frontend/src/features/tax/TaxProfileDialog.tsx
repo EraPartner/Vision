@@ -133,9 +133,7 @@ export function TaxProfileDialog({
             ? snapshots[effectiveTargetYear]
             : undefined;
     const editingHistorical = !!historicalSnapshot;
-    const isFiled =
-        editingHistorical &&
-        Boolean(snapshotMetas[effectiveTargetYear]?.filing);
+    const isFiled = Boolean(snapshotMetas[effectiveTargetYear]?.filing);
     const isLockedByFiling = isFiled && !filedOverride;
     const profile: BelgianTaxProfile = historicalSnapshot ?? liveProfile;
 
