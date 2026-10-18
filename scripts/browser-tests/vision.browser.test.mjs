@@ -20,6 +20,10 @@ if (!modulePath)
     "Set VISION_PLAYWRIGHT_MODULE to the installed playwright/index.mjs (pinned CI version: 1.62.1).",
   );
 const { chromium } = await import(pathToFileURL(modulePath).href);
+const { upgradeProfileV1ToHousehold } =
+  await import("../../packages/shared-utils/src/belgianTax/householdMigration.ts");
+const { DEFAULT_BELGIAN_TAX_PROFILE } =
+  await import("../../packages/shared-utils/src/belgianTax/profileDefaults.ts");
 let browser;
 async function api(path, method = "GET", body) {
   const response = await fetch(`${base}/api${path}`, {
@@ -143,7 +147,9 @@ test("closing nonzero multicurrency cash conserves each currency after reopening
     });
   }
   const readParts = async () =>
-    (await api("/accounts")).items.find((row) => row.id === account.id);
+    (await api("/accounts?active=all")).items.find(
+      (row) => row.id === account.id,
+    );
   const before = await readParts();
   assert.deepEqual(
     before.balance_parts.map(({ currency, balance }) => [
@@ -278,12 +284,17 @@ test("filing exposes prerequisites and cannot persist an unprepared year", async
 
 test("prepared filing keeps its reference and frozen calculation after reopening", async () => {
   const year = 2025;
-  await setting("belgian_tax_profile", {
-    taxYear: year,
-    profileConfigured: true,
-    grossAnnualIncome: 40000,
-  });
-  let { context, page } = await pageAt("/tax");
+  // The tax engine reads the v2 household; build it the way the app upgrades a profile.
+  await setting(
+    "belgian_tax_household_v2",
+    upgradeProfileV1ToHousehold({
+      ...DEFAULT_BELGIAN_TAX_PROFILE,
+      taxYear: year,
+      profileConfigured: true,
+      grossAnnualIncome: 40000,
+    }),
+  );
+  let { context, page } = await pageAt(`/tax?year=${year}`);
   let saved;
   try {
     await page.getByRole("button", { name: /mark as filed/i }).click();
@@ -303,14 +314,16 @@ test("prepared filing keeps its reference and frozen calculation after reopening
     );
     assert.ok(saved.value[year].frozenCalculation);
     await waitUntil(
-      () => api("/settings/belgian_tax_profile_snapshots_v1"),
-      (value) => value.value?.[year]?.grossAnnualIncome === 40000,
-      "as-filed profile was not persisted",
+      () => api("/settings/belgian_tax_household_snapshots_v2"),
+      (value) =>
+        value.value?.[year]?.partners?.[0]?.activities?.[0]?.grossIncome ===
+        40000,
+      "as-filed household was not persisted",
     );
   } finally {
     await context.close();
   }
-  ({ context, page } = await pageAt("/tax"));
+  ({ context, page } = await pageAt(`/tax?year=${year}`));
   try {
     await page.getByRole("button", { name: /export.*csv/i }).waitFor();
     assert.equal(
@@ -328,6 +341,8 @@ test("prepared filing keeps its reference and frozen calculation after reopening
 
 test("CSV upload, review and commit produce one persisted transaction", async () => {
   const recipient = "Browser synthetic import recipient";
+  // Import creates new payees in upper case.
+  const shownRecipient = new RegExp(`^${recipient}$`, "i");
   const { context, page } = await pageAt("/import");
   try {
     await page
@@ -361,7 +376,7 @@ test("CSV upload, review and commit produce one persisted transaction", async ()
       .click();
     await page.waitForURL(/\/import\/\d+\/review/);
     const batchId = new URL(page.url()).pathname.split("/")[2];
-    await page.getByText(recipient, { exact: true }).first().waitFor();
+    await page.getByText(shownRecipient).first().waitFor();
     await page
       .getByRole("button", { name: "Import 1 rows", exact: true })
       .click();
@@ -392,7 +407,7 @@ test("CSV upload, review and commit produce one persisted transaction", async ()
     await page.goto(
       `${base}/transactions?search=${encodeURIComponent(recipient)}`,
     );
-    await page.getByText(recipient, { exact: true }).first().waitFor();
+    await page.getByText(shownRecipient).first().waitFor();
   } finally {
     await context.close();
   }
@@ -511,13 +526,30 @@ async function assertFormFits(dialog, name) {
         field.getClientRects().length &&
         getComputedStyle(field).visibility !== "hidden",
     );
-    const escaped = visible.filter((field) => {
-      const box = field.getBoundingClientRect();
-      return (
-        box.left < Math.max(0, rect.left) - 1 ||
-        box.right > Math.min(innerWidth, rect.right) + 1
-      );
-    });
+    const left = Math.max(0, rect.left) - 1;
+    const right = Math.min(innerWidth, rect.right) + 1;
+    const outside = (box) => box.left < left || box.right > right;
+    // A control scrolled out of view inside a horizontal scroller that itself
+    // fits (a mobile tab strip) is reachable, not clipped.
+    const inFittingScroller = (field) => {
+      for (
+        let el = field.parentElement;
+        el && el !== node;
+        el = el.parentElement
+      ) {
+        const overflow = getComputedStyle(el).overflowX;
+        if (
+          (overflow === "auto" || overflow === "scroll") &&
+          el.scrollWidth > el.clientWidth
+        )
+          return !outside(el.getBoundingClientRect());
+      }
+      return false;
+    };
+    const escaped = visible.filter(
+      (field) =>
+        outside(field.getBoundingClientRect()) && !inFittingScroller(field),
+    );
     return {
       controls: visible.length,
       fits:
@@ -563,7 +595,7 @@ const formJourneys = [
     path: "/tax",
     open: async (page) => {
       await page
-        .getByRole("button", { name: "Tax profile", exact: true })
+        .getByRole("button", { name: /^(Set up|Edit) tax profile$/ })
         .first()
         .click();
       await page
@@ -636,6 +668,8 @@ for (const width of [390, 1280]) {
       name: `Synthetic responsive reconcile ${width}`,
       currency: "EUR",
       type: "checking",
+      // The detail page offers Reconcile directly only for multi-currency cash.
+      multi_currency_cash: true,
     });
     const { context, page } = await pageAt(`/accounts/${account.id}`, {
       width,
@@ -734,6 +768,8 @@ for (const width of [390, 1280]) {
       await edit.waitFor({ state: "hidden" });
       await page.keyboard.press("Escape");
       await page.getByRole("dialog").waitFor({ state: "hidden" });
+      // Asset-class pages omit the export action; the portfolio overview owns it.
+      await page.goto(`${base}/portfolio`);
       await page
         .getByRole("button", { name: "More actions", exact: true })
         .first()
