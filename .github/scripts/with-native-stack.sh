@@ -159,7 +159,7 @@ esac
 (
   cd "$repo_root/apps/node-backend"
   if [[ ${VISION_BROWSER_PROVIDER_FIXTURES:-0} == 1 ]]; then
-    exec bun --preload "$repo_root/scripts/browser-tests/yahoo-provider-preload.mjs" run src/main.ts
+    exec bun run --preload "$repo_root/scripts/browser-tests/yahoo-provider-preload.mjs" src/main.ts
   fi
   exec bun run src/main.ts
 ) >"$backend_log" 2>&1 &
