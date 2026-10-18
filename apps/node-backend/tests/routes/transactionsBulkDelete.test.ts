@@ -23,6 +23,11 @@ vi.mock("../../src/repositories/plannedExecutionGuard.ts", () => ({
   protectPlannedExecutions: vi.fn().mockResolvedValue(undefined),
 }));
 
+// Lock ordering is covered against PostgreSQL in accountLifecycleConcurrency.db.test.ts.
+vi.mock("../../src/repositories/accountLifecycleLock.ts", () => ({
+  lockAccountsForLedgerMutation: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("../../src/repositories/transactionRepository.ts", () =>
   mockTransactionRepository(),
 );

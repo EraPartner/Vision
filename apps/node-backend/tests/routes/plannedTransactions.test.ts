@@ -22,8 +22,8 @@ vi.mock("../../src/repositories/plannedTransactionRepository.ts", () => ({
   },
 }));
 
-vi.mock("../../src/services/plannedTransactionService.ts", () => ({
-  default: {
+vi.mock("../../src/services/plannedTransactionService.ts", () => {
+  const service = {
     getAll: vi.fn(),
     getById: vi.fn(),
     getDueSoon: vi.fn(),
@@ -34,8 +34,23 @@ vi.mock("../../src/services/plannedTransactionService.ts", () => ({
     replaceLoanSchedule: vi.fn(),
     executeAndAdvance: vi.fn(async () => ({ duplicate: false })),
     lockForExecution: vi.fn(),
-  },
-}));
+    // Execution reads its locked state from the first queued getById row.
+    getExecutionState: vi.fn(async (id: number) => {
+      const row = await service.getById(id);
+      return row
+        ? {
+            is_active: true,
+            currency: "EUR",
+            duplicate: false,
+            execution_count: 0,
+            tags: [],
+            ...row,
+          }
+        : null;
+    }),
+  };
+  return { default: service };
+});
 
 vi.mock("../../src/database/connection.ts", () => ({
   ...mockConnection(),
@@ -119,6 +134,20 @@ const patch = (id: number | string, body: object) =>
   api.patch(`${BASE}/${id}`).send(body);
 const execute = (id: number | string, body: object) =>
   api.post(`${BASE}/${id}/execute`).send(body);
+/** Queue the executed ledger row that execution locks before advancing. */
+const mockExecutedTransaction = () =>
+  dbQuery.mockResolvedValueOnce({
+    rows: [
+      {
+        currency: "EUR",
+        amount: "-10",
+        transaction_date: new Date("2026-03-15T00:00:00Z"),
+        recipient_cluster_id: null,
+        is_active: true,
+      },
+    ],
+    rowCount: 1,
+  } as PgQueryResult);
 
 describe("Planned Transaction Routes", () => {
   beforeEach(() => vi.clearAllMocks());
@@ -1145,6 +1174,7 @@ describe("Planned Transaction Routes", () => {
         }),
       );
 
+      mockExecutedTransaction();
       const res = await execute(1, {
         executed_transaction_id: 10,
         execution_date: "2026-03-15",
@@ -1177,6 +1207,7 @@ describe("Planned Transaction Routes", () => {
         }),
       );
 
+      mockExecutedTransaction();
       await execute(1, { executed_transaction_id: 10 }).expect(200);
 
       const call =
@@ -1204,6 +1235,7 @@ describe("Planned Transaction Routes", () => {
         }),
       );
 
+      mockExecutedTransaction();
       await execute(1, { executed_transaction_id: 10 }).expect(200);
 
       const updateFields =
@@ -1231,6 +1263,7 @@ describe("Planned Transaction Routes", () => {
         }),
       );
 
+      mockExecutedTransaction();
       await execute(1, { executed_transaction_id: 11 }).expect(200);
 
       const updateFields =
@@ -1312,6 +1345,7 @@ describe("Planned transaction request schemas (ADR-193)", () => {
     plannedTransactionRepository.executeAndAdvance.mockResolvedValue(
       partial({ duplicate: false }),
     );
+    mockExecutedTransaction();
     await execute(1, {
       executed_transaction_id: "10",
       execution_date: "2026-03-15",
