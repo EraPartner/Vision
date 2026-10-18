@@ -165,7 +165,7 @@ export async function stageBatch({
 }
 
 /** Select complete parsed asset rows without changing literal source records or parse errors. */
-export function applyPortfolioAssetScope(
+function applyPortfolioAssetScope(
   rows: ParsedPortfolioRows,
   symbols: string[] | undefined,
 ): ParsedPortfolioRows {
@@ -247,3 +247,5 @@ async function insertStagingChunk(
     await client.query(sql, values);
   });
 }
+
+export { applyPortfolioAssetScope as __applyPortfolioAssetScope };

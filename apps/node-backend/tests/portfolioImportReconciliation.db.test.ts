@@ -57,7 +57,7 @@ import {
   getSaxoCsvCompanionEvidence,
   getSaxoWorkbookReconciliationEvidence,
 } from "../src/services/portfolioImportPipeline/saxoTransactionHistoryAdapter.ts";
-import { pruneOldImportBatches } from "../src/startup/warmup.ts";
+import { __pruneOldImportBatches as pruneOldImportBatches } from "../src/startup/warmup.ts";
 import {
   retainedEvent,
   retainedReference,

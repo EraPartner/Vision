@@ -2,7 +2,7 @@
 title: Feature - Portfolio & Investments
 type: feature
 status: active
-date: 2026-10-11
+date: 2026-10-13
 last_modified: 2026-10-11
 updated: 2026-10-11
 tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, phase-14, pdf-export, offline-resilience, stale-prices, online-status-detection, graceful-degradation, portfolio-summary, realtime-totals, decimal-precision, monetary-math, snapshot-valuation-parity, fixed-income-accrual, real-estate-appreciation, net-worth-reconciliation, historical-fx, snapshot-fx, loading-states, error-states, page-error, skeleton, portfolio-unit-math, shared-utils, splits-event, return-of-capital, banker-rounding, fx-attribution, asset-gain, fx-gain, purchase-date-rates, value-fx-neutral, adr-074, adr-091, adr-100, per-account, move-holding, close-account, brokerage-fanout, rebalancing, saved-plans, cash-aware, cross-workspace, adr-098, portfolio-ticker, marquee, live-quotes, ticker-manager, show-in-ticker, migration-0061, fx-aware-pnl, unified-detail-dialog, useFxAwarePnl]
@@ -12,6 +12,37 @@ related_code: ["apps/node-backend/src/routes/investments.ts", "apps/node-backend
 ---
 
 # Feature: Portfolio & Investments
+
+## History completeness and error handling
+
+`usePortfolio` separates inventory, valuation and transaction history. Inventory follows every
+500-item page, including inactive investments; a short first page is not a complete inventory.
+Ordinary overview consumers retain the latest 50 transactions per investment, requested in
+sequential bulk groups of at most 100 IDs. A bulk endpoint failure is exposed to the user instead
+of falling back to an unbounded request per investment or presenting empty history.
+
+Consumers that calculate across history opt into `completeHistory`; tax overview, portfolio tax
+and available tax years include archived holdings. `completeAssetClass: "real_estate"` retrieves
+complete real-estate history without downloading every other holding's history. Complete reads
+follow 1,000-row pages with at most four investments in flight. Premature pagination termination
+is an error. Investment detail loads its own complete history only while open, with a retry state
+on failure. Inventory and all history query paths forward cancellation to their HTTP requests;
+unmounting stops active reads and queued pages instead of leaving old requests running during
+a new mount. Caller cancellation is not retried, including during retry backoff. Overview
+valuation remains server-summary based.
+
+Monthly rent uses the latest rent transaction's currency, then the investment's original currency
+(and EUR only if neither declares one). Missing required conversion rates produce an explicit
+unavailable value and warning. A failed history request does not silently become zero tax or rent.
+See [[docs/features/portfolio-tax]] and [[docs/performance/caching-strategies]].
+
+Real-estate rent error recovery retries the shared exchange-rate query as well as portfolio
+reads when a booking currency has no available rate. Aggregate and per-property monthly rent
+and annual yield use the booking currency once, with the canonical display-currency property
+value as denominator. Rendered page tests cover same-currency, foreign-currency and mixed
+property/booking currencies, plus a missing-rate recovery.
+
+
 
 > [!tip] Historical performance and current totals
 > [Open the journey](../flow-visualizer.html#portfolio-valuation). See [[docs/guides/visual-learning|Understand Vision Visually]] for the reading paths and conceptual diagrams.
@@ -1355,3 +1386,8 @@ to match neighbouring explanatory content.
 The annual-interest estimate is remaining principal multiplied by the annual rate, excluding accrued
 interest already included in current value. Savings and bond help text uses this principal basis;
 the valuation calculation remains the one defined by [[docs/adr/061-snapshot-valuation-parity]].
+
+
+## Feature index
+
+- [[docs/features/index]]

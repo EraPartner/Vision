@@ -3,7 +3,8 @@ import { describe, expect, it, vi, afterEach } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http } from "msw";
-import { renderWithApp } from "@/test/renderWithApp";
+import type { ReactElement } from "react";
+import { renderWithApp as renderApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { ok, err } from "@/test/msw/handlers";
 import { InvestmentDetailDialog } from "@/features/portfolio/InvestmentDetailDialog";
@@ -41,6 +42,34 @@ vi.mock("@tanstack/react-virtual", () => ({
 }));
 
 const API_BASE = "http://localhost:3002";
+
+// Detail history now loads on opening. Serve each scenario through the HTTP
+// boundary instead of relying on the parent's recent-activity prop as history.
+function renderWithApp(ui: ReactElement<{ investment: InvestmentSummary }>) {
+    const rows = ui.props.investment.transactions.map((tx) => ({
+        dividend_amount_convention: "unknown",
+        income_recognition_role: "standard",
+        units: null,
+        price_per_unit: null,
+        recurrence_interval: null,
+        recurrence_end_date: null,
+        account_id: null,
+        import_batch_id: null,
+        ...tx,
+    }));
+    server.use(
+        http.get(`${API_BASE}/api/investments/:id/transactions`, () =>
+            ok({
+                items: rows,
+                total: rows.length,
+                limit: 1000,
+                offset: 0,
+                links: [],
+            }),
+        ),
+    );
+    return renderApp(ui);
+}
 
 const TXN = {
     id: 101,
@@ -106,6 +135,38 @@ afterEach(() => {
 });
 
 describe("InvestmentDetailDialog", () => {
+    it("shows a history failure rather than an empty list and retries it", async () => {
+        let fail = true;
+        server.use(
+            http.get(`${API_BASE}/api/investments/:id/transactions`, () =>
+                fail
+                    ? err(400, "History unavailable")
+                    : ok({
+                          items: [],
+                          total: 0,
+                          limit: 1000,
+                          offset: 0,
+                          links: [],
+                      }),
+            ),
+        );
+        const user = userEvent.setup();
+        renderApp(<InvestmentDetailDialog investment={INVESTMENT} />);
+        await user.click(
+            await screen.findByRole("button", { name: /details/i }),
+        );
+        await user.click(
+            await screen.findByRole("tab", { name: /transactions/i }),
+        );
+        expect(await screen.findByText("History unavailable")).toBeVisible();
+        expect(screen.queryByText(/No transactions/)).not.toBeInTheDocument();
+        fail = false;
+        await user.click(
+            screen.getByRole("button", { name: /try again|retry/i }),
+        );
+        expect(await screen.findByText(/No transactions/)).toBeVisible();
+    });
+
     it("shows total return including income and standalone deductions in the headline amount, percentage and direction", async () => {
         const user = userEvent.setup();
         renderWithApp(
@@ -157,7 +218,7 @@ describe("InvestmentDetailDialog", () => {
         ).not.toBeInTheDocument();
         await user.click(screen.getByRole("tab", { name: /transactions/i }));
         expect(
-            screen.getByText("Income included in acquired units"),
+            await screen.findByText("Income included in acquired units"),
         ).toBeVisible();
         expect(screen.getByText("Literal source income")).toBeVisible();
     });
@@ -451,7 +512,10 @@ describe("InvestmentDetailDialog", () => {
         await user.click(editBtn);
 
         // Assert
-        expect(onEditTransaction).toHaveBeenCalledWith(TXN, INVESTMENT);
+        expect(onEditTransaction).toHaveBeenCalledWith(
+            expect.objectContaining(TXN),
+            INVESTMENT,
+        );
     });
 
     it("delete transaction shows confirmation, then calls DELETE API on confirm", async () => {

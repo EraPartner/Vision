@@ -89,7 +89,42 @@ describe("useInvestmentsQuery", () => {
             wrapper: makeWrapper(),
         });
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
-        expect(spy).toHaveBeenCalledWith({ limit: 500, active: false });
+        expect(spy).toHaveBeenCalledWith(
+            {
+                limit: 500,
+                offset: 0,
+                active: false,
+            },
+            expect.any(AbortSignal),
+        );
+    });
+
+    it("loads more than 500 mixed active and archived holdings", async () => {
+        const rows = Array.from({ length: 603 }, (_, index) => ({
+            ...INVESTMENT_STUB,
+            id: index + 1,
+            is_active: index % 2 === 0,
+        }));
+        vi.spyOn(apiClient, "getInvestments").mockImplementation(
+            async (params) => ({
+                items: rows.slice(
+                    params?.offset ?? 0,
+                    (params?.offset ?? 0) + 500,
+                ) as never,
+                total: rows.length,
+                limit: 500,
+                offset: params?.offset ?? 0,
+                links: [],
+            }),
+        );
+        const { result } = renderHook(() => useInvestmentsQuery(), {
+            wrapper: makeWrapper(),
+        });
+        await waitFor(() => expect(result.current.isSuccess).toBe(true));
+        expect(result.current.data?.items).toHaveLength(603);
+        expect(
+            result.current.data?.items.filter((i) => i.is_active),
+        ).toHaveLength(302);
     });
 
     it("exposes error on failure", async () => {
@@ -130,14 +165,24 @@ describe("useAllPortfolioTransactionsQuery", () => {
         );
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
         expect(result.current.data).toHaveLength(1001);
-        expect(spy).toHaveBeenNthCalledWith(1, 4, {
-            limit: 1000,
-            offset: 0,
-        });
-        expect(spy).toHaveBeenNthCalledWith(2, 4, {
-            limit: 1000,
-            offset: 1000,
-        });
+        expect(spy).toHaveBeenNthCalledWith(
+            1,
+            4,
+            {
+                limit: 1000,
+                offset: 0,
+            },
+            expect.any(AbortSignal),
+        );
+        expect(spy).toHaveBeenNthCalledWith(
+            2,
+            4,
+            {
+                limit: 1000,
+                offset: 1000,
+            },
+            expect.any(AbortSignal),
+        );
     });
 });
 
@@ -196,58 +241,148 @@ describe("usePortfolioTransactionsQuery", () => {
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
         expect(spy).toHaveBeenCalledWith(
             expect.objectContaining({ investment_ids: "1,2,3" }),
+            expect.any(AbortSignal),
         );
     });
 
-    it("falls back to per-investment requests when bulk endpoint fails", async () => {
-        vi.spyOn(apiClient, "getPortfolioTransactionsBulk").mockRejectedValue(
-            new Error("bulk unavailable"),
+    it.each([401, 429, 500, 504])(
+        "does not fan out a failed bulk request (%s)",
+        async (status) => {
+            const error = Object.assign(new Error("bulk unavailable"), {
+                status,
+            });
+            vi.spyOn(
+                apiClient,
+                "getPortfolioTransactionsBulk",
+            ).mockRejectedValue(error);
+            const individual = vi.spyOn(apiClient, "getPortfolioTransactions");
+            const { result } = renderHook(
+                () => usePortfolioTransactionsQuery([1, 2]),
+                { wrapper: makeWrapper() },
+            );
+            await waitFor(() => expect(result.current.isError).toBe(true));
+            expect(result.current.error).toBe(error);
+            expect(individual).not.toHaveBeenCalled();
+        },
+    );
+
+    it("bounds complete-history work to four concurrent holdings", async () => {
+        let active = 0;
+        let peak = 0;
+        vi.spyOn(apiClient, "getPortfolioTransactions").mockImplementation(
+            async (id) => {
+                active += 1;
+                peak = Math.max(peak, active);
+                await new Promise((resolve) => setTimeout(resolve, 5));
+                active -= 1;
+                return {
+                    items: [{ ...PORTFOLIO_TXN_STUB, investment_id: id }],
+                    total: 1,
+                    limit: 1000,
+                    offset: 0,
+                    links: [],
+                };
+            },
         );
-        vi.spyOn(apiClient, "getPortfolioTransactions").mockResolvedValue({
-            items: [PORTFOLIO_TXN_STUB],
-            total: 1,
-            limit: 1000,
-            offset: 0,
-            links: [],
+        const { result } = renderHook(
+            () => usePortfolioTransactionsQuery([1, 2, 3, 4, 5, 6, 7], true),
+            { wrapper: makeWrapper() },
+        );
+        await waitFor(() => expect(result.current.isSuccess).toBe(true));
+        expect(result.current.data).toHaveLength(7);
+        expect(peak).toBeLessThanOrEqual(4);
+    });
+
+    it("drains failed workers before retrying and stops queued holdings and pages", async () => {
+        let active = 0;
+        let peak = 0;
+        let firstAttempt = true;
+        let rejectFirst!: (error: Error) => void;
+        const releases: (() => void)[] = [];
+        const failure = new Error("first holding failed");
+        const requests = vi
+            .spyOn(apiClient, "getPortfolioTransactions")
+            .mockImplementation(async (id) => {
+                active++;
+                peak = Math.max(peak, active);
+                try {
+                    if (firstAttempt) {
+                        if (id === 1)
+                            await new Promise<void>((_resolve, reject) => {
+                                rejectFirst = reject;
+                            });
+                        else
+                            await new Promise<void>((resolve) =>
+                                releases.push(resolve),
+                            );
+                    }
+                    return {
+                        items: [{ ...PORTFOLIO_TXN_STUB, investment_id: id }],
+                        // The first attempt would need another page, which must not start.
+                        total: firstAttempt ? 2 : 1,
+                        limit: 1000,
+                        offset: 0,
+                        links: [],
+                    };
+                } finally {
+                    active--;
+                }
+            });
+        const { result } = renderHook(
+            () => usePortfolioTransactionsQuery([1, 2, 3, 4, 5, 6, 7], true),
+            { wrapper: makeWrapper() },
+        );
+        await waitFor(() => expect(requests).toHaveBeenCalledTimes(4));
+        await act(async () => rejectFirst(failure));
+        expect(active).toBe(3);
+        expect(result.current.isFetching).toBe(true);
+        expect(result.current.isError).toBe(false);
+        await act(async () => releases[0]!());
+        expect(active).toBe(2);
+        expect(requests).toHaveBeenCalledTimes(4);
+        expect(result.current.isFetching).toBe(true);
+        await act(async () => {
+            releases[1]!();
+            releases[2]!();
         });
+        await waitFor(() => expect(result.current.isError).toBe(true));
+        expect(result.current.error).toBe(failure);
+        expect(active).toBe(0);
+        expect(requests).toHaveBeenCalledTimes(4);
+        firstAttempt = false;
+        await act(async () => {
+            await result.current.refetch();
+        });
+        await waitFor(() => expect(result.current.isSuccess).toBe(true));
+        expect(result.current.data).toHaveLength(7);
+        expect(peak).toBeLessThanOrEqual(4);
+    });
+
+    it("retains cached history on failure and recovers on retry", async () => {
+        const bulk = vi
+            .spyOn(apiClient, "getPortfolioTransactionsBulk")
+            .mockResolvedValue({
+                items: [PORTFOLIO_TXN_STUB],
+                total: 1,
+                limit: 50,
+                offset: 0,
+                links: [],
+            });
         const { result } = renderHook(
             () => usePortfolioTransactionsQuery([1]),
             { wrapper: makeWrapper() },
         );
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
-        expect(result.current.data).toEqual([PORTFOLIO_TXN_STUB]);
-        expect(apiClient.getPortfolioTransactions).toHaveBeenCalledWith(1, {
-            limit: 1000,
+        bulk.mockRejectedValueOnce(new Error("offline"));
+        await act(async () => {
+            await result.current.refetch();
         });
-    });
-
-    it("flattens transactions from multiple investments in fallback mode", async () => {
-        vi.spyOn(apiClient, "getPortfolioTransactionsBulk").mockRejectedValue(
-            new Error("bulk failed"),
-        );
-        const txn1 = { ...PORTFOLIO_TXN_STUB, id: 1, investment_id: 1 };
-        const txn2 = { ...PORTFOLIO_TXN_STUB, id: 2, investment_id: 2 };
-        vi.spyOn(apiClient, "getPortfolioTransactions")
-            .mockResolvedValueOnce({
-                items: [txn1],
-                total: 1,
-                limit: 1000,
-                offset: 0,
-                links: [],
-            })
-            .mockResolvedValueOnce({
-                items: [txn2],
-                total: 1,
-                limit: 1000,
-                offset: 0,
-                links: [],
-            });
-        const { result } = renderHook(
-            () => usePortfolioTransactionsQuery([1, 2]),
-            { wrapper: makeWrapper() },
-        );
+        await waitFor(() => expect(result.current.isError).toBe(true));
+        expect(result.current.data).toHaveLength(1);
+        await act(async () => {
+            await result.current.refetch();
+        });
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
-        expect(result.current.data).toHaveLength(2);
     });
 });
 

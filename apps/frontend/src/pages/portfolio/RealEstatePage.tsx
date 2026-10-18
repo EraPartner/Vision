@@ -1,3 +1,4 @@
+import { monthlyRentInTarget } from "@/hooks/portfolio/monthlyRent";
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { useMemo } from "react";
 import {
@@ -42,15 +43,30 @@ export default function RealEstatePage() {
     const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings.numberFormat);
     const targetCurrency = appSettings.defaultCurrency || "EUR";
-    const { byAssetClass, isLoading, isError, error, refetch } =
-        usePortfolio();
+    const { byAssetClass, isLoading, isError, error, refetch } = usePortfolio({
+        completeAssetClass: "real_estate",
+    });
     const { dialogs, renderMenu } = useHoldingActions({
         deleteTitleKey: "realestate.deleteProperty",
         deleteDescriptionKey: "realestate.deletePropertyDesc",
     });
     const properties = byAssetClass("real_estate");
 
-    const { convertToTarget } = useCurrencyConverter(targetCurrency);
+    const {
+        convertToTarget,
+        convertToTargetIfAvailable,
+        isLoading: fxLoading,
+        refetch: refetchRates,
+    } = useCurrencyConverter(targetCurrency);
+    const rentById = new Map(
+        properties.map((p) => [
+            p.id,
+            monthlyRentInTarget(p, convertToTargetIfAvailable),
+        ]),
+    );
+    const missingRentRate = [...rentById.values()].some(
+        (value) => value === undefined,
+    );
 
     // One Intl.NumberFormat per (locale, decimals) instead of one per formatted
     // value (~50-200µs a piece) — the memoized-formatter pattern NetWorthPage
@@ -97,12 +113,10 @@ export default function RealEstatePage() {
     );
 
     // Estimate monthly rent from most recent rent_income transactions
-    const estimatedMonthlyRent = properties.reduce((s, p) => {
-        const rentTxns = p.transactions.filter((t) => t.type === "rent_income");
-        if (rentTxns.length === 0) return s;
-        // Use most recent rent as monthly estimate
-        return s + convertToTarget(rentTxns[0]?.amount ?? 0, p.currency);
-    }, 0);
+    const estimatedMonthlyRent = [...rentById.values()].reduce<number>(
+        (sum, rent) => sum + (rent ?? 0),
+        0,
+    );
 
     const annualYield =
         totalValue > 0 ? ((estimatedMonthlyRent * 12) / totalValue) * 100 : 0;
@@ -114,7 +128,7 @@ export default function RealEstatePage() {
         <AssetPageActions allowedAssetClasses={["real_estate"]} />
     );
 
-    if (isLoading) {
+    if (isLoading || (missingRentRate && fxLoading)) {
         return (
             <PageShell {...loadingSurfaceProps} className="">
                 <PageHeader title={t("realestate.title")} icon={PageIcon} />
@@ -123,14 +137,21 @@ export default function RealEstatePage() {
             </PageShell>
         );
     }
-    if (isError) {
+    if (isError || missingRentRate) {
         return (
             <PageShell className="">
                 <PageHeader title={t("realestate.title")} icon={PageIcon} />
                 <PageError
                     title={t("realestate.pageErrorTitle")}
-                    message={error?.message ?? t("common.error")}
-                    onRetry={() => refetch()}
+                    message={
+                        missingRentRate
+                            ? t("realestate.missingRentRate")
+                            : (error?.message ?? t("common.error"))
+                    }
+                    onRetry={() => {
+                        void refetch();
+                        if (missingRentRate) void refetchRates();
+                    }}
                 />
             </PageShell>
         );
@@ -279,12 +300,7 @@ export default function RealEstatePage() {
                             propertyCost > 0
                                 ? (propertyReturn / propertyCost) * 100
                                 : 0;
-                        const monthlyRent = convertToTarget(
-                            p.transactions.filter(
-                                (t) => t.type === "rent_income",
-                            )[0]?.amount ?? 0,
-                            p.currency,
-                        );
+                        const monthlyRent = rentById.get(p.id) ?? 0;
                         const currentValueInTarget = convertToTarget(
                             p.currentValue,
                             p.currency,
@@ -358,7 +374,9 @@ export default function RealEstatePage() {
                                             </p>
                                             <p className="type-title-2 tabular-nums text-primary">
                                                 <Money
-                                                    amount={currentValueInTarget}
+                                                    amount={
+                                                        currentValueInTarget
+                                                    }
                                                     currency={targetCurrency}
                                                 />
                                             </p>

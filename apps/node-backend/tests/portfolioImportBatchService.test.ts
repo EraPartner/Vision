@@ -9,6 +9,14 @@ const portfolioRemovalMocks = vi.hoisted(() => ({
   validateImportBatchRemoval: vi.fn().mockResolvedValue(undefined),
 }));
 
+// Persistence and lock semantics are covered by plannedExecutionConcurrency.db.test.ts.
+vi.mock("../src/repositories/accountLifecycleLock.ts", () => ({
+  lockAccountsForLedgerMutation: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("../src/repositories/plannedExecutionGuard.ts", () => ({
+  protectPlannedExecutions: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("../src/database/connection.ts", () =>
   mockTxConnection(undefined, {
     query: vi.fn().mockResolvedValue({ rows: [], rowCount: 1 }),

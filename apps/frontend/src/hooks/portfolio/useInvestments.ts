@@ -22,34 +22,126 @@ import { toast } from "sonner";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 
+/** Stop rather than publish a partial collection if a page disappears mid-read. */
+async function collectPages<T>(
+    fetchPage: (offset: number) => Promise<{ items: T[]; total: number }>,
+    signal?: AbortSignal,
+): Promise<T[]> {
+    const items: T[] = [];
+    let total = Infinity;
+    while (items.length < total) {
+        signal?.throwIfAborted();
+        const page = await fetchPage(items.length);
+        total = page.total;
+        if (!page.items.length && items.length < total)
+            throw new Error(
+                "Portfolio pagination stopped before all records were loaded",
+            );
+        items.push(...page.items);
+    }
+    signal?.throwIfAborted();
+    return items;
+}
+
 export function useInvestmentsQuery() {
     return useQuery({
         queryKey: portfolioKeys.investments,
-        queryFn: () => apiClient.getInvestments({ limit: 500, active: false }),
+        queryFn: async ({ signal }) => {
+            const items = await collectPages(
+                (offset) =>
+                    apiClient.getInvestments(
+                        {
+                            limit: 500,
+                            offset,
+                            active: false,
+                        },
+                        signal,
+                    ),
+                signal,
+            );
+            return {
+                items,
+                total: items.length,
+                limit: items.length,
+                offset: 0,
+                links: [],
+            };
+        },
         staleTime: 2 * 60_000,
         gcTime: 10 * 60_000,
     });
 }
 
-export function usePortfolioTransactionsQuery(investmentIds: number[]) {
+/** Recent activity only. Calculations and detail views must request complete history. */
+export const RECENT_TRANSACTIONS_PER_INVESTMENT = 50;
+export function usePortfolioTransactionsQuery(
+    investmentIds: number[],
+    complete = false,
+) {
     return useQuery({
-        queryKey: portfolioKeys.transactions(investmentIds.join(",")),
-        queryFn: async () => {
-            if (investmentIds.length === 0) return [];
-            try {
-                const bulk = await apiClient.getPortfolioTransactionsBulk({
-                    investment_ids: investmentIds.join(","),
-                    per_investment_limit: 1000,
-                });
-                return bulk.items;
-            } catch {
-                const results = await Promise.all(
-                    investmentIds.map((id) =>
-                        apiClient.getPortfolioTransactions(id, { limit: 1000 }),
-                    ),
-                );
-                return results.flatMap((r) => r.items);
+        queryKey: [
+            ...portfolioKeys.transactions(investmentIds.join(",")),
+            complete ? "complete" : "recent",
+        ],
+        queryFn: async ({ signal }) => {
+            if (!complete) {
+                const items: PortfolioTransaction[] = [];
+                // Bound URL size and server work for large inventories. Errors propagate:
+                // this endpoint is part of the current API, not an optional capability.
+                for (
+                    let offset = 0;
+                    offset < investmentIds.length;
+                    offset += 100
+                ) {
+                    signal.throwIfAborted();
+                    const page = await apiClient.getPortfolioTransactionsBulk(
+                        {
+                            investment_ids: investmentIds
+                                .slice(offset, offset + 100)
+                                .join(","),
+                            per_investment_limit:
+                                RECENT_TRANSACTIONS_PER_INVESTMENT,
+                        },
+                        signal,
+                    );
+                    items.push(...page.items);
+                }
+                return items;
             }
+            const result: PortfolioTransaction[][] = [];
+            let next = 0;
+            let failed = false;
+            let failure: unknown;
+            // Do not reject until every in-flight worker settles: a query retry
+            // must not start another pool while the previous requests still run.
+            await Promise.all(
+                Array.from(
+                    { length: Math.min(4, investmentIds.length) },
+                    async () => {
+                        try {
+                            while (!failed && next < investmentIds.length) {
+                                signal.throwIfAborted();
+                                const index = next++;
+                                result[index] = await collectPages((offset) => {
+                                    if (failed) throw failure;
+                                    return apiClient.getPortfolioTransactions(
+                                        investmentIds[index]!,
+                                        { limit: 1000, offset },
+                                        signal,
+                                    );
+                                }, signal);
+                            }
+                        } catch (error) {
+                            if (!failed) {
+                                failed = true;
+                                failure = error;
+                            }
+                        }
+                    },
+                ),
+            );
+            if (failed) throw failure;
+            return result.flat();
         },
         enabled: investmentIds.length > 0,
         staleTime: 2 * 60_000,
@@ -57,30 +149,26 @@ export function usePortfolioTransactionsQuery(investmentIds: number[]) {
     });
 }
 
-export function useAllPortfolioTransactionsQuery(investmentId: number) {
+export function useAllPortfolioTransactionsQuery(
+    investmentId: number,
+    enabled = true,
+) {
     return useQuery({
         queryKey: portfolioKeys.allTransactionsForInvestment(investmentId),
-        queryFn: async () => {
-            const pageSize = 1000;
-            const items: PortfolioTransaction[] = [];
-            let offset = 0;
-            let total = Number.POSITIVE_INFINITY;
-            while (items.length < total) {
-                const page = await apiClient.getPortfolioTransactions(
-                    investmentId,
-                    { limit: pageSize, offset },
-                );
-                total = page.total;
-                items.push(...page.items);
-                if (page.items.length === 0 && items.length < total) {
-                    throw new Error(
-                        "Portfolio transaction pagination stopped before the complete history was loaded",
-                    );
-                }
-                offset += page.items.length;
-            }
-            return items;
-        },
+        queryFn: ({ signal }) =>
+            collectPages(
+                (offset) =>
+                    apiClient.getPortfolioTransactions(
+                        investmentId,
+                        {
+                            limit: 1000,
+                            offset,
+                        },
+                        signal,
+                    ),
+                signal,
+            ),
+        enabled,
         staleTime: 2 * 60_000,
         gcTime: 10 * 60_000,
     });

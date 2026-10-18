@@ -16,7 +16,7 @@ vi.mock("../src/database/connection.ts", () =>
 import { query } from "../src/database/connection.ts";
 import { parseIbkrTransactionHistory } from "../src/services/portfolioImportPipeline/ibkrTransactionHistoryAdapter.ts";
 import {
-  applyPortfolioAssetScope,
+  __applyPortfolioAssetScope as applyPortfolioAssetScope,
   stageBatch,
 } from "../src/services/portfolioImportPipeline/stage.ts";
 import { batchConfigFields } from "../src/database/rows/portfolioImport.ts";

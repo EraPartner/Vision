@@ -12,7 +12,7 @@ import { networkSource } from "./helpers/kinesisNetwork.ts";
 import { previewPortfolioImportReconciliation } from "../src/services/portfolioImportReconciliationService.ts";
 import { commitReviewedPortfolioImports } from "../src/services/portfolioImportCommitService.ts";
 import { rollbackBatch } from "../src/services/portfolioImportBatchService.ts";
-import { pruneOldImportBatches } from "../src/startup/warmup.ts";
+import { __pruneOldImportBatches as pruneOldImportBatches } from "../src/startup/warmup.ts";
 import { partial } from "./helpers/partial.ts";
 const pool = getTestPool()!,
   owned = {

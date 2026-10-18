@@ -26,7 +26,7 @@ import { cashReceipt } from "../src/services/portfolioKinesisCashScope.ts";
 import type { KinesisCashProof } from "../src/services/portfolioKinesisCashScope.ts";
 import { reconcileTransfers } from "../src/services/transferReconciliationService.ts";
 import { commitBatch } from "../src/services/portfolioImportPipeline/commit.ts";
-import { pruneOldImportBatches } from "../src/startup/warmup.ts";
+import { __pruneOldImportBatches as pruneOldImportBatches } from "../src/startup/warmup.ts";
 const warming = vi.hoisted(() => ({
   available: true,
   calls: [] as Array<Array<{ currency: string; dates: string[] }>>,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyPortfolioAssetScope } from "../src/services/portfolioImportPipeline/stage.ts";
+import { __applyPortfolioAssetScope as applyPortfolioAssetScope } from "../src/services/portfolioImportPipeline/stage.ts";
 import { __buildPortfolioConfig } from "../src/routes/portfolioImportRoutes.ts";
 import type { ParsedPortfolioRows } from "../src/services/portfolioImportPipeline/portfolioGenericAdapter.ts";
 import { partial } from "./helpers/partial.ts";
