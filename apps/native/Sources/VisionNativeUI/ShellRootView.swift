@@ -99,7 +99,11 @@ public struct ShellRootView<WebContent: View>: View {
         let theme = VisionTheme(selection: model.theme)
         NavigationSplitView(columnVisibility: $columnVisibility) {
             NativeSidebar(model: model, skipToContent: isNativeDetail ? { contentFocused = true } : nil)
-                .navigationSplitViewColumnWidth(min: 200, ideal: 248, max: 340)
+                .navigationSplitViewColumnWidth(
+                    min: SidebarWidthGuard.minimumWidth, ideal: SidebarWidthGuard.idealWidth,
+                    max: SidebarWidthGuard.maximumWidth)
+                .background(
+                    SidebarWidthGuard(minimum: SidebarWidthGuard.minimumWidth, ideal: SidebarWidthGuard.idealWidth))
                 .environment(\.colorScheme, theme.colorScheme)
                 // The window has no toolbar (the page draws its topbar under the traffic
                 // lights); NativeTopbar, View › Toggle Sidebar and ⌃⌘S toggle the sidebar instead.
@@ -387,9 +391,17 @@ struct NativeSidebar: View {
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass")
-                Text(model.strings.t("commandPalette.hint"))
-                Spacer(minLength: 4)
-                Text("⌘K").font(.caption).foregroundStyle(.tertiary)
+                // One line at any sidebar width: the hint truncates and the shortcut hides
+                // before the text would wrap.
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 6) {
+                        Text(model.strings.t("commandPalette.hint")).fixedSize()
+                        Spacer(minLength: 4)
+                        Text("⌘K").font(.caption).foregroundStyle(.tertiary).fixedSize()
+                    }
+                    Text(model.strings.t("commandPalette.hint")).lineLimit(1).truncationMode(.tail)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
             .foregroundStyle(.secondary)
             .padding(.horizontal, 8)

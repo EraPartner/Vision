@@ -87,6 +87,11 @@ targets:
         PRODUCT_NAME: $(VISION_NATIVE_PRODUCT_NAME_$(VISION_NATIVE_VARIANT))
         PRODUCT_MODULE_NAME: VisionNative
         PRODUCT_BUNDLE_IDENTIFIER: $(VISION_NATIVE_BUNDLE_ID_$(VISION_NATIVE_VARIANT))
+        # VisionNative/Assets.xcassets, rendered from the Electron icons (packaging/electron/
+        # build/icon.icns and resources-demo/icon-demo.icns).
+        VISION_NATIVE_APPICON_standard: AppIcon
+        VISION_NATIVE_APPICON_demo: AppIconDemo
+        ASSETCATALOG_COMPILER_APPICON_NAME: $(VISION_NATIVE_APPICON_$(VISION_NATIVE_VARIANT))
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"
         CODE_SIGN_STYLE: Automatic
@@ -108,6 +113,7 @@ targets:
         VisionNativeVariant: $(VISION_NATIVE_VARIANT)
         CFBundleIdentifier: $(PRODUCT_BUNDLE_IDENTIFIER)
         CFBundleExecutable: $(EXECUTABLE_NAME)
+        CFBundleIconName: $(ASSETCATALOG_COMPILER_APPICON_NAME)
         # The languages of the String Catalog and the shell locales.
         CFBundleLocalizations: [en, nl]
         CFBundlePackageType: APPL

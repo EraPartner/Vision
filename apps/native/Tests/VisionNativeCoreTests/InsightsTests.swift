@@ -10,6 +10,12 @@ private let insightPaceJSON =
 private let insightForecastJSON =
     #"{"actual":[{"date":"2026-10-01","net":10,"cumulative":10},{"date":"2026-10-02","net":null,"cumulative":null}],"methods":[{"id":"ensemble_imse","label":"Ensemble","daily":[{"date":"2026-10-02","value":20}],"cumulative":[{"date":"2026-10-02","value":30}],"bands":{"p25":[{"date":"2026-10-02","value":5}],"p75":[{"date":"2026-10-02","value":35}]},"cumulative_bands":{"p25":[{"date":"2026-10-02","value":15}],"p75":[{"date":"2026-10-02","value":45}]},"error":null}],"scheduled_actual":[{"date":"2026-10-02","net":5}],"planned":[{"date":"2026-10-02","net":7}],"diagnostics":null,"currency":"EUR","history_months":12,"include_planned":true,"month":"2026-10"}"#
 
+/// The wire shape of `/api/aggregations/*`: the payload in `{ data, meta }` inside the
+/// transport envelope.
+private func aggregationBody(_ payload: String) -> String {
+    #"{"ok":true,"data":{"data":"# + payload + #","meta":{"computedAt":"2026-10-18T00:00:00.000Z","source":"live"}}}"#
+}
+
 private func insightFixture<Value: Decodable>(_ type: Value.Type, _ json: String) throws -> Value {
     try JSONDecoder().decode(type, from: Data(json.utf8))
 }
@@ -762,7 +768,7 @@ struct HomeAPIAdapterTests {
     }
 
     @Test func monthlyAdapterKeepsEnvelopePrecisionAndRepeatedExclusions() async throws {
-        let transport = InsightTransport(body: "{\"ok\":true,\"data\":\(insightMonthsJSON)}")
+        let transport = InsightTransport(body: aggregationBody(insightMonthsJSON))
         let client = APIClient(
             baseURL: { URL(string: "http://127.0.0.1:3002") }, transport: transport, maxRetries: 0)
         let data = try await client.homeMonthly(
@@ -773,6 +779,50 @@ struct HomeAPIAdapterTests {
         let query = URLComponents(url: request.url, resolvingAgainstBaseURL: false)?.queryItems ?? []
         #expect(query.filter { $0.name == "excluded_category_ids" }.map(\.value) == ["3", "8"])
         #expect(query.first { $0.name == "currency" }?.value == "USD")
+    }
+
+    /// Regression: every aggregation answers `{ ok, data: { data, meta } }`; decoding the
+    /// outer `data` as the payload failed every Home and Statistics load with
+    /// "months: Required".
+    @Test func aggregationAdaptersUnwrapTheAggregationEnvelope() async throws {
+        let monthly = InsightTransport(body: aggregationBody(insightMonthsJSON))
+        let statistics = try await APIClient(
+            baseURL: { URL(string: "http://127.0.0.1:3002") }, transport: monthly, maxRetries: 0
+        ).statisticsMonthly(
+            StatisticsQuery(
+                currency: "EUR", window: .all, exclusions: InsightExclusions(),
+                today: PlannedFixture.today, calendar: PlannedFixture.calendar))
+        #expect(statistics.months.count == 2)
+
+        let pace = InsightTransport(body: aggregationBody(insightPaceJSON))
+        let paceData = try await APIClient(
+            baseURL: { URL(string: "http://127.0.0.1:3002") }, transport: pace, maxRetries: 0
+        ).homePace(currency: "EUR")
+        #expect(paceData.current_month.days_elapsed == 3)
+
+        // The accuracy route builds its own `{ data, meta }` without `computedAt`.
+        let accuracy = InsightTransport(
+            body: #"{"ok":true,"data":{"data":{"methods":[{"method_id":"ensemble_imse","as_of_month":"2026-09","mae":1,"rmse":2,"mape":null,"sample_days":30,"history":[]}],"limit_months":24},"meta":{"source":"db","userId":"anonymous"}}}"#)
+        let accuracyData = try await APIClient(
+            baseURL: { URL(string: "http://127.0.0.1:3002") }, transport: accuracy, maxRetries: 0
+        ).homeForecastAccuracy()
+        #expect(accuracyData.methods.map(\.method_id) == ["ensemble_imse"])
+    }
+
+    @Test func aggregationPayloadWithoutTheEnvelopeIsAContractError() async throws {
+        let transport = InsightTransport(body: "{\"ok\":true,\"data\":\(insightMonthsJSON)}")
+        let client = APIClient(
+            baseURL: { URL(string: "http://127.0.0.1:3002") }, transport: transport, maxRetries: 0)
+        do {
+            _ = try await client.homeMonthly(
+                currency: "EUR", exclusions: InsightExclusions())
+            Issue.record("An unwrapped aggregation payload must not decode")
+        } catch let error as APIError {
+            guard case .contract = error else {
+                Issue.record("Expected a contract error")
+                return
+            }
+        }
     }
 
     @Test func plannedAdapterSendsCompleteLocalDateWindow() async throws {

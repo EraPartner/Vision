@@ -30,7 +30,15 @@
  * every test so no test sees another's seeded rates.
  */
 
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import {
   acquireDbSuiteLock,
   closeTestPool,
@@ -54,6 +62,16 @@ import { banksRepository } from "../src/repositories/infoRepositoryBanks.ts";
 import { clearMvCache } from "../src/repositories/infoRepositoryHelpers.ts";
 import { clearMemoryCache } from "../src/services/currency/currencyConversionService.ts";
 import { closePool } from "../src/database/connection.ts";
+
+// Rates come only from the rows each test seeds: a date with no seeded rate must
+// not reach the live ECB feed, whose 8 s fetch timeout outlasts the test timeout
+// whenever the feed is slow from CI.
+vi.mock("../src/services/currency/rateFetcher.ts", async (original) => ({
+  ...(await original<
+    typeof import("../src/services/currency/rateFetcher.ts")
+  >()),
+  getUnindexedRatesToEurForDates: async () => new Map(),
+}));
 
 const rec: Record<string, number> = {};
 
