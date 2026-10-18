@@ -51,8 +51,8 @@ public struct ResearchForecastView: View {
                         summary
                         ResearchCard {
                             HStack {
-                                Text(strings.t("research.forecast.chartTitle")).font(.headline).accessibilityAddTraits(
-                                    .isHeader)
+                                Text(strings.t("research.forecast.chartTitle")).font(.researchCardTitle)
+                                    .accessibilityAddTraits(.isHeader)
                                 Spacer()
                                 if forecast?.lowConfidence == true {
                                     Label(
@@ -267,14 +267,19 @@ struct ResearchForecastStat: View {
         self.rolling = rolling
     }
     var body: some View {
-        ResearchCard {
-            Label(title, systemImage: symbol).font(.caption).foregroundStyle(theme.secondaryLabel)
-            if loading {
-                RoundedRectangle(cornerRadius: 5).fill(theme.muted).frame(height: 30).accessibilityLabel(title)
-            } else {
-                RollingNumber(value: value, animate: rolling).font(.title2.weight(.semibold))
+        ResearchCard(padding: 20) {
+            HStack(spacing: 8) {
+                Text(title).font(.body.weight(.medium)).foregroundStyle(theme.secondaryLabel)
+                Spacer(minLength: 0)
+                Image(systemName: symbol).font(.callout).foregroundStyle(theme.tertiaryLabel).accessibilityHidden(true)
             }
-            if let subtitle { Text(subtitle).font(.caption).foregroundStyle(theme.secondaryLabel) }
+            if loading {
+                RoundedRectangle(cornerRadius: 5).fill(theme.muted).frame(width: 112, height: 30)
+                    .accessibilityLabel(title)
+            } else {
+                RollingNumber(value: value, animate: rolling).font(VisionFonts.display(24, relativeTo: .title))
+            }
+            if let subtitle { Text(subtitle).font(.footnote).foregroundStyle(theme.secondaryLabel) }
         }
     }
 }

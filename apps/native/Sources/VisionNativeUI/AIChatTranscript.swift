@@ -27,17 +27,20 @@ struct AIChatTranscript: View {
                     if model.messages.isEmpty && snapshot.assistantDraft.isEmpty && !thinking && !terminal
                         && !model.composerDisabled
                     {
-                        VStack(spacing: 14) {
-                            Image(systemName: "bubble.left.and.bubble.right").font(.largeTitle).foregroundStyle(
-                                theme.primary)
-                            Text(strings.t("aiChat.emptyTitle")).font(.title3.weight(.semibold))
-                            Text(strings.t("aiChat.emptyState")).font(.callout).foregroundStyle(theme.secondaryLabel)
-                                .multilineTextAlignment(.center)
-                            Button(strings.t("aiChat.insightsDigestButton"), systemImage: "sparkles") {
+                        VisionEmptyState(
+                            symbol: "bubble.left.and.bubble.right", title: strings.t("aiChat.emptyTitle"),
+                            description: strings.t("aiChat.emptyState")
+                        ) {
+                            Button {
                                 Task { await model.digest(prompt: strings.t("aiChat.insightsDigestPrompt")) }
-                            }.buttonStyle(.bordered).disabled(model.composerDisabled)
-                        }.padding(24).frame(maxWidth: .infinity).background(
-                            theme.muted, in: RoundedRectangle(cornerRadius: 12))
+                            } label: {
+                                Label {
+                                    Text(strings.t("aiChat.insightsDigestButton"))
+                                } icon: {
+                                    Image(systemName: "sparkles").foregroundStyle(theme.primary)
+                                }
+                            }.buttonStyle(.bordered).controlSize(.small).disabled(model.composerDisabled)
+                        }.padding(24).frame(maxWidth: 672).visionCardBackground().frame(maxWidth: .infinity)
                     }
                     ForEach(model.messages) { message in
                         AIChatBubble(message: message, shell: shell)
@@ -56,25 +59,31 @@ struct AIChatTranscript: View {
                                         : snapshot.status.rawValue == "timed_out"
                                             ? "aiChat.streamTimedOut" : "aiChat.streamInterrupted")
                             )
-                            .font(.callout).foregroundStyle(theme.secondaryLabel)
+                            .font(.footnote).foregroundStyle(theme.secondaryLabel)
                             Spacer()
                             if snapshot.lastRequest != nil && !model.composerDisabled {
                                 Button(strings.t("common.retry")) { Task { await model.retryLastTurn() } }.buttonStyle(
                                     .bordered)
                             }
-                        }.padding(12).background(theme.muted, in: RoundedRectangle(cornerRadius: 10))
+                        }.padding(.horizontal, 12).padding(.vertical, 8)
+                            .background(theme.muted, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.control))
+                            .padding(.leading, 48)
                     }
                     if thinking {
                         HStack(spacing: 12) {
                             AIChatAvatar(role: "assistant")
                             HStack(spacing: 8) {
                                 ProgressView().controlSize(.small)
-                                Text(strings.t("aiChat.thinking")).font(.callout).foregroundStyle(theme.secondaryLabel)
-                            }.padding(12).background(theme.muted, in: RoundedRectangle(cornerRadius: 12))
+                                Text(strings.t("aiChat.thinking")).foregroundStyle(theme.secondaryLabel)
+                            }.padding(.horizontal, 16).padding(.vertical, 10)
+                                .background(theme.card, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.card))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: DesignTokens.Radius.card).stroke(
+                                        theme.border.opacity(0.6)))
                         }.accessibilityElement(children: .combine)
                     }
                     Color.clear.frame(height: 1).id("chat-bottom").accessibilityHidden(true)
-                }.padding(20).frame(maxWidth: 850).frame(maxWidth: .infinity)
+                }.padding(.horizontal, 16).padding(.vertical, 24).frame(maxWidth: 768).frame(maxWidth: .infinity)
             }.onScrollGeometryChange(for: ChatScrollPosition.self) { geometry in
                 ChatScrollPosition(
                     top: geometry.contentOffset.y, distance: geometry.contentSize.height - geometry.visibleRect.maxY)
@@ -141,16 +150,16 @@ struct AIChatBubble: View {
                 AIChatAvatar(role: "tool")
                 VStack(alignment: .leading, spacing: 10) {
                     Label(message.toolName ?? shell.strings.t("aiChat.toolResult"), systemImage: "wrench")
-                        .font(.caption.weight(.medium)).foregroundStyle(theme.secondaryLabel)
+                        .font(.footnote.weight(.medium)).foregroundStyle(theme.secondaryLabel)
                     if let result = message.toolResult {
                         AIChatToolResultCard(result: result, presentation: message.toolPresentation, shell: shell)
                     } else {
-                        Text(shell.strings.t("aiChat.noDataReturned")).font(.caption).foregroundStyle(
+                        Text(shell.strings.t("aiChat.noDataReturned")).font(.footnote).foregroundStyle(
                             theme.secondaryLabel)
                     }
                 }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
-                    .background(theme.card, in: RoundedRectangle(cornerRadius: 12))
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(theme.border.opacity(0.6)))
+                    .background(theme.card, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.card))
+                    .overlay(RoundedRectangle(cornerRadius: DesignTokens.Radius.card).stroke(theme.border.opacity(0.6)))
             }
         } else {
             AIChatTextBubble(role: message.role, content: message.content ?? "", streaming: false, shell: shell)
@@ -176,10 +185,15 @@ struct AIChatTextBubble: View {
                         .phaseAnimator([false, true]) { view, phase in view.opacity(reducedMotion || phase ? 1 : 0.25) }
                         .accessibilityHidden(true)
                 }
-            }.padding(.horizontal, 16).padding(.vertical, 12)
+            }.padding(.horizontal, 16).padding(.vertical, 10)
                 .foregroundStyle(user ? theme.primaryForeground : theme.foreground)
-                .background(user ? theme.primary : theme.card, in: RoundedRectangle(cornerRadius: 12))
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(user ? .clear : theme.border.opacity(0.6)))
+                .background(
+                    user ? theme.primary : theme.card, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.card))
+                .overlay(
+                    RoundedRectangle(cornerRadius: DesignTokens.Radius.card).stroke(
+                        user ? .clear : theme.border.opacity(0.6))
+                )
+                .shadow(color: Color.black.opacity(user ? 0.08 : 0), radius: 2, y: 1)
             if user { AIChatAvatar(role: role) } else { Spacer(minLength: 30) }
         }
     }
@@ -191,6 +205,14 @@ struct AIChatAvatar: View {
     var body: some View {
         Image(systemName: role == "user" ? "person" : role == "tool" ? "wrench" : "sparkles")
             .font(.callout).foregroundStyle(role == "tool" ? theme.secondaryLabel : theme.primary)
-            .frame(width: 32, height: 32).background(theme.primary.opacity(0.1), in: Circle()).accessibilityHidden(true)
+            .frame(width: 32, height: 32)
+            .background(
+                role == "user"
+                    ? theme.primary.opacity(0.15)
+                    : role == "tool" ? theme.foreground.opacity(0.06) : theme.primary.opacity(0.12),
+                in: Circle()
+            )
+            .overlay(Circle().stroke(role == "user" ? theme.primary.opacity(0.3) : theme.border.opacity(0.5)))
+            .accessibilityHidden(true)
     }
 }

@@ -78,7 +78,7 @@ public struct ResearchHomeView: View {
                     Button {
                         shell.navigate(to: ResearchURLs.market(benchmark.symbol))
                     } label: {
-                        ResearchCard {
+                        ResearchCard(padding: 16) {
                             HStack(alignment: .top, spacing: 6) {
                                 Text(benchmark.label).font(.caption).foregroundStyle(theme.secondaryLabel).lineLimit(1)
                                 Spacer(minLength: 0)
@@ -87,13 +87,14 @@ public struct ResearchHomeView: View {
                             Text(
                                 quote?.price.map { VisionFormat.decimal($0, fractionDigits: 2, locale: locale) } ?? "—"
                             )
-                            .font(.title2.weight(.semibold)).monospacedDigit()
+                            .font(.researchCardTitle.monospacedDigit())
+                            .foregroundStyle(quote?.price == nil ? theme.tertiaryLabel : theme.foreground)
                             if let change = quote?.change {
                                 Text(
                                     (change > 0 ? "+" : "")
                                         + VisionFormat.decimal(change, fractionDigits: 2, locale: locale)
                                 )
-                                .font(.caption).monospacedDigit().foregroundStyle(theme.secondaryLabel)
+                                .font(.footnote).monospacedDigit().foregroundStyle(theme.secondaryLabel)
                             }
                         }
                     }.buttonStyle(.plain).accessibilityLabel(benchmark.label)
@@ -108,7 +109,8 @@ public struct ResearchHomeView: View {
     private var watchlist: some View {
         ResearchCard {
             HStack {
-                Text(shell.strings.t("research.watchlistPreview")).font(.headline).accessibilityAddTraits(.isHeader)
+                Text(shell.strings.t("research.watchlistPreview")).font(.researchCardTitle)
+                    .accessibilityAddTraits(.isHeader)
                 Spacer()
                 if !model.watchlist.isEmpty {
                     Button {

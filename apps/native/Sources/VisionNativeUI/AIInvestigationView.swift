@@ -16,8 +16,8 @@ struct AIInvestigationView: View {
         model.settingsSummary.map { strings.t($0) }.joined(separator: " · ")
     }
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Text(strings.t("aiResearch.title")).font(.title2.weight(.semibold)).accessibilityAddTraits(.isHeader)
+        VStack(alignment: .leading, spacing: 16) {
+            Text(strings.t("aiResearch.title")).font(.researchCardTitle).accessibilityAddTraits(.isHeader)
             question
             Divider()
             settings

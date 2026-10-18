@@ -1,19 +1,31 @@
 import SwiftUI
 import VisionNativeCore
 
+extension Font {
+    /// `type-title-3`: `CardTitle variant="sm"`, the research cards' section titles.
+    static var researchCardTitle: Font { VisionFonts.display(17, relativeTo: .title3) }
+}
+
 struct ResearchCard<Content: View>: View {
     var title: String? = nil
+    var titleFont: Font = .researchCardTitle
+    var padding: CGFloat = 24
     @ViewBuilder var content: () -> Content
     @Environment(\.visionTheme) private var theme
-    init(title: String? = nil, @ViewBuilder content: @escaping () -> Content) {
+    init(
+        title: String? = nil, titleFont: Font = .researchCardTitle, padding: CGFloat = 24,
+        @ViewBuilder content: @escaping () -> Content
+    ) {
         self.title = title
+        self.titleFont = titleFont
+        self.padding = padding
         self.content = content
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            if let title { Text(title).font(.visionCardTitle).accessibilityAddTraits(.isHeader) }
+            if let title { Text(title).font(titleFont).accessibilityAddTraits(.isHeader) }
             content()
-        }.padding(20).frame(maxWidth: .infinity, alignment: .leading)
+        }.padding(padding).frame(maxWidth: .infinity, alignment: .leading)
             .visionCardBackground()
     }
 }
@@ -202,7 +214,7 @@ struct ResearchNewsCard: View {
     var body: some View {
         ResearchCard {
             HStack {
-                Text(shell.strings.t("newsFeed.title")).font(.headline).accessibilityAddTraits(.isHeader)
+                Text(shell.strings.t("newsFeed.title")).font(.researchCardTitle).accessibilityAddTraits(.isHeader)
                 Spacer()
                 if !articles.isEmpty {
                     Text(shell.strings.t("newsFeed.articles", ["n": String(min(6, articles.count))])).font(.caption)

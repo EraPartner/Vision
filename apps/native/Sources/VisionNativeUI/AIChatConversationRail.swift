@@ -25,9 +25,9 @@ struct AIChatConversationRail: View {
                 }
                 .buttonStyle(.borderless).disabled(model.isCreating)
                 .accessibilityLabel(strings.t("aiChat.newConversation"))
-            }.padding(16)
+            }.padding(.horizontal, 16).padding(.vertical, 12)
             ScrollView {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 2) {
                     if model.isLoadingConversations && model.conversations.isEmpty {
                         ForEach(0..<5, id: \.self) { _ in
                             RoundedRectangle(cornerRadius: 8).fill(theme.muted).frame(height: 38).accessibilityHidden(
@@ -45,10 +45,13 @@ struct AIChatConversationRail: View {
                                 Task { await model.select(id: conversation.id) }
                                 didSelect?()
                             } label: {
+                                let active = model.selectedID == conversation.id
                                 HStack(spacing: 8) {
-                                    Image(systemName: "bubble.left").font(.caption).foregroundStyle(theme.tertiaryLabel)
+                                    Image(systemName: "bubble.left").font(.caption)
+                                        .foregroundStyle(active ? theme.primary : theme.secondaryLabel)
                                     Text(conversation.title.isEmpty ? strings.t("aiChat.untitled") : conversation.title)
                                         .font(.callout).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+                                        .foregroundStyle(active ? theme.foreground : theme.secondaryLabel)
                                     if model.streamingIDs.contains(conversation.id) {
                                         Circle().fill(theme.primary).frame(width: 6, height: 6)
                                             .phaseAnimator([false, true]) { view, phase in

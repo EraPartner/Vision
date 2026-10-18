@@ -14,18 +14,15 @@ public struct ResearchChartBuilderView: View {
     private var controlsEnabled: Bool { model.isStorageLoaded && !model.isStorageAction }
     public var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: VisionPageLayout.spacing) {
                 header
                 layoutControls
                 if model.state.series.isEmpty {
                     ResearchCard {
-                        VStack(spacing: 9) {
-                            Image(systemName: "chart.xyaxis.line").font(.largeTitle).foregroundStyle(
-                                theme.secondaryLabel
-                            ).accessibilityHidden(true)
-                            Text(strings.t("research.builder.emptyTitle")).font(.headline)
-                            Text(strings.t("research.builder.emptyHint")).foregroundStyle(theme.secondaryLabel)
-                        }.padding(.vertical, 46).frame(maxWidth: .infinity)
+                        VisionEmptyState(
+                            symbol: "chart.xyaxis.line", title: strings.t("research.builder.emptyTitle"),
+                            description: strings.t("research.builder.emptyHint")
+                        ) {}.padding(.vertical, 46)
                     }
                 } else {
                     ResearchCard {
@@ -68,14 +65,10 @@ public struct ResearchChartBuilderView: View {
         }
     }
     private var header: some View {
-        HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 6) {
-                Label(strings.t("research.builder.title"), systemImage: "chart.xyaxis.line").font(
-                    .largeTitle.weight(.semibold)
-                ).accessibilityAddTraits(.isHeader)
-                Text(strings.t("research.builder.subtitle")).foregroundStyle(theme.secondaryLabel)
-            }
-            Spacer()
+        VisionPageHeader(
+            title: strings.t("research.builder.title"), subtitle: strings.t("research.builder.subtitle"),
+            symbol: "chart.xyaxis.line"
+        ) {
             Menu {
                 Button(strings.t("research.builder.newChart")) { model.requestNew() }
                 Button(strings.t("research.builder.copyLink")) { Task { await model.copyShareLink() } }
@@ -179,7 +172,7 @@ public struct ResearchChartBuilderView: View {
     private var oscillator: some View {
         ResearchCard {
             HStack {
-                Text(strings.t("research.builder.oscillator")).font(.headline)
+                Text(strings.t("research.builder.oscillator")).font(.researchCardTitle)
                 Spacer()
                 Picker(strings.t("research.builder.oscillator"), selection: state(\.oscillator)) {
                     Text(strings.t("research.builder.oscNone")).tag("none")

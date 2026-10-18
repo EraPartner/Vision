@@ -68,29 +68,39 @@ struct ResearchMarketFundamentalsView: View {
                     Spacer()
                     ResearchProvenanceBadge(meta: snapshot?.meta, shell: shell)
                 }
-                Text(strings.t("research.scorecard.title")).font(.headline)
+                Text(strings.t("research.scorecard.title")).font(.headline).accessibilityAddTraits(.isHeader)
                 ResearchMarketScorecardView(
                     scorecard: data.scorecard, currency: data.fundamentals["currency"]?.stringValue, shell: shell)
                 ForEach(groups, id: \.key) { group in
                     let metrics = group.metrics.filter { data.fundamentals[$0.key]?.decimalValue != nil }
                     if !metrics.isEmpty {
-                        VStack(alignment: .leading, spacing: 10) {
+                        VStack(alignment: .leading, spacing: 8) {
                             Text(strings.t("research.fundamentals." + group.key)).font(.headline)
-                            ForEach(metrics, id: \.key) { metric in
-                                if let value = data.fundamentals[metric.key]?.decimalValue {
-                                    HStack {
-                                        Text(strings.t(metric.label)).foregroundStyle(theme.secondaryLabel)
-                                        Spacer()
-                                        Text(
-                                            format(
-                                                value, as: metric.format,
-                                                currency: data.fundamentals["currency"]?.stringValue ?? "USD")
-                                        ).monospacedDigit()
+                                .accessibilityAddTraits(.isHeader)
+                            VStack(spacing: 0) {
+                                ForEach(Array(metrics.enumerated()), id: \.element.key) { index, metric in
+                                    if let value = data.fundamentals[metric.key]?.decimalValue {
+                                        if index > 0 { Divider().opacity(0.5) }
+                                        HStack {
+                                            Text(strings.t(metric.label)).foregroundStyle(theme.secondaryLabel)
+                                            Spacer()
+                                            Text(
+                                                format(
+                                                    value, as: metric.format,
+                                                    currency: data.fundamentals["currency"]?.stringValue ?? "USD")
+                                            ).monospacedDigit()
+                                        }.padding(.horizontal, 16).padding(.vertical, 10).frame(minHeight: 40)
                                     }
                                 }
                             }
-                        }.padding(14).background(
-                            theme.foreground.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
+                            .background(
+                                theme.card.opacity(0.7),
+                                in: RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous)
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous).stroke(
+                                    theme.border.opacity(0.6)))
+                        }
                     }
                 }
             }

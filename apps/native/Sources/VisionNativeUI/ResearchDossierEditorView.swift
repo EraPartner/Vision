@@ -15,13 +15,13 @@ struct ResearchDossierEditorView: View {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 5) {
                     Text(heading)
-                        .font(.headline).accessibilityAddTraits(.isHeader)
+                        .font(.researchCardTitle).lineLimit(1).accessibilityAddTraits(.isHeader)
                     if let detail = model.detail, model.selectedId != nil {
                         Text(
                             strings.t("dossiers.workspace." + detail.workspace) + " · "
                                 + strings.t("dossiers.version", ["version": String(detail.version)])
                         )
-                        .font(.caption).foregroundStyle(theme.secondaryLabel)
+                        .foregroundStyle(theme.secondaryLabel)
                     }
                 }
                 Spacer()

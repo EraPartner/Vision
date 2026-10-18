@@ -50,7 +50,8 @@ public struct ResearchWatchlistView: View {
                                 ResearchWatchlistRow(item: item, model: model, shell: shell)
                                 if index < page.items.count - 1 { Divider() }
                             }
-                        }.visionCardBackground()
+                        }.clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous))
+                            .visionCardBackground()
                     }
                 }
             }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
@@ -143,7 +144,7 @@ private struct ResearchWatchlistRow: View {
                 .menuStyle(.borderlessButton).fixedSize()
                 .accessibilityLabel(strings.t("watchlist.rowMenu", ["name": ResearchWatchlistUI.name(item)]))
             }.padding(.top, 4)
-        }.padding(18).background(metric?.isAtOrBelowTarget == true ? theme.gain.opacity(0.06) : .clear)
+        }.padding(18).background(metric?.isAtOrBelowTarget == true ? theme.success.opacity(0.06) : .clear)
     }
     private var identity: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -151,8 +152,9 @@ private struct ResearchWatchlistRow: View {
                 if let symbol = item.symbol, !symbol.isEmpty {
                     Button(ResearchWatchlistUI.name(item), action: lookup).buttonStyle(.link).font(.headline)
                         .multilineTextAlignment(.leading)
-                    Text(symbol).font(.caption.monospaced()).padding(.horizontal, 5).padding(.vertical, 2)
-                        .background(theme.foreground.opacity(0.04), in: RoundedRectangle(cornerRadius: 4))
+                    Text(symbol).font(.caption2.monospaced().weight(.medium))
+                        .foregroundStyle(theme.foreground.opacity(0.8)).padding(.horizontal, 6).padding(.vertical, 1)
+                        .overlay(Capsule().strokeBorder(theme.border.opacity(0.7), lineWidth: 1))
                 } else {
                     Text(ResearchWatchlistUI.name(item)).font(.headline)
                 }
@@ -177,8 +179,7 @@ private struct ResearchWatchlistRow: View {
     private var prices: some View {
         VStack(alignment: .leading, spacing: 5) {
             if let price = item.symbol.flatMap({ model.quotes[$0]?.price }) {
-                Text(ResearchWatchlistUI.money(price, currency: item.currency, shell: shell)).font(.headline)
-                    .monospacedDigit()
+                Text(ResearchWatchlistUI.money(price, currency: item.currency, shell: shell)).monospacedDigit()
             } else {
                 Text(strings.t("watchlist.quoteUnavailable")).font(.callout).foregroundStyle(theme.secondaryLabel)
             }
@@ -186,12 +187,13 @@ private struct ResearchWatchlistRow: View {
                 strings.t("watchlist.targetPrice") + " "
                     + ResearchWatchlistUI.money(item.targetPrice, currency: item.currency, shell: shell)
             )
-            .font(.caption).monospacedDigit()
+            .font(.footnote).monospacedDigit()
             if metric?.isAtOrBelowTarget == true {
-                Label(strings.t("watchlist.atTargetShort"), systemImage: "checkmark").font(.caption).foregroundStyle(
-                    theme.gain
-                )
-                .help(strings.t("watchlist.atTarget"))
+                Label(strings.t("watchlist.atTargetShort"), systemImage: "checkmark").font(.caption2.weight(.medium))
+                    .foregroundStyle(theme.success).padding(.horizontal, 6).padding(.vertical, 1)
+                    .background(Capsule().fill(theme.success.opacity(0.15)))
+                    .overlay(Capsule().strokeBorder(theme.success.opacity(0.3), lineWidth: 1))
+                    .help(strings.t("watchlist.atTarget"))
             } else if let percent = metric?.absoluteDistancePercent, let signed = metric?.distancePercent, signed > 0 {
                 DeltaPill(
                     signed,
