@@ -2,8 +2,8 @@
 title: Reports API
 type: endpoint
 status: active
-date: 2026-10-10
-updated: 2026-10-08
+date: 2026-10-11
+updated: 2026-10-11
 tags:
   - api
   - reports
@@ -53,7 +53,7 @@ Server-side PDF generation via **Puppeteer headless Chrome** (Phase 3 redesign).
 - **Paginated footers** (Phase 5): "Vision | Confidential | page X / Y" on all content pages; theme colors interpolated as HSL literals
 - **Enhanced print breaks** (Phase 5): `break-inside: avoid` prevents card/row orphaning; `display: table-header-group` repeats table headers across pages
 - **Full i18n support** (Phase 6): 32 translation keys for dialog UI, period labels, section toggles, and actions (en/nl)
-- **Graceful degradation**: Promise.allSettled ensures one failed data source doesn't crash report (a row contract violation still fails it; see [[#Performance]])
+- **Source failures**: Any requested source failure aborts export; successful empty results remain distinct from unavailable data (see [[#Performance]])
 - **Three report types**: Financial (complete), Portfolio (Phase 8 — 6 sections), Tax (Phase 8 — 7 sections + Belgian tax pass-through)
 
 ## Phase Updates
@@ -406,7 +406,7 @@ No `apiRequest` wrapper is used because the response is a binary stream.
 
 - **Dispatcher** (`apps/node-backend/src/services/reports/index.ts`): Routes by report type, builds HTML, invokes Puppeteer
 - **HTTP route** (`apps/node-backend/src/routes/reports.ts`): Receives `{ pdf, filename }` from the dispatcher and owns the binary download headers and response body
-- **Data fetcher** (`apps/node-backend/src/services/reports/dataFetcher.ts`): Parallel Promise.allSettled loads all data; graceful degradation
+- **Data fetcher** (`apps/node-backend/src/services/reports/dataFetcher.ts`): Parallel Promise.allSettled loads selected sources; requested source failures reject the export
 - **Section renderers** (`apps/node-backend/src/services/reports/sections/`): Pure functions; each section independent
 - **Theme system** (`themeCss.js` + `sectionHelpers.js`): CSS tokens, formatters, SVG chart builders
 - **Puppeteer renderer** (`puppeteerRenderer.js`): Headless Chrome → PDF buffer
@@ -422,14 +422,43 @@ All fetched in parallel via Promise.allSettled:
 - `computeAverageVsCurrent()` — rolling averages
 - `infoRepository.getPlannedExpensesNextMonth()` — planned transactions
 
+### Period, valuation and capacity contracts
+
+Financial monthly, category and recipient totals apply inclusive start/end dates before aggregation,
+including partial months in custom ranges. Both category and recipient exclusions apply in the
+filtered category and recipient aggregates; the comparison chart retains an explicitly unfiltered
+aggregate for the same dates. Category ancestry and primary-recipient identity follow the shared
+filter builder. Account balances, rolling averages and planned outlook keep their labelled
+current/rolling/future meaning.
+
+The portfolio overview takes value, invested capital, gain/loss, return and inflation-adjusted
+value from one selected historical snapshot when available, with its valuation date. Current
+holdings remain a separately labelled table. Without a snapshot, current totals are used and
+inflation-adjusted value is unavailable. Allocation-only exports skip snapshots and dividends.
+
+Annual client PIT is included only for an explicit calendar-year report whose `taxProfile.taxYear`
+matches. The frontend requires that year to be the live profile year or have its own saved
+snapshot, and uses the frozen display calculation when present. A missing historical profile is
+never replaced by a relabelled live profile. Partial, rolling and YTD reports omit annual PIT. The
+rules section explains why annual PIT is omitted. PIT and statutory Belgian amounts remain EUR even when
+portfolio transaction totals use another report currency. This changes no tax-law calculation.
+
+`reportConcurrency.ts` admits two active reports and up to eight waiting requests before database
+fetches or HTML allocation. Further requests receive HTTP 503 with the standard error envelope;
+clients can retry later. A disconnected queued request is removed. An active disconnected request
+closes its owned Chromium page promptly if rendering has started. Its slot remains held until
+source/render work and page cleanup settle. Cancellation is checked before and after rendering;
+the route does not write a PDF or forward a cancellation error to a disconnected response. There
+is no short client timeout added. The PDF remains buffered before a successful binary response.
+See [[docs/adr/201-bounded-report-pipeline|ADR-201]].
+
 ### Performance
 
-- **Parallel data loading**: All sources fetched concurrently
-- **Graceful degradation**: Failed sources return null; sections skip silently. The exception is a
-  `RowContractError` (a database row that no longer matches its schema): the financial, portfolio
-  and tax data fetchers rethrow it, so the export fails with a 500 instead of rendering an empty
-  section over data the code no longer understands
-  ([[docs/adr/194-runtime-contracts-completion|ADR-194]])
+- **Parallel data loading**: Only sources needed by selected sections are fetched concurrently
+- **Failure semantics**: Financial, portfolio and tax reports reject a failed requested source,
+  including row-contract violations. Only deliberately skipped sources are null. Successful empty
+  results remain empty: zero tax/dividend totals can describe no activity, but never a failed query.
+  A failed snapshot request cannot fall back to current holdings.
 - **PDF buffering**: Entire report is generated before the route sends it to the client
 - **Typical size**: 2–10 MB depending on transaction volume
 

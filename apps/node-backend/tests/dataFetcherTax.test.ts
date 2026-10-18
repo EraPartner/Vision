@@ -323,3 +323,30 @@ it("surfaces a row contract mismatch instead of skipping the tax sections", asyn
     fetchTaxData("EUR", { kind: "year", year: 2024 }, {}),
   ).rejects.toBeInstanceOf(RowContractError);
 });
+
+it('includes annual PIT only for the same explicit report year', async () => {
+  query.mockResolvedValue(partial<PgQueryResult>({ rows: [] }));
+  loadCurrentRates.mockResolvedValue({ EUR: 1 });
+  const options = { taxProfile: { taxYear: 2024 }, precomputedPIT: { totalTax: 250 } };
+  const annual = await fetchTaxData('USD', { kind: 'year', year: 2024 }, options);
+  expect(annual.precomputedPIT).toEqual(options.precomputedPIT);
+  const wrongYear = await fetchTaxData('USD', { kind: 'year', year: 2023 }, options);
+  expect(wrongYear.precomputedPIT).toBeUndefined();
+  const partialPeriod = await fetchTaxData('USD', { kind: 'custom', from: '2024-02-12', to: '2024-03-08' }, options);
+  expect(partialPeriod.precomputedPIT).toBeUndefined();
+});
+
+
+it('rejects unavailable tax transactions instead of reporting zero tax', async () => {
+  query.mockRejectedValueOnce(new Error('tax source unavailable'));
+  await expect(fetchTaxData('EUR', { kind: 'year', year: 2024 })).rejects.toThrow('tax source unavailable');
+});
+
+it('keeps genuine empty tax activity as zero totals', async () => {
+  query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
+  loadCurrentRates.mockResolvedValue({ EUR: 1 });
+  const report = await fetchTaxData('EUR', { kind: 'year', year: 2024 });
+  expect(report.tobTotal).toBe(0);
+  expect(report.dividendWHTTotal).toBe(0);
+  expect(report.feesTotal).toBe(0);
+});

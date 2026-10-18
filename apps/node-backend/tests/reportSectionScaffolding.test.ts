@@ -737,7 +737,7 @@ describe("portfolio report view models", () => {
     const summary = buildPortfolioExecutiveSummaryData(
       partial<BreakdownRow[]>(investments),
       // Numeric values where the row type has pg numeric strings.
-      loose<SnapshotRow[]>([{ return_pct: 12, inflation_adjusted_value: 27 }]),
+      loose<SnapshotRow[]>([{ snapshot_date: new Date("2025-12-31T12:00:00Z"), value: "112", invested: "100", return_pct: 12, inflation_adjusted_value: 107 }]),
       partial<ArgOf<typeof buildPortfolioExecutiveSummaryData, 2>>({
         byMonth: [{ amount: 2 }, { amount: 3 }],
         byInvestment: [],
@@ -745,11 +745,12 @@ describe("portfolio report view models", () => {
     )!;
 
     expect(summary).toMatchObject({
-      totalValue: 28,
-      totalInvested: 21,
-      totalGainLoss: 7,
+      totalValue: 112,
+      totalInvested: 100,
+      totalGainLoss: 12,
+      valuationDate: "2025-12-31",
       returnPct: 12,
-      inflationAdjustedValue: 27,
+      inflationAdjustedValue: 107,
       totalDividends: 5,
       holdingsCount: 7,
     });

@@ -13,22 +13,35 @@ import {
   sectionPage,
   svgGroupedBarChart,
   signClass,
-} from '../sectionHelpers.ts';
-import { filterMonthsByPeriod } from '../dataFetcher.ts';
-import type { FinancialReportData, Period } from '../dataFetcher.ts';
+} from "../sectionHelpers.ts";
+import { filterMonthsByPeriod } from "../dataFetcher.ts";
+import type { FinancialReportData, Period } from "../dataFetcher.ts";
 
 export function renderCashflowTrend(
-  data: Pick<FinancialReportData, 'monthly'>,
+  data: Pick<FinancialReportData, "monthly">,
   { currency, period }: { currency: string; period: Period },
 ): string {
+  if (!data.monthly)
+    return emptySection({
+      title: "Cashflow Trend",
+      subtitle: "Monthly income vs. expenses",
+      heading: "Data unavailable",
+      message: "Monthly totals could not be loaded. Retry the report.",
+      pageBreak: true,
+    });
   const months = filterMonthsByPeriod(data.monthly?.months ?? [], period);
 
   if (!months.length) {
-    return emptySection({ title: 'Cashflow Trend', subtitle: 'Monthly income vs. expenses', message: 'No data for selected period.', pageBreak: true });
+    return emptySection({
+      title: "Cashflow Trend",
+      subtitle: "Monthly income vs. expenses",
+      message: "No data for selected period.",
+      pageBreak: true,
+    });
   }
 
   // Build chart groups — use all months in chronological order
-  const groups = months.map(m => ({
+  const groups = months.map((m) => ({
     label: fmtMonthLabel(m.year, m.month),
     income: m.total_income,
     spending: m.total_spending, // negative; svgGroupedBarChart uses Math.abs
@@ -37,10 +50,12 @@ export function renderCashflowTrend(
   const chartSvg = svgGroupedBarChart(groups);
 
   // Monthly table (most recent first)
-  const tableRows = [...months].reverse().map(m => {
-    const net = m.net_amount;
-    const sc = signClass(net);
-    return `
+  const tableRows = [...months]
+    .reverse()
+    .map((m) => {
+      const net = m.net_amount;
+      const sc = signClass(net);
+      return `
       <tr>
         <td>${escapeHtml(fmtMonthLabel(m.year, m.month))}</td>
         <td class="num pos">${escapeHtml(fmtCurrency(m.total_income, currency))}</td>
@@ -48,11 +63,12 @@ export function renderCashflowTrend(
         <td class="num ${sc}">${escapeHtml(fmtCurrency(net, currency))}</td>
         <td class="num">${m.transaction_count}</td>
       </tr>`;
-  }).join('');
+    })
+    .join("");
 
   return sectionPage({
-    title: 'Cashflow Trend',
-    subtitle: `Monthly income vs. expenses — ${String(months.length)} month${months.length !== 1 ? 's' : ''}`,
+    title: "Cashflow Trend",
+    subtitle: `Monthly income vs. expenses — ${String(months.length)} month${months.length !== 1 ? "s" : ""}`,
     pageBreak: true,
     content: `
       <div class="chart-wrap">${chartSvg}</div>

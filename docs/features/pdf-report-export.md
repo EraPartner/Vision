@@ -2,8 +2,8 @@
 title: PDF Report Export
 type: feature
 status: active
-date: 2026-10-08
-updated: 2026-10-08
+date: 2026-10-11
+updated: 2026-10-11
 tags:
   [
     feature,
@@ -486,7 +486,7 @@ The PDF report system is a three-layer architecture:
 
 1. **Report dispatcher** — `apps/node-backend/src/services/reports/index.ts` — routes by report type, assembles cover + content, invokes Puppeteer renderer
 2. **Modular sections** — `apps/node-backend/src/services/reports/sections/` — seven financial section renderers (executiveSummary, cashflowTrend, categoryBreakdown, topRecipients, bankBalances, plannedOutlook, rollingAverages)
-3. **Data fetcher** — `apps/node-backend/src/services/reports/dataFetcher.ts` — parallel Promise.allSettled loads all data sources; graceful degradation if any fails
+3. **Data fetcher** — `apps/node-backend/src/services/reports/dataFetcher.ts` — parallel selected-source loading; requested source failures abort the export
 4. **Theme integration** — `apps/node-backend/src/services/reports/themeCss.ts` + `sectionHelpers.js` — CSS custom properties, shared formatting utilities (currency, date, percentages), SVG chart builders
 
 The PDF contains:
@@ -646,8 +646,8 @@ const pdf = await renderHtmlToPdf(html, {
    - Ends the response with the raw PDF buffer
 
 3. **Data Fetcher** (`apps/node-backend/src/services/reports/dataFetcher.ts`)
-   - Parallel `Promise.allSettled` loads all data in parallel
-   - Gracefully handles failures (returns null for failed sources)
+   - Parallel `Promise.allSettled` loads only the sources needed by selected sections
+   - Requested source failures reject the export; unavailable monthly data is not zero activity
    - Wraps aggregation results + repository data
    - Exports `filterMonthsByPeriod()` utility for section renderers
    - The portfolio fetcher also builds the executive-summary and monthly-performance view models; section renderers only format those prepared values
@@ -879,10 +879,33 @@ The report fetches all data in parallel via `fetchFinancialData()`:
 | Rolling Averages  | `computeAverageVsCurrent()` → 6-month rolling trend                      |
 | Planned Outlook   | `infoRepository.getPlannedExpensesNextMonth()` → next-month transactions |
 
+## Report integrity and resource bounds
+
+Custom financial periods filter transactions by exact inclusive dates before monthly, category
+and recipient aggregation. Both exclusion types are applied by the backend before totals and
+rankings; filtered charts are no longer produced by deleting already-aggregated rows. The paired
+unfiltered chart covers the same dates. Current balances, rolling averages and future planned
+outlook retain their separate labelled time scopes.
+
+Portfolio overview KPIs share one historical snapshot and show its valuation date. Current top
+holdings are labelled separately. With no snapshot, the overview uses current totals and marks
+inflation-adjusted value unavailable. Including annual personal income tax (PIT) requires the
+selected year to have a live profile or saved snapshot and uses its frozen display calculation
+when present. The report includes PIT only for a matching explicit year and renders it in EUR.
+Partial-period reports omit annual PIT. The rules section explains the omission when a compatible
+annual profile or calculation is unavailable.
+
+Two complete report jobs can run at once, with eight queued before data fetching or HTML creation.
+Overflow returns HTTP 503; disconnected queued clients release their place. Active cancellation
+closes the owned Chromium page, while its slot remains held until rendering and cleanup settle.
+These are memory and
+concurrency bounds, not a measured elapsed-time improvement. See [[docs/api/reports|Reports API]]
+and [[docs/adr/201-bounded-report-pipeline|ADR-201]].
+
 ## Performance
 
-- **Parallel loading**: All 7 data sources fetched concurrently via Promise.allSettled
-- **Graceful degradation**: Any failed source logs warning; report continues with remaining data
+- **Parallel loading**: Selected sources fetch concurrently, including only needed portfolio datasets
+- **Source failures**: A requested source failure aborts the report rather than presenting incomplete totals
 - **Puppeteer rendering**: Chrome headless print-to-PDF (memory-efficient)
 - **No streaming chunking**: Entire PDF buffered; suitable for typical reports (< 20 pages)
 
@@ -960,7 +983,7 @@ remain recorded facts. See [[docs/adr/188-proved-in-kind-income-recognition|ADR-
 - **Modular sections**: Add new report section by creating a renderer in `sections/`, exporting it, and adding to `FINANCIAL_SECTION_RENDERERS` map
 - **Data separation**: Section renderers are pure functions; all state fetched once in `dataFetcher.js`
 - **Period filtering**: `filterMonthsByPeriod()` is reusable utility; applies to any months array
-- **Graceful degradation**: Promise.allSettled ensures one data source failure doesn't crash entire report
+- **Failure semantics**: Requested source failures stop the export; skipped sources remain null
 
 ## Related
 

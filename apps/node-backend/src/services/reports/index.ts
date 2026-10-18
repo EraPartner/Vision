@@ -1,3 +1,4 @@
+import { withReportSlot } from "./reportConcurrency.ts";
 /**
  * Report generation dispatcher.
  *
@@ -6,51 +7,51 @@
  * it to a PDF buffer returned to the HTTP route.
  */
 
-import { renderHtmlToPdf } from './puppeteerRenderer.ts';
-import { toAppDateString, toAppTz, APP_TIMEZONE } from '../../lib/timezone.ts';
-import { buildThemeCss } from './themeCss.ts';
-import { escapeHtml, SECTION_CSS } from './sectionHelpers.ts';
-import { fetchFinancialData } from './dataFetcher.ts';
-import { fetchPortfolioData } from './dataFetcherPortfolio.ts';
-import { fetchTaxData } from './dataFetcherTax.ts';
-import { renderExecutiveSummary } from './sections/executiveSummary.ts';
-import { renderCashflowTrend } from './sections/cashflowTrend.ts';
-import { renderCategoryBreakdown } from './sections/categoryBreakdown.ts';
-import { renderTopRecipients } from './sections/topRecipients.ts';
-import { renderBankBalances } from './sections/bankBalances.ts';
-import { renderPlannedOutlook } from './sections/plannedOutlook.ts';
-import { renderRollingAverages } from './sections/rollingAverages.ts';
-import { renderPortfolioExecutiveSummary } from './sections/portfolioExecutiveSummary.ts';
-import { renderPortfolioAllocation } from './sections/portfolioAllocation.ts';
-import { renderTopHoldings } from './sections/topHoldings.ts';
-import { renderPerformanceTrend } from './sections/performanceTrend.ts';
-import { renderAssetClassDetail } from './sections/assetClassDetail.ts';
-import { renderDividendIncome } from './sections/dividendIncome.ts';
-import { renderTaxExecutiveSummary } from './sections/taxExecutiveSummary.ts';
-import { renderTaxTypeBreakdown } from './sections/taxTypeBreakdown.ts';
-import { renderFeeBreakdown } from './sections/feeBreakdown.ts';
-import { renderTaxByAssetClass } from './sections/taxByAssetClass.ts';
-import { renderTaxMonthlyTrend } from './sections/taxMonthlyTrend.ts';
-import { renderTopInvestmentsByCost } from './sections/topInvestmentsByCost.ts';
-import { renderBelgianRulesSummary } from './sections/belgianRulesSummary.ts';
+import { renderHtmlToPdf } from "./puppeteerRenderer.ts";
+import { toAppDateString, toAppTz, APP_TIMEZONE } from "../../lib/timezone.ts";
+import { buildThemeCss } from "./themeCss.ts";
+import { escapeHtml, SECTION_CSS } from "./sectionHelpers.ts";
+import { fetchFinancialData } from "./dataFetcher.ts";
+import { fetchPortfolioData } from "./dataFetcherPortfolio.ts";
+import { fetchTaxData } from "./dataFetcherTax.ts";
+import { renderExecutiveSummary } from "./sections/executiveSummary.ts";
+import { renderCashflowTrend } from "./sections/cashflowTrend.ts";
+import { renderCategoryBreakdown } from "./sections/categoryBreakdown.ts";
+import { renderTopRecipients } from "./sections/topRecipients.ts";
+import { renderBankBalances } from "./sections/bankBalances.ts";
+import { renderPlannedOutlook } from "./sections/plannedOutlook.ts";
+import { renderRollingAverages } from "./sections/rollingAverages.ts";
+import { renderPortfolioExecutiveSummary } from "./sections/portfolioExecutiveSummary.ts";
+import { renderPortfolioAllocation } from "./sections/portfolioAllocation.ts";
+import { renderTopHoldings } from "./sections/topHoldings.ts";
+import { renderPerformanceTrend } from "./sections/performanceTrend.ts";
+import { renderAssetClassDetail } from "./sections/assetClassDetail.ts";
+import { renderDividendIncome } from "./sections/dividendIncome.ts";
+import { renderTaxExecutiveSummary } from "./sections/taxExecutiveSummary.ts";
+import { renderTaxTypeBreakdown } from "./sections/taxTypeBreakdown.ts";
+import { renderFeeBreakdown } from "./sections/feeBreakdown.ts";
+import { renderTaxByAssetClass } from "./sections/taxByAssetClass.ts";
+import { renderTaxMonthlyTrend } from "./sections/taxMonthlyTrend.ts";
+import { renderTopInvestmentsByCost } from "./sections/topInvestmentsByCost.ts";
+import { renderBelgianRulesSummary } from "./sections/belgianRulesSummary.ts";
 import {
   FINANCIAL_SECTION_CATALOG,
   PORTFOLIO_SECTION_CATALOG,
   TAX_SECTION_CATALOG,
-} from './sectionCatalog.ts';
-import investmentRepository from '../../repositories/investmentRepository.ts';
-import type { FinancialReportData, Period } from './dataFetcher.ts';
-import type { PortfolioReportData } from './dataFetcherPortfolio.ts';
+} from "./sectionCatalog.ts";
+import investmentRepository from "../../repositories/investmentRepository.ts";
+import type { FinancialReportData, Period } from "./dataFetcher.ts";
+import type { PortfolioReportData } from "./dataFetcherPortfolio.ts";
 import type {
   PrecomputedPIT,
   TaxProfile,
   TaxReportData,
-} from './dataFetcherTax.ts';
-import type { SectionEntry } from './sectionCatalog.ts';
+} from "./dataFetcherTax.ts";
+import type { SectionEntry } from "./sectionCatalog.ts";
 
 export type { Period, PrecomputedPIT, TaxProfile };
 
-export type PeriodKind = Period['kind'];
+export type PeriodKind = Period["kind"];
 
 export type ThemeTokens = {
   primary?: string | undefined;
@@ -61,13 +62,20 @@ export type ThemeTokens = {
   text?: string | undefined;
   muted?: string | undefined;
   border?: string | undefined;
-  chart1?: string | undefined; chart2?: string | undefined; chart3?: string | undefined; chart4?: string | undefined;
-  chart5?: string | undefined; chart6?: string | undefined; chart7?: string | undefined; chart8?: string | undefined;
-  mode?: 'light' | 'dark' | undefined;
+  chart1?: string | undefined;
+  chart2?: string | undefined;
+  chart3?: string | undefined;
+  chart4?: string | undefined;
+  chart5?: string | undefined;
+  chart6?: string | undefined;
+  chart7?: string | undefined;
+  chart8?: string | undefined;
+  mode?: "light" | "dark" | undefined;
 };
 
 export type GenerateReportOpts = {
-  type: 'financial' | 'portfolio' | 'tax';
+  type: "financial" | "portfolio" | "tax";
+  signal?: AbortSignal;
   currency: string;
   period: Period;
   sections: string[];
@@ -79,34 +87,40 @@ export type GenerateReportOpts = {
 };
 
 const REPORT_TITLES: Record<string, string> = {
-  financial: 'Financial Report',
-  portfolio: 'Portfolio Report',
-  tax: 'Tax Report',
+  financial: "Financial Report",
+  portfolio: "Portfolio Report",
+  tax: "Tax Report",
 };
 
 const REPORT_SUBTITLES: Record<string, string> = {
-  financial: 'Transactions, cashflow, categories & recipients',
-  portfolio: 'Holdings, allocation & performance',
-  tax: 'Tax-year breakdown & deductible transactions',
+  financial: "Transactions, cashflow, categories & recipients",
+  portfolio: "Holdings, allocation & performance",
+  tax: "Tax-year breakdown & deductible transactions",
 };
 
 /** Format a period descriptor into a human-readable string. */
 function formatPeriod(period: Period): string {
   switch (period.kind) {
-    case 'ytd':
+    case "ytd":
       return `Year to Date (${toAppTz(new Date()).year})`;
-    case 'rolling':
-      return `Last ${period.months} month${period.months === 1 ? '' : 's'}`;
-    case 'custom': {
+    case "rolling":
+      return `Last ${period.months} month${period.months === 1 ? "" : "s"}`;
+    case "custom": {
       // `from`/`to` are calendar dates; new Date('YYYY-MM-DD') is UTC midnight,
       // so format in UTC or a zone west of UTC shows the previous day.
-      const fmt = (d: string) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+      const fmt = (d: string) =>
+        new Date(d).toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+          timeZone: "UTC",
+        });
       return `${fmt(period.from)} – ${fmt(period.to)}`;
     }
-    case 'year':
+    case "year":
       return `${period.year}`;
     default:
-      return 'All time';
+      return "All time";
   }
 }
 
@@ -296,10 +310,10 @@ function buildBaseCss(): string {
  * `.pageNumber` / `.totalPages` spans that Puppeteer populates automatically.
  */
 function buildFooterTemplate(theme: ThemeTokens): string {
-  const primary = theme.primary ? `hsl(${theme.primary})` : '#5b7fa6';
-  const muted   = theme.muted   ? `hsl(${theme.muted})`   : '#8a939f';
-  const border  = theme.border  ? `hsl(${theme.border})`  : '#d1d5db';
-  const surface = theme.surface ? `hsl(${theme.surface})` : '#ffffff';
+  const primary = theme.primary ? `hsl(${theme.primary})` : "#5b7fa6";
+  const muted = theme.muted ? `hsl(${theme.muted})` : "#8a939f";
+  const border = theme.border ? `hsl(${theme.border})` : "#d1d5db";
+  const surface = theme.surface ? `hsl(${theme.surface})` : "#ffffff";
 
   // Puppeteer's footer iframe wraps the template in a default <html><body>
   // with an 8 px body margin — zero it so the footer div fills the iframe
@@ -353,36 +367,53 @@ function buildCoverHtml({
   excludedRecipientIds?: number[];
   pricesAsOf?: Date | string | null;
 }): string {
-  const title = REPORT_TITLES[type] ?? 'Report';
-  const subtitle = REPORT_SUBTITLES[type] ?? '';
+  const title = REPORT_TITLES[type] ?? "Report";
+  const subtitle = REPORT_SUBTITLES[type] ?? "";
   const periodStr = formatPeriod(period);
-  const dateStr = new Date(generatedAt).toLocaleDateString('en-US', {
-    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: APP_TIMEZONE,
+  const dateStr = new Date(generatedAt).toLocaleDateString("en-US", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: APP_TIMEZONE,
   });
 
   const filterParts: string[] = [];
-  if (excludedCategoryIds.length > 0) filterParts.push(`${excludedCategoryIds.length} categor${excludedCategoryIds.length === 1 ? 'y' : 'ies'} excluded`);
-  if (excludedRecipientIds.length > 0) filterParts.push(`${excludedRecipientIds.length} recipient${excludedRecipientIds.length === 1 ? '' : 's'} excluded`);
-  const filtersRow = filterParts.length > 0
-    ? `<div class="meta-row">
+  if (excludedCategoryIds.length > 0)
+    filterParts.push(
+      `${excludedCategoryIds.length} categor${excludedCategoryIds.length === 1 ? "y" : "ies"} excluded`,
+    );
+  if (excludedRecipientIds.length > 0)
+    filterParts.push(
+      `${excludedRecipientIds.length} recipient${excludedRecipientIds.length === 1 ? "" : "s"} excluded`,
+    );
+  const filtersRow =
+    filterParts.length > 0
+      ? `<div class="meta-row">
             <span class="meta-label">Filters</span>
-            <span class="meta-value">${escapeHtml(filterParts.join(', '))}</span>
+            <span class="meta-value">${escapeHtml(filterParts.join(", "))}</span>
           </div>`
-    : '';
+      : "";
 
-  let pricesRow = '';
+  let pricesRow = "";
   if (pricesAsOf) {
     const pricesAsOfDate = new Date(pricesAsOf);
-    const pricesAsOfStr = pricesAsOfDate.toLocaleDateString('en-US', {
-      day: 'numeric', month: 'long', year: 'numeric', timeZone: APP_TIMEZONE,
+    const pricesAsOfStr = pricesAsOfDate.toLocaleDateString("en-US", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      timeZone: APP_TIMEZONE,
     });
-    const ageDays = Math.floor((new Date(generatedAt).getTime() - pricesAsOfDate.getTime()) / (24 * 60 * 60 * 1000));
-    const staleSuffix = ageDays > 1 ? ` (${ageDays} days old)` : '';
+    const ageDays = Math.floor(
+      (new Date(generatedAt).getTime() - pricesAsOfDate.getTime()) /
+        (24 * 60 * 60 * 1000),
+    );
+    const staleSuffix = ageDays > 1 ? ` (${ageDays} days old)` : "";
     pricesRow = `<div class="meta-row">
             <span class="meta-label">Prices as of</span>
             <span class="meta-value">${escapeHtml(pricesAsOfStr + staleSuffix)}</span>
           </div>`;
-  } else if (type === 'portfolio' || type === 'tax') {
+  } else if (type === "portfolio" || type === "tax") {
     pricesRow = `<div class="meta-row">
             <span class="meta-label">Prices as of</span>
             <span class="meta-value">No live prices recorded</span>
@@ -429,7 +460,10 @@ export type SectionContext = { currency: string; period: Period };
  * A section renderer for one report type's data payload. Defaults to
  * `unknown` data for code that only routes renderers without calling them.
  */
-export type SectionRenderer<D = unknown> = (data: D, ctx: SectionContext) => string;
+export type SectionRenderer<D = unknown> = (
+  data: D,
+  ctx: SectionContext,
+) => string;
 
 /*
  * id -> renderer, per report type. sectionCatalog.js owns the canonical
@@ -441,33 +475,39 @@ export type SectionRenderer<D = unknown> = (data: D, ctx: SectionContext) => str
  * reorder a section, edit its sectionCatalog.js array and this map together.
  */
 
-const FINANCIAL_SECTION_RENDERERS: Record<string, SectionRenderer<FinancialReportData>> = {
-  executiveSummary:  renderExecutiveSummary,
-  cashflowTrend:     renderCashflowTrend,
+const FINANCIAL_SECTION_RENDERERS: Record<
+  string,
+  SectionRenderer<FinancialReportData>
+> = {
+  executiveSummary: renderExecutiveSummary,
+  cashflowTrend: renderCashflowTrend,
   categoryBreakdown: renderCategoryBreakdown,
-  topRecipients:     renderTopRecipients,
-  bankBalances:      renderBankBalances,
-  rollingAverages:   renderRollingAverages,
-  plannedOutlook:    renderPlannedOutlook,
+  topRecipients: renderTopRecipients,
+  bankBalances: renderBankBalances,
+  rollingAverages: renderRollingAverages,
+  plannedOutlook: renderPlannedOutlook,
 };
 
-const PORTFOLIO_SECTION_RENDERERS: Record<string, SectionRenderer<PortfolioReportData>> = {
+const PORTFOLIO_SECTION_RENDERERS: Record<
+  string,
+  SectionRenderer<PortfolioReportData>
+> = {
   portfolioExecutiveSummary: renderPortfolioExecutiveSummary,
-  portfolioAllocation:       renderPortfolioAllocation,
-  topHoldings:               renderTopHoldings,
-  performanceTrend:          renderPerformanceTrend,
-  assetClassDetail:          renderAssetClassDetail,
-  dividendIncome:            renderDividendIncome,
+  portfolioAllocation: renderPortfolioAllocation,
+  topHoldings: renderTopHoldings,
+  performanceTrend: renderPerformanceTrend,
+  assetClassDetail: renderAssetClassDetail,
+  dividendIncome: renderDividendIncome,
 };
 
 const TAX_SECTION_RENDERERS: Record<string, SectionRenderer<TaxReportData>> = {
-  taxExecutiveSummary:  renderTaxExecutiveSummary,
-  taxTypeBreakdown:     renderTaxTypeBreakdown,
-  taxByAssetClass:      renderTaxByAssetClass,
-  taxMonthlyTrend:      renderTaxMonthlyTrend,
+  taxExecutiveSummary: renderTaxExecutiveSummary,
+  taxTypeBreakdown: renderTaxTypeBreakdown,
+  taxByAssetClass: renderTaxByAssetClass,
+  taxMonthlyTrend: renderTaxMonthlyTrend,
   topInvestmentsByCost: renderTopInvestmentsByCost,
-  feeBreakdown:         renderFeeBreakdown,
-  belgianRulesSummary:  renderBelgianRulesSummary,
+  feeBreakdown: renderFeeBreakdown,
+  belgianRulesSummary: renderBelgianRulesSummary,
 };
 
 /**
@@ -485,15 +525,35 @@ function reconcile(
 ): string[] {
   const catalogIds = catalog.map((s) => s.id);
   const missing = catalogIds.filter((id) => !(id in renderers));
-  const orphan = Object.keys(renderers).filter((id) => !catalogIds.includes(id));
-  if (missing.length) throw new Error(`${label} report sections without a renderer: ${missing.join(', ')}`);
-  if (orphan.length) throw new Error(`${label} report renderers without a catalog entry: ${orphan.join(', ')}`);
+  const orphan = Object.keys(renderers).filter(
+    (id) => !catalogIds.includes(id),
+  );
+  if (missing.length)
+    throw new Error(
+      `${label} report sections without a renderer: ${missing.join(", ")}`,
+    );
+  if (orphan.length)
+    throw new Error(
+      `${label} report renderers without a catalog entry: ${orphan.join(", ")}`,
+    );
   return catalog.filter((s) => s.default).map((s) => s.id);
 }
 
-const DEFAULT_FINANCIAL_SECTIONS = reconcile(FINANCIAL_SECTION_CATALOG, FINANCIAL_SECTION_RENDERERS, 'financial');
-const DEFAULT_PORTFOLIO_SECTIONS = reconcile(PORTFOLIO_SECTION_CATALOG, PORTFOLIO_SECTION_RENDERERS, 'portfolio');
-const DEFAULT_TAX_SECTIONS       = reconcile(TAX_SECTION_CATALOG, TAX_SECTION_RENDERERS, 'tax');
+const DEFAULT_FINANCIAL_SECTIONS = reconcile(
+  FINANCIAL_SECTION_CATALOG,
+  FINANCIAL_SECTION_RENDERERS,
+  "financial",
+);
+const DEFAULT_PORTFOLIO_SECTIONS = reconcile(
+  PORTFOLIO_SECTION_CATALOG,
+  PORTFOLIO_SECTION_RENDERERS,
+  "portfolio",
+);
+const DEFAULT_TAX_SECTIONS = reconcile(
+  TAX_SECTION_CATALOG,
+  TAX_SECTION_RENDERERS,
+  "tax",
+);
 
 /**
  * Shared report-body builder. Picks the requested sections (or the type's
@@ -508,7 +568,7 @@ async function buildBody<D>({
   renderers,
   defaultSections,
   fetchData,
-  separator = '\n',
+  separator = "\n",
 }: {
   currency: string;
   period: Period;
@@ -561,7 +621,13 @@ function buildFinancialBody({
     sections,
     renderers: FINANCIAL_SECTION_RENDERERS,
     defaultSections: DEFAULT_FINANCIAL_SECTIONS,
-    fetchData: (validSections) => fetchFinancialData(currency, { excludedCategoryIds, excludedRecipientIds, sections: validSections }),
+    fetchData: (validSections) =>
+      fetchFinancialData(currency, {
+        period,
+        excludedCategoryIds,
+        excludedRecipientIds,
+        sections: validSections,
+      }),
   });
 }
 
@@ -580,7 +646,8 @@ function buildPortfolioBody({
     sections,
     renderers: PORTFOLIO_SECTION_RENDERERS,
     defaultSections: DEFAULT_PORTFOLIO_SECTIONS,
-    fetchData: () => fetchPortfolioData(currency, period),
+    fetchData: (validSections) =>
+      fetchPortfolioData(currency, period, { sections: validSections }),
     separator: '\n<div class="page-break"></div>\n',
   });
 }
@@ -604,7 +671,8 @@ function buildTaxBody({
     sections,
     renderers: TAX_SECTION_RENDERERS,
     defaultSections: DEFAULT_TAX_SECTIONS,
-    fetchData: () => fetchTaxData(currency, period, { taxProfile, precomputedPIT }),
+    fetchData: () =>
+      fetchTaxData(currency, period, { taxProfile, precomputedPIT }),
     separator: '\n<div class="page-break"></div>\n',
   });
 }
@@ -619,10 +687,10 @@ function buildDocument({
   themeCss: string;
   baseCss: string;
   body: string;
-  mode: 'light' | 'dark';
+  mode: "light" | "dark";
 }): string {
   return `<!DOCTYPE html>
-<html class="${mode === 'dark' ? 'dark' : ''}">
+<html class="${mode === "dark" ? "dark" : ""}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -638,7 +706,8 @@ ${body}
 }
 
 /** Generate a PDF report for the HTTP route to send. */
-export async function generateReport({
+async function generateReportInner({
+  signal,
   type,
   currency,
   period,
@@ -650,22 +719,45 @@ export async function generateReport({
   precomputedPIT,
 }: GenerateReportOpts): Promise<{ pdf: Buffer; filename: string }> {
   const generatedAt = new Date().toISOString();
-  const mode = theme.mode ?? 'light';
+  const mode = theme.mode ?? "light";
 
   const themeCss = buildThemeCss(theme);
   const baseCss = buildBaseCss();
-  const pricesAsOf = (type === 'portfolio' || type === 'tax')
-    ? await investmentRepository.getLatestPriceUpdatedAt().catch((): Date | null => null)
-    : null;
-  const coverHtml = buildCoverHtml({ type, currency, period, generatedAt, excludedCategoryIds, excludedRecipientIds, pricesAsOf });
+  const pricesAsOf =
+    type === "portfolio" || type === "tax"
+      ? await investmentRepository
+          .getLatestPriceUpdatedAt()
+          .catch((): Date | null => null)
+      : null;
+  const coverHtml = buildCoverHtml({
+    type,
+    currency,
+    period,
+    generatedAt,
+    excludedCategoryIds,
+    excludedRecipientIds,
+    pricesAsOf,
+  });
 
   let bodyHtml: string;
-  if (type === 'financial') {
-    bodyHtml = await buildFinancialBody({ currency, period, sections, excludedCategoryIds, excludedRecipientIds });
-  } else if (type === 'portfolio') {
+  if (type === "financial") {
+    bodyHtml = await buildFinancialBody({
+      currency,
+      period,
+      sections,
+      excludedCategoryIds,
+      excludedRecipientIds,
+    });
+  } else if (type === "portfolio") {
     bodyHtml = await buildPortfolioBody({ currency, period, sections });
-  } else if (type === 'tax') {
-    bodyHtml = await buildTaxBody({ currency, period, sections, taxProfile, precomputedPIT });
+  } else if (type === "tax") {
+    bodyHtml = await buildTaxBody({
+      currency,
+      period,
+      sections,
+      taxProfile,
+      precomputedPIT,
+    });
   } else {
     bodyHtml = `
       <div class="page placeholder-notice">
@@ -674,13 +766,22 @@ export async function generateReport({
       </div>`;
   }
 
-  const html = buildDocument({ themeCss, baseCss, body: coverHtml + '\n' + bodyHtml, mode });
+  signal?.throwIfAborted();
+  const html = buildDocument({
+    themeCss,
+    baseCss,
+    body: coverHtml + "\n" + bodyHtml,
+    mode,
+  });
 
   const footerTemplate = buildFooterTemplate(theme);
   const pdf = await renderHtmlToPdf(html, {
+    ...(signal ? { signal } : {}),
     footerTemplate,
-    margin: { top: '0', right: '0', bottom: '28px', left: '0' },
+    margin: { top: "0", right: "0", bottom: "28px", left: "0" },
   });
+
+  signal?.throwIfAborted();
 
   // App-timezone date for the filename — the UTC slice named a report
   // generated shortly after local midnight with yesterday's date.
@@ -688,4 +789,10 @@ export async function generateReport({
   const filename = `vision-${type}-${date}.pdf`;
 
   return { pdf, filename };
+}
+
+export function generateReport(
+  options: GenerateReportOpts,
+): Promise<{ pdf: Buffer; filename: string }> {
+  return withReportSlot(() => generateReportInner(options), options.signal);
 }

@@ -7,6 +7,8 @@ import { ExportDialog } from "@/features/reports/ExportDialog";
 import { http } from "msw";
 import { server } from "@/test/msw/server";
 import { ok, settingsWithBaselines } from "@/test/msw/handlers";
+import { DEFAULT_BELGIAN_TAX_PROFILE } from "@/stores/belgianTaxStore";
+import { computeBelgianPIT } from "@/lib/belgianTax";
 import * as reportsApi from "@/lib/api/reports";
 
 // jsdom does not implement these blob URL APIs
@@ -286,4 +288,30 @@ describe("ExportDialog", () => {
             );
         },
     );
+});
+
+
+it.each([false, true])('exports historical PIT only from an existing year profile (saved=%s), preserving frozen totals', async (saved) => {
+    const live = { ...DEFAULT_BELGIAN_TAX_PROFILE, taxYear: 2026, profileConfigured: true };
+    const historical = { ...live, taxYear: 2024 };
+    const frozen = { ...computeBelgianPIT(historical), totalPIT: 12345 };
+    server.use(http.get('http://localhost:3002/api/settings', () => ok(settingsWithBaselines({
+        belgian_tax_profile: live,
+        belgian_tax_profile_snapshots_v1: saved ? { 2024: historical } : {},
+        belgian_tax_profile_snapshot_meta_v1: saved ? { 2024: { frozenCalculation: frozen } } : {},
+    }))));
+    const user = await openDialog();
+    await user.click(screen.getByRole('radio', { name: /^tax$/i }));
+    await user.click(screen.getByRole('radio', { name: /full year|specific year/i }));
+    fireEvent.change(screen.getByLabelText(/^year$/i), { target: { value: '2024' } });
+    await user.click(screen.getByRole('button', { name: /download pdf/i }));
+    await waitFor(() => expect(reportsApi.downloadTaxReport).toHaveBeenCalled());
+    const options = vi.mocked(reportsApi.downloadTaxReport).mock.calls[0]?.[0];
+    if (saved) {
+        expect(options?.taxProfile?.taxYear).toBe(2024);
+        expect(options?.precomputedPIT?.totalTax).toBe(12345);
+    } else {
+        expect(options?.taxProfile).toBeUndefined();
+        expect(options?.precomputedPIT).toBeUndefined();
+    }
 });

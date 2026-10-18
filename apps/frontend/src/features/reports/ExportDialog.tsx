@@ -131,9 +131,17 @@ export function ExportDialog({
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
     const { settings: dashSettings } = useSettings();
-    const { profile: taxProfile, calculation: pitCalc } = useBelgianTaxProfile(
-        (state) => ({ profile: state.profile, calculation: state.calculation }),
-    );
+    const {
+        liveTaxYear,
+        snapshotExistsForYear,
+        profileForYear,
+        displayCalculationForYear,
+    } = useBelgianTaxProfile((state) => ({
+        profileForYear: state.profileForYear,
+        liveTaxYear: state.profile.taxYear,
+        snapshotExistsForYear: state.snapshotExistsForYear,
+        displayCalculationForYear: state.displayCalculationForYear,
+    }));
     const defaultCurrency = appSettings.defaultCurrency || "EUR";
     const currentYear = new Date().getFullYear();
 
@@ -235,36 +243,49 @@ export function ExportDialog({
             } else if (reportType === "portfolio") {
                 await downloadPortfolioReport(baseOpts);
             } else {
-                const resolvedTaxProfile = taxProfile.profileConfigured
+                const hasYearProfile =
+                    period.kind === "year" &&
+                    (period.year === liveTaxYear ||
+                        snapshotExistsForYear(period.year));
+                const taxProfile =
+                    period.kind === "year" && hasYearProfile
+                        ? profileForYear(period.year)
+                        : undefined;
+                const pitCalc =
+                    period.kind === "year" && hasYearProfile
+                        ? displayCalculationForYear(period.year)
+                        : undefined;
+                const resolvedTaxProfile = taxProfile?.profileConfigured
                     ? {
                           filingStatus: taxProfile.employmentType,
                           region: taxProfile.region,
                           taxYear: taxProfile.taxYear,
                       }
                     : undefined;
-                const resolvedPIT = taxProfile.profileConfigured
-                    ? {
-                          taxableIncome: pitCalc.taxableIncome,
-                          totalTax: pitCalc.totalPIT,
-                          brackets: pitCalc.breakdown
-                              .filter((e) => e.bracket)
-                              // Translate the bracket label here rather than shipping pit.ts's
-                              // English one into the report: reuses the same
-                              // `tax.pit.row.bracket{n}` keys PitBreakdownCard renders on
-                              // screen, so the exported report matches the UI in both
-                              // languages. Rates are identical across tax years (25/40/45/50),
-                              // only the boundaries move, so the fixed-rate key text is safe.
-                              .map((e) => ({
-                                  label: e.bracketNumber
-                                      ? t(
-                                            `tax.pit.row.bracket${e.bracketNumber}`,
-                                        )
-                                      : e.label,
-                                  rate: e.rate,
-                                  taxAmount: e.amount,
-                              })),
-                      }
-                    : undefined;
+                const resolvedPIT =
+                    taxProfile?.profileConfigured && pitCalc
+                        ? {
+                              taxableIncome: pitCalc.taxableIncome,
+                              totalTax: pitCalc.totalPIT,
+                              brackets: pitCalc.breakdown
+                                  .filter((e) => e.bracket)
+                                  // Translate the bracket label here rather than shipping pit.ts's
+                                  // English one into the report: reuses the same
+                                  // `tax.pit.row.bracket{n}` keys PitBreakdownCard renders on
+                                  // screen, so the exported report matches the UI in both
+                                  // languages. Rates are identical across tax years (25/40/45/50),
+                                  // only the boundaries move, so the fixed-rate key text is safe.
+                                  .map((e) => ({
+                                      label: e.bracketNumber
+                                          ? t(
+                                                `tax.pit.row.bracket${e.bracketNumber}`,
+                                            )
+                                          : e.label,
+                                      rate: e.rate,
+                                      taxAmount: e.amount,
+                                  })),
+                          }
+                        : undefined;
                 await downloadTaxReport({
                     ...baseOpts,
                     taxProfile: resolvedTaxProfile,

@@ -1,12 +1,13 @@
+import { periodToDateRange } from "./reportPeriod.ts";
+export { periodToDateRange } from "./reportPeriod.ts";
 /**
  * Portfolio data fetcher for PDF report generation.
  *
- * Fetches all data sources in parallel using Promise.allSettled so a single
- * failing source does not abort the entire report. Each source returns null
- * on failure; section renderers handle null gracefully.
+ * Fetches requested data sources in parallel. A requested source failure aborts
+ * the export; empty successful results retain their ordinary no-data meaning.
  */
 
-import { queryRows, RowContractError } from "../../database/rowContracts.ts";
+import { queryRows } from "../../database/rowContracts.ts";
 import { dividendTxRowSchema } from "../../database/rows/info.ts";
 import {
   getSnapshots,
@@ -17,15 +18,16 @@ import {
   loadCurrentRates,
   getHistoricalRateIndex,
 } from "../currency/currencyConversionService.ts";
-import { todayAppDateString, firstOfMonthYmd } from "../../lib/timezone.ts";
+import { toAppDateString } from "../../lib/timezone.ts";
 import { logger } from "../../config/logger.ts";
 import { findRateOnOrBeforeInIndex } from "../currency/rateFetcher.ts";
-import { addAll, toNumber } from "../../lib/money.ts";
+import { addAll, toNumber, toDecimal } from "../../lib/money.ts";
 
-export type Period = { kind: 'ytd' }
-  | { kind: 'rolling'; months: number }
-  | { kind: 'custom'; from: string; to: string }
-  | { kind: 'year'; year: number };
+export type Period =
+  | { kind: "ytd" }
+  | { kind: "rolling"; months: number }
+  | { kind: "custom"; from: string; to: string }
+  | { kind: "year"; year: number };
 
 /** A row of `getSnapshots`' resolved array (portfolioPerformanceSnapshotService.js). */
 export type SnapshotRow = Awaited<ReturnType<typeof getSnapshots>>[number];
@@ -37,20 +39,35 @@ export type SnapshotRow = Awaited<ReturnType<typeof getSnapshots>>[number];
  * Compatibility aliases are normalized once at the fetch boundary so section
  * renderers consume one camelCase shape.
  */
-export type BreakdownRow = Awaited<ReturnType<typeof getBreakdownSummary>>[number];
+export type BreakdownRow = Awaited<
+  ReturnType<typeof getBreakdownSummary>
+>[number];
 
 export type DividendMonthRow = { year: number; month: number; amount: number };
 
 export type DividendInvestmentRow = {
-  investmentId: number; name: string; symbol: string | null; assetClass: string;
+  investmentId: number;
+  name: string;
+  symbol: string | null;
+  assetClass: string;
   total: number;
 };
 
-export type DividendData = { byMonth: DividendMonthRow[]; byInvestment: DividendInvestmentRow[]; totalInKindIncome: number; inKindIncomeCount: number };
+export type DividendData = {
+  byMonth: DividendMonthRow[];
+  byInvestment: DividendInvestmentRow[];
+  totalInKindIncome: number;
+  inKindIncomeCount: number;
+};
 
 export type PerformanceTrendPoint = {
-  year: number; month: number; value: number; invested: number;
-  inflationAdjustedValue: number; gainLoss: number; returnPct: number;
+  year: number;
+  month: number;
+  value: number;
+  invested: number;
+  inflationAdjustedValue: number;
+  gainLoss: number;
+  returnPct: number;
 };
 
 export type PerformanceTrendData = {
@@ -63,7 +80,8 @@ export type PortfolioExecutiveSummaryData = {
   totalInvested: number;
   totalGainLoss: number;
   returnPct: number;
-  inflationAdjustedValue: number;
+  inflationAdjustedValue: number | null;
+  valuationDate: string | null;
   totalDividends: number;
   totalInKindIncome: number;
   inKindIncomeCount: number;
@@ -85,20 +103,14 @@ export type PortfolioReportData = {
   currency: string;
 };
 
-
-/**
- * Unwrap a settled Promise result; log and return null on rejection. A row
- * contract mismatch is rethrown instead: the report must not silently render
- * an empty section over data the code no longer understands (ADR-193).
- */
-function unwrap<T>(result: PromiseSettledResult<T>, label: string): T | null {
+/** Requested source failures abort export; only deliberately skipped sources are null. */
+function unwrap<T>(result: PromiseSettledResult<T>, label: string): T {
   if (result.status === "fulfilled") return result.value;
-  if (result.reason instanceof RowContractError) throw result.reason;
   logger.warn(
-    `[dataFetcherPortfolio] ${label} failed — section will be skipped`,
+    `[dataFetcherPortfolio] ${label} failed — report generation stopped`,
     { reason: result.reason?.message },
   );
-  return null;
+  throw result.reason;
 }
 
 /** Normalize a portfolio breakdown row at the report boundary. */
@@ -156,19 +168,27 @@ function buildPortfolioExecutiveSummaryData(
 ): PortfolioExecutiveSummaryData | null {
   if (!breakdown?.length && !snapshots?.length) return null;
 
-  const totalValue = toNumber(
-    addAll((breakdown ?? []).map((investment) => investment.currentValue ?? 0)),
-  );
-  const totalInvested = toNumber(
-    addAll(
-      (breakdown ?? []).map((investment) => investment.totalInvested ?? 0),
-    ),
-  );
-  const totalGainLoss = toNumber(
-    addAll((breakdown ?? []).map((investment) => investment.gainLoss ?? 0)),
-  );
-
   const latest = snapshots?.length ? snapshots[snapshots.length - 1] : null;
+  const totalValue = latest
+    ? Number(latest.value)
+    : toNumber(
+        addAll(
+          (breakdown ?? []).map((investment) => investment.currentValue ?? 0),
+        ),
+      );
+  const totalInvested = latest
+    ? Number(latest.invested)
+    : toNumber(
+        addAll(
+          (breakdown ?? []).map((investment) => investment.totalInvested ?? 0),
+        ),
+      );
+  const totalGainLoss = latest
+    ? toDecimal(totalValue).minus(totalInvested).toNumber()
+    : toNumber(
+        addAll((breakdown ?? []).map((investment) => investment.gainLoss ?? 0)),
+      );
+
   const returnPct = latest
     ? Number(latest.return_pct ?? 0)
     : totalInvested > 0
@@ -182,7 +202,10 @@ function buildPortfolioExecutiveSummaryData(
     returnPct,
     inflationAdjustedValue: latest
       ? Number(latest.inflation_adjusted_value ?? totalValue)
-      : totalValue,
+      : null,
+    valuationDate: latest
+      ? toAppDateString(new Date(latest.snapshot_date))
+      : null,
     totalDividends: toNumber(
       addAll((dividends?.byMonth ?? []).map((month) => month.amount ?? 0)),
     ),
@@ -196,34 +219,6 @@ function buildPortfolioExecutiveSummaryData(
       )
       .slice(0, 5),
   };
-}
-
-/** Convert a Period to a concrete { startDate, endDate } range (ISO date strings). */
-export function periodToDateRange(period: Period): { startDate: string; endDate: string } {
-  // All boundaries derive from the APP_TIMEZONE calendar day via pure string
-  // math — local-Date + toISOString() shifted rolling starts to the last day
-  // of the previous month in UTC+ zones.
-  const today = todayAppDateString();
-  const year = Number(today.slice(0, 4));
-
-  switch (period.kind) {
-    case "ytd":
-      return { startDate: `${year}-01-01`, endDate: today };
-    case "rolling":
-      return {
-        startDate: firstOfMonthYmd(today, -(period.months - 1)),
-        endDate: today,
-      };
-    case "custom":
-      return { startDate: period.from, endDate: period.to };
-    case "year":
-      return {
-        startDate: `${period.year}-01-01`,
-        endDate: `${period.year}-12-31`,
-      };
-    default:
-      return { startDate: `${year - 1}-01-01`, endDate: today };
-  }
 }
 
 /**
@@ -267,10 +262,7 @@ async function fetchDividends(
     (row) => row.income_recognition_role === "included_in_units",
   );
   const currencies = [
-    ...new Set([
-      ...inKind.map((row) => row.currency),
-      targetCurrency,
-    ]),
+    ...new Set([...inKind.map((row) => row.currency), targetCurrency]),
   ].filter((code) => code !== "EUR");
   const historicalIndex =
     inKind.length && currencies.length
@@ -353,14 +345,28 @@ async function fetchDividends(
 export async function fetchPortfolioData(
   currency: string,
   period: Period,
+  { sections }: { sections?: string[] } = {},
 ): Promise<PortfolioReportData> {
   const { startDate, endDate } = periodToDateRange(period);
 
+  const needs = (...ids: string[]) =>
+    !sections?.length || ids.some((id) => sections.includes(id));
   const [snapshotsResult, breakdownResult, dividendsResult] =
     await Promise.allSettled([
-      getSnapshots(startDate, endDate, currency),
-      getBreakdownSummary(currency),
-      fetchDividends(currency, startDate, endDate),
+      needs("portfolioExecutiveSummary", "performanceTrend")
+        ? getSnapshots(startDate, endDate, currency)
+        : Promise.resolve(null),
+      needs(
+        "portfolioExecutiveSummary",
+        "portfolioAllocation",
+        "topHoldings",
+        "assetClassDetail",
+      )
+        ? getBreakdownSummary(currency)
+        : Promise.resolve(null),
+      needs("portfolioExecutiveSummary", "dividendIncome")
+        ? fetchDividends(currency, startDate, endDate)
+        : Promise.resolve(null),
     ]);
 
   const snapshots = unwrap(snapshotsResult, "getSnapshots");

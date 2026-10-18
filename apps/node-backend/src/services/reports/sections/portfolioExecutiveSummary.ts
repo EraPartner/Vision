@@ -14,7 +14,7 @@ import {
   sectionPage,
   signClass,
 } from "../sectionHelpers.ts";
-import type { PortfolioReportData } from '../dataFetcherPortfolio.ts';
+import type { PortfolioReportData } from "../dataFetcherPortfolio.ts";
 
 /**
  * @returns HTML page div
@@ -43,7 +43,7 @@ export function renderPortfolioExecutiveSummary(
       value: fmtCurrency(summary.totalInvested, currency),
     },
     {
-      label: "Unrealised P/L",
+      label: "Gain/loss",
       value: fmtCurrency(summary.totalGainLoss, currency),
       sub: fmtPct(summary.returnPct, true),
       cls: glClass,
@@ -65,12 +65,15 @@ export function renderPortfolioExecutiveSummary(
       },
       {
         label: "Inflation-Adj. Value",
-        value: fmtCurrency(summary.inflationAdjustedValue, currency),
+        value:
+          summary.inflationAdjustedValue === null
+            ? "Unavailable"
+            : fmtCurrency(summary.inflationAdjustedValue, currency),
       },
       {
         label: "Holdings",
         value: String(summary.holdingsCount),
-        sub: "active investments",
+        sub: "current active investments",
       },
     ],
     { cols: 3 },
@@ -92,13 +95,16 @@ export function renderPortfolioExecutiveSummary(
 
   return sectionPage({
     title: "Portfolio Overview",
-    subtitle: "Key performance indicators for the selected period",
+    subtitle: summary.valuationDate
+      ? `Valuation as of ${summary.valuationDate}; dividends for the selected period`
+      : "Current valuation; dividends for the selected period",
     content: `
       ${kpiCards}
       ${kpiCards2}
       ${
         summary.topHoldings.length
           ? `
+        <h3>Current top holdings</h3>
         <table class="data-table">
           <thead><tr>
             <th>Investment</th><th>Symbol</th>

@@ -120,3 +120,37 @@ describe("descriptive income portfolio reporting", () => {
     ).rejects.toBeInstanceOf(RowContractError);
   });
 });
+
+it('an allocation-only export does not read snapshots or dividends', async () => {
+  const { getSnapshots, getBreakdownSummary } = await import('../src/services/portfolioPerformanceSnapshotService.ts');
+  vi.clearAllMocks();
+  const report = await fetchPortfolioData('EUR', { kind: 'year', year: 2021 }, { sections: ['portfolioAllocation'] });
+  expect(getBreakdownSummary).toHaveBeenCalledOnce();
+  expect(getSnapshots).not.toHaveBeenCalled();
+  expect(query).not.toHaveBeenCalled();
+  expect(report.snapshots).toBeNull();
+  expect(report.dividends).toBeNull();
+});
+
+
+it('rejects a requested snapshot failure instead of falling back to current holdings', async () => {
+  const { getSnapshots } = await import('../src/services/portfolioPerformanceSnapshotService.ts');
+  vi.mocked(getSnapshots).mockRejectedValueOnce(new Error('snapshots unavailable'));
+  query.mockResolvedValue({ rows: [] });
+  await expect(fetchPortfolioData('EUR', { kind: 'year', year: 2021 }, { sections: ['portfolioExecutiveSummary'] })).rejects.toThrow('snapshots unavailable');
+});
+
+it('rejects requested dividend and holding failures instead of synthesizing zero totals', async () => {
+  query.mockRejectedValueOnce(new Error('dividends unavailable'));
+  await expect(fetchPortfolioData('EUR', { kind: 'year', year: 2021 }, { sections: ['portfolioExecutiveSummary'] })).rejects.toThrow('dividends unavailable');
+  const { getBreakdownSummary } = await import('../src/services/portfolioPerformanceSnapshotService.ts');
+  vi.mocked(getBreakdownSummary).mockRejectedValueOnce(new Error('holdings unavailable'));
+  await expect(fetchPortfolioData('EUR', { kind: 'year', year: 2021 }, { sections: ['portfolioAllocation'] })).rejects.toThrow('holdings unavailable');
+});
+
+it('keeps successful empty history distinct from source failure', async () => {
+  query.mockResolvedValue({ rows: [] });
+  const report = await fetchPortfolioData('EUR', { kind: 'year', year: 2021 }, { sections: ['portfolioExecutiveSummary'] });
+  expect(report.snapshots).toEqual([]);
+  expect(report.executiveSummary).toMatchObject({ totalValue: 100, valuationDate: null, totalDividends: 0 });
+});

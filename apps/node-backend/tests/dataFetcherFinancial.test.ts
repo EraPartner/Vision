@@ -72,10 +72,9 @@ describe('fetchFinancialData only fetches sources for requested sections', () =>
 });
 
 describe('fetchFinancialData source failures', () => {
-  it('still skips a section whose source fails for another reason', async () => {
+  it('fails the export when a requested source is unavailable', async () => {
     vi.mocked(computeBankBalances).mockRejectedValueOnce(new Error('offline'));
-    const data = await fetchFinancialData('EUR', { sections: ['bankBalances'] });
-    expect(data.banks).toBeNull();
+    await expect(fetchFinancialData('EUR', { sections: ['bankBalances'] })).rejects.toThrow('offline');
   });
 
   it('surfaces a row contract mismatch instead of skipping the section', async () => {
@@ -86,4 +85,17 @@ describe('fetchFinancialData source failures', () => {
       RowContractError,
     );
   });
+});
+
+it('applies exact dates and both exclusions before category and recipient aggregation', async () => {
+  await fetchFinancialData('EUR', { period: { kind: 'custom', from: '2025-02-12', to: '2025-03-08' }, excludedCategoryIds: [10], excludedRecipientIds: [20], sections: ['executiveSummary', 'categoryBreakdown', 'topRecipients'] });
+  const dates = { startDate: '2025-02-12', endDate: '2025-03-08' };
+  for (const source of [computeMonthlySummary, computeCategoryBreakdown, computeRecipientInsights]) {
+    expect(source).toHaveBeenCalledWith(expect.objectContaining(dates));
+    expect(source).toHaveBeenCalledWith(expect.objectContaining({ ...dates, excludedCategoryIds: [10], excludedRecipientIds: [20] }));
+  }
+});
+it('does not turn a failed monthly aggregate into zero income', async () => {
+  vi.mocked(computeMonthlySummary).mockRejectedValueOnce(new Error('query failed'));
+  await expect(fetchFinancialData('EUR', { sections: ['executiveSummary'] })).rejects.toThrow('query failed');
 });
