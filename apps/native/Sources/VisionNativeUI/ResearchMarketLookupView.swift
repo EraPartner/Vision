@@ -31,7 +31,8 @@ public struct ResearchMarketLookupView: View {
                             Button(strings.t("research.mapping.button")) { Task { await model.mapping.begin() } }
                         } label: {
                             Image(systemName: "ellipsis")
-                        }.accessibilityLabel(strings.t("marketLookup.menu"))
+                        }
+                        .menuIndicator(.hidden).accessibilityLabel(strings.t("marketLookup.menu"))
                     }
                 }
                 ResearchSymbolSearchView(

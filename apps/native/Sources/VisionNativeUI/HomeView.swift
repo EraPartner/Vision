@@ -32,6 +32,7 @@ public struct HomeView: View {
                     } label: {
                         Image(systemName: "ellipsis")
                     }
+                    .menuIndicator(.hidden)
                     .accessibilityLabel(strings.t("home.menu"))
                     Button {
                         shell.transactions.requestAdd()

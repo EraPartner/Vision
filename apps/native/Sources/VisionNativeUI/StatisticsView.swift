@@ -77,7 +77,7 @@ public struct StatisticsView: View {
                     ) {
                         Text(strings.t("statsPage.window.rolling24")).tag(StatisticsWindow.rolling24)
                         Text(strings.t("statsPage.window.allTime")).tag(StatisticsWindow.all)
-                    }.pickerStyle(.segmented).frame(maxWidth: 280)
+                    }.pickerStyle(.segmented).labelsHidden().fixedSize()
                     Menu {
                         if model.hasData {
                             Button(strings.t("statsPage.menu.exportPdf")) { shell.openStatisticsReport() }
@@ -86,6 +86,7 @@ public struct StatisticsView: View {
                     } label: {
                         Image(systemName: "ellipsis")
                     }
+                    .menuIndicator(.hidden)
                     .accessibilityLabel(strings.t("statsPage.menu.label"))
                 }
                 if model.isLoading {
@@ -107,7 +108,7 @@ public struct StatisticsView: View {
                             })
                     ) {
                         ForEach(StatisticsTab.allCases, id: \.self) { tab in Text(strings.t(tab.labelKey)).tag(tab) }
-                    }.pickerStyle(.segmented)
+                    }.pickerStyle(.segmented).labelsHidden().fixedSize()
                     content
                 }
             }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)

@@ -73,6 +73,7 @@ struct AIChatConversationRail: View {
                             } label: {
                                 Image(systemName: "ellipsis").frame(width: 20, height: 24)
                             }
+                            .menuIndicator(.hidden)
                             .menuStyle(.borderlessButton).fixedSize().accessibilityLabel(
                                 strings.t("aiChat.conversationActions"))
                         }.padding(.horizontal, 10).padding(.vertical, 9)

@@ -110,7 +110,8 @@ struct ResearchMarketMappingSheet: View {
                                     }
                                 } label: {
                                     Image(systemName: "ellipsis")
-                                }.accessibilityLabel(
+                                }
+                                .menuIndicator(.hidden).accessibilityLabel(
                                     strings.t("research.mapping.rowMenu", ["provider": mapping.provider]))
                             }.padding(.vertical, 5)
                         }

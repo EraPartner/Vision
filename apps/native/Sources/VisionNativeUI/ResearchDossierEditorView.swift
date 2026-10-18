@@ -36,7 +36,8 @@ struct ResearchDossierEditorView: View {
                         }.disabled(model.busy)
                     } label: {
                         Image(systemName: "ellipsis")
-                    }.accessibilityLabel(strings.t("dossiers.editorMenu"))
+                    }
+                    .menuIndicator(.hidden).accessibilityLabel(strings.t("dossiers.editorMenu"))
                 }
                 Button(strings.t("dossiers.save"), systemImage: "square.and.arrow.down") { Task { await model.save() } }
                     .buttonStyle(.visionPrimary).disabled(model.busy)

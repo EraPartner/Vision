@@ -215,6 +215,7 @@ struct AnalysisSavedLibraryView: View {
                         } label: {
                             Image(systemName: "ellipsis")
                         }
+                        .menuIndicator(.hidden)
                         .accessibilityLabel(strings.t("analysis.rowMenu", ["name": saved.name]))
                         .disabled(model.savedAction || model.isSaving)
                     }.padding(10)

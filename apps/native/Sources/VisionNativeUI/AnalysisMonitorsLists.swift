@@ -52,6 +52,7 @@ struct AnalysisMonitorsRulesView: View {
                                 } label: {
                                     Image(systemName: "ellipsis")
                                 }
+                                .menuIndicator(.hidden)
                                 .menuStyle(.borderlessButton).frame(width: 24).disabled(model.isBusy)
                                 .accessibilityLabel(strings.t("monitors.rowMenu", ["name": rule.title]))
                             }.padding(.vertical, 8)

@@ -171,6 +171,7 @@ public struct PortfolioTaxView: View {
         } label: {
             Image(systemName: "ellipsis")
         }
+        .menuIndicator(.hidden)
         .accessibilityLabel(strings.t("tax.menu.label"))
         .disabled(tax.actions.isSaving || model.isSavingAdjustments)
     }

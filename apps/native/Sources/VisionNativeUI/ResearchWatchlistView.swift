@@ -141,6 +141,7 @@ private struct ResearchWatchlistRow: View {
                 } label: {
                     Image(systemName: "ellipsis")
                 }
+                .menuIndicator(.hidden)
                 .menuStyle(.borderlessButton).fixedSize()
                 .accessibilityLabel(strings.t("watchlist.rowMenu", ["name": ResearchWatchlistUI.name(item)]))
             }.padding(.top, 4)

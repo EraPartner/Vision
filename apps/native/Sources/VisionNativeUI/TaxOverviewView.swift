@@ -137,6 +137,7 @@ public struct TaxOverviewView: View {
         } label: {
             Image(systemName: "ellipsis")
         }
+        .menuIndicator(.hidden)
         .accessibilityLabel(strings.t("tax.menu.label")).disabled(screens.actions.isSaving)
     }
     @ViewBuilder private func content(_ overview: OpenAPI.BelgianTaxOverview) -> some View {

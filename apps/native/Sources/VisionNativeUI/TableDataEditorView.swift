@@ -328,6 +328,7 @@ public struct TableDataEditorView: View {
             } label: {
                 Image(systemName: "ellipsis")
             }
+            .menuIndicator(.hidden)
             .disabled(model.isReviewLocked)
             .modifier(RowMenuStyle(label: strings.t("dbEditor.rowMenu")))
             ForEach(model.columns, id: \.name) { column in
@@ -372,6 +373,7 @@ public struct TableDataEditorView: View {
             } label: {
                 Image(systemName: "ellipsis")
             }
+            .menuIndicator(.hidden)
             .disabled(model.isReviewLocked)
             .modifier(RowMenuStyle(label: strings.t("dbEditor.rowMenu")))
             ForEach(model.columns, id: \.name) { column in

@@ -51,7 +51,8 @@ public struct PortfolioOverviewView: View {
                             Button(strings.t("nav.portfolioImport")) { shell.navigate(to: "/portfolio/import") }
                         } label: {
                             Image(systemName: "ellipsis")
-                        }.accessibilityLabel(strings.t("portfolio.menu"))
+                        }
+                        .menuIndicator(.hidden).accessibilityLabel(strings.t("portfolio.menu"))
                         Button(strings.t("addInv.title"), systemImage: "plus") { editing.beginAddInvestment() }
                             .buttonStyle(.visionPrimary)
                     }

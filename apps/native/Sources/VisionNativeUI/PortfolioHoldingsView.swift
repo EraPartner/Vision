@@ -87,7 +87,8 @@ public struct PortfolioHoldingsView: View {
                             Button(strings.t("nav.portfolioImport")) { shell.navigate(to: "/portfolio/import") }
                         } label: {
                             Image(systemName: "ellipsis")
-                        }.accessibilityLabel(strings.t("portfolio.menu"))
+                        }
+                        .menuIndicator(.hidden).accessibilityLabel(strings.t("portfolio.menu"))
                     }
                 }
                 if model.isLoading || (isRealEstate && (model.rentLoading || (missingRentRate && shell.exchangeRates.isLoading))) {

@@ -35,6 +35,7 @@ struct SavedChartsView: View {
                             } label: {
                                 Image(systemName: "ellipsis")
                             }
+                            .menuIndicator(.hidden)
                             .accessibilityLabel(strings.t("customChart.menu", ["name": chart.name]))
                         }
                         if let dataset = model.datasets[chart.id] {
