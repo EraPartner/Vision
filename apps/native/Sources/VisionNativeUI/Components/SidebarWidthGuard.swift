@@ -15,6 +15,13 @@ struct SidebarWidthGuard: NSViewRepresentable {
     let minimum: CGFloat
     let ideal: CGFloat
 
+    /// The last corrections the probe attempted, newest last, for test diagnostics.
+    @MainActor static var trace: [String] = []
+    @MainActor private static func note(_ line: String) {
+        trace.append(line)
+        if trace.count > 20 { trace.removeFirst(trace.count - 20) }
+    }
+
     func makeNSView(context: Context) -> ProbeView { ProbeView(minimum: minimum, ideal: ideal) }
     func updateNSView(_ view: ProbeView, context: Context) {}
 
@@ -75,7 +82,10 @@ struct SidebarWidthGuard: NSViewRepresentable {
 
         private func correctIfNeeded() {
             guard let splitView = enclosingSplitView(), let sidebar = splitView.arrangedSubviews.first
-            else { return }
+            else {
+                SidebarWidthGuard.note("no split view (window=\(window != nil))")
+                return
+            }
             if observedSplitView !== splitView {
                 if let previous = observedSplitView {
                     NotificationCenter.default.removeObserver(
@@ -90,12 +100,18 @@ struct SidebarWidthGuard: NSViewRepresentable {
                 }
             }
             let splitWidth = splitView.bounds.width
-            guard splitWidth > 0, sidebar.frame.width > 0 else { return }
+            guard splitWidth > 0, sidebar.frame.width > 0 else {
+                SidebarWidthGuard.note("unsized split=\(splitWidth) sidebar=\(sidebar.frame.width)")
+                return
+            }
+            let before = sidebar.frame.width
             let width = SidebarWidthGuard.correctedWidth(
-                sidebar: sidebar.frame.width, splitView: splitWidth, minimum: minimum, ideal: ideal,
+                sidebar: before, splitView: splitWidth, minimum: minimum, ideal: ideal,
                 firstLayout: !widened)
             widened = true
             if let width { splitView.setPosition(width, ofDividerAt: 0) }
+            SidebarWidthGuard.note(
+                "split=\(splitWidth) sidebar=\(before) target=\(width.map { "\($0)" } ?? "none") after=\(sidebar.frame.width)")
         }
 
         private func enclosingSplitView() -> NSSplitView? {

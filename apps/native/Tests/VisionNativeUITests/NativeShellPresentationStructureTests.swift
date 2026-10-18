@@ -206,12 +206,17 @@ private func sidebarDiagnostics(_ host: NSView) -> String {
             let delegate = split.delegate.map { String(describing: type(of: $0)) } ?? "nil"
             let widths = split.arrangedSubviews.map { "\($0.frame.width)" }.joined(separator: ",")
             lines.append("\(depth) \(name) vertical=\(split.isVertical) width=\(split.bounds.width) arranged=[\(widths)] delegate=\(delegate)")
-        } else if depth <= 3 || name.contains("Split") {
+            for (index, item) in ((split.delegate as? NSSplitViewController)?.splitViewItems ?? []).enumerated() {
+                lines.append(
+                    "  item\(index) behavior=\(item.behavior.rawValue) min=\(item.minimumThickness) max=\(item.maximumThickness) collapsed=\(item.isCollapsed) holding=\(item.holdingPriority.rawValue) view=\(item.viewController.view.frame.width)")
+            }
+        } else if depth <= 3 || name.contains("Split") || name.contains("ProbeView") {
             lines.append("\(depth) \(name) \(view.frame.size)")
         }
         for child in view.subviews where depth < 40 { walk(child, depth: depth + 1) }
     }
     walk(host, depth: 0)
+    lines.append("guard trace: " + SidebarWidthGuard.trace.joined(separator: " | "))
     return lines.joined(separator: "\n")
 }
 
