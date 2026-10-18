@@ -75,7 +75,7 @@ struct PortfolioBrokerField: View {
                     Image(systemName: "arrow.right")
                     Text(label)
                     Text("·").accessibilityHidden(true)
-                    Button(strings.t("addPortTxn.broker.change")) { expanded = true }.buttonStyle(.link)
+                    Button(strings.t("addPortTxn.broker.change")) { expanded = true }.buttonStyle(.visionLink)
                 }.font(.footnote).foregroundStyle(theme.secondaryLabel)
             } else {
                 Picker(

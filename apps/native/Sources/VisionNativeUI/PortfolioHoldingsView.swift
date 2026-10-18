@@ -295,7 +295,7 @@ public struct PortfolioHoldingsView: View {
                                             ]
                                         ).string)
                                 }
-                                .buttonStyle(.link)
+                                .buttonStyle(.visionLink)
                             }
                             Button(holding.name) { Task { await model.openDetail(id: holding.id) } }.buttonStyle(.plain)
                             if holding.oversold {

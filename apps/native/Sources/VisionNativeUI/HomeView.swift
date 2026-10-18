@@ -110,7 +110,8 @@ public struct HomeView: View {
     }
 
     private var hero: some View {
-        card("dashboard.hero") {
+        // MonthToDateHero is a headerless card: the eyebrow is its only heading.
+        card(nil) {
             if let pace = model.pace {
                 ViewThatFits(in: .horizontal) {
                     HStack(alignment: .top, spacing: 24) {
@@ -155,10 +156,30 @@ public struct HomeView: View {
         .accessibilityElement(children: .combine)
     }
     private func heroPlot(_ pace: HomeSpendingPace) -> some View {
-        InsightTimelineChart(
-            series: heroSeries(pace), currency: currency, settings: settings,
-            title: strings.t("home.chart.aria"), height: 180,
-            selection: $heroSelection, rangeStart: $heroRange)
+        VStack(alignment: .leading, spacing: 8) {
+            HomePaceChart(pace: pace)
+                .frame(height: 144)
+                .accessibilityElement()
+                .accessibilityLabel(strings.t("home.chart.aria"))
+            HStack(spacing: 16) {
+                HStack(spacing: 6) {
+                    Capsule().fill(theme.primary).frame(width: 16, height: 2)
+                    Text(strings.t("home.chart.thisMonth"))
+                }
+                HStack(spacing: 6) {
+                    Path { path in
+                        path.move(to: .zero)
+                        path.addLine(to: CGPoint(x: 16, y: 0))
+                    }
+                    .stroke(Color(token: theme.palette.mutedForeground), style: StrokeStyle(lineWidth: 1, dash: [3, 2]))
+                    .frame(width: 16, height: 1)
+                    Text(strings.t("home.chart.typical"))
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(theme.secondaryLabel)
+            .accessibilityHidden(true)
+        }
     }
     private var monthName: String {
         let format = DateFormatter()
@@ -218,34 +239,54 @@ public struct HomeView: View {
 
     private var attention: some View {
         card("home.attention.title") {
-            if model.needsCategory > 0 {
-                routeRow(
-                    strings.tc("home.attention.needsCategory", model.needsCategory),
-                    route: "/transactions?uncategorised=true", trailing: strings.t("home.attention.review"))
-            }
-            if model.matchCount > 0 {
-                routeRow(
-                    strings.tc("home.attention.looksPaid", model.matchCount),
-                    route: "/planned", trailing: strings.t("home.attention.confirm"))
-            }
-            ForEach(model.staleAccounts) { account in
-                HStack {
-                    routeRow(
-                        strings.t(
-                            "home.attention.stale",
-                            [
-                                "name": account.name,
-                                "date": VisionFormat.appDate(account.last_transaction, format: settings.dateFormat),
-                            ]),
-                        route: "/import", trailing: strings.t("home.attention.import"))
-                    Button {
-                        Task { await model.dismissInactivity(account) }
-                    } label: {
-                        Image(systemName: "xmark")
+            if model.needsCategory > 0 || model.matchCount > 0 || !model.staleAccounts.isEmpty {
+                // The web list: one inset surface with hairline dividers and leading glyphs.
+                VStack(spacing: 0) {
+                    if model.needsCategory > 0 {
+                        routeRow(
+                            strings.tc("home.attention.needsCategory", model.needsCategory),
+                            route: "/transactions?uncategorised=true", trailing: strings.t("home.attention.review"),
+                            symbol: "tag")
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(strings.t("home.attention.dismissInactivity", ["name": account.name]))
+                    if model.matchCount > 0 {
+                        if model.needsCategory > 0 { Divider() }
+                        routeRow(
+                            strings.tc("home.attention.looksPaid", model.matchCount),
+                            route: "/planned", trailing: strings.t("home.attention.confirm"),
+                            symbol: "checkmark.circle")
+                    }
+                    ForEach(model.staleAccounts) { account in
+                        if model.needsCategory > 0 || model.matchCount > 0 || account.id != model.staleAccounts.first?.id {
+                            Divider()
+                        }
+                        HStack(spacing: 4) {
+                            routeRow(
+                                strings.t(
+                                    "home.attention.stale",
+                                    [
+                                        "name": account.name,
+                                        "date": VisionFormat.appDate(
+                                            account.last_transaction, format: settings.dateFormat),
+                                    ]),
+                                route: "/import", trailing: strings.t("home.attention.import"),
+                                symbol: "square.and.arrow.down")
+                            Button {
+                                Task { await model.dismissInactivity(account) }
+                            } label: {
+                                Image(systemName: "xmark").foregroundStyle(theme.secondaryLabel)
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.trailing, 12)
+                            .accessibilityLabel(strings.t("home.attention.dismissInactivity", ["name": account.name]))
+                        }
+                    }
                 }
+                .background(
+                    RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
+                        .fill(theme.foreground.opacity(0.02)))
+                .overlay(
+                    RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
+                        .strokeBorder(theme.border.opacity(0.6)))
             }
             if model.needsCategory == 0 && model.matchCount == 0 && model.staleAccounts.isEmpty {
                 Label(strings.t("home.attention.none"), systemImage: "checkmark.circle").foregroundStyle(
@@ -254,7 +295,7 @@ public struct HomeView: View {
             if !model.dismissedAccounts.isEmpty {
                 Button(strings.t("home.attention.restoreDismissed")) {
                     Task { await model.restoreInactivity() }
-                }.buttonStyle(.link)
+                }.buttonStyle(.visionLink)
             }
         }
     }
@@ -278,19 +319,40 @@ public struct HomeView: View {
                         .foregroundStyle(theme.secondaryLabel)
                     }
                 }.font(.footnote)
-                LabeledContent(strings.t("home.netWorth.assets"), value: money(worth.assets))
-                ProgressView(value: ratio(worth.assets, scale: max(worth.assets, worth.debt, 1))).tint(
-                    theme.gain)
-                LabeledContent(strings.t("home.netWorth.debt"), value: money(worth.debt))
-                ProgressView(value: ratio(worth.debt, scale: max(worth.assets, worth.debt, 1))).tint(
-                    theme.loss)
+                VStack(spacing: 10) {
+                    netWorthBar(
+                        "home.netWorth.assets", worth.assets, scale: max(worth.assets, worth.debt, 1),
+                        color: theme.gain)
+                    netWorthBar(
+                        "home.netWorth.debt", worth.debt, scale: max(worth.assets, worth.debt, 1),
+                        color: theme.loss)
+                }.padding(.top, 4)
             } else if model.errors["netWorth"] != nil {
                 widgetFailure("netWorth")
             } else {
                 Text(strings.t("home.netWorth.empty")).font(.callout).foregroundStyle(theme.secondaryLabel)
-                Button(strings.t("home.accounts.title")) { navigate("/accounts") }.buttonStyle(.link)
+                Button(strings.t("home.accounts.title")) { navigate("/accounts") }.buttonStyle(.visionLink)
             }
         }
+    }
+    /// NetWorthWidget's bar: the label and amount on one line over a thin rounded track.
+    private func netWorthBar(_ key: String, _ amount: Decimal, scale: Decimal, color: Color) -> some View {
+        VStack(spacing: 5) {
+            HStack {
+                Text(strings.t(key)).foregroundStyle(theme.secondaryLabel)
+                Spacer()
+                MoneyText(amount: amount, currency: currency, settings: settings, signed: false, colored: false)
+            }.font(.footnote)
+            GeometryReader { proxy in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(theme.foreground.opacity(0.08))
+                    Capsule().fill(color).frame(width: proxy.size.width * ratio(amount, scale: scale))
+                }
+            }
+            .frame(height: 6)
+            .accessibilityHidden(true)
+        }
+        .accessibilityElement(children: .combine)
     }
     private func ratio(_ value: Decimal, scale: Decimal) -> Double {
         NSDecimalNumber(decimal: min(1, max(0, value / scale))).doubleValue
@@ -611,12 +673,16 @@ public struct HomeView: View {
     }
     private func routeRow(
         _ title: String, route: String, subtitle: String? = nil, trailing: String? = nil,
-        amount: (Decimal, String)? = nil, signed: Bool = true, colored: Bool = true
+        amount: (Decimal, String)? = nil, signed: Bool = true, colored: Bool = true, symbol: String? = nil
     ) -> some View {
         Button {
             navigate(route)
         } label: {
             HStack(alignment: .center, spacing: 10) {
+                if let symbol {
+                    Image(systemName: symbol).font(.system(size: 15)).foregroundStyle(theme.secondaryLabel)
+                        .frame(width: 22).accessibilityHidden(true)
+                }
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title).foregroundStyle(theme.foreground)
                     if let subtitle { Text(subtitle).font(.footnote).foregroundStyle(theme.secondaryLabel) }
@@ -627,33 +693,23 @@ public struct HomeView: View {
                         amount: amount.0, currency: amount.1, settings: settings, signed: signed, colored: colored
                     ).fontWeight(.medium)
                 } else if let trailing {
-                    Text(trailing).monospacedDigit().foregroundStyle(theme.foreground)
+                    Text(trailing).monospacedDigit().foregroundStyle(theme.secondaryLabel)
                 }
-                Image(systemName: "chevron.right").font(.caption).foregroundStyle(theme.secondaryLabel)
-            }.padding(.vertical, 6).contentShape(Rectangle())
+                Image(systemName: "chevron.right").font(.caption).foregroundStyle(theme.tertiaryLabel)
+            }
+            .padding(.vertical, symbol == nil ? 6 : 10)
+            .padding(.horizontal, symbol == nil ? 0 : 12)
+            .contentShape(Rectangle())
         }.buttonStyle(.plain)
     }
     private func card<Content: View>(
-        _ titleKey: String, action: (String, String)? = nil, exclusion: String? = nil, hero: TrendHue.Tone? = nil,
+        _ titleKey: String?, action: (String, String)? = nil, exclusion: String? = nil, hero: TrendHue.Tone? = nil,
         titleFont: Font = Font.visionTitle3,
         @ViewBuilder content: () -> Content
     ) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Text(strings.t(titleKey)).font(titleFont).accessibilityAddTraits(.isHeader)
-                Spacer()
-                if let exclusion, model.hasExclusions {
-                    Toggle(
-                        strings.t(
-                            model.graphExclusions[exclusion] != false
-                                ? "exclusion.filtersActive" : "exclusion.filtersIgnored"),
-                        isOn: Binding(
-                            get: { model.graphExclusions[exclusion] != false },
-                            set: { model.graphExclusions[exclusion] = $0 })
-                    )
-                    .toggleStyle(.button).controlSize(.small)
-                }
-                if let action { Button(strings.t(action.0)) { navigate(action.1) }.buttonStyle(.link) }
+            if titleKey != nil || action != nil || exclusion != nil {
+                cardHeader(titleKey, action: action, exclusion: exclusion, titleFont: titleFont)
             }
             content()
         }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
@@ -669,6 +725,81 @@ public struct HomeView: View {
             }
             .visionCardBackground()
     }
+    private func cardHeader(
+        _ titleKey: String?, action: (String, String)?, exclusion: String?, titleFont: Font
+    ) -> some View {
+            HStack {
+                if let titleKey {
+                    Text(strings.t(titleKey)).font(titleFont).accessibilityAddTraits(.isHeader)
+                }
+                Spacer()
+                if let exclusion, model.hasExclusions {
+                    Toggle(
+                        strings.t(
+                            model.graphExclusions[exclusion] != false
+                                ? "exclusion.filtersActive" : "exclusion.filtersIgnored"),
+                        isOn: Binding(
+                            get: { model.graphExclusions[exclusion] != false },
+                            set: { model.graphExclusions[exclusion] = $0 })
+                    )
+                    .toggleStyle(.button).controlSize(.small)
+                }
+                if let action { Button(strings.t(action.0)) { navigate(action.1) }.buttonStyle(.visionLink) }
+            }
+    }
+}
+
+/// MonthToDateHero's chart: no axes or grid; the typical month as a dashed muted diagonal, the
+/// projection as a faint dotted primary line, this month's running spend as a 2.5 pt primary
+/// line ending in a dot. Heights follow the web's 600 × 140 view box, padded 4 × 8.
+private struct HomePaceChart: View {
+    let pace: HomeSpendingPace
+    @Environment(\.visionTheme) private var theme
+
+    var body: some View {
+        GeometryReader { proxy in
+            let size = proxy.size
+            let points = pace.cumulativeSpending.map { (Double($0.key) ?? 0, double($0.value)) }
+            let days = Double(max(pace.current_month.days_in_month, 1))
+            let elapsed = Double(pace.current_month.days_elapsed)
+            let typical = double(pace.past_6_months.avg_monthly_spending)
+            let projected = double(pace.comparison.projected_monthly_total)
+            let total = double(pace.current_month.total_spending)
+            let yMax = max(total, typical, projected, 1) * 1.08
+            let x = { (day: Double) in 4 + day / days * (size.width - 8) }
+            let y = { (value: Double) in size.height - 8 - value / yMax * (size.height - 16) }
+            let last = points.last ?? (0, 0)
+            ZStack {
+                if typical > 0 {
+                    Path { path in
+                        path.move(to: CGPoint(x: x(0), y: y(0)))
+                        path.addLine(to: CGPoint(x: x(days), y: y(typical)))
+                    }
+                    .stroke(
+                        Color(token: theme.palette.mutedForeground).opacity(0.5),
+                        style: StrokeStyle(lineWidth: 1.5, dash: [4, 4]))
+                }
+                if projected > 0 && elapsed < days {
+                    Path { path in
+                        path.move(to: CGPoint(x: x(last.0), y: y(last.1)))
+                        path.addLine(to: CGPoint(x: x(days), y: y(projected)))
+                    }
+                    .stroke(theme.primary.opacity(0.45), style: StrokeStyle(lineWidth: 2, dash: [2, 4]))
+                }
+                Path { path in
+                    for (index, point) in points.enumerated() {
+                        let location = CGPoint(x: x(point.0), y: y(point.1))
+                        if index == 0 { path.move(to: location) } else { path.addLine(to: location) }
+                    }
+                }
+                .stroke(theme.primary, style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
+                Circle().fill(theme.primary).frame(width: 8, height: 8)
+                    .position(x: x(last.0), y: y(last.1))
+            }
+        }
+    }
+
+    private func double(_ value: Decimal) -> Double { NSDecimalNumber(decimal: value).doubleValue }
 }
 
 private struct HomeWidgetsSheet: View {

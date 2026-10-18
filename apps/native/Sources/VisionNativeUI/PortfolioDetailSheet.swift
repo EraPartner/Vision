@@ -68,7 +68,7 @@ struct PortfolioDetailSheet: View {
             VStack(alignment: .leading, spacing: 8) {
                 if let symbol = holding.symbol {
                     Text(symbol).font(.caption.weight(.semibold)).foregroundStyle(theme.secondaryLabel)
-                    Button(holding.name) { research(holding, symbol: symbol) }.buttonStyle(.link).font(
+                    Button(holding.name) { research(holding, symbol: symbol) }.buttonStyle(.visionLink).font(
                         .title2.weight(.semibold))
                 } else {
                     Text(holding.name).font(.title2.weight(.semibold))

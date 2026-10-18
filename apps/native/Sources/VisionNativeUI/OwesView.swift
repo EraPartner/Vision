@@ -284,7 +284,7 @@ struct OwesPersonDetail: View {
                     Button(title) {
                         model.openTransaction(split.transactionId, label: title)
                     }
-                    .buttonStyle(.link)
+                    .buttonStyle(.visionLink)
                     .lineLimit(1)
                     Text(date)
                         .font(.footnote)
@@ -409,7 +409,7 @@ struct OwesRecentTransactions: View {
                     Button(row.description) {
                         model.openTransaction(row.id, label: row.description)
                     }
-                    .buttonStyle(.link)
+                    .buttonStyle(.visionLink)
                     .lineLimit(1))
             },
             LocalDataColumn(key: "category", title: strings.t("txPage.col.category"), width: 180, minWidth: 180) { row in

@@ -431,7 +431,7 @@ public struct StatisticsView: View {
                                     Button(money(model.pivotGroups.reduce(0) { $0 + $1.total })) {
                                         shell.navigate(to: "/transactions")
                                     }
-                                    .buttonStyle(.link).frame(width: pivotColumnWidth, height: 32)
+                                    .buttonStyle(.visionLink).frame(width: pivotColumnWidth, height: 32)
                                 }
                             }.fontWeight(.semibold)
                         }
@@ -506,7 +506,7 @@ public struct StatisticsView: View {
                             categoryIds: ids, period: period, label: name, uncategorised: uncategorised
                         ).string
                     )
-                }.buttonStyle(.link).disabled(value == 0).frame(width: pivotColumnWidth, height: 32).monospacedDigit()
+                }.buttonStyle(.visionLink).disabled(value == 0).frame(width: pivotColumnWidth, height: 32).monospacedDigit()
                     .help(money(value)).accessibilityLabel(strings.t("statsPage.pivot.drillAria", ["label": name]))
             }
         }

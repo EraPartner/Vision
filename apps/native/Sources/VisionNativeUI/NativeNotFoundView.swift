@@ -7,7 +7,7 @@ public struct NativeNotFoundView: View {
     public init(shell: NativeShellModel) { self.shell = shell }
     public var body: some View {
         VStack(spacing: 24) {
-            NativeNotFoundBrandMark().fill(theme.primary).frame(width: 40, height: 40).padding(20)
+            VisionBrandMark().fill(theme.primary).frame(width: 40, height: 40).padding(20)
                 .background(theme.primary.opacity(0.12), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous))
                 .accessibilityHidden(true)
             VStack(spacing: 8) {
@@ -35,7 +35,7 @@ public struct NativeNotFoundView: View {
 }
 
 /// Verbatim VisionMark.tsx geometry, in its 262 296 500 500 view box.
-private struct NativeNotFoundBrandMark: Shape {
+struct VisionBrandMark: Shape {
     func path(in rect: CGRect) -> Path {
         func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
             CGPoint(x: rect.minX + (x - 262) / 500 * rect.width, y: rect.minY + (y - 296) / 500 * rect.height)

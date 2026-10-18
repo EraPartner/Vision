@@ -253,16 +253,19 @@ struct NativeSidebar: View {
         // The header and footer sit outside the list, as on the web, so scrolled rows clip at
         // the list's edges instead of showing through the translucent chrome.
         VStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 6) {
-                brandButton
-                HStack(spacing: 4) {
-                    if model.commandPalette != nil { searchField } else { Spacer() }
+            // AppSidebar's header: the logo, name and collapse button in one row, then the
+            // full-width search field.
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 10) {
+                    brandButton
                     collapseButton
                 }
+                .frame(height: 32)
+                if model.commandPalette != nil { searchField }
             }
-            .padding(.horizontal, 10)
-            .padding(.top, 6)
-            .padding(.bottom, 4)
+            .padding(.horizontal, 12)
+            .padding(.top, 4)
+            .padding(.bottom, 8)
             List(selection: selection) {
                 ForEach(model.sections) { section in
                     sectionView(section)
@@ -331,9 +334,14 @@ struct NativeSidebar: View {
         ForEach(items) { item in
             let isActive = model.selectedItemURL == item.url
             Label {
-                Text(model.strings.t(item.titleKey))
-                    .fontWeight(isActive ? .semibold : .regular)
-                    .foregroundStyle(Color(token: theme.glass.foreground))
+                HStack(spacing: 6) {
+                    Text(model.strings.t(item.titleKey))
+                        .fontWeight(isActive ? .semibold : .regular)
+                        .foregroundStyle(Color(token: theme.glass.foreground))
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
+                    badgeView(item)
+                }
             } icon: {
                 Image(systemName: item.symbol)
                     .foregroundStyle(Color(token: theme.glass.icon))
@@ -343,19 +351,27 @@ struct NativeSidebar: View {
             .help(
                 item.shortcutKey.map { model.strings.t(item.titleKey) + " · G " + $0.uppercased() }
                     ?? model.strings.t(item.titleKey))
-            .badge(badgeText(item))
-            .badgeProminence(item.badge == .needsCategory || item.badge == .plannedDue ? .increased : .standard)
             .accessibilityValue(badgeLabel(item))
             .listRowBackground(SidebarSelectionPill(isActive: isActive))
         }
     }
 
-    /// `NavItemBadge`: hidden at zero, capped at 99+; "hot" counts use increased prominence.
-    private func badgeText(_ item: NavItem) -> Text? {
-        guard let badge = item.badge else { return nil }
-        let count = model.badgeCount(badge)
-        guard count > 0 else { return nil }
-        return Text(count > 99 ? "99+" : String(count))
+    /// `NavItemBadge`: hidden at zero, capped at 99+; "hot" counts are an 18 pt primary pill,
+    /// quiet ones plain tertiary figures.
+    @ViewBuilder
+    private func badgeView(_ item: NavItem) -> some View {
+        let count = item.badge.map { model.badgeCount($0) } ?? 0
+        if count > 0 {
+            let hot = item.badge == .needsCategory || item.badge == .plannedDue
+            Text(count > 99 ? "99+" : String(count))
+                .font(.caption.weight(hot ? .medium : .regular))
+                .monospacedDigit()
+                .foregroundStyle(hot ? theme.primaryForeground : theme.tertiaryLabel)
+                .padding(.horizontal, 6)
+                .frame(minWidth: 18, minHeight: 18)
+                .background(Capsule().fill(hot ? theme.primary : Color.clear))
+                .accessibilityHidden(true)
+        }
     }
 
     private func badgeLabel(_ item: NavItem) -> String {
@@ -406,10 +422,12 @@ struct NativeSidebar: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
-            .background(RoundedRectangle(cornerRadius: DesignTokens.Radius.chip).fill(.quaternary))
+            .font(.callout)
+            .foregroundStyle(theme.tertiaryLabel)
+            .padding(.horizontal, 10)
+            .frame(height: 32)
+            .background(
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.chip).fill(theme.foreground.opacity(0.06)))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -422,12 +440,23 @@ struct NativeSidebar: View {
         Button {
             model.toggleSidebar()
         } label: {
-            HStack(spacing: 7) {
-                Image(nsImage: NSApplication.shared.applicationIconImage)
-                    .resizable()
-                    .frame(width: 20, height: 20)
+            HStack(spacing: 10) {
+                // The web logo: the Vision mark on a 28 pt primary-to-accent gradient chip.
+                VisionBrandMark()
+                    .fill(theme.primaryForeground)
+                    .frame(width: 14, height: 14)
+                    .frame(width: 28, height: 28)
+                    .background(
+                        RoundedRectangle(cornerRadius: DesignTokens.Radius.chip, style: .continuous)
+                            .fill(
+                                LinearGradient(
+                                    colors: [theme.primary, theme.primary.opacity(0.85), theme.accent.opacity(0.7)],
+                                    startPoint: .topLeading, endPoint: .bottomTrailing))
+                    )
+                    .shadow(color: theme.primary.opacity(0.35), radius: 9, y: 6)
                     .accessibilityHidden(true)
                 Text(verbatim: "Vision").font(.visionDisplayHeadline)
+                    .foregroundStyle(Color(token: theme.glass.foreground))
                 Spacer(minLength: 0)
             }
             .contentShape(Rectangle())
@@ -443,8 +472,8 @@ struct NativeSidebar: View {
             model.setSidebarVisible(false)
         } label: {
             Image(systemName: "sidebar.left")
-                .foregroundStyle(.secondary)
-                .frame(width: 24, height: 24)
+                .foregroundStyle(theme.tertiaryLabel)
+                .frame(width: 28, height: 28)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

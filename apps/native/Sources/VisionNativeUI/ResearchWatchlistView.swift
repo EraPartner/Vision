@@ -150,7 +150,7 @@ private struct ResearchWatchlistRow: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 if let symbol = item.symbol, !symbol.isEmpty {
-                    Button(ResearchWatchlistUI.name(item), action: lookup).buttonStyle(.link).font(.headline)
+                    Button(ResearchWatchlistUI.name(item), action: lookup).buttonStyle(.visionLink).font(.headline)
                         .multilineTextAlignment(.leading)
                     Text(symbol).font(.caption2.monospaced().weight(.medium))
                         .foregroundStyle(theme.foreground.opacity(0.8)).padding(.horizontal, 6).padding(.vertical, 1)

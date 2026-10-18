@@ -83,7 +83,7 @@ struct ResearchWatchlistChartSheet: View {
             } else {
                 Button(ResearchWatchlistUI.money(item.targetPrice, currency: item.currency, shell: shell)) {
                     model.beginTargetEdit(numberFormat: shell.settings.numberFormat)
-                }.buttonStyle(.link).font(.title2.weight(.semibold)).monospacedDigit()
+                }.buttonStyle(.visionLink).font(.title2.weight(.semibold)).monospacedDigit()
                     .help(editLabel(item)).accessibilityLabel(
                         editLabel(item) + ", "
                             + ResearchWatchlistUI.money(item.targetPrice, currency: item.currency, shell: shell)
