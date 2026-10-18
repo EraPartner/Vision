@@ -498,17 +498,21 @@ public struct LocalFileSystem: RuntimeFileSystem {
         defer { try? handle.close() }
         var hasher = SHA256()
         var total = 0
-        while true {
+        // `read(upToCount:)` returns autoreleased buffers. Startup hashes the whole payload
+        // (~400 MB); without a pool per chunk they all stay alive until the task ends and
+        // leave that much dirty, empty malloc space in the app's footprint.
+        while try autoreleasepool(invoking: { () throws -> Bool in
             let chunk: Data?
             do {
                 chunk = try handle.read(upToCount: 1 << 20)
             } catch {
                 throw FileSystemError.failed(path, error.localizedDescription)
             }
-            guard let chunk, !chunk.isEmpty else { break }
+            guard let chunk, !chunk.isEmpty else { return false }
             total += chunk.count
             hasher.update(data: chunk)
-        }
+            return true
+        }) {}
         let hex = hasher.finalize().map { String(format: "%02x", $0) }.joined()
         return (total, hex)
     }

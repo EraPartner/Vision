@@ -180,6 +180,16 @@ has `retained`, `native` and `electron` modes and now stores `footprint` and `vm
 output per mode. The helper-specific evidence above is history; the "known divergence" note about
 helper runs no longer applies.
 
+**App memory breakdown (run 39102878737, `4b34770`, 2026-10-18)**
+
+`footprint` on the app process after startup: native-only 369 MB, retained 371 MB, the Electron
+main process 48 MB. In both native modes about 349 MB is `MALLOC_SMALL`, of which ~312 MB is
+*empty* (freed but still dirty) regions; live heap is ~37 MB. The cause found: every launch
+verifies the runtime payload manifest by hashing each file (`LocalSystem.sha256`, ~400 MB) in
+1 MiB `FileHandle` reads, whose autoreleased buffers stayed alive until the task ended. The
+hash loop now drains an autorelease pool per chunk; the next e2e run shows whether the empty
+regions are gone.
+
 **Backend direction (2026-10-18):** Tor chose a Mac-only future with a Swift backend
 (Hummingbird 2) inside the app; [[docs/adr/210-vision-native-swift-backend|ADR-210]] records it as
 proposed, with no code. Do not start the migration before it is accepted.
