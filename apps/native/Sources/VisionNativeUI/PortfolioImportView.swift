@@ -40,7 +40,7 @@ public struct PortfolioImportView: View {
                         historyOpen = true
                         Task { await screens.history.load(offset: 0, force: true) }
                     })
-            }.padding(24).frame(maxWidth: 1360, alignment: .leading).frame(maxWidth: .infinity)
+            }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
         }
         .task { await screens.load() }
         .onAppear {

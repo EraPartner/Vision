@@ -53,7 +53,7 @@ public struct ResearchDossiersView: View {
                         editor
                     }
                 }
-            }.padding(24).frame(maxWidth: 1440, alignment: .leading).frame(maxWidth: .infinity)
+            }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
         }
         .sheet(
             isPresented: Binding(get: { model.pendingReview != nil }, set: { if !$0 { model.cancelPendingReview() } })
@@ -93,7 +93,8 @@ public struct ResearchDossiersView: View {
                     }.buttonStyle(.plain).accessibilityAddTraits(model.selectedId == item.id ? [.isSelected] : [])
                     Divider()
                 }
-            }.background(theme.card, in: RoundedRectangle(cornerRadius: 10))
+            }.clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous))
+                .visionCardBackground()
             if model.total > 500 {
                 HStack {
                     Button(strings.t("dossiers.previous")) { Task { await model.previousPage() } }.disabled(

@@ -307,6 +307,11 @@ describeDb("importPipeline commit (real Postgres)", () => {
       const work: Promise<unknown>[] = [];
       try {
         await gate.query("BEGIN");
+        // Count only sessions this gate blocks: other DB test files share the
+        // database, and their lock waiters made the first claim look queued
+        // before it was, so the second claim could win the row lock.
+        const gatePid = (await gate.query("SELECT pg_backend_pid() AS pid"))
+          .rows[0].pid;
         await gate.query(
           "SELECT id FROM import_batches WHERE id = $1 FOR UPDATE",
           [batchId],
@@ -320,7 +325,8 @@ describeDb("importPipeline commit (real Postgres)", () => {
         while (Date.now() < deadline) {
           waiters = (
             await pool.query(
-              "SELECT count(*)::int AS n FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock' AND query LIKE '%import_batches%'",
+              "SELECT count(*)::int AS n FROM pg_stat_activity WHERE $1 = ANY(pg_blocking_pids(pid))",
+              [gatePid],
             )
           ).rows[0].n;
           if (waiters) break;
@@ -367,6 +373,11 @@ describeDb("importPipeline commit (real Postgres)", () => {
       const work: Promise<unknown>[] = [];
       try {
         await gate.query("BEGIN");
+        // Count only sessions this gate blocks: other DB test files share the
+        // database, and their lock waiters made the first claim look queued
+        // before it was, so the second claim could win the row lock.
+        const gatePid = (await gate.query("SELECT pg_backend_pid() AS pid"))
+          .rows[0].pid;
         await gate.query(
           "SELECT id FROM import_batches WHERE id = $1 FOR UPDATE",
           [batchId],
@@ -380,7 +391,8 @@ describeDb("importPipeline commit (real Postgres)", () => {
         while (Date.now() < deadline) {
           waiters = (
             await pool.query(
-              "SELECT count(*)::int AS n FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock' AND query LIKE '%import_batches%'",
+              "SELECT count(*)::int AS n FROM pg_stat_activity WHERE $1 = ANY(pg_blocking_pids(pid))",
+              [gatePid],
             )
           ).rows[0].n;
           if (waiters) break;

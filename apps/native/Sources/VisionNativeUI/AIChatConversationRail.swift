@@ -85,8 +85,9 @@ struct AIChatConversationRail: View {
                     }
                 }.padding(.horizontal, 8).padding(.bottom, 12)
             }
-        }.frame(maxHeight: .infinity).background(theme.card, in: RoundedRectangle(cornerRadius: 16))
-            .overlay(RoundedRectangle(cornerRadius: 16).stroke(theme.border.opacity(0.6)))
+        }.frame(maxHeight: .infinity)
+            .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous))
+            .visionCardBackground()
             .sheet(item: $renameTarget) { target in
                 AIChatRenameSheet(model: model, conversation: target, shell: shell)
             }

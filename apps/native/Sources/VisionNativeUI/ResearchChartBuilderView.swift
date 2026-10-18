@@ -44,7 +44,7 @@ public struct ResearchChartBuilderView: View {
                 }
                 ResearchChartBuilderSeriesView(model: model, shell: shell)
                 if !model.state.series.isEmpty { oscillator }
-            }.padding(24).frame(maxWidth: 1500, alignment: .leading).frame(maxWidth: .infinity)
+            }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
         }
         .overlay(alignment: .bottom) { ResearchChartBuilderNoticeView(model: model, shell: shell) }
         .sheet(isPresented: $model.isSaveDialogPresented) { ResearchChartBuilderSaveSheet(model: model, shell: shell) }

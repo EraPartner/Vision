@@ -17,12 +17,11 @@ public struct ExchangeRatesView: View {
 
     public var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: VisionPageLayout.spacing) {
                 header
                 content
             }
-            .padding(24)
-            .frame(maxWidth: 1200, alignment: .leading)
+            .padding(VisionPageLayout.padding)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .foregroundStyle(theme.foreground)
@@ -257,15 +256,12 @@ public struct ExchangeRatesView: View {
     }
 
     private func card<Content: View>(padding: CGFloat = 16, @ViewBuilder _ content: () -> Content) -> some View {
-        content()
-            .padding(padding)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: DesignTokens.Radius.card)
-                    .fill(theme.card))
-            .overlay(
-                RoundedRectangle(cornerRadius: DesignTokens.Radius.card)
-                    .strokeBorder(theme.border.opacity(0.6), lineWidth: 1))
+        VStack(alignment: .leading, spacing: 12) {
+            content()
+        }
+        .padding(padding)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .visionCardBackground()
     }
 
     // MARK: Toast

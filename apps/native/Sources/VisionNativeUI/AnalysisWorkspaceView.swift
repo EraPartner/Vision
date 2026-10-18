@@ -65,7 +65,7 @@ public struct AnalysisWorkspaceView: View {
                                     })
                             }.frame(width: wide ? 360 : nil)
                         }
-                    }.padding(24).frame(maxWidth: 1460, alignment: .leading).frame(maxWidth: .infinity)
+                    }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
         }

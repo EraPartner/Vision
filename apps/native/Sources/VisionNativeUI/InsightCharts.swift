@@ -97,7 +97,7 @@ struct InsightTimelineChart: View {
             )
             .chartXScale(domain: keys)
             .chartXAxis {
-                AxisMarks(values: .automatic(desiredCount: 6)) { value in
+                AxisMarks(values: ChartAxisTicks.evenlySpaced(keys)) { value in
                     AxisGridLine()
                     AxisValueLabel {
                         if let key = value.as(String.self) { Text(formatTick?(key) ?? periodLabel(key)) }

@@ -111,7 +111,7 @@ public struct StatisticsView: View {
                     }.pickerStyle(.segmented)
                     content
                 }
-            }.padding(24).frame(maxWidth: 1280, alignment: .leading).frame(maxWidth: .infinity)
+            }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
         }
         .task(id: shell.route.string + currency + String(shell.settingsRevision)) { await reload() }
         // Saved-chart toasts go to the shell's notice host, like the screens it wires itself.

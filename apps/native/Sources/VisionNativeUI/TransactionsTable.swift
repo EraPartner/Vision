@@ -26,6 +26,22 @@ struct TransactionsTableCard: View {
     private var isCompact: Bool { Double(tableWidth) < TransactionsModel.compactWidth }
 
     var body: some View {
+        // Measures the width the page offers: a sibling takes the proposal as is, while the
+        // card's own size would follow rows that overflow it.
+        VStack(spacing: 0) {
+            Color.clear
+                .frame(maxWidth: .infinity, maxHeight: 0)
+                .onGeometryChange(for: CGFloat.self) { proxy in
+                    proxy.size.width
+                } action: { width in
+                    tableWidth = width
+                }
+                .accessibilityHidden(true)
+            card
+        }
+    }
+
+    private var card: some View {
         AdminCard(padding: 0) {
             VStack(alignment: .leading, spacing: 0) {
                 searchBar
@@ -51,11 +67,6 @@ struct TransactionsTableCard: View {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
             }
-        }
-        .onGeometryChange(for: CGFloat.self) { proxy in
-            proxy.size.width
-        } action: { width in
-            tableWidth = width
         }
         .onChange(of: model.focusRequest) { _, request in
             guard let request else { return }
@@ -198,8 +209,16 @@ struct TransactionsTableCard: View {
         return shown.filter { ![.date, .recipient, .category, .bank].contains($0) }
     }
 
+    /// The column widths that fit `tableWidth` (resized ones kept).
+    private var fittedWidths: [String: CGFloat] {
+        TransactionColumn.fittedWidths(
+            dataColumns, resized: widths.mapValues(Double.init), available: Double(tableWidth),
+            chrome: Double(Self.selectWidth + Self.editWidth + 32) + (isCompact ? Double(Self.summaryWidth) : 0)
+        ).mapValues { CGFloat($0) }
+    }
+
     private func width(_ column: TransactionColumn) -> CGFloat {
-        widths[column.rawValue] ?? CGFloat(column.width)
+        fittedWidths[column.rawValue] ?? CGFloat(column.width)
     }
 
     private func widthBinding(_ column: TransactionColumn) -> Binding<CGFloat> {
@@ -358,11 +377,12 @@ struct TransactionsTableCard: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 32)
         } else {
+            let fitted = fittedWidths
             LazyVStack(alignment: .leading, spacing: 0) {
                 ForEach(rows) { row in
                     TransactionRowView(
                         model: model, shell: shell, row: row, columns: dataColumns, compact: isCompact,
-                        widths: widths, focusedRow: $focusedRow)
+                        widths: fitted, focusedRow: $focusedRow)
                     Divider()
                 }
             }

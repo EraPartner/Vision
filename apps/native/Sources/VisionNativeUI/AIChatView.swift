@@ -27,14 +27,17 @@ public struct AIChatView: View {
             VisionPageHeader(
                 title: strings.t("aiChat.title"),
                 subtitle: strings.t(isChat ? "aiChat.mode.chatHint" : "aiChat.mode.investigationHint"),
-                symbol: "bubble.left.and.bubble.right")
-            Picker(
-                strings.t("aiChat.mode.label"),
-                selection: Binding(get: { model.mode }, set: { value in model.setMode(value) })
+                symbol: "bubble.left.and.bubble.right"
             ) {
-                Text(strings.t("aiChat.mode.chat")).tag(AIChatMode.chat)
-                Text(strings.t("aiChat.mode.investigation")).tag(AIChatMode.investigation)
-            }.pickerStyle(.segmented).frame(maxWidth: 360)
+                // The web header's trailing Chat / Investigation toggle; the label stays for VoiceOver.
+                Picker(
+                    strings.t("aiChat.mode.label"),
+                    selection: Binding(get: { model.mode }, set: { value in model.setMode(value) })
+                ) {
+                    Text(strings.t("aiChat.mode.chat")).tag(AIChatMode.chat)
+                    Text(strings.t("aiChat.mode.investigation")).tag(AIChatMode.investigation)
+                }.pickerStyle(.segmented).labelsHidden().fixedSize()
+            }
             HStack(alignment: .top, spacing: isChat && width >= 768 ? 16 : 0) {
                 AIChatConversationRail(model: model, shell: shell)
                     .frame(width: isChat && width >= 768 ? 272 : 0)
@@ -48,10 +51,10 @@ public struct AIChatView: View {
                         AIInvestigationView(model: investigation, shell: shell)
                     }.opacity(isChat ? 0 : 1).disabled(isChat).allowsHitTesting(!isChat).accessibilityHidden(isChat)
                 }.frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(theme.card, in: RoundedRectangle(cornerRadius: 16))
-                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(theme.border.opacity(0.6)))
+                    .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous))
+                    .visionCardBackground()
             }.frame(maxHeight: .infinity)
-        }.padding(24).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .onGeometryChange(for: CGFloat.self) {
                 $0.size.width
             } action: {

@@ -292,6 +292,20 @@ import Testing
         #expect(Set(model.metrics.keys) == [3])
     }
 
+    @Test func restartedVisitDuringAReadStillShowsTheList() async throws {
+        let transport = WatchlistTransport()
+        let model = ResearchWatchlistModel(service: client(transport))
+        let gate = WatchlistGate()
+        await transport.setListGate(gate)
+        let first = Task { await model.load() }
+        await gate.started()
+        first.cancel()
+        await model.load()
+        await gate.release()
+        await first.value
+        #expect(model.page?.items.map(\.id) == [2, 1] && !model.isLoading && model.error == nil)
+    }
+
     @Test func deletingSelectedItemClosesChartAndCallsMutationCallback() async throws {
         let transport = WatchlistTransport()
         let model = ResearchWatchlistModel(service: client(transport))

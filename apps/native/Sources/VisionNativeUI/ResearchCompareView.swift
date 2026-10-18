@@ -65,7 +65,7 @@ public struct ResearchCompareView: View {
                         performance
                     }
                 }
-            }.padding(24).frame(maxWidth: 1500, alignment: .leading).frame(maxWidth: .infinity)
+            }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
         }
     }
     private var selectedSymbols: some View {

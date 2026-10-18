@@ -43,7 +43,7 @@ public struct TaxOverviewView: View {
                 {
                     Text(error).foregroundStyle(theme.destructive)
                 }
-            }.padding(24).frame(maxWidth: 1280, alignment: .leading).frame(maxWidth: .infinity)
+            }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
         }
         .task(id: shell.route.string + shell.settings.defaultCurrency + String(shell.settingsRevision)) {
             await reload()

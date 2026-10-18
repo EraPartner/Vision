@@ -89,7 +89,10 @@ public final class ResearchWatchlistModel {
             ) {
                 try await service.researchWatchlist()
             }
-            guard readRevision == revision, !Task.isCancelled else { return }
+            // A newer read or leaving the page changes `readRevision`. A cancelled caller is not
+            // stale: a restarted visit that arrives while this read is in flight returns early,
+            // so dropping this result would leave the page blank.
+            guard readRevision == revision else { return }
             let previousTarget = selectedItem?.targetPrice
             page = result
             dirty = false
@@ -112,7 +115,7 @@ public final class ResearchWatchlistModel {
             }
             if selectedItem != nil { await updateChartMetrics() }
         } catch {
-            guard readRevision == revision, !Task.isCancelled else { return }
+            guard readRevision == revision else { return }
             self.error = error.localizedDescription
             dirty = true
         }

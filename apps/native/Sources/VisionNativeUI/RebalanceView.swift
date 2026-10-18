@@ -28,7 +28,7 @@ public struct RebalanceView: View {
                 }
                 if let error = model.computeError { Text(verbatim: error).foregroundStyle(theme.destructive) }
                 if let result = model.result { resultCards(result) }
-            }.padding(24).frame(maxWidth: 1280, alignment: .leading).frame(maxWidth: .infinity)
+            }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
         }
         .task(id: shell.route.string + settings.defaultCurrency + String(shell.settingsRevision)) {
             await model.load(route: shell.route, settings: settings)
@@ -226,8 +226,7 @@ public struct RebalanceView: View {
             if let title { Text(strings.t(title)).font(.headline) }
             content()
         }.padding(20).frame(maxWidth: .infinity, alignment: .leading)
-            .background(theme.card, in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(theme.border.opacity(0.6)))
+            .visionCardBackground()
     }
     func field<Content: View>(_ key: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 6) {

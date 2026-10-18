@@ -16,11 +16,8 @@ public struct ResearchMarketLookupView: View {
     public var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                HStack {
-                    Label(strings.t("marketLookup.title"), systemImage: "magnifyingglass.chart.bar").font(
-                        .largeTitle.weight(.semibold)
-                    ).accessibilityAddTraits(.isHeader)
-                    Spacer()
+                // The web PageHeader: the sidebar icon tile and the title, without a subtitle.
+                VisionPageHeader(title: strings.t("marketLookup.title"), subtitle: "", symbol: "chart.xyaxis.line") {
                     if let quote = model.quote, !model.isProviderAsset {
                         addPortfolioButton
                         Menu {
@@ -120,7 +117,7 @@ public struct ResearchMarketLookupView: View {
                         }.padding(.vertical, 50).frame(maxWidth: .infinity)
                     }
                 }
-            }.padding(24).frame(maxWidth: 1500, alignment: .leading).frame(maxWidth: .infinity)
+            }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
         }
         .overlay(alignment: .bottom) {
             NoticeToast(notice: watchlistAdd.notice ?? actionNotice, strings: strings) {

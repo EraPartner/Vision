@@ -93,7 +93,7 @@ public struct PortfolioOverviewView: View {
                     }
                     if model.widgets.isVisible("archived") { archived }
                 }
-            }.padding(24).frame(maxWidth: 1440, alignment: .leading).frame(maxWidth: .infinity)
+            }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
         }
         .task(id: currency + shell.route.string + String(shell.settingsRevision)) { await reload() }
         .sheet(isPresented: $customize) {

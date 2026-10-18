@@ -38,16 +38,14 @@ struct AdminCard<Content: View>: View {
     @Environment(\.visionTheme) var theme
 
     var body: some View {
-        content()
-            .padding(padding)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: DesignTokens.Radius.card)
-                    .fill(theme.card)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: DesignTokens.Radius.card)
-                    .strokeBorder(ring ?? theme.border.opacity(0.6), lineWidth: 1))
+        // One card for all of the content: modifiers on a multi-view builder apply to each
+        // view, which drew a separate card per child (Net worth's error showed three).
+        VStack(alignment: .leading, spacing: 12) {
+            content()
+        }
+        .padding(padding)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .visionCardBackground(stroke: ring)
     }
 }
 
@@ -192,25 +190,31 @@ struct NativeScrollRestoration {
 
 struct AdminPage<Content: View>: View {
     private let restoration: NativeScrollRestoration?
+    /// A centred width cap, for the few web pages that set one (`max-w-7xl` on Import).
+    private let maxWidth: CGFloat?
     private let content: () -> Content
     @Environment(\.visionTheme) var theme
     @State private var position = ScrollPosition(edge: .top)
     @State private var maximumOffset: CGFloat = 0
     @State private var isRestoring = true
 
-    init(restoration: NativeScrollRestoration? = nil, @ViewBuilder content: @escaping () -> Content) {
+    init(
+        restoration: NativeScrollRestoration? = nil, maxWidth: CGFloat? = nil,
+        @ViewBuilder content: @escaping () -> Content
+    ) {
         self.restoration = restoration
+        self.maxWidth = maxWidth
         self.content = content
     }
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: VisionPageLayout.spacing) {
                 content()
             }
-            .padding(24)
-            .frame(maxWidth: 1200, alignment: .leading)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(VisionPageLayout.padding)
+            .frame(maxWidth: maxWidth ?? .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity)
         }
         .scrollPosition($position)
         .onScrollGeometryChange(for: CGFloat.self) { geometry in

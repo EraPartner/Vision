@@ -53,7 +53,7 @@ public struct NetWorthView: View {
                     }
                 }
                 if let error = model.pricesError { Text(error).font(.callout).foregroundStyle(theme.destructive) }
-            }.padding(24).frame(maxWidth: 1280, alignment: .leading).frame(maxWidth: .infinity)
+            }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
         }
         .task(id: currency + String(settings.defaultPageSize) + shell.route.string + String(shell.settingsRevision)) {
             await reload()

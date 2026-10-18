@@ -291,12 +291,7 @@ struct PlannedRecurringPanel: View {
                     .padding(.vertical, 12)
             }
         }
-        .background(
-            RoundedRectangle(cornerRadius: DesignTokens.Radius.card)
-                .fill(theme.card))
-        .overlay(
-            RoundedRectangle(cornerRadius: DesignTokens.Radius.card)
-                .strokeBorder(theme.border.opacity(0.6), lineWidth: 1))
+        .visionCardBackground()
     }
 
     private func confidenceTone(_ level: PlannedRecurringPattern.ConfidenceLevel) -> BadgeTone {

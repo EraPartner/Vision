@@ -525,7 +525,7 @@ public struct NativeNetWorthPrintSectionView: View {
             )
             .chartXScale(domain: snapshot.displaySnapshots.map(\.date))
             .chartXAxis {
-                AxisMarks(values: .automatic(desiredCount: 6)) { value in
+                AxisMarks(values: ChartAxisTicks.evenlySpaced(snapshot.displaySnapshots.map(\.date))) { value in
                     AxisGridLine()
                     AxisValueLabel { if let key = value.as(String.self) { Text(presentation.tick(key)) } }
                 }
