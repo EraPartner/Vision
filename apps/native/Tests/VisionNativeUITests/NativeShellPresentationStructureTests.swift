@@ -80,7 +80,7 @@ struct NativeShellPresentationStructureTests {
         #expect(SidebarWidthGuard.correctedWidth(sidebar: 140, splitView: 400, minimum: minimum, ideal: ideal) == nil)
         #expect(
             SidebarWidthGuard.correctedWidth(
-                sidebar: 150, splitView: 1100, minimum: minimum, ideal: ideal, firstLayout: false) == minimum)
+                sidebar: 150, splitView: 1100, minimum: minimum, ideal: ideal, firstLayout: false) == ideal)
         #expect(
             SidebarWidthGuard.correctedWidth(
                 sidebar: 220, splitView: 1100, minimum: minimum, ideal: ideal, firstLayout: false) == nil)

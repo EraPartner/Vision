@@ -26,16 +26,17 @@ struct SidebarWidthGuard: NSViewRepresentable {
     func updateNSView(_ view: ProbeView, context: Context) {}
 
     /// The width to move the divider to, or `nil` to leave it. On the first measured layout a
-    /// sidebar narrower than `ideal` widens to `ideal`; afterwards (SwiftUI can re-apply its own
-    /// width on a later pass) only a sidebar below `minimum` is pushed back to `minimum`, so the
-    /// user's drags are left alone. Nothing moves while the split view is too narrow to hold the
-    /// ideal sidebar next to a usable detail column.
+    /// sidebar narrower than `ideal` widens to `ideal`. Afterwards only a sidebar below `minimum`
+    /// moves, back to `ideal`: the user cannot drag below `minimum`, so that is SwiftUI
+    /// re-applying its own 140 pt column default (it ignores `navigationSplitViewColumnWidth`
+    /// here). Nothing moves while the split view is too narrow to hold the ideal sidebar next to
+    /// a usable detail column.
     nonisolated static func correctedWidth(
         sidebar: CGFloat, splitView: CGFloat, minimum: CGFloat, ideal: CGFloat, firstLayout: Bool = true
     ) -> CGFloat? {
         guard sidebar > 0, splitView >= ideal * 2 else { return nil }
         if firstLayout { return sidebar < ideal ? max(minimum, ideal) : nil }
-        return sidebar < minimum ? minimum : nil
+        return sidebar < minimum ? max(minimum, ideal) : nil
     }
 
     final class ProbeView: NSView {
@@ -43,6 +44,9 @@ struct SidebarWidthGuard: NSViewRepresentable {
         private let ideal: CGFloat
         private var widened = false
         private var pending = false
+        /// Bounds the corrections per launch, so a split view that keeps undoing them cannot
+        /// make the probe fight it forever.
+        private var corrections = 0
         private weak var observedSplitView: NSSplitView?
 
         init(minimum: CGFloat, ideal: CGFloat) {
@@ -66,12 +70,19 @@ struct SidebarWidthGuard: NSViewRepresentable {
             scheduleCorrection()
         }
 
+        /// SwiftUI resets the column without a split resize notification; the probe fills the
+        /// sidebar column, so its own frame change is the reliable signal.
+        override func setFrameSize(_ newSize: NSSize) {
+            super.setFrameSize(newSize)
+            scheduleCorrection()
+        }
+
         /// The first layout can run before the split view has sized its columns, and SwiftUI can
         /// later re-apply its own width, so this re-checks after every split resize.
         @objc private func splitViewDidResize(_ note: Notification) { scheduleCorrection() }
 
         private func scheduleCorrection() {
-            guard window != nil, !pending else { return }
+            guard window != nil, !pending, corrections < 8 else { return }
             pending = true
             // Moving the divider inside a layout pass would re-enter it.
             Task { @MainActor [weak self] in
@@ -95,9 +106,12 @@ struct SidebarWidthGuard: NSViewRepresentable {
                 NotificationCenter.default.addObserver(
                     self, selector: #selector(splitViewDidResize(_:)),
                     name: NSSplitView.didResizeSubviewsNotification, object: splitView)
-                if let item = (splitView.delegate as? NSSplitViewController)?.splitViewItems.first {
-                    item.minimumThickness = minimum
-                }
+            }
+            // SwiftUI rewrites the item's minimum on its own update passes, so restate it each time.
+            if let item = (splitView.delegate as? NSSplitViewController)?.splitViewItems.first,
+                item.minimumThickness < minimum
+            {
+                item.minimumThickness = minimum
             }
             let splitWidth = splitView.bounds.width
             guard splitWidth > 0, sidebar.frame.width > 0 else {
@@ -109,7 +123,10 @@ struct SidebarWidthGuard: NSViewRepresentable {
                 sidebar: before, splitView: splitWidth, minimum: minimum, ideal: ideal,
                 firstLayout: !widened)
             widened = true
-            if let width { splitView.setPosition(width, ofDividerAt: 0) }
+            if let width {
+                corrections += 1
+                splitView.setPosition(width, ofDividerAt: 0)
+            }
             SidebarWidthGuard.note(
                 "split=\(splitWidth) sidebar=\(before) target=\(width.map { "\($0)" } ?? "none") after=\(sidebar.frame.width)")
         }
