@@ -1051,7 +1051,7 @@ sorted order and revalidated as active through commit. Query-count and elapsed-t
 on real PostgreSQL remain pending; reduced source-level round trips are not a measured speedup.
 
 Belfius sequence metadata survives staging and commit for same-day balance selection; see
-[[docs/adr/199-bank-chronology]]. Rollback rejects planned-execution links and requires reopening
+[[docs/adr/206-bank-chronology]]. Rollback rejects planned-execution links and requires reopening
 closed accounts before removing their ledger rows. It locks and rechecks the batch before
 discovering those rows, so a stale route status cannot let rollback race a commit or review
 override. The lock order is batch, accounts, then ledger rows; deletion uses only the guarded

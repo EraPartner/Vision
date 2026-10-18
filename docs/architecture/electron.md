@@ -380,7 +380,7 @@ enrollment, partial verification, unavailable protection and failure, and close 
 A native backup pauses closure, stops the backend writer while retaining PostgreSQL, captures
 the database dump and attachment tree, and restarts the backend in `finally` before compression.
 A shared maintenance guard prevents conflicting restore/update shutdown; quit waits for maintenance.
-The health watchdog pauses for this interval. See [[docs/adr/200-coordinated-native-recovery|ADR-200]].
+The health watchdog pauses for this interval. See [[docs/adr/207-coordinated-native-recovery|ADR-207]].
 Restore pauses the timer
 and checks the candidate database after detailed readiness but before final
 database-switch activation. A status other than `verified` first rolls the

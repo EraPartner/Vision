@@ -452,7 +452,7 @@ closes its owned Chromium page promptly if rendering has started. Its slot remai
 source/render work and page cleanup settle. Cancellation is checked before and after rendering;
 the route does not write a PDF or forward a cancellation error to a disconnected response. There
 is no short client timeout added. The PDF remains buffered before a successful binary response.
-See [[docs/adr/201-bounded-report-pipeline|ADR-201]].
+See [[docs/adr/208-bounded-report-pipeline|ADR-208]].
 
 ### Performance
 

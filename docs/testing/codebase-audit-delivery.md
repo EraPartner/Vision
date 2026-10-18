@@ -47,7 +47,7 @@ acceptance or confirmed reproduction of the original native warning.
 | 15 | Coordinated restore recovery | Normal and Demo startup recover attachment/database journals together before writes or seed decisions; ambiguous recovery fails closed. | [[docs/features/backup-coverage-audit]] |
 | 16 | Update activation cleanup | Cleanup failure after successful launch cannot roll back the running new application to a partially removed old copy. | [[docs/features/application-updates]] |
 | 17 | Quiescent backup | A maintenance guard pauses backend/audit work while database and attachment bytes are captured; readiness resumes before compression. | [[docs/features/backup-coverage-audit]] |
-| 18 | Bank chronology | Migration 0127 and parser/staging/insert propagation preserve bank sequence in balance-anchor ordering, with conservative backfill. | [[docs/adr/199-bank-chronology]] |
+| 18 | Bank chronology | Migration 0127 and parser/staging/insert propagation preserve bank sequence in balance-anchor ordering, with conservative backfill. | [[docs/adr/206-bank-chronology]] |
 | 19 | Protected classifications | Manual transfer operations protect opening, adjustment and brokerage ownership; bulk UI respects eligibility. | [[docs/features/transfers]] |
 | 20 | Account lifecycle | Shared lifecycle locks coordinate ledger mutation/import/rollback with account closing. | [[docs/features/accounts]] |
 | 21 | Manual pair validity | Reciprocity, activity, different accounts and opposite signs are revalidated after sorted graph locking; unequal amounts/currencies remain supported. | [[docs/features/transfers]] |
@@ -68,7 +68,7 @@ acceptance or confirmed reproduction of the original native warning.
 | 36 | Visible Dashboard consumers | Hydrated visibility gates only the query families with active consumers, preserving shared/cached data. | [[docs/performance/caching-strategies]] |
 | 37 | Lazy Settings | Lightweight section routing precedes lazy dialog/section loading; opening retains deep links and drafts. | [[docs/features/settings]] |
 | 38 | Bounded exclusions picker | Virtual rows, memoized membership and keyboard focus bound work for large recipient lists. | [[docs/features/settings]] |
-| 39 | Report admission | Admission bounds the complete preparation/render pipeline to two active/eight queued requests, with overflow rejection and cancellation cleanup. | [[docs/adr/201-bounded-report-pipeline]] |
+| 39 | Report admission | Admission bounds the complete preparation/render pipeline to two active/eight queued requests, with overflow rejection and cancellation cleanup. | [[docs/adr/208-bounded-report-pipeline]] |
 | 40 | Selected report dependencies | Portfolio sections select only required datasets while retaining shared dependencies and source failure semantics. | [[docs/features/pdf-report-export]] |
 
 ## Walkthrough and cleanup work
@@ -136,4 +136,4 @@ traversal using the same predicate. It does not establish end-to-end database, s
 - [[docs/features/backup-coverage-audit]]
 - [[docs/features/belgian-tax]]
 - [[docs/features/plannedTransactions]]
-- [[docs/adr/200-coordinated-native-recovery]]
+- [[docs/adr/207-coordinated-native-recovery]]

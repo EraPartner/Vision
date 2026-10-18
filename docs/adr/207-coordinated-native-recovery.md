@@ -1,5 +1,5 @@
 ---
-title: "ADR-200: Coordinated native backup and restore recovery"
+title: "ADR-207: Coordinated native backup and restore recovery"
 type: adr
 status: accepted
 date: 2026-10-11
@@ -7,7 +7,7 @@ tags: [adr, architecture, backup, recovery, electron]
 description: Quiesce the native writer for a consistent bundle and recover interrupted database and attachment switches before startup.
 ---
 
-# ADR-200: Coordinated native backup and restore recovery
+# ADR-207: Coordinated native backup and restore recovery
 
 ## Status
 

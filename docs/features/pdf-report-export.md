@@ -911,7 +911,7 @@ Overflow returns HTTP 503; disconnected queued clients release their place. Acti
 closes the owned Chromium page, while its slot remains held until rendering and cleanup settle.
 These are memory and
 concurrency bounds, not a measured elapsed-time improvement. See [[docs/api/reports|Reports API]]
-and [[docs/adr/201-bounded-report-pipeline|ADR-201]].
+and [[docs/adr/208-bounded-report-pipeline|ADR-208]].
 
 ## Performance
 

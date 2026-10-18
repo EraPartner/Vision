@@ -1,5 +1,5 @@
 ---
-title: ADR-199 Bank chronology for balance anchors
+title: ADR-206 Bank chronology for balance anchors
 type: adr
 status: accepted
 date: 2026-10-11
@@ -7,7 +7,7 @@ tags: [adr, accounts, imports, balances, chronology]
 description: Preserve bank ordering independently of insertion order when selecting same-day balance anchors.
 ---
 
-# ADR-199: Bank chronology for balance anchors
+# ADR-206: Bank chronology for balance anchors
 
 ## Context
 

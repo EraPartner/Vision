@@ -17,12 +17,12 @@ aliases: [ADRs, decisions, architecture decisions]
 
 ## Recovery and report resource bounds
 
-[[docs/adr/200-coordinated-native-recovery|ADR-200]] coordinates native snapshot capture and interrupted restore recovery.
-[[docs/adr/201-bounded-report-pipeline|ADR-201]] bounds complete PDF jobs before data fetching and HTML allocation.
+[[docs/adr/207-coordinated-native-recovery|ADR-207]] coordinates native snapshot capture and interrupted restore recovery.
+[[docs/adr/208-bounded-report-pipeline|ADR-208]] bounds complete PDF jobs before data fetching and HTML allocation.
 
 ## Bank chronology
 
-[[docs/adr/199-bank-chronology|ADR-199]] preserves bank sequence through import and uses it for same-day balance anchors without guessing missing chronology.
+[[docs/adr/206-bank-chronology|ADR-206]] preserves bank sequence through import and uses it for same-day balance anchors without guessing missing chronology.
 
 ## Latest visual hierarchy decision
 

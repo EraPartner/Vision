@@ -69,7 +69,7 @@ The budgeting accounts surface: every bank/cash/liability entity ([[docs/adr/088
 
 Same-day imported anchors use retained bank sequence where available, independently of import
 arrival order. Unsequenced rows follow sequenced rows and use ID order; unknown historical
-chronology is not guessed. See [[docs/adr/199-bank-chronology]].
+chronology is not guessed. See [[docs/adr/206-bank-chronology]].
 
 Ledger creation/import holds a shared lock on active accounts through commit. Ledger edits,
 deletions and import rollback lock affected accounts in ID order before locking transaction rows.

@@ -66,7 +66,7 @@ notification. These paths do not reset receipts, keys or Keychain witnesses.
 During native backup capture, audit closure drains and pauses before stopping the backend writer.
 The existing trusted session survives this intentional maintenance interval; closure resumes only
 after restart has been attempted. Unexpected backend loss still ends the session.
-See [[docs/adr/200-coordinated-native-recovery|coordinated native recovery]].
+See [[docs/adr/207-coordinated-native-recovery|coordinated native recovery]].
 
 ## Related
 

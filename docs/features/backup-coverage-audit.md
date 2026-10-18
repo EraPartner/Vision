@@ -356,7 +356,7 @@ On the next launch, an unfinished database switch restores attachments and then 
 database before normal startup. Recovery handles interruption before either rename, between
 renames, and after activation. If database finalization is already durable, the remaining
 attachment journal only authorizes cleanup. Corrupt state or unexpected paths stop recovery;
-there is no empty replacement database fallback. See [[docs/adr/200-coordinated-native-recovery|ADR-200]]
+there is no empty replacement database fallback. See [[docs/adr/207-coordinated-native-recovery|ADR-207]]
 and [[docs/architecture/electron|Electron architecture]].
 
 ## Restore Process (Phase 1+2)

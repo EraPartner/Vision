@@ -1,5 +1,5 @@
 ---
-title: "ADR-201: Bound the complete PDF report pipeline"
+title: "ADR-208: Bound the complete PDF report pipeline"
 type: adr
 status: accepted
 date: 2026-10-11
@@ -7,7 +7,7 @@ tags: [adr, architecture, reports, performance]
 description: Admit PDF report work before database reads and HTML allocation, with a finite queue and disconnect cancellation.
 ---
 
-# ADR-201: Bound the complete PDF report pipeline
+# ADR-208: Bound the complete PDF report pipeline
 
 ## Status
 
