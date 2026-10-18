@@ -3,7 +3,7 @@ title: Guides Index
 type: guides-index
 status: active
 date: 2026-10-04
-updated: 2026-10-04
+updated: 2026-10-18
 tags: [guides, index, how-to]
 description: Setup, development, deployment, and contribution guides for the Vision project
 aliases: [guides, how-to, getting started]
@@ -31,6 +31,7 @@ SORT title ASC
 
 - [[docs/guides/setup\|Setup Guide]] - Local development environment setup
 - [[docs/guides/native-macos-runtime|Native macOS Runtime Guide]] - Bundled PostgreSQL 18, Electron lifecycle, diagnostics, backup, and restore
+- [[docs/guides/swift-backend-port|Swift Backend Port Playbook]] - Phases and Claude Code prompts for the ADR-210 in-app Swift backend
 - [[docs/guides/devcontainer\|Agent Sandbox Guide]] - Built-in Claude Code and Codex sandbox workflow
 - [[docs/guides/backend-configuration\|Backend Configuration]] - Config, logging, and database utilities
 

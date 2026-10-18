@@ -205,6 +205,10 @@ PostgreSQL) is now about half of the Electron Demo's.
 (Hummingbird 2) inside the app; [[docs/adr/210-vision-native-swift-backend|ADR-210]] records it as
 proposed, with no code. Do not start the migration before it is accepted.
 
+**Swift backend** (ADR-210): not started. The phase plan and session prompts are in
+[[docs/guides/swift-backend-port|the Swift backend port playbook]]; each session records here the
+operations it moved, the checks it ran and the next slice.
+
 **Next**
 
 1. Run the manual Mac checks: VoiceOver on the startup/failure screens, the text context menu,
