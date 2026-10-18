@@ -82,21 +82,32 @@ function invalid(error: unknown): never {
       : "Invalid analysis interchange input",
   );
 }
+/** Size check and read through one handle, so the file read is the file measured. */
+async function readBounded(
+  filePath: string,
+  limit: number,
+  message: () => string,
+): Promise<Buffer> {
+  const file = await fs.open(filePath, "r");
+  try {
+    if ((await file.stat()).size > limit) throw new ValidationError(message());
+    return await file.readFile();
+  } finally {
+    await file.close();
+  }
+}
 /** Value-only file parsing. No Analysis execution, scenario save, settings or database writes. */
 export async function importAnalysisInterchange(
   filePath: string,
   fileName: string,
   format: AnalysisInterchangeFormat,
 ) {
-  const stat = await fs.stat(filePath);
   const limit = format === "csv" ? 1_000_000 : 10_000_000;
-  if (stat.size > limit)
-    throw new ValidationError(
-      format === "csv"
-        ? "Scenario CSV exceeds the 1 MB limit"
-        : "Workbook exceeds 10 MB",
-    );
-  const bytes = await fs.readFile(filePath);
+  const bytes = await readBounded(filePath, limit, () =>
+    format === "csv"
+      ? "Scenario CSV exceeds the 1 MB limit"
+      : "Workbook exceeds 10 MB",
+  );
   try {
     const importedAt = new Date().toISOString();
     if (format === "csv") {
@@ -139,10 +150,13 @@ export async function exportAnalysisInterchange(
   filePath: string,
   format: AnalysisInterchangeFormat,
 ) {
-  const stat = await fs.stat(filePath);
-  if (stat.size > ANALYSIS_EXPORT_MAX_BYTES)
-    throw new ValidationError("Analysis export payload exceeds 64 MiB");
-  const text = await fs.readFile(filePath, "utf8");
+  const text = (
+    await readBounded(
+      filePath,
+      ANALYSIS_EXPORT_MAX_BYTES,
+      () => "Analysis export payload exceeds 64 MiB",
+    )
+  ).toString("utf8");
   let payload: unknown;
   try {
     payload = JSON.parse(text);

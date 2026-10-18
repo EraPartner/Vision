@@ -4,7 +4,7 @@ import { z } from "zod";
 import { bareMessages, parseInput } from "../lib/zodInput.ts";
 import { csvEncodingField } from "../lib/parserConfigSchema.ts";
 import { portfolioUpload } from "../lib/portfolioUpload.ts";
-import { cleanup } from "../lib/csvUpload.ts";
+import { cleanup, uploadTempPath } from "../lib/csvUpload.ts";
 import { ValidationError } from "../middleware/errorHandler.ts";
 import { probePortfolioImport } from "../services/portfolioImportProbe.ts";
 
@@ -27,7 +27,7 @@ export function registerPortfolioImportProbeRoute(router: Router) {
       const options = parseInput(probeInput, req.body);
       res.ok(
         await probePortfolioImport(
-          req.file.path,
+          uploadTempPath(req.file.path),
           req.file.originalname,
           options,
         ),

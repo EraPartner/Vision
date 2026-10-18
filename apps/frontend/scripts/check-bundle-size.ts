@@ -106,7 +106,11 @@ const BUDGETS_KB = {
     // the "Not entered" pension type (ADR-203 review): 1366.19 measured.
     // Final read-only extreme-year report context measures 1373.85 KB total; its lazy
     // source helper adds 0.55 KB preload / 1.56 KB overall over 474.14 / 1372.29 KB.
-    total: 1374,
+    // Raised from 1374 when main (1381.33 KB measured against its own 1367 budget: widget
+    // persistence, lazy Settings sections, the filing workflow and report changes) merged
+    // into the native branch; the native bridges, shared tax report context and transfer
+    // source add 7.40 KB, all lazy (boot preload 464.76): 1388.73 measured.
+    total: 1390,
 };
 
 /** Parses dist/index.html for the entry module script and its modulepreload set. */

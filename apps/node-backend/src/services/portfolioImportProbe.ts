@@ -93,10 +93,16 @@ export async function probePortfolioImport(
   filename: string,
   options: PortfolioProbeOptions,
 ): Promise<PortfolioImportProbe> {
-  const stat = await fs.stat(filePath);
-  if (stat.size > 50 * 1024 * 1024)
-    throw new ValidationError("File size exceeds maximum of 50MB");
-  const bytes = await fs.readFile(filePath);
+  // Size check and read through one handle, so the file read is the file measured.
+  const file = await fs.open(filePath, "r");
+  let bytes: Buffer;
+  try {
+    if ((await file.stat()).size > 50 * 1024 * 1024)
+      throw new ValidationError("File size exceeds maximum of 50MB");
+    bytes = await file.readFile();
+  } finally {
+    await file.close();
+  }
   let detected: DetectedPortfolioImport | null = null;
   let detectionError: "parse_error" | null = null;
   try {

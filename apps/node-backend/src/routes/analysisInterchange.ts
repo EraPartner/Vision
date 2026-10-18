@@ -2,7 +2,7 @@ import { Router } from "express";
 import multer from "multer";
 import os from "node:os";
 import { z } from "zod";
-import { cleanup } from "../lib/csvUpload.ts";
+import { cleanup, uploadTempPath } from "../lib/csvUpload.ts";
 import { parseInput } from "../lib/zodInput.ts";
 import { ValidationError } from "../middleware/errorHandler.ts";
 import {
@@ -35,7 +35,7 @@ router.post(
       const { format } = parseInput(input, req.body);
       res.ok(
         await importAnalysisInterchange(
-          req.file.path,
+          uploadTempPath(req.file.path),
           req.file.originalname,
           format,
         ),
@@ -52,7 +52,10 @@ router.post(
     if (!req.file) throw new ValidationError("No export snapshot uploaded");
     try {
       const { format } = parseInput(input, req.body);
-      const bytes = await exportAnalysisInterchange(req.file.path, format);
+      const bytes = await exportAnalysisInterchange(
+        uploadTempPath(req.file.path),
+        format,
+      );
       res.attachment(`analysis.${format}`);
       res.type(
         format === "csv"

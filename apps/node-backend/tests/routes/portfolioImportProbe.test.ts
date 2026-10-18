@@ -1,3 +1,5 @@
+import os from "node:os";
+import path from "node:path";
 import { Router } from "express";
 import type { Request, Response, NextFunction } from "express";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -18,7 +20,12 @@ const fixture = vi.hoisted(() => ({
 vi.mock("../../src/services/portfolioImportProbe.ts", () => ({
   probePortfolioImport: fixture.probe,
 }));
-vi.mock("../../src/lib/csvUpload.ts", () => ({ cleanup: fixture.cleanup }));
+vi.mock("../../src/lib/csvUpload.ts", async (importOriginal) => ({
+  uploadTempPath: (
+    await importOriginal<typeof import("../../src/lib/csvUpload.ts")>()
+  ).uploadTempPath,
+  cleanup: fixture.cleanup,
+}));
 vi.mock("../../src/lib/portfolioUpload.ts", () => ({
   portfolioUpload: {
     single: () => (_req: unknown, _res: unknown, next: () => void) => next(),
@@ -58,7 +65,7 @@ describe("portfolio import read-only probe boundary", () => {
     expect(bodyAt(response, "ok")).toBe(true);
     expect(bodyAt(response, "data")).toEqual(fixture.result);
     expect(fixture.probe).toHaveBeenCalledWith(
-      "/tmp/synthetic-probe",
+      path.join(os.tmpdir(), "synthetic-probe"),
       "synthetic.csv",
       { encoding: "utf-8", skipRows: 0 },
     );
@@ -72,7 +79,7 @@ describe("portfolio import read-only probe boundary", () => {
       .send({ separator: ";", encoding: "latin1", skipRows: "2" })
       .expect(200);
     expect(fixture.probe).toHaveBeenCalledWith(
-      "/tmp/synthetic-probe",
+      path.join(os.tmpdir(), "synthetic-probe"),
       "synthetic.csv",
       { separator: ";", encoding: "latin1", skipRows: 2 },
     );

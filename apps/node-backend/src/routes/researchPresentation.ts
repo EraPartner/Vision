@@ -2,7 +2,7 @@ import { Router } from "express";
 import multer from "multer";
 import os from "node:os";
 import { readFile } from "node:fs/promises";
-import { cleanup } from "../lib/csvUpload.ts";
+import { cleanup, uploadTempPath } from "../lib/csvUpload.ts";
 import { ValidationError } from "../middleware/errorHandler.ts";
 import {
   computeResearchPresentation,
@@ -19,7 +19,7 @@ router.post("/presentation", upload.single("file"), async (req, res) => {
   try {
     let input: unknown;
     try {
-      input = JSON.parse(await readFile(req.file.path, "utf8"));
+      input = JSON.parse(await readFile(uploadTempPath(req.file.path), "utf8"));
     } catch (error) {
       if (error instanceof SyntaxError)
         throw new ValidationError("Invalid presentation JSON");
