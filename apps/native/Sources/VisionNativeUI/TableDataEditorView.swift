@@ -217,16 +217,9 @@ public struct TableDataEditorView: View {
                 }
             }
             if model.showsEmptyState {
-                VStack(spacing: 8) {
-                    Image(systemName: "tablecells")
-                        .font(.title2)
-                        .foregroundStyle(theme.tertiaryLabel)
-                        .accessibilityHidden(true)
-                    Text(strings.t("dbEditor.empty"))
-                        .font(.headline)
-                        .accessibilityAddTraits(.isHeader)
+                VisionEmptyState(symbol: "tablecells", title: strings.t("dbEditor.empty")) {
+                    EmptyView()
                 }
-                .frame(maxWidth: .infinity)
                 .padding(.vertical, 24)
             }
         }
@@ -582,7 +575,7 @@ struct ReviewChangesSheet: View {
         let counts = model.operationCounts
         VStack(alignment: .leading, spacing: 14) {
             Text(strings.t("dbEditor.previewTitle"))
-                .font(.title3.weight(.semibold))
+                .font(.visionCardTitle)
                 .accessibilityAddTraits(.isHeader)
             Text(strings.t("dbEditor.previewDescription"))
                 .foregroundStyle(theme.secondaryLabel)

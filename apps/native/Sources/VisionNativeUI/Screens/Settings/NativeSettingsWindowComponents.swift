@@ -5,7 +5,7 @@ struct NativeSettingsSection<Content: View>: View {
     let title: String
     @ViewBuilder var content: () -> Content
     var body: some View {
-        VStack(alignment: .leading, spacing: 22, content: content)
+        VStack(alignment: .leading, spacing: 24, content: content)
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityElement(children: .contain).accessibilityLabel(title)
     }
@@ -25,14 +25,16 @@ struct NativeSettingsGroup<Content: View>: View {
         VStack(alignment: .leading, spacing: 0) {
             if title != nil || description != nil {
                 VStack(alignment: .leading, spacing: 4) {
-                    if let title { Text(title).font(.caption.weight(.semibold)).accessibilityAddTraits(.isHeader) }
-                    if let description { Text(description).font(.caption).foregroundStyle(theme.secondaryLabel) }
-                }.padding(16).padding(.bottom, -4)
+                    if let title {
+                        Text(title).font(.body.weight(.medium)).foregroundStyle(theme.secondaryLabel)
+                            .accessibilityAddTraits(.isHeader)
+                    }
+                    if let description { Text(description).font(.footnote).foregroundStyle(theme.secondaryLabel) }
+                }.padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 8)
             }
             content()
         }.frame(maxWidth: .infinity, alignment: .leading)
-            .background(theme.card, in: RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).stroke(theme.border.opacity(0.6)))
+            .visionCardBackground()
     }
 }
 
@@ -57,7 +59,7 @@ struct NativeSettingsRow<Content: View>: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title).font(.body).foregroundStyle(destructive ? theme.destructive : theme.foreground)
             if let description {
-                Text(description).font(.caption).foregroundStyle(theme.secondaryLabel).fixedSize(
+                Text(description).font(.footnote).foregroundStyle(theme.secondaryLabel).fixedSize(
                     horizontal: false, vertical: true)
             }
         }.frame(maxWidth: .infinity, alignment: .leading)

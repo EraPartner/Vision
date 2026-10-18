@@ -51,7 +51,7 @@ public struct NativeSettingsWindow: View {
                         }.buttonStyle(.plain)
                             .background(
                                 selected == item ? theme.primary.opacity(0.1) : Color.clear,
-                                in: RoundedRectangle(cornerRadius: 7)
+                                in: RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
                             )
                             .accessibilityAddTraits(selected == item ? [.isSelected] : [])
                             .focusable(selected == item)
@@ -80,11 +80,12 @@ public struct NativeSettingsWindow: View {
             Divider()
             VStack(spacing: 0) {
                 HStack {
-                    Text(strings.t(selected.titleKey)).font(.title3.weight(.semibold)).accessibilityAddTraits(.isHeader)
+                    Text(strings.t(selected.titleKey)).font(VisionFonts.display(17, relativeTo: .title3))
+                        .lineLimit(1).accessibilityAddTraits(.isHeader)
                     Spacer()
                     Button(action: onClose) { Image(systemName: "xmark") }.buttonStyle(.plain)
                         .accessibilityLabel(strings.t("common.close")).keyboardShortcut(.cancelAction)
-                }.padding(.horizontal, 24).frame(height: 52)
+                }.padding(.horizontal, 24).frame(height: 48)
                 Divider()
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {

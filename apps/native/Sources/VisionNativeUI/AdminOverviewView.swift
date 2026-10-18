@@ -39,7 +39,7 @@ public struct AdminOverviewView: View {
         if model.showsTileSkeleton {
             LazyVGrid(columns: grid, spacing: 16) {
                 ForEach(0..<3, id: \.self) { _ in
-                    AdminCard {
+                    AdminCard(padding: 24) {
                         HStack(spacing: 16) {
                             SkeletonBar(width: 40, height: 40)
                             VStack(alignment: .leading, spacing: 8) {
@@ -75,7 +75,7 @@ public struct AdminOverviewView: View {
         Button {
             shell.navigate(to: tile.route)
         } label: {
-            AdminCard(ring: ring(tile.status)) {
+            AdminCard(padding: 24, ring: ring(tile.status)) {
                 HStack(spacing: 16) {
                     AdminIconBadge(symbol: tile.symbol)
                     VStack(alignment: .leading, spacing: 2) {
@@ -83,7 +83,7 @@ public struct AdminOverviewView: View {
                             .font(.callout)
                             .foregroundStyle(theme.secondaryLabel)
                         Text(tile.value)
-                            .font(.title2.weight(.semibold))
+                            .font(.visionCardTitle)
                             .monospacedDigit()
                         if let subtext = tile.subtext {
                             Text(subtext)
@@ -109,15 +109,16 @@ public struct AdminOverviewView: View {
     }
 
     private var tokenCard: some View {
-        AdminCard {
+        AdminCard(padding: 24) {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .top, spacing: 12) {
                     AdminIconBadge(symbol: "key")
                     VStack(alignment: .leading, spacing: 4) {
                         Text(strings.t("admin.token.title"))
-                            .font(.headline)
+                            .font(VisionFonts.display(17, relativeTo: .title3))
+                            .accessibilityAddTraits(.isHeader)
                         Text(strings.t("admin.token.description"))
-                            .font(.subheadline)
+                            .font(.body)
                             .foregroundStyle(theme.secondaryLabel)
                     }
                 }

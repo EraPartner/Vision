@@ -77,19 +77,19 @@ struct ImportExportCard: View {
     ]
 
     var body: some View {
-        AdminCard(padding: 20) {
+        AdminCard(padding: 24) {
             VStack(alignment: .leading, spacing: 16) {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 6) {
                     Label {
                         Text(strings.t("importPage.csvExport"))
                     } icon: {
                         Image(systemName: "square.and.arrow.down")
                             .foregroundStyle(Color(token: theme.palette.accent))
                     }
-                    .font(.title3.weight(.semibold))
+                    .font(.visionCardTitle)
                     .accessibilityAddTraits(.isHeader)
                     Text(strings.t("importPage.csvExportDesc"))
-                        .font(.callout)
+                        .font(.body)
                         .foregroundStyle(theme.secondaryLabel)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -203,15 +203,15 @@ struct ImportSetupReferenceCard: View {
     @Environment(\.visionTheme) var theme
 
     var body: some View {
-        AdminCard(padding: 20) {
+        AdminCard(padding: 24) {
             VStack(alignment: .leading, spacing: 16) {
                 HStack(alignment: .top, spacing: 16) {
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: 6) {
                         Text(strings.t("importPage.setupReference"))
-                            .font(.headline)
+                            .font(VisionFonts.display(17, relativeTo: .title3))
                             .accessibilityAddTraits(.isHeader)
                         Text(strings.t("importPage.setupReferenceDesc"))
-                            .font(.callout)
+                            .font(.body)
                             .foregroundStyle(theme.secondaryLabel)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -266,10 +266,10 @@ struct SimpleCSVImportCard: View {
                     } icon: {
                         Image(systemName: symbol).foregroundStyle(theme.primary)
                     }
-                    .font(.headline)
+                    .font(.visionCardTitle)
                     .accessibilityAddTraits(.isHeader)
                     Text(strings.t(model.kind.descriptionKey))
-                        .font(.callout)
+                        .font(.body)
                         .foregroundStyle(theme.secondaryLabel)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -361,7 +361,7 @@ struct SupportedBanksCard: View {
         AdminCard(padding: 16) {
             VStack(alignment: .leading, spacing: 12) {
                 Text(strings.t("importPage.supportedBanks"))
-                    .font(.headline)
+                    .font(VisionFonts.display(17, relativeTo: .title3))
                     .accessibilityAddTraits(.isHeader)
                 if model.isLoadingAdapters {
                     HStack(spacing: 6) {

@@ -24,7 +24,7 @@ public struct AnalysisWorkspaceView: View {
         GeometryReader { geometry in
             ScrollViewReader { proxy in
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 20) {
+                    VStack(alignment: .leading, spacing: VisionPageLayout.spacing) {
                         VisionPageHeader(
                             title: strings.t("analysis.title"), subtitle: strings.t("analysis.subtitle"),
                             symbol: "tablecells")
@@ -32,10 +32,10 @@ public struct AnalysisWorkspaceView: View {
                         let wide = geometry.size.width >= 1140
                         let layout =
                             wide
-                            ? AnyLayout(HStackLayout(alignment: .top, spacing: 20))
-                            : AnyLayout(VStackLayout(alignment: .leading, spacing: 20))
+                            ? AnyLayout(HStackLayout(alignment: .top, spacing: 24))
+                            : AnyLayout(VStackLayout(alignment: .leading, spacing: 24))
                         layout {
-                            VStack(alignment: .leading, spacing: 20) {
+                            VStack(alignment: .leading, spacing: 24) {
                                 if model.dataset?.relation.hasPrefix("service:") == true { financialParameters }
                                 templates(proxy)
                                 query(proxy)
@@ -55,7 +55,7 @@ public struct AnalysisWorkspaceView: View {
                                 }
                                 savedFeedback
                             }.frame(maxWidth: .infinity, alignment: .leading)
-                            VStack(alignment: .leading, spacing: 20) {
+                            VStack(alignment: .leading, spacing: 24) {
                                 AnalysisReusableView(model: model, shell: shell)
                                 AnalysisSavedLibraryView(
                                     model: model, shell: shell,
@@ -157,7 +157,7 @@ public struct AnalysisWorkspaceView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Text(strings.t("analysis.taskStartHelp"))
                         .font(.callout)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(theme.secondaryLabel)
                         .frame(maxWidth: 560, alignment: .leading)
                         .fixedSize(horizontal: false, vertical: true)
                     ForEach(AnalysisTemplate.all) { template in
@@ -169,12 +169,12 @@ public struct AnalysisWorkspaceView: View {
                             scroll(proxy, to: "analysis-data")
                         } label: {
                             VStack(alignment: .leading, spacing: 5) {
-                                Text(strings.t(template.titleKey)).fontWeight(.medium)
+                                Text(strings.t(template.titleKey)).font(.headline)
                                 Text(strings.t(template.descriptionKey)).font(.footnote).foregroundStyle(
                                     theme.secondaryLabel)
                             }.padding(12).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
                         }.buttonStyle(.plain)
-                            .background(theme.foreground.opacity(0.03), in: RoundedRectangle(cornerRadius: 10))
+                            .visionCardBackground()
                     }
                     Button(strings.t("analysis.blank")) {
                         model.startBlank()

@@ -8,9 +8,9 @@ struct AnalysisMonitorsRulesView: View {
     var body: some View {
         if model.rulesLoading || model.rulesError != nil || model.rules?.items.isEmpty == false || model.rulesOffset > 0
         {
-            AdminCard {
+            AdminCard(padding: 24) {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text(strings.t("monitors.rules")).font(.headline)
+                    Text(strings.t("monitors.rules")).font(VisionFonts.display(17, relativeTo: .title3)).accessibilityAddTraits(.isHeader)
                     if model.rulesLoading && model.rules == nil { ProgressView(strings.t("common.loading")) }
                     if model.rulesError != nil {
                         AnalysisMonitorsRetry(
@@ -19,7 +19,7 @@ struct AnalysisMonitorsRulesView: View {
                     }
                     if let page = model.rules {
                         if page.items.isEmpty && model.rulesError == nil {
-                            Text(strings.t("monitors.empty")).foregroundStyle(.secondary)
+                            Text(strings.t("monitors.empty")).foregroundStyle(theme.secondaryLabel)
                         }
                         ForEach(page.items) { rule in
                             HStack(alignment: .top, spacing: 8) {
@@ -33,7 +33,7 @@ struct AnalysisMonitorsRulesView: View {
                                                 + strings.t("monitors.status." + (rule.lastStatus ?? "never")) + " · "
                                                 + strings.t(rule.enabled ? "monitors.enabled" : "monitors.disabled")
                                         )
-                                        .font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.leading)
+                                        .font(.caption).foregroundStyle(theme.secondaryLabel).multilineTextAlignment(.leading)
                                     }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
                                 }.buttonStyle(.plain).foregroundStyle(
                                     rule.id == model.selectedId ? theme.primary : theme.foreground)
@@ -71,11 +71,12 @@ struct AnalysisMonitorsRulesView: View {
 struct AnalysisMonitorsHistoryView: View {
     let model: AnalysisMonitorsModel
     let strings: any Localizing
+    @Environment(\.visionTheme) private var theme
     var body: some View {
         if model.selectedId != nil {
-            AdminCard {
+            AdminCard(padding: 24) {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text(strings.t("monitors.observations")).font(.headline)
+                    Text(strings.t("monitors.observations")).font(VisionFonts.display(17, relativeTo: .title3)).accessibilityAddTraits(.isHeader)
                     if model.observationsLoading && model.observations == nil {
                         ProgressView(strings.t("common.loading"))
                     }
@@ -87,7 +88,7 @@ struct AnalysisMonitorsHistoryView: View {
                     }
                     if let page = model.observations {
                         if page.items.isEmpty && model.observationsError == nil {
-                            Text(strings.t("monitors.noObservations")).foregroundStyle(.secondary)
+                            Text(strings.t("monitors.noObservations")).foregroundStyle(theme.secondaryLabel)
                         }
                         ForEach(page.items) { item in
                             AnalysisMonitorsObservationView(item: item, strings: strings)
@@ -112,9 +113,9 @@ struct AnalysisMonitorsNotificationsView: View {
         if model.notificationsLoading || model.notificationsError != nil || model.notifications?.items.isEmpty == false
             || model.notificationOffset > 0
         {
-            AdminCard {
+            AdminCard(padding: 24) {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text(strings.t("monitors.inbox")).font(.headline)
+                    Text(strings.t("monitors.inbox")).font(VisionFonts.display(17, relativeTo: .title3)).accessibilityAddTraits(.isHeader)
                     if model.notificationsLoading && model.notifications == nil {
                         ProgressView(strings.t("common.loading"))
                     }
@@ -126,7 +127,7 @@ struct AnalysisMonitorsNotificationsView: View {
                     }
                     if let page = model.notifications {
                         if page.items.isEmpty && model.notificationsError == nil {
-                            Text(strings.t("monitors.noNotifications")).foregroundStyle(.secondary)
+                            Text(strings.t("monitors.noNotifications")).foregroundStyle(theme.secondaryLabel)
                         }
                         ForEach(page.items) { item in
                             notification(item)
@@ -151,7 +152,7 @@ struct AnalysisMonitorsNotificationsView: View {
                 }
                 Text(item.title).fontWeight(item.readAt == nil ? .semibold : .regular)
                 Spacer(minLength: 8)
-                Text(AnalysisMonitorPresentation.dateTime(item.createdAt)).font(.caption).foregroundStyle(.secondary)
+                Text(AnalysisMonitorPresentation.dateTime(item.createdAt)).font(.caption).foregroundStyle(theme.secondaryLabel)
                     .monospacedDigit()
             }
             let reason = AnalysisMonitorPresentation.reason(item.reasonCode, fallback: item.reason, strings: strings)
@@ -162,7 +163,7 @@ struct AnalysisMonitorsNotificationsView: View {
                         "monitors.valueChange",
                         ["previous": item.previousValue ?? "—", "current": item.currentValue ?? "—"])
                 )
-                .font(.caption).foregroundStyle(.secondary).monospacedDigit().textSelection(.enabled)
+                .font(.caption).foregroundStyle(theme.secondaryLabel).monospacedDigit().textSelection(.enabled)
             }
             if item.readAt == nil {
                 Button(strings.t("monitors.markRead")) { Task { await model.markRead(item) } }.buttonStyle(.bordered)

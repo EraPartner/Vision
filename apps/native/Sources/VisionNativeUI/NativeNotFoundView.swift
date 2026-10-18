@@ -8,12 +8,13 @@ public struct NativeNotFoundView: View {
     public var body: some View {
         VStack(spacing: 24) {
             NativeNotFoundBrandMark().fill(theme.primary).frame(width: 40, height: 40).padding(20)
-                .background(theme.primary.opacity(0.12), in: RoundedRectangle(cornerRadius: 16))
+                .background(theme.primary.opacity(0.12), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous))
                 .accessibilityHidden(true)
             VStack(spacing: 8) {
-                Text(shell.strings.t("notFound.title")).font(.largeTitle).monospacedDigit()
+                Text(shell.strings.t("notFound.title")).font(.visionLargeTitle).monospacedDigit()
                     .accessibilityAddTraits(.isHeader)
-                Text(shell.strings.t("notFound.heading")).font(.title3).foregroundStyle(theme.secondaryLabel)
+                Text(shell.strings.t("notFound.heading")).font(VisionFonts.display(17, relativeTo: .title3))
+                    .foregroundStyle(theme.secondaryLabel)
             }
             Text(shell.strings.t("notFound.description")).foregroundStyle(theme.secondaryLabel)
             Button {
@@ -25,8 +26,9 @@ public struct NativeNotFoundView: View {
                 Button(shell.strings.t("nav.transactions")) { shell.navigate(to: "/transactions") }
                 Text("·").accessibilityHidden(true)
                 Button(shell.strings.t("nav.importExport")) { shell.navigate(to: "/import") }
-            }.buttonStyle(.link)
-        }.multilineTextAlignment(.center).padding(32)
+            }.buttonStyle(.plain).font(.callout).foregroundStyle(theme.secondaryLabel)
+                .accessibilityAddTraits(.isLink)
+        }.multilineTextAlignment(.center).frame(maxWidth: 448).padding(32)
             .frame(maxWidth: .infinity, maxHeight: .infinity).foregroundStyle(theme.foreground)
             .background(theme.background)
     }

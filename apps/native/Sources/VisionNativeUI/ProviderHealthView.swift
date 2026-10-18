@@ -25,8 +25,9 @@ public struct ProviderHealthView: View {
             AdminCard(padding: 0) {
                 VStack(alignment: .leading, spacing: 0) {
                     Text(strings.t("admin.providers.tableTitle"))
-                        .font(.headline)
-                        .padding(16)
+                        .font(VisionFonts.display(17, relativeTo: .title3))
+                        .accessibilityAddTraits(.isHeader)
+                        .padding(24)
                     table
                         .padding(.horizontal, 16)
                         .padding(.bottom, 8)

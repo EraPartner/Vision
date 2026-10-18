@@ -12,7 +12,7 @@ struct AnalysisPanel<Content: View>: View {
             if let title { Text(title).font(.visionCardTitle).accessibilityAddTraits(.isHeader) }
             if let description { Text(description).font(.callout).foregroundStyle(theme.secondaryLabel) }
             content()
-        }.padding(20).frame(maxWidth: .infinity, alignment: .leading)
+        }.padding(24).frame(maxWidth: .infinity, alignment: .leading)
             .visionCardBackground()
     }
 }

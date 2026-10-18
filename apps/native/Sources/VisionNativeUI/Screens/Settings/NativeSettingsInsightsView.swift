@@ -160,17 +160,17 @@ public struct NativeSettingsInsightsView: View {
     private func listHeader(_ key: String, hint: String, count: Int) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text(strings.t(key)).font(.headline)
+                Text(strings.t(key)).font(.body.weight(.medium)).foregroundStyle(theme.secondaryLabel)
+                    .accessibilityAddTraits(.isHeader)
                 Spacer()
-                Text(strings.tc("settings.dashboard.excludedCount", count)).font(.caption).monospacedDigit()
-                    .padding(.horizontal, 8).padding(.vertical, 3).background(theme.muted, in: Capsule())
+                VisionBadge(text: strings.tc("settings.dashboard.excludedCount", count), tone: .secondary, small: true)
+                    .monospacedDigit()
             }
-            Text(strings.t(hint)).font(.callout).foregroundStyle(theme.secondaryLabel)
-        }.padding(16).padding(.bottom, -4)
+            Text(strings.t(hint)).font(.footnote).foregroundStyle(theme.secondaryLabel)
+        }.padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 8)
     }
     private var hiddenBadge: some View {
-        Text(strings.t("settings.dashboard.hidden")).font(.caption).foregroundStyle(theme.secondaryLabel)
-            .padding(.horizontal, 6).padding(.vertical, 2).overlay(Capsule().stroke(theme.border))
+        VisionBadge(text: strings.t("settings.dashboard.hidden"), tone: .outline, small: true)
     }
     private func empty(_ key: String) -> some View {
         Text(strings.t(key)).font(.callout).foregroundStyle(theme.secondaryLabel).frame(maxWidth: .infinity).padding(

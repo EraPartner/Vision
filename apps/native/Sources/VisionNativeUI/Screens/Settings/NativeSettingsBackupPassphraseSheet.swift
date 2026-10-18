@@ -13,7 +13,7 @@ struct NativeSettingsBackupPassphraseSheet: View {
     private var strings: any Localizing { shell.strings }
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Label(strings.t("settings.restore.passphraseTitle"), systemImage: "lock").font(.title3.weight(.semibold))
+            Label(strings.t("settings.restore.passphraseTitle"), systemImage: "lock").font(.visionCardTitle)
             Text(strings.t("settings.restore.passphraseDesc")).font(.callout).foregroundStyle(theme.secondaryLabel)
             VStack(alignment: .leading, spacing: 7) {
                 Text(strings.t("settings.restore.passphraseLabel")).font(.callout)

@@ -12,7 +12,7 @@ public struct AnalysisMonitorsView: View {
     private var strings: any Localizing { shell.strings }
     public var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: VisionPageLayout.spacing) {
                 VisionPageHeader(
                     title: strings.t("monitors.title"), subtitle: strings.t("monitors.intro"), symbol: "bell.badge"
                 ) {}
@@ -29,7 +29,7 @@ public struct AnalysisMonitorsView: View {
                         left.frame(width: 350)
                         right.frame(minWidth: 460, maxWidth: .infinity)
                     }
-                    VStack(alignment: .leading, spacing: 20) {
+                    VStack(alignment: .leading, spacing: 24) {
                         left
                         right
                     }
@@ -56,13 +56,13 @@ public struct AnalysisMonitorsView: View {
         }
     }
     private var left: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 24) {
             AnalysisMonitorsCreationView(model: model, shell: shell)
             AnalysisMonitorsRulesView(model: model, strings: strings)
         }
     }
     private var right: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 24) {
             AnalysisMonitorsDetailsView(model: model, strings: strings)
             AnalysisMonitorsHistoryView(model: model, strings: strings)
             AnalysisMonitorsNotificationsView(model: model, strings: strings)

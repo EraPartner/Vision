@@ -41,7 +41,14 @@ struct AnalysisFormulaEditorView: View {
                                 .caption)
                         }
                     }
-                }.padding(12).background(theme.foreground.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
+                }.padding(12)
+                .background(
+                    theme.background.opacity(0.4),
+                    in: RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous)
+                        .strokeBorder(theme.border.opacity(0.6)))
             }
             Button(t("addFormula")) {
                 let index = model.draft.formulas.count

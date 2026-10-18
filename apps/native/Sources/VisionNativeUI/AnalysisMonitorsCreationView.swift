@@ -5,12 +5,13 @@ struct AnalysisMonitorsCreationView: View {
     let model: AnalysisMonitorsModel
     let shell: NativeShellModel
     @FocusState private var focus: AnalysisMonitorInput?
+    @Environment(\.visionTheme) private var theme
     private var strings: any Localizing { shell.strings }
     private var draft: AnalysisMonitorDraft { model.newDraft }
     var body: some View {
-        AdminCard {
+        AdminCard(padding: 24) {
             VStack(alignment: .leading, spacing: 14) {
-                Text(strings.t("monitors.newRule")).font(.headline)
+                Text(strings.t("monitors.newRule")).font(VisionFonts.display(17, relativeTo: .title3)).accessibilityAddTraits(.isHeader)
                 VStack(alignment: .leading, spacing: 6) {
                     Text(strings.t("monitors.kind")).font(.caption)
                     ForEach(AnalysisMonitorKind.allCases, id: \.self) { kind in
@@ -41,7 +42,7 @@ struct AnalysisMonitorsCreationView: View {
                         TextField(strings.t("monitors.ruleTitle"), text: text(\.title)).textFieldStyle(.roundedBorder)
                             .focused($focus, equals: .title)
                     }
-                    Text(strings.t("monitors.baselineHint")).font(.caption).foregroundStyle(.secondary)
+                    Text(strings.t("monitors.baselineHint")).font(.caption).foregroundStyle(theme.secondaryLabel)
                     AnalysisMonitorsScheduleView(draft: draft, strings: strings, update: model.updateNew, focus: $focus)
                     Button(strings.t("monitors.create"), systemImage: "plus") { Task { await model.create() } }
                         .buttonStyle(.borderedProminent)
@@ -73,7 +74,7 @@ struct AnalysisMonitorsCreationView: View {
                 Button(strings.t("monitors.openAnalysis")) { shell.navigate(to: "/analysis") }
             }
             DisclosureGroup(strings.t("monitors.howAlertsWork")) {
-                Text(strings.t("monitors.analysisHint")).font(.caption).foregroundStyle(.secondary).padding(.top, 4)
+                Text(strings.t("monitors.analysisHint")).font(.caption).foregroundStyle(theme.secondaryLabel).padding(.top, 4)
             }
         }
     }

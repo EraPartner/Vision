@@ -474,15 +474,15 @@ struct ImportHistoryCard: View {
     @Environment(\.visionTheme) var theme
 
     var body: some View {
-        AdminCard(padding: 20) {
+        AdminCard(padding: 24) {
             VStack(alignment: .leading, spacing: 16) {
                 HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: 6) {
                         Text(strings.t("importHistory.title"))
-                            .font(.title3.weight(.semibold))
+                            .font(.visionCardTitle)
                             .accessibilityAddTraits(.isHeader)
                         Text(strings.t("importHistory.desc"))
-                            .font(.callout)
+                            .font(.body)
                             .foregroundStyle(theme.secondaryLabel)
                     }
                     Spacer()

@@ -66,7 +66,7 @@ struct AnalysisQueryBuilderView: View {
                 columns: [GridItem(.adaptive(minimum: 290), alignment: .leading)], alignment: .leading, spacing: 24
             ) {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text(strings.t("analysis.fields")).font(.headline)
+                    Text(strings.t("analysis.fields")).font(.callout.weight(.medium))
                     Text(strings.t("analysis.fieldsHelp")).font(.footnote).foregroundStyle(theme.secondaryLabel)
                     TextField(strings.t("analysis.searchFields"), text: $fieldSearch).textFieldStyle(.roundedBorder)
                     Toggle(strings.t("analysis.technicalFields"), isOn: $technicalFields).font(.footnote)
@@ -83,7 +83,7 @@ struct AnalysisQueryBuilderView: View {
                     }.frame(maxHeight: 220)
                 }
                 VStack(alignment: .leading, spacing: 10) {
-                    Text(strings.t("analysis.measures")).font(.headline)
+                    Text(strings.t("analysis.measures")).font(.callout.weight(.medium))
                     Text(strings.t("analysis.measuresHelp")).font(.footnote).foregroundStyle(theme.secondaryLabel)
                     ForEach(dataset.measures) { measure in
                         Toggle(
@@ -106,7 +106,7 @@ struct AnalysisQueryBuilderView: View {
                 }.frame(maxHeight: .infinity, alignment: .top)
             }
             VStack(alignment: .leading, spacing: 8) {
-                Text(strings.t("analysis.groups")).font(.headline)
+                Text(strings.t("analysis.groups")).font(.callout.weight(.medium))
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), alignment: .leading)], alignment: .leading) {
                     ForEach(model.plan.fields, id: \.self) { id in
                         Toggle(
@@ -118,7 +118,7 @@ struct AnalysisQueryBuilderView: View {
             }
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
-                    Text(strings.t("analysis.filters")).font(.headline)
+                    Text(strings.t("analysis.filters")).font(.callout.weight(.medium))
                     Spacer()
                     Button(strings.t("analysis.addFilter"), systemImage: "plus") { model.addFilter() }
                         .buttonStyle(.bordered).disabled(dataset.fields.isEmpty)
@@ -203,13 +203,13 @@ struct AnalysisSQLEditorView: View {
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(strings.t("analysis.sqlEditor")).font(.headline)
+            Text(strings.t("analysis.sqlEditor")).font(.callout.weight(.medium))
             TextEditor(text: Binding(get: { model.sql }, set: { model.sql = $0 }))
                 .font(.body.monospaced()).frame(minHeight: 220)
                 .accessibilityLabel(strings.t("analysis.sqlEditor"))
                 .overlay(RoundedRectangle(cornerRadius: 6).stroke(theme.border.opacity(0.6)))
             VStack(alignment: .leading, spacing: 10) {
-                Text(strings.t("analysis.approvedDatasets")).font(.headline)
+                Text(strings.t("analysis.approvedDatasets")).font(.callout.weight(.medium))
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), alignment: .leading)], alignment: .leading) {
                     ForEach(model.datasets) { dataset in
                         Toggle(

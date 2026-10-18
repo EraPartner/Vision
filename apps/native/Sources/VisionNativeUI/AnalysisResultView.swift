@@ -20,13 +20,13 @@ public struct AnalysisResultView: View {
         VStack(alignment: .leading, spacing: 20) {
             if let result = model.displayedResult {
                 AnalysisPanel {
-                    HStack {
-                        Text(strings.t("analysis.workflow.present")).font(.headline).focusable().focused(
+                    HStack(spacing: 8) {
+                        Image(systemName: "cylinder").foregroundStyle(theme.secondaryLabel).accessibilityHidden(true)
+                        Text(strings.t("analysis.workflow.present")).font(.visionCardTitle).focusable().focused(
                             $headingFocused
                         )
                         .accessibilityAddTraits(.isHeader)
-                        Text(verbatim: String(result.window.returnedRows)).font(.caption).monospacedDigit()
-                            .padding(5).background(theme.foreground.opacity(0.06), in: Capsule())
+                        VisionBadge(text: String(result.window.returnedRows), tone: .secondary).monospacedDigit()
                     }
                     Text(strings.t("analysis.resultsHelp")).font(.callout).foregroundStyle(theme.secondaryLabel)
                     if model.queryOutdated || model.transformationsOutdated {

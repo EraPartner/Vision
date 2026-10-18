@@ -19,11 +19,12 @@ struct AnalysisMonitorsStatus: View {
 struct AnalysisMonitorsObservationView: View {
     let item: AnalysisMonitorObservation
     let strings: any Localizing
+    @Environment(\.visionTheme) private var theme
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 AnalysisMonitorsStatus(status: item.status.rawValue, strings: strings)
-                Text(AnalysisMonitorPresentation.dateTime(item.checkedAt)).font(.caption).foregroundStyle(.secondary)
+                Text(AnalysisMonitorPresentation.dateTime(item.checkedAt)).font(.caption).foregroundStyle(theme.secondaryLabel)
                     .monospacedDigit()
             }
             let reason = AnalysisMonitorPresentation.reason(item.reasonCode, fallback: item.reason, strings: strings)
@@ -48,7 +49,7 @@ struct AnalysisMonitorsObservationView: View {
                 .font(.callout).monospacedDigit()
             }
             if item.coverage["status"]?.stringValue == "unknown" {
-                Text(strings.t("monitors.coverage")).font(.caption).foregroundStyle(.secondary)
+                Text(strings.t("monitors.coverage")).font(.caption).foregroundStyle(theme.secondaryLabel)
             }
         }.padding(.vertical, 8).frame(maxWidth: .infinity, alignment: .leading)
     }

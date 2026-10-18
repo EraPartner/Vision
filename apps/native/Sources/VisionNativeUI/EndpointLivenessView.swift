@@ -21,14 +21,17 @@ public struct EndpointLivenessView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(spacing: 12) {
                         Text(strings.t("admin.endpoints.tableTitle"))
-                            .font(.headline)
+                            .font(VisionFonts.display(17, relativeTo: .title3))
+                            .accessibilityAddTraits(.isHeader)
                         Spacer(minLength: 12)
                         TextField(strings.t("admin.endpoints.filterPlaceholder"), text: filter)
                             .textFieldStyle(.roundedBorder)
                             .frame(maxWidth: 256)
                             .accessibilityLabel(strings.t("admin.endpoints.filterPlaceholder"))
                     }
-                    .padding(16)
+                    .padding(.horizontal, 24)
+                    .padding(.top, 24)
+                    .padding(.bottom, 16)
                     table
                         .padding(.horizontal, 16)
                         .padding(.bottom, 8)
@@ -79,16 +82,9 @@ public struct EndpointLivenessView: View {
             }
         }
         if !model.isLoading && rows.isEmpty {
-            VStack(spacing: 8) {
-                Image(systemName: "dot.radiowaves.left.and.right")
-                    .font(.title2)
-                    .foregroundStyle(theme.tertiaryLabel)
-                    .accessibilityHidden(true)
-                Text(strings.t("admin.endpoints.noMatches"))
-                    .font(.headline)
-                    .accessibilityAddTraits(.isHeader)
+            VisionEmptyState(symbol: "dot.radiowaves.left.and.right", title: strings.t("admin.endpoints.noMatches")) {
+                EmptyView()
             }
-            .frame(maxWidth: .infinity)
             .padding(.vertical, 24)
         }
     }
