@@ -229,6 +229,15 @@ public struct PlannedPaymentsView: View {
                 .font(.callout)
                 .foregroundStyle(theme.secondaryLabel)
                 .multilineTextAlignment(.center)
+            // A contract violation names the endpoint and field, as the Home and Net worth
+            // errors do; the generic message alone cannot be traced to a cause.
+            if case .contract = error, let detail = error.errorDescription {
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(theme.secondaryLabel)
+                    .multilineTextAlignment(.center)
+                    .textSelection(.enabled)
+            }
             Button(strings.t("common.retry")) {
                 Task { await model.retry() }
             }
