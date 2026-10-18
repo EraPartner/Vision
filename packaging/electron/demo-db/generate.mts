@@ -862,7 +862,7 @@ let loanSchedId = 0;
   planId++;
   const nextDue = ymd(2026, 7, 1);
   S(
-    `INSERT INTO planned_transactions (id,planned_date,amount,currency,memo,recipient_id,category_id,is_recurring,recurrence_pattern,is_executed,is_active,is_loan,loan_type,loan_principal,loan_annual_interest_rate,loan_term_months,loan_start_date,loan_payment_day,loan_regular_payment_amount,loan_first_payment_date) VALUES (${planId},'${fmt(nextDue)}',${num(-pay, 2)},'EUR','Hypotheek woning Gent',${recId["KBC Woonkrediet"]},${catId["HOUSING:MORTGAGE"]},true,'monthly',false,true,true,'annuity',${num(principal, 2)},${num(annual, 4)},${termM},'${fmt(startDate)}',3,${num(pay, 2)},'${fmt(startDate)}');`,
+    `INSERT INTO planned_transactions (id,planned_date,amount,currency,memo,recipient_id,category_id,is_recurring,recurrence_pattern,is_executed,is_active,is_loan,loan_type,loan_principal,loan_annual_interest_rate,loan_term_months,loan_start_date,loan_payment_day,loan_regular_payment_amount,loan_first_payment_date) VALUES (${planId},'${fmt(nextDue)}',${num(-pay, 2)},'EUR','Hypotheek woning Gent',${recId["KBC Woonkrediet"]},${catId["HOUSING:MORTGAGE"]},true,'monthly',false,true,true,'amortizing',${num(principal, 2)},${num(annual, 4)},${termM},'${fmt(startDate)}',3,${num(pay, 2)},'${fmt(startDate)}');`,
   );
   const loanPlanId = planId;
   let bal = principal;
