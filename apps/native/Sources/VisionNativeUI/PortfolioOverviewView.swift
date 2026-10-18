@@ -107,81 +107,99 @@ public struct PortfolioOverviewView: View {
     private func reload(force: Bool = false) async {
         await model.load(currency: currency, route: shell.route, force: force)
     }
+    /// The web hero (`grid lg:grid-cols-5`): value, period gain and the period segmented
+    /// control on the left two fifths, the value chart on the right.
     private func hero(_ summary: PortfolioSummaryData) -> some View {
         AdminCard(padding: 24) {
-            VStack(alignment: .leading, spacing: 24) {
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text(strings.t("portfolio.hero.value")).font(.caption2.weight(.medium)).tracking(1.3)
-                            .textCase(.uppercase)
-                            .foregroundStyle(Color(token: theme.palette.mutedForeground).opacity(0.8))
-                        MoneyText(
-                            amount: summary.totals.totalPortfolioValue, currency: currency, settings: shell.settings,
-                            signed: false, colored: false
-                        ).font(.visionLargeTitle)
-                        if let gain = periodGain(summary) {
-                            HStack(spacing: 6) {
-                                Text(money(gain.amount, signed: true)).fontWeight(.medium)
-                                if let percent = gain.percent { Text(signedPercent(percent)) }
-                                Text(
-                                    model.period == .all
-                                        ? strings.t("networth.allTime")
-                                        : strings.t(
-                                            "portfolio.hero.inPeriod",
-                                            ["period": strings.t("performance.period." + model.period.rawValue)])
-                                )
-                                .foregroundStyle(theme.secondaryLabel)
-                            }.font(.callout).monospacedDigit().foregroundStyle(
-                                gain.amount >= 0 ? theme.gain : theme.loss)
-                        } else if !model.isFetching {
-                            Text(strings.t("performance.emptyTitle")).font(.callout).foregroundStyle(
-                                theme.secondaryLabel)
-                        }
-                    }
-                    Spacer()
-                    Picker(
-                        strings.t("portfolio.period.label"),
-                        selection: Binding(
-                            get: { model.period },
-                            set: { shell.replaceQuery("period", with: $0 == .all ? nil : $0.rawValue) })
-                    ) {
-                        ForEach(PortfolioPeriod.allCases, id: \.self) { period in
-                            Text(strings.t("performance.period." + period.rawValue)).tag(period)
-                        }
-                    }.frame(width: 150)
-                }
-                if let data = performance, !data.snapshots.isEmpty {
-                    PortfolioSeriesChart(
-                        series: [
-                            InsightChartSeries(
-                                id: "value", label: strings.t("portfolio.hero.value"),
-                                points: data.snapshots.map { InsightChartPoint(key: $0.date, value: $0.value) }),
-                            InsightChartSeries(
-                                id: "invested", label: strings.t("portfolio.hero.invested"),
-                                points: data.snapshots.map { InsightChartPoint(key: $0.date, value: $0.invested) },
-                                dashed: true),
-                        ], title: strings.t("portfolio.hero.chartAria"), currency: currency, shell: shell, area: true,
-                        colors: ["value": theme.primary, "invested": theme.secondaryLabel])
-                    if data.snapshots.last?.isProvisional == true {
-                        Label(strings.t("performance.latestSnapshotProvisional"), systemImage: "info.circle")
-                            .font(.caption).foregroundStyle(theme.secondaryLabel)
-                            .help(strings.t("performance.latestSnapshotProvisionalDescription"))
-                    }
-                } else if let error = model.errors[currency + "|" + model.period.rawValue] {
-                    Text(strings.t("common.loadError", ["msg": error])).foregroundStyle(theme.destructive)
-                    Button(strings.t("common.retry")) { Task { await reload(force: true) } }
-                } else if model.isFetching {
-                    ProgressView().frame(maxWidth: .infinity).frame(height: 260)
-                } else {
-                    VisionEmptyState(
-                        symbol: "chart.line.uptrend.xyaxis", title: strings.t("performance.emptyTitle"),
-                        description: strings.t("performance.emptyDescription")
-                    ) {
-                        Button(strings.t("portfolio.refreshPrices")) { Task { await model.refreshPrices() } }
-                            .disabled(model.isRefreshingPrices || !model.isOnline)
-                    }.frame(height: 260)
+            HStack(alignment: .top, spacing: 24) {
+                heroSummary(summary)
+                    .frame(minWidth: 260, maxWidth: 380, alignment: .leading)
+                heroChart
+                    .frame(minWidth: 320, maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+    private func heroSummary(_ summary: PortfolioSummaryData) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(strings.t("portfolio.hero.value")).font(.caption2.weight(.medium)).tracking(1.3)
+                .textCase(.uppercase)
+                .foregroundStyle(Color(token: theme.palette.mutedForeground).opacity(0.8))
+            MoneyText(
+                amount: summary.totals.totalPortfolioValue, currency: currency, settings: shell.settings,
+                signed: false, colored: false
+            ).font(.visionLargeTitle)
+            if let gain = periodGain(summary) {
+                HStack(spacing: 6) {
+                    Text(money(gain.amount, signed: true)).fontWeight(.medium)
+                    if let percent = gain.percent { Text("(" + signedPercent(percent) + ")") }
+                    Text(
+                        model.period == .all
+                            ? strings.t("networth.allTime")
+                            : strings.t(
+                                "portfolio.hero.inPeriod",
+                                ["period": strings.t("performance.period." + model.period.rawValue)])
+                    )
+                    .foregroundStyle(theme.secondaryLabel)
+                }.font(.callout).monospacedDigit().foregroundStyle(
+                    gain.amount >= 0 ? theme.gain : theme.loss)
+            } else if !model.isFetching {
+                Text(strings.t("performance.emptyTitle")).font(.callout).foregroundStyle(
+                    theme.secondaryLabel)
+            }
+            Picker(
+                strings.t("portfolio.period.label"),
+                selection: Binding(
+                    get: { model.period },
+                    set: { shell.replaceQuery("period", with: $0 == .all ? nil : $0.rawValue) })
+            ) {
+                ForEach(PortfolioPeriod.allCases, id: \.self) { period in
+                    Text(strings.t("portfolio.period." + period.rawValue)).tag(period)
+                        .accessibilityLabel(strings.t("performance.period." + period.rawValue))
                 }
             }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .controlSize(.small)
+            .fixedSize()
+            .accessibilityLabel(strings.t("portfolio.period.label"))
+        }
+    }
+    @ViewBuilder private var heroChart: some View {
+        if let data = performance, !data.snapshots.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                PortfolioSeriesChart(
+                    series: [
+                        InsightChartSeries(
+                            id: "value", label: strings.t("portfolio.hero.value"),
+                            points: data.snapshots.map { InsightChartPoint(key: $0.date, value: $0.value) }),
+                        InsightChartSeries(
+                            id: "invested", label: strings.t("portfolio.hero.invested"),
+                            points: data.snapshots.map { InsightChartPoint(key: $0.date, value: $0.invested) },
+                            dashed: true),
+                    ], title: strings.t("portfolio.hero.chartAria"), currency: currency, shell: shell, area: true,
+                    height: 200, colors: ["value": theme.primary, "invested": theme.secondaryLabel])
+                if data.snapshots.last?.isProvisional == true {
+                    Label(strings.t("performance.latestSnapshotProvisional"), systemImage: "info.circle")
+                        .font(.caption).foregroundStyle(theme.secondaryLabel)
+                        .help(strings.t("performance.latestSnapshotProvisionalDescription"))
+                }
+            }
+        } else if let error = model.errors[currency + "|" + model.period.rawValue] {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(strings.t("common.loadError", ["msg": error])).foregroundStyle(theme.destructive)
+                Button(strings.t("common.retry")) { Task { await reload(force: true) } }
+                    .buttonStyle(.visionOutline)
+            }
+        } else if model.isFetching {
+            ProgressView().frame(maxWidth: .infinity).frame(height: 200)
+        } else {
+            VisionEmptyState(
+                symbol: "chart.line.uptrend.xyaxis", title: strings.t("performance.emptyTitle"),
+                description: strings.t("performance.emptyDescription")
+            ) {
+                Button(strings.t("portfolio.refreshPrices")) { Task { await model.refreshPrices() } }
+                    .disabled(model.isRefreshingPrices || !model.isOnline)
+            }.frame(height: 200)
         }
     }
     private func periodGain(_ summary: PortfolioSummaryData) -> (amount: Decimal, percent: Decimal?)? {
