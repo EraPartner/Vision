@@ -1,4 +1,11 @@
-import { useState, useEffect, useRef, type KeyboardEvent } from "react";
+import {
+    useState,
+    useEffect,
+    useRef,
+    lazy,
+    Suspense,
+    type KeyboardEvent,
+} from "react";
 import {
     SlidersHorizontal,
     Palette,
@@ -13,22 +20,47 @@ import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { List, ListRow } from "@/components/ui/list";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { GeneralSection } from "./sections/GeneralSection";
-import { AppearanceSection } from "./sections/AppearanceSection";
-import { StatisticsSection } from "./sections/StatisticsSection";
-import { BehaviorSection } from "./sections/BehaviorSection";
-import { AiSection } from "./sections/AiSection";
-import { BackupSection } from "./sections/BackupSection";
-import { AboutSection } from "./sections/AboutSection";
+const GeneralSection = lazy(() =>
+    import("./sections/GeneralSection").then((module) => ({
+        default: module.GeneralSection,
+    })),
+);
+const AppearanceSection = lazy(() =>
+    import("./sections/AppearanceSection").then((module) => ({
+        default: module.AppearanceSection,
+    })),
+);
+const StatisticsSection = lazy(() =>
+    import("./sections/StatisticsSection").then((module) => ({
+        default: module.StatisticsSection,
+    })),
+);
+const BehaviorSection = lazy(() =>
+    import("./sections/BehaviorSection").then((module) => ({
+        default: module.BehaviorSection,
+    })),
+);
+const AiSection = lazy(() =>
+    import("./sections/AiSection").then((module) => ({
+        default: module.AiSection,
+    })),
+);
+const BackupSection = lazy(() =>
+    import("./sections/BackupSection").then((module) => ({
+        default: module.BackupSection,
+    })),
+);
+const AboutSection = lazy(() =>
+    import("./sections/AboutSection").then((module) => ({
+        default: module.AboutSection,
+    })),
+);
 
-export type SettingsSectionId =
-    | "general"
-    | "appearance"
-    | "statistics"
-    | "behavior"
-    | "ai"
-    | "backup"
-    | "about";
+import {
+    resolveSettingsSection,
+    type SettingsSectionId,
+} from "@/lib/settingsSections";
+import { SectionLoader } from "@/components/shared/SectionLoader";
 
 interface SectionDef {
     id: SettingsSectionId;
@@ -53,13 +85,6 @@ const SECTIONS: readonly [SectionDef, ...SectionDef[]] = [
     { id: "backup", labelKey: "settings.tab.backup", icon: DatabaseBackup },
     { id: "about", labelKey: "settings.section.about", icon: Info },
 ];
-
-export function resolveSettingsSection(
-    tab: string | undefined,
-): SettingsSectionId | undefined {
-    if (SECTIONS.some((s) => s.id === tab)) return tab as SettingsSectionId;
-    return undefined;
-}
 
 interface DashboardSettingsDialogProps {
     open: boolean;
@@ -218,7 +243,11 @@ export function DashboardSettingsDialog({
                         tabIndex={0}
                         className="min-h-0 flex-1 focus-ring"
                     >
-                        <div className="px-6 py-6">{renderSection()}</div>
+                        <div className="px-6 py-6">
+                            <Suspense fallback={<SectionLoader />}>
+                                {renderSection()}
+                            </Suspense>
+                        </div>
                     </ScrollArea>
                 </div>
             </DialogContent>

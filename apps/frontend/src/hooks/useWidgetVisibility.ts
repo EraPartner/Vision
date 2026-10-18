@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { apiClient } from '@/lib/api';
-import logger from '@/lib/logger';
-import { useSettingsStore } from '@/stores/settingsStore';
-const SETTINGS_KEY = 'widget_visibility';
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { apiClient } from "@/lib/api";
+import logger from "@/lib/logger";
+import { useSettingsStore } from "@/stores/settingsStore";
+const SETTINGS_KEY = "widget_visibility";
 export interface WidgetDefinition {
     id: string;
     label?: string;
@@ -13,60 +13,110 @@ export interface WidgetDefinition {
 export type WidgetVisibilityMap = Record<string, Record<string, boolean>>;
 // e.g. { dashboard: { statCards: true, bankBalances: false }, statistics: { ... } }
 let cachedVisibility: WidgetVisibilityMap | null = null;
-let pendingLoad: Promise<WidgetVisibilityMap> | null = null;
+let pendingLoad: Promise<void> | null = null;
+let hydrated = false;
+type VisibilityEdit = (base: WidgetVisibilityMap) => WidgetVisibilityMap;
+let pendingEdits: VisibilityEdit[] = [];
 const listeners = new Set<(v: WidgetVisibilityMap) => void>();
 function notify(v: WidgetVisibilityMap) {
     cachedVisibility = v;
     listeners.forEach((fn) => fn(v));
 }
-async function loadFromBackend(): Promise<WidgetVisibilityMap> {
+async function loadFromBackend(): Promise<void> {
     if (pendingLoad) return pendingLoad;
     pendingLoad = (async () => {
         try {
             const result = await apiClient.getSetting(SETTINGS_KEY);
-            if (result?.value && typeof result.value === 'object') {
-                return result.value as WidgetVisibilityMap;
+            const value = result?.value ?? {};
+            if (
+                typeof value !== "object" ||
+                Array.isArray(value) ||
+                Object.values(value).some(
+                    (page) =>
+                        !page ||
+                        typeof page !== "object" ||
+                        Array.isArray(page) ||
+                        Object.values(page).some(
+                            (visible) => typeof visible !== "boolean",
+                        ),
+                )
+            ) {
+                throw new Error("Invalid widget visibility setting");
             }
-        } catch {
-            // not found or backend unreachable
+            // An early local edit is an operation, not a complete backend map.
+            // Replay it over the read snapshot to retain untouched pages/widgets.
+            const edits = pendingEdits;
+            const merged = edits.reduce(
+                (base, edit) => edit(base),
+                value as WidgetVisibilityMap,
+            );
+            pendingEdits = [];
+            hydrated = true;
+            notify(merged);
+            if (edits.length) scheduleSave(merged);
+        } catch (err) {
+            logger.error("Failed to load widget visibility:", err);
+            // Keep local defaults/edits usable, but never replace unknown saved data.
+            if (pendingEdits.length)
+                useSettingsStore.getState()._markSettingsSaveError();
         }
-        return {};
     })();
     try {
-        return await pendingLoad;
+        await pendingLoad;
     } finally {
         pendingLoad = null;
     }
 }
-function saveToBackend(v: WidgetVisibilityMap) {
-    apiClient.saveSetting(SETTINGS_KEY, v).catch((err) => {
-        logger.error('Failed to save widget visibility:', err);
-        useSettingsStore.getState()._markSettingsSaveError();
-    });
+function applyEdit(edit: VisibilityEdit) {
+    const next = edit(cachedVisibility ?? {});
+    if (!hydrated) pendingEdits.push(edit);
+    notify(next);
+    if (hydrated) scheduleSave(next);
+    else void loadFromBackend();
+}
+let saveTimer: ReturnType<typeof setTimeout> | undefined;
+let saveQueue: Promise<void> = Promise.resolve();
+function scheduleSave(v: WidgetVisibilityMap) {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+        // Module-owned debounce survives page unmount. Serialize whole-setting
+        // writes so a slower old request cannot overwrite a newer page's edits.
+        saveQueue = saveQueue
+            .then(() => apiClient.saveSetting(SETTINGS_KEY, v))
+            .then(() => undefined)
+            .catch((err) => {
+                logger.error("Failed to save widget visibility:", err);
+                useSettingsStore.getState()._markSettingsSaveError();
+            });
+    }, 500);
 }
 /**
  * Hook to manage widget visibility for a specific page.
  * Widgets are visible by default unless explicitly hidden.
  */
-export function useWidgetVisibility(pageKey: string, widgets: WidgetDefinition[]) {
-    const [visibility, setVisibility] = useState<WidgetVisibilityMap>(cachedVisibility || {});
-    const [isLoaded, setIsLoaded] = useState(!!cachedVisibility);
-    const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+export function useWidgetVisibility(
+    pageKey: string,
+    widgets: WidgetDefinition[],
+) {
+    const [visibility, setVisibility] = useState<WidgetVisibilityMap>(
+        cachedVisibility || {},
+    );
+    const [isLoaded, setIsLoaded] = useState(hydrated);
     useEffect(() => {
-        const listener = (v: WidgetVisibilityMap) => setVisibility(v);
+        const listener = (v: WidgetVisibilityMap) => {
+            setVisibility(v);
+            setIsLoaded(hydrated);
+        };
         listeners.add(listener);
-        if (!cachedVisibility) {
-            loadFromBackend().then((v) => {
-                notify(v);
-                setIsLoaded(true);
-            });
-        }
+        if (!hydrated) void loadFromBackend();
         return () => {
             listeners.delete(listener);
-            if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
         };
     }, []);
-    const pageVisibility = useMemo(() => visibility[pageKey] || {}, [visibility, pageKey]);
+    const pageVisibility = useMemo(
+        () => visibility[pageKey] || {},
+        [visibility, pageKey],
+    );
     const isVisible = useCallback(
         (widgetId: string): boolean => {
             const stored = pageVisibility[widgetId];
@@ -74,45 +124,32 @@ export function useWidgetVisibility(pageKey: string, widgets: WidgetDefinition[]
             const def = widgets.find((w) => w.id === widgetId);
             return def?.defaultVisible !== false;
         },
-        [pageVisibility, widgets]
+        [pageVisibility, widgets],
     );
-    // Base mutations on `cachedVisibility` (the module-level source of truth
-    // that `notify` keeps current synchronously) rather than the captured
-    // `visibility` state. Otherwise two writes within the same render cycle —
-    // rapid toggles, or two pages mounted at once — both build from the same
-    // stale snapshot and the last writer silently clobbers the first.
     const setWidgetVisible = useCallback(
         (widgetId: string, visible: boolean) => {
-            const base = cachedVisibility ?? visibility;
-            const next = {
+            applyEdit((base) => ({
                 ...base,
                 [pageKey]: { ...(base[pageKey] || {}), [widgetId]: visible },
-            };
-            notify(next);
-            if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-            saveTimerRef.current = setTimeout(() => saveToBackend(next), 500);
+            }));
         },
-        [visibility, pageKey]
+        [pageKey],
     );
     const setAllVisible = useCallback(
         (visible: boolean) => {
             const pageMap: Record<string, boolean> = {};
             widgets.forEach((w) => (pageMap[w.id] = visible));
-            const base = cachedVisibility ?? visibility;
-            const next = { ...base, [pageKey]: pageMap };
-            notify(next);
-            if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-            saveTimerRef.current = setTimeout(() => saveToBackend(next), 500);
+            applyEdit((base) => ({ ...base, [pageKey]: pageMap }));
         },
-        [visibility, pageKey, widgets]
+        [pageKey, widgets],
     );
     const resetToDefaults = useCallback(() => {
-        const next = { ...(cachedVisibility ?? visibility) };
-        delete next[pageKey];
-        notify(next);
-        if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-        saveTimerRef.current = setTimeout(() => saveToBackend(next), 500);
-    }, [visibility, pageKey]);
+        applyEdit((base) => {
+            const next = { ...base };
+            delete next[pageKey];
+            return next;
+        });
+    }, [pageKey]);
     return {
         isVisible,
         setWidgetVisible,

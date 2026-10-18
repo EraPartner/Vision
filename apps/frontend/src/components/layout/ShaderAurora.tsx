@@ -1,5 +1,4 @@
 import { useEffect, useRef } from "react";
-import { prefersReducedMotion } from "@/utils/prefersReducedMotion";
 import { resolveAuroraMode } from "@/components/layout/shaderAuroraMode";
 
 /**
@@ -210,7 +209,10 @@ export function ShaderAurora({ staticAtmosphere }: ShaderAuroraProps) {
         let c1 = resolveThemeColor("--primary", [0.18, 0.65, 0.45]);
         let c2 = resolveThemeColor("--accent", [0.85, 0.7, 0.4]);
 
-        const reducedMotion = prefersReducedMotion();
+        const motionQuery = window.matchMedia(
+            "(prefers-reduced-motion: reduce)",
+        );
+        let reducedMotion = motionQuery.matches;
 
         const draw = (timeSec: number) => {
             gl!.uniform2f(uRes, canvas.width, canvas.height);
@@ -299,14 +301,15 @@ export function ShaderAurora({ staticAtmosphere }: ShaderAuroraProps) {
         };
         syncRef.current = syncLoop;
 
-        if (reducedMotion) {
-            draw(0);
-        } else {
+        const onMotionChange = () => {
+            reducedMotion = motionQuery.matches;
             syncLoop();
-            window.addEventListener("focus", syncLoop);
-            window.addEventListener("blur", syncLoop);
-            document.addEventListener("visibilitychange", syncLoop);
-        }
+        };
+        motionQuery.addEventListener("change", onMotionChange);
+        syncLoop();
+        window.addEventListener("focus", syncLoop);
+        window.addEventListener("blur", syncLoop);
+        document.addEventListener("visibilitychange", syncLoop);
 
         const onContextLost = (e: Event) => {
             e.preventDefault();
@@ -333,11 +336,10 @@ export function ShaderAurora({ staticAtmosphere }: ShaderAuroraProps) {
             document.documentElement.classList.remove("fx-webgl-live");
             stopLoop();
             window.removeEventListener("resize", resize);
-            if (!reducedMotion) {
-                window.removeEventListener("focus", syncLoop);
-                window.removeEventListener("blur", syncLoop);
-                document.removeEventListener("visibilitychange", syncLoop);
-            }
+            motionQuery.removeEventListener("change", onMotionChange);
+            window.removeEventListener("focus", syncLoop);
+            window.removeEventListener("blur", syncLoop);
+            document.removeEventListener("visibilitychange", syncLoop);
             canvas.removeEventListener("webglcontextlost", onContextLost);
             canvas.removeEventListener(
                 "webglcontextrestored",

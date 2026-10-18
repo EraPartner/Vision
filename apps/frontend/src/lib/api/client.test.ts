@@ -551,3 +551,66 @@ describe("response contracts", () => {
         );
     });
 });
+
+describe("caller cancellation", () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+        vi.useRealTimers();
+    });
+
+    it("does not dispatch an already cancelled request", async () => {
+        const controller = new AbortController();
+        controller.abort();
+        const transport = vi.spyOn(globalThis, "fetch");
+        await expect(
+            apiRequest("/api/client-test", { signal: controller.signal }),
+        ).rejects.toMatchObject({ name: "AbortError" });
+        expect(transport).not.toHaveBeenCalled();
+    });
+
+    it("does not retry an aborted in-flight request", async () => {
+        const controller = new AbortController();
+        const transport = vi.spyOn(globalThis, "fetch").mockImplementation(
+            async (_url, options) =>
+                new Promise((_resolve, reject) => {
+                    options!.signal!.addEventListener(
+                        "abort",
+                        () =>
+                            reject(new DOMException("Cancelled", "AbortError")),
+                        { once: true },
+                    );
+                }),
+        );
+        const pending = apiRequest("/api/client-test", {
+            signal: controller.signal,
+        });
+        const outcome = expect(pending).rejects.toMatchObject({
+            name: "AbortError",
+        });
+        controller.abort();
+        await outcome;
+        expect(transport).toHaveBeenCalledTimes(1);
+    });
+
+    it("cancels retry backoff immediately and clears its timer", async () => {
+        vi.useFakeTimers();
+        const controller = new AbortController();
+        const transport = vi
+            .spyOn(globalThis, "fetch")
+            .mockResolvedValue(new Response("retry", { status: 503 }));
+        const pending = apiRequest("/api/client-test", {
+            signal: controller.signal,
+        });
+        const outcome = expect(pending).rejects.toMatchObject({
+            name: "AbortError",
+        });
+        await vi.advanceTimersByTimeAsync(0);
+        expect(transport).toHaveBeenCalledTimes(1);
+        expect(vi.getTimerCount()).toBe(1);
+        controller.abort();
+        await outcome;
+        expect(vi.getTimerCount()).toBe(0);
+        await vi.runAllTimersAsync();
+        expect(transport).toHaveBeenCalledTimes(1);
+    });
+});

@@ -1,3 +1,4 @@
+import { z } from "zod";
 import {
     SettingRecordSchema,
     SettingsWithBaselinesSchema,
@@ -72,5 +73,39 @@ export function saveSetting(
     // Keep a rejected queue rejected until reload. Later edits cannot overwrite
     // an unacknowledged or conflicting save.
     saves.set(key, next);
+    return next;
+}
+
+/** Atomically replace related settings, sharing serialization with per-key writes. */
+export function saveSettings(values: Record<string, unknown>): Promise<void> {
+    const keys = Object.keys(values);
+    const next = Promise.all(
+        keys.map((key) => saves.get(key) ?? Promise.resolve()),
+    ).then(async () => {
+        const expected = Object.fromEntries(
+            keys.map((key) => {
+                const baseline =
+                    baselines.get(key) ??
+                    (allSettingsRead ? { exists: false } : undefined);
+                if (!baseline)
+                    throw new Error(
+                        "Settings were not loaded. Reload before saving.",
+                    );
+                return [key, baseline];
+            }),
+        );
+        await apiRequest(
+            "/api/settings",
+            {
+                method: "PUT",
+                body: JSON.stringify({ settings: values, expected }),
+                schema: z.object({ saved: z.number().int().nonnegative() }),
+            },
+            0,
+        );
+        for (const key of keys)
+            baselines.set(key, { exists: true, value: values[key] });
+    });
+    for (const key of keys) saves.set(key, next);
     return next;
 }

@@ -2,8 +2,8 @@
 title: Caching Strategies
 type: performance
 status: active
-date: 2026-10-08
-last_modified: 2026-04-25
+date: 2026-10-13
+last_modified: 2026-10-11
 tags: [performance, caching, optimization, startup, dependency-ordering]
 description: In-memory caching implementation for exchange rates and price feeds
 aliases: [caching, cache layers, in-memory cache, ttl, cache invalidation]
@@ -11,6 +11,37 @@ related_code: ["apps/node-backend/src/services/currency/currencyConversionServic
 ---
 
 # Caching Strategies
+
+## Visible consumers and deferred frontend work
+
+Dashboard waits for widget visibility to load before mounting its widgets. Parent queries are
+enabled only for a visible consumer: summary cards need monthly totals and the transaction count;
+category distribution needs transactions; recent transactions choose the filtered or unfiltered
+path according to their exclusion override; monthly trends request only their selected exclusion
+variant. Hidden-query errors do not add a page error banner or get retried by the visible page.
+The month-to-date hero and other child widgets retain their own queries when visible.
+
+Settings is deferred until first open, and each of its seven panels is a separate lazy import.
+This removes eager Settings feature code from the shell's static import graph. A production build
+confirmed separate dialog and panel chunks; startup latency and memory savings have not been
+measured. Recipient exclusions render a bounded viewport with keyboard access to all results.
+
+`ShaderAurora` subscribes to live changes in the operating system's Reduce Motion media query.
+Enabling the preference cancels its animation loop and draws a static frame; disabling it resumes
+only when the existing visibility, focus and static-atmosphere gates permit animation. This
+retains the shader appearance while avoiding animation work the user has disabled. Native GPU
+timings remain unmeasured.
+
+Portfolio complete-history reads use at most four workers per query attempt. A worker failure
+stops queued holdings and further pages; in-flight API requests finish before the query rejects,
+so retries cannot overlap a failed pool. Query cancellation reaches the HTTP transport for
+inventory, recent and complete history, including detail reads. Caller cancellation is not
+retried; it also clears a pending retry-backoff timer before another request can start.
+
+Portfolio history also separates recent windows from complete consumers; see
+[[docs/features/portfolio#History completeness and error handling]]. Navigation-safe widget saves
+and exclusion keyboard behavior are described in [[docs/features/settings]].
+
 
 Vision implements multi-layer caching to minimize external API calls and improve response times.
 

@@ -12,6 +12,10 @@ package "Frontend" {
   class PortfolioSummaries
   class PortfolioSummaryQuery
   class PortfolioImportDetection
+  class PortfolioHistoryQueries
+  class DashboardVisibleQueries
+  class ImportReviewEditQueue
+  class WidgetSaveQueue
   class PortfolioImportsApi
   class "tab sessionStorage" as ImportSessionStorage
   
@@ -127,5 +131,14 @@ PriceProviderService --> Binance
 PriceProviderService --> YahooFinance
 PriceProviderService --> Kinesis
 BelgianInflationService --> Statbel
+
+Pages --> DashboardVisibleQueries : hydrated visible widgets only
+DashboardVisibleQueries --> ApiClient : selected filtered / unfiltered inputs
+Hooks --> PortfolioHistoryQueries : explicit recent or complete consumer
+PortfolioHistoryQueries --> ApiClient : bulk windows or paged history; errors propagate
+Pages --> ImportReviewEditQueue : recipient/category edits then commit
+ImportReviewEditQueue --> ApiClient : serialized edits; failed edit blocks commit
+Hooks --> WidgetSaveQueue : module-owned debounce survives navigation
+WidgetSaveQueue --> ApiClient : serialized setting writes
 
 @enduml

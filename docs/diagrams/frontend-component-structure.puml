@@ -306,46 +306,30 @@ package "Feature Components - Transactions" {
 
 package "Feature Components - Settings" {
   class DashboardSettingsDialog {
-    -orchestrator
-    -state: exclusions, appSettings, backup config
-    +handleSave()
-    +handleReset()
+    +URL section selection
+    +keyboard tabs
+    +lazy panel loader
   }
-
-  class GeneralTab {
-    -currency, date format, number format
-    -decimal places, start-of-week, page size
+  class GeneralSection
+  class AppearanceSection
+  class StatisticsSection
+  class BehaviorSection
+  class AiSection
+  class BackupSection
+  class AboutSection
+  class VirtualRecipientExclusions {
+    +bounded viewport
+    +roving checkbox focus
   }
-
-  class DashboardTab {
-    -category exclusion
-    -recipient exclusion
-    -exclusion scope
-  }
-
-  class AppTab {
-    -onboarding restart
-    -update check/apply
-    -AI chat settings
-    -reset-all
-  }
-
-  class BackupTab {
-    -backup directory
-    -passphrase, encrypt
-    -restore flow
-  }
-
-  class AIChatSettingsSection {
-    -Ollama status
-    -model selector
-  }
-
-  DashboardSettingsDialog --> GeneralTab
-  DashboardSettingsDialog --> DashboardTab
-  DashboardSettingsDialog --> AppTab
-  DashboardSettingsDialog --> BackupTab
-  AppTab --> AIChatSettingsSection
+  AppLayout ..> DashboardSettingsDialog : first-open lazy import
+  DashboardSettingsDialog ..> GeneralSection : lazy
+  DashboardSettingsDialog ..> AppearanceSection : lazy
+  DashboardSettingsDialog ..> StatisticsSection : lazy
+  DashboardSettingsDialog ..> BehaviorSection : lazy
+  DashboardSettingsDialog ..> AiSection : lazy
+  DashboardSettingsDialog ..> BackupSection : lazy
+  DashboardSettingsDialog ..> AboutSection : lazy
+  StatisticsSection --> VirtualRecipientExclusions
 }
 
 package "Feature Components - Tax" {

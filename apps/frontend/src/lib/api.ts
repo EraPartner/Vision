@@ -131,6 +131,7 @@ export const apiClient = {
     getSettings: sett.getSettings,
     getSetting: sett.getSetting,
     saveSetting: sett.saveSetting,
+    saveSettings: sett.saveSettings,
 
     // Portfolio / investments
     getInvestments: port.getInvestments,
