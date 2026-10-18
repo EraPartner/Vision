@@ -40,7 +40,7 @@ struct NativeTopbar: View {
             }
             if let title {
                 Text(title)
-                    .font(.headline)
+                    .font(.visionDisplayHeadline)
                     .lineLimit(1)
                     .padding(.leading, model.isSidebarVisible ? 0 : 4)
                     .opacity(scrolled ? 1 : 0)

@@ -9,7 +9,7 @@ struct AnalysisPanel<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            if let title { Text(title).font(.headline).accessibilityAddTraits(.isHeader) }
+            if let title { Text(title).font(.visionCardTitle).accessibilityAddTraits(.isHeader) }
             if let description { Text(description).font(.callout).foregroundStyle(theme.secondaryLabel) }
             content()
         }.padding(20).frame(maxWidth: .infinity, alignment: .leading)

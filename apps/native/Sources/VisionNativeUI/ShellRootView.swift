@@ -112,6 +112,9 @@ public struct ShellRootView<WebContent: View>: View {
             detailColumn(theme)
         }
         .environment(\.visionTheme, theme)
+        // Prominent buttons, toggles and pickers take the web's emerald `--primary` (or the
+        // chosen accent) instead of the system blue.
+        .tint(theme.primary)
         .environment(\.visionVisualEffects, model.nativeSettings?.effectiveVisualEffects ?? "standard")
         .environment(\.visionWealthCanvasTint, model.route.path.hasPrefix("/portfolio"))
         .environment(\.visionStaticAtmosphere, model.nativeSettings?.isLargeDisplay ?? false)
@@ -424,7 +427,7 @@ struct NativeSidebar: View {
                     .resizable()
                     .frame(width: 20, height: 20)
                     .accessibilityHidden(true)
-                Text(verbatim: "Vision").font(.headline)
+                Text(verbatim: "Vision").font(.visionDisplayHeadline)
                 Spacer(minLength: 0)
             }
             .contentShape(Rectangle())
