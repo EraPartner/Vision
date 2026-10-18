@@ -30,7 +30,7 @@ struct TransactionAddSheet: View {
         VStack(spacing: 0) {
             HStack {
                 Text(strings.t("form.addTransaction.title"))
-                    .font(.title2.weight(.semibold))
+                    .font(.visionCardTitle)
                     .accessibilityAddTraits(.isHeader)
                 Spacer()
                 Button {
@@ -174,8 +174,8 @@ struct TransactionAddSheet: View {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 if !draft.kind.signGlyph.isEmpty {
                     Text(verbatim: draft.kind.signGlyph)
-                        .font(.largeTitle.weight(.semibold))
-                        .foregroundStyle(theme.secondaryLabel)
+                        .font(.visionLargeTitle)
+                        .foregroundStyle(theme.tertiaryLabel)
                         .accessibilityHidden(true)
                 }
                 TextField(
@@ -183,7 +183,7 @@ struct TransactionAddSheet: View {
                     text: Binding(get: { draft.amount }, set: { form.setAmount($0) })
                 )
                 .textFieldStyle(.plain)
-                .font(.largeTitle.weight(.semibold).monospacedDigit())
+                .font(.visionLargeTitle.monospacedDigit())
                 .multilineTextAlignment(.center)
                 .frame(width: 200)
                 .focused($amountFocused)

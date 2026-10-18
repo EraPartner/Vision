@@ -27,7 +27,7 @@ struct PlannedPaymentFormSheet: View {
         VStack(spacing: 0) {
             HStack {
                 Text(strings.t(form.titleKey))
-                    .font(.title2.weight(.semibold))
+                    .font(.visionCardTitle)
                     .accessibilityAddTraits(.isHeader)
                 Spacer()
                 Button {

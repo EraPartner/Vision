@@ -163,11 +163,11 @@ public struct ExchangeRatesView: View {
     }
 
     private func summaryCard(_ summary: ExchangeRatesPresentation.SummaryCard) -> some View {
-        card {
+        card(padding: 20) {
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
                     Text(summary.title)
-                        .font(.subheadline.weight(.medium))
+                        .font(.body.weight(.medium))
                         .foregroundStyle(theme.secondaryLabel)
                     Spacer(minLength: 8)
                     Image(systemName: summary.symbol)
@@ -175,7 +175,7 @@ public struct ExchangeRatesView: View {
                         .accessibilityHidden(true)
                 }
                 Text(summary.value)
-                    .font(.title.weight(.semibold))
+                    .font(VisionFonts.display(24, relativeTo: .title))
                     .monospacedDigit()
                 Text(summary.subtext)
                     .font(.footnote)
@@ -209,12 +209,11 @@ public struct ExchangeRatesView: View {
         card(padding: 0) {
             VStack(alignment: .leading, spacing: 0) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(table.title).font(.headline)
+                    Text(table.title).font(VisionFonts.display(17, relativeTo: .title3))
                     Text(table.description)
-                        .font(.subheadline)
                         .foregroundStyle(theme.secondaryLabel)
                 }
-                .padding(16)
+                .padding(VisionPageLayout.padding)
                 Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 0) {
                     GridRow {
                         ForEach(Array(columns.enumerated()), id: \.offset) { index, column in

@@ -190,19 +190,21 @@ struct AccountDetailContent: View {
     // MARK: Balance
 
     private var balanceCard: some View {
-        AdminCard {
+        AdminCard(padding: VisionPageLayout.padding) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .top, spacing: 16) {
                     VStack(alignment: .leading, spacing: 6) {
                         Text(strings.t("accounts.detail.balance"))
-                            .font(.headline)
+                            .font(.footnote)
+                            .foregroundStyle(theme.secondaryLabel)
                             .accessibilityAddTraits(.isHeader)
                         if holdingsOnly {
                             Text(strings.t("accounts.trackedInPortfolio"))
+                                .font(VisionFonts.display(17, relativeTo: .title3))
                                 .foregroundStyle(theme.secondaryLabel)
                         } else if let balance = account.computedBalance {
                             MoneyText(amount: balance, currency: account.currency, settings: settings, signed: false, colored: false)
-                                .font(.largeTitle.weight(.semibold))
+                                .font(.visionLargeTitle)
                                 .help(strings.t("accounts.balanceTooltip"))
                             if let provenance = model.provenance(account) {
                                 Text(provenance)
@@ -243,11 +245,11 @@ struct AccountDetailContent: View {
 
     private var holdingsCard: some View {
         let metrics = model.metrics(account)
-        return AdminCard {
+        return AdminCard(padding: VisionPageLayout.padding) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 8) {
                     Text(strings.t("accounts.detail.holdings"))
-                        .font(.headline)
+                        .font(VisionFonts.display(17, relativeTo: .title3))
                         .accessibilityAddTraits(.isHeader)
                     if metrics?.oversold == true {
                         VisionBadge(text: strings.t("portfolio.oversold.label"), tone: .warning, small: true)
@@ -278,15 +280,20 @@ struct AccountDetailContent: View {
                                 amount: metrics.holdingsValue, currency: model.displayCurrency, settings: settings,
                                 signed: false, colored: false
                             )
-                            .font(.title3.weight(.semibold))
+                            .font(VisionFonts.display(24, relativeTo: .title))
                         }
                         VStack(alignment: .leading, spacing: 2) {
                             Text(strings.t("accounts.portfolio.pnl"))
                                 .font(.footnote)
                                 .foregroundStyle(theme.secondaryLabel)
-                            Text(MoneyText.text(metrics.gainLoss, currency: model.displayCurrency, settings: settings, signed: true))
+                            MoneyText.styled(
+                                MoneyText.text(
+                                    metrics.gainLoss, currency: model.displayCurrency, settings: settings, signed: true),
+                                decimalSeparator: settings.numberFormat.locale.decimalSeparator?.first,
+                                color: AccountHubRow.gainColor(metrics.gainLoss, theme: theme)
+                            )
                                 .monospacedDigit()
-                                .font(.title3.weight(.semibold))
+                                .font(VisionFonts.display(24, relativeTo: .title))
                                 .foregroundStyle(AccountHubRow.gainColor(metrics.gainLoss, theme: theme))
                         }
                     }
@@ -301,11 +308,11 @@ struct AccountDetailContent: View {
     // MARK: Planned
 
     private var plannedCard: some View {
-        AdminCard {
+        AdminCard(padding: VisionPageLayout.padding) {
             VStack(alignment: .leading, spacing: 10) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(strings.t("accounts.detail.upcomingPlanned"))
-                        .font(.headline)
+                        .font(VisionFonts.display(17, relativeTo: .title3))
                         .accessibilityAddTraits(.isHeader)
                     Text(strings.t("accounts.detail.upcomingPlannedHint"))
                         .font(.footnote)
@@ -361,15 +368,16 @@ struct AccountDetailContent: View {
     // MARK: Details
 
     private var detailsCard: some View {
-        AdminCard {
+        AdminCard(padding: VisionPageLayout.padding) {
             VStack(alignment: .leading, spacing: 10) {
                 Text(strings.t("accounts.detail.details"))
-                    .font(.headline)
+                    .font(VisionFonts.display(17, relativeTo: .title3))
                     .accessibilityAddTraits(.isHeader)
                 Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 6) {
                     ForEach(model.details(account)) { entry in
                         GridRow {
                             Text(strings.t(entry.labelKey))
+                                .font(.footnote)
                                 .foregroundStyle(theme.secondaryLabel)
                             Text(entry.value)
                         }
@@ -393,11 +401,11 @@ struct AccountLedgerCard: View {
     private var canView: Bool { AccountKinds.canViewTransactions(account) }
 
     var body: some View {
-        AdminCard {
+        AdminCard(padding: VisionPageLayout.padding) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .firstTextBaseline) {
                     Text(strings.t("accounts.detail.ledgerTitle"))
-                        .font(.headline)
+                        .font(VisionFonts.display(17, relativeTo: .title3))
                         .accessibilityAddTraits(.isHeader)
                     if canView && model.ledgerTotal > 0 {
                         Text(strings.tc("accounts.detail.ledgerCount", model.ledgerTotal))

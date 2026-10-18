@@ -11,7 +11,7 @@ struct SavedChartsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             HStack {
-                Text(strings.t("customChart.tab")).font(.title2)
+                Text(strings.t("customChart.tab")).font(VisionFonts.display(17, relativeTo: .title3))
                 if !model.charts.isEmpty {
                     Text(strings.tc("customChart.savedCount", model.charts.count)).foregroundStyle(theme.secondaryLabel)
                 }
@@ -24,10 +24,10 @@ struct SavedChartsView: View {
                 Button(strings.t("customChart.createFirst")) { model.begin() }.buttonStyle(.bordered)
             }
             ForEach(model.charts, id: \.id) { chart in
-                AdminCard {
+                AdminCard(padding: VisionPageLayout.padding) {
                     VStack(alignment: .leading, spacing: 14) {
                         HStack {
-                            Text(chart.name).font(.headline)
+                            Text(chart.name).font(VisionFonts.display(17, relativeTo: .title3)).lineLimit(1)
                             Spacer()
                             Menu {
                                 Button(strings.t("common.edit")) { model.begin(chart: chart) }
@@ -153,7 +153,7 @@ private struct CustomChartBuilderSheet: View {
         VStack(alignment: .leading, spacing: 16) {
             Text(
                 strings.t(model.editingId == nil ? "customChart.builder.createTitle" : "customChart.builder.editTitle")
-            ).font(.title2)
+            ).font(.visionCardTitle)
             Text(strings.t("customChart.builder.desc")).foregroundStyle(theme.secondaryLabel)
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {

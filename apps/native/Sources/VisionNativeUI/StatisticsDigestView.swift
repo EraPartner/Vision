@@ -12,10 +12,10 @@ struct StatisticsDigestView: View {
         if model.isLoading {
             ProgressView().padding()
         } else if let data = model.data {
-            AdminCard {
+            AdminCard(padding: VisionPageLayout.padding) {
                 VStack(alignment: .leading, spacing: 16) {
                     HStack {
-                        Text(strings.t("insights.panel.title")).font(.headline)
+                        Text(strings.t("insights.panel.title")).font(VisionFonts.display(17, relativeTo: .title3))
                         Spacer()
                         if data.findingCount > 0, !isPrinting {
                             Button(
@@ -23,7 +23,7 @@ struct StatisticsDigestView: View {
                             ) { model.expanded.toggle() }
                         }
                     }
-                    Text(strings.t("insights.panel.desc")).font(.caption).foregroundStyle(theme.secondaryLabel)
+                    Text(strings.t("insights.panel.desc")).foregroundStyle(theme.secondaryLabel)
                     if let cash = data.cashForecast {
                         HStack {
                             Text(strings.t("insights.panel.cashForecast"))

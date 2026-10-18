@@ -588,7 +588,7 @@ struct TransactionQuickLookSheet: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
                 Text(strings.t("quickLook.title"))
-                    .font(.headline)
+                    .font(.visionCardTitle)
                     .accessibilityAddTraits(.isHeader)
                 Spacer()
                 Button {
@@ -602,16 +602,17 @@ struct TransactionQuickLookSheet: View {
             }
             VStack(alignment: .leading, spacing: 6) {
                 MoneyText(amount: row.amount, currency: row.displayCurrency, settings: settings)
-                    .font(.largeTitle.weight(.semibold))
+                    .font(.visionLargeTitle)
                     .strikethrough(!row.isActive)
                     .opacity(row.isActive ? 1 : 0.5)
                 Text(row.recipient(labels))
-                    .font(.title3.weight(.medium))
+                    .font(.headline)
                 Text(
                     verbatim: [VisionFormat.appDate(row.date, format: settings.dateFormat), row.accountLabel(model.accountNames)]
                         .filter { !$0.isEmpty }
                         .joined(separator: " · ")
                 )
+                .font(.callout)
                 .foregroundStyle(theme.secondaryLabel)
             }
             HStack(spacing: 8) {
@@ -631,16 +632,18 @@ struct TransactionQuickLookSheet: View {
                         Text(comment).foregroundStyle(theme.secondaryLabel)
                     }
                 }
-                .padding(10)
+                .padding(.horizontal, 12).padding(.vertical, 10)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(RoundedRectangle(cornerRadius: DesignTokens.Radius.control).fill(theme.muted))
+                .background(
+                    RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous)
+                        .fill(theme.foreground.opacity(0.04)))
             }
             Text(strings.t("quickLook.hint"))
-                .font(.footnote)
+                .font(.caption.weight(.medium))
                 .foregroundStyle(theme.tertiaryLabel)
                 .frame(maxWidth: .infinity)
         }
-        .padding(20)
+        .padding(24)
         .frame(minWidth: 420)
         .focusable()
         .focusEffectDisabled()

@@ -61,22 +61,22 @@ public struct OwesView: View {
                 OwesErrorCard(strings: strings) { Task { await model.loadSummary(force: true) } }
             }
             if model.totalOutstanding > 0 {
-                AdminCard {
-                    HStack(alignment: .center) {
-                        VStack(alignment: .leading, spacing: 2) {
+                AdminCard(padding: VisionPageLayout.padding) {
+                    HStack(alignment: .bottom) {
+                        VStack(alignment: .leading, spacing: 4) {
                             Text(strings.t("owesPage.totalOutstanding"))
-                                .font(.callout)
+                                .font(.footnote)
                                 .foregroundStyle(theme.secondaryLabel)
                             Text(model.peopleLabel())
-                                .font(.footnote)
-                                .foregroundStyle(theme.tertiaryLabel)
+                                .font(.callout)
+                                .foregroundStyle(theme.secondaryLabel)
                         }
                         Spacer()
                         MoneyText(
                             amount: model.totalOutstanding, currency: model.defaultCurrency, settings: settings,
-                            signed: false
+                            signed: false, colored: false
                         )
-                        .font(.title.weight(.semibold))
+                        .font(.visionLargeTitle)
                     }
                 }
             }
@@ -119,8 +119,11 @@ public struct OwesView: View {
                         .accessibilityLabel(strings.t("owesPage.repaymentProgress", ["recipient": item.recipientName]))
                 }
                 Spacer(minLength: 8)
-                MoneyText(amount: item.remaining, currency: model.defaultCurrency, settings: settings, signed: false)
-                    .font(.body.weight(.semibold))
+                MoneyText(
+                    amount: item.remaining, currency: model.defaultCurrency, settings: settings, signed: false,
+                    colored: false
+                )
+                .font(.headline)
                 Image(systemName: "chevron.right")
                     .imageScale(.small)
                     .foregroundStyle(theme.tertiaryLabel)
@@ -362,7 +365,7 @@ struct OwesRecentTransactions: View {
                 AdminCard {
                     VStack(alignment: .leading, spacing: 12) {
                         Text(strings.t("owesPage.recentTransactionsTitle"))
-                            .font(.headline)
+                            .font(VisionFonts.display(17, relativeTo: .title3))
                             .accessibilityAddTraits(.isHeader)
                         VisionEmptyState(symbol: "dollarsign.circle", title: strings.t("owesPage.noRecentTransactions")) {
                             EmptyView()
@@ -444,7 +447,7 @@ struct OwesPaymentSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text(strings.t("owesPage.recordDialog.title"))
-                .font(.title3.weight(.semibold))
+                .font(.visionCardTitle)
                 .accessibilityAddTraits(.isHeader)
             VStack(alignment: .leading, spacing: 5) {
                 Text(strings.t("owesPage.recordDialog.amount"))

@@ -99,7 +99,7 @@ public struct NetWorthView: View {
         }
     }
     private func hero(_ data: OpenAPI.NetWorthResponse) -> some View {
-        AdminCard {
+        AdminCard(padding: VisionPageLayout.padding) {
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .center, spacing: 40) {
                     identity(data)
@@ -115,14 +115,19 @@ public struct NetWorthView: View {
     }
     private func identity(_ data: OpenAPI.NetWorthResponse) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(strings.t("networth.title")).font(.caption).foregroundStyle(theme.secondaryLabel)
+            Text(strings.t("networth.title").uppercased())
+                .font(.caption2.weight(.medium)).tracking(1.3)
+                .foregroundStyle(Color(token: theme.palette.mutedForeground).opacity(0.8))
             RollingNumber(
                 value: MoneyText.text(data.current.netWorth, currency: currency, settings: settings, signed: false),
                 decimalSeparator: settings.numberFormat.locale.decimalSeparator?.first
             )
-            .font(.system(size: 40, weight: .semibold))
+            .font(.visionLargeTitle)
             HStack {
-                Text(MoneyText.text(data.monthlyChange, currency: currency, settings: settings)).monospacedDigit()
+                MoneyText.styled(
+                    MoneyText.text(data.monthlyChange, currency: currency, settings: settings),
+                    decimalSeparator: settings.numberFormat.locale.decimalSeparator?.first, color: tone(data.monthlyChange)
+                ).monospacedDigit()
                     .foregroundStyle(tone(data.monthlyChange))
                 Text("(" + signedPercent(data.monthlyChangePercent) + ")")
                     .foregroundStyle(tone(data.monthlyChange))
@@ -139,16 +144,20 @@ public struct NetWorthView: View {
                                     stamp, format: settings.dateFormat, locale: settings.numberFormat.locale)
                             ])
                 )
-                .font(.caption).foregroundStyle(theme.tertiaryLabel)
+                .font(.footnote).foregroundStyle(theme.tertiaryLabel)
             }
-            Text(strings.t("networth.sinceStart")).font(.caption).foregroundStyle(theme.tertiaryLabel)
+            Text(strings.t("networth.sinceStart")).font(.caption.weight(.medium)).foregroundStyle(theme.tertiaryLabel)
+                .padding(.top, 8)
             if let change = model.allTimeChange {
                 HStack {
                     Image(systemName: change >= 0 ? "arrow.up.right" : "arrow.down.right")
-                    Text(MoneyText.text(change, currency: currency, settings: settings)).monospacedDigit()
+                    MoneyText.styled(
+                        MoneyText.text(change, currency: currency, settings: settings),
+                        decimalSeparator: settings.numberFormat.locale.decimalSeparator?.first, color: tone(change)
+                    ).monospacedDigit()
                         .foregroundStyle(tone(change))
                     if let percent = model.allTimePercent {
-                        Text("(" + signedPercent(percent) + ")")
+                        Text("(" + signedPercent(percent) + ")").font(.footnote)
                     }
                 }.font(.headline).foregroundStyle(tone(change))
             }
@@ -158,7 +167,7 @@ public struct NetWorthView: View {
         let assets = model.assets ?? 0
         let debt = model.debt ?? 0
         let scale = max(assets, debt, 1)
-        return VStack(alignment: .leading, spacing: 20) {
+        return VStack(alignment: .leading, spacing: 16) {
             valueBar("networth.assets", value: assets, scale: scale, color: theme.gain)
             if assets > Decimal(string: "0.005")! {
                 Text(
@@ -173,11 +182,15 @@ public struct NetWorthView: View {
     private func valueBar(_ key: String, value: Decimal, scale: Decimal, color: Color) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text(strings.t(key))
+                Text(strings.t(key)).foregroundStyle(theme.secondaryLabel)
                 Spacer()
-                Text(value <= Decimal(string: "0.005")! ? "—" : money(value)).monospacedDigit()
+                if value <= Decimal(string: "0.005")! {
+                    Text("—")
+                } else {
+                    MoneyText(amount: value, currency: currency, settings: settings, signed: false, colored: false)
+                }
             }
-            .font(.callout)
+            .font(.footnote)
             if value > Decimal(string: "0.005")! {
                 GeometryReader { geometry in
                     Capsule().fill(theme.foreground.opacity(0.06))
@@ -189,20 +202,20 @@ public struct NetWorthView: View {
         }
     }
     @ViewBuilder private func accounts(_ data: OpenAPI.NetWorthResponse) -> some View {
-        AdminCard {
-            Text(strings.t("networth.byAccount.title")).font(.headline)
-            Text(strings.t("networth.byAccount.description")).font(.callout).foregroundStyle(theme.secondaryLabel)
+        AdminCard(padding: VisionPageLayout.padding) {
+            Text(strings.t("networth.byAccount.title")).font(VisionFonts.display(17, relativeTo: .title3))
+            Text(strings.t("networth.byAccount.description")).foregroundStyle(theme.secondaryLabel)
             if let rows = model.accountRows {
                 if rows.isEmpty { Text(strings.t("networth.byAccount.none")) }
                 ForEach(rows) { row in
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(row.label ?? strings.t("networth.byAccount.unassigned")).font(.headline)
+                            Text(row.label ?? strings.t("networth.byAccount.unassigned"))
                             if row.accountId == nil {
-                                Text(strings.t("networth.byAccount.unassignedHint")).font(.caption).foregroundStyle(
+                                Text(strings.t("networth.byAccount.unassignedHint")).font(.footnote).foregroundStyle(
                                     theme.secondaryLabel)
                             } else if let type = row.type {
-                                Text(strings.t("accounts.type." + type)).font(.caption).foregroundStyle(
+                                Text(strings.t("accounts.type." + type)).font(.footnote).foregroundStyle(
                                     theme.secondaryLabel)
                             }
                             if abs(row.cash) > Decimal(string: "0.005")!, abs(row.holdings) > Decimal(string: "0.005")!
@@ -211,7 +224,7 @@ public struct NetWorthView: View {
                                     strings.t("networth.byAccount.cash") + " " + money(row.cash) + " · "
                                         + strings.t("networth.byAccount.holdings") + " " + money(row.holdings)
                                 )
-                                .font(.caption).foregroundStyle(theme.secondaryLabel)
+                                .font(.footnote).foregroundStyle(theme.secondaryLabel)
                             }
                         }
                         Spacer()
@@ -227,21 +240,25 @@ public struct NetWorthView: View {
                 let difference = NetWorthAccountRow.cents(total - data.current.netWorth)
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(strings.t("networth.byAccount.displayedTotal")).font(.headline)
+                        Text(strings.t("networth.byAccount.displayedTotal")).fontWeight(.medium)
                         Text(
                             abs(difference) < Decimal(string: "0.005")!
                                 ? strings.t("networth.byAccount.matches")
                                 : strings.t(difference > 0 ? "networth.byAccount.above" : "networth.byAccount.below")
                                     + " " + money(abs(difference))
                         )
-                        .font(.caption).foregroundStyle(
+                        .font(.footnote).foregroundStyle(
                             abs(difference) < Decimal(string: "0.005")! ? theme.secondaryLabel : theme.warning)
                     }
                     Spacer()
                     MoneyText(amount: total, currency: currency, settings: settings, signed: false, colored: false)
+                        .fontWeight(.medium)
                 }
+                .padding(.vertical, 6).padding(.horizontal, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: DesignTokens.Radius.control).fill(theme.foreground.opacity(0.02)))
                 if abs(difference) >= Decimal(string: "0.005")! {
-                    Text(strings.t("networth.byAccount.differenceHint")).font(.caption).foregroundStyle(
+                    Text(strings.t("networth.byAccount.differenceHint")).font(.footnote).foregroundStyle(
                         theme.secondaryLabel)
                 }
             } else if model.accountsError != nil {
@@ -252,10 +269,10 @@ public struct NetWorthView: View {
         }
     }
     private var chart: some View {
-        AdminCard {
+        AdminCard(padding: VisionPageLayout.padding) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(strings.t("networth.overTime")).font(.headline)
+                    Text(strings.t("networth.overTime")).font(VisionFonts.display(17, relativeTo: .title3))
                     Text(strings.t("networth.chartDesc")).font(.callout).foregroundStyle(theme.secondaryLabel)
                 }
                 Spacer()
@@ -360,10 +377,14 @@ public struct NetWorthView: View {
         }
     }
     private func stat(_ key: String, value: String, symbol: String) -> some View {
-        AdminCard {
-            Label(strings.t(key), systemImage: symbol).font(.caption).foregroundStyle(theme.secondaryLabel)
+        AdminCard(padding: 20) {
+            HStack {
+                Text(strings.t(key)).fontWeight(.medium).foregroundStyle(theme.secondaryLabel)
+                Spacer()
+                Image(systemName: symbol).foregroundStyle(theme.tertiaryLabel).accessibilityHidden(true)
+            }
             RollingNumber(value: value, decimalSeparator: settings.numberFormat.locale.decimalSeparator?.first)
-                .font(.title2)
+                .font(VisionFonts.display(24, relativeTo: .title))
         }
     }
     private func signedPercent(_ value: Decimal) -> String {

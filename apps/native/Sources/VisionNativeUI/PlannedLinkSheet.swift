@@ -60,7 +60,7 @@ struct PlannedLinkSheet: View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(strings.t("plannedPage.link.title", ["name": link.payment.name]))
-                    .font(.title2.weight(.semibold))
+                    .font(.visionCardTitle)
                     .accessibilityAddTraits(.isHeader)
                 Text(description)
                     .font(.callout)

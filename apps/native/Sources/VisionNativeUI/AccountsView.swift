@@ -115,7 +115,7 @@ public struct AccountsView: View {
     }
 
     private var netCashCard: some View {
-        AdminCard {
+        AdminCard(padding: VisionPageLayout.padding) {
             HStack(alignment: .center, spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(strings.t("accounts.netCash"))
@@ -133,7 +133,7 @@ public struct AccountsView: View {
                 switch model.netCash {
                 case .amount(let total):
                     MoneyText(amount: total.amount, currency: model.displayCurrency, settings: settings, signed: false, colored: false)
-                        .font(.title2.weight(.semibold))
+                        .font(VisionFonts.display(24, relativeTo: .title))
                 case .pending, .unavailable:
                     Text(strings.t("accounts.group.subtotalPending"))
                         .font(.callout)
@@ -333,8 +333,13 @@ struct AccountHubRow: View {
                         .foregroundStyle(theme.tertiaryLabel)
                     HStack(spacing: 4) {
                         Text(strings.t("accounts.portfolio.pnl"))
-                        Text(MoneyText.text(metrics.gainLoss, currency: model.displayCurrency, settings: settings, signed: true))
-                            .monospacedDigit()
+                        MoneyText.styled(
+                            MoneyText.text(
+                                metrics.gainLoss, currency: model.displayCurrency, settings: settings, signed: true),
+                            decimalSeparator: settings.numberFormat.locale.decimalSeparator?.first,
+                            color: Self.gainColor(metrics.gainLoss, theme: theme)
+                        )
+                        .monospacedDigit()
                     }
                     .font(.footnote)
                     .foregroundStyle(Self.gainColor(metrics.gainLoss, theme: theme))

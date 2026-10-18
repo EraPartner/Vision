@@ -19,7 +19,7 @@ struct TransactionSplitSheet: View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(strings.t("splitDialog.buttonTitle"))
-                    .font(.title2.weight(.semibold))
+                    .font(.visionCardTitle)
                     .accessibilityAddTraits(.isHeader)
                 Text(strings.t("splitDialog.total", ["amount": money(form.absoluteAmount)]))
                     .font(.callout)
