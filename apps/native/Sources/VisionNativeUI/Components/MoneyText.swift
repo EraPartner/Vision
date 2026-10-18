@@ -17,14 +17,39 @@ struct MoneyText: View {
 
     var body: some View {
         let text = Self.text(amount, currency: currency, settings: settings, signed: signed)
+        let separator = settings.numberFormat.locale.decimalSeparator?.first
+        let color = colored && amount >= 0 ? theme.gain : theme.foreground
         Group {
             if rolling {
-                RollingNumber(value: text, decimalSeparator: settings.numberFormat.locale.decimalSeparator?.first)
+                RollingNumber(value: text, decimalSeparator: separator)
             } else {
-                Text(text).monospacedDigit().lineLimit(1)
+                Self.styled(text, decimalSeparator: separator, color: color).monospacedDigit().lineLimit(1)
             }
         }
-        .foregroundStyle(colored && amount >= 0 ? theme.gain : theme.foreground)
+        .foregroundStyle(color)
+    }
+
+    /// Money.tsx micro-typography in one `Text`, so it still truncates and reads as one
+    /// value: the currency symbol is smaller and medium weight, the decimal separator and
+    /// fraction smaller and dimmed.
+    static func styled(_ text: String, decimalSeparator: Character?, color: Color) -> Text {
+        let characters = Array(text)
+        let roles = RollingNumber.roles(characters, decimalSeparator: decimalSeparator)
+        var result = Text(verbatim: "")
+        var start = 0
+        while start < characters.count {
+            var end = start + 1
+            while end < characters.count, roles[end] == roles[start] { end += 1 }
+            let run = Text(verbatim: String(characters[start..<end]))
+            switch roles[start] {
+            case .plain: result = result + run
+            case .currency:
+                result = result + run.fontWeight(.medium).textScale(.secondary).foregroundStyle(color.opacity(0.85))
+            case .minor: result = result + run.textScale(.secondary).foregroundStyle(color.opacity(0.75))
+            }
+            start = end
+        }
+        return result
     }
 
     /// The formatted amount, for labels and tests.

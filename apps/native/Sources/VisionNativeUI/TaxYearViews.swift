@@ -85,7 +85,8 @@ struct TaxMastheadView: View {
     private var status: String { TaxYearPresentation.status(overview) }
     var body: some View {
         TaxCard {
-            Text(strings.t("tax.masthead.eyebrow")).font(.caption).foregroundStyle(theme.secondaryLabel)
+            Text(strings.t("tax.masthead.eyebrow")).font(.caption2.weight(.medium)).tracking(1.3).textCase(.uppercase)
+                .foregroundStyle(Color(token: theme.palette.mutedForeground).opacity(0.8))
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .bottom) {
                     identity
@@ -122,7 +123,7 @@ struct TaxMastheadView: View {
     private var identity: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text(String(overview.year)).font(.system(size: 40, weight: .semibold)).monospacedDigit()
+                Text(String(overview.year)).font(.visionLargeTitle).monospacedDigit()
                     .accessibilityAddTraits(.isHeader)
                 VisionBadge(
                     text: strings.t("tax.masthead.status." + status),
@@ -137,12 +138,12 @@ struct TaxMastheadView: View {
     }
     private var rates: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(strings.t("tax.masthead.meta.effectiveBurden")).font(.caption).foregroundStyle(theme.secondaryLabel)
+            Text(strings.t("tax.masthead.meta.effectiveBurden")).font(.caption).foregroundStyle(theme.tertiaryLabel)
             Text(
                 overview.calculation.effectiveRate.map {
                     VisionFormat.percent($0, digits: 1, locale: shell.settings.numberFormat.locale)
                 } ?? "—"
-            ).font(.largeTitle).monospacedDigit()
+            ).font(.visionLargeTitle).monospacedDigit().foregroundStyle(theme.primary)
             Text(
                 strings.t("tax.masthead.meta.marginalRate") + " · "
                     + (overview.calculation.marginalRate.map {

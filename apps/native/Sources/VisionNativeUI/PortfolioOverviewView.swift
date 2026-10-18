@@ -109,13 +109,17 @@ public struct PortfolioOverviewView: View {
         await model.load(currency: currency, route: shell.route, force: force)
     }
     private func hero(_ summary: PortfolioSummaryData) -> some View {
-        AdminCard {
-            VStack(alignment: .leading, spacing: 20) {
+        AdminCard(padding: 24) {
+            VStack(alignment: .leading, spacing: 24) {
                 HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(strings.t("portfolio.hero.value")).font(.caption).foregroundStyle(theme.secondaryLabel)
-                        Text(money(summary.totals.totalPortfolioValue)).font(.system(size: 42, weight: .semibold))
-                            .monospacedDigit()
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text(strings.t("portfolio.hero.value")).font(.caption2.weight(.medium)).tracking(1.3)
+                            .textCase(.uppercase)
+                            .foregroundStyle(Color(token: theme.palette.mutedForeground).opacity(0.8))
+                        MoneyText(
+                            amount: summary.totals.totalPortfolioValue, currency: currency, settings: shell.settings,
+                            signed: false, colored: false
+                        ).font(.visionLargeTitle)
                         if let gain = periodGain(summary) {
                             HStack(spacing: 6) {
                                 Text(money(gain.amount, signed: true)).fontWeight(.medium)
@@ -200,7 +204,7 @@ public struct PortfolioOverviewView: View {
                     ["date": VisionFormat.appDate($0, format: shell.settings.dateFormat)])
             }
         }
-        return AdminCard {
+        return AdminCard(padding: 24) {
             LazyVGrid(
                 columns: [GridItem(.adaptive(minimum: 200), alignment: .leading)], alignment: .leading, spacing: 20
             ) {
@@ -241,12 +245,12 @@ public struct PortfolioOverviewView: View {
     private func figure(_ key: String, value: String?, detail: String?, hint: String, gain: Decimal?) -> some View {
         VStack(alignment: .leading, spacing: 7) {
             HStack {
-                Text(strings.t(key)).font(.caption).foregroundStyle(theme.secondaryLabel)
+                Text(strings.t(key)).font(.caption).foregroundStyle(theme.tertiaryLabel)
                 PortfolioFigureInfo(title: strings.t("portfolio.figure.about", ["label": strings.t(key)]), text: hint)
             }
-            Text(value ?? "—").font(.title2.weight(.medium)).monospacedDigit()
+            Text(value ?? "—").font(Font.visionTitle3).monospacedDigit()
                 .foregroundStyle(value == nil ? theme.tertiaryLabel : (gain ?? 0) >= 0 ? theme.gain : theme.loss)
-            if let detail { Text(detail).font(.caption).foregroundStyle(theme.secondaryLabel).monospacedDigit() }
+            if let detail { Text(detail).font(.footnote).foregroundStyle(theme.secondaryLabel).monospacedDigit() }
         }
     }
     private var holdings: some View {
@@ -415,7 +419,7 @@ public struct PortfolioOverviewView: View {
     }
     private func moneyRow(_ key: String, _ amount: Decimal, signed: Bool = false, fallback: Bool = false) -> some View {
         HStack {
-            Text(strings.t(key)).foregroundStyle(theme.secondaryLabel)
+            Text(strings.t(key)).font(.footnote).foregroundStyle(theme.secondaryLabel)
             if fallback {
                 PortfolioFigureInfo(
                     title: strings.t("portfolio.fxFallbackNote"), text: strings.t("portfolio.fxFallbackNote"),
@@ -423,9 +427,12 @@ public struct PortfolioOverviewView: View {
                 ).foregroundStyle(theme.warning)
             }
             Spacer()
-            Text(money(amount, signed: signed)).monospacedDigit().foregroundStyle(
-                signed ? amount >= 0 ? theme.gain : theme.loss : theme.foreground)
-        }.font(.callout).padding(.vertical, 4)
+            let tone = signed ? amount >= 0 ? theme.gain : theme.loss : theme.foreground
+            MoneyText.styled(
+                money(amount, signed: signed),
+                decimalSeparator: shell.settings.numberFormat.locale.decimalSeparator?.first, color: tone
+            ).font(.body.weight(.medium)).monospacedDigit().foregroundStyle(tone)
+        }.padding(.vertical, 6)
     }
     @ViewBuilder private var archived: some View {
         if let error = model.errors["archive"] {

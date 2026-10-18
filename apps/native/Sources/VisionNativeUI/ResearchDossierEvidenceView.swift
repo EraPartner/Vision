@@ -9,7 +9,8 @@ struct ResearchDossierEvidenceListView: View {
         ResearchCard {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 5) {
-                    Text(shell.strings.t("dossiers.evidence")).font(.headline).accessibilityAddTraits(.isHeader)
+                    Text(shell.strings.t("dossiers.evidence")).font(.researchCardTitle)
+                        .accessibilityAddTraits(.isHeader)
                     Text(shell.strings.t("dossiers.evidenceHint")).font(.callout).foregroundStyle(theme.secondaryLabel)
                 }
                 Spacer()

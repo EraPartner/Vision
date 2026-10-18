@@ -138,7 +138,7 @@ struct ImportCommitReceiptCard: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
                 Text(strings.t("importPage.commitReceiptTitle"))
-                    .font(.title3.weight(.semibold))
+                    .font(Font.visionTitle3)
                     .accessibilityAddTraits(.isHeader)
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                     RollingNumber(value: String(receipt.imported))
@@ -171,11 +171,12 @@ struct ImportCommitReceiptCard: View {
             .accessibilityLabel(strings.t("importPage.dismissCommitReceipt"))
             .help(strings.t("importPage.dismissCommitReceipt"))
         }
-        .padding(16)
+        .padding(24)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: DesignTokens.Radius.card).fill(theme.success.opacity(0.06)))
-        .overlay(
-            RoundedRectangle(cornerRadius: DesignTokens.Radius.card).strokeBorder(theme.success.opacity(0.3), lineWidth: 1))
+        .background(
+            RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous).fill(theme.success.opacity(0.05))
+        )
+        .visionCardBackground()
         .accessibilityElement(children: .contain)
     }
 }
@@ -198,14 +199,14 @@ struct ImportBankCard: View {
     @Environment(\.visionTheme) var theme
 
     var body: some View {
-        AdminCard(padding: 20) {
-            VStack(alignment: .leading, spacing: 20) {
-                VStack(alignment: .leading, spacing: 4) {
+        AdminCard(padding: 24) {
+            VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: 6) {
                     Text(strings.t("importPage.csvImport"))
-                        .font(.title3.weight(.semibold))
+                        .font(.visionCardTitle)
                         .accessibilityAddTraits(.isHeader)
                     Text(strings.t("importPage.csvImportDesc"))
-                        .font(.callout)
+                        .font(.body)
                         .foregroundStyle(theme.secondaryLabel)
                 }
                 CSVDropzone(

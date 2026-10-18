@@ -32,9 +32,9 @@ struct TransactionInspectorView: View {
             .padding(16)
         }
         .frame(maxHeight: docked ? CGFloat(760) : CGFloat.infinity)
-        .background(
-            RoundedRectangle(cornerRadius: DesignTokens.Radius.card)
-                .fill(docked ? theme.card : Color.clear))
+        .background {
+            if docked { Color.clear.visionCardBackground() }
+        }
         .task(id: row.recipientId) { await inspector.load(recipientId: row.recipientId) }
         .task { await inspector.attachments.load() }
         .onExitCommand { model.closeInspector() }
@@ -48,14 +48,14 @@ struct TransactionInspectorView: View {
         HStack(alignment: .top, spacing: 8) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(row.recipient(labels))
-                    .font(.title3.weight(.semibold))
+                    .font(Font.visionTitle3)
                     .lineLimit(2)
                     .accessibilityAddTraits(.isHeader)
                 Text(verbatim: subtitle)
                     .font(.footnote)
                     .foregroundStyle(theme.secondaryLabel)
                 MoneyText(amount: row.amount, currency: row.displayCurrency, settings: settings)
-                    .font(.largeTitle.weight(.semibold))
+                    .font(.visionLargeTitle)
                     .strikethrough(!row.isActive)
                     .padding(.top, 4)
             }
@@ -85,8 +85,9 @@ struct TransactionInspectorView: View {
         VStack(alignment: .leading, spacing: 8) {
             if let title {
                 Text(title)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(theme.secondaryLabel)
+                    .font(.caption2.weight(.medium))
+                    .tracking(1.3)
+                    .foregroundStyle(Color(token: theme.palette.mutedForeground).opacity(0.8))
                     .textCase(.uppercase)
                     .accessibilityAddTraits(.isHeader)
             }

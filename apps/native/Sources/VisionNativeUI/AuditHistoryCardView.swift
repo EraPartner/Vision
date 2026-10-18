@@ -9,7 +9,7 @@ struct AuditHistoryCardView: View {
     @Environment(\.visionTheme) var theme
 
     var body: some View {
-        AdminCard {
+        AdminCard(padding: 24) {
             VStack(alignment: .leading, spacing: 16) {
                 header
                 if model.showsLoading { loading }
@@ -44,9 +44,10 @@ struct AuditHistoryCardView: View {
             AdminIconBadge(symbol: "clock.badge.checkmark")
             VStack(alignment: .leading, spacing: 4) {
                 Text(strings.t("admin.audit.title"))
-                    .font(.headline)
+                    .font(Font.visionTitle3)
+                    .accessibilityAddTraits(.isHeader)
                 Text(strings.t("admin.audit.description"))
-                    .font(.subheadline)
+                    .font(.body)
                     .foregroundStyle(theme.secondaryLabel)
             }
             Spacer(minLength: 8)

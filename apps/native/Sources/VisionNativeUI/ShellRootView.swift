@@ -112,6 +112,9 @@ public struct ShellRootView<WebContent: View>: View {
             detailColumn(theme)
         }
         .environment(\.visionTheme, theme)
+        // Prominent buttons, toggles and pickers take the web's emerald `--primary` (or the
+        // chosen accent) instead of the system blue.
+        .tint(theme.primary)
         .environment(\.visionVisualEffects, model.nativeSettings?.effectiveVisualEffects ?? "standard")
         .environment(\.visionWealthCanvasTint, model.route.path.hasPrefix("/portfolio"))
         .environment(\.visionStaticAtmosphere, model.nativeSettings?.isLargeDisplay ?? false)
@@ -247,18 +250,9 @@ struct NativeSidebar: View {
     @FocusState private var skipFocused: Bool
 
     var body: some View {
-        List(selection: selection) {
-            ForEach(model.sections) { section in
-                sectionView(section)
-            }
-        }
-        .listStyle(.sidebar)
-        .scrollContentBackground(.hidden)
-        // The pill marks the active row; a clear tint hides the system selection highlight
-        // while keeping the list's selection and arrow-key movement.
-        .tint(Color.clear)
-        .accessibilityLabel(model.strings.t("nav.primary"))
-        .safeAreaInset(edge: .top, spacing: 0) {
+        // The header and footer sit outside the list, as on the web, so scrolled rows clip at
+        // the list's edges instead of showing through the translucent chrome.
+        VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 6) {
                 brandButton
                 HStack(spacing: 4) {
@@ -269,8 +263,17 @@ struct NativeSidebar: View {
             .padding(.horizontal, 10)
             .padding(.top, 6)
             .padding(.bottom, 4)
-        }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+            List(selection: selection) {
+                ForEach(model.sections) { section in
+                    sectionView(section)
+                }
+            }
+            .listStyle(.sidebar)
+            .scrollContentBackground(.hidden)
+            // The pill marks the active row; a clear tint hides the system selection highlight
+            // while keeping the list's selection and arrow-key movement.
+            .tint(Color.clear)
+            .accessibilityLabel(model.strings.t("nav.primary"))
             footer
         }
         .overlay(alignment: .top) { skipLink }
@@ -424,7 +427,7 @@ struct NativeSidebar: View {
                     .resizable()
                     .frame(width: 20, height: 20)
                     .accessibilityHidden(true)
-                Text(verbatim: "Vision").font(.headline)
+                Text(verbatim: "Vision").font(.visionDisplayHeadline)
                 Spacer(minLength: 0)
             }
             .contentShape(Rectangle())

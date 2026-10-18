@@ -63,7 +63,7 @@ public struct AIChatView: View {
             .sheet(isPresented: $conversationsOpen) {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack {
-                        Text(strings.t("aiChat.conversations")).font(.title3.weight(.semibold))
+                        Text(strings.t("aiChat.conversations")).font(.researchCardTitle)
                         Spacer()
                         Button(strings.t("common.close")) { conversationsOpen = false }.keyboardShortcut(.cancelAction)
                     }.padding(16)
@@ -88,22 +88,22 @@ public struct AIChatView: View {
                 }
                 VStack(alignment: .leading, spacing: 4) {
                     Text(conversationTitle)
-                        .font(.headline).lineLimit(1).accessibilityAddTraits(.isHeader)
+                        .font(.researchCardTitle).lineLimit(1).accessibilityAddTraits(.isHeader)
                     // `(statusLoading || status?.ok)`: when Ollama is unreachable only the banner says so.
                     if statusLoading || model.status?.ok == true {
                         HStack(spacing: 6) {
                             Circle().fill(model.status?.ok == true ? theme.gain : theme.tertiaryLabel).frame(
                                 width: 6, height: 6)
                             Text(strings.t(statusLoading ? "aiChat.checkingOllama" : "aiChat.ollamaReady"))
-                                .font(.caption).foregroundStyle(theme.secondaryLabel)
+                                .font(.footnote).foregroundStyle(theme.secondaryLabel)
                         }
                     }
                 }
                 Spacer(minLength: 0)
-            }.padding(16)
-            Divider()
+            }.padding(.horizontal, 20).padding(.vertical, 12)
+            Divider().opacity(0.5)
             if !statusLoading && model.status?.ok != true {
-                AIChatStatusBanner(model: model, shell: shell).padding(16)
+                AIChatStatusBanner(model: model, shell: shell).padding(.horizontal, 20).padding(.vertical, 12)
             }
             AIChatTranscript(model: model, shell: shell, isVisible: isChat)
             if !model.composerDisabled || model.streamSnapshot.isStreaming {

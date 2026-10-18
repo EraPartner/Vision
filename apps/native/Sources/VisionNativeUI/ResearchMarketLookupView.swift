@@ -55,7 +55,7 @@ public struct ResearchMarketLookupView: View {
                     }
                     ResearchCard {
                         HStack {
-                            Text(strings.t("market.priceChart")).font(.headline)
+                            Text(strings.t("market.priceChart")).font(.researchCardTitle)
                             Spacer()
                             Picker(
                                 strings.t("market.priceChart"),
@@ -83,7 +83,7 @@ public struct ResearchMarketLookupView: View {
                     if !model.isProviderAsset {
                         if let quote = model.quote { tradingInfo(quote) }
                         ResearchCard {
-                            Text(strings.t("research.details")).font(.headline)
+                            Text(strings.t("research.details")).font(.researchCardTitle)
                             Picker(
                                 strings.t("research.details"),
                                 selection: Binding(
@@ -110,11 +110,10 @@ public struct ResearchMarketLookupView: View {
                     }
                 } else {
                     ResearchCard {
-                        VStack(spacing: 8) {
-                            Image(systemName: "magnifyingglass").font(.largeTitle).accessibilityHidden(true)
-                            Text(strings.t("market.searchTicker")).font(.headline)
-                            Text(strings.t("market.searchHint")).foregroundStyle(theme.secondaryLabel)
-                        }.padding(.vertical, 50).frame(maxWidth: .infinity)
+                        VisionEmptyState(
+                            symbol: "magnifyingglass", title: strings.t("market.searchTicker"),
+                            description: strings.t("market.searchHint")
+                        ) {}.padding(.vertical, 50)
                     }
                 }
             }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
@@ -157,26 +156,32 @@ public struct ResearchMarketLookupView: View {
         }.buttonStyle(.borderedProminent)
     }
     private func quoteHero(_ quote: ResearchQuote) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text(quote.symbol).font(.title2.weight(.semibold)).monospaced()
-                if let type = quote.type { Text(type).font(.caption).foregroundStyle(theme.secondaryLabel) }
-                if let exchange = quote.exchange { Text(exchange).font(.caption).foregroundStyle(theme.secondaryLabel) }
-                Spacer()
-
+        HStack(alignment: .top, spacing: 16) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 8) {
+                    Text(quote.symbol).font(Font.visionTitle1).accessibilityAddTraits(
+                        .isHeader)
+                    if let type = quote.type, !type.isEmpty { VisionBadge(text: type, tone: .secondary, small: true) }
+                    if let exchange = quote.exchange {
+                        Text(exchange).font(.footnote).foregroundStyle(theme.secondaryLabel)
+                    }
+                }
+                if let name = quote.name { Text(name).foregroundStyle(theme.secondaryLabel) }
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    if let price = quote.price {
+                        Text(ResearchMarketDisplay.money(price, currency: quote.currency, shell: shell, digits: 2))
+                            .font(.visionLargeTitle.monospacedDigit())
+                    }
+                    let changeLabel = quoteChangeLabel(quote)
+                    if !changeLabel.isEmpty {
+                        DeltaPill(quote.changePercent ?? quote.change ?? 0, label: changeLabel)
+                    }
+                }.padding(.top, 14)
             }
-            if let name = quote.name { Text(name).foregroundStyle(theme.secondaryLabel) }
-            if let price = quote.price {
-                Text(ResearchMarketDisplay.money(price, currency: quote.currency, shell: shell, digits: 2)).font(
-                    .largeTitle.weight(.semibold)
-                ).monospacedDigit()
-            }
-            let changeLabel = quoteChangeLabel(quote)
-            if !changeLabel.isEmpty {
-                DeltaPill(quote.changePercent ?? quote.change ?? 0, label: changeLabel)
-            }
+            Spacer(minLength: 0)
             if !model.isProviderAsset {
-                Text(strings.t("market.autoRefresh")).font(.caption).foregroundStyle(theme.secondaryLabel)
+                Label(strings.t("market.autoRefresh"), systemImage: "clock").font(.footnote)
+                    .foregroundStyle(theme.secondaryLabel)
             }
         }
     }

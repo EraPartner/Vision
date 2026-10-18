@@ -135,9 +135,9 @@ public struct ImportReviewView: View {
         AdminCard(padding: 0) {
             VStack(alignment: .leading, spacing: 0) {
                 Text(strings.t("importReview.legend.title"))
-                    .font(.headline)
+                    .font(Font.visionTitle3)
                     .accessibilityAddTraits(.isHeader)
-                    .padding(20)
+                    .padding(24)
                 ForEach(ImportMatchKind.allCases) { kind in
                     Divider().opacity(0.5)
                     HStack(spacing: 12) {
@@ -150,7 +150,7 @@ public struct ImportReviewView: View {
                         Text(verbatim: preview.totals[kind.rawValue].map { String($0) } ?? "")
                             .monospacedDigit()
                     }
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, 24)
                     .padding(.vertical, 10)
                     .frame(minHeight: 44)
                     .accessibilityElement(children: .combine)
@@ -171,13 +171,13 @@ public struct ImportReviewView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(strings.t("importReview.accounts.title"))
-                            .font(.headline)
+                            .font(Font.visionTitle3)
                             .accessibilityAddTraits(.isHeader)
                         Text(strings.t("importReview.accounts.desc"))
-                            .font(.callout)
+                            .font(.body)
                             .foregroundStyle(theme.secondaryLabel)
                     }
-                    .padding(20)
+                    .padding(24)
                     ForEach(entries) { entry in
                         Divider().opacity(0.5)
                         FlowLayout(spacing: 8) {
@@ -195,7 +195,7 @@ public struct ImportReviewView: View {
                                 VisionBadge(text: strings.t("importReview.accounts.newBadge"), tone: .success)
                             }
                         }
-                        .padding(.horizontal, 20)
+                        .padding(.horizontal, 24)
                         .padding(.vertical, 10)
                         .frame(minHeight: 44, alignment: .leading)
                         .accessibilityElement(children: .combine)
@@ -212,13 +212,13 @@ public struct ImportReviewView: View {
             VStack(alignment: .leading, spacing: 0) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(strings.t("importReview.groups.title"))
-                        .font(.headline)
+                        .font(Font.visionTitle3)
                         .accessibilityAddTraits(.isHeader)
                     Text(strings.t("importReview.groups.desc"))
-                        .font(.callout)
+                        .font(.body)
                         .foregroundStyle(theme.secondaryLabel)
                 }
-                .padding(20)
+                .padding(24)
                 ForEach(Array(preview.groups.enumerated()), id: \.offset) { _, group in
                     Divider().opacity(0.5)
                     ImportReviewGroupView(model: model, group: group, settings: settings, strings: strings)
@@ -364,11 +364,11 @@ struct ImportReviewGroupView: View {
                 }
                 .frame(maxWidth: 200)
             }
-            .padding(.horizontal, 20)
+            .padding(.horizontal, 24)
             .padding(.vertical, 12)
             if expanded {
                 details(state)
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, 24)
                     .padding(.bottom, 16)
                     .transition(.opacity)
             }

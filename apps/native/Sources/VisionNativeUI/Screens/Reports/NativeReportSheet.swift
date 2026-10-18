@@ -13,8 +13,8 @@ public struct NativeReportSheet: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 5) {
-                Text(strings.t("export.title")).font(.title2.weight(.semibold))
-                Text(strings.t("export.description")).font(.callout).foregroundStyle(theme.secondaryLabel)
+                Text(strings.t("export.title")).font(.visionCardTitle).accessibilityAddTraits(.isHeader)
+                Text(strings.t("export.description")).font(.body).foregroundStyle(theme.secondaryLabel)
             }.padding(24)
             Form {
                 Section(strings.t("export.reportType")) {

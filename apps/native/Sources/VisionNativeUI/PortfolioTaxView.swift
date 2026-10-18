@@ -249,7 +249,7 @@ public struct PortfolioTaxView: View {
     }
     private func sectionHeading(_ title: String, description: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(strings.t(title)).font(.title2).accessibilityAddTraits(.isHeader)
+            Text(strings.t(title)).font(.visionCardTitle).accessibilityAddTraits(.isHeader)
             Text(strings.t(description)).foregroundStyle(theme.secondaryLabel)
         }
     }

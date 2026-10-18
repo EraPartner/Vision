@@ -14,7 +14,7 @@ struct HomeForecastDiagnostics: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 HStack {
-                    Text(strings.t("cashflow.diagnostics.title")).font(.title2)
+                    Text(strings.t("cashflow.diagnostics.title")).font(.visionCardTitle)
                     Spacer()
                     Button(strings.t("common.close")) { dismiss() }.keyboardShortcut(.cancelAction)
                 }
@@ -22,7 +22,8 @@ struct HomeForecastDiagnostics: View {
                     ProgressView()
                 } else if let diagnostics = model.forecast?.diagnostics {
                     Text(
-                        strings.t("cashflow.diagnostics.desc", ["months": String(diagnostics.history_months)]))
+                        strings.t("cashflow.diagnostics.desc", ["months": String(diagnostics.history_months)])
+                    ).foregroundStyle(theme.secondaryLabel)
                     Text(strings.t("cashflow.diagnostics.accuracy")).font(.headline)
                     accuracy(diagnostics)
                     Text(
@@ -32,9 +33,9 @@ struct HomeForecastDiagnostics: View {
                                 "n": String(diagnostics.history_months),
                                 "currency": model.forecast?.currency ?? settings.defaultCurrency,
                             ])
-                    ).font(.caption).foregroundStyle(theme.secondaryLabel)
+                    ).font(.footnote).foregroundStyle(theme.secondaryLabel)
                     Text(strings.t("cashflow.diagnostics.suggestedWeights")).font(.headline)
-                    Text(strings.t("cashflow.diagnostics.weightsNote")).font(.caption).foregroundStyle(
+                    Text(strings.t("cashflow.diagnostics.weightsNote")).font(.footnote).foregroundStyle(
                         theme.secondaryLabel)
                     let weights = diagnostics.suggestedWeights
                     let maxWeight = weights.values.max() ?? 1
@@ -72,7 +73,7 @@ struct HomeForecastDiagnostics: View {
                     Text("RMSE")
                     Text("MAPE")
                     Text(strings.t("cashflow.diagnostics.months"))
-                }.font(.caption.weight(.semibold))
+                }.font(.caption.weight(.semibold)).foregroundStyle(theme.secondaryLabel)
                 ForEach(
                     Array(diagnostics.backtest.sorted { $0.mae < $1.mae }.enumerated()), id: \.element.id
                 ) { index, method in
@@ -92,6 +93,10 @@ struct HomeForecastDiagnostics: View {
                     }.font(.caption)
                 }
             }
+            .padding(12)
+            .overlay(
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous)
+                    .strokeBorder(theme.border.opacity(0.6)))
             ForEach(diagnostics.backtest.sorted { $0.mae < $1.mae }) { method in
                 let persisted = model.forecastAccuracy?.methods.first { $0.id == method.id }
                 let history = persisted?.history ?? method.per_month

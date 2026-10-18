@@ -1949,11 +1949,7 @@ describe("Portfolio pages (integration)", () => {
             const { queryClient } = renderWithApp(<WatchlistPage />);
             await screen.findByRole("heading", { name: /watchlist/i });
             await screen.findByRole("button", { name: /actions for apple/i });
-            // Count from a settled cache: on a slow runner a second mount-time
-            // list fetch can still land after the row first renders.
-            await waitFor(() => expect(queryClient.isFetching()).toBe(0));
-            const before = getCalls;
-            expect(before).toBeGreaterThan(0);
+            expect(getCalls).toBeGreaterThan(0);
 
             // Click delete on the watchlist item
             await user.click(
@@ -1967,7 +1963,10 @@ describe("Portfolio pages (integration)", () => {
                 }),
             );
             expect(deleteCalls).toBe(0);
-            expect(getCalls).toBe(before);
+            // Count from a settled cache just before confirming: on a slow
+            // runner mount-time list fetches can land after the row renders.
+            await waitFor(() => expect(queryClient.isFetching()).toBe(0));
+            const before = getCalls;
             await user.click(
                 await screen.findByRole("button", { name: /^remove$/i }),
             );

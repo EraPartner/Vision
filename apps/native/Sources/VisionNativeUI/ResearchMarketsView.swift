@@ -120,9 +120,9 @@ public struct ResearchMarketsView: View {
                         (percent >= 0 ? "+" : "−")
                             + VisionFormat.percent(abs(percent), digits: 2, locale: shell.settings.numberFormat.locale)
                     )
-                    .font(.title.weight(.semibold)).monospacedDigit()
+                    .font(Font.visionTitle1.monospacedDigit())
                 } else {
-                    Text("—").font(.title.weight(.semibold)).foregroundStyle(theme.tertiaryLabel)
+                    Text("—").font(Font.visionTitle1).foregroundStyle(theme.tertiaryLabel)
                 }
                 Text(entry.symbol).font(.caption.monospaced()).foregroundStyle(theme.foreground.opacity(0.5)).lineLimit(
                     1)

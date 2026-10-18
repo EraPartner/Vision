@@ -6,6 +6,7 @@ struct AnalysisMonitorsScheduleView: View {
     let strings: any Localizing
     let update: ((inout AnalysisMonitorDraft) -> Void) -> Void
     let focus: FocusState<AnalysisMonitorInput?>.Binding
+    @Environment(\.visionTheme) private var theme
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             DisclosureGroup(
@@ -27,7 +28,7 @@ struct AnalysisMonitorsScheduleView: View {
                     "monitors.scheduleSummary",
                     ["interval": duration(draft.intervalMinutes), "cooldown": duration(draft.cooldownMinutes)])
             )
-            .font(.caption).foregroundStyle(.secondary)
+            .font(.caption).foregroundStyle(theme.secondaryLabel)
         }
     }
     private func field(
@@ -38,7 +39,7 @@ struct AnalysisMonitorsScheduleView: View {
             TextField(strings.t(key), text: Binding(get: { value }, set: set))
                 .textFieldStyle(.roundedBorder).focused(focus, equals: input)
                 .accessibilityHint(range)
-            Text(range).font(.caption2).foregroundStyle(.secondary)
+            Text(range).font(.caption2).foregroundStyle(theme.secondaryLabel)
         }
     }
     private func duration(_ raw: String) -> String {

@@ -22,7 +22,7 @@ struct VisionPageHeader<Actions: View>: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                    .font(.largeTitle.weight(.semibold))
+                    .font(.visionLargeTitle)
                     .accessibilityAddTraits(.isHeader)
                 if !subtitle.isEmpty {
                     Text(subtitle)

@@ -40,16 +40,17 @@ public struct DatabaseMaintenanceView: View {
             AdminCard(padding: 0) {
                 VStack(alignment: .leading, spacing: 0) {
                     Text(strings.t("dbMaintenance.tableStats"))
-                        .font(.headline)
-                        .padding(16)
+                        .font(Font.visionTitle3)
+                        .accessibilityAddTraits(.isHeader)
+                        .padding(24)
                     table
                         .padding(.horizontal, 16)
                     Text(strings.t("dbMaintenance.statsNote"))
                         .font(.footnote)
                         .foregroundStyle(theme.secondaryLabel)
-                        .padding(.horizontal, 16)
+                        .padding(.horizontal, 24)
                         .padding(.top, 12)
-                        .padding(.bottom, 16)
+                        .padding(.bottom, 20)
                 }
             }
         }
@@ -89,7 +90,7 @@ public struct DatabaseMaintenanceView: View {
     }
 
     private func summaryCard(_ label: String, value: String, symbol: String) -> some View {
-        AdminCard {
+        AdminCard(padding: 24) {
             HStack(spacing: 16) {
                 AdminIconBadge(symbol: symbol)
                 VStack(alignment: .leading, spacing: 2) {
@@ -100,7 +101,7 @@ public struct DatabaseMaintenanceView: View {
                         SkeletonBar(width: 80, height: 24)
                     } else {
                         Text(value)
-                            .font(.title2.weight(.semibold))
+                            .font(.visionCardTitle)
                             .monospacedDigit()
                     }
                 }
@@ -165,21 +166,12 @@ public struct DatabaseMaintenanceView: View {
         .accessibilityElement(children: .contain)
         .accessibilityAddTraits(model.isLoading ? .updatesFrequently : [])
         if model.showsEmptyState {
-            VStack(spacing: 10) {
-                Image(systemName: "cylinder")
-                    .font(.title2)
-                    .foregroundStyle(theme.tertiaryLabel)
-                    .accessibilityHidden(true)
-                Text(strings.t("dbMaintenance.noTables"))
-                    .font(.headline)
-                    .multilineTextAlignment(.center)
-                    .accessibilityAddTraits(.isHeader)
+            VisionEmptyState(symbol: "cylinder", title: strings.t("dbMaintenance.noTables")) {
                 Button(strings.t("dbMaintenance.refresh")) {
                     Task { await model.refresh() }
                 }
                 .buttonStyle(.bordered)
             }
-            .frame(maxWidth: .infinity)
             .padding(.vertical, 24)
         }
     }

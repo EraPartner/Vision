@@ -232,7 +232,7 @@ public struct TaxOverviewView: View {
             onApply: { try await screens.applyDeduction($0) })
     }
     private var automation: some View {
-        TaxCard(title: strings.t("tax.automation.title")) {
+        TaxCard(title: strings.t("tax.automation.title"), small: true) {
             Text(strings.t("tax.automation.automatic") + ": " + strings.t("tax.automation.automaticDesc"))
             Text(strings.t("tax.automation.manualLabel") + ": " + strings.t("tax.automation.manualDesc"))
             Text(strings.t("tax.automation.investmentLabel") + ": " + strings.t("tax.automation.investmentDesc"))

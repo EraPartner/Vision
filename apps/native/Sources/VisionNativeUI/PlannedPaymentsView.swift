@@ -260,7 +260,7 @@ public struct PlannedPaymentsView: View {
         let strip = model.strip
         let monthly = model.estimatedMonthly
         let ratesLoading = model.isRatesLoading
-        return AdminCard {
+        return AdminCard(padding: VisionPageLayout.padding) {
             VStack(alignment: .leading, spacing: 16) {
                 HStack(alignment: .top, spacing: 16) {
                     VStack(alignment: .leading, spacing: 6) {
@@ -293,15 +293,16 @@ public struct PlannedPaymentsView: View {
                     }
                     Spacer(minLength: 0)
                     VStack(alignment: .trailing, spacing: 4) {
-                        Label(strings.t("plannedPage.estMonthly"), systemImage: "repeat")
-                            .font(.caption.weight(.semibold))
+                        Label(strings.t("plannedPage.estMonthly").uppercased(), systemImage: "repeat")
+                            .font(.caption2.weight(.medium))
+                            .tracking(1.3)
                             .foregroundStyle(theme.secondaryLabel)
                         if ratesLoading {
                             SkeletonBar(width: 96, height: 28)
                                 .accessibilityLabel(strings.t("common.loading"))
                         } else {
                             MoneyText(amount: monthly.total, currency: settings.defaultCurrency, settings: settings)
-                                .font(.title2.weight(.semibold))
+                                .font(.visionCardTitle)
                         }
                         if !ratesLoading && monthly.unavailableCount > 0 {
                             fxWarning(monthly.unavailableCount)
@@ -349,8 +350,9 @@ public struct PlannedPaymentsView: View {
         let weekday = LanguageLocale.shortWeekday(bucket.date, language: strings.language, calendar: model.calendar)
         return VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Text(isToday ? strings.t("plannedPage.next7.today") : weekday)
-                    .font(.caption.weight(.semibold))
+                Text((isToday ? strings.t("plannedPage.next7.today") : weekday).uppercased())
+                    .font(.caption2.weight(.medium))
+                    .tracking(1.3)
                     .foregroundStyle(isToday ? theme.primary : theme.secondaryLabel)
                 Spacer(minLength: 0)
                 Text(verbatim: String(bucket.day))
@@ -658,7 +660,7 @@ struct PlannedHistorySheet: View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .top) {
                 Text(strings.t("plannedPage.history.title"))
-                    .font(.title2.weight(.semibold))
+                    .font(.visionCardTitle)
                     .accessibilityAddTraits(.isHeader)
                 Spacer()
                 Button {

@@ -129,16 +129,30 @@ public struct HomeView: View {
     }
     private func heroReadout(_ pace: HomeSpendingPace) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(strings.t("home.spentSoFar", ["month": monthName])).font(.headline)
+            Text(strings.t("home.spentSoFar", ["month": monthName]).uppercased())
+                .font(.caption2.weight(.medium)).tracking(1.3)
+                .foregroundStyle(Color(token: theme.palette.mutedForeground).opacity(0.8))
             MoneyText(
                 amount: pace.current_month.total_spending, currency: currency, settings: settings,
                 signed: false, colored: false
-            ).font(.largeTitle)
-            Text(paceDescription(pace)).foregroundStyle(theme.secondaryLabel)
-            LabeledContent(strings.t("home.incomeSoFar"), value: money(pace.income))
-            LabeledContent(strings.t("home.plannedIn"), value: money(plannedTotal(income: true)))
-            LabeledContent(strings.t("home.plannedOut"), value: money(plannedTotal(income: false)))
+            ).font(.visionLargeTitle)
+            Text(paceDescription(pace)).font(.callout).foregroundStyle(theme.secondaryLabel)
+            HStack(alignment: .top, spacing: 12) {
+                heroFigure(strings.t("home.incomeSoFar"), amount: pace.income, colored: true)
+                heroFigure(strings.t("home.plannedIn"), amount: plannedTotal(income: true), colored: true)
+                heroFigure(strings.t("home.plannedOut"), amount: plannedTotal(income: false), colored: false)
+            }.padding(.top, 8)
         }
+    }
+    private func heroFigure(_ label: String, amount: Decimal, colored: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label).font(.caption.weight(.medium)).foregroundStyle(theme.tertiaryLabel).lineLimit(1)
+            MoneyText(
+                amount: amount, currency: currency, settings: settings, signed: amount > 0, colored: colored
+            ).font(.headline)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
     }
     private func heroPlot(_ pace: HomeSpendingPace) -> some View {
         InsightTimelineChart(
@@ -250,8 +264,8 @@ public struct HomeView: View {
                 MoneyText(
                     amount: worth.current.netWorth, currency: currency, settings: settings, signed: false,
                     colored: false, rolling: true
-                ).font(.title)
-                HStack {
+                ).font(Font.visionTitle1)
+                HStack(spacing: 4) {
                     MoneyText(amount: worth.monthlyChange, currency: currency, settings: settings)
                     Text(strings.t("home.netWorth.change")).foregroundStyle(theme.secondaryLabel)
                     if worth.monthlyChangePercent != 0 {
@@ -261,9 +275,9 @@ public struct HomeView: View {
                                     worth.monthlyChangePercent, fractionDigits: 1,
                                     locale: settings.numberFormat.locale) + "%)"
                         )
-                        .font(.caption).foregroundStyle(theme.secondaryLabel)
+                        .foregroundStyle(theme.secondaryLabel)
                     }
-                }
+                }.font(.footnote)
                 LabeledContent(strings.t("home.netWorth.assets"), value: money(worth.assets))
                 ProgressView(value: ratio(worth.assets, scale: max(worth.assets, worth.debt, 1))).tint(
                     theme.gain)
@@ -273,7 +287,7 @@ public struct HomeView: View {
             } else if model.errors["netWorth"] != nil {
                 widgetFailure("netWorth")
             } else {
-                Text(strings.t("home.netWorth.empty")).foregroundStyle(theme.secondaryLabel)
+                Text(strings.t("home.netWorth.empty")).font(.callout).foregroundStyle(theme.secondaryLabel)
                 Button(strings.t("home.accounts.title")) { navigate("/accounts") }.buttonStyle(.link)
             }
         }
@@ -290,7 +304,7 @@ public struct HomeView: View {
                 routeRow(
                     payment.recipientName ?? payment.bankAccount ?? "", route: "/planned",
                     subtitle: upcomingDay(payment.plannedDate),
-                    trailing: money(payment.amount, currency: payment.currency))
+                    amount: (payment.amount, payment.currency ?? currency))
             }
         }
     }
@@ -307,7 +321,8 @@ public struct HomeView: View {
                         AccountProvenance.text(account, settings: settings, strings: strings),
                     ]
                     .compactMap { $0 }.joined(separator: " · "),
-                    trailing: account.computedBalance.map { money($0, currency: account.currency) } ?? "—")
+                    trailing: "—", amount: account.computedBalance.map { ($0, account.currency) }, signed: false,
+                    colored: false)
             }
         }
     }
@@ -329,8 +344,9 @@ public struct HomeView: View {
         let selected = months.first { $0.id == netSelection } ?? months.last
         let net = selected.map { $0.total_income - abs($0.total_spending) } ?? 0
         return card("dashboard.statCards", hero: net >= 0 ? .gain : .loss) {
-            Text(strings.t("dashboard.stat.lastMonthNet")).font(.caption)
-            MoneyText(amount: net, currency: currency, settings: settings, rolling: true).font(.title)
+            Text(strings.t("dashboard.stat.lastMonthNet")).font(.body.weight(.medium)).foregroundStyle(
+                theme.secondaryLabel)
+            MoneyText(amount: net, currency: currency, settings: settings, rolling: true).font(.visionLargeTitle)
             Text(selected?.id ?? strings.t("dashboard.stat.mostRecentMonth")).foregroundStyle(
                 theme.secondaryLabel)
             if let latest = months.last, latest.total_income > 0 {
@@ -370,7 +386,7 @@ public struct HomeView: View {
         }
     }
     private var bankBalances: some View {
-        card("bankWidget.title") {
+        card("bankWidget.title", titleFont: .visionCardTitle) {
             if let balances = model.balances {
                 LabeledContent(
                     strings.t("bankWidget.netPosition"), value: money(balances.total_net_position))
@@ -450,7 +466,7 @@ public struct HomeView: View {
                 routeRow(
                     row.recipientName ?? row.memo ?? "", route: "/transactions?id=\(row.id)",
                     subtitle: VisionFormat.appDate(row.transactionDate, format: settings.dateFormat),
-                    trailing: money(row.amount, currency: row.currency))
+                    amount: (row.amount, row.currency ?? currency))
             }
         }
     }
@@ -594,7 +610,8 @@ public struct HomeView: View {
         return format.string(from: Date())
     }
     private func routeRow(
-        _ title: String, route: String, subtitle: String? = nil, trailing: String? = nil
+        _ title: String, route: String, subtitle: String? = nil, trailing: String? = nil,
+        amount: (Decimal, String)? = nil, signed: Bool = true, colored: Bool = true
     ) -> some View {
         Button {
             navigate(route)
@@ -602,21 +619,28 @@ public struct HomeView: View {
             HStack(alignment: .center, spacing: 10) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title).foregroundStyle(theme.foreground)
-                    if let subtitle { Text(subtitle).font(.caption).foregroundStyle(theme.secondaryLabel) }
+                    if let subtitle { Text(subtitle).font(.footnote).foregroundStyle(theme.secondaryLabel) }
                 }
                 Spacer()
-                if let trailing { Text(trailing).monospacedDigit().foregroundStyle(theme.foreground) }
+                if let amount {
+                    MoneyText(
+                        amount: amount.0, currency: amount.1, settings: settings, signed: signed, colored: colored
+                    ).fontWeight(.medium)
+                } else if let trailing {
+                    Text(trailing).monospacedDigit().foregroundStyle(theme.foreground)
+                }
                 Image(systemName: "chevron.right").font(.caption).foregroundStyle(theme.secondaryLabel)
             }.padding(.vertical, 6).contentShape(Rectangle())
         }.buttonStyle(.plain)
     }
     private func card<Content: View>(
         _ titleKey: String, action: (String, String)? = nil, exclusion: String? = nil, hero: TrendHue.Tone? = nil,
+        titleFont: Font = Font.visionTitle3,
         @ViewBuilder content: () -> Content
     ) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Text(strings.t(titleKey)).font(.headline).accessibilityAddTraits(.isHeader)
+                Text(strings.t(titleKey)).font(titleFont).accessibilityAddTraits(.isHeader)
                 Spacer()
                 if let exclusion, model.hasExclusions {
                     Toggle(
@@ -632,7 +656,7 @@ public struct HomeView: View {
                 if let action { Button(strings.t(action.0)) { navigate(action.1) }.buttonStyle(.link) }
             }
             content()
-        }.padding(18).frame(maxWidth: .infinity, alignment: .leading)
+        }.padding(VisionPageLayout.padding).frame(maxWidth: .infinity, alignment: .leading)
             // NetSummaryCard: TrendHue then the hero CardSheen (ADR-172), above the card fill.
             .background {
                 if let hero {
@@ -653,7 +677,7 @@ private struct HomeWidgetsSheet: View {
     @Environment(\.dismiss) private var dismiss
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(strings.t("widgets.title")).font(.title2)
+            Text(strings.t("widgets.title")).font(.visionCardTitle)
             Text(strings.t("widgets.description"))
             ForEach(InsightWidget.home) { widget in
                 VStack(alignment: .leading, spacing: 3) {

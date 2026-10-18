@@ -27,15 +27,16 @@ struct NativeSettingsAboutView: View {
         NativeSettingsSection(title: strings.t("settings.section.about")) {
             NativeSettingsGroup {
                 HStack(spacing: 16) {
-                    Image(systemName: "eye.fill").font(.system(size: 28)).foregroundStyle(theme.primary)
+                    Image(systemName: "eye.fill").font(.system(size: 28)).foregroundStyle(theme.primaryForeground)
                         .frame(width: 56, height: 56).background(
-                            theme.primary.opacity(0.1), in: RoundedRectangle(cornerRadius: 10)
+                            theme.primary,
+                            in: RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous)
                         ).accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(model.appName).font(.title2.weight(.semibold))
-                        Text(strings.t("settings.app.version", ["version": model.version ?? "—"])).font(.callout)
+                        Text(model.appName).font(.visionCardTitle)
+                        Text(strings.t("settings.app.version", ["version": model.version ?? "—"])).font(.body)
                             .foregroundStyle(theme.secondaryLabel)
-                        Text(strings.t("settings.app.license", ["license": model.license])).font(.caption)
+                        Text(strings.t("settings.app.license", ["license": model.license])).font(.footnote)
                             .foregroundStyle(theme.tertiaryLabel)
                     }
                     Spacer()
@@ -47,7 +48,7 @@ struct NativeSettingsAboutView: View {
                             Label(strings.t("settings.app.documentation"), systemImage: "arrow.up.right")
                         }
                     }.buttonStyle(.bordered)
-                }.padding(16)
+                }.padding(24)
             }
             // ADR-204 §5 cuts the updater, including check/install/release controls.
             NativeSettingsGroup {

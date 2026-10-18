@@ -47,7 +47,7 @@ struct RollingNumber: View {
     /// Printed pages and reduced motion show the final figures without reels.
     private var rolls: Bool { animate && !reduceMotion && !theme.isPrintReport }
 
-    private enum Role { case plain, currency, minor }
+    enum Role { case plain, currency, minor }
 
     var body: some View {
         let characters = Array(value)
@@ -91,7 +91,7 @@ struct RollingNumber: View {
         }
     }
 
-    private static func roles(_ characters: [Character], decimalSeparator: Character?) -> [Role] {
+    static func roles(_ characters: [Character], decimalSeparator: Character?) -> [Role] {
         var roles = [Role](repeating: .plain, count: characters.count)
         for (index, character) in characters.enumerated()
         where character.unicodeScalars.contains(where: { $0.properties.generalCategory == .currencySymbol }) {

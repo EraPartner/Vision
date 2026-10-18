@@ -126,6 +126,12 @@ struct SidebarWidthGuard: NSViewRepresentable {
             if let width {
                 corrections += 1
                 splitView.setPosition(width, ofDividerAt: 0)
+                // SwiftUI can put its own column width back on a later pass without resizing
+                // the probe or posting a split resize, so check again once that pass has run.
+                Task { @MainActor [weak self] in
+                    try? await Task.sleep(for: .milliseconds(50))
+                    self?.scheduleCorrection()
+                }
             }
             SidebarWidthGuard.note(
                 "split=\(splitWidth) sidebar=\(before) target=\(width.map { "\($0)" } ?? "none") after=\(sidebar.frame.width)")

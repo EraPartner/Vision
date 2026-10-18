@@ -9,11 +9,11 @@ struct PortfolioTaxSummaryView: View {
     private var strings: any Localizing { shell.strings }
     var body: some View {
         TaxCard {
-            Text(strings.t("tax.totalCosts")).font(.caption).foregroundStyle(theme.secondaryLabel)
+            Text(strings.t("tax.totalCosts")).font(.caption).foregroundStyle(theme.tertiaryLabel)
             RollingNumber(
                 value: money(data.totals.totalTaxesAndFees),
                 decimalSeparator: shell.settings.numberFormat.locale.decimalSeparator?.first
-            ).font(.system(size: 40, weight: .semibold))
+            ).font(.visionLargeTitle)
                 .monospacedDigit().foregroundStyle(theme.loss)
             Text(strings.t("tax.combinedTaxesAndFeesYear", ["year": String(data.year)]))
                 .font(.footnote).foregroundStyle(theme.secondaryLabel)
@@ -27,12 +27,12 @@ struct PortfolioTaxSummaryView: View {
                     "tax.totalFeesPaid", amount: data.totals.totalFees,
                     detail: strings.t("tax.brokerAndMgmtFeesYear", ["year": String(data.year)]), color: theme.loss)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(strings.t("tax.effectiveTaxRate")).font(.caption).foregroundStyle(theme.secondaryLabel)
+                    Text(strings.t("tax.effectiveTaxRate")).font(.caption).foregroundStyle(theme.tertiaryLabel)
                     Text(
                         VisionFormat.percent(
                             data.totals.effectiveTaxRate, digits: 1, locale: shell.settings.numberFormat.locale)
                     )
-                    .font(.title3).monospacedDigit()
+                    .font(Font.visionTitle3).monospacedDigit()
                     .foregroundStyle(data.totals.effectiveTaxRate > 25 ? theme.loss : theme.foreground)
                     Text(strings.t("tax.onRealizedGains")).font(.footnote).foregroundStyle(theme.secondaryLabel)
                 }.accessibilityElement(children: .combine)
@@ -47,10 +47,10 @@ struct PortfolioTaxSummaryView: View {
     }
     private func metric(_ key: String, amount: Decimal, detail: String, color: Color) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(strings.t(key)).font(.caption).foregroundStyle(theme.secondaryLabel)
+            Text(strings.t(key)).font(.caption).foregroundStyle(theme.tertiaryLabel)
             RollingNumber(
                 value: money(amount), decimalSeparator: shell.settings.numberFormat.locale.decimalSeparator?.first
-            ).font(.title3).foregroundStyle(color)
+            ).font(Font.visionTitle3).foregroundStyle(color)
             Text(detail).font(.footnote).foregroundStyle(theme.secondaryLabel)
         }.accessibilityElement(children: .combine)
     }
@@ -207,7 +207,7 @@ struct PortfolioTaxInvestmentBreakdownView: View {
                     Spacer(minLength: 0)
                     VStack(alignment: .trailing, spacing: 3) {
                         Text(money(investment.total)).font(.headline).monospacedDigit().foregroundStyle(theme.loss)
-                        Text(strings.t("tax.totalCosts")).font(.caption).foregroundStyle(theme.secondaryLabel)
+                        Text(strings.t("tax.totalCosts")).font(.caption).foregroundStyle(theme.tertiaryLabel)
                     }
                 }.padding(.vertical, 8).accessibilityElement(children: .combine)
                 if investment.id != data.investmentBreakdown.last?.id { Divider() }

@@ -70,17 +70,26 @@ struct AIChatToolResultCard: View {
                     }
                 }
             }.frame(height: min(288, CGFloat(data.rows.count + 1) * 34))
-                .background(theme.background.opacity(0.6), in: RoundedRectangle(cornerRadius: 9))
-                .overlay(RoundedRectangle(cornerRadius: 9).stroke(theme.border.opacity(0.6)))
+                .background(
+                    theme.background.opacity(0.6),
+                    in: RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous).stroke(
+                        theme.border.opacity(0.5)))
         }
     }
     private func json(_ value: TaxValue) -> some View {
         ScrollView([.horizontal, .vertical]) {
-            Text(verbatim: AIChatToolDisplay.json(value, pretty: true)).font(.caption.monospaced()).textSelection(
+            Text(verbatim: AIChatToolDisplay.json(value, pretty: true)).font(.footnote.monospaced()).textSelection(
                 .enabled
             )
-            .frame(maxWidth: .infinity, alignment: .leading).padding(10)
-        }.frame(maxHeight: 256).background(theme.background.opacity(0.6), in: RoundedRectangle(cornerRadius: 8))
+            .foregroundStyle(theme.foreground.opacity(0.8))
+            .frame(maxWidth: .infinity, alignment: .leading).padding(8)
+        }.frame(maxHeight: 256)
+            .background(theme.background.opacity(0.6), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.control))
+            .overlay(RoundedRectangle(cornerRadius: DesignTokens.Radius.control).stroke(theme.border.opacity(0.5)))
     }
     @ViewBuilder private func footer(_ count: Int) -> some View {
         let total = result["meta"]?["total"]?.decimalValue

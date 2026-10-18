@@ -11,12 +11,12 @@ struct AIInvestigationAnswerView: View {
         answer.evidence.last { $0.id == selectedEvidenceID }
     }
     var body: some View {
-        ResearchCard {
+        ResearchCard(padding: 16) {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
                 Text(strings.t("aiResearch.status." + answer.status))
                 Spacer(minLength: 12)
                 Text(answer.language.uppercased() + " · " + answer.depth)
-            }.font(.caption).foregroundStyle(theme.secondaryLabel)
+            }.font(.footnote).foregroundStyle(theme.secondaryLabel)
             Text(answer.summary).font(.body).textSelection(.enabled)
             statementSection("aiResearch.facts", statements: answer.facts)
             statementSection("aiResearch.calculations", statements: answer.calculations)
@@ -31,7 +31,7 @@ struct AIInvestigationAnswerView: View {
                 Button(strings.t("aiResearch.openAnalysis")) {
                     shell.navigate(
                         to: NativeRoute(path: "/analysis", query: [.init(name: "savedAnalysis", value: id)]).string)
-                }.buttonStyle(.bordered)
+                }.buttonStyle(.bordered).controlSize(.small)
             }
             if let evidence = selectedEvidence { evidenceDetail(evidence) }
         }
@@ -66,14 +66,15 @@ struct AIInvestigationAnswerView: View {
         }
     }
     private func annotation(_ key: String, lines: [String], warning: Bool) -> some View {
-        (Text(strings.t(key) + ": ").fontWeight(.medium) + Text(lines.joined(separator: "; ")))
-            .font(.caption).foregroundStyle(warning ? theme.warning : theme.secondaryLabel).textSelection(.enabled)
+        (Text(strings.t(key) + ": ").fontWeight(.medium).foregroundStyle(warning ? theme.warning : theme.foreground)
+            + Text(lines.joined(separator: "; ")))
+            .font(.footnote).foregroundStyle(warning ? theme.warning : theme.secondaryLabel).textSelection(.enabled)
     }
     private func evidenceDetail(_ evidence: AIEvidence) -> some View {
-        ResearchCard {
+        ResearchCard(padding: 16) {
             Text(evidence.label).font(.headline)
             if let excerpt = evidence.excerpt {
-                Text(excerpt).font(.callout).foregroundStyle(theme.secondaryLabel).textSelection(.enabled)
+                Text(excerpt).font(.footnote).foregroundStyle(theme.secondaryLabel).textSelection(.enabled)
             }
             if evidence.kind == "web", evidence.locator.hasPrefix("https://"), let url = URL(string: evidence.locator) {
                 Link(evidence.locator, destination: url).font(.caption).textSelection(.enabled)

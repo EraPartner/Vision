@@ -57,7 +57,14 @@ struct AnalysisAssumptionsView: View {
                             choices: ["ratio", "percent"], shell: shell, clearable: false, segmented: true)
                     }
                     Button(t("remove")) { model.draft.assumptions.remove(at: index) }
-                }.padding(12).background(theme.foreground.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
+                }.padding(12)
+                .background(
+                    theme.background.opacity(0.4),
+                    in: RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous)
+                        .strokeBorder(theme.border.opacity(0.6)))
             }
             Button(t("addAssumption")) { model.draft.addAssumption() }
         }
@@ -103,7 +110,14 @@ struct AnalysisScenariosView: View {
                         }
                     }
                     Button(t("remove")) { model.draft.scenarios.remove(at: index) }
-                }.padding(12).background(theme.foreground.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
+                }.padding(12)
+                .background(
+                    theme.background.opacity(0.4),
+                    in: RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous)
+                        .strokeBorder(theme.border.opacity(0.6)))
             }
             Button(t("compare")) { Task { await model.compare() } }.buttonStyle(.borderedProminent).disabled(
                 !model.canCompare)

@@ -214,7 +214,7 @@ public struct StatisticsView: View {
                         ])
                 )
                 .foregroundStyle(theme.secondaryLabel)
-                MoneyText(amount: net, currency: currency, settings: settings, rolling: true).font(.largeTitle)
+                MoneyText(amount: net, currency: currency, settings: settings, rolling: true).font(.visionLargeTitle)
                 if let index = months.firstIndex(where: { $0.id == chosen.id }), index > 0 {
                     let before = months[index - 1].total_income - abs(months[index - 1].total_spending)
                     HStack {
@@ -901,10 +901,10 @@ public struct StatisticsView: View {
     )
         -> some View
     {
-        AdminCard {
+        AdminCard(padding: VisionPageLayout.padding) {
             VStack(alignment: .leading, spacing: 14) {
                 HStack {
-                    Text(strings.t(title)).font(.headline)
+                    Text(strings.t(title)).font(Font.visionTitle3).accessibilityAddTraits(.isHeader)
                     Spacer()
                     if let graph, model.hasExclusions, isPrinting {
                         Text(
@@ -939,7 +939,7 @@ private struct StatisticsWidgetsSheet: View {
     @Environment(\.dismiss) private var dismiss
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(strings.t("widgets.title")).font(.title2)
+            Text(strings.t("widgets.title")).font(.visionCardTitle)
             Text(strings.t("widgets.description"))
             ForEach(InsightWidget.statistics) { widget in
                 Toggle(

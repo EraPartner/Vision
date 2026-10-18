@@ -10,8 +10,8 @@ struct AIChatComposer: View {
     private var strings: any Localizing { shell.strings }
     private var streaming: Bool { model.streamSnapshot.isStreaming }
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 20) {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 16) {
                 Picker(
                     strings.t("aiChat.model"),
                     selection: Binding(
@@ -27,7 +27,7 @@ struct AIChatComposer: View {
                 .toggleStyle(.switch).fixedSize().disabled(model.composerDisabled || streaming)
                 .accessibilityLabel(strings.t("aiChat.tools"))
                 Spacer(minLength: 0)
-            }.font(.callout)
+            }.font(.footnote)
             HStack(alignment: .bottom, spacing: 8) {
                 ZStack(alignment: .topLeading) {
                     if model.draft.isEmpty {
@@ -42,8 +42,9 @@ struct AIChatComposer: View {
                         onSend: send
                     )
                     .frame(height: textHeight)
-                }.padding(4).background(theme.background, in: RoundedRectangle(cornerRadius: 9))
-                    .overlay(RoundedRectangle(cornerRadius: 9).stroke(theme.border))
+                }.padding(4)
+                    .background(theme.background, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.control))
+                    .overlay(RoundedRectangle(cornerRadius: DesignTokens.Radius.control).stroke(theme.border))
                 Button {
                     if streaming { model.stop() } else { send() }
                 } label: {
@@ -57,7 +58,8 @@ struct AIChatComposer: View {
                 Spacer()
                 Text(String(model.draft.utf16.count) + "/4000").monospacedDigit()
             }.font(.caption).foregroundStyle(theme.tertiaryLabel)
-        }.padding(16).background(theme.card).overlay(alignment: .top) { Divider() }
+        }.frame(maxWidth: 768).frame(maxWidth: .infinity).padding(.horizontal, 16).padding(.vertical, 12)
+            .background(theme.card).overlay(alignment: .top) { Divider().opacity(0.6) }
     }
     private func send() {
         guard model.canSend else { return }

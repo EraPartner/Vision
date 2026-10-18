@@ -74,7 +74,9 @@ public struct ResearchDossiersView: View {
                 }
             }
             if !model.listLoading && model.listError == nil && model.items.isEmpty {
-                ResearchCard { Text(strings.t("dossiers.empty")).foregroundStyle(theme.secondaryLabel) }
+                ResearchCard {
+                    VisionEmptyState(symbol: "folder", title: strings.t("dossiers.empty")) {}.padding(.vertical, 8)
+                }
             }
             LazyVStack(spacing: 0) {
                 ForEach(model.items) { item in
@@ -82,7 +84,7 @@ public struct ResearchDossiersView: View {
                         Task { await model.select(item.id) }
                     } label: {
                         VStack(alignment: .leading, spacing: 5) {
-                            Text(item.title).font(.body.weight(model.selectedId == item.id ? .semibold : .regular))
+                            Text(item.title).font(.body.weight(model.selectedId == item.id ? .medium : .regular))
                             Text(
                                 strings.t("dossiers.workspace." + item.workspace) + " · "
                                     + strings.t("dossiers.version", ["version": String(item.version)])

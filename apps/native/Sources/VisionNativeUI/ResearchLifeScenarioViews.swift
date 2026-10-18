@@ -23,7 +23,7 @@ struct ResearchLifeScenarioPanel: View {
         return result
     }
     var body: some View {
-        ResearchCard(title: strings.t("research.lifeScenario.title")) {
+        ResearchCard(title: strings.t("research.lifeScenario.title"), titleFont: .visionCardTitle) {
             Text(strings.t("research.lifeScenario.subtitle")).font(.callout).foregroundStyle(theme.secondaryLabel)
             if model.savedError != nil {
                 HStack(alignment: .top, spacing: 12) {

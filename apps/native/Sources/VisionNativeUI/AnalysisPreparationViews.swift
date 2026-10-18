@@ -58,7 +58,14 @@ struct AnalysisPreparationStepView: View {
             }
             Button(t("addStep")) { if model.addStep() { onAdded() } }.disabled(
                 !model.step.isValid(columnIds: model.columnIds))
-        }.padding(12).background(theme.foreground.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
+        }.padding(12)
+                .background(
+                    theme.background.opacity(0.4),
+                    in: RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous)
+                        .strokeBorder(theme.border.opacity(0.6)))
     }
     private func fieldPicker(_ key: String, value: Binding<String>) -> some View {
         AnalysisWorkbenchPicker(

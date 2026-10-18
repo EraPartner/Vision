@@ -22,7 +22,7 @@ struct PortfolioExposureView: View {
     var body: some View {
         PortfolioCard(
             title: shell.strings.t("portfolio.exposure.title"),
-            description: shell.strings.t("portfolio.exposure.description")
+            description: shell.strings.t("portfolio.exposure.description"), large: true
         ) {
             Picker(shell.strings.t("portfolio.exposure.dimensionLabel"), selection: $dimension) {
                 ForEach(["issuer", "sector", "issuerCountry"], id: \.self) { key in

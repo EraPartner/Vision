@@ -5,14 +5,15 @@ struct AnalysisMonitorsDetailsView: View {
     let model: AnalysisMonitorsModel
     let strings: any Localizing
     @FocusState private var focus: AnalysisMonitorInput?
+    @Environment(\.visionTheme) private var theme
     var body: some View {
         if let rule = model.selectedRule, let draft = model.editDraft {
-            AdminCard {
+            AdminCard(padding: 24) {
                 VStack(alignment: .leading, spacing: 16) {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(strings.t("monitors.ruleDetails")).font(.headline)
+                        Text(strings.t("monitors.ruleDetails")).font(Font.visionTitle3).accessibilityAddTraits(.isHeader)
                         Text(strings.t(rule.kind.labelKey) + " · " + rule.targetLabel).font(.caption).foregroundStyle(
-                            .secondary)
+                            theme.secondaryLabel)
                         HStack {
                             Button(strings.t("monitors.checkNow"), systemImage: "checklist") {
                                 Task { await model.check(rule) }
@@ -61,15 +62,15 @@ struct AnalysisMonitorsDetailsView: View {
                     Divider()
                     Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 8) {
                         GridRow {
-                            Text(strings.t("monitors.nextDue")).foregroundStyle(.secondary)
+                            Text(strings.t("monitors.nextDue")).foregroundStyle(theme.secondaryLabel)
                             Text(AnalysisMonitorPresentation.dateTime(rule.nextDueAt)).monospacedDigit()
                         }
                         GridRow {
-                            Text(strings.t("monitors.lastChecked")).foregroundStyle(.secondary)
+                            Text(strings.t("monitors.lastChecked")).foregroundStyle(theme.secondaryLabel)
                             Text(AnalysisMonitorPresentation.dateTime(rule.lastCheckedAt)).monospacedDigit()
                         }
                         GridRow {
-                            Text(strings.t("monitors.lastStatus")).foregroundStyle(.secondary)
+                            Text(strings.t("monitors.lastStatus")).foregroundStyle(theme.secondaryLabel)
                             AnalysisMonitorsStatus(status: rule.lastStatus, strings: strings)
                         }
                     }.font(.callout)

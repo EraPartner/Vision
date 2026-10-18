@@ -141,8 +141,10 @@ public struct RebalanceView: View {
         card("rebalance.commitment.title") {
             HStack(alignment: .top, spacing: 24) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(strings.t("rebalance.commitment.candidateLabel")).font(.callout)
-                    Text(money(value.candidateCashCap)).font(.title2).monospacedDigit()
+                    Text(strings.t("rebalance.commitment.candidateLabel")).font(.caption)
+                        .foregroundStyle(theme.tertiaryLabel)
+                    Text(money(value.candidateCashCap)).font(Font.visionTitle3)
+                        .monospacedDigit()
                     Text(strings.t("rebalance.commitment.estimateWarning")).font(.footnote).foregroundStyle(
                         theme.secondaryLabel)
                 }.frame(maxWidth: .infinity, alignment: .leading)
@@ -164,13 +166,13 @@ public struct RebalanceView: View {
     }
     @ViewBuilder func resultCards(_ result: RebalanceResult) -> some View {
         HStack(alignment: .top, spacing: 16) {
-            card("rebalance.availableCash") {
-                Text(money(model.availableCash == 0 ? result.availableCash : model.availableCash)).font(.title2)
-                    .monospacedDigit()
+            card("rebalance.availableCash", label: true) {
+                Text(money(model.availableCash == 0 ? result.availableCash : model.availableCash))
+                    .font(.visionCardTitle).monospacedDigit()
                 Text(strings.t("rebalance.availableCashHint")).font(.footnote).foregroundStyle(theme.secondaryLabel)
             }
-            card("rebalance.totalDeployed") {
-                Text(money(result.totalDeployed)).font(.title2).monospacedDigit()
+            card("rebalance.totalDeployed", label: true) {
+                Text(money(result.totalDeployed)).font(.visionCardTitle).monospacedDigit()
                 Text(strings.t("rebalance.totalDeployedHint")).font(.footnote).foregroundStyle(theme.secondaryLabel)
             }
         }
@@ -190,10 +192,8 @@ public struct RebalanceView: View {
                         Text(percent(result.targetWeights[sleeve] ?? 0)).monospacedDigit().gridColumnAlignment(
                             .trailing)
                         if let deploy = result.deployment[sleeve], deploy > 0 {
-                            Text(money(deploy, signed: true)).monospacedDigit().padding(.horizontal, 8).padding(
-                                .vertical, 3
-                            )
-                            .background(theme.muted, in: Capsule()).gridColumnAlignment(.trailing)
+                            VisionBadge(text: money(deploy, signed: true)).monospacedDigit()
+                                .gridColumnAlignment(.trailing)
                         } else {
                             Text("—").foregroundStyle(theme.secondaryLabel).gridColumnAlignment(.trailing)
                         }
@@ -221,11 +221,20 @@ public struct RebalanceView: View {
         VisionFormat.currency(
             value, code: model.currency, locale: settings.numberFormat.locale, fractionDigits: 0, signed: signed)
     }
-    func card<Content: View>(_ title: String?, @ViewBuilder content: () -> Content) -> some View {
+    func card<Content: View>(_ title: String?, label: Bool = false, @ViewBuilder content: () -> Content)
+        -> some View
+    {
         VStack(alignment: .leading, spacing: 14) {
-            if let title { Text(strings.t(title)).font(.headline) }
+            if let title {
+                if label {
+                    Text(strings.t(title)).font(.body.weight(.medium)).foregroundStyle(theme.secondaryLabel)
+                } else {
+                    Text(strings.t(title)).font(Font.visionTitle3)
+                        .accessibilityAddTraits(.isHeader)
+                }
+            }
             content()
-        }.padding(20).frame(maxWidth: .infinity, alignment: .leading)
+        }.padding(24).frame(maxWidth: .infinity, alignment: .leading)
             .visionCardBackground()
     }
     func field<Content: View>(_ key: String, @ViewBuilder content: () -> Content) -> some View {

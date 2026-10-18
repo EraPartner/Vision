@@ -19,7 +19,11 @@ public struct NativeOnboardingView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     Text(strings.t("onboarding.\(model.draft.step.rawValue).title"))
-                        .font(.title2.weight(.semibold)).accessibilityAddTraits(.isHeader)
+                        .font(
+                            model.draft.step == .welcome
+                                ? Font.visionTitle1 : .visionCardTitle
+                        )
+                        .accessibilityAddTraits(.isHeader)
                         .accessibilityFocused($headingFocused)
                     if model.draft.step != .importData {
                         Text(strings.t("onboarding.\(model.draft.step.rawValue).desc"))
@@ -61,7 +65,16 @@ public struct NativeOnboardingView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Label("Vision", systemImage: "sparkles").font(.title3.weight(.semibold))
+                HStack(spacing: 8) {
+                    Image(systemName: "sparkles").font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(theme.primaryForeground).frame(width: 32, height: 32)
+                        .background(
+                            theme.primary,
+                            in: RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
+                        )
+                        .accessibilityHidden(true)
+                    Text(verbatim: "Vision").font(.visionDisplayHeadline)
+                }
                 Spacer()
                 Button {
                     Task { await model.finish() }
@@ -88,7 +101,11 @@ public struct NativeOnboardingView: View {
                     ])
             )
             .font(.caption).foregroundStyle(theme.secondaryLabel)
-        }.padding(22)
+        }.padding(.horizontal, 24).padding(.top, 24).padding(.bottom, 16)
+            .background(
+                LinearGradient(
+                    colors: [theme.primary.opacity(0.1), theme.primary.opacity(0.05), .clear],
+                    startPoint: .leading, endPoint: .trailing))
     }
     private var footer: some View {
         HStack {
@@ -133,11 +150,23 @@ public struct NativeOnboardingView: View {
         }
     }
     private func overviewGroup(_ section: String, items: [NativeOnboardingFeature]) -> some View {
-        GroupBox(strings.t("onboarding.overview.\(section).label")) {
+        let tint = section == "budgeting" ? Color(token: theme.palette.chart3) : theme.primary
+        let shape = RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous)
+        return VStack(alignment: .leading, spacing: 12) {
+            Text(strings.t("onboarding.overview.\(section).label")).font(.footnote.weight(.medium))
+                .foregroundStyle(tint).accessibilityAddTraits(.isHeader)
             VStack(alignment: .leading, spacing: 14) {
                 ForEach(items) { feature in featureLabel(feature) }
-            }.frame(maxWidth: .infinity, alignment: .leading).padding(12)
+            }
         }
+        .frame(maxWidth: .infinity, alignment: .leading).padding(16)
+        .background(
+            LinearGradient(
+                colors: [tint.opacity(0.2), tint.opacity(0.05)], startPoint: .topLeading, endPoint: .bottomTrailing),
+            in: shape
+        )
+        .overlay(shape.strokeBorder(tint.opacity(0.2), lineWidth: 1))
+        .accessibilityElement(children: .contain)
     }
     private var tour: some View {
         LazyVGrid(columns: [.init(.flexible()), .init(.flexible())], spacing: 12) {

@@ -4,15 +4,20 @@ import VisionNativeCore
 struct TaxCard<Content: View>: View {
     var title: String? = nil
     var description: String? = nil
+    /// `CardTitle variant="sm"` (type-title-3).
+    var small = false
     @ViewBuilder var content: () -> Content
     @Environment(\.visionTheme) private var theme
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if let title { Text(title).font(.headline).accessibilityAddTraits(.isHeader) }
-            if let description { Text(description).font(.callout).foregroundStyle(theme.secondaryLabel) }
+            if let title {
+                Text(title).font(small ? Font.visionTitle3 : .visionCardTitle)
+                    .accessibilityAddTraits(.isHeader)
+            }
+            if let description { Text(description).foregroundStyle(theme.secondaryLabel) }
             content()
-        }.padding(20).frame(maxWidth: .infinity, alignment: .leading)
+        }.padding(24).frame(maxWidth: .infinity, alignment: .leading)
             .visionCardBackground()
     }
 }
@@ -40,7 +45,10 @@ struct TaxMoneyRow: View {
                     RollingNumber(
                         value: text, decimalSeparator: shell.settings.numberFormat.locale.decimalSeparator?.first)
                 } else {
-                    Text(text).monospacedDigit()
+                    MoneyText.styled(
+                        text, decimalSeparator: shell.settings.numberFormat.locale.decimalSeparator?.first,
+                        color: tone ?? theme.foreground
+                    ).monospacedDigit()
                 }
             }
             .foregroundStyle(tone ?? theme.foreground)

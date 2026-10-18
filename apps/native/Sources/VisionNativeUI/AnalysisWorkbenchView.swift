@@ -23,7 +23,7 @@ public struct AnalysisWorkbenchView: View {
                 Text(t("sourceStale")).font(.callout).foregroundStyle(theme.warning)
             }
             VStack(alignment: .leading, spacing: 14) {
-                Text(strings.t("analysis.workflow.prepare")).font(.title3).accessibilityAddTraits(.isHeader)
+                Text(strings.t("analysis.workflow.prepare")).font(Font.visionTitle3).accessibilityAddTraits(.isHeader)
                 AnalysisPanel {
                     DisclosureGroup(t("preparation"), isExpanded: $preparationOpen) {
                         VStack(alignment: .leading, spacing: 12) {
@@ -52,7 +52,7 @@ public struct AnalysisWorkbenchView: View {
                 }
             }.id("analysis-prepare")
             VStack(alignment: .leading, spacing: 14) {
-                Text(strings.t("analysis.workflow.calculate")).font(.title3).accessibilityAddTraits(.isHeader)
+                Text(strings.t("analysis.workflow.calculate")).font(Font.visionTitle3).accessibilityAddTraits(.isHeader)
                 if !model.complete { Text(t("complete")).font(.callout).foregroundStyle(theme.secondaryLabel) }
                 if let error = model.error { Text(error).foregroundStyle(theme.destructive).textSelection(.enabled) }
                 AnalysisPanel {

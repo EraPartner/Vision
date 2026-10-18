@@ -12,16 +12,10 @@ public struct ResearchCompareView: View {
     private var strings: any Localizing { shell.strings }
     public var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                HStack(alignment: .top, spacing: 12) {
-                    Image(systemName: "chart.line.uptrend.xyaxis").font(.title2).foregroundStyle(theme.primary)
-                        .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(strings.t("research.compare.title")).font(.largeTitle.weight(.semibold))
-                            .accessibilityAddTraits(.isHeader)
-                        Text(strings.t("research.compare.subtitle")).foregroundStyle(theme.secondaryLabel)
-                    }
-                }
+            VStack(alignment: .leading, spacing: VisionPageLayout.spacing) {
+                VisionPageHeader(
+                    title: strings.t("research.compare.title"), subtitle: strings.t("research.compare.subtitle"),
+                    symbol: "chart.line.uptrend.xyaxis")
                 VStack(alignment: .leading, spacing: 10) {
                     ViewThatFits(in: .horizontal) {
                         HStack(spacing: 8) { selectedSymbols }
@@ -43,13 +37,10 @@ public struct ResearchCompareView: View {
                 }
                 if model.state.symbols.isEmpty {
                     ResearchCard {
-                        VStack(spacing: 8) {
-                            Image(systemName: "chart.line.uptrend.xyaxis").font(.largeTitle).foregroundStyle(
-                                theme.secondaryLabel
-                            ).accessibilityHidden(true)
-                            Text(strings.t("research.compare.startTitle")).font(.headline)
-                            Text(strings.t("research.compare.startHint")).foregroundStyle(theme.secondaryLabel)
-                        }.padding(.vertical, 28).frame(maxWidth: .infinity)
+                        VisionEmptyState(
+                            symbol: "chart.line.uptrend.xyaxis", title: strings.t("research.compare.startTitle"),
+                            description: strings.t("research.compare.startHint")
+                        ) {}.padding(.vertical, 28)
                     }
                 } else {
                     Picker(
@@ -94,7 +85,8 @@ public struct ResearchCompareView: View {
         VStack(alignment: .leading, spacing: 20) {
             ResearchCard {
                 HStack {
-                    Text(strings.t("research.compare.rebased")).font(.headline).accessibilityAddTraits(.isHeader)
+                    Text(strings.t("research.compare.rebased")).font(.researchCardTitle)
+                        .accessibilityAddTraits(.isHeader)
                     Spacer()
                     Picker(
                         strings.t("research.compare.rebased"),
