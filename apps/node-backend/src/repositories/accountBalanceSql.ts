@@ -1,3 +1,4 @@
+import { bankChronologySql } from "./bankChronologySql.ts";
 import { roundToCents } from "../lib/money.ts";
 
 /**
@@ -53,12 +54,12 @@ export function balanceProvenanceLateral({
   return `
   LEFT JOIN LATERAL (
     WITH anchor AS (
-      SELECT t.date, t.id
+      SELECT t.date, t.id, ${bankChronologySql("t")} AS chronology
       FROM transactions t
       WHERE t.account_id = a.id AND t.is_active = true
         AND t.date <= ${asOfDate}
         AND t.balance IS NOT NULL
-      ORDER BY t.date DESC, t.id DESC
+      ORDER BY t.date DESC, ${bankChronologySql("t")} DESC, t.id DESC
       LIMIT 1
     ),
     delta AS (
@@ -68,7 +69,7 @@ export function balanceProvenanceLateral({
         AND t2.date <= ${asOfDate}
         AND (
           NOT EXISTS (SELECT 1 FROM anchor)
-          OR (t2.date, t2.id) > (SELECT date, id FROM anchor)
+          OR (t2.date, ${bankChronologySql("t2")}, t2.id) > (SELECT date, chronology, id FROM anchor)
         )
     )
     SELECT (SELECT to_char(date, 'YYYY-MM-DD') FROM anchor) AS anchor_date,
@@ -140,13 +141,13 @@ export function computedBalanceByCurrencyLateral({
       GROUP BY COALESCE(t.currency, 'EUR')
     ) ccy
     LEFT JOIN LATERAL (
-      SELECT t.balance, t.date, t.id
+      SELECT t.balance, t.date, t.id, ${bankChronologySql("t")} AS chronology
       FROM transactions t
       WHERE t.account_id = ${account} AND t.is_active = true
         AND t.date <= ${asOfDate}
         AND t.balance IS NOT NULL
         AND COALESCE(t.currency, 'EUR') = ccy.currency
-      ORDER BY t.date DESC, t.id DESC
+      ORDER BY t.date DESC, ${bankChronologySql("t")} DESC, t.id DESC
       LIMIT 1
     ) anch ON true
     JOIN LATERAL (
@@ -155,7 +156,7 @@ export function computedBalanceByCurrencyLateral({
       WHERE t2.account_id = ${account} AND t2.is_active = true
         AND t2.date <= ${asOfDate}
         AND COALESCE(t2.currency, 'EUR') = ccy.currency
-        AND (anch.date IS NULL OR (t2.date, t2.id) > (anch.date, anch.id))
+        AND (anch.date IS NULL OR (t2.date, ${bankChronologySql("t2")}, t2.id) > (anch.date, anch.chronology, anch.id))
     ) dlt ON true
   ) ${alias} ON true
 `;
@@ -382,6 +383,7 @@ export function computedBalanceSeriesCtes({
            ${byCurrency ? "p.currency" : "rc.row_currency"} AS row_currency,
            (SELECT first_day FROM bs_span) - 1 AS date,
            -1 AS id,
+           -1::numeric AS chronology,
            COALESCE(anch.balance, 0) + dlt.amount AS balance,
            0::numeric AS amount
     FROM (
@@ -391,13 +393,13 @@ export function computedBalanceSeriesCtes({
       WHERE t.is_active = true AND t.date < (SELECT first_day FROM bs_span)
     ) p
     LEFT JOIN LATERAL (
-      SELECT t.balance, t.date, t.id
+      SELECT t.balance, t.date, t.id, ${bankChronologySql("t")} AS chronology
       FROM transactions t
       WHERE t.account_id = p.account_id AND t.is_active = true
         AND t.balance IS NOT NULL
         AND t.date < (SELECT first_day FROM bs_span)
         ${samePartition}
-      ORDER BY t.date DESC, t.id DESC
+      ORDER BY t.date DESC, ${bankChronologySql("t")} DESC, t.id DESC
       LIMIT 1
     ) anch ON true
     JOIN LATERAL (
@@ -406,7 +408,7 @@ export function computedBalanceSeriesCtes({
       WHERE t.account_id = p.account_id AND t.is_active = true
         AND t.date < (SELECT first_day FROM bs_span)
         ${samePartition}
-        AND (anch.date IS NULL OR (t.date, t.id) > (anch.date, anch.id))
+        AND (anch.date IS NULL OR (t.date, ${bankChronologySql("t")}, t.id) > (anch.date, anch.chronology, anch.id))
     ) dlt ON true
     ${
       byCurrency
@@ -416,19 +418,19 @@ export function computedBalanceSeriesCtes({
       FROM transactions t
       WHERE t.account_id = p.account_id AND t.is_active = true
         AND t.date < (SELECT first_day FROM bs_span)
-      ORDER BY t.date DESC, t.id DESC
+      ORDER BY t.date DESC, ${bankChronologySql("t")} DESC, t.id DESC
       LIMIT 1
     ) rc ON true`
     }
   ),
   bs_src AS (
-    SELECT account_id, currency, row_currency, date, id, balance, amount
+    SELECT account_id, currency, row_currency, date, id, chronology, balance, amount
     FROM bs_opening
     UNION ALL
     SELECT t.account_id,
            ${currencyExpr},
            COALESCE(t.currency, 'EUR'),
-           t.date, t.id, t.balance, t.amount
+           t.date, t.id, ${bankChronologySql("t")}, t.balance, t.amount
     FROM transactions t
     JOIN ${accountList} bs_al ON bs_al.account_id = t.account_id
     WHERE t.is_active = true
@@ -448,32 +450,33 @@ export function computedBalanceSeriesCtes({
            row_currency,
            date,
            id,
+           chronology,
            balance,
            GREATEST(date, (SELECT first_day FROM bs_span)) AS day,
            LEAD(GREATEST(date, (SELECT first_day FROM bs_span))) OVER bs_w AS next_day,
            SUM(amount) OVER bs_w AS cum
     FROM bs_src
-    WINDOW bs_w AS (PARTITION BY ${partitionBy} ORDER BY date, id)
+    WINDOW bs_w AS (PARTITION BY ${partitionBy} ORDER BY date, chronology, id)
   ),
   bs_carry AS (
     -- Carry the latest stamp's adj (balance − cum) forward. MAX over the packed
-    -- [date, id, adj] array IS that carry-forward: the array compares
+    -- [date, chronology, id, adj] array IS that carry-forward: the array compares
     -- element-wise, (date, id) is unique, and the frame is everything up to the
     -- current row — so the maximum is the newest stamp at or before it, and
-    -- element 3 is its adj. Written this way to reuse bs_rows' ordering; the
+    -- element 4 is its adj. Written this way to reuse bs_rows' ordering; the
     -- readable alternative (FIRST_VALUE over a COUNT(balance) grouping) needs a
     -- different partition and therefore a second sort of the whole ledger.
     SELECT account_id, currency, row_currency, day, next_day, cum,
            MAX(CASE WHEN balance IS NOT NULL
-                    THEN ARRAY[(date - DATE '2000-01-01')::numeric, id::numeric, balance - cum]
-               END) OVER (PARTITION BY ${partitionBy} ORDER BY date, id) AS stamp
+                    THEN ARRAY[(date - DATE '2000-01-01')::numeric, chronology, id::numeric, balance - cum]
+               END) OVER (PARTITION BY ${partitionBy} ORDER BY date, chronology, id) AS stamp
     FROM bs_rows
   ),
   bs_day_end AS (
     -- End-of-day balance per (account[, currency], day). No stamp yet → the
     -- carry is NULL and the balance is the plain running sum.
     SELECT account_id, currency, row_currency, day,
-           cum + COALESCE(stamp[3], 0) AS balance
+           cum + COALESCE(stamp[4], 0) AS balance
     FROM bs_carry
     WHERE next_day IS DISTINCT FROM day
   ),

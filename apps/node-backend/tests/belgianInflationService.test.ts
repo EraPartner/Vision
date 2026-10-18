@@ -414,6 +414,18 @@ describe("belgianInflationService", () => {
     vi.unstubAllGlobals();
   });
 
+  it("offline warmup loads cached rates without any external attempt", async () => {
+    query.mockResolvedValue(partial<PgQueryResult>({ rows: [{ month_date: new Date(2024, 0, 1), monthly_rate: "0.00400000" }] }));
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const result = await warmInflationCache({ allowExternal: false });
+      expect(result.rates).toEqual([{ month: "2024-01", monthly_rate: 0.004 }]);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally { vi.unstubAllGlobals(); }
+  });
+
   it("warmInflationCache returns DB quickly when available and refreshes in background", async () => {
     query
       .mockResolvedValueOnce(

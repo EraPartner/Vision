@@ -118,7 +118,8 @@ export function useTaxOverviewData() {
         ],
     );
     const stats = useStatistics();
-    const { allSummaries: summaries } = usePortfolio();
+    const portfolioQuery = usePortfolio({ completeHistory: true });
+    const { allSummaries: summaries } = portfolioQuery;
     const { convertToTarget } = useCurrencyConverter(
         appSettings.defaultCurrency || "EUR",
     );
@@ -421,7 +422,12 @@ export function useTaxOverviewData() {
 
     return {
         /** react-query statistics result — pages use `isLoading` / `isError` / `error`. */
-        stats,
+        stats: {
+            ...stats,
+            isLoading: stats.isLoading || portfolioQuery.isLoading,
+            isError: stats.isError || portfolioQuery.isError,
+            error: stats.error || portfolioQuery.error,
+        },
         /** Profile for the viewed year (live or snapshot). */
         profile,
         /** Display PIT calculation for the viewed year (frozen "as-filed" when present). */

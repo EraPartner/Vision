@@ -397,7 +397,7 @@ note right of NativeShellIntentCoordinator
 end note
 note right of NativeShellPresentationMode
   retainedWeb | nativeOnly; native-only is the eligible Debug Demo default
-  (VISION_NATIVE_WEB_FREE=0 opts out). Helper retired by ADR-209.
+  (VISION_NATIVE_WEB_FREE=0 opts out). Helper retired by ADR-212.
   Native-only: native loading/error/notFound.
   SDK print checks disposition before and after preparation.
 end note

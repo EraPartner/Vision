@@ -22,7 +22,7 @@ import {
 import { todayAppDateString } from "../lib/timezone.ts";
 import { buildSetClauses } from "../lib/sqlClauses.ts";
 
-import type { z } from "zod";
+import { z } from "zod";
 import type {
   HydratedPlannedTransactionRow,
   LoanScheduleRow,
@@ -477,6 +477,29 @@ export const plannedTransactionRepository = {
       "SELECT id FROM planned_transactions WHERE id = $1 FOR UPDATE",
       [id],
     );
+  },
+  /** Execution needs scalar state and tag IDs, not full history or loan schedules. */
+  async getExecutionState(id: number, transactionId: number) {
+    const [row] = await queryRows(
+      plannedTransactionListRowSchema.extend({
+        execution_count: z.number(),
+        duplicate: z.boolean(),
+        recipient_cluster_id: z.number().nullable(),
+      }),
+      `SELECT ${PLANNED_SELECT_FIELDS},
+        COALESCE(r.primary_recipient_id, pt.recipient_id) AS recipient_cluster_id,
+        (SELECT count(*)::int FROM planned_transaction_executions WHERE planned_transaction_id = pt.id) AS execution_count,
+        EXISTS (SELECT 1 FROM planned_transaction_executions WHERE planned_transaction_id = pt.id AND executed_transaction_id = $2) AS duplicate
+       FROM planned_transactions pt ${PLANNED_JOINS} WHERE pt.id = $1`,
+      [id, transactionId],
+    );
+    if (!row) return null;
+    const tags = await queryRows(
+      idRowSchema,
+      "SELECT tag_id AS id FROM planned_transaction_tags WHERE planned_transaction_id = $1",
+      [id],
+    );
+    return { ...row, tags };
   },
   async getAll({
     limit = 50,

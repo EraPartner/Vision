@@ -4,52 +4,68 @@
  * Static bracket table for the tax year + PIT summary block when supplied.
  */
 
-import { emptySection, escapeHtml, fmtCurrency, fmtPct, sectionPage } from '../sectionHelpers.ts';
-import { addAll, toNumber } from '../../../lib/money.ts';
+import {
+  emptySection,
+  escapeHtml,
+  fmtCurrency,
+  fmtPct,
+  sectionPage,
+} from "../sectionHelpers.ts";
+import { addAll, toNumber } from "../../../lib/money.ts";
 import type {
   PrecomputedHousehold,
   PrecomputedPIT,
   ReportHousehold,
   TaxProfile,
   TaxReportData,
-} from '../dataFetcherTax.ts';
-import type { TobBracket } from '../belgianTaxTables.ts';
+} from "../dataFetcherTax.ts";
+import type { TobBracket } from "../belgianTaxTables.ts";
 
 export function renderBelgianRulesSummary(
   data: TaxReportData | null,
-  { currency }: { currency: string },
+  { currency: _currency }: { currency: string },
 ): string {
-  const taxTables      = data?.taxTables      ?? null;
+  const taxTables = data?.taxTables ?? null;
   const precomputedPIT = data?.precomputedPIT ?? null;
-  const taxYear        = data?.taxYear        ?? '—';
-  const taxProfile     = data?.taxProfile     ?? null;
+  const taxYear = data?.taxYear ?? "—";
+  const taxProfile = data?.taxProfile ?? null;
 
   if (!taxTables && !precomputedPIT) {
-    return emptySection({ title: 'Belgian Tax Rules', subtitle: `Tax year ${taxYear} bracket reference`, heading: 'No tax table data', message: `Belgian tax bracket data unavailable for year ${taxYear}.` });
+    return emptySection({
+      title: "Belgian Tax Rules",
+      subtitle: `Tax year ${taxYear} bracket reference`,
+      heading: "No tax table data",
+      message: `Belgian tax bracket data unavailable for year ${taxYear}.`,
+    });
   }
 
   const tob: Record<string, TobBracket> = taxTables?.tob ?? {};
 
-  const tobRows = Object.entries(tob).map(([key, t]) => {
-    const label = {
-      bonds:              'Bonds',
-      sharesAndOther:     'Shares & Other',
-      accumulatingFunds:  'Accumulating Funds',
-      distributingFunds:  'Distributing Funds',
-    }[key] ?? key;
-    const cap = t.cap != null ? fmtCurrency(t.cap, 'EUR') : '—';
-    return `<tr>
+  const tobRows = Object.entries(tob)
+    .map(([key, t]) => {
+      const label =
+        {
+          bonds: "Bonds",
+          sharesAndOther: "Shares & Other",
+          accumulatingFunds: "Accumulating Funds",
+          distributingFunds: "Distributing Funds",
+        }[key] ?? key;
+      const cap = t.cap != null ? fmtCurrency(t.cap, "EUR") : "—";
+      return `<tr>
       <td>${escapeHtml(label)}</td>
-      <td class="num">${t.rate != null ? fmtPct(t.rate, false, 2) : '—'}</td>
+      <td class="num">${t.rate != null ? fmtPct(t.rate, false, 2) : "—"}</td>
       <td class="num">${cap}</td>
     </tr>`;
-  }).join('');
+    })
+    .join("");
 
-  const pitHtml = precomputedPIT ? renderPITBlock(precomputedPIT, taxProfile, currency) : '';
+  const pitHtml = precomputedPIT
+    ? renderPITBlock(precomputedPIT, taxProfile, "EUR")
+    : "<p>Annual personal income tax is not included. It requires a full calendar year with its own configured profile or saved snapshot.</p>";
   const householdHtml = renderHouseholdBlock(
     data?.precomputedHousehold,
     data?.household,
-    currency,
+    "EUR",
   );
 
   return sectionPage({
@@ -61,8 +77,8 @@ export function renderBelgianRulesSummary(
           <div style="font-size:11px;font-weight:600;color:hsl(var(--muted));text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Dividend Tax</div>
           <table class="data-table">
             <tbody>
-              <tr><td>Exemption (first-year allowance)</td><td class="num">${taxTables?.dividendExemption != null ? fmtCurrency(taxTables.dividendExemption, 'EUR') : '—'}</td></tr>
-              <tr><td>Withholding Tax Rate</td><td class="num">${taxTables?.dividendWHTRate != null ? fmtPct(taxTables.dividendWHTRate, false) : '—'}</td></tr>
+              <tr><td>Exemption (first-year allowance)</td><td class="num">${taxTables?.dividendExemption != null ? fmtCurrency(taxTables.dividendExemption, "EUR") : "—"}</td></tr>
+              <tr><td>Withholding Tax Rate</td><td class="num">${taxTables?.dividendWHTRate != null ? fmtPct(taxTables.dividendWHTRate, false) : "—"}</td></tr>
             </tbody>
           </table>
         </div>
@@ -136,29 +152,37 @@ function renderPITBlock(
   profile: TaxProfile | null,
   currency: string,
 ): string {
-  if (!pit) return '';
+  if (!pit) return "";
 
   // Unlike taxTables rates (fractions), the client sends bracket rates already in
   // percent units (pit.ts: `rate: br.rate * 100`) — hence isRaw.
-  const rows = (pit.brackets ?? []).map(b => `<tr>
-    <td>${b.label != null ? escapeHtml(b.label) : '—'}</td>
-    <td class="num">${b.rate != null ? fmtPct(b.rate, true) : '—'}</td>
-    <td class="num">${b.taxableIncome != null ? fmtCurrency(b.taxableIncome, currency) : '—'}</td>
-    <td class="num neg">${b.taxAmount != null ? fmtCurrency(b.taxAmount, currency) : '—'}</td>
-  </tr>`).join('');
+  const rows = (pit.brackets ?? [])
+    .map(
+      (b) => `<tr>
+    <td>${b.label != null ? escapeHtml(b.label) : "—"}</td>
+    <td class="num">${b.rate != null ? fmtPct(b.rate, true) : "—"}</td>
+    <td class="num">${b.taxableIncome != null ? fmtCurrency(b.taxableIncome, currency) : "—"}</td>
+    <td class="num neg">${b.taxAmount != null ? fmtCurrency(b.taxAmount, currency) : "—"}</td>
+  </tr>`,
+    )
+    .join("");
 
   const profileLine = profile
-    ? `<p style="color:hsl(var(--muted));font-size:11px;margin:0 0 8px;">Filing status: ${escapeHtml(profile.filingStatus ?? '—')} · Taxable income: ${pit.taxableIncome != null ? fmtCurrency(pit.taxableIncome, currency) : '—'}</p>`
-    : '';
+    ? `<p style="color:hsl(var(--muted));font-size:11px;margin:0 0 8px;">Filing status: ${escapeHtml(profile.filingStatus ?? "—")} · Taxable income: ${pit.taxableIncome != null ? fmtCurrency(pit.taxableIncome, currency) : "—"}</p>`
+    : "";
 
   return `
     <div style="margin-top:16px;">
       <div style="font-size:11px;font-weight:600;color:hsl(var(--muted));text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Personal Income Tax Estimate</div>
       ${profileLine}
-      ${rows ? `<table class="data-table">
+      ${
+        rows
+          ? `<table class="data-table">
         <thead><tr><th>Bracket</th><th class="num">Rate</th><th class="num">Taxable</th><th class="num">Tax</th></tr></thead>
         <tbody>${rows}</tbody>
-        ${pit.totalTax != null ? `<tfoot><tr style="font-weight:600;"><td colspan="3">Estimated Total PIT</td><td class="num neg">${fmtCurrency(pit.totalTax, currency)}</td></tr></tfoot>` : ''}
-      </table>` : '<p style="color:hsl(var(--muted));font-size:12px;">Bracket detail not provided.</p>'}
+        ${pit.totalTax != null ? `<tfoot><tr style="font-weight:600;"><td colspan="3">Estimated Total PIT</td><td class="num neg">${fmtCurrency(pit.totalTax, currency)}</td></tr></tfoot>` : ""}
+      </table>`
+          : '<p style="color:hsl(var(--muted));font-size:12px;">Bracket detail not provided.</p>'
+      }
     </div>`;
 }

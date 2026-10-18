@@ -118,7 +118,7 @@ public final class TaxWidgetsModel {
 
     private func validate(_ record: OpenAPI.Setting) throws {
         guard record.key == Self.settingsKey,
-            record.value.objectValue != nil,
+            InsightWidgetVisibility.isValidSetting(record.value),
             let fields = record.expected.objectValue, let exists = fields["exists"]?.boolValue,
             Set(fields.keys) == (exists ? ["exists", "value"] : ["exists"])
         else {

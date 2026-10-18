@@ -107,9 +107,12 @@ public enum DirectorySwitch {
     /// `atomicReplaceDirectory`: copies `source` to `<dest>.staging-<nonce>`, verifies the
     /// copy against the source fingerprint, renames the live tree to
     /// `<dest>.previous-<nonce>` and the staging tree into place. With `preservePrevious`
-    /// the previous tree stays for rollback.
+    /// the previous tree stays for rollback. `beforeSwitch` receives the switch token
+    /// before either rename (ADR-207), so a journal written there covers every
+    /// interruption point, including an absent old tree; when it throws, nothing is renamed.
     public static func replace(
-        source: String, destination: String, preservePrevious: Bool, nonce: String
+        source: String, destination: String, preservePrevious: Bool, nonce: String,
+        beforeSwitch: ((DirectorySwitchToken) throws -> Void)? = nil
     ) throws -> DirectorySwitchToken {
         let parent = PathUtilities.dirname(destination)
         let base = PathUtilities.basename(destination)
@@ -126,6 +129,15 @@ public enum DirectorySwitch {
             throw BackupFailure("Attachment staging verification failed")
         }
         let hadDestination = BackupFiles.exists(destination)
+        let token = DirectorySwitchToken(
+            count: stagingFingerprint.count, digest: stagingFingerprint.digest, entries: stagingFingerprint.entries,
+            previousDirectory: preservePrevious && hadDestination ? previous : nil, destinationDirectory: destination)
+        do {
+            try beforeSwitch?(token)
+        } catch {
+            BackupFiles.remove(staging)
+            throw error
+        }
         do {
             if hadDestination { try move(destination, previous) }
             try move(staging, destination)
@@ -136,9 +148,7 @@ public enum DirectorySwitch {
             throw error
         }
         if !preservePrevious { BackupFiles.remove(previous) }
-        return DirectorySwitchToken(
-            count: stagingFingerprint.count, digest: stagingFingerprint.digest, entries: stagingFingerprint.entries,
-            previousDirectory: preservePrevious && hadDestination ? previous : nil, destinationDirectory: destination)
+        return token
     }
 
     static func move(_ source: String, _ destination: String) throws {
@@ -147,25 +157,39 @@ public enum DirectorySwitch {
         }
     }
 
+    /// Whether `path` exists without following a final symlink; any error but ENOENT throws.
+    static func entryExists(_ path: String) throws -> Bool {
+        var status = stat()
+        if lstat(path, &status) == 0 { return true }
+        if errno == ENOENT { return false }
+        throw BackupFailure("lstat \(PathUtilities.basename(path)) failed: \(String(cString: strerror(errno)))")
+    }
+
     /// `rollbackDirectorySwitch`: keeps the restored tree as `<dest>.failed-<nonce>` and puts
-    /// the previous tree back.
+    /// the previous tree back. Safe to repeat at every rename boundary of `replace`: a
+    /// previous tree that is already gone while the destination exists means the rollback
+    /// (or the switch) never moved it, so there is nothing to do; both trees missing is
+    /// ambiguous and fails closed. A token without a previous tree moves the restored
+    /// tree aside.
     public static func rollback(_ token: DirectorySwitchToken?, nonce: String) throws -> RollbackResult {
-        guard let token, let previousPath = token.previousDirectory, !previousPath.isEmpty,
-            !token.destinationDirectory.isEmpty
-        else {
-            return .nothingToRollback
-        }
-        let previous = PathUtilities.normalize(previousPath)
+        guard let token, !token.destinationDirectory.isEmpty else { return .nothingToRollback }
         let destination = PathUtilities.normalize(token.destinationDirectory)
-        guard PathUtilities.dirname(previous) == PathUtilities.dirname(destination) else {
+        let previous = token.previousDirectory.flatMap { $0.isEmpty ? nil : PathUtilities.normalize($0) }
+        if let previous, PathUtilities.dirname(previous) != PathUtilities.dirname(destination) {
             throw BackupFailure("Attachment rollback directories must share a parent")
         }
+        let destinationExists = try entryExists(destination)
+        let previousExists = try previous.map(entryExists) ?? false
+        if previous != nil, !previousExists {
+            if !destinationExists { throw BackupFailure("Both attachment generations are missing") }
+            return .nothingToRollback
+        }
         let failed = "\(destination).failed-\(nonce)"
-        try move(destination, failed)
+        if destinationExists { try move(destination, failed) }
         do {
-            try move(previous, destination)
+            if let previous { try move(previous, destination) }
         } catch {
-            try? move(failed, destination)
+            if destinationExists { try? move(failed, destination) }
             throw error
         }
         return .rolledBack(preservedFailedDirectory: failed)

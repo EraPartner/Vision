@@ -83,7 +83,7 @@ export type TransferCandidatePairRow = z.output<
 
 /** `lockTransferPeerPointer` row. */
 export const transferPeerPointerRowSchema = z
-  .object({ transfer_peer_id: pgInt.nullable() })
+  .object({ transfer_peer_id: pgInt.nullable(), transfer_source: z.string().nullable().optional() })
   .describe("transfer peer pointer row");
 
 /** `detectRecurringPatterns`' bespoke projection. */

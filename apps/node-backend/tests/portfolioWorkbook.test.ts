@@ -13,7 +13,7 @@ import {
   assertPortfolioUploadSupported,
   detectPortfolioFileFormat,
   readPortfolioWorkbook,
-  isLikelyPortfolioFile,
+  __isLikelyPortfolioFile as isLikelyPortfolioFile,
 } from "../src/lib/portfolioUpload.ts";
 import { parseSaxoTransactionHistory } from "../src/services/portfolioImportPipeline/saxoTransactionHistoryAdapter.ts";
 import { parseWithConfig } from "../src/services/portfolioImportPipeline/portfolioGenericAdapter.ts";

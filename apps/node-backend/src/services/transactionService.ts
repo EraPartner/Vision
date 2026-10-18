@@ -83,6 +83,7 @@ async function createManualTransaction(data: ManualTransactionInput): Promise<{
     recipientId: data.recipient_id,
     memo: data.memo || "",
     accountId: data.account_id,
+    currency: data.currency,
   };
 
   const transaction = await withTransaction(async (client) => {
@@ -218,8 +219,8 @@ async function update(
   return updated;
 }
 
-function listTransferSuggestions(): ReturnType<typeof getTransferSuggestions> {
-  return getTransferSuggestions();
+function listTransferSuggestions(options: Parameters<typeof getTransferSuggestions>[0] = {}): ReturnType<typeof getTransferSuggestions> {
+  return getTransferSuggestions(options);
 }
 
 async function markTransfer(aId: number, bId: number) {

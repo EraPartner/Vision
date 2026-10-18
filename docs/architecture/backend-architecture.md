@@ -19,8 +19,8 @@ This document contains UML diagrams for the Node.js backend application.
 
 Production serving no longer reserves `/native-helper.html` or `/native-helper-assets`.
 `middleware/nativeHelperArtifacts.ts`, its test and its `app.use` in `main.ts` were removed by
-[[docs/adr/209-vision-native-retire-helper-document|ADR-209]] (2026-10-18), which retired the
-[[docs/adr/207-vision-native-helper-document|ADR-207]] helper document. Those URLs now fall
+[[docs/adr/212-vision-native-retire-helper-document|ADR-212]] (2026-10-18), which retired the
+[[docs/adr/210-vision-native-helper-document|ADR-210]] helper document. Those URLs now fall
 through to generic static serving and the non-`/api` SPA fallback like any other path. See
 [[docs/architecture/native-app|native ownership]] for the native document model.
 

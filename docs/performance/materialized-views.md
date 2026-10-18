@@ -2,7 +2,7 @@
 title: Materialized Views & Aggregation Strategy
 type: performance
 status: active
-date: 2026-10-08
+date: 2026-10-11
 updated: 2026-10-08
 tags:
   [
@@ -206,7 +206,7 @@ An import does not await the full materialized-view scans. After transfer reconc
 
 The materialized-view scheduler uses a five-second trailing debounce and a ten-second maximum wait for a continuous burst. Refresh execution time and a possible wait behind an in-flight refresh are additional. A successful refresh clears the process statistics cache again after the views switch snapshots, preventing a request during refresh from preserving the old projection.
 
-Startup runs create, index, and refresh after Express begins listening. The boot trace records these separately as `materialized_views_create`, `materialized_views_indexes`, and `materialized_views_refresh`; `/health/detailed` reports the combined warmup result.
+Startup runs create, index, and refresh after Express begins listening. View preparation and transfer backfill settle before one refresh is requested. A successful late backfill still refreshes existing views if preparation failed; that preparation failure remains reported. A rejected backfill is logged and does not prevent prepared views from refreshing. The boot trace records these separately as `materialized_views_create`, `materialized_views_indexes`, and `materialized_views_refresh`; `/health/detailed` reports the combined warmup result.
 
 ### Debounced Refresh (Single-Row Mutations)
 

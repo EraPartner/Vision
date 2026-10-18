@@ -175,11 +175,26 @@ async function sendReport(
   res: ExpressResponse,
   options: Parameters<typeof generateReport>[0],
 ) {
-  const { pdf, filename } = await generateReport(options);
-  res.setHeader("Content-Type", "application/pdf");
-  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-  res.setHeader("Content-Length", pdf.length);
-  res.end(pdf);
+  const controller = new AbortController();
+  const cancel = () => {
+    if (!res.writableEnded) controller.abort();
+  };
+  res.once?.("close", cancel);
+  try {
+    const { pdf, filename } = await generateReport({
+      ...options,
+      signal: controller.signal,
+    });
+    if (controller.signal.aborted || res.writableEnded) return;
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.setHeader("Content-Length", pdf.length);
+    res.end(pdf);
+  } catch (error) {
+    if (!controller.signal.aborted) throw error;
+  } finally {
+    res.removeListener?.("close", cancel);
+  }
 }
 
 /* ── POST endpoints ──────────────────────────────────────────────────────── */

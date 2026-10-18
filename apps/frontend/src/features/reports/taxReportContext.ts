@@ -14,14 +14,25 @@ export type TaxReportContextState = Pick<BelgianTaxSlice,
 export type TaxReportContext = Pick<ReportOptions,
     "taxProfile" | "precomputedPIT" | "household" | "precomputedHousehold">;
 
-/** Original export composition, shared by the web dialog and native extreme-year fallback. */
+/** Original export composition, shared by the web dialog and native extreme-year fallback.
+ * Annual figures need a full calendar year that is the live year, has its own saved snapshot,
+ * or has a frozen calculation (the same years that can be filed). */
 export function taxReportContext(
     state: TaxReportContextState,
     year: number,
     translate: (key: string) => string,
     runtime?: HouseholdRuntime,
+    annual = true,
+    /** The retained extreme-year bridge predates the filing rule; Vision Native no longer calls it. */
+    anyYear = false,
 ): TaxReportContext {
-    const configured = state.profile.profileConfigured;
+    const hasYearProfile =
+        annual &&
+        (anyYear ||
+            year === state.profile.taxYear ||
+            Object.hasOwn(state.householdSnapshots, year) ||
+            Boolean(state.snapshotMetas[year]?.frozenCalculation));
+    const configured = hasYearProfile && state.profile.profileConfigured === true;
     const yearProfile = resolveBelgianTaxProfile(state, year);
     const taxProfile = configured ? {
         filingStatus: yearProfile.employmentType,

@@ -53,7 +53,19 @@ its public property name inside a default runtime object while its separate
 test-only named export uses the `__` alias. `bun run check-test-only-exports`
 parses static, namespace, and dynamic imports and enforces this boundary. Its
 closed allowlist preserves intentional public APIs and must not be widened
-merely to silence a new violation.
+merely to silence a new violation. Each exception needs a runtime entry point or
+an independently documented module contract. Local runtime use alone does not
+make an internal helper a public named API.
+
+Reviewed examples (2026-10-11): `calculateNextDate` remains the documented
+Date-space recurrence API; the Vision adapter's `parse` is the same registry
+contract as the other bank adapters; `buildPortfolioImportReconciliationPlan`
+is the pure domain planner shared by preview and locked commit. Their named
+exports stay public under explicit policy. The upload MIME filter, statement
+asset-scope helper and startup staging-prune helper instead keep their local
+runtime names and expose `__isLikelyPortfolioFile`, `__applyPortfolioAssetScope`
+and `__pruneOldImportBatches` for direct tests. No production call sites or
+financial expectations change. See [[docs/testing/test-inventory]].
 
 This eliminates the prior frontend/backend money-rounding drift that was caused by each app carrying its own copy of `roundMoney`.
 
@@ -65,10 +77,10 @@ This eliminates the prior frontend/backend money-rounding drift that was caused 
 
 For rendered frontend values, use `components/shared/Money.tsx` after calculation. Pass raw negative/positive deltas with `signed`; pass an explicit currency when the amount is native or already converted. Keep `useCurrencyFormatter` for APIs that require a string, such as translated interpolation, chart ticks/tooltips, input placeholders, titles, and ARIA text.
 
-All monetary calculations must use Decimal.js to eliminate IEEE 754 floating-point drift. JavaScript's native `number` type cannot exactly represent 0.1 + 0.2 (results in 0.30000000000000004). Vision uses banker's rounding (HALF_EVEN) to match PostgreSQL NUMERIC semantics.
+All monetary calculations must use Decimal.js to eliminate IEEE 754 floating-point drift. JavaScript's native `number` type cannot exactly represent 0.1 + 0.2 (results in 0.30000000000000004). Vision's calculation helper uses banker's rounding (HALF_EVEN). PostgreSQL `NUMERIC` rounds ties away from zero when reducing scale; this is a different boundary contract.
 
 > [!note] Banker's Rounding is Now Canonical (June 2026)
-> `roundMoney` uses `ROUND_HALF_EVEN` (banker's rounding). This was `ROUND_HALF_UP` prior to June 2026. Banker's rounding is the PostgreSQL `NUMERIC` default and eliminates systematic bias in large datasets (e.g., half-cent amounts always round up accumulated ~0.5¢/transaction errors over thousands of rows). Any code relying on HALF_UP semantics must be audited.
+> `roundMoney` uses `ROUND_HALF_EVEN` (banker's rounding). This was `ROUND_HALF_UP` prior to June 2026. Preserve that calculation contract. When comparing identity against a stored `NUMERIC(18,4)` ledger amount, normalize to four places with ties away from zero, as manual deduplication does. Do not assume the helper's rounding mode matches database scale coercion. The historical ADR-069 statement about the database default is superseded by this correction.
 
 > [!note] Money arithmetic guard
 > The backend ESLint rule `vision-local-money/no-raw-money-arithmetic` warns on raw `+`, `-`, `*`, `/` and compound assignments (`+=`, `-=`, `*=`, `/=`) when either operand is an identifier or static property named `amount`, `price`, `fee`, `fees`, `balance`, `cost`, `gain`, `loss`, `total`, `sum`, or `cents`, ignoring case. This includes `row.amount`, `row['amount']` and optional member access. The rule keeps warning severity: review each warning in context. It exempts the backend money helper and test files. Dynamic property keys and other names, such as `amount_eur`, are outside this name-based check; a clean lint run does not establish that every monetary calculation uses Decimal.

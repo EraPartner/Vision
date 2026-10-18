@@ -212,6 +212,9 @@ export default function ImportReviewPage() {
         persistDefaultCategory,
         commit,
         isCommitting,
+        isSavingEdits,
+        hasEditErrors,
+        reviewSavedEdits,
         discard,
         isDiscarding,
     } = useImportReviewMutations(batchId, newAccountCount);
@@ -319,7 +322,12 @@ export default function ImportReviewPage() {
             toast.error(t("importReview.toast.categoryOverrideFailed"), {
                 description: apiErrorToMessage(err, t),
             });
-            updateGroupState(groupKey, { categorySaving: false }, fallback);
+        } finally {
+            setGroupOverrides((prev) => {
+                const next = new Map(prev);
+                next.delete(groupKey);
+                return next;
+            });
         }
     };
 
@@ -368,7 +376,7 @@ export default function ImportReviewPage() {
         );
     }
 
-    const busy = isCommitting || isDiscarding;
+    const busy = isCommitting || isDiscarding || isSavingEdits;
 
     return (
         <PageShell className="max-w-3xl mx-auto">
@@ -492,7 +500,19 @@ export default function ImportReviewPage() {
                             const effectiveName =
                                 state.recipientName ?? group.recipient_name;
                             const effectiveRecipientId = state.recipientId;
-                            const effectiveCategoryId = state.categoryId;
+                            const mixedCategories =
+                                !state.categorySaving &&
+                                new Set(
+                                    group.rows.map(
+                                        (row) =>
+                                            row.override_category_id ??
+                                            group.recipient_default_category_id ??
+                                            null,
+                                    ),
+                                ).size > 1;
+                            const effectiveCategoryId = mixedCategories
+                                ? null
+                                : state.categoryId;
                             const dominant = dominantMatchSource(group.rows);
                             const isNew =
                                 group.recipient_id == null ||
@@ -545,6 +565,7 @@ export default function ImportReviewPage() {
                                                     }
                                                     className="h-8 max-w-[200px] type-footnote"
                                                     disabled={
+                                                        busy ||
                                                         state.recipientSaving
                                                     }
                                                 />
@@ -581,6 +602,13 @@ export default function ImportReviewPage() {
                                             <span className="shrink-0 type-footnote text-label-secondary">
                                                 {t("importReview.category")}
                                             </span>
+                                            {mixedCategories && (
+                                                <p role="status">
+                                                    {t(
+                                                        "importReview.mixedCategories",
+                                                    )}
+                                                </p>
+                                            )}
                                             <CategoryCombobox
                                                 value={effectiveCategoryId}
                                                 onSelect={(id, label) =>
@@ -594,6 +622,7 @@ export default function ImportReviewPage() {
                                                 }
                                                 className="h-8 max-w-[260px] type-footnote"
                                                 disabled={
+                                                    busy ||
                                                     state.categorySaving ||
                                                     effectiveRecipientId == null
                                                 }
@@ -707,7 +736,35 @@ export default function ImportReviewPage() {
                             ? t("importReview.discarding")
                             : t("importReview.discard")}
                     </Button>
-                    <Button onClick={() => commit(dateRange)} disabled={busy}>
+                    {isSavingEdits && (
+                        <p role="status">{t("importReview.savingEdits")}</p>
+                    )}
+                    {hasEditErrors && (
+                        <div role="alert">
+                            <p>{t("importReview.editsFailed")}</p>
+                            <Button
+                                variant="outline"
+                                disabled={busy}
+                                onClick={() =>
+                                    void reviewSavedEdits()
+                                        .then(() =>
+                                            setGroupOverrides(new Map()),
+                                        )
+                                        .catch((err: Error) =>
+                                            toast.error(
+                                                apiErrorToMessage(err, t),
+                                            ),
+                                        )
+                                }
+                            >
+                                {t("importReview.reviewSavedEdits")}
+                            </Button>
+                        </div>
+                    )}
+                    <Button
+                        onClick={() => commit(dateRange)}
+                        disabled={busy || hasEditErrors}
+                    >
                         {isCommitting ? (
                             <>
                                 <Loader2

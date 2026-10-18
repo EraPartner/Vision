@@ -26,7 +26,10 @@ export type { HouseholdUpdate };
 
 const MAX_HISTORY_ENTRIES_PER_YEAR = 200;
 
-import { DEFAULT_BELGIAN_TAX_PROFILE } from "@vision/shared-utils/belgian-tax/profileDefaults";
+import {
+    DEFAULT_BELGIAN_TAX_PROFILE,
+    hasMeaningfulBelgianTaxData,
+} from "@vision/shared-utils/belgian-tax/profileDefaults";
 export {
     DEFAULT_BELGIAN_TAX_PROFILE,
     hasMeaningfulBelgianTaxData,
@@ -444,30 +447,7 @@ export const createBelgianTaxSlice: StateCreator<
             };
         }),
     markYearAsFiled: (year, reference) =>
-        set((state) => {
-            const existing = state.snapshotMetas[year];
-            const filing = {
-                filedAt: new Date().toISOString(),
-                ...(reference ? { reference } : {}),
-            };
-            return {
-                snapshotMetas: appendHistoryEntry(
-                    {
-                        ...state.snapshotMetas,
-                        [year]: {
-                            ...(existing ?? {}),
-                            filing,
-                            ...(existing?.frozenCalculation
-                                ? {}
-                                : computeYearResults(state, year)),
-                        },
-                    },
-                    year,
-                    "filed",
-                    reference ? { reference } : undefined,
-                ),
-            };
-        }),
+        set((state) => buildFiledTaxState(state, year, reference)),
     unmarkYearAsFiled: (year) =>
         set((state) => {
             const existing = state.snapshotMetas[year];
@@ -528,3 +508,100 @@ export const createBelgianTaxSlice: StateCreator<
     _markSaveError: () =>
         set((state) => ({ saveErrorNonce: state.saveErrorNonce + 1 })),
 });
+
+/**
+ * Prepare a filing without publishing it before persistence has acknowledged it.
+ *
+ * A year is fileable when it is the live year, has its own household snapshot, or has an
+ * explicitly frozen calculation. A past year that would only use a live estimate is refused.
+ * The live year is pinned as its own snapshot so the filed household survives later edits; a
+ * frozen year without a snapshot is not pinned, because the live household would disagree with
+ * the frozen figures. Results are frozen next to the filing unless the year was already frozen.
+ */
+export function buildFiledTaxState(
+    state: BelgianTaxSlice,
+    year: number,
+    reference?: string,
+): Partial<BelgianTaxSlice> {
+    const runtime = householdRuntime;
+    const live = state.household;
+    const existing = state.snapshotMetas[year];
+    if (
+        !runtime ||
+        !live ||
+        state.isLoading ||
+        state.householdLoadFailed ||
+        existing?.filing
+    )
+        return state;
+    const isLiveYear = year === live.taxYear;
+    const hasSnapshot = Object.hasOwn(state.householdSnapshots, year);
+    if (!isLiveYear && !hasSnapshot && !existing?.frozenCalculation)
+        return state;
+    if (!hasMeaningfulBelgianTaxData(resolveBelgianTaxProfile(state, year)))
+        return state;
+    const householdSnapshots =
+        isLiveYear && !hasSnapshot
+            ? {
+                  ...state.householdSnapshots,
+                  [year]: { ...structuredClone(live), taxYear: year },
+              }
+            : state.householdSnapshots;
+    const filing = {
+        filedAt: new Date().toISOString(),
+        ...(reference ? { reference } : {}),
+    };
+    return {
+        ...(householdSnapshots !== state.householdSnapshots
+            ? {
+                  householdSnapshots,
+                  snapshots: runtime.projectSnapshotsToV1(
+                      householdSnapshots,
+                      DEFAULT_BELGIAN_TAX_PROFILE,
+                  ),
+              }
+            : {}),
+        snapshotMetas: appendHistoryEntry(
+            {
+                ...state.snapshotMetas,
+                [year]: {
+                    ...(existing ?? {}),
+                    filing,
+                    ...(existing?.frozenCalculation
+                        ? {}
+                        : computeYearResults(state, year)),
+                },
+            },
+            year,
+            "filed",
+            reference ? { reference } : undefined,
+        ),
+    };
+}
+
+/**
+ * Publish one acknowledged filing onto the current state, leaving other years and the live
+ * household as they are now.
+ */
+export function publishFiledYear(
+    current: BelgianTaxSlice,
+    year: number,
+    filedHousehold: BelgianTaxHouseholdV2 | undefined,
+    filedMeta: BelgianTaxProfileSnapshotMeta,
+): Partial<BelgianTaxSlice> {
+    const snapshotMetas = { ...current.snapshotMetas, [year]: filedMeta };
+    const runtime = householdRuntime;
+    if (!filedHousehold || !runtime) return { snapshotMetas };
+    const householdSnapshots = {
+        ...current.householdSnapshots,
+        [year]: filedHousehold,
+    };
+    return {
+        householdSnapshots,
+        snapshots: runtime.projectSnapshotsToV1(
+            householdSnapshots,
+            DEFAULT_BELGIAN_TAX_PROFILE,
+        ),
+        snapshotMetas,
+    };
+}

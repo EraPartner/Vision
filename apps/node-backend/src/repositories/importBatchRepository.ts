@@ -1,3 +1,11 @@
+import { lockAccountsForLedgerMutation } from "./accountLifecycleLock.ts";
+import {
+  ConflictError,
+  NotFoundError,
+  ValidationError,
+} from "../middleware/errorHandler.ts";
+import { z } from "zod";
+import { protectPlannedExecutions } from "./plannedExecutionGuard.ts";
 /**
  * importBatchRepository — CRUD for import_batches.
  *
@@ -7,6 +15,7 @@
  */
 
 import { query, withTransaction } from "../database/connection.ts";
+import { idRowSchema } from "../database/rowSchemas.ts";
 import { queryOne, queryRows } from "../database/rowContracts.ts";
 import {
   importBatchListRowSchema,
@@ -165,13 +174,23 @@ export async function overrideRecipient({
   rowId: number;
   recipientId: number | null;
 }): Promise<number> {
-  const { rowCount } = await query(
-    `UPDATE import_staging_rows
+  return withTransaction(async (client) => {
+    const batch = await client.query(
+      "SELECT id FROM import_batches WHERE id = $1 AND status = 'awaiting_review' FOR UPDATE",
+      [batchId],
+    );
+    if (!batch.rowCount)
+      throw new ConflictError(
+        "Import review has ended; reload the batch before making changes",
+      );
+    const { rowCount } = await client.query(
+      `UPDATE import_staging_rows
             SET user_override_recipient_id = $3
           WHERE id = $1 AND batch_id = $2 AND status = 'matched'`,
-    [rowId, batchId, recipientId],
-  );
-  return rowCount ?? 0;
+      [rowId, batchId, recipientId],
+    );
+    return rowCount ?? 0;
+  });
 }
 
 /**
@@ -188,13 +207,23 @@ export async function overrideCategory({
   rowId: number;
   categoryId: number | null;
 }): Promise<number> {
-  const { rowCount } = await query(
-    `UPDATE import_staging_rows
+  return withTransaction(async (client) => {
+    const batch = await client.query(
+      "SELECT id FROM import_batches WHERE id = $1 AND status = 'awaiting_review' FOR UPDATE",
+      [batchId],
+    );
+    if (!batch.rowCount)
+      throw new ConflictError(
+        "Import review has ended; reload the batch before making changes",
+      );
+    const { rowCount } = await client.query(
+      `UPDATE import_staging_rows
             SET override_category_id = $3
           WHERE id = $1 AND batch_id = $2 AND status = 'matched'`,
-    [rowId, batchId, categoryId],
-  );
-  return rowCount ?? 0;
+      [rowId, batchId, categoryId],
+    );
+    return rowCount ?? 0;
+  });
 }
 
 /**
@@ -257,9 +286,37 @@ export async function rollbackBatch(
   id: number,
 ): Promise<{ deleted: number; recipientsRemoved: number }> {
   return withTransaction(async (client) => {
-    const { rowCount: deleted } = await client.query(
-      `DELETE FROM transactions WHERE import_batch_id = $1`,
+    // The route's earlier read is advisory. Serialize against the commit claim
+    // and review overrides before discovering any ledger rows to remove.
+    const batch = await queryOne(
+      z.object({ status: z.string() }),
+      "SELECT status FROM import_batches WHERE id = $1 FOR UPDATE",
       [id],
+      client,
+    );
+    if (!batch) throw new NotFoundError(`Import batch ${id} not found`);
+    if (batch.status === "aborted")
+      throw new ValidationError("Batch is already aborted");
+    if (
+      ["staging", "validating", "matching", "committing"].includes(batch.status)
+    ) {
+      throw new ValidationError(
+        "Cannot rollback a batch that is still in progress",
+      );
+    }
+    const targets = await queryRows(
+      idRowSchema,
+      "SELECT id FROM transactions WHERE import_batch_id = $1",
+      [id],
+    );
+    await lockAccountsForLedgerMutation(
+      client,
+      targets.map((row) => row.id),
+    );
+    await protectPlannedExecutions(targets.map((row) => row.id));
+    const { rowCount: deleted } = await client.query(
+      `DELETE FROM transactions WHERE import_batch_id = $1 AND id = ANY($2::int[])`,
+      [id, targets.map((row) => row.id)],
     );
 
     // Clean up recipients this import auto-created that are now orphaned.

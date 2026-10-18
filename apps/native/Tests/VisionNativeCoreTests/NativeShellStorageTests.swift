@@ -3,7 +3,7 @@ import Testing
 
 @testable import VisionNativeCore
 
-/// The native-only shell's storage keeps each page-storage script's semantics (ADR-208).
+/// The native-only shell's storage keeps each page-storage script's semantics (ADR-211).
 @Suite struct NativeShellStorageTests {
     private func withStorage(
         _ values: [String: String] = [:], _ body: (NativeShellStorage, URL) async throws -> Void

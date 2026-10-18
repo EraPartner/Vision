@@ -3,8 +3,8 @@ title: API Endpoint Matrix
 type: reference
 status: active
 date: 2026-10-13
-updated: 2026-10-13
-last_modified: 2026-10-13
+updated: 2026-10-18
+last_modified: 2026-10-18
 adr-reference: 026
 # Authoritative HTTP-operation count from openapi.yaml. The CI checker also
 # compares every method/path pair; update concrete resource rows when routes change.
@@ -72,7 +72,7 @@ tags:
     auto-link,
     planned-match,
   ]
-description: Complete matrix of all 303 HTTP API operations (authoritative count from openapi.yaml), 2 health endpoints, and 25 Electron IPC invoke channels. The Electron contract also defines 6 renderer event channels.
+description: Complete matrix of all 309 HTTP API operations (authoritative count from openapi.yaml), health endpoints, and Electron IPC channels. The shared Electron contract defines invoke and renderer event channels.
 aliases:
   [api matrix, endpoint matrix, all endpoints, api overview, endpoint list]
 ---
@@ -80,7 +80,7 @@ aliases:
 # API Endpoint Matrix
 
 > [!abstract] Overview
-> **301 HTTP API operations** (the count and concrete method/path pairs in `openapi.yaml` are checked by `scripts/check-endpoint-matrix.ts` in CI), 2 unversioned `/health` endpoints, and 25 Electron invoke channels. `openapi.yaml` owns HTTP operations; `packaging/electron/electron-api.d.ts` owns Electron invoke and event channels.
+> **309 HTTP API operations** (the count and concrete method/path pairs in `openapi.yaml` are checked by `scripts/check-endpoint-matrix.ts` in CI), unversioned `/health` endpoints, and Electron invoke channels. `openapi.yaml` owns HTTP operations; `packaging/electron/electron-api.d.ts` owns Electron invoke and event channels.
 >
 > **Note:** As of Phase 2.4, `openapi.yaml` is the authoritative API specification. This matrix provides a quick lookup; see the OpenAPI spec for formal schemas and examples.
 >
@@ -195,7 +195,25 @@ same atomic commit. Full `recordedIncome` and `recordedCash` are additive subtot
 `imported`; older responses may omit them. Exact owned cash repeats remain compatible, while new
 Kinesis cash still requires its confirmed bounded review. No operation or scope is added.
 
-## Accounts (13 endpoints)
+## Integrity and report contract changes (2026-10-11)
+
+Operation paths are unchanged. Previously accepted unsafe writes can now fail: planned-execution
+links block transaction deletion and import rollback with `409`; closed-account ledger mutation
+requires reopening (`400`); changed ownership requires reload/retry (`409`). Completed one-off
+plans and currency-mismatched clearing are rejected. Import review edits and commit serialize on
+the batch, with `409` after another action claims its state. Protected system transfer origins
+cannot be manually marked or unmarked. See [[docs/api/transactions]], [[docs/api/plannedTransactions]],
+[[docs/api/imports]] and [[docs/api/portfolio-imports]].
+
+New manual and automatic planned executions require active ledger rows. Existing pairs remain
+replayable after deactivation.
+
+Transfer suggestions retain `data.items` but are bounded: clients must follow `nextCursor` while
+`hasMore` is true, including when the same outflow spans pages. Report admission covers data
+loading through PDF rendering and returns `503` when its bounded queue is full. These are
+behavioral compatibility changes; clients must handle the documented errors and pagination.
+
+## Accounts
 
 | Method | Path                                             | Description                                                                                                                                                      | Rate Limit | Doc                             |
 | ------ | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------------------------------- |
@@ -213,7 +231,7 @@ Kinesis cash still requires its confirmed bounded review. No operation or scope 
 | PUT    | `/api/accounts/:id/statement-balances/:currency` | Store an authoritative statement reading for one native currency (ADR-089 D2)                                                                                    | —          | [[docs/api/accounts\|Accounts]] |
 | DELETE | `/api/accounts/:id/statement-balances/:currency` | Remove an authoritative statement reading for one native currency (ADR-089 D2)                                                                                   | —          | [[docs/api/accounts\|Accounts]] |
 
-## Cross-Workspace (2 endpoints — ADR-098)
+## Cross-Workspace
 
 | Method | Path                                         | Description                                                                                                                                                | Rate Limit | Doc                                    |
 | ------ | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | -------------------------------------- |
@@ -295,7 +313,7 @@ history. This group uses the aggregation rate limiter.
 | GET    | `/api/analysis/monitors/notifications`          | List paged inbox and unread count                    | 600 req/min | [[docs/api/analysis-monitors\|Analysis Monitors]] |
 | POST   | `/api/analysis/monitors/notifications/:id/read` | Mark one notification read                           | 600 req/min | [[docs/api/analysis-monitors\|Analysis Monitors]] |
 
-## Transactions (18 endpoints — incl. 4 Tags endpoints)
+## Transactions
 
 With `include_balance=true`, transaction lists carry the latest preceding statement balance and
 then apply subsequent amounts, independently per account and currency. This corrects zero-amount
@@ -325,7 +343,7 @@ opening anchors without changing request fields, response shape or operation cou
 | PATCH  | `/api/tags/:id`                          | Update tag color or is_active                                                                                                                                                                                                                                                                                                                                                                                                                                                              | —          | [[docs/features/tags\|Tags]]                 |
 | DELETE | `/api/tags/:id`                          | Soft-delete tag (`is_active=false`)                                                                                                                                                                                                                                                                                                                                                                                                                                                        | —          | [[docs/features/tags\|Tags]]                 |
 
-## Categories (12 endpoints)
+## Categories
 
 | Method | Path                             | Description                                              | Rate Limit | Doc                                 |
 | ------ | -------------------------------- | -------------------------------------------------------- | ---------- | ----------------------------------- |
@@ -342,7 +360,7 @@ opening anchors without changing request fields, response shape or operation cou
 | DELETE | `/api/categories/tree/:id`       | Delete a childless node                                  | —          | [[docs/api/categories\|Categories]] |
 | POST   | `/api/categories/tree/:id/merge` | Merge children and references atomically                 | —          | [[docs/api/categories\|Categories]] |
 
-## Recipients (14 endpoints)
+## Recipients
 
 | Method | Path                                      | Description                                                                                   | Rate Limit | Doc                                 |
 | ------ | ----------------------------------------- | --------------------------------------------------------------------------------------------- | ---------- | ----------------------------------- |
@@ -361,7 +379,7 @@ opening anchors without changing request fields, response shape or operation cou
 | PATCH  | `/api/recipients/:id/patterns/:patternId` | Update pattern                                                                                | —          | [[docs/api/recipients\|Recipients]] |
 | DELETE | `/api/recipients/:id/patterns/:patternId` | Delete pattern                                                                                | —          | [[docs/api/recipients\|Recipients]] |
 
-## Planned Transactions (8 endpoints) — Phase 3 / Phase 6 / June 2026
+## Planned Transactions — Phase 3 / Phase 6 / June 2026
 
 | Method | Path                                          | Description                                                                                 | Rate Limit | Doc                                                    |
 | ------ | --------------------------------------------- | ------------------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------ |
@@ -374,7 +392,7 @@ opening anchors without changing request fields, response shape or operation cou
 | GET    | `/api/planned-transactions/due-soon`          | Upcoming bills within N days (Phase 6)                                                      | —          | [[docs/api/plannedTransactions\|Planned Transactions]] |
 | GET    | `/api/planned-transactions/match-suggestions` | Ambiguous auto-link candidates for user confirmation (June 2026; registered before `/:id`)  | —          | [[docs/api/plannedTransactions\|Planned Transactions]] |
 
-## Investments (17 endpoints)
+## Investments
 
 | Method | Path                                   | Description                                                        | Rate Limit | Doc                                   |
 | ------ | -------------------------------------- | ------------------------------------------------------------------ | ---------- | ------------------------------------- |
@@ -396,7 +414,7 @@ opening anchors without changing request fields, response shape or operation cou
 | PATCH  | `/api/investments/transactions/:txnId` | Update portfolio transaction (shared typed body validation)        | —          | [[docs/api/investments\|Investments]] |
 | GET    | `/api/investments/:id/summary`         | Investment summary                                                 | —          | [[docs/api/investments\|Investments]] |
 
-## Watchlist (5 endpoints)
+## Watchlist
 
 | Method | Path                 | Description | Rate Limit | Doc                               |
 | ------ | -------------------- | ----------- | ---------- | --------------------------------- |
@@ -406,7 +424,7 @@ opening anchors without changing request fields, response shape or operation cou
 | PATCH  | `/api/watchlist/:id` | Update      | —          | [[docs/api/watchlist\|Watchlist]] |
 | DELETE | `/api/watchlist/:id` | Delete      | —          | [[docs/api/watchlist\|Watchlist]] |
 
-## Market Lookup (4 endpoints)
+## Market Lookup
 
 | Method | Path                 | Description                                                                                                                                                                                           | Rate Limit | Doc                                      |
 | ------ | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ---------------------------------------- |
@@ -415,7 +433,7 @@ opening anchors without changing request fields, response shape or operation cou
 | GET    | `/api/market/chart`  | Historical chart data                                                                                                                                                                                 | —          | [[docs/api/marketLookup\|Market Lookup]] |
 | GET    | `/api/market/news`   | News articles                                                                                                                                                                                         | —          | [[docs/api/marketLookup\|Market Lookup]] |
 
-## Research (19 endpoints) — ADR-079, ADR-081, ADR-082
+## Research — ADR-079, ADR-081, ADR-082
 
 Provider-agnostic research surface mounted at `/api/research` under `marketRateLimiter`. Six data endpoints route through the capability map → quota governor → cache → race-to-first provider, **except `fundamentals`** which fetches FMP + Yahoo in parallel and merges field-by-field (FMP preferred) via `researchAggregator.fetchFundamentals()`. Two analytics endpoints (`scorecard`, `portfolio-forecast`) compute derived outputs from aggregated data; the projection endpoint is non-persisted (ADR-079 / ADR-065 storage boundary). All data-endpoint responses carry `meta.provider` (which provider answered, or `null`; may be `"fmp+yahoo"` composite for fundamentals/scorecard) and `meta.source` (`'cache'` | `'live'` | `'unavailable'`). All five symbol adapters are wired; the keyed four (Twelve Data / Finnhub / FMP / Alpha Vantage) light up when their API key is set via Settings (`/provider-keys`) or the root `.env` (ADR-080). The **macro vertical** (ADR-082) adds three more adapters — FRED (keyed `FRED_API_KEY`), Eurostat and DBnomics (keyless) — behind two **provider-pinned** endpoints (`macro/search` fans out + unions a catalog; `macro/series` fetches one provider's observations); macro data is never raced and never persisted to `asset_price_history`. See [[docs/api/research|Research API]] and [[docs/features/research|Research Feature]].
 
@@ -441,7 +459,7 @@ Provider-agnostic research surface mounted at `/api/research` under `marketRateL
 | PUT    | `/api/research/provider-keys/:provider` | Set/replace a provider's API key (Settings)                                                                                                                                                                                                                                                                                                 | —          | [[docs/api/research\|Research]] |
 | DELETE | `/api/research/provider-keys/:provider` | Clear a provider's stored API key                                                                                                                                                                                                                                                                                                           | —          | [[docs/api/research\|Research]] |
 
-## Import (16 endpoints)
+## Import
 
 | Method | Path                                                    | Description                                                                  | Rate Limit | Doc                           |
 | ------ | ------------------------------------------------------- | ---------------------------------------------------------------------------- | ---------- | ----------------------------- |
@@ -462,7 +480,7 @@ Provider-agnostic research surface mounted at `/api/research` under `marketRateL
 | PATCH  | `/api/import/parsers/:id`                               | Update saved parser name and/or config; 404 if missing; 409 on name conflict | —          | [[docs/api/imports\|Imports]] |
 | DELETE | `/api/import/parsers/:id`                               | Delete saved parser; 204 on success; 404 if missing                          | —          | [[docs/api/imports\|Imports]] |
 
-## Portfolio Import (14 endpoints) — ADR-078
+## Portfolio Import — ADR-078
 
 All routes mounted at `/api/portfolio/import` with `importRateLimiter`. The pipeline stages,
 validates, and matches CSV history or supported Saxo XLSX. Maintained formats always require review.
@@ -491,7 +509,7 @@ in ascending order and preserves source order within a date. See
 | POST   | `/api/portfolio/import/reconciliation/preview`                      | Preview full history or derived Kinesis scopes or native IBKR funding corrections with selected and pending counts | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
 | POST   | `/api/portfolio/import/reconciliation/commit`                       | Apply a fingerprint-bound scope; existing-only modes preserve pending rows and review lifecycle                    | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
 
-## Attachments (4 endpoints) — Phase 5A
+## Attachments — Phase 5A
 
 | Method | Path                               | Description                                                                     | Rate Limit | Doc                                   |
 | ------ | ---------------------------------- | ------------------------------------------------------------------------------- | ---------- | ------------------------------------- |
@@ -500,7 +518,7 @@ in ascending order and preserves source order within a date. See
 | GET    | `/api/attachments/:id/download`    | Download attachment file                                                        | 60 req/min | [[docs/api/attachments\|Attachments]] |
 | DELETE | `/api/attachments/:id`             | Delete attachment                                                               | 60 req/min | [[docs/api/attachments\|Attachments]] |
 
-## Saved Charts (4 endpoints)
+## Saved Charts
 
 | Method | Path                    | Description                                             | Rate Limit | Doc                                    |
 | ------ | ----------------------- | ------------------------------------------------------- | ---------- | -------------------------------------- |
@@ -509,7 +527,7 @@ in ascending order and preserves source order within a date. See
 | PATCH  | `/api/saved-charts/:id` | Update                                                  | —          | [[docs/api/savedCharts\|Saved Charts]] |
 | DELETE | `/api/saved-charts/:id` | Delete                                                  | —          | [[docs/api/savedCharts\|Saved Charts]] |
 
-## Settings (5 endpoints)
+## Settings
 
 | Method | Path                 | Description                                                         | Rate Limit | Doc                             |
 | ------ | -------------------- | ------------------------------------------------------------------- | ---------- | ------------------------------- |
@@ -519,7 +537,7 @@ in ascending order and preserves source order within a date. See
 | PUT    | `/api/settings`      | Atomic conditional replacements; per-key baselines required         | —          | [[docs/api/settings\|Settings]] |
 | DELETE | `/api/settings/:key` | Conditional delete; persisted baseline required                     | —          | [[docs/api/settings\|Settings]] |
 
-## Recipient Bank Accounts (5 endpoints)
+## Recipient Bank Accounts
 
 | Method | Path                                                       | Description                                         | Rate Limit | Doc                                               |
 | ------ | ---------------------------------------------------------- | --------------------------------------------------- | ---------- | ------------------------------------------------- |
@@ -529,7 +547,7 @@ in ascending order and preserves source order within a date. See
 | DELETE | `/api/recipients/:id/bank-accounts/:accountId`             | Soft delete                                         | —          | [[docs/api/recipientBankAccounts\|Bank Accounts]] |
 | POST   | `/api/recipients/:id/bank-accounts/:accountId/set-primary` | Set primary                                         | —          | [[docs/api/recipientBankAccounts\|Bank Accounts]] |
 
-## Splits (11 endpoints)
+## Splits
 
 | Method | Path                              | Description                                                               | Rate Limit | Doc                         |
 | ------ | --------------------------------- | ------------------------------------------------------------------------- | ---------- | --------------------------- |
@@ -546,14 +564,14 @@ in ascending order and preserves source order within a date. See
 | POST   | `/api/splits/owed/:id/settle-all` | Settle all for recipient                                                  | —          | [[docs/api/splits\|Splits]] |
 | DELETE | `/api/splits/:id`                 | Delete split                                                              | —          | [[docs/api/splits\|Splits]] |
 
-## Health (2 endpoints)
+## Health
 
 | Method | Path               | Description                              | Rate Limit | Doc                         |
 | ------ | ------------------ | ---------------------------------------- | ---------- | --------------------------- |
 | GET    | `/health`          | Health check (backend ready)             | —          | [[docs/api/health\|Health]] |
 | GET    | `/health/detailed` | Detailed health with cache warmup status | —          | [[docs/api/health\|Health]] |
 
-## Private Electron Audit Bridge (6 endpoints)
+## Private Electron Audit Bridge
 
 These routes are for the native Electron main process. They require a loopback socket peer and a per-launch Bearer token that differs from `ADMIN_AUTH_TOKEN`. An HTTP 200 verification response can contain a failed or unavailable audit status.
 
@@ -566,7 +584,7 @@ These routes are for the native Electron main process. They require a loopback s
 | POST   | `/api/internal/audit/checkpoint`      | Record metadata for an already persisted receipt                          | Loopback + private token | [[docs/api/internal-audit\|Audit Bridge]] |
 | POST   | `/api/internal/audit/update-decision` | Append bounded Electron checksum or install decision; no publisher proof  | Loopback + private token | [[docs/api/internal-audit\|Audit Bridge]] |
 
-## Admin (22 endpoints)
+## Admin
 
 The three generic `/api/admin/database/tables/:table/{schema,rows,mutate}` editor operations return `403` for the six protected audit tables, including read requests. Database statistics and backup coverage do not imply authenticated audit evidence.
 
@@ -595,7 +613,7 @@ The three generic `/api/admin/database/tables/:table/{schema,rows,mutate}` edito
 | POST   | `/api/admin/codex-experimental/synthetic-turn`    | Send one fixed fictional question; no request payload                                                                                        | adminRateLimiter   | [[docs/api/admin\|Admin]] |
 | POST   | `/api/admin/codex-experimental/logout`            | Log out and remove disposable runtime state                                                                                                  | adminRateLimiter   | [[docs/api/admin\|Admin]] |
 
-## Belgian Tax (4 endpoints) — Native phase 3 prerequisite
+## Belgian Tax — Native phase 3 prerequisite
 
 | Method | Path                         | Purpose                                                                                                                                                             | Rate Limit                                 | Docs                                  |
 | ------ | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ | ------------------------------------- |
@@ -604,14 +622,14 @@ The three generic `/api/admin/database/tables/:table/{schema,rows,mutate}` edito
 | GET    | `/api/belgian-tax/portfolio-dashboard` | Authoritative Portfolio Tax costs, estimates, frozen-first PIT budget, display rates, and original adjustment/classification CAS records; read-only historical/current-FX web parity | globalRateLimiter + aggregationRateLimiter | [[docs/api/belgian-tax\|Belgian Tax]] |
 | POST   | `/api/belgian-tax/compute`   | Stateless computation of a complete v2 household using the shared TypeScript tax engine; household result and compatible PIT calculation                            | globalRateLimiter + aggregationRateLimiter | [[docs/api/belgian-tax\|Belgian Tax]] |
 
-## Reports (3 endpoints) — Phase 3 / Phase 5 / Phase 7
+## Reports — Phase 3 / Phase 5 / Phase 7
 
 Server-side PDF generation via Puppeteer headless Chrome (Phase 3). Modular section architecture with theme-aware styling and period filtering. Theme tokens (HSL) and section selections passed in POST body. Phase 5 adds paginated footers. Phase 7 adds filter exclusions with impact comparison. Returns binary stream (`application/pdf`).
 
 The 2026-10-13 OpenAPI correction declares the existing binary PDF response and shared request
 `currency`, `period`, `sections`, `theme`, exclusion IDs and optional tax context. It removes stale
 top-level `start_date`/`end_date`/`year` declarations; the route ignored those fields. No backend
-behavior or endpoint count changes (309 HTTP operations, 336 combined). Successful responses have
+behavior or endpoint count changes (309 HTTP operations). Successful responses have
 attachment/length headers; invalid fields produce a 400 `VALIDATION_ERROR` JSON envelope. See
 [[docs/api/reports|Reports API]] for exact defaults and validation.
 Generated consumers of the stale response/date declarations need regeneration; this specification
@@ -623,7 +641,7 @@ correction is breaking for them, while runtime-compatible callers retain existin
 | POST   | `/api/reports/portfolio` | Generate portfolio PDF (6 sections: executive summary, allocation, top holdings, performance trend, asset class detail, dividend income); Phase 8 complete                                                                                     | —          | [[docs/features/pdf-report-export\|PDF Report Export]] |
 | POST   | `/api/reports/tax`       | Generate tax PDF (7 sections: executive summary, type breakdown, by asset class, monthly trend, top investments, fee breakdown, Belgian rules); accepts optional `taxProfile`, `precomputedPIT`, `household`, `precomputedHousehold` (ADR-201) | —          | [[docs/features/pdf-report-export\|PDF Report Export]] |
 
-## Aggregations (15 endpoints) — Phase 2 / Phase 6 / Phase 7 / Phase 10 / Phase D / Phase E / Phase 9 / Phase C / Phase G
+## Aggregations — Phase 2 / Phase 6 / Phase 7 / Phase 10 / Phase D / Phase E / Phase 9 / Phase C / Phase G
 
 Server-computed aggregations with materialized-view/live/cache distinction. Production path as of Phase 9 (shadow mode validation complete). Cash flow forecast added in Phase 6. Sankey flow added in Phase 7. Multi-method forecast added in Phase 10. Phase C adds dashboard frontend visualization with controls and diagnostics panel. Phase D adds persisted accuracy metrics and trend analysis. Phase E adds 6-hour TTL cache materialization with nightly job precompute. Phase G adds per-category breakdown with hierarchical reconciliation.
 
@@ -645,7 +663,7 @@ Server-computed aggregations with materialized-view/live/cache distinction. Prod
 | GET    | `/api/aggregations/category-pivot`             | Spending by category with exclusion filter support; cells carry optional `incomeByOwner` (ADR-201)                                                                                                                                                                                                                                                                                                                                                                                                                             | —          | [[docs/api/aggregations\|Aggregations]] |
 | GET    | `/api/aggregations/recipient-by-year`          | Per-recipient spending broken out by calendar year with exclusion filter support                                                                                                                                                                                                                                                                                                                                                                                                                                               | —          | [[docs/api/aggregations\|Aggregations]] |
 
-## Info/Statistics (17 endpoints — Phase 9 Aggregation Cutover, Phase 14+ Portfolio Totals)
+## Info/Statistics
 
 Aggregation routes removed in Phase 9 as migration to `/api/aggregations/*` is complete. These endpoints remain for non-aggregation queries only: portfolio-performance, portfolio-summary (realtime totals, Phase 14), net-worth, exchange-rates, inflation-rates, and supporting refresh endpoints. Portfolio-summary endpoint added 2026-04-29 as single source of truth for dashboard and performance page headline metrics. 2026-06-11 (ADR-074): both portfolio-performance and portfolio-summary gain FX attribution fields (assetGain, fxGain, nativeCurrentValue, usedFallbackRate); flows now converted at transaction-date FX rates; no new endpoints added. Phase 9 cutover also removed `GET /api/info` (general statistics) and `GET /api/info/transaction-summary` (summary with filters).
 
@@ -678,7 +696,7 @@ share mutation invalidation. This query scope adds no operation. See [[docs/api/
 `portfolio-summary` also returns optional additive `brokerageCashFees` (dated source-owned cash costs,
 `gainAfterFees` and account subtotals). Existing investment totals and return series keep their scope.
 
-## AI Chat (9 endpoints + 30 tool-calling tools)
+## AI Chat
 
 | Method | Path                        | Description                                                                                                 | Rate Limit | Doc                      |
 | ------ | --------------------------- | ----------------------------------------------------------------------------------------------------------- | ---------- | ------------------------ |
@@ -727,8 +745,8 @@ The backup operations remain:
 
 `electronAudit.read` requests a bounded verified page from the native main process. `electronAudit.exportSnapshot` saves a complete verified snapshot of at most 500 entries through the native save dialog. The renderer receives neither the private backend bearer nor direct access to the local receipt. A newer tail is labeled pending authentication; the export states that its local receipt and macOS Keychain checkpoint do not make it a signed report or remote attestation.
 
-`packaging/electron/ipc-contract.test.ts` requires the 29 shared invoke channels to equal both the
-main-process registrations and preload invokes. It also requires all 6 shared event channels to
+`packaging/electron/ipc-contract.test.ts` requires the shared invoke channels to equal both the
+main-process registrations and preload invokes. It also requires all shared event channels to
 equal the main senders and preload subscriptions.
 
 **Frontend Wrappers:** `apps/frontend/src/lib/api/electron.ts` consumes the shared bridge types and provides async wrappers for all IPC handlers.
@@ -737,43 +755,13 @@ equal the main senders and preload subscriptions.
 
 **Documentation:** See [[docs/features/backup-coverage-audit|Backup Coverage Audit]] for bundle format, coverage matrix, and restoration process.
 
-## Summary
+## Inventory authority
 
-| Resource                             | Operations or invoke channels |
-| ------------------------------------ | ----------------------------- |
-| Accounts (ADR-088)                   | 13                            |
-| Analysis Workspace (ADR-144)         | 21                            |
-| AI Research                          | 20                            |
-| Research Dossiers (ADR-153)          | 9                             |
-| Analysis Monitors (ADR-154)          | 8                             |
-| Cross-Workspace (ADR-098)            | 2                             |
-| Transactions (incl. Tags)            | 18                            |
-| Categories                           | 12                            |
-| Recipients                           | 14                            |
-| Planned Transactions                 | 8                             |
-| Investments                          | 17                            |
-| Watchlist                            | 5                             |
-| Market Lookup                        | 4                             |
-| Research (ADR-079/081/082)           | 18                            |
-| Import                               | 16                            |
-| Portfolio Import (ADR-078)           | 14                            |
-| Attachments (Phase 5A)               | 4                             |
-| Saved Charts                         | 4                             |
-| Settings                             | 5                             |
-| Recipient Bank Accounts              | 5                             |
-| Admin (incl. DB Data Editor ADR-101) | 22                            |
-| Private Electron Audit Bridge        | 6                             |
-| Splits                               | 12                            |
-| Health                               | 2                             |
-| Aggregations (Phase 2/6/10/D)        | 15                            |
-| Belgian Tax (ADR-204)                | 4                             |
-| Reports (Phase 3/7)                  | 3                             |
-| Info/Statistics (Phase 14)           | 18                            |
-| AI Chat                              | 9                             |
-| Electron IPC invoke channels         | 25                            |
-| **Total**                            | **336**                       |
-
-> **309** versioned `/api` HTTP operations are declared in `openapi.yaml`. The checker compares their concrete method/path pairs with the resource tables and also checks `api_operation_count`. The 2 health routes and 25 Electron invoke channels are separate contracts; the 6 Electron event channels are not request endpoints. Resource summary counts and rate-limit descriptions are navigation aids and are not independently gate-checked.
+`openapi.yaml` owns versioned HTTP method/path pairs. Run `bun run check-endpoint-matrix`
+to compare every declared operation with the tables above and check `api_operation_count`.
+Health routes and Electron channels are separate contracts and are not added to an HTTP total.
+The native `ipc-contract.test.ts` compares the shared invoke/event definitions with registrations,
+senders and preload wrappers. These executable inventories replace manually summed resource totals.
 
 ## Phase G Endpoint Consolidation (April 2026)
 

@@ -12,13 +12,12 @@
  * are sticky and never overwritten by auto-detection.
  */
 
-import { query, withTransaction } from '../database/connection.ts';
-import { transactionRepository } from '../repositories/transactionRepository.ts';
-import { resolveTransferMatches } from './calculations/transfers.ts';
-import { scheduleAggregationRefresh } from './aggregationRefresh.ts';
-import { invalidateStatisticsCaches } from './info/cache.ts';
-import { logger } from '../config/logger.ts';
-import { ValidationError, NotFoundError } from '../middleware/errorHandler.ts';
+import { query, withTransaction } from "../database/connection.ts";
+import { transactionRepository } from "../repositories/transactionRepository.ts";
+import { scheduleAggregationRefresh } from "./aggregationRefresh.ts";
+import { invalidateStatisticsCaches } from "./info/cache.ts";
+import { logger } from "../config/logger.ts";
+import { ValidationError, NotFoundError } from "../middleware/errorHandler.ts";
 
 const DEFAULT_WINDOW_DAYS = 3;
 
@@ -31,13 +30,25 @@ export async function reconcileTransfers({
 }: { windowDays?: number } = {}): Promise<{ pairsCreated: number }> {
   await transactionRepository.releaseInvalidAutoTransferPairs(windowDays);
   await transactionRepository.releaseOrphanedTransfers();
-  const { autoPairs } = resolveTransferMatches(
-    await transactionRepository.listTransferCandidatePairs(windowDays),
-  );
+  const autoPairs =
+    await transactionRepository.listUniqueTransferPairs(windowDays);
   let created = 0;
   if (autoPairs.length) {
     await withTransaction(async () => {
+      // Lock all proposed legs in the same order as manual edits. An edit that
+      // won the lock is visible to the fresh uniqueness statement below.
+      await transactionRepository.lockTransferLegs(
+        [
+          ...new Set(autoPairs.flatMap(({ outId, inId }) => [outId, inId])),
+        ].sort((a, b) => a - b),
+      );
+      const currentPairs = new Set(
+        (await transactionRepository.listUniqueTransferPairs(windowDays)).map(
+          ({ outId, inId }) => `${outId}:${inId}`,
+        ),
+      );
       for (const { outId, inId } of autoPairs) {
+        if (!currentPairs.has(`${outId}:${inId}`)) continue;
         // Re-check open state inside the txn so we never clobber a concurrent
         // manual mark or an already-paired row.
         const r1 = await transactionRepository.markAutoTransferLeg(outId, inId);
@@ -49,8 +60,10 @@ export async function reconcileTransfers({
           // concurrent mark). Revert the leg we did mark so we never commit a
           // one-way transfer pointing at a peer that points elsewhere — the
           // pair re-evaluates cleanly on the next reconcile.
-          if (r1) await transactionRepository.revertAutoTransferLeg(outId, inId);
-          if (r2) await transactionRepository.revertAutoTransferLeg(inId, outId);
+          if (r1)
+            await transactionRepository.revertAutoTransferLeg(outId, inId);
+          if (r2)
+            await transactionRepository.revertAutoTransferLeg(inId, outId);
         }
       }
     });
@@ -64,18 +77,57 @@ export async function reconcileTransfers({
  */
 export async function getTransferSuggestions({
   windowDays = DEFAULT_WINDOW_DAYS,
-}: { windowDays?: number } = {}) {
-  const { suggestions } = resolveTransferMatches(
-    await transactionRepository.listTransferCandidatePairs(windowDays),
+  cursor,
+  limit = 200,
+}: {
+  windowDays?: number;
+  cursor?: string | undefined;
+  limit?: number | undefined;
+} = {}) {
+  if (!Number.isInteger(limit) || limit < 1 || limit > 200) {
+    throw new ValidationError(
+      "Suggestion limit must be an integer between 1 and 200",
+    );
+  }
+  const parts = cursor?.split(":").map(Number);
+  if (
+    cursor !== undefined &&
+    (!/^\d+:\d+$/.test(cursor) ||
+      parts?.length !== 2 ||
+      parts.some(
+        (id) => !Number.isSafeInteger(id) || id < 1 || id > 2147483647,
+      ))
+  ) {
+    throw new ValidationError("Invalid transfer suggestion cursor");
+  }
+  const after: [number, number] = parts ? [parts[0]!, parts[1]!] : [0, 0];
+  const pairs = await transactionRepository.listTransferSuggestionPairs(
+    windowDays,
+    after,
+    limit + 1,
   );
-  if (!suggestions.length) return [];
-  const ids = [...new Set(suggestions.flatMap((s) => [s.outId, ...s.candidateInIds]))];
-  const rows = await transactionRepository.listTransferSuggestionRows(ids);
-  const byId = new Map(rows.map((r) => [r.id, r]));
-  return suggestions.map((s) => ({
-    outflow: byId.get(s.outId),
-    candidates: s.candidateInIds.map((id) => byId.get(id)).filter(Boolean),
-  }));
+  const hasMore = pairs.length > limit;
+  const page = pairs.slice(0, limit);
+  const ids = [...new Set(page.flatMap((pair) => [pair.outId, pair.inId]))];
+  const rows = ids.length
+    ? await transactionRepository.listTransferSuggestionRows(ids)
+    : [];
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  const grouped = new Map<number, number[]>();
+  for (const pair of page) {
+    const candidates = grouped.get(pair.outId) ?? [];
+    candidates.push(pair.inId);
+    grouped.set(pair.outId, candidates);
+  }
+  const last = page.at(-1);
+  return {
+    items: [...grouped].map(([outId, inIds]) => ({
+      outflow: byId.get(outId),
+      candidates: inIds.map((id) => byId.get(id)).filter(Boolean),
+    })),
+    hasMore,
+    nextCursor: hasMore && last ? `${last.outId}:${last.inId}` : null,
+  };
 }
 
 /**
@@ -96,28 +148,49 @@ export async function markTransfer(
   bId: number,
 ): Promise<{ ok: boolean }> {
   await withTransaction(async () => {
-    const rows = await transactionRepository.lockTransferLegs([aId, bId]);
+    const rows = await transactionRepository.lockTransferGraphForMark([aId, bId]);
     const a = rows.find((r) => r.id === aId);
     const b = rows.find((r) => r.id === bId);
     if (!a || !b) {
-      throw new NotFoundError('Both transactions must exist to mark a transfer');
+      throw new NotFoundError(
+        "Both transactions must exist to mark a transfer",
+      );
+    }
+    if (
+      [a, b].some(
+        (leg) =>
+          leg.transfer_source &&
+          !["auto", "manual"].includes(leg.transfer_source),
+      )
+    ) {
+      throw new ValidationError(
+        "System-owned transactions must be corrected through their original workflow",
+      );
     }
     if (!a.is_active || !b.is_active) {
-      throw new ValidationError('Both transactions must be active to mark a transfer');
+      throw new ValidationError(
+        "Both transactions must be active to mark a transfer",
+      );
     }
-    if (a.account_id === null || b.account_id === null || a.account_id === b.account_id) {
-      throw new ValidationError('A transfer must link two different accounts');
+    if (
+      a.account_id === null ||
+      b.account_id === null ||
+      a.account_id === b.account_id
+    ) {
+      throw new ValidationError("A transfer must link two different accounts");
     }
     const aAmt = Number(a.amount);
     const bAmt = Number(b.amount);
     if (!((aAmt < 0 && bAmt > 0) || (aAmt > 0 && bAmt < 0))) {
-      throw new ValidationError('A transfer needs one outflow and one inflow (opposite signs)');
+      throw new ValidationError(
+        "A transfer needs one outflow and one inflow (opposite signs)",
+      );
     }
     // Release any existing peer of A or B before re-pairing them together, so a
     // prior counterpart (e.g. an auto pair A↔C) isn't stranded as a phantom
     // one-way transfer. The stranded peer goes back to open (NULL), not
     // dismissed — releasing it is a side effect, not a user dismissal.
-    await transactionRepository.releaseTransferPeersOf([aId, bId]);
+    await transactionRepository.releaseTransferPeersOf([aId, bId], rows.map((row) => row.id));
     await transactionRepository.markManualTransferLeg(aId, bId);
     await transactionRepository.markManualTransferLeg(bId, aId);
   });
@@ -140,19 +213,7 @@ export async function markTransfer(
  */
 export async function unmarkTransfer(id: number): Promise<{ ok: boolean }> {
   await withTransaction(async () => {
-    // Lock the target row before reading its peer (mirrors markTransfer's
-    // FOR UPDATE). Without the lock, a concurrent markTransfer could re-point the
-    // peer at a third row Q between this SELECT and the reset below, stranding Q
-    // as a phantom one-way manual transfer that no cleanup path releases.
-    const peer = await transactionRepository.lockTransferPeerPointer(id);
-
-    // Lock the peer too and re-read its pointer under the lock: only reset it if
-    // it still points back at `id`. If markTransfer already re-paired it to Q,
-    // leave that legitimate pairing (and Q) untouched — we just reset our leg.
-    let peerPointsBack = false;
-    if (peer) {
-      peerPointsBack = (await transactionRepository.lockTransferPeerPointer(peer)) === id;
-    }
+    const { peer, peerPointsBack } = await transactionRepository.lockTransferPairForUnmark(id);
 
     if (peer && peerPointsBack) {
       await transactionRepository.insertTransferDismissal(id, peer);
@@ -189,13 +250,21 @@ export function scheduleReconcile() {
   invalidateStatisticsCaches();
   const now = Date.now();
   if (reconcileTimer) clearTimeout(reconcileTimer);
-  if (reconcileDeadline === null) reconcileDeadline = now + RECONCILE_MAX_WAIT_MS;
-  const delay = Math.max(0, Math.min(RECONCILE_DEBOUNCE_MS, reconcileDeadline - now));
+  if (reconcileDeadline === null)
+    reconcileDeadline = now + RECONCILE_MAX_WAIT_MS;
+  const delay = Math.max(
+    0,
+    Math.min(RECONCILE_DEBOUNCE_MS, reconcileDeadline - now),
+  );
   reconcileTimer = setTimeout(() => {
     reconcileTimer = undefined;
     reconcileDeadline = null;
     reconcileTransfers()
-      .catch((err) => logger.warn('[transfers] debounced reconcile failed', { err: err?.message }))
+      .catch((err) =>
+        logger.warn("[transfers] debounced reconcile failed", {
+          err: err?.message,
+        }),
+      )
       .finally(() => scheduleAggregationRefresh());
   }, delay);
 }
@@ -209,12 +278,16 @@ export async function backfillTransfersOnce(): Promise<{
   skipped: boolean;
   pairsCreated?: number;
 }> {
-  const { rows } = await query("SELECT 1 FROM user_settings WHERE key = 'transfers_backfilled' LIMIT 1");
+  const { rows } = await query(
+    "SELECT 1 FROM user_settings WHERE key = 'transfers_backfilled' LIMIT 1",
+  );
   if (rows.length) return { skipped: true };
   const result = await reconcileTransfers();
   await query(
     "INSERT INTO user_settings (key, value) VALUES ('transfers_backfilled', 'true'::jsonb) ON CONFLICT (key) DO NOTHING",
   );
-  logger.info(`[transfers] one-time backfill complete: ${result.pairsCreated} pair(s)`);
+  logger.info(
+    `[transfers] one-time backfill complete: ${result.pairsCreated} pair(s)`,
+  );
   return { skipped: false, ...result };
 }

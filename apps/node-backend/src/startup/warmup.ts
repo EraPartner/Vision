@@ -1,3 +1,4 @@
+import { prepareViewsAfterBackfill } from "./prepareViews.ts";
 /**
  * Startup warmup tasks.
  *
@@ -87,7 +88,7 @@ const IMPORT_RETENTION_DAYS = 30;
  * NOT NULL; completed_at can be null for aborted/failed batches). Failures are
  * logged and swallowed so warmup is never blocked.
  */
-export async function pruneOldImportBatches() {
+async function pruneOldImportBatches() {
   const tables = ["import_batches", "portfolio_import_batches"];
   for (const table of tables) {
     try {
@@ -326,38 +327,27 @@ export async function runWarmupTasks({
     const end = bootMark?.(phase);
     return operation().finally(() => end?.());
   };
-  const materializedViewsReady = markPhase(
-    "materialized_views_create",
-    createMaterializedViews,
-  )
-    .then(() =>
-      markPhase("materialized_views_indexes", ensureMaterializedViewIndexes),
-    )
-    .then(() =>
+  // Finish the one-time transfer rewrite before the initial refresh so the
+  // same aggregation covers both normal preparation and upgraded data.
+  const materializedViewsReady = prepareViewsAfterBackfill({
+    prepare: () =>
+      markPhase("materialized_views_create", createMaterializedViews).then(() =>
+        markPhase("materialized_views_indexes", ensureMaterializedViewIndexes),
+      ),
+    backfill: backfillTransfersOnce,
+    refresh: () =>
       markPhase("materialized_views_refresh", refreshMaterializedViews),
-    )
+    backfillFailed: (error) =>
+      logger.error("Internal-transfer backfill failed on startup", {
+        error: String(error),
+      }),
+  })
     .then(() => {
       warmupStatus.materializedViews = "ready";
     })
     .catch((err) => {
       warmupStatus.materializedViews = "failed";
       logger.error("Failed to prepare materialized views on startup", {
-        error: err.message,
-      });
-    });
-
-  // One-time internal-transfer backfill on upgrade (ADR-083). Best-effort and
-  // DB-only; refreshes the MVs afterwards so the exclusion is reflected — after
-  // the chain above, since refreshing a view that does not exist yet is a no-op
-  // that logs an error. Both refreshes are idempotent and coalesce.
-  backfillTransfersOnce()
-    .then((r) =>
-      r.skipped
-        ? undefined
-        : materializedViewsReady.then(() => refreshMaterializedViews()),
-    )
-    .catch((err) => {
-      logger.error("Internal-transfer backfill failed on startup", {
         error: err.message,
       });
     });
@@ -385,7 +375,7 @@ export async function runWarmupTasks({
       });
     });
 
-  warmInflationCache()
+  warmInflationCache({ allowExternal: online })
     .then(() => {
       warmupStatus.inflation = "ready";
     })
@@ -534,3 +524,5 @@ export async function runWarmupTasks({
     holdingGapBackfillInterval,
   };
 }
+
+export { pruneOldImportBatches as __pruneOldImportBatches };

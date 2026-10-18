@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { describe, it, expect } from "vitest";
-import { render } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
+import { render, act } from "@testing-library/react";
 import { ShaderAurora } from "@/components/layout/ShaderAurora";
 
 // jsdom has no WebGL: canvas.getContext('webgl') returns null, which IS the
@@ -28,5 +28,61 @@ describe("ShaderAurora — WebGL-unavailable fallback path", () => {
         const { unmount } = render(<ShaderAurora staticAtmosphere={true} />);
         expect(() => unmount()).not.toThrow();
         expect(document.documentElement).not.toHaveClass("fx-webgl-live");
+    });
+});
+
+describe("ShaderAurora live accessibility preference", () => {
+    it("stops animation on Reduce Motion, resumes when allowed, and removes the listener", () => {
+        const media = new EventTarget() as EventTarget & { matches: boolean };
+        media.matches = false;
+        const frames = vi.fn(() => 1);
+        const cancel = vi.fn();
+        const draw = vi.fn();
+        const noop = () => undefined;
+        const gl = new Proxy(
+            {},
+            {
+                get: (_target, key) =>
+                    key === "drawArrays"
+                        ? draw
+                        : String(key).startsWith("create") ||
+                            key === "getUniformLocation"
+                          ? () => ({})
+                          : key === "getShaderParameter" ||
+                              key === "getProgramParameter"
+                            ? () => true
+                            : key === "getExtension"
+                              ? () => null
+                              : noop,
+            },
+        );
+        const context = vi
+            .spyOn(HTMLCanvasElement.prototype, "getContext")
+            .mockReturnValue(gl as never);
+        const focus = vi.spyOn(document, "hasFocus").mockReturnValue(true);
+        vi.stubGlobal("matchMedia", () => media);
+        vi.stubGlobal("requestAnimationFrame", frames);
+        vi.stubGlobal("cancelAnimationFrame", cancel);
+        const { unmount } = render(<ShaderAurora staticAtmosphere={false} />);
+        expect(frames).toHaveBeenCalledOnce();
+        act(() => {
+            media.matches = true;
+            media.dispatchEvent(new Event("change"));
+        });
+        expect(cancel).toHaveBeenCalled();
+        expect(draw).toHaveBeenCalled();
+        act(() => {
+            media.matches = false;
+            media.dispatchEvent(new Event("change"));
+        });
+        expect(frames).toHaveBeenCalledTimes(2);
+        unmount();
+        const count = draw.mock.calls.length;
+        media.matches = true;
+        media.dispatchEvent(new Event("change"));
+        expect(draw).toHaveBeenCalledTimes(count);
+        context.mockRestore();
+        focus.mockRestore();
+        vi.unstubAllGlobals();
     });
 });

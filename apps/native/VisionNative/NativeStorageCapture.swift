@@ -2,7 +2,7 @@ import Foundation
 import VisionNativeCore
 import WebKit
 
-/// ADR-208's one-time capture (owner decision 2026-10-17): before the first native-only
+/// ADR-211's one-time capture (owner decision 2026-10-17): before the first native-only
 /// graph exists, a transient, unpresented web view loads the backend's `/health` document at
 /// the supervised origin, which runs no application script, reads that origin's browser
 /// storage with `NativeRawStateCaptureBridge` and is released. No other writer exists yet, so

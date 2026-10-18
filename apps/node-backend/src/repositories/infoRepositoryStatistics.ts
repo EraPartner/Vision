@@ -62,8 +62,28 @@ export const statisticsRepository = {
   async getCategoryBreakdown(
     targetCurrency = "EUR",
     ancestorCategoryId: number | undefined = undefined,
+    filters: CategoryPivotOptions = {},
   ): Promise<CategoryTotal[]> {
     const includeTransfers = await getIncludeTransfers();
+    const exclusion = buildExclusionClauses({
+      excludedCategoryIds: filters.excludedCategoryIds ?? [],
+      excludedRecipientIds: filters.excludedRecipientIds ?? [],
+      startParamIdx: ancestorCategoryId === undefined ? 1 : 2,
+    });
+    const params: unknown[] =
+      ancestorCategoryId === undefined
+        ? [...exclusion.params]
+        : [ancestorCategoryId, ...exclusion.params];
+    const clauses = exclusion.whereSql ? [exclusion.whereSql] : [];
+    if (filters.startDate) {
+      params.push(filters.startDate);
+      clauses.push(`t.date >= $${params.length}`);
+    }
+    if (filters.endDate) {
+      params.push(filters.endDate);
+      clauses.push(`t.date <= $${params.length}`);
+    }
+    const filterSql = clauses.length ? `AND ${clauses.join(" AND ")}` : "";
 
     if (ancestorCategoryId !== undefined) {
       // Expand the effective category only once through the ancestry view. A
@@ -83,9 +103,10 @@ export const statisticsRepository = {
         JOIN categories ancestor ON ancestor.id = ancestry.ancestor_id
         WHERE t.is_active = true
           ${includeTransfers ? "" : "AND t.is_transfer = false"}
+          ${filterSql}
         GROUP BY ancestor.id, ancestor.path_name, t.currency
       `,
-        [ancestorCategoryId],
+        params,
       );
       const converted = await convertRowsToEur(
         mapRowsForAmountConversion(rows, "amount", false),
@@ -112,7 +133,11 @@ export const statisticsRepository = {
 
     // The MV (mv_category_totals) is built transfer-excluding, so it is only a
     // valid fast path when the caller also wants transfers excluded.
-    if (!includeTransfers && (await mvAvailable("mv_category_totals"))) {
+    if (
+      !filterSql &&
+      !includeTransfers &&
+      (await mvAvailable("mv_category_totals"))
+    ) {
       const catRows = await queryRows(
         mvCategoryTotalsRowSchema,
         "SELECT * FROM mv_category_totals ORDER BY count DESC LIMIT 500",
@@ -152,10 +177,12 @@ export const statisticsRepository = {
       LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id, pr.default_category_id) = c.id
       WHERE t.is_active = true
         ${includeTransfers ? "" : "AND t.is_transfer = false"}
+        ${filterSql}
       GROUP BY COALESCE(c.id, -1),
                COALESCE(c.path_name, 'UNCATEGORISED'),
                t.currency
     `,
+      params,
     );
 
     const catConverted = await convertRowsToEur(

@@ -677,7 +677,11 @@ function normalizeTransactionPatchFields(
 
 // GET /api/transactions/transfer-suggestions — ambiguous transfer matches
 router.get("/transfer-suggestions", async (req, res) => {
-  res.ok({ items: await transactionService.getTransferSuggestions() });
+  const options = parseInput(z.object({
+    cursor: z.string().optional(),
+    limit: z.coerce.number().int().min(1).max(200).optional(),
+  }), req.query);
+  res.ok(await transactionService.getTransferSuggestions(options));
 });
 
 // POST /api/transactions/transfers — manually confirm a transfer pair (sticky)

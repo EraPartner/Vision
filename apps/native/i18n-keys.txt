@@ -4826,3 +4826,11 @@ export.section.topRecipients
 export.sections
 export.sections.all
 export.title
+
+# Ported from main (2026-10-18): real estate rent, import review edit queue, filing prerequisite.
+realestate.missingRentRate
+importReview.savingEdits
+importReview.editsFailed
+importReview.reviewSavedEdits
+importReview.mixedCategories
+tax.markFiled.prerequisite

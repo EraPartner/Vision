@@ -21,6 +21,19 @@ vi.mock("@/hooks/usePortfolio", () => ({
     }),
 }));
 
+// This harness owns holding state. The detail dialog now loads complete history
+// through a separate query; keep that boundary on the same changing fixture.
+// API pagination and failed history loads are covered by the query/dialog suites.
+vi.mock("@/hooks/portfolio/useInvestments", () => ({
+    useAllPortfolioTransactionsQuery: (investmentId: number) => ({
+        data:
+            portfolio.holdings.find((holding) => holding.id === investmentId)
+                ?.transactions ?? [],
+        isLoading: false,
+        isError: false,
+    }),
+}));
+
 const virtualWindow = vi.hoisted(() => ({ measured: true }));
 
 // jsdom has no layout: the transactions list's scroll box measures 0px tall, so

@@ -89,6 +89,10 @@ public final class PortfolioModel {
     public private(set) var historyComplete = false
     public private(set) var historyVersion = 0
     public private(set) var historyError: String?
+    /// RealEstatePage's complete property history (usePortfolio `completeAssetClass`), for rent.
+    public private(set) var rentHistory: [Int: [PortfolioTransaction]] = [:]
+    public private(set) var rentLoading = false
+    public private(set) var rentError: String?
     public var error: String? { errors["investments"] ?? errors["summary"] }
     public var isLoading: Bool { summary == nil && error == nil }
     /// The footer line that replaces the broker subtotals, which also disables the broker
@@ -527,6 +531,36 @@ public final class PortfolioModel {
             historyLoading = false
         }
         return complete
+    }
+    /// Loads every property's complete history with four workers, as `usePortfolioTransactionsQuery`
+    /// does for the complete asset class; a failure surfaces instead of a partial rent.
+    public func loadRentHistory(ids: [Int], force: Bool = false) async {
+        let wanted = Set(ids)
+        guard force || rentError != nil || wanted != Set(rentHistory.keys) else { return }
+        rentLoading = true
+        rentError = nil
+        let service = service
+        do {
+            var loaded: [Int: [PortfolioTransaction]] = [:]
+            try await withThrowingTaskGroup(of: (Int, [PortfolioTransaction]).self) { group in
+                var pending = ids.makeIterator()
+                for _ in 0..<min(4, ids.count) {
+                    if let id = pending.next() {
+                        group.addTask { (id, try await Self.completeHistory(service: service, investmentId: id)) }
+                    }
+                }
+                while let result = try await group.next() {
+                    loaded[result.0] = result.1
+                    if let next = pending.next() {
+                        group.addTask { (next, try await Self.completeHistory(service: service, investmentId: next)) }
+                    }
+                }
+            }
+            rentHistory = loaded
+        } catch {
+            if !(error is CancellationError) { rentError = error.localizedDescription }
+        }
+        rentLoading = false
     }
     public nonisolated static func completeHistory(service: any PortfolioService, investmentId: Int) async throws
         -> [PortfolioTransaction]

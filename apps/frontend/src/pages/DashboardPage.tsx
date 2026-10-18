@@ -171,6 +171,7 @@ export default function DashboardPage() {
         setAllVisible,
         resetToDefaults,
         widgets: widgetDefs,
+        isLoaded: widgetsLoaded,
     } = useWidgetVisibility("dashboard", DASHBOARD_WIDGETS);
 
     // Per-graph exclusion override state
@@ -197,13 +198,38 @@ export default function DashboardPage() {
         exclusionScopeApplies &&
         (allExcludedCategoryIds.length > 0 || excludedRecipientIds.length > 0);
 
+    const needsStats = widgetsLoaded && isVisible("statCards");
+    const needsTransactions =
+        widgetsLoaded &&
+        (isVisible("categoryPie") ||
+            (isVisible("recentTransactions") &&
+                (!exclusionsApply ||
+                    graphExclusions["recentTransactions"] === false)));
+    const needsFilteredMonthly =
+        widgetsLoaded &&
+        isVisible("monthlyTrends") &&
+        exclusionsReady &&
+        exclusionsApply &&
+        graphExclusions["monthlyTrends"] !== false;
+    const needsUnfilteredMonthly =
+        widgetsLoaded &&
+        isVisible("monthlyTrends") &&
+        exclusionsReady &&
+        (!exclusionsApply || graphExclusions["monthlyTrends"] === false);
+    const needsFilteredRecent =
+        widgetsLoaded &&
+        isVisible("recentTransactions") &&
+        exclusionsReady &&
+        exclusionsApply &&
+        graphExclusions["recentTransactions"] !== false;
+
     // Fetch real-time statistics from /api/info endpoints with applied filters
     const {
         data: statsData,
         isLoading: statsLoading,
         error: statsError,
         refetch: refetchStats,
-    } = useFilteredDashboardStats();
+    } = useFilteredDashboardStats(needsStats);
 
     // Fetch transactions for charts and recent transactions table
     const {
@@ -211,7 +237,7 @@ export default function DashboardPage() {
         isLoading: transactionsLoading,
         error: transactionsError,
         refetch: refetchTransactions,
-    } = useTransactions({ limit: 50 });
+    } = useTransactions({ limit: 50 }, needsTransactions);
 
     // Monthly summary — FILTERED version. Shares the
     // ['monthlySummary', currency, categoryIds, recipientIds] key family with
@@ -225,7 +251,7 @@ export default function DashboardPage() {
     } = useMonthlySummary({
         excludedCategoryIds: allExcludedCategoryIds,
         excludedRecipientIds,
-        enabled: exclusionsApply,
+        enabled: needsFilteredMonthly,
     });
 
     // Monthly summary — UNFILTERED version (no exclusions in the key).
@@ -237,9 +263,7 @@ export default function DashboardPage() {
         error: monthlyUnfilteredError,
         refetch: refetchMonthlyUnfiltered,
     } = useMonthlySummary({
-        enabled:
-            !exclusionsApply ||
-            Object.values(graphExclusions).some((value) => value === false),
+        enabled: needsUnfilteredMonthly,
     });
 
     const monthlyLoading = monthlyFilteredLoading || monthlyUnfilteredLoading;
@@ -254,7 +278,7 @@ export default function DashboardPage() {
     } = useDashboardRecentTransactions(
         allExcludedCategoryIds,
         excludedRecipientIds,
-        exclusionsReady,
+        needsFilteredRecent,
         exclusionsApply,
     );
 
@@ -480,19 +504,14 @@ export default function DashboardPage() {
     // page. Cached data from any successful query still renders so the user
     // sees something useful when the host is offline. The banner distinguishes
     // "live" (some queries fresh, some failed) from "stale" (all served from cache).
-    const partialError =
-        statsError ||
-        transactionsError ||
-        monthlyFilteredError ||
-        monthlyUnfilteredError ||
-        recentFilteredError;
-    const partialErrorMessage =
-        statsError?.message ||
-        transactionsError?.message ||
-        monthlyFilteredError?.message ||
-        monthlyUnfilteredError?.message ||
-        recentFilteredError?.message ||
-        "";
+    const partialError = [
+        needsStats && statsError,
+        needsTransactions && transactionsError,
+        needsFilteredMonthly && monthlyFilteredError,
+        needsUnfilteredMonthly && monthlyUnfilteredError,
+        needsFilteredRecent && recentFilteredError,
+    ].find(Boolean);
+    const partialErrorMessage = partialError ? partialError.message : "";
     const hasAnyData =
         Boolean(statsData) ||
         (transactionsData?.items?.length ?? 0) > 0 ||
@@ -501,16 +520,21 @@ export default function DashboardPage() {
     const allFromCache = Boolean(statsError) && Boolean(transactionsError);
 
     const retryDashboard = () => {
-        const requests: Promise<unknown>[] = [
-            refetchStats(),
-            refetchTransactions(),
-            refetchMonthlyUnfiltered(),
-        ];
-        if (exclusionsApply) {
-            requests.push(refetchMonthlyFiltered(), refetchRecentFiltered());
-        }
+        const requests: Promise<unknown>[] = [];
+        if (needsStats) requests.push(refetchStats());
+        if (needsTransactions) requests.push(refetchTransactions());
+        if (needsUnfilteredMonthly) requests.push(refetchMonthlyUnfiltered());
+        if (needsFilteredMonthly) requests.push(refetchMonthlyFiltered());
+        if (needsFilteredRecent) requests.push(refetchRecentFiltered());
         void Promise.allSettled(requests);
     };
+
+    if (!widgetsLoaded)
+        return (
+            <PageShell {...loadingSurfaceProps}>
+                <Skeleton className="h-40 w-full" />
+            </PageShell>
+        );
 
     if (partialError && !hasAnyData) {
         return (

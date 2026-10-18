@@ -32,6 +32,8 @@ import {
     Receipt,
 } from "lucide-react";
 import { isUnitBased, isFixedIncome, isRealEstate } from "@/utils/assetClass";
+import { useAllPortfolioTransactionsQuery } from "@/hooks/portfolio/useInvestments";
+import { PageError } from "@/components/shared/PageError";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { usePortfolioSummaryQuery } from "@/hooks/portfolio/usePortfolioSummary";
 import { useFxAwarePnl } from "@/hooks/portfolio/useFxAwarePnl";
@@ -422,6 +424,8 @@ export function InvestmentDetailDialog({
     // user never opened (usePortfolio recomputes the whole portfolio per
     // consumer, and there is one of these per holding row).
     const [nestedMounted, setNestedMounted] = useState(false);
+    const history = useAllPortfolioTransactionsQuery(investment.id, open);
+    const transactions = history.data ?? [];
     // In controlled mode Radix never reports the opening through
     // onOpenChange, so the nested dialogs are mounted from the prop instead.
     useEffect(() => {
@@ -434,7 +438,7 @@ export function InvestmentDetailDialog({
     // NOT cleared on close: that is what keeps the draft alive for a reopen.
     const [editTxnId, setEditTxnId] = useState<number | null>(null);
     const [editTxnOpen, setEditTxnOpen] = useState(false);
-    const editTxn = investment.transactions.find((tx) => tx.id === editTxnId);
+    const editTxn = transactions.find((tx) => tx.id === editTxnId);
     // Without a DialogTrigger of their own the nested dialogs have nothing to
     // hand focus back to, so the control that opened them is remembered here.
     const nestedOpenerRef = useRef<HTMLElement | null>(null);
@@ -694,7 +698,7 @@ export function InvestmentDetailDialog({
                             </TabsTrigger>
                             <TabsTrigger value="transactions">
                                 {t("invDetail.tab.transactions", {
-                                    n: investment.transactions.length,
+                                    n: transactions.length,
                                 })}
                             </TabsTrigger>
                         </TabsList>
@@ -1188,7 +1192,15 @@ export function InvestmentDetailDialog({
                         </TabsContent>
 
                         <TabsContent value="transactions" className="mt-4">
-                            {investment.transactions.length === 0 ? (
+                            {history.isLoading ? (
+                                <p role="status">{t("common.loading")}</p>
+                            ) : history.isError ? (
+                                <PageError
+                                    title={t("common.error")}
+                                    message={history.error.message}
+                                    onRetry={() => history.refetch()}
+                                />
+                            ) : transactions.length === 0 ? (
                                 <EmptyState
                                     icon={Receipt}
                                     size="compact"
@@ -1198,7 +1210,7 @@ export function InvestmentDetailDialog({
                                 />
                             ) : (
                                 <TransactionList
-                                    transactions={investment.transactions}
+                                    transactions={transactions}
                                     t={t}
                                     fmt={fmt}
                                     locale={locale}
@@ -1213,7 +1225,7 @@ export function InvestmentDetailDialog({
                                 />
                             )}
 
-                            {investment.transactions.length > 0 &&
+                            {transactions.length > 0 &&
                                 addTransactionControl && (
                                     <div className="mt-4 flex justify-end border-t border-border/50 pt-4">
                                         {addTransactionControl}

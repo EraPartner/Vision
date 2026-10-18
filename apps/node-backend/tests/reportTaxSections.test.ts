@@ -293,6 +293,12 @@ describe("renderBelgianRulesSummary", () => {
     expect(html).toContain(eur("12,345.67")); // estimated total PIT
   });
 
+  it("keeps annual PIT in EUR when the portfolio report currency differs", () => {
+    const html = renderBelgianRulesSummary(rulesData, { currency: "USD" });
+    expect(html).toContain(eur("12,345.67"));
+    expect(html).not.toContain("$12,345.67");
+  });
+
   it("falls back to the placeholder when neither table nor PIT data is present", () => {
     expect(renderBelgianRulesSummary(null, ctx)).toContain("No tax table data");
   });

@@ -226,6 +226,7 @@ extension TransactionsModel {
         let second = legs[1]
         func eligible(_ leg: TransactionRow) -> Bool {
             guard leg.id > 0, let account = leg.accountId, account > 0, leg.isActive, leg.transferPeerId == nil,
+                leg.transferSource == nil || ["auto", "manual"].contains(leg.transferSource ?? ""),
                 leg.amount != 0, !leg.date.isEmpty, let currency = leg.currency
             else { return false }
             return currency.range(of: "^[A-Z]{3}$", options: .regularExpression) != nil

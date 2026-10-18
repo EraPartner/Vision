@@ -66,6 +66,7 @@ export interface ExpressResponse {
   // Method syntax so Node's overloaded `on`/`once` stay assignable.
   on(event: string, listener: (...args: unknown[]) => void): void;
   once?(event: string, listener: (...args: unknown[]) => void): void;
+  removeListener?(event: string, listener: (...args: unknown[]) => void): void;
   statusCode: number;
   headersSent: boolean;
   writableEnded: boolean;

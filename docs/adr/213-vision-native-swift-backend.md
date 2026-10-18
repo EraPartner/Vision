@@ -1,20 +1,20 @@
 ---
-title: "ADR-210: Move the backend into the Mac app in Swift"
+title: "ADR-213: Move the backend into the Mac app in Swift"
 type: adr
 status: proposed
 date: 2026-10-18
 tags: [adr, architecture, swift, native-app, backend, hummingbird, openapi, macos]
 description: "Proposed on 2026-10-18. Vision becomes a Mac app: the TypeScript backend is replaced, route by route behind openapi.yaml, by a Swift backend built on Hummingbird 2 and PostgresNIO that runs inside the app process. PostgreSQL stays a supervised process; Docker/Linux and Electron keep the TypeScript backend until they are retired."
-aliases: [adr-210, swift backend]
+aliases: [adr-213, swift backend]
 ---
 
-# ADR-210: Move the backend into the Mac app in Swift
+# ADR-213: Move the backend into the Mac app in Swift
 
 ## Status
 
 Proposed on 2026-10-18 by Tor, who chose the direction (Mac only, Swift with Hummingbird, in the
 app process) and asked for the decision record before any code. Accepting it is a separate step,
-and every stage below stays default-off until CI proves it, as with ADR-206 to ADR-208.
+and every stage below stays default-off until CI proves it, as with ADR-209 to ADR-211.
 [[docs/adr/205-vision-native-hand-over|ADR-205]]'s real-data switch-over rule is unchanged.
 
 ## Date
@@ -23,8 +23,8 @@ and every stage below stays default-off until CI proves it, as with ADR-206 to A
 
 ## Context
 
-Since [[docs/adr/208-vision-native-without-web-content|ADR-208]] and
-[[docs/adr/209-vision-native-retire-helper-document|ADR-209]] the Debug Demo shows no web content,
+Since [[docs/adr/211-vision-native-without-web-content|ADR-211]] and
+[[docs/adr/212-vision-native-retire-helper-document|ADR-212]] the Debug Demo shows no web content,
 so TypeScript's remaining job in the native app is the backend: about 126,000 lines in
 `apps/node-backend/src` (43 route modules, 309 operations in `openapi.yaml`), run by the native
 supervisor as a separate Node process with its own runtime in the payload. Its dependencies are
@@ -34,7 +34,7 @@ Chrome for PDF reports, a Yahoo Finance client, and the Ollama/OpenAI/Codex inte
 Tor wants a performant, well-supported, type-safe and memory-safe backend for a Mac-only Vision.
 Rust and Swift were compared: Rust offers compile-time-checked SQL (`sqlx`) and the strongest
 Linux story; Swift offers one language with the app, shared code with the calculations already
-ported in ADR-208, server and client generated from the same OpenAPI contract, and a backend
+ported in ADR-211, server and client generated from the same OpenAPI contract, and a backend
 that can run inside the app. For a Mac-only app the last three outweigh Rust's advantages.
 
 ## Decision
@@ -88,6 +88,6 @@ that can run inside the app. For a Mac-only app the last three outweigh Rust's a
 
 - [[docs/adr/204-vision-native-swift-app-target|ADR-204: Vision Native]]
 - [[docs/adr/205-vision-native-hand-over|ADR-205: Vision Native hand-over]]
-- [[docs/adr/208-vision-native-without-web-content|ADR-208: Finish phase 4 without web content]]
-- [[docs/adr/209-vision-native-retire-helper-document|ADR-209: Retire the helper document]]
+- [[docs/adr/211-vision-native-without-web-content|ADR-211: Finish phase 4 without web content]]
+- [[docs/adr/212-vision-native-retire-helper-document|ADR-212: Retire the helper document]]
 - [[docs/reference/native-parity/agent-handoff|Vision Native agent handoff]]

@@ -170,7 +170,8 @@ running, so Retry starts a fresh backend.
 4. Prepare the Demo seed. A seed whose `logicalSha256` and `schemaRevision` match the marker is
    kept. Otherwise the dump is restored into a staging database, its schema head and table counts
    are verified, and it is renamed into place while the previous database is kept for rollback.
-   An interrupted switch from an earlier launch is rolled back first.
+   An interrupted restore from an earlier launch is recovered first (see
+   [[docs/architecture/native-app#Restore|Restore]]).
 5. Start the backend. This runs `initdb` once (scram, C locale, data checksums), writes
    `vision.conf`, starts `postgres` on the loopback port with Unix sockets disabled, inspects the
    server (major 18, loopback-only, our data directory), bootstraps the roles, database and
@@ -450,10 +451,24 @@ backend (unless the database switch could not be recovered). Errors keep Electro
 `"Error: <message>"` form, so the frontend's `PASSPHRASE_REQUIRED` and `INVALID_PASSPHRASE`
 checks reopen the passphrase prompt.
 
-A launch after a quit or crash during a restore settles `pendingAttachmentSwitch` before the
-backend starts. If `pendingDatabaseSwitch` is still persisted, the previous attachment tree goes
-back and the database switch then rolls back. Otherwise the restore had committed: the restored
-tree stays and the previous one is removed.
+Coordinated recovery and quiescent backups follow
+[[docs/adr/207-coordinated-native-recovery|ADR-207: Coordinated native recovery]]. The attachment
+journal is persisted before either rename. Startup recovery (`NativeRuntime.recoverInterruptedRestore`)
+runs before any write or Demo seed decision and before `bootstrapDatabase` could create a database.
+While `pendingDatabaseSwitch` is persisted, the backend stops, the previous attachment tree returns
+and the database switch rolls back. Otherwise the restore committed: the restored tree stays and
+the previous one is removed. Rollback is safe to repeat at every rename boundary, and a malformed
+journal, a non-object runtime marker or an ambiguous switch fails the launch closed. A bundle
+backup drains and pauses the audit closure and stops the backend writer. `pg_dump`, the
+attachment copy and the schema head run inside that interval (`QuiescentSnapshot`). The backend
+then restarts to detailed readiness, also after a failed capture. Around the capture the shell
+pauses its health watchdog and sends `backend:lost` with `backup.maintenance`, then
+`backend:restored` once `/health` answers. A restore is refused while a backup runs, and quit
+waits for a running backup or restore. A backend that survives `SIGKILL` fails the stop. A lost
+backend ends the audit session, and recovery must re-establish it at the trusted checkpoint.
+Audit notices distinguish enrollment and partial verification. Vision Native has no updater, so
+the update-installer changes do not apply. The runtime manifest is already verified off the main
+thread with streamed hashes.
 
 Audit continuity (phase 1e) follows `restoreWithAuditRecovery` in `runtime/native.ts`: the restore
 pauses the audit closure before it stops the backend and resumes it afterwards, also after a
@@ -1561,7 +1576,7 @@ later phases without a manual Demo-review intermission. See [[docs/features/sett
 ### Shell overlays and reports (phase 3p)
 
 `NativeCommandPaletteModel` and `NativeCommandPaletteView` own palette selection, recent actions,
-navigation and native shortcuts help. Inline answers are native ([[docs/adr/208-vision-native-without-web-content|ADR-208]]):
+navigation and native shortcuts help. Inline answers are native ([[docs/adr/211-vision-native-without-web-content|ADR-211]]):
 `NativePaletteCalculator` (`Navigation/NativePaletteCalculator.swift`) ports the source's locale-aware
 arithmetic and `<amount> <cur> [in|to|naar <cur>]` conversion, and `NativePaletteRates` serves the
 exchange rates from `exchangeRates()` through a shared 10-minute cache. `ShellController` no longer
@@ -1569,10 +1584,10 @@ calls `__visionNativePaletteAnswer`. `NativeShellNotificationsModel`
 owns the global FX state, Home upcoming-payment reminders and backup reminder. Their dismissal state
 uses the app-lifetime local-state queue, which drains accepted writes before restore.
 
-`lib/nativeHelperRuntime.ts` (kept after [[docs/adr/209-vision-native-retire-helper-document|ADR-209]]) installs and retires the fixed source callbacks and
+`lib/nativeHelperRuntime.ts` (kept after [[docs/adr/212-vision-native-retire-helper-document|ADR-212]]) installs and retires the fixed source callbacks and
 overlay keyboard bridge. The palette answer and the two tax-report callbacks
 (`__visionNativePaletteAnswer`, `__visionNativeTaxReportProfile`, `__visionNativeTaxReportContext`)
-are no longer called by the shell; their native replacements are described here and in ADR-208. `NativePaletteAnswerBridge.tsx` still owns its React lifetime, QueryClient
+are no longer called by the shell; their native replacements are described here and in ADR-211. `NativePaletteAnswerBridge.tsx` still owns its React lifetime, QueryClient
 and live translation reference; extraction does not retire the renderer or change financial logic.
 
 `NativeOverlayFocusReturn.swift` captures a weak route-window opener before the shared sheet
@@ -1599,7 +1614,7 @@ The hand-written binary request uses the existing `/api/reports/{type}` routes t
 retry. `NativeTaxReportContextService` reads the original selected-year overview and projects the
 report's three profile fields natively with `NativeTaxReportProfile` (partner A's primary activity sets
 the employment type; region and tax year are the household's), so no shared TypeScript projection runs
-([[docs/adr/208-vision-native-without-web-content|ADR-208]]). Frozen PIT/household precedence and legacy
+([[docs/adr/211-vision-native-without-web-content|ADR-211]]). Frozen PIT/household precedence and legacy
 missing-household fields are preserved, including Decimal values and unknown household fields. Every
 four-digit report year reads `GET /api/belgian-tax/overview`: the route now accepts years 0000 through
 9999, and a year outside the storable 1900–2200 snapshot range gets the year-pinned live estimate the
@@ -1653,7 +1668,7 @@ See [[docs/reference/native-parity/shell-and-settings|shell parity]],
 
 ### Staged native route and storage authority (phase 4 preparation)
 
-[[docs/adr/206-vision-native-staged-web-retirement|Proposed ADR-206]] introduces opt-in
+[[docs/adr/209-vision-native-staged-web-retirement|Proposed ADR-209]] introduces opt-in
 `NativeNavigationHistory`/`NativeNavigationLocation` and dormant `NativeRawStateStore` boundaries.
 The SDK retains renderer routing and browser storage. Native history tests cover exact raw queries,
 guarded push/replace/back/forward, Settings ownership, admin hydration and legacy redirects. The
@@ -1679,12 +1694,12 @@ The detached `lib/nativeRouteAdapter.ts` delegates explicit requests to the actu
 after a native preflight lease, then observes source acceptance before reporting a commit. It adds
 no blocker, global history override or App wiring. Existing web leave guards remain authoritative;
 resolved-target admission, unified interception and host projection atomicity are still gates.
-[[docs/adr/207-vision-native-helper-document|ADR-207]] (accepted 2026-10-17) had recorded a separate
-default-off Debug Demo helper document. [[docs/adr/209-vision-native-retire-helper-document|ADR-209]]
-(2026-10-18) retired it: ADR-208's native-only mode replaced its purpose, and every helper
+[[docs/adr/210-vision-native-helper-document|ADR-210]] (accepted 2026-10-17) had recorded a separate
+default-off Debug Demo helper document. [[docs/adr/212-vision-native-retire-helper-document|ADR-212]]
+(2026-10-18) retired it: ADR-211's native-only mode replaced its purpose, and every helper
 artifact (HTML entry, `lib/nativeHelperDocument.ts`, `build:native-helper`, the backend
 `/native-helper.html` and `/native-helper-assets` namespace, the Swift session, bridge and
-selection types, and the `VISION_NATIVE_HELPER_DOCUMENT` opt-in) was deleted. The ADR-207 account
+selection types, and the `VISION_NATIVE_HELPER_DOCUMENT` opt-in) was deleted. The ADR-210 account
 below survives only as history in the ADR and in
 [[docs/reference/native-parity/agent-handoff|the agent handoff]].
 
@@ -1708,7 +1723,7 @@ effective `enhanced` tier and `StartupRedirect` ownership (`vision.startupSectio
 `applyNativeStartup`, `persistNativeNavigation` and `trackNativeNavigation` functions. `WebShell`
 has no helper script handler or `WKNavigation` tracking. `NativeDocumentState`
 (`setNativeDocumentState` / `nativeDocumentState`, renamed from `NativeHelperDocumentState` by
-ADR-209) carries the document state. `scripts/lib/native-mac-build.sh` stages only the ordinary
+ADR-212) carries the document state. `scripts/lib/native-mac-build.sh` stages only the ordinary
 frontend build.
 
 Optional `NativeShellIntentCoordinator` ownership keeps cold CSV/new-transaction actions and
@@ -1723,10 +1738,10 @@ tests await macOS. No existing renderer event owner is retired by this preparato
 
 
 
-### Native-only mode (ADR-208)
+### Native-only mode (ADR-211)
 
-[[docs/adr/208-vision-native-without-web-content|ADR-208]] adds the `nativeOnly` presentation, which
-runs the shell with no web view at all; [[docs/adr/209-vision-native-retire-helper-document|ADR-209]]
+[[docs/adr/211-vision-native-without-web-content|ADR-211]] adds the `nativeOnly` presentation, which
+runs the shell with no web view at all; [[docs/adr/212-vision-native-retire-helper-document|ADR-212]]
 removed the intermediate helper presentation, leaving `NativeShellPresentationMode` with
 `retainedWeb` and `nativeOnly`. `NativeDocumentSelection.select` makes native-only the default for
 an eligible launch (Debug build, Demo variant, supervised `vision_native_demo` backend at a

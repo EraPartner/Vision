@@ -1,14 +1,26 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+    useCallback,
+    useEffect,
+    useRef,
+    useState,
+    lazy,
+    Suspense,
+} from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { Button } from "@/components/ui/button";
 import { Search } from "lucide-react";
 import {
-    DashboardSettingsDialog,
     resolveSettingsSection,
     type SettingsSectionId,
-} from "@/features/settings/DashboardSettingsDialog";
+} from "@/lib/settingsSections";
+import { SectionLoader } from "@/components/shared/SectionLoader";
+const DashboardSettingsDialog = lazy(() =>
+    import("@/features/settings/DashboardSettingsDialog").then((module) => ({
+        default: module.DashboardSettingsDialog,
+    })),
+);
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { UpcomingPaymentsNotification } from "@/components/notifications/UpcomingPaymentsNotification";
 import { FxStatusBanner } from "@/components/notifications/FxStatusBanner";
@@ -52,6 +64,10 @@ export function AppLayout({ children }: AppLayoutProps) {
     const rawSettingsSection = searchParams.get("settings") ?? undefined;
     const settingsSection = resolveSettingsSection(rawSettingsSection);
     const settingsOpen = settingsSection !== undefined;
+    const [settingsMounted, setSettingsMounted] = useState(settingsOpen);
+    useEffect(() => {
+        if (settingsOpen) setSettingsMounted(true);
+    }, [settingsOpen]);
     const settingsEntryWasPushedRef = useRef(false);
     const [paletteOpen, setPaletteOpen] = useState(false);
     const [shortcutsOpen, setShortcutsOpen] = useState(false);
@@ -373,17 +389,19 @@ export function AppLayout({ children }: AppLayoutProps) {
                         onOpenChange={setShortcutsOpen}
                     />
                 )}
-                {!nativeSettings && (
-                    <DashboardSettingsDialog
-                        open={settingsOpen}
-                        onOpenChange={(open) => {
-                            if (!open) closeSettings();
-                        }}
-                        defaultTab={settingsSection ?? "general"}
-                        onSectionChange={(section) =>
-                            writeSettingsSection(section, true)
-                        }
-                    />
+                {!nativeSettings && (settingsOpen || settingsMounted) && (
+                    <Suspense fallback={<SectionLoader />}>
+                        <DashboardSettingsDialog
+                            open={settingsOpen}
+                            onOpenChange={(open) => {
+                                if (!open) closeSettings();
+                            }}
+                            defaultTab={settingsSection ?? "general"}
+                            onSectionChange={(section) =>
+                                writeSettingsSection(section, true)
+                            }
+                        />
+                    </Suspense>
                 )}
                 {!nativeOnboarding && !onboardingLoading && (
                     <OnboardingWizard

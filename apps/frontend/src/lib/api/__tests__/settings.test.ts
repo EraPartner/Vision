@@ -259,3 +259,72 @@ describe("settings conditional API client", () => {
         expect(writes).toBe(1);
     });
 });
+
+describe("atomic settings groups", () => {
+    it("serializes overlapping single and grouped writes with acknowledged baselines", async () => {
+        server.use(
+            http.get(`${API_BASE}/api/settings`, () =>
+                ok({ settings: {}, expected: {} }),
+            ),
+        );
+        await settings.getSettings();
+        const bodies: unknown[] = [];
+        server.use(
+            http.put(
+                `${API_BASE}/api/settings/:key`,
+                async ({ request, params }) => {
+                    const body = (await request.json()) as { value: unknown };
+                    bodies.push(body);
+                    return ok(saved(String(params.key), body.value));
+                },
+            ),
+            http.put(`${API_BASE}/api/settings`, async ({ request }) => {
+                bodies.push(await request.json());
+                return ok({ saved: 2 });
+            }),
+        );
+        await Promise.all([
+            settings.saveSetting("profile", 1),
+            settings.saveSettings({ profile: 2, snapshot: 2 }),
+            settings.saveSetting("snapshot", 3),
+        ]);
+        expect(bodies).toEqual([
+            { value: 1, expected: { exists: false } },
+            {
+                settings: { profile: 2, snapshot: 2 },
+                expected: {
+                    profile: { exists: true, value: 1 },
+                    snapshot: { exists: false },
+                },
+            },
+            { value: 3, expected: { exists: true, value: 2 } },
+        ]);
+    });
+    it("does not bless new baselines or allow a partial followup after group conflict", async () => {
+        server.use(
+            http.get(`${API_BASE}/api/settings`, () =>
+                ok({ settings: {}, expected: {} }),
+            ),
+        );
+        await settings.getSettings();
+        let writes = 0;
+        server.use(
+            http.put(`${API_BASE}/api/settings`, () => {
+                writes++;
+                return HttpResponse.json(
+                    {
+                        ok: false,
+                        error: { message: "conflict", code: "CONFLICT" },
+                    },
+                    { status: 409 },
+                );
+            }),
+        );
+        await expect(
+            settings.saveSettings({ profile: 1, snapshot: 1 }),
+        ).rejects.toThrow();
+        await settings.getSettings();
+        await expect(settings.saveSetting("snapshot", 2)).rejects.toThrow();
+        expect(writes).toBe(1);
+    });
+});

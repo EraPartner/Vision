@@ -1023,6 +1023,21 @@ jobs:
           VISION_NATIVE_COMMAND_DIR: apps/frontend
         run: bash .github/scripts/with-native-stack.sh bun run vitest run src/test/live-contracts/live-contracts.test.ts
 
+      - name: Install pinned browser test runtime
+        run: |
+          npm install --prefix "$RUNNER_TEMP/vision-browser-tools" --ignore-scripts --no-audit --no-fund --no-save playwright@1.62.1
+          node "$RUNNER_TEMP/vision-browser-tools/node_modules/playwright/cli.js" install --with-deps chromium
+
+      - name: Check controlled Yahoo provider protocol
+        run: node --test scripts/browser-tests/yahoo-provider-fixture.test.mjs
+
+      - name: Run real browser journeys against disposable PostgreSQL
+        env:
+          VISION_BROWSER_PROVIDER_FIXTURES: "1"
+        run: |
+          export VISION_PLAYWRIGHT_MODULE="$RUNNER_TEMP/vision-browser-tools/node_modules/playwright/index.mjs"
+          bash .github/scripts/with-native-stack.sh node --test scripts/browser-tests/vision.browser.test.mjs
+
   # ─────────────────────────────────────────────────────────────────────────────
   # CI Complete — aggregates the full pipeline so branch protection has one
   # required status check.

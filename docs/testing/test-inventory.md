@@ -2,9 +2,9 @@
 title: Test Inventory
 type: testing
 status: active
-date: 2026-10-08
-last_modified: 2026-10-08
-updated: 2026-10-08
+date: 2026-10-13
+last_modified: 2026-10-11
+updated: 2026-10-18
 last-updated: 2026-10-08
 last_updated_timestamp: 2026-10-06T00:00:00Z
 added_portfolio_tax_pure_module_tests: 2026-05-29
@@ -61,6 +61,53 @@ related_code:
 
 # Test Inventory
 
+## Reviewed cleanup and browser coverage (2026-10-13)
+
+`node scripts/browser-tests/inventory.mjs` regenerates the complete file inventory at
+`scripts/browser-tests/test-file-inventory.json`. The 2026-10-13 snapshot includes 941 nonignored
+test/spec files across apps, packages, Electron, scripts and CI. Automated source/path cues classify
+255 simulated-DOM files, 82 database suites, 35 native/filesystem suites, 10 property suites,
+2 live HTTP contract files, 48 source/file contracts, 213 mocked unit/service files, 294 other
+unit/script/contracts needing review, one controlled external-provider protocol suite, and one
+authored browser file. These are file counts and
+inferred boundaries, not test counts or passing evidence. No remaining byte-identical test files
+were found. Review flags identify source assertions, mock call order and expected-output fixtures;
+they never authorize automatic deletion.
+
+The scoped decision ledger in `scripts/browser-tests/coverage-ledger.json` records keep, replace
+and remove decisions with rationale and replacement links. It is not a claim that every test in
+the repository was reviewed. The responsive suite's exact CSS assertions were replaced with authored browser geometry scenarios under the user's
+explicit optional-execution waiver. Provider-backed forms use a runner-owned synthetic Yahoo HTTP fixture with real Vision API
+requests and the installed provider client transformations. Account-close SQL mock assertions remain until real PostgreSQL scenarios prove
+currency conservation and rollback.
+Precision/property and native restore/journal fault tests remain required. The legacy-inventory checker fixtures run with the current test runtime and disable implicit Bun environment-file loading. Their acceptance and rejection assertions are unchanged; Node and Bun can execute the same fixtures without loading local financial configuration.
+
+The one removed duplicate
+is the service-level dedup golden copy; the canonical golden fixture is retained.
+
+The browser runner in `scripts/browser-tests/vision.browser.test.mjs` exercises real Chromium,
+HTTP and disposable PostgreSQL, with fixtures restricted to the native CI stack. Its implemented
+journeys and outstanding gaps are in the ledger and [[docs/testing/testing#Behavior-focused cleanup and real browser boundary]].
+The latest authored additions cover nonzero EUR/USD closing and Add account geometry at two
+widths, with deliberate overflow and equivalent-style oracle probes. Syntax validation passed;
+PostgreSQL initialization still prevents executing them. Existing native isolated smoke already
+covers backend restarts, encrypted attachment/database round trips and tampered restore rejection.
+The ledger now records these separately from browser tests and deterministic fault injection.
+The 2026-10-13 waiver permits scoped retirement of obsolete CSS assertions after observable
+replacements are authored. New journeys cover local and market-backed forms, all shared investment asset branches,
+lone-widget full-row geometry, and the Import reference column's normal scroll behavior. They
+assert rendered control bounds, form dismissal and persisted unchanged holding state. This is
+not permission to discard financial, SQL rollback, PostgreSQL or restore guarantees.
+
+They are currently unexecuted locally because PostgreSQL initialization cannot create shared
+memory. Frontend page integrations remain simulated-DOM tests with mocked HTTP; live GET shape
+checks remain API contracts, not end-to-end UI coverage. No static test counts imply complete
+journey or failure-mode coverage.
+
+Current frontend coverage gates in `apps/frontend/vite.config.ts` are statements 62%, branches
+51%, functions 54%, and lines 64%. The cleanup did not change them.
+
+
 ## Overview
 
 This document tracks the current state of test coverage across the Vision codebase. The project uses **Vitest** for backend tests and **React Testing Library** for frontend component tests.
@@ -75,7 +122,7 @@ This document tracks the current state of test coverage across the Vision codeba
 | `msw/server`    | `apps/frontend/src/test/msw/server.ts`         | MSW server setup with `setupServer(...defaultHandlers)`                                                                                                                                    |
 | `msw/handlers`  | `apps/frontend/src/test/msw/handlers.ts`       | Default HTTP handlers covering boot endpoints; exports `ok()` / `err()` helpers per ADR-026 envelope                                                                                       |
 | Test setup      | `apps/frontend/src/test-setup.ts`              | MSW lifecycle + jsdom polyfills (PointerEvent, pointer capture, scrollIntoView) for Radix UI compatibility                                                                                 |
-| Coverage gate   | `apps/frontend/vite.config.ts`                 | V8 provider; include components/hooks/lib/pages/utils; exclude tests + d.ts; **Phase D thresholds**: statements 17 / branches 11 / functions 10 / lines 18 (ratchet gates, bump per phase) |
+| Coverage gate   | `apps/frontend/vite.config.ts`                 | V8 provider; include components/hooks/lib/pages/utils; exclude tests + d.ts; **Current thresholds**: statements 62 / branches 51 / functions 54 / lines 64 |
 | Contract tests  | `apps/frontend/src/test/msw/contracts.test.ts` | **Phase D**: Node-env Vitest suite (16 tests) validating MSW default handlers match backend response shapes via Zod schemas                                                                |
 
 #### MSW Default Handlers (Phase A Update)
@@ -1168,3 +1215,33 @@ Loop artifacts:
 4. MSW fixture regresses → contract test fails immediately (before component tests); fix the fixture, not the schema
 
 Related docs: [[docs/adr/026-unified-api-response-envelope|ADR-026]], [[docs/testing/testing#Phase D: Coverage Threshold Ratchet & Contract Tests|Phase D Details]]
+
+
+## Merge reconciliation: tax filing on the household store (2026-10-18)
+
+The local filing workflow was merged with the household (v2) tax store. Two remote tests and
+one local assertion set conflicted on behaviour, not only on storage. The chosen rule and the
+tests that encode it:
+
+- **Rolling-period tax export.** `ExportDialog.test.tsx` previously expected annual PIT figures
+  for a rolling 12-month export. Audit 26 omits annual calculations for any period that is not a
+  full calendar year, and the backend drops them for such periods. The test now asserts that
+  profile, PIT and household figures are absent. No financial value changed; the case moved from
+  "exported" to "omitted".
+- **Filing eligibility.** A year can be filed when it is the live year, has its own household
+  snapshot, or has an explicitly frozen calculation. The remote test that auto-pinned the live
+  household for a past year without a snapshot was not kept, because that would file a live
+  estimate. Its frozen-year counterpart (no pin, frozen figures kept) was ported to
+  `MarkAsFiledDialog.test.tsx`, and `ExportDialog.test.tsx` checks that such a frozen-only year
+  exports its frozen totals. The local tests now assert the household keys
+  (`belgian_tax_household_v2`, `belgian_tax_household_snapshots_v2`) in the atomic save.
+- **Persistence tests.** `taxPersistence.test.ts` and `BelgianTaxProfileContext.test.tsx` hydrate
+  through the household runtime and assert the v2 keys; v1 keys are never written.
+
+These are simulated-DOM and mocked-HTTP tests. No browser, Electron or PostgreSQL run covers the
+merged filing flow yet.
+
+## Related
+
+- [[docs/testing/index]]
+- [[docs/testing/testing]]

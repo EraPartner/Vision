@@ -6,9 +6,9 @@ enum TaxYearPresentation {
         (try? TaxValue(encoding: overview.metadata)) ?? .object([:])
     }
     static func status(_ overview: OpenAPI.BelgianTaxOverview) -> String {
+        // TaxFilingMasthead: the current profile year also shows its filed status.
+        if metadata(overview)["filing"]?.objectValue != nil { return "filed" }
         guard overview.isHistorical else { return "live" }
-        let meta = metadata(overview)
-        if meta["filing"]?.objectValue != nil { return "filed" }
         if overview.calculationSource == "frozen" { return "frozen" }
         return overview.hasSnapshot ? "snapshot" : "estimate"
     }
@@ -171,17 +171,23 @@ struct TaxMarkFiledSheet: View {
             )
             .focused($referenceFocused).onSubmit { confirm() }
             Text(shell.strings.t("tax.markFiled.referenceHelp")).font(.caption).foregroundStyle(theme.secondaryLabel)
+            if !TaxYearMutation.canFile(overview) {
+                Text(shell.strings.t("tax.markFiled.prerequisite")).font(.footnote)
+                    .foregroundStyle(theme.secondaryLabel)
+            }
             if let error = actions.error { Text(error).foregroundStyle(theme.destructive) }
             HStack {
                 Spacer()
                 Button(shell.strings.t("common.cancel")) { dismiss() }.keyboardShortcut(.cancelAction)
                 Button(shell.strings.t("tax.markFiled.confirm")) { confirm() }
                     .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
+                    .disabled(!TaxYearMutation.canFile(overview))
             }
         }.padding(24).frame(width: 480).disabled(actions.isSaving)
             .task { referenceFocused = true }
     }
     private func confirm() {
+        guard TaxYearMutation.canFile(overview) else { return }
         let value = reference.trimmingCharacters(in: .whitespacesAndNewlines)
         Task { if await actions.perform(.file(reference: value.isEmpty ? nil : value)) { dismiss() } }
     }

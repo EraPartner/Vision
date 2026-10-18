@@ -1,6 +1,6 @@
 name: Native End-to-End Smoke
 
-# ADR-208 gate for the native-only Debug Demo default: build the real Demo runtime payload,
+# ADR-211 gate for the native-only Debug Demo default: build the real Demo runtime payload,
 # launch the Debug Demo app natively and with the retained web document, and check that the
 # supervised runtime starts and the shell stays up. Synthetic data only.
 on:

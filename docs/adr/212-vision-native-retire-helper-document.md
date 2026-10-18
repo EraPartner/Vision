@@ -1,21 +1,21 @@
 ---
-title: "ADR-209: Retire the helper document"
+title: "ADR-212: Retire the helper document"
 type: adr
 status: accepted
 date: 2026-10-18
 tags: [adr, architecture, swift, native-app, phase-4, demo, webkit, typescript]
-description: "Accepted on 2026-10-18 by Tor. With native-only the passing Debug Demo default, the ADR-207 helper document is removed from the app, frontend build and backend; the retained web document stays as the explicit opt-out and for every ineligible build. Native-only stays limited to the Debug Demo."
-aliases: [adr-209, retire helper document]
+description: "Accepted on 2026-10-18 by Tor. With native-only the passing Debug Demo default, the ADR-210 helper document is removed from the app, frontend build and backend; the retained web document stays as the explicit opt-out and for every ineligible build. Native-only stays limited to the Debug Demo."
+aliases: [adr-212, retire helper document]
 ---
 
-# ADR-209: Retire the helper document
+# ADR-212: Retire the helper document
 
 ## Status
 
-Accepted on 2026-10-18 by Tor. It supersedes [[docs/adr/207-vision-native-helper-document|ADR-207]]'s
+Accepted on 2026-10-18 by Tor. It supersedes [[docs/adr/210-vision-native-helper-document|ADR-210]]'s
 helper document and completes the "owner removes them" step in
-[[docs/adr/208-vision-native-without-web-content|ADR-208]]'s consequences for the helper only.
-ADR-207's eligibility rules (Debug build, Demo variant, supervised loopback runtime) still gate
+[[docs/adr/211-vision-native-without-web-content|ADR-211]]'s consequences for the helper only.
+ADR-210's eligibility rules (Debug build, Demo variant, supervised loopback runtime) still gate
 the native-only mode. [[docs/adr/205-vision-native-hand-over|ADR-205]] is unchanged.
 
 ## Date
@@ -24,7 +24,7 @@ the native-only mode. [[docs/adr/205-vision-native-hand-over|ADR-205]] is unchan
 
 ## Context
 
-Since ADR-208 every calculation the helper document hosted runs in Swift in every mode, and its
+Since ADR-211 every calculation the helper document hosted runs in Swift in every mode, and its
 storage lives in `NativeRawStateStore`. Native-only became the Debug Demo default once the native
 suites (run 39067544787) and the macOS smoke passed, and run 39069586078 passed the retained,
 helper, native-only and Electron smokes together. The helper was then reachable only through an
@@ -58,6 +58,6 @@ route namespace, a WebKit bridge and its session authority.
 
 - [[docs/adr/204-vision-native-swift-app-target|ADR-204: Vision Native]]
 - [[docs/adr/205-vision-native-hand-over|ADR-205: Vision Native hand-over]]
-- [[docs/adr/207-vision-native-helper-document|ADR-207: Helper document]]
-- [[docs/adr/208-vision-native-without-web-content|ADR-208: Finish phase 4 without web content]]
+- [[docs/adr/210-vision-native-helper-document|ADR-210: Helper document]]
+- [[docs/adr/211-vision-native-without-web-content|ADR-211: Finish phase 4 without web content]]
 - [[docs/reference/native-parity/agent-handoff|Vision Native agent handoff]]

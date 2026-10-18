@@ -73,7 +73,7 @@ public final class NativeShellModel {
     public var isPresentingOnboarding = false
     /// The route a sidebar click or shortcut asked the page for, until the page reports one.
     public private(set) var pendingRoute: NativeRoute?
-    /// Native history: the route authority whenever the presentation is native (ADR-208).
+    /// Native history: the route authority whenever the presentation is native (ADR-211).
     public private(set) var nativeNavigation: NativeNavigationHistory?
     public var nativeNavigationLocation: NativeNavigationLocation? { nativeNavigation?.location }
     public var canGoBack: Bool { nativeNavigation?.canGoBack ?? false }

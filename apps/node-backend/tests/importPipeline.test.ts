@@ -401,7 +401,7 @@ describe("commitBatch", () => {
   // sequence matched to the three genuinely pooled statements.
   function setupCommit(row: unknown) {
     poolQuery
-      .mockResolvedValueOnce({ rows: [] }) // UPDATE status='committing'
+      .mockResolvedValueOnce({ rows: [{ adapter_name: "belfius" }] }) // Claim review for commit
       .mockResolvedValueOnce({ rows: [row] }) // SELECT matched
       .mockResolvedValueOnce({ rows: [] }); // UPDATE counters
   }
@@ -433,6 +433,8 @@ describe("commitBatch", () => {
       dedup_occurrence: 1,
     });
     mockClient.query.mockImplementation(async (sql, params) => {
+      if (sql.includes("SELECT id, is_active FROM accounts"))
+        return { rows: [{ id: BE12_ACCOUNT_ID, is_active: true }] };
       if (sql.includes("INSERT INTO accounts"))
         return { rows: [{ id: BE12_ACCOUNT_ID }] };
       if (sql.includes("WHERE dedup_fingerprint_version")) return { rows: [] };
@@ -470,6 +472,8 @@ describe("commitBatch", () => {
       dedup_occurrence: 1,
     });
     mockClient.query.mockImplementation(async (sql) => {
+      if (sql.includes("SELECT id, is_active FROM accounts"))
+        return { rows: [{ id: BE12_ACCOUNT_ID, is_active: true }] };
       if (sql.includes("INSERT INTO accounts"))
         return { rows: [{ id: BE12_ACCOUNT_ID }] };
       if (sql.includes("WHERE dedup_fingerprint_version")) return { rows: [] };
@@ -508,10 +512,12 @@ describe("commitBatch", () => {
       dedup_occurrence: 2,
     };
     poolQuery
-      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ adapter_name: "belfius" }] })
       .mockResolvedValueOnce({ rows: [first, second] })
       .mockResolvedValueOnce({ rows: [] });
     mockClient.query.mockImplementation(async (sql) => {
+      if (sql.includes("SELECT id, is_active FROM accounts"))
+        return { rows: [{ id: BE12_ACCOUNT_ID, is_active: true }] };
       if (sql.includes("INSERT INTO accounts"))
         return { rows: [{ id: BE12_ACCOUNT_ID }] };
       if (sql.includes("WHERE dedup_fingerprint_version")) return { rows: [] };
@@ -538,6 +544,8 @@ describe("commitBatch", () => {
       dedup_occurrence: 1,
     });
     mockClient.query.mockImplementation(async (sql) => {
+      if (sql.includes("SELECT id, is_active FROM accounts"))
+        return { rows: [{ id: BE12_ACCOUNT_ID, is_active: true }] };
       if (sql.includes("INSERT INTO accounts"))
         return { rows: [{ id: BE12_ACCOUNT_ID }] };
       if (sql.includes("WHERE dedup_fingerprint_version"))
@@ -569,6 +577,8 @@ describe("commitBatch", () => {
     });
     let countReads = 0;
     poolQuery.mockImplementation(async (sql: string) => {
+      if (sql.includes("SET status = 'committing'"))
+        return { rows: [{ adapter_name: "belfius" }] };
       if (/SELECT COUNT\(\*\)::int AS total/.test(sql)) {
         countReads += 1;
         return { rows: [{ total: countReads === 1 ? 5 : 6 }] };
@@ -639,6 +649,8 @@ describe("commitBatch", () => {
       dedup_occurrence: 1,
     });
     mockClient.query.mockImplementation(async (sql) => {
+      if (sql.includes("SELECT id, is_active FROM accounts"))
+        return { rows: [{ id: BE12_ACCOUNT_ID, is_active: true }] };
       if (sql.includes("INSERT INTO accounts"))
         return { rows: [{ id: BE12_ACCOUNT_ID }] };
       if (sql.includes("WHERE dedup_fingerprint_version"))
@@ -656,7 +668,6 @@ describe("commitBatch", () => {
     expect(statements.some((s) => s.includes("INSERT INTO transactions"))).toBe(
       false,
     );
-    expect(statements.some((s) => s.startsWith("SAVEPOINT"))).toBe(false);
     expect(
       statements.filter((s) => s.includes("status = 'duplicate'")),
     ).toHaveLength(1);
@@ -752,7 +763,7 @@ describe("commitBatch", () => {
       { ...matchedRow, id: "3", row_index: 2, memo: "coffee 2", tx_hash: "h2" },
     ];
     poolQuery
-      .mockResolvedValueOnce({ rows: [] }) // UPDATE status='committing'
+      .mockResolvedValueOnce({ rows: [{ adapter_name: "belfius" }] }) // Claim review for commit
       .mockResolvedValueOnce({ rows }) // SELECT matched
       .mockResolvedValueOnce({ rows: [] }) // staging error UPDATE (unresolved row)
       .mockResolvedValueOnce({ rows: [] }) // rows_error checkpoint

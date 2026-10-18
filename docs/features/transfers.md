@@ -2,7 +2,7 @@
 title: Feature - Internal Transfers
 type: feature
 status: active
-date: 2026-10-08
+date: 2026-10-11
 updated: 2026-10-08
 tags: [feature, transfers, internal-transfer, cash-flow, reconciliation, detection, statistics, aggregations, adr-083, migration-0044, migration-0045, mark-transfer-validation, release-orphans-manual]
 description: "Automatic detection of transfers between a user's own accounts via a windowed cross-batch reconciliation pass, persisted as a transfer_peer_id pairing, and excluded from cash-flow aggregates by default with a global includeTransfers toggle. 2026-06-25: markTransfer() now validates both rows exist, are active, are on different accounts, and have opposite signs; releaseOrphans() now covers MANUAL transfers."
@@ -146,3 +146,25 @@ transaction mutations).
 - [[docs/features/import|Import Feature]]
 - [[docs/adr/010-phase1-aggregation-strategy|ADR-010: Aggregation Strategy]]
 - [[docs/components/form-dialogs#AddTransactionSheet|AddTransactionSheet]] (creates both legs from the Transfer kind, ADR-181)
+
+## Ownership and structural validity
+
+Manual marking and unmarking are restricted to ordinary or reconciler-owned rows. Opening
+balances, adjustments and brokerage-origin rows must be corrected through their owning workflow;
+they cannot be overwritten by a bulk transfer action.
+
+Manual pairs must remain active, reciprocal, on different non-null accounts and opposite in sign.
+Reconciliation releases invalid manual pairs after structural edits or deactivation. It deliberately
+retains legitimate unequal amounts and cross-currency manual pairs. Automatic pairs additionally
+require equal amounts, matching currency and the configured date window. See
+[[docs/api/transactions]].
+
+Marking locks the selected rows and their discovered incoming/outgoing peer graph in ID order.
+Unmarking locks both known legs in the same order. Both operations recheck membership, ownership
+and pointers after acquiring the locks; a changed graph returns `409 CONFLICT` for reload and
+retry. Protected origins are checked on every affected row, including old peers.
+
+Automatic reconciliation uses bounded directional uniqueness probes rather than returning every
+ambiguous edge. Suggestions are a separate paginated edge list: `limit` defaults to 200 and is
+capped at 200, with `items`, `nextCursor` and `hasMore`. A row can occur on more than one page when
+it has several possible peers. Confirmation still revalidates the selected pair.

@@ -56,16 +56,19 @@ function rejectManualIncomeRole(
         throw new Error("Portfolio income recognition role is read-only");
 }
 
-export function getInvestments(params?: {
-    limit?: number | undefined;
-    offset?: number | undefined;
-    asset_class?: string | undefined;
-    active?: boolean | undefined;
-}): Promise<InvestmentsListResponse> {
+export function getInvestments(
+    params?: {
+        limit?: number | undefined;
+        offset?: number | undefined;
+        asset_class?: string | undefined;
+        active?: boolean | undefined;
+    },
+    signal?: AbortSignal,
+): Promise<InvestmentsListResponse> {
     return requestWithQuery<InvestmentsListResponse>(
         "/api/investments",
         params,
-        { schema: InvestmentListSchema },
+        { schema: InvestmentListSchema, ...(signal ? { signal } : {}) },
     );
 }
 
@@ -144,11 +147,15 @@ export function getInvestmentPriceHistory(
 export async function getPortfolioTransactions(
     investmentId: number,
     params?: { type?: string; limit?: number; offset?: number },
+    signal?: AbortSignal,
 ): Promise<PortfolioTransactionsListResponse> {
     const res = await requestWithQuery<PortfolioTransactionsListResponse>(
         `/api/investments/${investmentId}/transactions`,
         params,
-        { schema: PortfolioTransactionListSchema },
+        {
+            schema: PortfolioTransactionListSchema,
+            ...(signal ? { signal } : {}),
+        },
     );
     return {
         ...res,
@@ -156,17 +163,23 @@ export async function getPortfolioTransactions(
     };
 }
 
-export async function getPortfolioTransactionsBulk(params: {
-    investment_ids: string;
-    type?: string | undefined;
-    per_investment_limit?: number | undefined;
-    limit?: number | undefined;
-    offset?: number | undefined;
-}): Promise<PortfolioTransactionsListResponse> {
+export async function getPortfolioTransactionsBulk(
+    params: {
+        investment_ids: string;
+        type?: string | undefined;
+        per_investment_limit?: number | undefined;
+        limit?: number | undefined;
+        offset?: number | undefined;
+    },
+    signal?: AbortSignal,
+): Promise<PortfolioTransactionsListResponse> {
     const res = await requestWithQuery<PortfolioTransactionsListResponse>(
         "/api/investments/transactions",
         params,
-        { schema: PortfolioTransactionListSchema },
+        {
+            schema: PortfolioTransactionListSchema,
+            ...(signal ? { signal } : {}),
+        },
     );
     return {
         ...res,

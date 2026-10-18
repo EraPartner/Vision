@@ -51,12 +51,25 @@ const MAX_BACKOFF_MS = 30_000;
 export function backoffDelay(
     attempt: number,
     baseMs: number = 500,
+    signal?: AbortSignal | null,
 ): Promise<void> {
+    signal?.throwIfAborted();
     const delay = Math.min(
         baseMs * Math.pow(2, attempt) + Math.random() * 200,
         MAX_BACKOFF_MS,
     );
-    return new Promise((resolve) => setTimeout(resolve, delay));
+    return new Promise((resolve, reject) => {
+        const onAbort = () => {
+            clearTimeout(timer);
+            signal?.removeEventListener("abort", onAbort);
+            reject(signal?.reason);
+        };
+        const timer = setTimeout(() => {
+            signal?.removeEventListener("abort", onAbort);
+            resolve();
+        }, delay);
+        signal?.addEventListener("abort", onAbort, { once: true });
+    });
 }
 
 /**
@@ -337,9 +350,11 @@ export async function apiRequest<T>(
     let lastError: Error | null = null;
 
     for (let attempt = 0; attempt <= (isIdempotent ? retries : 0); attempt++) {
+        init.signal?.throwIfAborted();
         if (attempt > 0) {
-            await backoffDelay(attempt - 1);
+            await backoffDelay(attempt - 1, 500, init.signal);
         }
+        init.signal?.throwIfAborted();
 
         const startedAt = performance.now();
         apiEventBus.emit({
@@ -457,6 +472,8 @@ export async function apiRequest<T>(
             }
             lastError = err as Error;
             const nonRetryable =
+                init.signal?.aborted ||
+                (err instanceof Error && err.name === "AbortError") ||
                 err instanceof ApiContractError ||
                 (err instanceof ApiClientError &&
                     (err.code === ApiErrorCode.VALIDATION_ERROR ||

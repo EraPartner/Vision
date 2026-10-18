@@ -44,3 +44,18 @@ describe('report route response', () => {
     expect(res.end).toHaveBeenCalledWith(pdf);
   });
 });
+
+
+it('does not send a PDF or forward an error after the requesting client disconnects', async () => {
+  let close!: () => void;
+  const res = { writableEnded: false, once: vi.fn((_event, callback) => { close = callback; }), removeListener: vi.fn(), setHeader: vi.fn(), end: vi.fn() };
+  generateReport.mockImplementationOnce(async (options) => {
+    close();
+    expect(options.signal?.aborted).toBe(true);
+    throw new Error('Page closed on cancellation');
+  });
+  await expect(routeHandler('/financial')({ body: {} }, res)).resolves.toBeUndefined();
+  expect(res.end).not.toHaveBeenCalled();
+  expect(res.setHeader).not.toHaveBeenCalled();
+  expect(res.removeListener).toHaveBeenCalledWith('close', close);
+});

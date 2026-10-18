@@ -1,6 +1,6 @@
 /// Document presentation is fixed before the session creates its first document.
-/// `nativeOnly` has no web document at all and gives native history every route (ADR-208);
-/// `retainedWeb` shows the React page (ADR-209 retired the helper document).
+/// `nativeOnly` has no web document at all and gives native history every route (ADR-211);
+/// `retainedWeb` shows the React page (ADR-212 retired the helper document).
 public enum NativeShellPresentationMode: Equatable, Sendable {
     case retainedWeb
     case nativeOnly

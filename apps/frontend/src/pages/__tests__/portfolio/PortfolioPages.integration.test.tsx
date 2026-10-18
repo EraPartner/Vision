@@ -1252,7 +1252,7 @@ describe("Portfolio pages (integration)", () => {
         consoleSpy.mockRestore();
     });
 
-    it("PortfolioTaxPage renders heading gracefully when investments API returns 500", async () => {
+    it("PortfolioTaxPage shows an explicit error when investment history is unavailable", async () => {
         const consoleSpy = vi
             .spyOn(console, "error")
             .mockImplementation(() => {});
@@ -1262,11 +1262,14 @@ describe("Portfolio pages (integration)", () => {
         renderWithApp(<PortfolioTaxPage />);
         expect(
             await screen.findByRole(
-                "heading",
-                { name: /investment taxes & fees/i },
+                "button",
+                { name: /retry/i },
                 { timeout: 5000 },
             ),
         ).toBeInTheDocument();
+        expect(
+            screen.queryByText(/no investments yet/i),
+        ).not.toBeInTheDocument();
         consoleSpy.mockRestore();
     });
 
@@ -1801,6 +1804,20 @@ describe("Portfolio pages (integration)", () => {
                     },
                 ],
             };
+            server.use(
+                http.get(`${API_BASE}/api/investments/1/transactions`, () =>
+                    ok({
+                        items: investmentWithTx.transactions.map((tx) => ({
+                            ...PORTFOLIO_TRANSACTION_STUB,
+                            ...tx,
+                        })),
+                        total: 1,
+                        limit: 1000,
+                        offset: 0,
+                        links: [],
+                    }),
+                ),
+            );
             const user = userEvent.setup();
             renderWithApp(
                 <InvestmentDetailDialog investment={investmentWithTx} />,
@@ -1973,51 +1990,73 @@ describe("Portfolio pages (integration)", () => {
             errSpy.mockRestore();
         });
 
-        it("CryptoPage create investment invalidates investments list (stale refetch)", async () => {
-            let getCalls = 0;
+        it("CryptoPage shows the created holding after a valid bare-investment submission", async () => {
+            const created = {
+                ...INVESTMENT_STUB,
+                id: 99,
+                name: "Bitcoin",
+                asset_class: "crypto",
+                currency: "EUR",
+                price_provider: "binance",
+                created_at: "2025-01-01T00:00:00.000Z",
+            };
+            let postCalls = 0;
             server.use(
-                http.get(`${API_BASE}/api/investments`, () => {
-                    getCalls += 1;
-                    return ok({
-                        items: [],
-                        total: 0,
-                        limit: 200,
+                http.get(`${API_BASE}/api/investments`, () =>
+                    ok({
+                        items: postCalls ? [created] : [],
+                        total: postCalls ? 1 : 0,
+                        limit: 500,
                         offset: 0,
                         links: [],
-                    });
-                }),
-                http.post(`${API_BASE}/api/investments`, () =>
-                    ok({
-                        ...INVESTMENT_STUB,
-                        id: 99,
-                        name: "Bitcoin",
-                        asset_class: "crypto",
-                        currency: "EUR",
-                        price_provider: "binance",
-                        created_at: "2025-01-01T00:00:00.000Z",
                     }),
                 ),
+                http.get(`${API_BASE}/api/info/portfolio-summary`, () =>
+                    ok({
+                        ...PORTFOLIO_SUMMARY_STUB,
+                        summaries: postCalls
+                            ? [
+                                  {
+                                      ...PORTFOLIO_SUMMARY_ITEM_STUB,
+                                      id: created.id,
+                                      name: created.name,
+                                      asset_class: "crypto",
+                                      currency: "EUR",
+                                      assetClass: "crypto",
+                                  },
+                              ]
+                            : [],
+                    }),
+                ),
+                http.post(`${API_BASE}/api/investments`, () => {
+                    postCalls++;
+                    return ok(created);
+                }),
             );
-
             const user = userEvent.setup();
             renderWithApp(<CryptoPage />);
             await screen.findAllByRole("heading", { name: /crypto/i });
-            await waitFor(() => expect(getCalls).toBeGreaterThan(0));
-            const before = getCalls;
-
             const addBtns = await screen.findAllByRole("button", {
                 name: /add investment/i,
             });
             await user.click(addBtns[0]!);
-
             const nameInput = await screen.findByLabelText(/^name$/i);
             await user.type(nameInput, "Bitcoin");
-
             await user.click(screen.getByRole("button", { name: /^add$/i }));
-
-            await waitFor(() => expect(getCalls).toBeGreaterThan(before), {
-                timeout: 4000,
-            });
+            // The default initial purchase needs financial inputs; validation must not create an orphan holding.
+            expect(postCalls).toBe(0);
+            expect(screen.getByRole("dialog")).toBeInTheDocument();
+            expect(
+                await screen.findByText("Amount is required"),
+            ).toBeInTheDocument();
+            // This journey creates only the holding, so explicitly opt out of recording a purchase.
+            await user.click(screen.getByRole("switch"));
+            await user.click(screen.getByRole("button", { name: /^add$/i }));
+            await waitFor(() =>
+                expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+            );
+            expect(postCalls).toBe(1);
+            expect(await screen.findByText("Bitcoin")).toBeInTheDocument();
         });
 
         it("StocksPage create investment invalidates investments list (stale refetch)", async () => {

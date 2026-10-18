@@ -11,6 +11,7 @@ import { logger } from "../../config/logger.ts";
 
 /** Options for {@link renderHtmlToPdf}. */
 export interface RenderPdfOptions {
+  signal?: AbortSignal;
   footerTemplate?: string;
   headerTemplate?: string;
   margin?: { top?: string; right?: string; bottom?: string; left?: string };
@@ -42,7 +43,7 @@ async function launchBrowser(): Promise<Browser> {
 }
 
 // Bound concurrent renders so N simultaneous report POSTs can't open N Chromium
-// pages (+ N full data fetches) at once. Each render still runs to completion;
+// pages at once. Report admission separately bounds fetching and HTML work;
 // excess renders queue for a slot rather than piling pages onto one browser.
 const MAX_CONCURRENT_RENDERS = 2;
 let activeRenders = 0;
@@ -91,6 +92,7 @@ export async function renderHtmlToPdf(
   html: string,
   opts: RenderPdfOptions = {},
 ): Promise<Buffer> {
+  opts.signal?.throwIfAborted();
   await acquireRenderSlot();
   try {
     return await renderHtmlToPdfInner(html, opts);
@@ -103,9 +105,18 @@ async function renderHtmlToPdfInner(
   html: string,
   opts: RenderPdfOptions = {},
 ): Promise<Buffer> {
+  opts.signal?.throwIfAborted();
   const b = await getBrowser();
+  opts.signal?.throwIfAborted();
   const page = await b.newPage();
+  let closing: Promise<void> | undefined;
+  const closePage = () => (closing ??= page.close());
+  const abort = () => {
+    void closePage().catch(() => undefined);
+  };
+  opts.signal?.addEventListener("abort", abort, { once: true });
   try {
+    opts.signal?.throwIfAborted();
     await page.setContent(html, { waitUntil: "domcontentloaded" });
 
     const pdfOpts: PDFOptions = {
@@ -121,9 +132,16 @@ async function renderHtmlToPdfInner(
     }
 
     const pdf = await page.pdf(pdfOpts);
+    opts.signal?.throwIfAborted();
     return Buffer.from(pdf);
+  } catch (error) {
+    opts.signal?.throwIfAborted();
+    throw error;
   } finally {
-    await page.close();
+    opts.signal?.removeEventListener("abort", abort);
+    await closePage().catch((error: unknown) => {
+      if (!opts.signal?.aborted) throw error;
+    });
   }
 }
 

@@ -223,3 +223,128 @@ private struct AttachmentRuntime {
         #expect(copied == Array("r".utf8))
     }
 }
+
+/// Coordinated startup recovery (ADR-207, native.test.ts "startup recovers interrupted
+/// restore … before bootstrap"): the first bootstrap resolves the persisted switch at
+/// every rename boundary, never creates a replacement live database, and a second
+/// bootstrap leaves the result alone.
+@Suite struct NativeRestoreRecoveryTests {
+    private static let live = "vision_native"
+    private static let previous = "vision_native_previous_fixture"
+    private static let activated = "vision_native_restore_fixture"
+
+    private func writeMarker(_ harness: Harness, _ state: JSONValue) throws {
+        harness.fileSystem.addFile(harness.layout.state, try state.serialized())
+    }
+
+    private func createdLive(_ harness: Harness) -> Bool {
+        harness.runner.calls(named: "createdb").contains { $0.arguments.last == Self.live }
+    }
+
+    @Test(arguments: ["before", "between", "after"])
+    func startupRecoversAnInterruptedRestoreBeforeBootstrap(_ phase: String) async throws {
+        let harness = try Harness()
+        let runtime = try harness.makeRuntime()
+        try await runtime.ensurePostgresReady()
+        switch phase {
+        case "before": harness.databases = [Self.live, Self.activated]
+        case "between": harness.databases = [Self.previous, Self.activated]
+        default: harness.databases = [Self.previous, Self.live]
+        }
+        try writeMarker(
+            harness,
+            .object([
+                "activeRuntime": .string("native"),
+                "pendingDatabaseSwitch": .object([
+                    "version": .int(1), "liveDatabase": .string(Self.live), "previousDatabase": .string(Self.previous),
+                    "activatedDatabase": .string(Self.activated),
+                ]),
+            ]))
+
+        try await runtime.bootstrapDatabase()
+        let state = try #require(harness.fileSystem.json(harness.layout.state))
+        #expect(state["pendingDatabaseSwitch"] == nil)
+        #expect(harness.databases.contains(Self.live))
+        #expect(!harness.databases.contains(Self.previous))
+        #expect(!createdLive(harness))
+        if phase == "after" {
+            // The candidate was kept aside under a failed name; the original is live again.
+            let failed = try #require(state["lastRollback"]?["preservedFailedDatabase"]?.stringValue)
+            #expect(harness.databases == [Self.live, failed])
+        } else {
+            #expect(harness.databases == [Self.live, Self.activated])
+        }
+
+        let settled = harness.databases
+        try await runtime.bootstrapDatabase()
+        #expect(harness.databases == settled)
+        #expect(!createdLive(harness))
+    }
+
+    @Test func anAmbiguousSwitchFailsClosedWithoutAReplacementDatabase() async throws {
+        let harness = try Harness()
+        let runtime = try harness.makeRuntime()
+        try await runtime.ensurePostgresReady()
+        harness.databases = [Self.activated]
+        try writeMarker(
+            harness,
+            .object([
+                "pendingDatabaseSwitch": .object([
+                    "version": .int(1), "liveDatabase": .string(Self.live), "previousDatabase": .string(Self.previous),
+                    "activatedDatabase": .string(Self.activated),
+                ])
+            ]))
+        for _ in 0..<2 {
+            let error = await #expect(throws: NativeRuntimeError.self) { try await runtime.bootstrapDatabase() }
+            #expect(error?.code == "DATABASE_SWITCH_UNSAFE")
+        }
+        #expect(!createdLive(harness))
+        #expect(harness.fileSystem.json(harness.layout.state)?["pendingDatabaseSwitch"] != nil)
+    }
+
+    @Test func aMalformedAttachmentJournalFailsClosed() async throws {
+        let harness = try Harness()
+        let runtime = try harness.makeRuntime()
+        for destination in ["/elsewhere/attachments", harness.layout.attachments] {
+            let previous: JSONValue =
+                destination == harness.layout.attachments ? .string("/elsewhere/attachments.previous-1") : .null
+            try writeMarker(
+                harness,
+                .object([
+                    "pendingAttachmentSwitch": .object([
+                        "count": .int(0), "digest": .string(""), "entries": .array([]),
+                        "previousDirectory": previous, "destinationDirectory": .string(destination),
+                    ])
+                ]))
+            let error = await #expect(throws: NativeRuntimeError.self) { try await runtime.recoverInterruptedRestore() }
+            #expect(error?.code == "INVALID_RESTORE_JOURNAL")
+            #expect(harness.fileSystem.json(harness.layout.state)?["pendingAttachmentSwitch"] != nil)
+        }
+        let error = await #expect(throws: NativeRuntimeError.self) { try await runtime.bootstrapDatabase() }
+        #expect(error?.code == "INVALID_RESTORE_JOURNAL")
+        #expect(!createdLive(harness))
+    }
+
+    @Test func aMarkerThatIsNotAnObjectIsRejected() async throws {
+        let harness = try Harness()
+        harness.fileSystem.addFile(harness.layout.state, "[]")
+        let error = await #expect(throws: NativeRuntimeError.self) { try await harness.makeRuntime().readState() }
+        #expect(error?.code == "INVALID_RUNTIME_STATE")
+    }
+
+    @Test func aFinalizedDatabaseSwitchOnlyCleansUpTheAttachmentJournal() async throws {
+        let fixture = try AttachmentRuntime()
+        defer { fixture.remove() }
+        let live = fixture.layout.attachments
+        try fixture.makeTree(live, ["old/a.txt": "old"])
+        try fixture.makeTree(fixture.root + "/restored", ["new/b.txt": "new"])
+        let token = try await fixture.runtime.replaceAttachments(from: fixture.root + "/restored")
+        #expect(try fixture.pending()?.decode(DirectorySwitchToken.self) == token)
+
+        let previous = try #require(token.previousDirectory)
+        try await fixture.runtime.recoverInterruptedRestore()
+        #expect(BackupFiles.exists(live + "/new/b.txt"))
+        #expect(!BackupFiles.exists(previous))
+        #expect(fixture.pending() == nil)
+    }
+}

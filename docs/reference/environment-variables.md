@@ -65,6 +65,12 @@ aliases: [env vars, environment variables, .env, configuration, env]
 > contract. Prefer a user setting for anything the end user should control; reserve boot env vars
 > for deployment-time capability gating.
 
+### Explicit loader control
+
+`VISION_SKIP_DOTENV=1` disables the backend's explicit source-file loader. Tests (`NODE_ENV=test`)
+and native launches with `VISION_NATIVE_ENV_FILE` also skip source-checkout files. This does not
+disable a runtime's independent auto-loading; see [[docs/guides/backend-configuration]].
+
 ## Backend Variables
 
 | Variable                       | Default                                                                    | Required | Description                                                                                                                                                                                                                                                                                                                                                                     | Code                                                                                                                                                                                                                                |

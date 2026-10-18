@@ -352,6 +352,8 @@ public final class CategoriesModel {
         }
         post(.success, "categories.updated")
         if merge?.source.id == draft.source.id { merge = nil }
+        // useMergeCategoryNode: a merge also moves payee defaults, so recipients refetch too.
+        shell?.recipients.invalidate()
         await refreshAfterWrite()
     }
 

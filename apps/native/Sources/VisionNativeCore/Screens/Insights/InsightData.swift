@@ -197,6 +197,15 @@ public struct InsightWidgetVisibility: Equatable, Sendable {
     }
     public mutating func reset(page: String) { pages.removeValue(forKey: page) }
     public var json: JSONValue { .object(pages) }
+    /// useWidgetVisibility's read check: absent, or pages of boolean flags. Anything else is
+    /// unknown saved data that must neither load nor be overwritten.
+    public static func isValidSetting(_ raw: JSONValue) -> Bool {
+        if raw == .null { return true }
+        guard let pages = raw.objectValue else { return false }
+        return pages.values.allSatisfy { page in
+            page.objectValue.map { $0.values.allSatisfy { $0.boolValue != nil } } ?? false
+        }
+    }
 }
 
 /// Routes share the web URL contract; a drill keeps complete calendar-month boundaries.

@@ -47,6 +47,7 @@ export interface NativeDemoRuntime {
   readState(): Promise<unknown>;
   writeState(next: Record<string, unknown>): Promise<unknown>;
   ensurePostgresReady(): Promise<unknown>;
+  recoverInterruptedRestore(): Promise<void>;
   rollbackDatabaseSwitch(switchToken: unknown): Promise<unknown>;
   validateCustomDump(sourcePath: string): Promise<unknown>;
   activateRestoredDatabase(
@@ -270,12 +271,11 @@ export async function prepareNativeDemo(
   const resetRequested = reset || (await hasDemoResetRequest(runtime));
   await runtime.ensureLayout();
   await runtime.discover();
-  let state = await readRuntimeState(runtime);
-  if (state.pendingDatabaseSwitch) {
-    await runtime.ensurePostgresReady();
-    await runtime.rollbackDatabaseSwitch(state.pendingDatabaseSwitch);
-    state = await readRuntimeState(runtime);
-  }
+  await runtime.ensurePostgresReady();
+  // Recover both generations before deciding whether the seed is current.
+  // Database-only rollback would leave new attachments against the old data.
+  await runtime.recoverInterruptedRestore();
+  const state = await readRuntimeState(runtime);
   const currentSeed = fieldsOf(state.demoSeed);
   if (
     !resetRequested &&

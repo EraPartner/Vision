@@ -277,18 +277,61 @@ final class StringBox: @unchecked Sendable {
         #expect(BackupFiles.exists(live + "/tx/new.txt"))
     }
 
-    @Test func replacingAMissingTreeHasNothingToRollBack() throws {
+    /// Without an old tree the rollback moves the restored tree aside (ADR-207), so the
+    /// live directory is absent again, as it was before the switch.
+    @Test func replacingAMissingTreeRollsBackToNoTree() throws {
         let directory = try makeBackupScratchDirectory()
         defer { try? FileManager.default.removeItem(atPath: directory) }
         try makeTree(directory + "/restored", ["a.txt": "a"])
+        let live = directory + "/attachments"
         let token = try DirectorySwitch.replace(
-            source: directory + "/restored", destination: directory + "/attachments", preservePrevious: true,
-            nonce: "n")
+            source: directory + "/restored", destination: live, preservePrevious: true, nonce: "n")
         #expect(token.previousDirectory == nil)
-        let result = try DirectorySwitch.rollback(token, nonce: "r")
-        #expect(result == .nothingToRollback)
         let finalized = try DirectorySwitch.finalize(token)
         #expect(!finalized)
+        let result = try DirectorySwitch.rollback(token, nonce: "r")
+        #expect(result == .rolledBack(preservedFailedDirectory: live + ".failed-r"))
+        #expect(!BackupFiles.exists(live))
+        #expect(BackupFiles.exists(live + ".failed-r/a.txt"))
+    }
+
+    /// restore-journal.test.ts: the journal is written before either rename, and rolling
+    /// it back is safe (and repeatable) before, between and after the two renames.
+    @Test(arguments: ["before", "between", "after"])
+    func theAttachmentJournalRecoversEveryRenameInterruptionRepeatedly(_ phase: String) throws {
+        let directory = try makeBackupScratchDirectory()
+        defer { try? FileManager.default.removeItem(atPath: directory) }
+        let source = directory + "/source"
+        let live = directory + "/attachments"
+        try makeTree(source, ["receipt": "new"])
+        try makeTree(live, ["receipt": "old"])
+        var journal: DirectorySwitchToken?
+        #expect(throws: BackupFailure.self) {
+            _ = try DirectorySwitch.replace(
+                source: source, destination: live, preservePrevious: true, nonce: "n",
+                beforeSwitch: { token in
+                    journal = token
+                    #expect(try readBytes(live + "/receipt") == Array("old".utf8))
+                    throw BackupFailure("interrupted after durable intent")
+                })
+        }
+        let token = try #require(journal)
+        let previous = try #require(token.previousDirectory)
+        if phase != "before" { try DirectorySwitch.move(live, previous) }
+        if phase == "after" { try DirectorySwitch.copyTree(source, to: live) }
+        _ = try DirectorySwitch.rollback(token, nonce: "r1")
+        #expect(try readBytes(live + "/receipt") == Array("old".utf8))
+        _ = try DirectorySwitch.rollback(token, nonce: "r2")
+        #expect(try readBytes(live + "/receipt") == Array("old".utf8))
+    }
+
+    @Test func rollbackFailsClosedWhenBothGenerationsAreMissing() throws {
+        let directory = try makeBackupScratchDirectory()
+        defer { try? FileManager.default.removeItem(atPath: directory) }
+        let token = DirectorySwitchToken(
+            count: 0, digest: "", entries: [], previousDirectory: directory + "/attachments.previous-x",
+            destinationDirectory: directory + "/attachments")
+        #expect(throws: BackupFailure.self) { try DirectorySwitch.rollback(token, nonce: "r") }
     }
 
     @Test func exportCopiesOrCreatesAnEmptyTree() throws {

@@ -39,12 +39,18 @@ describe("BelgianTaxProfileContext", () => {
                 ok(settingsWithBaselines({})),
             ),
         );
+        vi.spyOn(apiClient, "saveSettings").mockResolvedValue(
+            undefined as never,
+        );
         vi.spyOn(apiClient, "saveSetting").mockResolvedValue(
             undefined as never,
         );
     });
 
-    afterEach(() => {
+    afterEach(async () => {
+        await act(async () => {
+            await new Promise((resolve) => setTimeout(resolve, 550));
+        });
         vi.restoreAllMocks();
     });
 
@@ -137,31 +143,37 @@ describe("BelgianTaxProfileContext", () => {
         await act(async () => {
             await new Promise((resolve) => setTimeout(resolve, 550));
         });
-        expect(apiClient.saveSetting).not.toHaveBeenCalled();
+        expect(apiClient.saveSettings).not.toHaveBeenCalled();
 
         act(() => result.current.updateProfile({ grossAnnualIncome: 42_000 }));
         await waitFor(() =>
-            expect(apiClient.saveSetting).toHaveBeenCalledWith(
-                "belgian_tax_household_v2",
+            expect(apiClient.saveSettings).toHaveBeenCalledWith(
                 expect.objectContaining({
-                    version: 2,
-                    partners: [
-                        expect.objectContaining({
-                            id: "A",
-                            activities: [
-                                expect.objectContaining({
-                                    grossIncome: 42_000,
-                                }),
-                            ],
-                        }),
-                    ],
+                    belgian_tax_household_v2: expect.objectContaining({
+                        version: 2,
+                        partners: [
+                            expect.objectContaining({
+                                id: "A",
+                                activities: [
+                                    expect.objectContaining({
+                                        grossIncome: 42_000,
+                                    }),
+                                ],
+                            }),
+                        ],
+                    }),
+                    belgian_tax_household_snapshots_v2: {},
+                    belgian_tax_profile_snapshot_meta_v1: {},
                 }),
             ),
         );
         // No backend consumer reads the v1 keys any more, so they are not written.
-        const keys = vi
-            .mocked(apiClient.saveSetting)
-            .mock.calls.map(([key]) => key);
+        const keys = [
+            ...vi.mocked(apiClient.saveSetting).mock.calls.map(([key]) => key),
+            ...vi
+                .mocked(apiClient.saveSettings)
+                .mock.calls.flatMap(([values]) => Object.keys(values)),
+        ];
         expect(keys).not.toContain("belgian_tax_profile");
         expect(keys).not.toContain("belgian_tax_profile_snapshots_v1");
     });
@@ -297,6 +309,54 @@ describe("BelgianTaxProfileContext", () => {
                 "belgian_tax_household_snapshots_v2",
             );
         });
+    });
+
+    it("persists the latest grouped edit after the provider unmounts", async () => {
+        const { result, unmount } = renderHook(() => useBelgianTaxProfile(), {
+            wrapper: makeWrapper(),
+        });
+        await waitFor(() => expect(result.current.isLoading).toBe(false));
+        act(() => {
+            result.current.updateProfile({ grossAnnualIncome: 42_000 });
+            result.current.createSnapshotFromLive(2020);
+            result.current.updateProfile({ grossAnnualIncome: 43_000 });
+        });
+        unmount();
+        await waitFor(() =>
+            expect(apiClient.saveSettings).toHaveBeenCalledTimes(1),
+        );
+        expect(apiClient.saveSettings).toHaveBeenCalledWith(
+            expect.objectContaining({
+                belgian_tax_household_v2: expect.objectContaining({
+                    partners: [
+                        expect.objectContaining({
+                            activities: [
+                                expect.objectContaining({
+                                    grossIncome: 43_000,
+                                }),
+                            ],
+                        }),
+                    ],
+                }),
+                belgian_tax_household_snapshots_v2: expect.objectContaining({
+                    2020: expect.objectContaining({
+                        taxYear: 2020,
+                        partners: [
+                            expect.objectContaining({
+                                activities: [
+                                    expect.objectContaining({
+                                        grossIncome: 42_000,
+                                    }),
+                                ],
+                            }),
+                        ],
+                    }),
+                }),
+                belgian_tax_profile_snapshot_meta_v1: expect.objectContaining({
+                    2020: expect.any(Object),
+                }),
+            }),
+        );
     });
 
     it("keeps a narrow profile selector stable for snapshot-only updates", async () => {
@@ -711,6 +771,9 @@ describe("BelgianTaxProfileContext", () => {
                 wrapper: makeWrapper(),
             });
             await waitFor(() => expect(result.current.isLoading).toBe(false));
+            act(() =>
+                result.current.updateProfile({ profileConfigured: true }),
+            );
             act(() => result.current.createSnapshotFromLive(2023));
             act(() => result.current.markYearAsFiled(2023));
             expect(result.current.isYearFiled(2023)).toBe(true);

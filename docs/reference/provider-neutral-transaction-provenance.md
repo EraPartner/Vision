@@ -2,7 +2,7 @@
 title: Provider-Neutral Transaction Provenance
 type: reference
 status: active
-date: 2026-10-08
+date: 2026-10-11
 tags: [reference, imports, provenance, migration]
 description: Durable provider-neutral source archives, provenance links, and atomic manual-transaction identity claims.
 aliases: [transaction provenance, neutral import provenance]
@@ -28,6 +28,17 @@ a transaction-scoped PostgreSQL advisory lock derived from that versioned hash a
 checking, transaction insertion, and claim insertion, so concurrent identical requests cannot both
 pass the check. Unexpected claim failures roll back the transaction. A missing claim table is the
 only tolerated rolling-deployment fallback.
+
+Manual identity now uses `manual-v3`: a JSON tuple of version, calendar date, canonical decimal
+amount rounded to the ledger's four decimal places (ties away from zero), nullable recipient ID,
+trimmed uppercase memo, canonical account identity and normalized
+currency. The same recipe controls the advisory lock and new claims. A claim hit must still match
+the current active transaction fields, so editing a transaction does not reserve its old identity.
+Legacy claims remain readable metadata; live-field fallback detects their current transactions
+without rewriting historical hashes. The fallback includes currency and matches absent recipients.
+Its memo trimming uses the same whitespace set as JavaScript, including tabs, line breaks and
+Unicode spaces on historical rows.
+Import fingerprints and their compatibility contract are unchanged.
 
 Migration 0108 performs only expand and backfill. The contract at
 `alembic/manual/contract_drop_provider_raw/` is deliberately out of band. The operator waived an

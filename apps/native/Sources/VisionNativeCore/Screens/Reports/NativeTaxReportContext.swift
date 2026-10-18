@@ -7,9 +7,14 @@ public enum NativeTaxReportContext {
         localize: (String) -> String
     ) throws -> TaxValue {
         guard overview["year"] == .number(Decimal(requestedYear)),
-            let configured = overview["hasProfile"]?.boolValue
+            let hasProfile = overview["hasProfile"]?.boolValue
         else { throw invalid("year/hasProfile: invalid overview authority") }
-        guard configured else { return .object([:]) }
+        // ExportDialog: only a year that can be filed (the live year, one with its own saved
+        // snapshot, or one with a frozen calculation) carries the annual figures.
+        let fileable =
+            overview["liveYear"] == .number(Decimal(requestedYear)) || overview["hasSnapshot"]?.boolValue == true
+            || truthy(overview["metadata"]?["frozenCalculation"])
+        guard hasProfile, fileable else { return .object([:]) }
         guard let household = overview["household"], household.objectValue != nil,
             household["taxYear"] == .number(Decimal(requestedYear)),
             let profile = projectedProfile, profile.objectValue != nil,
@@ -93,7 +98,7 @@ public enum NativeTaxReportContext {
 /// The report's v1 profile fields (`projectHouseholdToProfileV1` in
 /// `@vision/shared-utils/belgian-tax/householdMigration`): partner A's primary activity sets
 /// the employment type; region and tax year are the household's. Only the three fields the
-/// report reads are projected (ADR-208).
+/// report reads are projected (ADR-211).
 public enum NativeTaxReportProfile {
     /// `PRIMARY_ACTIVITY_ID`.
     static let primaryActivityID = "act_A_1"

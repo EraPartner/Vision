@@ -171,10 +171,18 @@ extension APIClient: HomeService {
         return InsightExclusions.resolve(settings: value, scope: scope, hiddenIds: hidden)
     }
     public func homeWidgetSetting() async throws -> OpenAPI.Setting {
-        try await setting(key: "widget_visibility")
+        try Self.validWidgets(try await setting(key: "widget_visibility"))
     }
     public func saveHomeWidgets(_ value: JSONValue, expected: JSONValue) async throws -> OpenAPI.Setting {
-        try await saveSetting(key: "widget_visibility", value: value, expected: expected)
+        try Self.validWidgets(try await saveSetting(key: "widget_visibility", value: value, expected: expected))
+    }
+    private static func validWidgets(_ record: OpenAPI.Setting) throws -> OpenAPI.Setting {
+        guard InsightWidgetVisibility.isValidSetting(record.value) else {
+            throw APIError.contract(
+                APIContractError(
+                    endpoint: "/api/settings/widget_visibility", issues: ["value: invalid widget visibility setting"]))
+        }
+        return record
     }
     private func currencyItems(_ code: String) -> [URLQueryItem] {
         [URLQueryItem(name: "currency", value: code)]

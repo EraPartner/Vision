@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Launches a built Debug "Vision Native Demo.app" (with its staged runtime payload) and checks
 # that the supervised runtime starts and the app keeps running: in the retained mode the
-# backend must answer /health; in the ADR-208 native-only mode (the Debug Demo default) the
+# backend must answer /health; in the ADR-211 native-only mode (the Debug Demo default) the
 # native document must also report ready. Synthetic Demo data only. Every run leaves the unified log stream and the tails of the
 # app's own logs in "$out" and in the job log.
 set -euo pipefail
@@ -25,7 +25,7 @@ stream_pid=$!
 sleep 2
 
 if [ "$mode" = "native" ]; then
-  # ADR-208: the Debug Demo default has no web document; the first run captures the origin's
+  # ADR-211: the Debug Demo default has no web document; the first run captures the origin's
   # storage once. No variable is set, so this also proves the default.
   "$binary" >"$out/app-$mode.log" 2>&1 &
 else

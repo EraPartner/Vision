@@ -6,7 +6,8 @@ and the relevant project docs.
 ## Queue contract
 
 - `- [ ]` means open. Revalidate the current code before implementing it.
-- Remove completed findings after verification; this file is not an archive.
+- Remove completed findings after implementation and required checks; this file is not an archive.
+- Record user-waived optional checks in the delivery record without describing them as passed.
 - Put evidence or a blocker on an indented `Tracking:` line. Do not put history in the title.
 - Every finding has one owner-sized outcome.
 - `🔎 verified-present YYYY-MM-DD` means the issue was reproduced on that date.
@@ -20,22 +21,11 @@ Run `bun run todo:list` for the concise queue and `bun run todo:check` for ledge
 
 ## Findings
 
-### App walkthrough feedback
-
-The state markers below refer to the user's reported walkthrough on 2026-10-10 and supplied
-screenshots, not an independent agent reproduction. Revalidate each issue before implementation.
-
-- [ ] **Resolve the native app's audit-integrity unavailable warning** ⏫
-  - Tracking: 🔎 verified-present 2026-10-10, based on user report; screenshot 11.31.02 shows a Vision notification: “Audit integrity protection is unavailable. Your data remains accessible, but changes cannot be independently verified.” The notification is marked “42m ago”, so its trigger time and current protection status remain unknown. This proves the warning was shown, not that an integrity check failed or data was altered. Source inspection locates the notification in `reportAuditStatus`; verification exceptions also map to `unavailable`. No independent runtime diagnosis has been performed.
-  - Acceptance: Reproduce safely in native Demo and trace the actual unavailable reason through startup/session establishment, the internal audit bridge, receipt verification, and Keychain witness access as applicable. Restore verified protection for a correctly enrolled installation, or correct a premature/stale notification if verification is healthy. Distinguish unavailable protection, integrity failure, and enrollment required; present an actionable recovery path for the actual cause. Verify startup, restart, temporary unavailability and recovery, and continued truthful reporting of a real integrity failure. Preserve existing audit history and trust anchors; do not silence the warning, reset keys or receipts, or enroll an existing database automatically to make it disappear.
-  - Starting points: `packaging/electron/main.js` (`reportAuditStatus` and `checkAuditIntegrity`), `packaging/electron/runtime/native.js` (`verifyAuditHistory`), `docs/api/internal-audit.md`, and ADRs 157–161 for receipts, Keychain witnesses, enrollment and device transfer.
-  - ↪ _from: User app walkthrough and attached notification screenshot, 2026-10-10_
-
-- [ ] **Restore a discoverable tax-filing workflow** ⏫
-  - Tracking: 🔎 verified-present 2026-10-10, based on user report. The user can no longer find a way to file taxes in the app. The affected tax page, selected year, and exact missing action still need reproduction. Existing tax documentation describes shared year actions for freeze, mark as filed, history and export; this does not establish that those actions remain accessible in the installed app.
-  - Acceptance: Trace the previous filing workflow and identify whether its entry point is hidden, missing, disabled without explanation, or broken. Make the supported filing actions discoverable on the relevant tax pages, including any required preparation/export and recording a year as filed. Verify eligible current and historical years, prerequisites, confirmation, persisted filed status, reopening the app, and preservation of the as-filed calculation/history. Explain disabled actions and recovery steps. Distinguish recording a filing in Vision from submitting a declaration to a tax authority; do not introduce an external submission integration without a separate scope decision.
-  - Starting points: `docs/features/belgian-tax.md`, `docs/features/portfolio-tax.md`, and the tax pages' `YearActionsMenu` and `TaxFilingMasthead` integration.
-  - ↪ _from: User app walkthrough follow-up, 2026-10-10_
+The October codebase audit, walkthrough remediation and selective test cleanup implementation
+are delivered under the user's explicit waiver of further optional verification. Implementation
+results and unexecuted acceptance checks are preserved in
+[the implementation delivery ledger](docs/testing/codebase-audit-delivery.md). The original audit warning's cause remains unconfirmed;
+no unexecuted live check is recorded as passed.
 
 ### Belgian tax correctness and household support
 

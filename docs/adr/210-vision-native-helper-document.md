@@ -1,20 +1,20 @@
 ---
-title: "ADR-207: Isolate a helper document for native Demo presentation"
+title: "ADR-210: Isolate a helper document for native Demo presentation"
 type: adr
 status: superseded
 date: 2026-10-17
 tags: [adr, architecture, swift, native-app, phase-4, demo, webkit, typescript]
 description: "Accepted on 2026-10-17 with the phase-4 go. A default-off Debug Demo experiment with native presentation and routing plus a same-origin helper document for unchanged TypeScript calculations and scoped storage, without React UI, live authority handover or real-data migration."
-aliases: [adr-207, native helper document]
+aliases: [adr-210, native helper document]
 ---
 
-# ADR-207: Isolate a helper document for native Demo presentation
+# ADR-210: Isolate a helper document for native Demo presentation
 
 ## Status
 
 > [!note] Superseded on 2026-10-18 by
-> [[docs/adr/209-vision-native-retire-helper-document|ADR-209]]: the helper document is removed;
-> its eligibility rules still gate ADR-208's native-only mode.
+> [[docs/adr/212-vision-native-retire-helper-document|ADR-212]]: the helper document is removed;
+> its eligibility rules still gate ADR-211's native-only mode.
 
 Accepted on 2026-10-17 (proposed 2026-10-15) with Tor's phase-4 go, default-off. The SDK
 implements the mode behind an explicit `VISION_NATIVE_HELPER_DOCUMENT=1` opt-in that only a
@@ -32,7 +32,7 @@ actual validation gates. The separate switch-over in
 The SDK still loads the React application, delegates route requests to its router and keeps
 that document mounted beneath native screens. Native navigation, startup selection and raw
 storage have testable preparatory Core APIs, but the default SDK has not switched authority.
-[[docs/adr/206-vision-native-staged-web-retirement|ADR-206]] describes that staged foundation.
+[[docs/adr/209-vision-native-staged-web-retirement|ADR-209]] describes that staged foundation.
 
 For a fresh isolated Demo session whose complete presentation is native, maintaining a second
 React presentation and router adds another route, leave-guard and startup owner. The SDK still
@@ -125,7 +125,7 @@ calls must have an explicit mode policy rather than silently depending on nonexi
 
 ### Relationship to the retained-route adapter
 
-ADR-206's history, startup and parameter foundations remain useful for this path. The
+ADR-209's history, startup and parameter foundations remain useful for this path. The
 separately prepared retained React route adapter also remains dormant and testable as an
 optional integration path. It is not activated or cancelled by this proposal. If retained
 React presentation is used, its resolved route requests and leave guards still need an
@@ -151,7 +151,7 @@ and rejected onboarding acknowledgments. Source-only Core proofs and a successfu
 do not establish AppKit/WebKit integration. Keep the flag off until these gates pass and
 record the exact verified commit and evidence in the handoff.
 
-> [!note] Amended by [[docs/adr/208-vision-native-without-web-content|ADR-208]] (2026-10-17)
+> [!note] Amended by [[docs/adr/211-vision-native-without-web-content|ADR-211]] (2026-10-17)
 > The helper document is a transition step: its calculations and storage move to Swift and a
 > native-only mode removes the web view.
 
@@ -218,7 +218,7 @@ real-data switch-over sequence remain in force.
 - [[docs/adr/index|All ADRs]]
 - [[docs/adr/204-vision-native-swift-app-target|ADR-204: Swift app target and phase gates]]
 - [[docs/adr/205-vision-native-hand-over|ADR-205: Separate real-data switch-over]]
-- [[docs/adr/206-vision-native-staged-web-retirement|ADR-206: Staged route authority]]
+- [[docs/adr/209-vision-native-staged-web-retirement|ADR-209: Staged route authority]]
 - [[docs/architecture/native-app|Native app architecture]]
 - [[docs/reference/native-parity/shell-and-settings|Shell and Settings parity]]
 - [[docs/reference/native-parity/agent-handoff|Native continuation handoff]]

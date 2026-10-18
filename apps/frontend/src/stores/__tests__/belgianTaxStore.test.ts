@@ -129,6 +129,61 @@ describe("Belgian tax settings slice", () => {
             state.snapshotMetas[historicalYear]!.frozenCalculation,
         );
     });
+    it("records the configured live year and preserves its frozen record across reload and unfiling", () => {
+        const year = DEFAULT_BELGIAN_TAX_PROFILE.taxYear;
+        useSettingsStore
+            .getState()
+            .updateProfile({
+                profileConfigured: true,
+                grossAnnualIncome: 50_000,
+            });
+        useSettingsStore.getState().freezeCalculation(year);
+        const frozen = useSettingsStore.getState().getFrozenCalculation(year);
+        useSettingsStore
+            .getState()
+            .markYearAsFiled(year, "synthetic-reference");
+        const saved = useSettingsStore.getState();
+        expect(saved.snapshots[year]?.grossAnnualIncome).toBe(50_000);
+        expect(saved.snapshotMetas[year]?.filing?.reference).toBe(
+            "synthetic-reference",
+        );
+        expect(saved.householdSnapshots[year]?.taxYear).toBe(year);
+        useSettingsStore
+            .getState()
+            ._hydrate(
+                runtime,
+                saved.household!,
+                saved.householdSnapshots,
+                saved.snapshotMetas,
+            );
+        useSettingsStore
+            .getState()
+            .updateProfile({ grossAnnualIncome: 60_000 });
+        expect(useSettingsStore.getState().getFrozenCalculation(year)).toEqual(
+            frozen,
+        );
+        useSettingsStore.getState().unmarkYearAsFiled(year);
+        expect(useSettingsStore.getState().isYearFiled(year)).toBe(false);
+        expect(useSettingsStore.getState().getFrozenCalculation(year)).toEqual(
+            frozen,
+        );
+        expect(
+            useSettingsStore
+                .getState()
+                .getSnapshotHistory(year)
+                .map((e) => e.kind),
+        ).toEqual(["frozen", "filed", "unfiled"]);
+    });
+
+    it("requires a reviewed profile for historical filing instead of freezing a live-profile estimate", () => {
+        const year = DEFAULT_BELGIAN_TAX_PROFILE.taxYear - 1;
+        useSettingsStore.getState().updateProfile({ profileConfigured: true });
+        useSettingsStore.getState().markYearAsFiled(year);
+        expect(useSettingsStore.getState().isYearFiled(year)).toBe(false);
+        useSettingsStore.getState().createSnapshotFromLive(year);
+        useSettingsStore.getState().markYearAsFiled(year);
+        expect(useSettingsStore.getState().isYearFiled(year)).toBe(true);
+    });
 
     it("freezes the household result next to the calculation and drops both on unfreeze", () => {
         const year = DEFAULT_BELGIAN_TAX_PROFILE.taxYear - 1;

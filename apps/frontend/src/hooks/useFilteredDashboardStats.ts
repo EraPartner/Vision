@@ -89,7 +89,7 @@ export function useMonthlySummary({
  * recipient exclusions. Client-side transaction pagination + re-filtering
  * have been removed.
  */
-export function useFilteredDashboardStats() {
+export function useFilteredDashboardStats(enabled = true) {
     // Shared resolution of excluded category/recipient IDs (incl. hidden categories)
     // so the dashboard, statistics page, and net-summary card all exclude the same
     // set — see useExcludedIds for why this was centralized.
@@ -101,7 +101,7 @@ export function useFilteredDashboardStats() {
     const summaryQuery = useMonthlySummary({
         excludedCategoryIds,
         excludedRecipientIds,
-        enabled: isReady,
+        enabled: enabled && isReady,
     });
 
     // The count is the DB total, independent of filters and currency — one cache
@@ -109,6 +109,7 @@ export function useFilteredDashboardStats() {
     // invalidateTransactionData already invalidates after mutations.
     const countQuery = useQuery({
         queryKey: dashboardKeys.transactionCount,
+        enabled,
         queryFn: () => apiClient.getTransactionCount(),
         staleTime: QUERY_STALE_TIME_MS.FREQUENT,
         refetchOnWindowFocus: false,

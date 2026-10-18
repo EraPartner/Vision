@@ -64,6 +64,8 @@ export interface ParsedBankTransaction {
   currency: string | null;
   /** the export's stamped running balance; null when the export carries none (ADR-094). */
   balance: number | null;
+  /** Stable within-day bank chronology, not a transaction identity. */
+  bankSequence?: string | null | undefined;
   recipientAccount: string | null;
   recipientAddress: string | null;
   recipientBankName: string | null;
@@ -117,6 +119,11 @@ export const parsedBankTransactionSchema = z.strictObject({
     .regex(/^[A-Z]{3}$/)
     .nullable(),
   balance: z.number().nullable(),
+  bankSequence: z
+    .string()
+    .regex(/^[0-9]{1,18}$/)
+    .nullable()
+    .optional(),
   recipientAccount: z.string().nullable(),
   recipientAddress: z.string().nullable(),
   recipientBankName: z.string().nullable(),

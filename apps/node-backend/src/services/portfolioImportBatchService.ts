@@ -1,3 +1,5 @@
+import { lockAccountsForLedgerMutation } from "../repositories/accountLifecycleLock.ts";
+import { protectPlannedExecutions } from "../repositories/plannedExecutionGuard.ts";
 import { lockKinesisCashLedger } from "../repositories/portfolioImportCashRepository.ts";
 import { validateKinesisCashRollback } from "./portfolioImportCashService.ts";
 import { scheduleRefresh } from "./materializedViewService.ts";
@@ -491,7 +493,7 @@ export async function rollbackBatch(batchId: number) {
     )
     .filter(Boolean);
   let deletedCash = 0;
-  return withTransaction(async () => {
+  return withTransaction(async (client) => {
     deletedCash = 0;
     // Share the batch-first lock order with review resolution. This closes the
     // route pre-check race and prevents resolution from creating a holding while
@@ -502,8 +504,8 @@ export async function rollbackBatch(batchId: number) {
         ...pairedScope,
         ...nativeBatchIds,
         ...cashScope.flatMap((receipt) =>
-          receipt.after_data.proof.sourceBindings.map(
-            (binding) => Number(binding.batch_id),
+          receipt.after_data.proof.sourceBindings.map((binding) =>
+            Number(binding.batch_id),
           ),
         ),
         ...repairScope.map((receipt) =>
@@ -606,8 +608,10 @@ export async function rollbackBatch(batchId: number) {
             ]
               .concat(
                 lockedBatch.account_id,
-                batchConfigFields(lockedBatch.custom_config)?.transfer_destination_account_id,
-                batchConfigFields(lockedBatch.custom_config)?.transfer_origin_account_id,
+                batchConfigFields(lockedBatch.custom_config)
+                  ?.transfer_destination_account_id,
+                batchConfigFields(lockedBatch.custom_config)
+                  ?.transfer_origin_account_id,
               )
               .filter((id) => id != null),
           ),
@@ -726,6 +730,8 @@ export async function rollbackBatch(batchId: number) {
         ]
       : [];
     if (cashIds.length > 0) {
+      await lockAccountsForLedgerMutation(client, cashIds.map(Number));
+      await protectPlannedExecutions(cashIds.map(Number));
       const r = await query(
         "DELETE FROM transactions WHERE id = ANY($1::int[])",
         [cashIds],

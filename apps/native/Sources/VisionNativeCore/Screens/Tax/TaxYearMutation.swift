@@ -47,6 +47,13 @@ public struct TaxSettingsPatch: Encodable, Equatable, Sendable {
 }
 
 public enum TaxYearMutation {
+    /// MarkAsFiledDialog: a configured profile and a year that can be filed (the live year, one
+    /// with its own household snapshot, or one with a frozen calculation), not filed yet.
+    public static func canFile(_ overview: OpenAPI.BelgianTaxOverview) -> Bool {
+        let filed = (try? TaxValue(encoding: overview.metadata))?["filing"]?.objectValue != nil
+        let frozen = overview.calculationSource == "frozen"
+        return overview.hasProfile && !filed && (!overview.isHistorical || overview.hasSnapshot || frozen)
+    }
     public static let householdKey = "belgian_tax_household_v2"
     public static let snapshotsKey = "belgian_tax_household_snapshots_v2"
     public static let metadataKey = "belgian_tax_profile_snapshot_meta_v1"
@@ -94,9 +101,9 @@ public enum TaxYearMutation {
             meta["frozenHouseholdResult"] = nil
             events.append(("unfrozen", [:]))
         case .file(let reference):
-            guard !filed, overview.isHistorical else { return nil }
-            // MarkAsFiledDialog pins missing historical inputs only when figures are not
-            // already frozen. Pinning today's inputs to old frozen figures would misstate them.
+            guard !filed, canFile(overview) else { return nil }
+            // Filing the live year pins its household as that year's snapshot. A frozen year is
+            // filed as it is: today's inputs beside old frozen figures would misstate them.
             if !frozen, snapshots[year] == nil {
                 var snapshot = live
                 snapshot["taxYear"] = .number(Decimal(overview.year))

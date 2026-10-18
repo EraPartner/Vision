@@ -4,7 +4,7 @@ type: endpoint
 method: POST, GET, PATCH, DELETE
 path: /api/portfolio/import
 description: Portfolio CSV/Saxo XLSX/native IBKR funding XLS or XLSX staging, reviewed reconciliation, immutable receipts, and dated custody/unit adjustments with original basis
-date: 2026-10-08
+date: 2026-10-11
 updated: 2026-10-13
 last_modified: 2026-10-13
 tags:
@@ -1180,3 +1180,11 @@ global API limiter. This covers uploads, batch/review operations, reconciliation
 - [[docs/adr/078-portfolio-csv-import|ADR-078: Portfolio CSV Import Architecture]]
 - [[docs/reference/data-model|Data Model Reference]] — `portfolio_import_batches`, `portfolio_import_staging_rows`
 - [[docs/features/portfolio|Portfolio Feature]]
+
+## Cash rollback integrity
+
+Rollback of owned ledger cash rows uses the same active-account lock and planned-execution guard
+as bank import rollback. Reopen a closed account before removing its ledger rows. Planned links
+and concurrent ownership changes return a conflict; rollback never silently changes recurrence or
+removes linked plan history. Existing immutable receipt checks still apply. See
+[[docs/api/transactions]] and [[docs/features/portfolio-import]].

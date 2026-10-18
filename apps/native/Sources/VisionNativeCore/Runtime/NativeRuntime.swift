@@ -61,6 +61,12 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
     private var shuttingDown = false
     /// The staging database of a Demo restore whose switch plan is not persisted yet.
     private var stagingRestoreDatabase: String?
+    /// `restoreSwitchOwnedThisLaunch`: this launch persisted the pending database switch,
+    /// so `bootstrapDatabase` must not treat it as an interrupted one and roll it back.
+    private var restoreSwitchOwnedThisLaunch = false
+    /// `startupRestoreRecovery`: the one coordinated recovery `bootstrapDatabase` runs per
+    /// launch. A failure stays memoized, so every later bootstrap fails closed too.
+    private var startupRestoreRecovery: Task<Void, Error>?
 
     public init(
         layout: RuntimeLayout,
@@ -494,6 +500,12 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
     public func bootstrapDatabase() async throws -> DatabaseConfig {
         let config = try prepareLayout()
         try await ensurePostgresReady(startService: true)
+        // An interrupted restore is resolved before a replacement database could be created.
+        if !restoreSwitchOwnedThisLaunch {
+            let recovery = startupRestoreRecovery ?? Task { try await self.recoverInterruptedRestore() }
+            startupRestoreRecovery = recovery
+            try await recovery.value
+        }
         let psql = try tool("psql")
         let adminArgs = adminArguments(config)
 
@@ -555,8 +567,14 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
 
     // MARK: - Runtime marker
 
+    /// `readState`: `nil` when the marker does not exist; a marker that is not a JSON
+    /// object throws instead of reading as empty, so recovery never ignores a journal.
     public func readState() async throws -> [String: JSONValue]? {
-        try RuntimeMarker.parse(try fileSystem.readIfPresent(layout.state))
+        guard let data = try fileSystem.readIfPresent(layout.state) else { return nil }
+        guard let state = try RuntimeMarker.parse(data) else {
+            throw NativeRuntimeError("INVALID_RUNTIME_STATE", "Invalid native runtime state")
+        }
+        return state
     }
 
     public func writeState(set: [String: JSONValue], remove: [String]) async throws {
@@ -702,6 +720,15 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
         }
         if dependencies.processes.exists(recorded) {
             try dependencies.processes.signal(recorded, SIGKILL)
+            // A writer that is still alive would make a quiescent snapshot inconsistent.
+            let killedDeadline = now().addingTimeInterval(10)
+            while dependencies.processes.exists(recorded) && now() < killedDeadline {
+                await dependencies.clock.sleep(milliseconds: 50)
+            }
+            if dependencies.processes.exists(recorded) {
+                throw NativeRuntimeError(
+                    "BACKEND_STOP_FAILED", "Native backend did not stop; snapshot capture is unsafe")
+            }
         }
         try? fileSystem.remove(layout.pid)
     }
@@ -904,6 +931,7 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
             // From here the persisted plan owns the staging database (rollback handles it).
             stagingRestoreDatabase = nil
             try await writeState(set: ["pendingDatabaseSwitch": try JSONValue(encoding: plan)], remove: [])
+            restoreSwitchOwnedThisLaunch = true
             try await stop(keepPostgres: true)
             try await terminateDatabaseConnections(config.database)
             try await terminateDatabaseConnections(staging)
@@ -915,6 +943,8 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
                 do {
                     try await rollbackDatabaseSwitch(try JSONValue(encoding: token))
                 } catch {
+                    restoreSwitchOwnedThisLaunch = false
+                    startupRestoreRecovery = nil
                     throw NativeRuntimeError(
                         "DATABASE_SWITCH_RECOVERY_FAILED",
                         "Native database activation failed and automatic rollback did not complete; Vision remains stopped."
@@ -989,6 +1019,8 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
         ]
         if let preservedFailed { rollback["preservedFailedDatabase"] = .string(preservedFailed) }
         try await writeState(set: ["lastRollback": .object(rollback)], remove: ["pendingDatabaseSwitch"])
+        restoreSwitchOwnedThisLaunch = false
+        startupRestoreRecovery = nil
     }
 
     /// `finalizeDatabaseSwitch`: clears the pending switch and remembers the previous name.
@@ -999,6 +1031,8 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
                 "lastDatabaseSwitchAt": .string(isoTimestamp(now())),
             ],
             remove: ["pendingDatabaseSwitch"])
+        restoreSwitchOwnedThisLaunch = false
+        startupRestoreRecovery = nil
     }
 
     /// `getDatabaseStats` as the migration owner.
@@ -1091,15 +1125,31 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
     }
 
     /// `replaceAttachments(source, { preservePrevious: true })`: the switch token is
-    /// persisted as `pendingAttachmentSwitch` before it is returned.
+    /// persisted as `pendingAttachmentSwitch` before either rename (ADR-207), so a crash
+    /// between the renames still leaves a journal. The blocking copy runs off the actor;
+    /// the marker is written synchronously from `beforeSwitch` while this actor awaits it.
     public func replaceAttachments(from source: String) async throws -> DirectorySwitchToken {
         let destination = layout.attachments
         let nonce = switchNonce()
-        let token = try await runBlocking {
-            try DirectorySwitch.replace(source: source, destination: destination, preservePrevious: true, nonce: nonce)
+        let fileSystem = self.fileSystem
+        let statePath = layout.state
+        let runtimeId = names.id
+        let clock = dependencies.clock
+        return try await runBlocking {
+            try DirectorySwitch.replace(
+                source: source, destination: destination, preservePrevious: true, nonce: nonce,
+                beforeSwitch: { token in
+                    let data = try fileSystem.readIfPresent(statePath)
+                    let current = try RuntimeMarker.parse(data)
+                    if data != nil, current == nil {
+                        throw NativeRuntimeError("INVALID_RUNTIME_STATE", "Invalid native runtime state")
+                    }
+                    let next = RuntimeMarker.merged(
+                        current: current, runtimeId: runtimeId,
+                        set: ["pendingAttachmentSwitch": try JSONValue(encoding: token)], remove: [], now: clock.now())
+                    try fileSystem.writeFile(statePath, try JSONValue.object(next).serialized(), mode: 0o600)
+                })
         }
-        try await writeState(set: ["pendingAttachmentSwitch": try JSONValue(encoding: token)], remove: [])
-        return token
     }
 
     /// `rollbackAttachmentSwitch`: the given token, else the persisted one.
@@ -1122,9 +1172,21 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
         try await writeState(set: [:], remove: ["pendingAttachmentSwitch"])
     }
 
+    /// The persisted `pendingAttachmentSwitch`, validated like `recoverInterruptedRestore`:
+    /// it must target this runtime's attachments directory and keep its previous tree as a
+    /// `<attachments>.previous-*` sibling. Malformed state throws instead of being renamed.
     public func persistedAttachmentSwitch() async throws -> DirectorySwitchToken? {
         guard let stored = try await readState()?["pendingAttachmentSwitch"], stored.isTruthy else { return nil }
-        return try stored.decode(DirectorySwitchToken.self)
+        let invalid = NativeRuntimeError("INVALID_RESTORE_JOURNAL", "Invalid pending attachment restore journal")
+        guard let token = try? stored.decode(DirectorySwitchToken.self),
+            token.destinationDirectory == layout.attachments
+        else { throw invalid }
+        if let previous = token.previousDirectory {
+            guard PathUtilities.dirname(previous) == PathUtilities.dirname(layout.attachments),
+                PathUtilities.basename(previous).hasPrefix("\(PathUtilities.basename(layout.attachments)).previous-")
+            else { throw invalid }
+        }
+        return token
     }
 
     /// What launch recovery did with an attachment switch a quit or crash interrupted.
@@ -1135,11 +1197,11 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
         case finalized
     }
 
-    /// Launch recovery for `pendingAttachmentSwitch`, before the database switch recovery
-    /// and before the backend starts. While `pendingDatabaseSwitch` is still persisted the
-    /// restore never reached its commit point, so the previous attachment tree goes back
-    /// (the database rolls back next); once the database switch was finalized the restored
-    /// tree is kept and only the previous one is removed.
+    /// The attachment half of `recoverInterruptedRestore` on its own; launch uses the
+    /// coordinated recovery, which also rolls the database switch back. While
+    /// `pendingDatabaseSwitch` is still persisted the restore never reached its commit
+    /// point, so the previous attachment tree goes back; once the database switch was
+    /// finalized the restored tree is kept and only the previous one is removed.
     @discardableResult
     public func recoverPendingAttachmentSwitch() async throws -> AttachmentSwitchRecovery? {
         guard let token = try await persistedAttachmentSwitch() else { return nil }
@@ -1150,6 +1212,25 @@ public actor NativeRuntime: DemoSeedingRuntime, BackupRuntime {
         }
         try await finalizeAttachmentSwitch(token)
         return .finalized
+    }
+
+    /// `recoverInterruptedRestore` (ADR-207): resolves the attachment and database restore
+    /// journals together before any write or Demo seed decision. While the database switch
+    /// is pending the backend stops, the previous attachment tree comes back and the
+    /// database switch rolls back; once the database switch was finalized the attachment
+    /// journal is cleanup only. A malformed journal or an ambiguous switch throws, so
+    /// startup fails closed instead of creating a replacement database.
+    public func recoverInterruptedRestore() async throws {
+        let state = try await readState()
+        let attachments = try await persistedAttachmentSwitch()
+        if let pending = state?["pendingDatabaseSwitch"], pending.isTruthy {
+            try await stop(keepPostgres: true)
+            if let attachments { try await rollbackPendingAttachmentSwitch(attachments) }
+            try await rollbackDatabaseSwitch(pending)
+        } else if let attachments {
+            // The database commit is durable; never roll its attachment generation back.
+            try await finalizeAttachmentSwitch(attachments)
+        }
     }
 
     /// `start()` then `waitUntilReady({ detailed: true })`, as a restore does after the switch.

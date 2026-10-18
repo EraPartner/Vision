@@ -22,6 +22,14 @@ related_code:
 
 # Categories
 
+## Merge cache consistency
+
+After a successful merge, `useCategoryMerge` invalidates category and recipient queries together
+with transaction-derived aggregates and research dossiers. Open summaries and linked research
+views therefore reload the new category assignments instead of retaining an old merged label.
+See [[docs/performance/caching-strategies]] and [[docs/testing/frontend-component-integration]].
+
+
 Categories organize transactions in an ordered tree. A category can be assigned at depth one or
 at any deeper level. An existing `FOOD:GROCERIES` category keeps its ID and display label after
 the migration. New categories use a parent ID and one node name; the colon-joined label is only
@@ -208,3 +216,8 @@ The merge dialog identifies the source by its full category path. Selecting a de
 
 The category dialog validates the trimmed name. Submitting only whitespace shows the required-name
 error and keeps the dialog open for correction; it does not send a save request.
+
+
+## Feature index
+
+- [[docs/features/index]]

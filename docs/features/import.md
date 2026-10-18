@@ -100,6 +100,21 @@ related_code:
 
 # Feature: CSV Import & Deduplication
 
+## Review edits and commit ordering
+
+Transaction import review serializes recipient and category edits. The UI disables conflicting
+editors while a save or commit is active. Commit waits for queued writes and cannot proceed after
+an unresolved edit failure. Multi-row changes settle every request and refresh the saved preview;
+a partial failure reports the problem and offers **Review saved edits** before proceeding.
+Optimistic category labels are cleared after settlement so they cannot mask persisted failures.
+Groups containing different effective row categories display a mixed state rather than choosing
+one row's category for the whole group.
+
+The frontend queue protects one review session; it is not a substitute for backend batch locks
+against another tab or concurrent commit. See [[docs/testing/testing]] for the browser journey
+boundary and its execution status.
+
+
 > [!tip] Import and review
 > [Open the journey](../flow-visualizer.html#csv-import) or [the companion flow](../flow-visualizer.html#import-commit). See [[docs/guides/visual-learning|Understand Vision Visually]] for the reading paths and conceptual diagrams.
 
@@ -1019,3 +1034,30 @@ their existing handling. Portfolio staging is unchanged.
 This deliberately changes previous partial-acceptance behavior for malformed bank files. Existing
 parked batches cannot recover records discarded by an older parser: discard the batch and upload
 the corrected original file. The failed batch retains its error summary. See [[docs/api/imports]].
+
+## Review ordering, batched writes and chronology
+
+Review edits are serialized in the client and commit waits for successful completion. After any
+failed override, the review reloads persisted staging state; mixed group categories are represented
+as mixed instead of keeping a misleading optimistic label. Unresolved failures block commit until
+review/retry succeeds. On the server, overrides lock the batch and require `awaiting_review`.
+Commit atomically claims a committable batch before reading rows; an override arriving afterward
+returns a conflict.
+
+Eligible rows use grouped modern/legacy duplicate lookups, bulk canonical inserts and batched
+staging status writes. Bulk failures fall back to isolated per-row savepoints. Occurrence-aware
+fingerprints, source hashes and chunk commit boundaries are retained. Accounts are locked in
+sorted order and revalidated as active through commit. Query-count and elapsed-time measurements
+on real PostgreSQL remain pending; reduced source-level round trips are not a measured speedup.
+
+Belfius sequence metadata survives staging and commit for same-day balance selection; see
+[[docs/adr/206-bank-chronology]]. Rollback rejects planned-execution links and requires reopening
+closed accounts before removing their ledger rows. It locks and rechecks the batch before
+discovering those rows, so a stale route status cannot let rollback race a commit or review
+override. The lock order is batch, accounts, then ledger rows; deletion uses only the guarded
+IDs. Neither guard silently changes a plan or account.
+
+
+## Feature index
+
+- [[docs/features/index]]

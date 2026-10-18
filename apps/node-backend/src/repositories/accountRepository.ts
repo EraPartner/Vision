@@ -97,7 +97,9 @@ export const accountRepository = {
   ): Promise<number | undefined> {
     const row = await queryOne(
       idRowSchema,
-      "SELECT id FROM accounts WHERE id = $1 AND is_active = true",
+      // Writers passing their transaction must retain the active-state check
+      // until commit. Account closing takes FOR UPDATE before reading balances.
+      `SELECT id FROM accounts WHERE id = $1 AND is_active = true${client ? " FOR SHARE" : ""}`,
       [id],
       client,
     );

@@ -84,6 +84,7 @@ entity "transactions" as transactions {
   * amount : numeric(15,2)
   currency : varchar(3)
   balance : numeric(15,2)
+  bank_sequence : numeric(18,0) <<nullable>>
   memo : text
   comment : text
   account_id : integer <<FK>>

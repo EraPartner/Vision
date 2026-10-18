@@ -94,7 +94,7 @@ public final class PortfolioWidgetsModel {
         if error == nil { didSave?() }
     }
     private func validate(_ record: OpenAPI.Setting) throws {
-        guard record.key == "widget_visibility", record.value.objectValue != nil,
+        guard record.key == "widget_visibility", InsightWidgetVisibility.isValidSetting(record.value),
             let exists = record.expected["exists"]?.boolValue,
             Set(record.expected.objectValue?.keys ?? [String: JSONValue]().keys)
                 == (exists ? ["exists", "value"] : ["exists"])

@@ -1,3 +1,4 @@
+import { VirtualRecipientExclusions } from "../VirtualRecipientExclusions";
 import { useState, memo, useMemo } from "react";
 import { SectionLoader } from "@/components/shared/SectionLoader";
 import { useQueryClient } from "@tanstack/react-query";
@@ -69,17 +70,25 @@ export const StatisticsSection = memo(function StatisticsSection() {
 
     const excludedCategories = settings.excludedCategoryIds;
     const excludedRecipients = settings.excludedRecipientIds;
+    const excludedCategorySet = useMemo(
+        () => new Set(excludedCategories),
+        [excludedCategories],
+    );
+    const excludedRecipientSet = useMemo(
+        () => new Set(excludedRecipients),
+        [excludedRecipients],
+    );
     const includeTransfers = includeTransfersSetting?.value === true;
 
     const toggleCategory = (id: number) => {
-        const next = excludedCategories.includes(id)
+        const next = excludedCategorySet.has(id)
             ? excludedCategories.filter((c) => c !== id)
             : [...excludedCategories, id];
         updateSettings({ excludedCategoryIds: next });
     };
 
     const toggleRecipient = (id: number) => {
-        const next = excludedRecipients.includes(id)
+        const next = excludedRecipientSet.has(id)
             ? excludedRecipients.filter((r) => r !== id)
             : [...excludedRecipients, id];
         updateSettings({ excludedRecipientIds: next });
@@ -147,9 +156,7 @@ export const StatisticsSection = memo(function StatisticsSection() {
     }, [categories, categorySearch]);
 
     const toggleCategoryGroup = (items: CategoryOption[]) => {
-        const allExcluded = items.every((c) =>
-            excludedCategories.includes(c.id),
-        );
+        const allExcluded = items.every((c) => excludedCategorySet.has(c.id));
         if (allExcluded) {
             updateSettings({
                 excludedCategoryIds: excludedCategories.filter(
@@ -159,7 +166,7 @@ export const StatisticsSection = memo(function StatisticsSection() {
         } else {
             const newIds = items
                 .map((c) => c.id)
-                .filter((id) => !excludedCategories.includes(id));
+                .filter((id) => !excludedCategorySet.has(id));
             updateSettings({
                 excludedCategoryIds: [...excludedCategories, ...newIds],
             });
@@ -172,12 +179,12 @@ export const StatisticsSection = memo(function StatisticsSection() {
             r.name.toLowerCase().includes(recipientSearch.toLowerCase()),
         );
         return [...filtered].sort((a, b) => {
-            const aExcl = excludedRecipients.includes(a.id) ? 0 : 1;
-            const bExcl = excludedRecipients.includes(b.id) ? 0 : 1;
+            const aExcl = excludedRecipientSet.has(a.id) ? 0 : 1;
+            const bExcl = excludedRecipientSet.has(b.id) ? 0 : 1;
             if (aExcl !== bExcl) return aExcl - bExcl;
             return a.name.localeCompare(b.name);
         });
-    }, [recipients, recipientSearch, excludedRecipients]);
+    }, [recipients, recipientSearch, excludedRecipientSet]);
 
     const hiddenBadge = (
         <Badge variant="outline" size="sm" className="ml-2">
@@ -290,18 +297,18 @@ export const StatisticsSection = memo(function StatisticsSection() {
                                     ) : (
                                         categoryGroups.map(
                                             ({ general, items, firstId }) => {
-                                                const allExcluded =
-                                                    items.every((c) =>
-                                                        excludedCategories.includes(
+                                                const allExcluded = items.every(
+                                                    (c) =>
+                                                        excludedCategorySet.has(
                                                             c.id,
                                                         ),
-                                                    );
-                                                const someExcluded =
-                                                    items.some((c) =>
-                                                        excludedCategories.includes(
+                                                );
+                                                const someExcluded = items.some(
+                                                    (c) =>
+                                                        excludedCategorySet.has(
                                                             c.id,
                                                         ),
-                                                    );
+                                                );
                                                 return (
                                                     <div
                                                         key={general}
@@ -346,7 +353,7 @@ export const StatisticsSection = memo(function StatisticsSection() {
                                                                 >
                                                                     <Checkbox
                                                                         id={`category-${category.id}`}
-                                                                        checked={excludedCategories.includes(
+                                                                        checked={excludedCategorySet.has(
                                                                             category.id,
                                                                         )}
                                                                         onCheckedChange={() =>
@@ -410,50 +417,25 @@ export const StatisticsSection = memo(function StatisticsSection() {
                                     setRecipientSearch(e.target.value)
                                 }
                             />
-                            <ScrollArea className="mt-3 h-[200px]">
-                                <div className="space-y-1 pr-3">
-                                    {visibleRecipients.length === 0 ? (
-                                        <p className={emptyClass}>
-                                            {recipientSearch
-                                                ? t(
-                                                      "settings.dashboard.noMatchingRecipients",
-                                                  )
-                                                : t(
-                                                      "settings.dashboard.noRecipients",
-                                                  )}
-                                        </p>
-                                    ) : (
-                                        visibleRecipients.map((recipient) => (
-                                            <div
-                                                key={recipient.id}
-                                                className={checkRowClass}
-                                            >
-                                                <Checkbox
-                                                    id={`recipient-${recipient.id}`}
-                                                    checked={excludedRecipients.includes(
-                                                        recipient.id,
-                                                    )}
-                                                    onCheckedChange={() =>
-                                                        toggleRecipient(
-                                                            recipient.id,
-                                                        )
-                                                    }
-                                                />
-                                                <Label
-                                                    htmlFor={`recipient-${recipient.id}`}
-                                                    className="flex flex-1 cursor-pointer items-center justify-between font-normal"
-                                                >
-                                                    <span>
-                                                        {recipient.name}
-                                                    </span>
-                                                    {!recipient.is_active &&
-                                                        hiddenBadge}
-                                                </Label>
-                                            </div>
-                                        ))
+                            {visibleRecipients.length === 0 ? (
+                                <p className={emptyClass}>
+                                    {recipientSearch
+                                        ? t(
+                                              "settings.dashboard.noMatchingRecipients",
+                                          )
+                                        : t("settings.dashboard.noRecipients")}
+                                </p>
+                            ) : (
+                                <VirtualRecipientExclusions
+                                    recipients={visibleRecipients}
+                                    excluded={excludedRecipientSet}
+                                    onToggle={toggleRecipient}
+                                    label={t(
+                                        "settings.dashboard.excludedRecipients",
                                     )}
-                                </div>
-                            </ScrollArea>
+                                    hiddenLabel={t("settings.dashboard.hidden")}
+                                />
+                            )}
                         </SettingRow>
                     </SettingsGroup>
                 </>

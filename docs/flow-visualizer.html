@@ -1253,7 +1253,7 @@
           {
             "id": "be.routes",
             "label": "Express routes",
-            "sub": "20 route files  ·  176 endpoints",
+            "sub": "HTTP operations defined in openapi.yaml",
             "kind": "backend",
             "x": 460,
             "y": 348
@@ -2802,7 +2802,7 @@
               {
                 "from": "sv.transactiondomains",
                 "to": "db.postgres",
-                "payload": "BEGIN · pg_advisory_xact_lock(manual-v2 hash) · duplicate lookup",
+                "payload": "BEGIN · pg_advisory_xact_lock(manual-v3 hash) · duplicate lookup",
                 "annotation": "apps/node-backend/src/services/transactionService.ts; apps/node-backend/src/services/deduplication.ts",
                 "title": "Lock the duplicate identity"
               },
@@ -2954,8 +2954,8 @@
                 "to": "be.routes",
                 "title": "Save recipient and category choices",
                 "note": "Each row override is persisted separately.",
-                "payload": "POST /api/import/batches/:id/rows/:rowId/override or category-override",
-                "annotation": "apps/frontend/src/lib/api/imports.ts; apps/node-backend/src/routes/importRoutes.ts"
+                "payload": "Serialized review edits; await completion and refetch persisted state on failure",
+                "annotation": "apps/frontend/src/features/imports/useImportReviewData.tsx waits for settled overrides and refetches persisted staging; unresolved failures block commit. apps/node-backend/src/repositories/importBatchRepository.ts locks batch state."
               },
               {
                 "from": "fe.pages",
@@ -2978,8 +2978,8 @@
                 "to": "db.postgres",
                 "title": "Commit bounded chunks",
                 "note": "Canonical accounts, fingerprints, row savepoints and chunk checkpoints preserve successful work.",
-                "payload": "transactions, provenance and per-row outcomes",
-                "annotation": "apps/node-backend/src/services/importPipeline/commit.ts"
+                "payload": "Sorted active-account locks; grouped identity lookup, bulk insert and staging status write; savepoint fallback",
+                "annotation": "apps/node-backend/src/services/importPipeline/commit.ts; repositories/importCommitRepository.ts preserve occurrence fingerprints, provenance and bank_sequence within each chunk."
               },
               {
                 "from": "sv.import",
@@ -3633,8 +3633,8 @@
                 "to": "build.native",
                 "title": "Export local data",
                 "note": "Use the native backup transport.",
-                "payload": "runBundleBackup",
-                "annotation": "packaging/electron/backup/restore.ts; packaging/electron/backup/native-transport.ts"
+                "payload": "Acquire maintenance guard, pause watchdog/audit, stop backend while keeping PostgreSQL",
+                "annotation": "packaging/electron/main.ts and backup/quiescent-snapshot.ts hold the writer pause across database dump and attachment capture."
               },
               {
                 "from": "build.native",
@@ -3651,6 +3651,13 @@
                 "note": "Receipt files accompany metadata.",
                 "payload": "exportAttachments",
                 "annotation": "packaging/electron/backup/native-transport.ts"
+              },
+              {
+                "from": "build.native",
+                "to": "build.electron",
+                "title": "Resume writers",
+                "payload": "Restart backend, await readiness and resume watchdog/audit in finally",
+                "annotation": "packaging/electron/backup/quiescent-snapshot.ts resumes before bundle compression, including capture failures."
               },
               {
                 "from": "build.electron",
@@ -3732,8 +3739,8 @@
                 "to": "db.attachments",
                 "title": "Switch attachments with a rollback copy",
                 "note": "Preserve the previous tree until finalization.",
-                "payload": "replaceAttachments preservePrevious",
-                "annotation": "packaging/electron/backup/native-transport.ts"
+                "payload": "Persist attachment switch intent before rename; retain rollback copy",
+                "annotation": "packaging/electron/runtime/native.ts writes the journal before mutation; startup consumes pending database and attachment journals before bootstrap creates the live database."
               },
               {
                 "from": "build.native",
@@ -4003,49 +4010,61 @@
             "id": "tax-pdf-report",
             "name": "Export a Belgian tax PDF report",
             "category": "Reports",
-            "summary": "The web ExportDialog sends the selected household and frozen or computed figures to POST /api/reports/tax; Puppeteer renders the returned PDF.",
+            "summary": "The web ExportDialog sends the selected household and frozen or computed figures to POST /api/reports/tax; the bounded report pipeline admits the request (503 when full), fetches only the requested sections, and Puppeteer renders the returned PDF.",
             "steps": [
               {
+                "from": "browser",
                 "to": "fe.pages",
                 "payload": "ExportDialog: type tax, year, sections, currency",
-                "annotation": "features/reports/ExportDialog.tsx selects the tax year; native Insights currently opens this same dialog in a web overlay.",
-                "from": "browser"
+                "annotation": "apps/frontend/src/features/reports/ExportDialog.tsx selects the tax year and its year-specific profile and calculation; annual personal income tax is omitted for partial periods. Native Insights currently opens this same dialog in a web overlay."
               },
               {
+                "from": "fe.pages",
                 "to": "fe.stores",
                 "payload": "profile/household and result for the selected year",
-                "annotation": "stores/belgianTaxStore.ts prefers frozen calculations for filed years.",
-                "from": "fe.pages"
+                "annotation": "stores/belgianTaxStore.ts prefers frozen calculations for filed years."
               },
               {
+                "from": "fe.stores",
                 "to": "pkg.shared-utils",
                 "payload": "computeHouseholdTax(h); toBelgianTaxCalculation(result, h) when unfrozen",
-                "annotation": "lib/belgianTax compatibility exports use the shared TypeScript engine; existing web calculations remain local.",
-                "from": "fe.stores"
+                "annotation": "lib/belgianTax compatibility exports use the shared TypeScript engine; existing web calculations remain local."
               },
               {
+                "from": "fe.pages",
                 "to": "fe.apiclient",
-                "payload": "POST /api/reports/tax: household, precomputedHousehold, precomputedPIT, year, sections",
-                "annotation": "features/reports/taxReportHousehold.ts serializes the selected household and results; postReportDownload uses an object URL.",
-                "from": "fe.pages"
+                "payload": "POST /api/reports/tax: household, precomputedHousehold, precomputedPIT (EUR), year, sections",
+                "annotation": "features/reports/taxReportHousehold.ts serializes the selected household and results; postReportDownload uses an object URL."
               },
               {
+                "from": "fe.apiclient",
                 "to": "be.routes",
                 "payload": "validated JSON report request",
-                "annotation": "routes/reports.ts validates the profile/result shapes and theme before report rendering.",
-                "from": "fe.apiclient"
+                "annotation": "apps/node-backend/src/routes/reports.ts validates request inputs, the profile/result shapes and theme before report rendering."
               },
               {
+                "from": "be.routes",
                 "to": "sv.reports",
-                "payload": "generateReport(\"tax\", params)",
-                "annotation": "services/reports/index.ts builds the themed HTML from supplied tax figures and portfolio data.",
-                "from": "be.routes"
+                "payload": "generateReport(\"tax\", params) · admit at most two active reports and eight queued; reject overflow with 503",
+                "annotation": "apps/node-backend/src/services/reports/reportConcurrency.ts admits before data and HTML allocation and cancels queued disconnected requests; services/reports/index.ts builds the themed HTML from supplied tax figures and portfolio data."
               },
               {
+                "from": "sv.reports",
+                "to": "be.repos",
+                "payload": "Fetch only requested section datasets with exact date and exclusion filters",
+                "annotation": "apps/node-backend/src/services/reports/dataFetcher.ts, dataFetcherPortfolio.ts and dataFetcherTax.ts propagate required-source failures instead of fabricating zero totals."
+              },
+              {
+                "from": "be.repos",
+                "to": "db.postgres",
+                "payload": "Consistent historical snapshot and filtered report aggregates",
+                "annotation": "apps/node-backend/src/services/reports/dataFetcherPortfolio.ts uses one snapshot for historical KPIs, labels its date and separates current holdings."
+              },
+              {
+                "from": "sv.reports",
                 "to": "fe.apiclient",
-                "payload": "application/pdf response",
-                "annotation": "Puppeteer renders the report; the frontend downloads the blob. The separate computation operation does not file a tax year.",
-                "from": "sv.reports"
+                "payload": "application/pdf: themed PDF with explicit period and currency provenance",
+                "annotation": "apps/node-backend/src/services/reports/puppeteerRenderer.ts renders the PDF within the admitted work slot; the frontend downloads the blob. The separate computation operation does not file a tax year."
               }
             ],
             "docs": [
@@ -4510,7 +4529,7 @@
                 "from": "build.electron",
                 "to": "build.native",
                 "payload": "prepareNativeDemo(demo-seed) · checksum and dump validation",
-                "annotation": "runtime/native-demo.ts retries interrupted switches, detects seed or reset changes, and refuses any application-data path outside Vision Demo."
+                "annotation": "runtime/native-demo.ts invokes native.ts coordinated attachment/database recovery before reading seed state, detects seed or reset changes, and refuses any application-data path outside Vision Demo. Recovery failure stops preparation without removing journals."
               },
               {
                 "from": "build.native",
@@ -5551,7 +5570,7 @@
                 "from": "build.electron",
                 "to": "build.auditanchor",
                 "payload": "trusted live 30-second cycle persists valid new head",
-                "annotation": "packaging/electron/main.ts runs the closure timer only after an exact verified startup head; a tail already present at startup is not promoted."
+                "annotation": "packaging/electron/main.ts establishes a session only at the exact trusted head, including after backend restart. Closure failures retry at bounded intervals. Verified recovery clears the outstanding notification; enrollment, unavailable, partial and failed states remain distinct."
               },
               {
                 "from": "build.electron",
@@ -5774,10 +5793,10 @@
               {
                 "from": "fe.pages",
                 "to": "fe.hooks",
-                "title": "Wait for exclusion resolution",
+                "title": "Resolve visibility and exclusions",
                 "note": "Hidden categories must resolve before requesting totals.",
-                "payload": "useFilteredDashboardStats / useMonthlySummary",
-                "annotation": "apps/frontend/src/hooks/useFilteredDashboardStats.ts"
+                "payload": "Wait for widget_visibility; enable only visible summary, trend, recent and category consumers",
+                "annotation": "apps/frontend/src/pages/DashboardPage.tsx; apps/frontend/src/hooks/useFilteredDashboardStats.ts retain per-chart exclusions and shared query consumers."
               },
               {
                 "from": "fe.hooks",
@@ -5859,15 +5878,15 @@
                 "to": "build.native",
                 "title": "Verify and start the runtime",
                 "note": "Verify packaged manifest and ensure private layout.",
-                "payload": "discover; ensureLayout; start",
-                "annotation": "packaging/electron/runtime/native.ts"
+                "payload": "Verify manifest on a worker thread with streamed file hashing",
+                "annotation": "packaging/electron/runtime/runtime-manifest.ts validates file, size, hash and symlink contracts without materializing entire runtime files on the main thread."
               },
               {
                 "from": "build.native",
                 "to": "db.postgres",
                 "title": "Open the private database cluster",
                 "note": "Provision separate administrator, owner, app and restricted analysis roles.",
-                "payload": "ensurePostgresReady; bootstrapDatabase",
+                "payload": "Recover pending coordinated restore switches before live database bootstrap",
                 "annotation": "packaging/electron/runtime/native.ts"
               },
               {
@@ -5884,7 +5903,7 @@
                 "title": "Run guarded migrations",
                 "note": "Use the reviewed migration path before normal requests.",
                 "payload": "runMigrations",
-                "annotation": "apps/node-backend/src/main.ts; apps/node-backend/src/database/migrate.ts recognizes exact reviewed 0120–0125 current revisions and pins their automatic additive target to 0125. Existing financial values, legacy objects and old receipt JSON remain unchanged. Older 0118/0119 bridge maintenance remains deferred; unknown successor revisions refuse automatic upgrade. Fresh baseline installs follow the normal chain, and warm boot at 0125 does not request 0118. Migration 0125 extends brokerage origin and typed staging cash receipt protection without creating cash history."
+                "annotation": "apps/node-backend/src/database/migrate.ts recognizes reviewed 0120–0127 revisions and pins their additive upgrade target to 0127. Legacy audit-bridge maintenance remains deferred and unknown revisions fail closed. Migration 0127 preserves bank chronology; see docs/adr/206-bank-chronology.md."
               },
               {
                 "from": "db.alembic",
@@ -5892,7 +5911,7 @@
                 "title": "Finish database initialization",
                 "note": "Ensure the analysis role and application grants after migrations.",
                 "payload": "ensureAnalysisRole",
-                "annotation": "apps/node-backend/src/main.ts"
+                "annotation": "apps/node-backend/src/startup/prepareViews.ts waits for view preparation and transfer backfill before requesting one refresh; warmup.ts keeps offline inflation loading local."
               },
               {
                 "from": "build.electron",
@@ -6124,7 +6143,7 @@
                 "to": "db.postgres",
                 "title": "Read matching candidates",
                 "note": "Match recipient cluster and sign, a five-day window and amount tolerance.",
-                "payload": "active plans and posted transactions",
+                "payload": "Recipient, direction and currency candidate buckets with ambiguity preserved",
                 "annotation": "apps/node-backend/src/services/plannedMatchService.ts"
               },
               {
@@ -6156,7 +6175,7 @@
                 "to": "sv.transactiondomains",
                 "title": "Lock and record execution",
                 "note": "The same transaction-plan pair is an idempotent replay.",
-                "payload": "executePlanned",
+                "payload": "Lock parent and transaction; validate currency and expected automatic occurrence; replay existing pair",
                 "annotation": "apps/node-backend/src/services/plannedExecutionService.ts"
               },
               {
@@ -6165,7 +6184,7 @@
                 "title": "Advance or finish the plan",
                 "note": "Record execution, inherit tags and advance unless recurrence bounds are reached.",
                 "payload": "execution history; nextOccurrenceYmd",
-                "annotation": "apps/node-backend/src/services/plannedExecutionService.ts"
+                "annotation": "apps/node-backend/src/services/plannedExecutionService.ts uses narrow locked state, rejects new completed one-off execution, and conditionally hydrates response history. repositories/plannedExecutionGuard.ts blocks deletion of linked ledger rows."
               },
               {
                 "from": "fe.hooks",
@@ -6295,6 +6314,134 @@
               {
                 "path": "api/ai-research.md",
                 "label": "AI Research API"
+              }
+            ]
+          },
+          {
+            "id": "portfolio-history",
+            "name": "Load complete portfolio history on demand",
+            "category": "Portfolio",
+            "summary": "Paginate inventory and explicitly distinguish recent overview data from complete detail/history requests.",
+            "steps": [
+              {
+                "from": "fe.pages",
+                "to": "fe.hooks",
+                "title": "Choose the required history scope",
+                "payload": "Recent overview or complete detail, tax and rental history",
+                "annotation": "apps/frontend/src/hooks/usePortfolio.ts; pages/portfolio/RealEstatePage.tsx; hooks/usePortfolioTaxData.ts"
+              },
+              {
+                "from": "fe.hooks",
+                "to": "fe.apiclient",
+                "title": "Bound requests and paginate",
+                "payload": "Inventory pages500; recent50 grouped100 IDs; complete history pages1000 with four concurrent holdings",
+                "annotation": "apps/frontend/src/hooks/portfolio/useInvestments.ts loads every metadata page and explicit complete history without catch-all per-holding fallback. Failed work stops new scheduling and drains current workers before rejecting. React Query cancellation aborts active HTTP requests and retry delays through apps/frontend/src/lib/api/portfolio.ts and client.ts."
+              },
+              {
+                "from": "fe.hooks",
+                "to": "fe.pages",
+                "title": "Preserve completeness and failures",
+                "payload": "History loading, error and retry state alongside separate valuation summary",
+                "annotation": "apps/frontend/src/hooks/usePortfolio.ts; features/portfolio/InvestmentDetailDialog.tsx distinguish failed history from an empty result. RealEstatePage.tsx retries both exchange rates and portfolio data when a rate is unavailable."
+              }
+            ],
+            "docs": [
+              {
+                "path": "features/portfolio.md",
+                "label": "Portfolio history"
+              }
+            ]
+          },
+          {
+            "id": "settings-on-demand",
+            "name": "Open Settings and persist choices",
+            "category": "Start here",
+            "summary": "Load Settings and its selected section on demand, while pending widget saves survive navigation.",
+            "steps": [
+              {
+                "from": "browser",
+                "to": "fe.features",
+                "title": "Open the selected section",
+                "payload": "Lazy dialog with independently lazy section and loading feedback",
+                "annotation": "apps/frontend/src/components/layout/AppLayout.tsx; lib/settingsSections.ts; features/settings/DashboardSettingsDialog.tsx preserve deep links and drafts after opening."
+              },
+              {
+                "from": "fe.features",
+                "to": "fe.stores",
+                "title": "Edit bounded controls",
+                "payload": "Virtual recipient exclusions, memoized membership and keyboard focus",
+                "annotation": "apps/frontend/src/features/settings/VirtualRecipientExclusions.tsx; features/settings/sections/StatisticsSection.tsx retain selection and ordering."
+              },
+              {
+                "from": "fe.stores",
+                "to": "fe.apiclient",
+                "title": "Persist beyond page lifetime",
+                "payload": "Serialized debounced widget save with retry and newer-choice protection",
+                "annotation": "apps/frontend/src/hooks/useWidgetVisibility.ts replays early edits over a successfully hydrated map before any full-setting write. Failed reads retain edits; module-owned serialized saves survive navigation."
+              }
+            ],
+            "docs": [
+              {
+                "path": "features/settings.md",
+                "label": "Settings"
+              },
+              {
+                "path": "performance/caching-strategies.md",
+                "label": "Query and persistence ownership"
+              }
+            ]
+          },
+          {
+            "id": "tax-filing-record",
+            "name": "Record a prepared tax year as filed",
+            "category": "Tax",
+            "summary": "Freeze the confirmed inputs and persist profile, snapshot and filing metadata atomically before showing filed status.",
+            "steps": [
+              {
+                "from": "fe.features",
+                "to": "fe.stores",
+                "payload": "Confirmed year, prepared calculation and frozen input snapshot",
+                "annotation": "apps/frontend/src/features/tax/MarkAsFiledDialog.tsx; apps/frontend/src/stores/taxPersistence.ts validate prerequisites and capture confirmation-time inputs."
+              },
+              {
+                "from": "fe.stores",
+                "to": "fe.apiclient",
+                "payload": "One acknowledged save for profile, snapshots and year metadata",
+                "annotation": "apps/frontend/src/stores/taxPersistence.ts; apps/frontend/src/lib/api/settings.ts serialize compare-and-set persistence for all three settings keys."
+              },
+              {
+                "from": "fe.apiclient",
+                "to": "be.routes",
+                "payload": "PUT /api/settings with settings and expected baselines",
+                "annotation": "apps/node-backend/src/routes/settings.ts validates settings and compare-and-set baselines."
+              },
+              {
+                "from": "be.routes",
+                "to": "be.repos",
+                "payload": "Atomic settings compare-and-set",
+                "annotation": "apps/node-backend/src/repositories/settingsRepository.ts applies the settings update within one transaction."
+              },
+              {
+                "from": "be.repos",
+                "to": "db.postgres",
+                "payload": "Commit profile, snapshots and filing metadata together",
+                "annotation": "apps/node-backend/src/repositories/settingsRepository.ts rejects stale baselines without a partial settings update."
+              },
+              {
+                "from": "fe.stores",
+                "to": "fe.features",
+                "payload": "Publish filed status only after acknowledgement; preserve newer changes in other years",
+                "annotation": "apps/frontend/src/stores/taxPersistence.ts merges only the confirmed year into latest state; failure leaves the year unfiled. Recording a filing does not submit a declaration."
+              }
+            ],
+            "docs": [
+              {
+                "path": "features/belgian-tax.md",
+                "label": "Belgian tax filing"
+              },
+              {
+                "path": "features/portfolio-tax.md",
+                "label": "Portfolio tax filing"
               }
             ]
           },

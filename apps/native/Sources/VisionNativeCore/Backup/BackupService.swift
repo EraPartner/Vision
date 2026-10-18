@@ -82,6 +82,9 @@ public actor BackupService {
     private var backupTask: Task<JSONValue, Never>?
     /// A restore is switching the database and attachments; backups wait until it ends.
     private var restoreInFlight = false
+    /// Quit-time callers waiting for a running backup or restore (`nativeMaintenanceDone`).
+    private var maintenanceWaiters: [CheckedContinuation<Void, Never>] = []
+    private let maintenance: BackupMaintenanceHooks
 
     public init(
         context: BackupContext,
@@ -92,8 +95,10 @@ public actor BackupService {
         },
         logger: any RuntimeLogging,
         now: @escaping @Sendable () -> Date = { Date() },
-        auditProvider: @escaping @Sendable () async -> (any AuditRestoreGuard)? = { nil }
+        auditProvider: @escaping @Sendable () async -> (any AuditRestoreGuard)? = { nil },
+        maintenance: BackupMaintenanceHooks = BackupMaintenanceHooks()
     ) {
+        self.maintenance = maintenance
         self.context = context
         self.settings = settings
         self.runtimeProvider = runtimeProvider
@@ -176,7 +181,43 @@ public actor BackupService {
         backupTask = task
         let result = await task.value
         backupTask = nil
+        resumeMaintenanceWaiters()
         return result
+    }
+
+    /// `await nativeMaintenanceDone` before the quit stops the services: returns once no
+    /// backup or restore is running.
+    public func waitForMaintenance() async {
+        while backupTask != nil || restoreInFlight {
+            await withCheckedContinuation { maintenanceWaiters.append($0) }
+        }
+    }
+
+    private func resumeMaintenanceWaiters() {
+        guard backupTask == nil, !restoreInFlight else { return }
+        let waiters = maintenanceWaiters
+        maintenanceWaiters.removeAll()
+        for waiter in waiters { waiter.resume() }
+    }
+
+    private static let maintenanceConflict = "A native backup, restore or update is already in progress"
+
+    /// `withBackupSnapshot` in `main.ts`: the app pauses its watchdog and tells the page,
+    /// the capture runs inside `QuiescentSnapshot`, and the app resumes afterwards, also
+    /// when the capture or the restart failed.
+    private func withBackupSnapshot<T: Sendable>(
+        _ runtime: any BackupRuntime, _ capture: @Sendable () async throws -> T
+    ) async throws -> T {
+        let snapshotRuntime = BackupSnapshotRuntime(runtime: runtime, audit: await auditProvider())
+        await maintenance.willBeginSnapshot()
+        do {
+            let value = try await QuiescentSnapshot.capture(snapshotRuntime, capture)
+            await maintenance.didEndSnapshot()
+            return value
+        } catch {
+            await maintenance.didEndSnapshot()
+            throw error
+        }
     }
 
     private func backupResult(destination: String, frontendStateJson: String?) async -> JSONValue {
@@ -197,14 +238,18 @@ public actor BackupService {
         defer { BackupFiles.remove(work) }
         let dbSqlPath = PathUtilities.join(work, "db.sql")
         let attachments = PathUtilities.join(work, "attachments")
-        try await runtime.dumpDatabase(to: dbSqlPath)
-        try await runtime.exportAttachments(to: attachments)
+        // SQL, attachments and schema head come from one quiescent interval (ADR-207);
+        // compression and encryption follow the restart.
+        let schemaHead = try await withBackupSnapshot(runtime) { () async throws -> String in
+            try await runtime.dumpDatabase(to: dbSqlPath)
+            try await runtime.exportAttachments(to: attachments)
+            return try await runtime.schemaHead()
+        }
         var frontendState: JSONValue?
         if let frontendStateJson, !frontendStateJson.isEmpty {
             // Invalid optional UI state does not invalidate the database backup.
             frontendState = try? JSONValue.parse(Data(frontendStateJson.utf8))
         }
-        let schemaHead = try await runtime.schemaHead()
         let appVersion = context.appVersion
         let date = now()
         let state = frontendState
@@ -290,14 +335,24 @@ public actor BackupService {
         guard BackupFiles.exists(path) else {
             return .object(["success": .bool(false), "error": .string("Backup file not found")])
         }
+        // `beginNativeMaintenance`: a restore never overlaps a running backup snapshot.
+        guard backupTask == nil else {
+            return .object(["success": .bool(false), "error": .string(Self.maintenanceConflict)])
+        }
         guard await confirm() else {
             return .object(["success": .bool(false), "error": .string("Restore cancelled by user")])
         }
         guard !restoreInFlight else {
             return .object(["success": .bool(false), "error": .string("A restore is already in progress")])
         }
+        guard backupTask == nil else {
+            return .object(["success": .bool(false), "error": .string(Self.maintenanceConflict)])
+        }
         restoreInFlight = true
-        defer { restoreInFlight = false }
+        defer {
+            restoreInFlight = false
+            resumeMaintenanceWaiters()
+        }
         let lower = path.lowercased()
         let isBundle = lower.hasSuffix(".visionbak") || lower.hasSuffix(".visionbak.enc")
         func restoreSelected(_ allowUnverifiedAudit: Bool) async throws -> JSONValue {

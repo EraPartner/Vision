@@ -78,9 +78,8 @@ public final class TaxProfileModel {
             initialValue = source
             records = overview.records
             initial = overview
-            isFiled =
-                editingHistorical && metadata[String(year)]?["filing"] != nil
-                && metadata[String(year)]?["filing"] != .null
+            // TaxProfileDialog: any filed year, the current one included, needs an explicit amend.
+            isFiled = metadata[String(year)]?["filing"] != nil && metadata[String(year)]?["filing"] != .null
             filedOverride = false
             step = initialStep
             selectedPartner = "A"

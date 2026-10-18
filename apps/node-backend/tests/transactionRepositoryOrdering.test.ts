@@ -80,14 +80,14 @@ describe("transaction list ORDER BY tiebreaker", () => {
       await transactionRepository[method]({ includeBalance: true });
       const sql = query.mock.calls[0]![0];
       expect(sql).toContain(
-        "SUM(t.amount) OVER (PARTITION BY t.account_id, COALESCE(t.currency, 'EUR') ORDER BY t.date ASC, t.id ASC) AS cumulative",
+        "SUM(t.amount) OVER (PARTITION BY t.account_id, COALESCE(t.currency, 'EUR') ORDER BY t.date ASC,",
       );
       expect(sql).toContain("balance - cumulative");
       expect(sql).toContain(
-        "OVER (PARTITION BY account_id, currency ORDER BY date ASC, id ASC) AS stamp",
+        "OVER (PARTITION BY account_id, currency ORDER BY date ASC, chronology ASC, id ASC) AS stamp",
       );
       expect(sql).toContain(
-        "cumulative + COALESCE(stamp[3], 0) AS running_balance",
+        "cumulative + COALESCE(stamp[4], 0) AS running_balance",
       );
     },
   );
@@ -134,11 +134,11 @@ describe("transaction list ORDER BY tiebreaker", () => {
     });
     const sql = query.mock.calls[0]![0];
     expect(sql).toContain(
-      "SUM(t.amount) OVER (PARTITION BY t.account_id, COALESCE(t.currency, 'EUR') ORDER BY t.date ASC, t.id ASC) AS cumulative",
+      "SUM(t.amount) OVER (PARTITION BY t.account_id, COALESCE(t.currency, 'EUR') ORDER BY t.date ASC,",
     );
     expect(sql).toContain("balance - cumulative");
     expect(sql).toContain(
-      "cumulative + COALESCE(stamp[3], 0) AS running_balance",
+      "cumulative + COALESCE(stamp[4], 0) AS running_balance",
     );
   });
 });
@@ -257,7 +257,16 @@ describe("transaction list count cache", () => {
     await transactionRepository.getAllWithCount({ active: true, offset: 50 });
     expect(countCalls()).toHaveLength(1);
 
-    queryPrepared.mockResolvedValueOnce({ rows: [{ id: 9 }], rowCount: 1 });
+    withTransaction.mockImplementation(async (fn) =>
+      fn({
+        query: vi.fn().mockImplementation(async (sql: string) => ({
+          rows: sql.includes("FROM accounts")
+            ? [{ id: 1, is_active: true }]
+            : [{ id: 9, account_id: 1 }],
+          rowCount: 1,
+        })),
+      }),
+    );
     await expect(transactionRepository.hardDelete(9)).resolves.toBe(true);
     await transactionRepository.getAllWithCount({ active: true });
 

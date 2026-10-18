@@ -55,5 +55,5 @@ export function taxReportContextFromSettings(
             return liveResult ??= runtime.computeHouseholdTax(live);
         },
     };
-    return taxReportContext(state, year, translate, runtime);
+    return taxReportContext(state, year, translate, runtime, true, true);
 }

@@ -45,6 +45,23 @@ public struct PortfolioHoldingsView: View {
     }
     private var holdings: [PortfolioHolding] { model.active.filter { classes.contains($0.assetClass) } }
     private var isUnitBased: Bool { !["real_estate", "savings", "bond"].contains(assetClass) }
+    private var isRealEstate: Bool { assetClass == "real_estate" }
+    /// RealEstatePage: each property's latest rent, converted from its booking currency.
+    private var rentById: [Int: Decimal?] {
+        let converter = PlannedCurrencyConverter(
+            rates: shell.exchangeRates.data, target: shell.settings.defaultCurrency)
+        return Dictionary(
+            uniqueKeysWithValues: holdings.map { holding in
+                (
+                    holding.id,
+                    PortfolioMonthlyRent.inTarget(
+                        model.rentHistory[holding.id] ?? [], originalCurrency: holding.originalCurrency,
+                        convert: { converter.convert($0, from: $1) })
+                )
+            })
+    }
+    private var missingRentRate: Bool { isRealEstate && rentById.values.contains { $0 == nil } }
+    private var rentKey: String { holdings.map { String($0.id) }.joined(separator: ",") }
     private var emptyKey: String {
         switch prefix {
         case "crypto": "noCrypto"
@@ -73,12 +90,22 @@ public struct PortfolioHoldingsView: View {
                         }.accessibilityLabel(strings.t("portfolio.menu"))
                     }
                 }
-                if model.isLoading {
+                if model.isLoading || (isRealEstate && (model.rentLoading || (missingRentRate && shell.exchangeRates.isLoading))) {
                     ProgressView().frame(maxWidth: .infinity).padding(60)
-                } else if let error = model.error {
+                } else if let error = model.error ?? (isRealEstate ? model.rentError : nil) ?? (missingRentRate
+                    ? strings.t("realestate.missingRentRate") : nil)
+                {
                     Text(strings.t(prefix + ".pageErrorTitle")).font(.title2)
                     Text(error).foregroundStyle(theme.destructive)
-                    Button(strings.t("common.retry")) { Task { await reload(force: true) } }
+                    Button(strings.t("common.retry")) {
+                        Task {
+                            await reload(force: true)
+                            if isRealEstate {
+                                await model.loadRentHistory(ids: holdings.map(\.id), force: true)
+                                if missingRentRate { await shell.exchangeRates.retry() }
+                            }
+                        }
+                    }
                 } else if holdings.isEmpty {
                     AdminCard {
                         VisionEmptyState(
@@ -101,6 +128,11 @@ public struct PortfolioHoldingsView: View {
             }.padding(24).frame(maxWidth: 1440, alignment: .leading).frame(maxWidth: .infinity)
         }
         .task(id: shell.settings.defaultCurrency + String(shell.settingsRevision)) { await reload() }
+        .task(id: isRealEstate ? rentKey : "") {
+            guard isRealEstate, !holdings.isEmpty else { return }
+            await shell.exchangeRates.appear()
+            await model.loadRentHistory(ids: holdings.map(\.id))
+        }
         .onChange(of: assetClass) { _, _ in
             query.clearAll()
             optionalColumns = []
@@ -138,8 +170,8 @@ public struct PortfolioHoldingsView: View {
                     } else if assetClass == "real_estate" {
                         figure("portfolio.appreciation", total { $0.totalAppreciation }, signed: true)
                         figure("portfolio.rentalIncome", total { $0.totalIncome }, signed: true)
-                        if holdings.allSatisfy({ $0.estimatedMonthlyRent != nil }) {
-                            let rent = total { $0.estimatedMonthlyRent ?? 0 }
+                        Group {
+                            let rent = rentById.values.reduce(Decimal(0)) { $0 + ($1 ?? 0) }
                             VStack(alignment: .leading, spacing: 5) {
                                 Text(strings.t("portfolio.yield")).font(.caption).foregroundStyle(theme.secondaryLabel)
                                 Text(
@@ -390,7 +422,9 @@ public struct PortfolioHoldingsView: View {
     private var assetCards: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 390), alignment: .top)], alignment: .leading, spacing: 20) {
             ForEach(holdings) { holding in
-                PortfolioAssetCard(holding: holding, model: model, editing: editing, shell: shell)
+                PortfolioAssetCard(
+                    holding: holding, model: model, editing: editing, shell: shell,
+                    monthlyRent: isRealEstate ? (rentById[holding.id] ?? nil) : nil)
             }
         }
     }

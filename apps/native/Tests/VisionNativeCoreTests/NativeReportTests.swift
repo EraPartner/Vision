@@ -179,6 +179,16 @@ actor ReportTestTransport: APITransport {
         let body = try #require(await service.requests.first?.body)
         #expect(body["excludedCategoryIds"] == .array([]) && body["excludedRecipientIds"] == .array([]))
     }
+    /// ExportDialog: annual tax figures need a full calendar year, so other periods never ask.
+    @Test func nonAnnualTaxPeriodsRequestNoTaxContext() async throws {
+        let service = ReportTestService()
+        let recorder = ReportCallbackRecorder()
+        let model = model(service, recorder)
+        model.configure(type: .tax)
+        model.periodPreset = .rolling12
+        await model.submit()
+        #expect(recorder.contextYears.isEmpty && (await service.requests.count) == 1)
+    }
     @Test func taxContextUsesSelectedFrozenYearAndRetainsDecimalUnknownHouseholdFields() async throws {
         let service = ReportTestService()
         let recorder = ReportCallbackRecorder()

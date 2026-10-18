@@ -3,12 +3,25 @@
  */
 
 import crypto from "crypto";
+import Decimal from "decimal.js";
 import { query, withSavepointIfInTransaction } from "../database/connection.ts";
 import { logger } from "../config/logger.ts";
 import { checkRows, queryRows } from "../database/rowContracts.ts";
 import { idRowSchema } from "../database/rowSchemas.ts";
 import { transactionIdRowSchema } from "../database/rows/ledger.ts";
-import { epochMsToUtcYmd } from "../lib/dateFormat.ts";
+import { epochMsToUtcYmd, toYmd } from "../lib/dateFormat.ts";
+
+// Match ECMAScript String.trim() exactly, including historical untrimmed rows.
+// PostgreSQL's default TRIM only removes ordinary spaces.
+const manualMemoTrimSql = String.raw`BTRIM(t.memo, U&'\0009\000A\000B\000C\000D\0020\00A0\1680\2000\2001\2002\2003\2004\2005\2006\2007\2008\2009\200A\2028\2029\202F\205F\3000\FEFF')`;
+
+// NUMERIC(18,4) rounds ties away from zero. Identity must represent the
+// persisted value so equivalent inputs share both the lock and live predicate.
+function manualAmountIdentity(amount: number | string): string {
+  return new Decimal(amount)
+    .toDecimalPlaces(4, Decimal.ROUND_HALF_UP)
+    .toString();
+}
 
 export interface FieldHashInput {
   /** genuine UTC-instant Date (see contract note below). */
@@ -39,6 +52,7 @@ export interface ManualHashInput {
   memo?: string | null | undefined;
   bankAccount?: string | null | undefined;
   accountId?: number | string | null | undefined;
+  currency?: string | null | undefined;
 }
 
 /**
@@ -51,10 +65,19 @@ function createManualTransactionHash({
   memo,
   bankAccount,
   accountId,
+  currency,
 }: ManualHashInput): string {
   const accountIdentity =
     accountId == null ? (bankAccount || "").toUpperCase() : `id:${accountId}`;
-  const raw = `manual-v2|${date}|${amount}|${recipientId}|${(memo || "").toUpperCase()}|${accountIdentity}`;
+  const raw = JSON.stringify([
+    "manual-v3",
+    toYmd(date),
+    manualAmountIdentity(amount),
+    recipientId == null ? null : String(recipientId),
+    (memo || "").trim().toUpperCase(),
+    accountIdentity,
+    (currency || "EUR").trim().toUpperCase(),
+  ]);
   return crypto.createHash("sha256").update(raw, "utf-8").digest("hex");
 }
 
@@ -128,6 +151,7 @@ export async function isManualDuplicate({
   memo,
   bankAccount,
   accountId,
+  currency,
 }: ManualHashInput): Promise<{
   isDuplicate: boolean;
   existingTransactionId: number | null;
@@ -139,7 +163,26 @@ export async function isManualDuplicate({
     memo,
     bankAccount,
     accountId,
+    currency,
   });
+
+  // Claims are hints: edits can leave an old hash pointing at a different identity.
+  // Validate the live fields even on a hash hit; legacy hashes fall through here too.
+  const predicate = `t.date = $1 AND t.amount = $2
+    AND t.recipient_id IS NOT DISTINCT FROM $3::integer
+    AND UPPER(COALESCE(${manualMemoTrimSql}, '')) = $4
+    AND (($6::integer IS NOT NULL AND t.account_id = $6)
+      OR ($6::integer IS NULL AND COALESCE(UPPER(acct.name), '') = $5))
+    AND UPPER(t.currency) = $7 AND t.is_active = true`;
+  const identityParams = [
+    toYmd(date),
+    manualAmountIdentity(amount),
+    recipientId ?? null,
+    (memo || "").trim().toUpperCase(),
+    (bankAccount || "").toUpperCase(),
+    accountId ?? null,
+    (currency || "EUR").trim().toUpperCase(),
+  ];
 
   // Rows are checked after the try: a contract violation must fail loudly,
   // not fall through to field matching like a missing claim table does.
@@ -157,9 +200,10 @@ export async function isManualDuplicate({
           `SELECT m.transaction_id
              FROM manual_transaction_dedup_claims m
              JOIN transactions t ON t.id = m.transaction_id AND t.is_active = true
-            WHERE m.deduplication_hash = $1
+             LEFT JOIN accounts acct ON acct.id = t.account_id
+            WHERE m.deduplication_hash = $8 AND ${predicate}
             LIMIT 1`,
-          [hash],
+          [...identityParams, hash],
         ),
     );
     claimRows = result.rows;
@@ -183,22 +227,9 @@ export async function isManualDuplicate({
     idRowSchema,
     `SELECT t.id FROM transactions t
      LEFT JOIN accounts acct ON acct.id = t.account_id
-     WHERE t.date = $1 AND t.amount = $2 AND t.recipient_id = $3
-       AND COALESCE(TRIM(t.memo), '') = $4
-       AND (
-         ($6::integer IS NOT NULL AND t.account_id = $6)
-         OR ($6::integer IS NULL AND COALESCE(UPPER(acct.name), '') = $5)
-       )
-       AND t.is_active = true
+     WHERE ${predicate}
      LIMIT 1`,
-    [
-      date,
-      amount,
-      recipientId,
-      (memo || "").trim(),
-      (bankAccount || "").toUpperCase(),
-      accountId ?? null,
-    ],
+    identityParams,
   );
   if (fieldMatch) {
     return { isDuplicate: true, existingTransactionId: fieldMatch.id };
@@ -217,6 +248,7 @@ export async function recordManualTransactionDedupClaim({
   memo,
   bankAccount,
   accountId,
+  currency,
   transactionId,
 }: ManualHashInput & {
   categoryId?: number | string | null;
@@ -230,6 +262,7 @@ export async function recordManualTransactionDedupClaim({
     memo,
     bankAccount,
     accountId,
+    currency,
   });
 
   try {

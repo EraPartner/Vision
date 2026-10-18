@@ -17,7 +17,7 @@ import { toast } from "sonner";
 import { useShallow } from "zustand/react/shallow";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { usePreloadedSetting } from "@/contexts/SettingsPreloadContext";
-import { useDebouncedSetting } from "@/hooks/useDebouncedSetting";
+import { scheduleTaxPersistence } from "@/stores/taxPersistence";
 import {
     DEFAULT_BELGIAN_TAX_PROFILE,
     hasMeaningfulBelgianTaxData,
@@ -108,15 +108,6 @@ export function BelgianTaxProfileProvider({
     const markSaveError = useSettingsStore((state) => state._markSaveError);
     const markHydrationFailed = useSettingsStore(
         (state) => state._markHydrationFailed,
-    );
-    const household = useSettingsStore((state) => state.household);
-    const householdSnapshots = useSettingsStore(
-        (state) => state.householdSnapshots,
-    );
-    const snapshotMetas = useSettingsStore((state) => state.snapshotMetas);
-    // After a failed engine load nothing was hydrated, so nothing may be written back.
-    const persistBlocked = useSettingsStore(
-        (state) => state.isLoading || state.householdLoadFailed,
     );
 
     useEffect(() => beginHydration(), [beginHydration]);
@@ -224,26 +215,26 @@ export function BelgianTaxProfileProvider({
         preloadSnapshotsLoading,
     ]);
 
-    useDebouncedSetting(
-        HOUSEHOLD_SETTINGS_KEY,
-        household,
-        persistBlocked,
-        markSaveError,
-        "Failed to save Belgian tax household:",
-    );
-    useDebouncedSetting(
-        HOUSEHOLD_SNAPSHOTS_SETTINGS_KEY,
-        householdSnapshots,
-        persistBlocked,
-        markSaveError,
-        "Failed to save Belgian tax household snapshots:",
-    );
-    useDebouncedSetting(
-        SNAPSHOT_METAS_SETTINGS_KEY,
-        snapshotMetas,
-        persistBlocked,
-        markSaveError,
-        "Failed to save Belgian tax profile snapshot meta:",
+    useEffect(
+        () =>
+            useSettingsStore.subscribe((state, previous) => {
+                // After a failed engine load nothing was hydrated, so nothing may be written back.
+                if (
+                    state.isLoading ||
+                    previous.isLoading ||
+                    state.householdLoadFailed ||
+                    !state.household
+                )
+                    return;
+                if (
+                    state.household !== previous.household ||
+                    state.householdSnapshots !== previous.householdSnapshots ||
+                    state.snapshotMetas !== previous.snapshotMetas
+                ) {
+                    scheduleTaxPersistence(state);
+                }
+            }),
+        [],
     );
 
     return (
@@ -269,11 +260,11 @@ export function BelgianTaxSaveErrorToaster() {
 }
 
 // Compatibility hook stays beside its provider, matching the other hydration bridges.
- 
 export function useBelgianTaxProfile(): PublicBelgianTaxProfileState;
 export function useBelgianTaxProfile<T>(
     selector: (state: PublicBelgianTaxProfileState) => T,
 ): T;
+// eslint-disable-next-line react-refresh/only-export-components
 export function useBelgianTaxProfile<T = PublicBelgianTaxProfileState>(
     selector?: (state: PublicBelgianTaxProfileState) => T,
 ): T {

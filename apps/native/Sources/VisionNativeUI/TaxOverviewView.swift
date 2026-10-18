@@ -90,6 +90,14 @@ public struct TaxOverviewView: View {
                 TaxYearSwitcherView(
                     overview: overview, availableYears: data?.yearCalculations.map(\.year) ?? [],
                     actions: screens.actions, shell: shell)
+                // YearActionsMenu: filing and CSV export are visible buttons beside the switcher.
+                if TaxYearPresentation.metadata(overview)["filing"]?.objectValue == nil {
+                    Button(strings.t("tax.yearActions.markFiled"), systemImage: "lock") { filing = true }
+                        .disabled(screens.actions.isSaving)
+                }
+                Button(strings.t("tax.yearActions.exportCsv"), systemImage: "arrow.down.document") {
+                    Task { await screens.exportYearCsv() }
+                }.disabled(screens.actions.isSaving)
                 actionsMenu(overview)
                 Button(
                     strings.t(overview.hasProfile ? "tax.profile.edit" : "tax.profile.setup"),
@@ -114,9 +122,6 @@ public struct TaxOverviewView: View {
                     strings.t(frozen ? "tax.yearActions.unfreeze" : "tax.yearActions.freeze"), systemImage: "snowflake"
                 ) {
                     Task { await perform(frozen ? .unfreeze : .freeze) }
-                }
-                if overview.isHistorical {
-                    Button(strings.t("tax.yearActions.markFiled"), systemImage: "lock") { filing = true }
                 }
             } else {
                 Button(strings.t("tax.yearActions.unmarkFiled"), systemImage: "lock.open") {

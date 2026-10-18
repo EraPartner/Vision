@@ -103,7 +103,8 @@ export function usePortfolioTaxData() {
             viewedYear,
         ],
     );
-    const { allSummaries: rawSummaries } = usePortfolio();
+    const portfolioQuery = usePortfolio({ completeHistory: true });
+    const { allSummaries: rawSummaries } = portfolioQuery;
     const { getAdjustment } = usePortfolioTaxAdjustments();
     const { getClassification } = usePortfolioTaxClassifications();
     // Overlay user-provided tax classifications onto each summary so downstream
@@ -368,6 +369,7 @@ export function usePortfolioTaxData() {
         liveProfile.profileConfigured || liveProfile.grossAnnualIncome > 0;
 
     return {
+        portfolioQuery,
         /** Profile for the viewed year (live or snapshot). */
         profile,
         /** Display PIT calculation for the viewed year (frozen "as-filed" when present). */

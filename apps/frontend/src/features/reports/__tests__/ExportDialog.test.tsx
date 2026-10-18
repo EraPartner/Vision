@@ -7,6 +7,8 @@ import { ExportDialog } from "@/features/reports/ExportDialog";
 import { http } from "msw";
 import { server } from "@/test/msw/server";
 import { ok, settingsWithBaselines } from "@/test/msw/handlers";
+import { DEFAULT_BELGIAN_TAX_PROFILE } from "@/stores/belgianTaxStore";
+import { computeBelgianPIT } from "@/lib/belgianTax";
 import * as reportsApi from "@/lib/api/reports";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { LATEST_TAX_YEAR } from "@/lib/belgianTax/constants";
@@ -394,15 +396,16 @@ describe("ExportDialog", () => {
             );
         });
 
-        it("uses the current year for a rolling period, like the backend heading", async () => {
+        it("omits annual tax and household figures for a rolling period", async () => {
             const live = married(20_000);
             const options = await downloadTax(
                 { belgian_tax_household_v2: live },
                 { year: "rolling" },
             );
             expect(options.period).toEqual({ kind: "rolling", months: 12 });
-            expect(options.taxProfile?.taxYear).toBe(new Date().getFullYear());
-            expect(options.precomputedPIT?.totalTax).toBeGreaterThan(0);
+            expect(options.taxProfile).toBeUndefined();
+            expect(options.precomputedPIT).toBeUndefined();
+            expect(options.household).toBeUndefined();
         });
 
         it("exports a frozen year's frozen figures, not a live recompute", async () => {
@@ -423,4 +426,48 @@ describe("ExportDialog", () => {
             expect(options.precomputedHousehold?.partners[1]?.grossIncome).toBe(35_000);
         });
     });
+});
+
+
+it.each([false, true])('exports historical PIT only from an existing year profile (saved=%s), preserving frozen totals', async (saved) => {
+    const live = { ...DEFAULT_BELGIAN_TAX_PROFILE, taxYear: 2026, profileConfigured: true };
+    const historical = { ...live, taxYear: 2024 };
+    const frozen = { ...computeBelgianPIT(historical), totalPIT: 12345 };
+    server.use(http.get('http://localhost:3002/api/settings', () => ok(settingsWithBaselines({
+        belgian_tax_profile: live,
+        belgian_tax_profile_snapshots_v1: saved ? { 2024: historical } : {},
+        belgian_tax_profile_snapshot_meta_v1: saved ? { 2024: { frozenCalculation: frozen } } : {},
+    }))));
+    const user = await openDialog();
+    await user.click(screen.getByRole('radio', { name: /^tax$/i }));
+    await user.click(screen.getByRole('radio', { name: /full year|specific year/i }));
+    fireEvent.change(screen.getByLabelText(/^year$/i), { target: { value: '2024' } });
+    await user.click(screen.getByRole('button', { name: /download pdf/i }));
+    await waitFor(() => expect(reportsApi.downloadTaxReport).toHaveBeenCalled());
+    const options = vi.mocked(reportsApi.downloadTaxReport).mock.calls[0]?.[0];
+    if (saved) {
+        expect(options?.taxProfile?.taxYear).toBe(2024);
+        expect(options?.precomputedPIT?.totalTax).toBe(12345);
+    } else {
+        expect(options?.taxProfile).toBeUndefined();
+        expect(options?.precomputedPIT).toBeUndefined();
+    }
+});
+
+it('exports a historical year that has only a frozen calculation, using its frozen totals', async () => {
+    const live = { ...DEFAULT_BELGIAN_TAX_PROFILE, taxYear: 2026, profileConfigured: true };
+    const frozen = { ...computeBelgianPIT({ ...live, taxYear: 2024 }), totalPIT: 12345 };
+    server.use(http.get('http://localhost:3002/api/settings', () => ok(settingsWithBaselines({
+        belgian_tax_profile: live,
+        belgian_tax_profile_snapshot_meta_v1: { 2024: { frozenCalculation: frozen } },
+    }))));
+    const user = await openDialog();
+    await user.click(screen.getByRole('radio', { name: /^tax$/i }));
+    await user.click(screen.getByRole('radio', { name: /full year|specific year/i }));
+    fireEvent.change(screen.getByLabelText(/^year$/i), { target: { value: '2024' } });
+    await user.click(screen.getByRole('button', { name: /download pdf/i }));
+    await waitFor(() => expect(reportsApi.downloadTaxReport).toHaveBeenCalled());
+    const options = vi.mocked(reportsApi.downloadTaxReport).mock.calls[0]?.[0];
+    expect(options?.taxProfile?.taxYear).toBe(2024);
+    expect(options?.precomputedPIT?.totalTax).toBe(12345);
 });

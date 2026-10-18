@@ -7,6 +7,8 @@ import {
   releaseDbSuiteLock,
 } from "./setup/db.ts";
 import { closePool } from "../src/database/connection.ts";
+import transactionRepository from "../src/repositories/transactionRepository.ts";
+import { bulkDeleteTransactions } from "../src/services/transactionBulkService.ts";
 import { executePlanned } from "../src/services/plannedExecutionService.ts";
 
 type ExecutePlannedResult = Awaited<ReturnType<typeof executePlanned>>;
@@ -71,7 +73,11 @@ describe.skipIf(!hasTestDatabase())(
     // Hold the parent until both application transactions are waiting. The old
     // implementation reads stale state before blocking on the execution insert;
     // the fixed implementation waits on the parent before its first read.
-    async function concurrently(id: number, ids: number[]) {
+    async function concurrently(
+      id: number,
+      ids: number[],
+      expectedOccurrence?: string,
+    ) {
       const gate = await getTestPool()!.connect();
       let outcomes:
         Promise<PromiseSettledResult<ExecutePlannedResult>[]> | undefined;
@@ -87,6 +93,7 @@ describe.skipIf(!hasTestDatabase())(
               id,
               executedTransactionId,
               executionDate: "2026-07-01",
+              expectedOccurrence,
             }),
           ),
         );
@@ -117,6 +124,148 @@ describe.skipIf(!hasTestDatabase())(
       );
       return rows[0];
     }
+
+    it.each([undefined, "2026-07-01"])(
+      "rejects inactive payments without advancing (expected occurrence %s)",
+      async (expectedOccurrence) => {
+        const { id, ids } = await fixture();
+        await getTestPool()!.query(
+          "UPDATE transactions SET is_active = false WHERE id = $1",
+          [ids[0]],
+        );
+        await expect(
+          executePlanned({
+            id,
+            executedTransactionId: ids[0]!,
+            expectedOccurrence,
+          }),
+        ).rejects.toMatchObject({ status: 409 });
+        expect(await persisted(id)).toEqual({
+          day: "2026-07-01",
+          count: 0,
+          is_executed: false,
+        });
+      },
+    );
+
+    it("replays an existing execution even if its ledger row was later deactivated", async () => {
+      const { id, ids } = await fixture();
+      await executePlanned({ id, executedTransactionId: ids[0]! });
+      const before = await persisted(id);
+      await getTestPool()!.query(
+        "UPDATE transactions SET is_active = false WHERE id = $1",
+        [ids[0]],
+      );
+      await expect(
+        executePlanned({ id, executedTransactionId: ids[0]! }),
+      ).resolves.toMatchObject({ duplicate: true });
+      expect(await persisted(id)).toEqual(before);
+    });
+
+    it("rejects a different currency without advancing or recording execution", async () => {
+      const { id, ids } = await fixture();
+      await getTestPool()!.query(
+        "UPDATE transactions SET currency = 'USD' WHERE id = $1",
+        [ids[0]],
+      );
+      await expect(
+        executePlanned({ id, executedTransactionId: ids[0]! }),
+      ).rejects.toMatchObject({ status: 409 });
+      expect(await persisted(id)).toEqual({
+        day: "2026-07-01",
+        count: 0,
+        is_executed: false,
+      });
+    });
+
+    it("allows only one payment for a one-off, but accepts its replay", async () => {
+      const { id, ids } = await fixture();
+      await getTestPool()!.query(
+        "UPDATE planned_transactions SET is_recurring = false WHERE id = $1",
+        [id],
+      );
+      const results = await concurrently(id, ids);
+      expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+      expect(await persisted(id)).toEqual({
+        day: "2026-07-01",
+        count: 1,
+        is_executed: true,
+      });
+    });
+
+    it("serializes two automatic matches for the same recurring occurrence", async () => {
+      const { id, ids } = await fixture();
+      await getTestPool()!.query(
+        "UPDATE planned_transactions SET recipient_id = (SELECT recipient_id FROM transactions WHERE id = $2) WHERE id = $1",
+        [id, ids[0]],
+      );
+      await getTestPool()!.query(
+        "UPDATE transactions SET date = '2026-07-01' WHERE id = ANY($1::int[])",
+        [ids],
+      );
+      const results = await concurrently(id, ids, "2026-07-01");
+      expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+      expect(await persisted(id)).toEqual({
+        day: "2026-08-01",
+        count: 1,
+        is_executed: false,
+      });
+    });
+
+    it("rejects a stale automatic occurrence after a concurrent execution", async () => {
+      const { id, ids } = await fixture();
+      await getTestPool()!.query(
+        "UPDATE planned_transactions SET recipient_id = (SELECT recipient_id FROM transactions WHERE id = $2) WHERE id = $1",
+        [id, ids[0]],
+      );
+      await executePlanned({
+        id,
+        executedTransactionId: ids[0]!,
+        expectedOccurrence: "2026-07-01",
+        hydrateResult: false,
+      });
+      await expect(
+        executePlanned({
+          id,
+          executedTransactionId: ids[1]!,
+          expectedOccurrence: "2026-07-01",
+          hydrateResult: false,
+        }),
+      ).rejects.toMatchObject({ status: 409 });
+      expect(await persisted(id)).toEqual({
+        day: "2026-08-01",
+        count: 1,
+        is_executed: false,
+      });
+    });
+
+    it("preserves earlier and latest executions when single or bulk deletion is rejected", async () => {
+      const { id, ids } = await fixture();
+      await executePlanned({ id, executedTransactionId: ids[0]! });
+      await executePlanned({ id, executedTransactionId: ids[1]! });
+      await expect(
+        transactionRepository.hardDelete(ids[0]!),
+      ).rejects.toMatchObject({ status: 409 });
+      await expect(
+        transactionRepository.hardDelete(ids[1]!),
+      ).rejects.toMatchObject({ status: 409 });
+      await expect(bulkDeleteTransactions({ ids })).rejects.toMatchObject({
+        status: 409,
+      });
+      expect(await persisted(id)).toEqual({
+        day: "2026-09-01",
+        count: 2,
+        is_executed: false,
+      });
+      expect(
+        (
+          await getTestPool()!.query(
+            "SELECT id FROM transactions WHERE id = ANY($1::int[])",
+            [ids],
+          )
+        ).rowCount,
+      ).toBe(2);
+    });
 
     it("advances two concurrent distinct payments twice", async () => {
       const { id, ids } = await fixture();

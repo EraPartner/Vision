@@ -53,6 +53,21 @@ A version 3 trusted checkpoint may contain a signed `retention` object: `through
 
 The main process checks on native startup before first navigation and after backend recovery. It creates a first receipt only for a native cluster created in the current launch after the verifier checks its post-migration head and reports zero legacy-unverified audit rows; migration 0117 can already have written the first chain entry. A transient initial bridge failure can be retried up to five times at 30-second intervals while healthy. A saved receipt binds the chain sequence, hash, and legacy cutover IDs with a local HMAC key protected by Electron `safeStorage`. Version 3 additionally requires a matching macOS Keychain checkpoint; an older version 2 receipt remains unverified. An exact verified head starts a trusted live session. Every 30 seconds while that session and the backend remain healthy, Electron re-verifies and can persist a newly valid tail to the local receipt before mirroring checkpoint metadata. A tail already present at startup is not automatically promoted. Backend loss ends the live session. A failed or unavailable check produces a system notification; startup remains accessible. Restore pauses closure and first requires an exact `verified` match. A mismatch rolls back the candidate. Only after that rollback succeeds may the user deliberately accept a second warning with Cancel as default; Electron then retries that selected backup once, requires a full internally valid chain without claiming the receipt matches, keeps the external receipt unchanged, and leaves audit continuity unverified; a later check against the preserved receipt may report rollback. Existing installations are not automatically enrolled. Changes within the 30-second interval can be incorporated into the next receipt, and a coordinated rollback of the application-data tree and PostgreSQL is detected when the separate Keychain checkpoint survives. Loss or mismatch of that checkpoint fails closed.
 
+### Recovery reporting
+
+Backend loss clears live-session establishment. After recovery, the main process requests a new
+session, but only an exact externally trusted head can establish it; an unreceipted tail is not
+adopted. Transient closure exceptions retry at 30-second intervals, bounded to five attempts.
+Status logs retain the bounded status/reason rather than arbitrary exception payloads. Notifications
+distinguish enrollment required, partially verified history, unavailable protection and integrity
+failure, and direct the user to Admin > Audit. Verified recovery closes the outstanding OS audit
+notification. These paths do not reset receipts, keys or Keychain witnesses.
+
+During native backup capture, audit closure drains and pauses before stopping the backend writer.
+The existing trusted session survives this intentional maintenance interval; closure resumes only
+after restart has been attempted. Unexpected backend loss still ends the session.
+See [[docs/adr/207-coordinated-native-recovery|coordinated native recovery]].
+
 ## Related
 
 - [[docs/api/index|API Documentation]]

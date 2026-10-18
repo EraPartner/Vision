@@ -7,17 +7,18 @@ import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { aggOk, err, ok, TRANSACTION_STUB } from "@/test/msw/handlers";
 import DashboardPage from "@/pages/DashboardPage";
-import {
-    transactionRow,
-    transactionsBody,
-} from "@/test/msw/rowFixtures";
+import { transactionRow, transactionsBody } from "@/test/msw/rowFixtures";
 
 const API_BASE = "http://localhost:3002";
 
 /** Opens Customize… from the header's more-actions menu. */
 async function openCustomize(user: ReturnType<typeof userEvent.setup>) {
-    await user.click(await screen.findByRole("button", { name: /more actions/i }));
-    await user.click(await screen.findByRole("menuitem", { name: /customize/i }));
+    await user.click(
+        await screen.findByRole("button", { name: /more actions/i }),
+    );
+    await user.click(
+        await screen.findByRole("menuitem", { name: /customize/i }),
+    );
     return screen.findByRole("dialog");
 }
 
@@ -28,8 +29,11 @@ async function openCustomize(user: ReturnType<typeof userEvent.setup>) {
  */
 async function enableSummaryCards(user: ReturnType<typeof userEvent.setup>) {
     await openCustomize(user);
-    const toggle = await screen.findByRole("switch", { name: /summary cards/i });
-    if (toggle.getAttribute("aria-checked") !== "true") await user.click(toggle);
+    const toggle = await screen.findByRole("switch", {
+        name: /summary cards/i,
+    });
+    if (toggle.getAttribute("aria-checked") !== "true")
+        await user.click(toggle);
     await user.keyboard("{Escape}");
 }
 
@@ -95,7 +99,9 @@ describe("DashboardPage (integration)", () => {
 
         expect(await openCustomize(user)).toBeInTheDocument();
         expect(
-            await screen.findByRole("heading", { name: /customize this page/i }),
+            await screen.findByRole("heading", {
+                name: /customize this page/i,
+            }),
         ).toBeInTheDocument();
     });
 
@@ -112,7 +118,9 @@ describe("DashboardPage (integration)", () => {
         expect(
             await screen.findByText(/spent in .* so far/i),
         ).toBeInTheDocument();
-        expect(screen.getByText(/nothing spent yet this month/i)).toBeInTheDocument();
+        expect(
+            await screen.findByText(/nothing spent yet this month/i),
+        ).toBeInTheDocument();
         expect(
             await screen.findByText(/nothing needs attention/i),
         ).toBeInTheDocument();
@@ -121,14 +129,12 @@ describe("DashboardPage (integration)", () => {
             await screen.findByText(/nothing due in the next 7 days/i),
         ).toBeInTheDocument();
         expect(await screen.findByText(/no accounts yet/i)).toBeInTheDocument();
-        expect(screen.getByRole("link", { name: /all planned/i })).toHaveAttribute(
-            "href",
-            "/planned",
-        );
-        expect(screen.getByRole("link", { name: /^details$/i })).toHaveAttribute(
-            "href",
-            "/portfolio/net-worth",
-        );
+        expect(
+            screen.getByRole("link", { name: /all planned/i }),
+        ).toHaveAttribute("href", "/planned");
+        expect(
+            screen.getByRole("link", { name: /^details$/i }),
+        ).toHaveAttribute("href", "/portfolio/net-worth");
     });
 
     it("lists what needs attention with a link to settle each item", async () => {
@@ -136,8 +142,20 @@ describe("DashboardPage (integration)", () => {
             http.get(`${API_BASE}/api/transactions`, ({ request }) => {
                 const params = new URL(request.url).searchParams;
                 if (params.get("uncategorised") === "true")
-                    return ok({ items: [TRANSACTION_STUB], total: 12, limit: 1, offset: 0, links: [] });
-                return ok({ items: [], total: 0, limit: 50, offset: 0, links: [] });
+                    return ok({
+                        items: [TRANSACTION_STUB],
+                        total: 12,
+                        limit: 1,
+                        offset: 0,
+                        links: [],
+                    });
+                return ok({
+                    items: [],
+                    total: 0,
+                    limit: 50,
+                    offset: 0,
+                    links: [],
+                });
             }),
         );
         renderWithApp(<DashboardPage />);
@@ -212,26 +230,28 @@ describe("DashboardPage (integration)", () => {
                 ok({ total_transactions: 77 }),
             ),
             http.get(`${API_BASE}/api/transactions`, () =>
-                ok(transactionsBody({
-                    items: [
-                        ...Array.from({ length: 6 }, (_, index) => ({
-                            ...TRANSACTION_STUB,
-                            id: index + 1,
-                            category_id: index + 1,
-                            category_name: `GROUP:CATEGORY ${index + 1}`,
-                        })),
-                        transactionRow({
-                            ...TRANSACTION_STUB,
-                            id: 7,
-                            category_id: null,
-                            category_name: null,
-                        }),
-                    ],
-                    total: 7,
-                    limit: 50,
-                    offset: 0,
-                    links: [],
-                })),
+                ok(
+                    transactionsBody({
+                        items: [
+                            ...Array.from({ length: 6 }, (_, index) => ({
+                                ...TRANSACTION_STUB,
+                                id: index + 1,
+                                category_id: index + 1,
+                                category_name: `GROUP:CATEGORY ${index + 1}`,
+                            })),
+                            transactionRow({
+                                ...TRANSACTION_STUB,
+                                id: 7,
+                                category_id: null,
+                                category_name: null,
+                            }),
+                        ],
+                        total: 7,
+                        limit: 50,
+                        offset: 0,
+                        links: [],
+                    }),
+                ),
             ),
         );
 

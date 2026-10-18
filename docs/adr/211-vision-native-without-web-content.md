@@ -1,20 +1,20 @@
 ---
-title: "ADR-208: Finish phase 4 without web content"
+title: "ADR-211: Finish phase 4 without web content"
 type: adr
 status: accepted
 date: 2026-10-17
 tags: [adr, architecture, swift, native-app, phase-4, demo, webkit, typescript, storage]
-description: "Accepted on 2026-10-17 by Tor. Phase 4 ends with no web content at all: the helper document's calculations (command-palette answers, tax report profile and context) and its scoped storage move to Swift, and a default-off native-only mode stops creating the WKWebView until CI parity and the macOS smoke prove it. Amends ADR-207's 'TypeScript calculations stay' decision."
-aliases: [adr-208, native without web content]
+description: "Accepted on 2026-10-17 by Tor. Phase 4 ends with no web content at all: the helper document's calculations (command-palette answers, tax report profile and context) and its scoped storage move to Swift, and a default-off native-only mode stops creating the WKWebView until CI parity and the macOS smoke prove it. Amends ADR-210's 'TypeScript calculations stay' decision."
+aliases: [adr-211, native without web content]
 ---
 
-# ADR-208: Finish phase 4 without web content
+# ADR-211: Finish phase 4 without web content
 
 ## Status
 
-Accepted on 2026-10-17 by Tor. It amends [[docs/adr/207-vision-native-helper-document|ADR-207]]:
+Accepted on 2026-10-17 by Tor. It amends [[docs/adr/210-vision-native-helper-document|ADR-210]]:
 the helper document becomes a transition step, not the end state. New authorities stay
-default-off until CI proves parity, as with ADR-206 and ADR-207.
+default-off until CI proves parity, as with ADR-209 and ADR-210.
 [[docs/adr/205-vision-native-hand-over|ADR-205]]'s real-data switch-over sequence is unchanged.
 
 ## Date
@@ -24,7 +24,7 @@ default-off until CI proves parity, as with ADR-206 and ADR-207.
 ## Context
 
 [[docs/adr/204-vision-native-swift-app-target|ADR-204]]'s phase-4 exit reads "no web content
-left; bundle size and memory compared with the phase 0 baseline". After ADR-207 every route,
+left; bundle size and memory compared with the phase 0 baseline". After ADR-210 every route,
 menu, overlay and report is native, but the Debug Demo still loads a hidden, same-origin helper
 document. It does three calculations in TypeScript and holds some browser storage:
 
@@ -99,6 +99,6 @@ UI".
 
 - [[docs/adr/204-vision-native-swift-app-target|ADR-204: Vision Native]]
 - [[docs/adr/205-vision-native-hand-over|ADR-205: Vision Native hand-over]]
-- [[docs/adr/206-vision-native-staged-web-retirement|ADR-206: Staged web retirement]]
-- [[docs/adr/207-vision-native-helper-document|ADR-207: Helper document]]
+- [[docs/adr/209-vision-native-staged-web-retirement|ADR-209: Staged web retirement]]
+- [[docs/adr/210-vision-native-helper-document|ADR-210: Helper document]]
 - [[docs/reference/native-parity/agent-handoff|Vision Native agent handoff]]

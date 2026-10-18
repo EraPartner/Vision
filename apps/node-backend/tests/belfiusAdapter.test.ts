@@ -80,6 +80,7 @@ BE81 0637 5694 4024;24/11/2025;00010;52;;SHOP B;;1000 Brussels;BANCONTACT;24/11/
     expect(txns[0]!.balance).toBe(1070);
     // The internal ordering key must not leak into the emitted rows.
     expect(txns[0]!._seq).toBeUndefined();
+    expect(txns.map((tx) => tx.bankSequence)).toEqual(["10000000050", "10000000051", "10000000052"]);
   });
 
   it("parses transaction fields correctly", async () => {

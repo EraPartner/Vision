@@ -5,7 +5,7 @@
  * investment, and threads through optional Belgian tax profile data from the client.
  */
 
-import { queryRows, RowContractError } from "../../database/rowContracts.ts";
+import { queryRows } from "../../database/rowContracts.ts";
 import { taxTxnRowSchema } from "../../database/rows/info.ts";
 import type { TaxTxnRow } from "../../database/rows/info.ts";
 import {
@@ -23,10 +23,11 @@ import { addAll, toNumber } from "../../lib/money.ts";
 const addMoney = (...values: Array<number | string>) =>
   toNumber(addAll(values));
 
-export type Period = { kind: 'ytd' }
-  | { kind: 'rolling'; months: number }
-  | { kind: 'custom'; from: string; to: string }
-  | { kind: 'year'; year: number };
+export type Period =
+  | { kind: "ytd" }
+  | { kind: "rolling"; months: number }
+  | { kind: "custom"; from: string; to: string }
+  | { kind: "year"; year: number };
 
 /**
  * Belgian PIT tax profile the frontend may attach to a tax-report request
@@ -104,23 +105,40 @@ export type { TaxTxnRow };
  * `tob + wht + sell + other` themselves).
  */
 export type TaxMonthBucket = {
-  year: number; month: number;
-  tob: number; wht: number; sell: number; other: number; fees: number;
+  year: number;
+  month: number;
+  tob: number;
+  wht: number;
+  sell: number;
+  other: number;
+  fees: number;
 };
 
 /**
  * Per-asset-class tax/fee subtotal. `byAssetClass` (below) is an ARRAY of
  * these — renderers iterate it directly and label rows with `.assetClass`.
  */
-export type TaxAssetClassBucket = { assetClass: string; taxes: number; fees: number };
+export type TaxAssetClassBucket = {
+  assetClass: string;
+  taxes: number;
+  fees: number;
+};
 
 /**
  * Per-investment tax/fee subtotal. `total` is the full cost figure
  * (`tob + wht + sell + other + fees`).
  */
 export type TaxInvestmentBucket = {
-  investmentId: number; name: string; symbol: string | null; assetClass: string;
-  tob: number; wht: number; sell: number; other: number; fees: number; total: number;
+  investmentId: number;
+  name: string;
+  symbol: string | null;
+  assetClass: string;
+  tob: number;
+  wht: number;
+  sell: number;
+  other: number;
+  fees: number;
+  total: number;
 };
 
 /** Aggregated result of {@link fetchTaxTransactions}. */
@@ -177,18 +195,13 @@ export type TaxReportData = {
   unconvertedCurrencies: string[];
 };
 
-/**
- * Unwrap a settled Promise result; log and return null on rejection. A row
- * contract mismatch is rethrown instead: the report must not silently render
- * an empty section over data the code no longer understands (ADR-193).
- */
-function unwrap<T>(result: PromiseSettledResult<T>, label: string): T | null {
+/** Requested source failures abort export; only deliberately skipped sources are null. */
+function unwrap<T>(result: PromiseSettledResult<T>, label: string): T {
   if (result.status === "fulfilled") return result.value;
-  if (result.reason instanceof RowContractError) throw result.reason;
-  logger.warn(`[dataFetcherTax] ${label} failed — section will be skipped`, {
+  logger.warn(`[dataFetcherTax] ${label} failed — report generation stopped`, {
     reason: result.reason?.message,
   });
-  return null;
+  throw result.reason;
 }
 
 /** Normalise a Period into a tax context (year-scoped). */
@@ -561,6 +574,10 @@ export async function fetchTaxData(
   ]);
 
   const txns = unwrap(txnsResult, "fetchTaxTransactions");
+  // Annual PIT and household figures belong to one full calendar year whose
+  // profile was configured for that same year.
+  const annualTaxApplies =
+    period.kind === "year" && taxProfile?.taxYear === taxYear;
 
   return {
     taxYear,
@@ -570,10 +587,10 @@ export async function fetchTaxData(
     period,
     periodNote,
     taxTables,
-    taxProfile: taxProfile ?? undefined,
-    precomputedPIT: precomputedPIT ?? undefined,
-    household: household ?? undefined,
-    precomputedHousehold: precomputedHousehold ?? undefined,
+    taxProfile: annualTaxApplies ? taxProfile : undefined,
+    precomputedPIT: annualTaxApplies ? precomputedPIT : undefined,
+    household: annualTaxApplies ? household : undefined,
+    precomputedHousehold: annualTaxApplies ? precomputedHousehold : undefined,
     tobTotal: txns?.tobTotal ?? 0,
     dividendWHTTotal: txns?.dividendWHTTotal ?? 0,
     sellTaxTotal: txns?.sellTaxTotal ?? 0,

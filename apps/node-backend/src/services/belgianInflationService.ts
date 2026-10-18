@@ -1,11 +1,14 @@
-import { withTransaction } from '../database/connection.ts';
-import { queryRows } from '../database/rowContracts.ts';
-import { belgianInflationMonthRowSchema } from '../database/rows/info.ts';
-import { logger } from '../config/logger.ts';
-import { recordSuccess as recordProviderSuccess, recordError as recordProviderError } from './providerHealthService.ts';
-import { roundMoney } from '../lib/money.ts';
+import { withTransaction } from "../database/connection.ts";
+import { queryRows } from "../database/rowContracts.ts";
+import { belgianInflationMonthRowSchema } from "../database/rows/info.ts";
+import { logger } from "../config/logger.ts";
+import {
+  recordSuccess as recordProviderSuccess,
+  recordError as recordProviderError,
+} from "./providerHealthService.ts";
+import { roundMoney } from "../lib/money.ts";
 
-import type { BelgianInflationRate } from '../types/rows.ts';
+import type { BelgianInflationRate } from "../types/rows.ts";
 
 export type { BelgianInflationRate };
 
@@ -38,22 +41,23 @@ const STATBEL_RETRY_BASE_DELAY_MS = 500;
 const STATBEL_WARN_THROTTLE_MS = 30 * 60 * 1000;
 
 const STATBEL_CANDIDATE_URLS = [
-  'https://bestat.statbel.fgov.be/bestat/api/views/86586e27-90ac-47c6-87ce-64b63194e605/result/JSON',
-  'https://bestat.economie.fgov.be/bestat/api/views/86586e27-90ac-47c6-87ce-64b63194e605/result/JSON',
+  "https://bestat.statbel.fgov.be/bestat/api/views/86586e27-90ac-47c6-87ce-64b63194e605/result/JSON",
+  "https://bestat.economie.fgov.be/bestat/api/views/86586e27-90ac-47c6-87ce-64b63194e605/result/JSON",
 ];
 
 const EUROSTAT_HICP_INDEX_URL =
-  'https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/prc_hicp_midx?geo=BE&coicop=CP00&unit=I15';
+  "https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/prc_hicp_midx?geo=BE&coicop=CP00&unit=I15";
 
-let memoryCache: { rates: BelgianInflationRate[], timestamp: number } | null = null;
+let memoryCache: { rates: BelgianInflationRate[]; timestamp: number } | null =
+  null;
 let statbelFailureLogState = { lastWarnAt: 0, suppressed: 0 };
 let backgroundRefreshPromise: Promise<void> | null = null;
 
 function isTruthy(value: unknown): boolean {
   if (value === true || value === 1) return true;
-  if (typeof value === 'string') {
+  if (typeof value === "string") {
     const normalized = value.trim().toLowerCase();
-    return normalized === 'true' || normalized === '1';
+    return normalized === "true" || normalized === "1";
   }
   return false;
 }
@@ -70,25 +74,31 @@ function errorMessage(error: unknown): string | undefined {
 }
 
 function isJsonObject(value: unknown): value is JsonObject {
-  return typeof value === 'object' && value !== null;
+  return typeof value === "object" && value !== null;
 }
 
 function logStatbelFallbackWarning(error: unknown) {
   const now = Date.now();
   if (now - statbelFailureLogState.lastWarnAt >= STATBEL_WARN_THROTTLE_MS) {
-    logger.warn('Failed to fetch external inflation rates; falling back to database', {
-      error: errorMessage(error),
-      suppressed_since_last_warning: statbelFailureLogState.suppressed,
-    });
+    logger.warn(
+      "Failed to fetch external inflation rates; falling back to database",
+      {
+        error: errorMessage(error),
+        suppressed_since_last_warning: statbelFailureLogState.suppressed,
+      },
+    );
     statbelFailureLogState = { lastWarnAt: now, suppressed: 0 };
     return;
   }
 
   statbelFailureLogState.suppressed += 1;
-  logger.debug('External inflation fetch failed; warning suppressed during throttle window', {
-    error: errorMessage(error),
-    suppressed: statbelFailureLogState.suppressed,
-  });
+  logger.debug(
+    "External inflation fetch failed; warning suppressed during throttle window",
+    {
+      error: errorMessage(error),
+      suppressed: statbelFailureLogState.suppressed,
+    },
+  );
 }
 
 /** @returns 'YYYY-MM' */
@@ -117,7 +127,7 @@ function monthKeyFromDatabaseValue(
     // pg reads month_date (first-of-month DATE) as LOCAL midnight; UTC
     // extraction (toISOString) rendered it as the last day of the PREVIOUS
     // month east of UTC, labeling every rate with the prior month's key.
-    return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}`;
+    return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}`;
   }
 
   const normalized = normalizeMonthInput(value);
@@ -132,27 +142,62 @@ function monthKeyFromDatabaseValue(
 }
 
 function parseNumeric(value: unknown): number | undefined {
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  if (typeof value !== 'string') return undefined;
-  const sanitized = value.replace(',', '.').replace(/[^0-9.+-]/g, '').trim();
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value !== "string") return undefined;
+  const sanitized = value
+    .replace(",", ".")
+    .replace(/[^0-9.+-]/g, "")
+    .trim();
   if (!sanitized) return undefined;
   const parsed = Number(sanitized);
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 const MONTH_NAME_TO_NUMBER: Record<string, number> = {
-  january: 1, jan: 1, januari: 1, janvier: 1,
-  february: 2, feb: 2, februari: 2, fevrier: 2, février: 2,
-  march: 3, mar: 3, maart: 3, mars: 3,
-  april: 4, avr: 4,
-  may: 5, mei: 5, mai: 5,
-  june: 6, jun: 6, juni: 6, juin: 6,
-  july: 7, jul: 7, juli: 7, juillet: 7,
-  august: 8, aug: 8, augustus: 8, aout: 8, août: 8,
-  september: 9, sep: 9, sept: 9,
-  october: 10, oct: 10, oktober: 10, octobre: 10,
-  november: 11, nov: 11,
-  december: 12, dec: 12, decembre: 12, décembre: 12,
+  january: 1,
+  jan: 1,
+  januari: 1,
+  janvier: 1,
+  february: 2,
+  feb: 2,
+  februari: 2,
+  fevrier: 2,
+  février: 2,
+  march: 3,
+  mar: 3,
+  maart: 3,
+  mars: 3,
+  april: 4,
+  avr: 4,
+  may: 5,
+  mei: 5,
+  mai: 5,
+  june: 6,
+  jun: 6,
+  juni: 6,
+  juin: 6,
+  july: 7,
+  jul: 7,
+  juli: 7,
+  juillet: 7,
+  august: 8,
+  aug: 8,
+  augustus: 8,
+  aout: 8,
+  août: 8,
+  september: 9,
+  sep: 9,
+  sept: 9,
+  october: 10,
+  oct: 10,
+  oktober: 10,
+  octobre: 10,
+  november: 11,
+  nov: 11,
+  december: 12,
+  dec: 12,
+  decembre: 12,
+  décembre: 12,
 };
 
 // Own keys only: an upstream "constructor" must not resolve to Object.prototype.
@@ -174,40 +219,53 @@ function parseMonthName(value: unknown): number | undefined {
  */
 function parseMonthFromRow(row: JsonObject): string | undefined {
   const directMonth = normalizeMonthInput(
-    row.month
-    ?? row.maand
-    ?? row.mois
-    ?? row.period
-    ?? row.periode
-    ?? row.time
-    ?? row.date
+    row.month ??
+      row.maand ??
+      row.mois ??
+      row.period ??
+      row.periode ??
+      row.time ??
+      row.date,
   );
   if (directMonth) return directMonth;
 
   const year = parseNumeric(row.year ?? row.jaar ?? row.annee ?? row.année);
-  const rawMonth = row.month_number ?? row.monthnr ?? row.maand_nr ?? row.mois_nr ?? row.month ?? row.maand ?? row.mois;
+  const rawMonth =
+    row.month_number ??
+    row.monthnr ??
+    row.maand_nr ??
+    row.mois_nr ??
+    row.month ??
+    row.maand ??
+    row.mois;
 
   if (year === undefined || !Number.isFinite(year)) return undefined;
 
   const monthNumber = parseNumeric(rawMonth) ?? parseMonthName(rawMonth);
-  if (monthNumber === undefined || !Number.isFinite(monthNumber) || monthNumber < 1 || monthNumber > 12) return undefined;
+  if (
+    monthNumber === undefined ||
+    !Number.isFinite(monthNumber) ||
+    monthNumber < 1 ||
+    monthNumber > 12
+  )
+    return undefined;
 
-  return `${Math.trunc(year)}-${String(Math.trunc(monthNumber)).padStart(2, '0')}`;
+  return `${Math.trunc(year)}-${String(Math.trunc(monthNumber)).padStart(2, "0")}`;
 }
 
 /** @param row raw provider payload row — key set varies by upstream (EN/NL/FR). */
 function parseMonthlyRateFromRow(row: JsonObject): number | undefined {
   const candidateKeys = [
-    'monthly_rate',
-    'monthly_inflation_rate',
-    'inflation_monthly',
-    'inflation_rate_monthly',
-    'inflatie_maandelijks',
-    'taux_inflation_mensuel',
-    'inflation',
-    'inflatie',
-    'value',
-    'valeur',
+    "monthly_rate",
+    "monthly_inflation_rate",
+    "inflation_monthly",
+    "inflation_rate_monthly",
+    "inflatie_maandelijks",
+    "taux_inflation_mensuel",
+    "inflation",
+    "inflatie",
+    "value",
+    "valeur",
   ];
 
   let rawValue: unknown;
@@ -220,7 +278,22 @@ function parseMonthlyRateFromRow(row: JsonObject): number | undefined {
 
   if (rawValue === undefined) {
     const numericCandidates = Object.entries(row)
-      .filter(([k]) => !['year', 'jaar', 'annee', 'année', 'month', 'maand', 'mois', 'period', 'periode', 'time', 'date'].includes(k))
+      .filter(
+        ([k]) =>
+          ![
+            "year",
+            "jaar",
+            "annee",
+            "année",
+            "month",
+            "maand",
+            "mois",
+            "period",
+            "periode",
+            "time",
+            "date",
+          ].includes(k),
+      )
       .map(([, v]) => parseNumeric(v))
       .filter((v) => Number.isFinite(v));
     rawValue = numericCandidates[0];
@@ -250,9 +323,13 @@ function extractObjectRows(payload: unknown): JsonObject[] {
   if (!isJsonObject(payload)) return [];
 
   const values = Object.values(payload);
-  const objectValues = values.filter((value) => value && typeof value === 'object');
+  const objectValues = values.filter(
+    (value) => value && typeof value === "object",
+  );
 
-  const looksLikeRow = Object.values(payload).some((value) => ['string', 'number'].includes(typeof value));
+  const looksLikeRow = Object.values(payload).some((value) =>
+    ["string", "number"].includes(typeof value),
+  );
   const nestedRows = objectValues.flatMap((value) => extractObjectRows(value));
 
   return looksLikeRow ? [payload, ...nestedRows] : nestedRows;
@@ -265,7 +342,8 @@ function normalizeRatesFromPayload(payload: unknown): BelgianInflationRate[] {
   for (const row of rows) {
     const month = parseMonthFromRow(row);
     const monthlyRate = parseMonthlyRateFromRow(row);
-    if (!month || monthlyRate === undefined || !Number.isFinite(monthlyRate)) continue;
+    if (!month || monthlyRate === undefined || !Number.isFinite(monthlyRate))
+      continue;
     byMonth.set(month, {
       month,
       monthly_rate: roundMoney(monthlyRate, RATE_DECIMALS),
@@ -284,25 +362,39 @@ function parseStatbelMonthString(value: unknown): string | undefined {
   const parts = String(value).trim().split(/\s+/);
   const [monthName] = parts;
   const yearPart = parts.at(-1);
-  if (parts.length < 2 || monthName === undefined || yearPart === undefined) return undefined;
+  if (parts.length < 2 || monthName === undefined || yearPart === undefined)
+    return undefined;
   const monthNum = monthNumberForName(monthName.toLowerCase());
   const year = parseNumeric(yearPart);
-  if (!monthNum || year === undefined || !Number.isFinite(year) || year < 1900 || year > 2100) return undefined;
-  return `${Math.trunc(year)}-${String(monthNum).padStart(2, '0')}`;
+  if (
+    !monthNum ||
+    year === undefined ||
+    !Number.isFinite(year) ||
+    year < 1900 ||
+    year > 2100
+  )
+    return undefined;
+  return `${Math.trunc(year)}-${String(monthNum).padStart(2, "0")}`;
 }
 
-function normalizeRatesFromStatbelPayload(payload: unknown): BelgianInflationRate[] {
+function normalizeRatesFromStatbelPayload(
+  payload: unknown,
+): BelgianInflationRate[] {
   const facts = (payload as StatbelPayload | null | undefined)?.facts;
   if (!Array.isArray(facts) || facts.length === 0) return [];
 
-  const globalRows = facts.filter((row) => row['Level 1'] === null || row['Level 1'] === undefined);
+  const globalRows = facts.filter(
+    (row) => row["Level 1"] === null || row["Level 1"] === undefined,
+  );
   const indexed = globalRows
     .map((row) => {
-      const month = parseStatbelMonthString(row['Month']);
-      const cpi = parseNumeric(row['Consumer price index']);
-      return month && cpi !== undefined && Number.isFinite(cpi) && cpi > 0 ? { month, cpi } : null;
+      const month = parseStatbelMonthString(row["Month"]);
+      const cpi = parseNumeric(row["Consumer price index"]);
+      return month && cpi !== undefined && Number.isFinite(cpi) && cpi > 0
+        ? { month, cpi }
+        : null;
     })
-    .filter((item): item is { month: string, cpi: number } => Boolean(item))
+    .filter((item): item is { month: string; cpi: number } => Boolean(item))
     .sort((a, b) => a.month.localeCompare(b.month));
 
   if (indexed.length < 2) return [];
@@ -311,19 +403,30 @@ function normalizeRatesFromStatbelPayload(payload: unknown): BelgianInflationRat
   for (const [i, curr] of indexed.entries()) {
     const prev = indexed[i - 1];
     if (prev === undefined) continue;
-    const monthlyRate = (curr.cpi / prev.cpi) - 1;
+    const monthlyRate = curr.cpi / prev.cpi - 1;
     if (!Number.isFinite(monthlyRate) || Math.abs(monthlyRate) > 1) continue;
-    rates.push({ month: curr.month, monthly_rate: roundMoney(monthlyRate, RATE_DECIMALS) });
+    rates.push({
+      month: curr.month,
+      monthly_rate: roundMoney(monthlyRate, RATE_DECIMALS),
+    });
   }
 
   return rates;
 }
 
-function normalizeRatesFromEurostatIndexPayload(payload: unknown): BelgianInflationRate[] {
+function normalizeRatesFromEurostatIndexPayload(
+  payload: unknown,
+): BelgianInflationRate[] {
   const eurostat = payload as EurostatIndexPayload | null | undefined;
   const timeIndex = eurostat?.dimension?.time?.category?.index;
   const values = eurostat?.value;
-  if (!timeIndex || typeof timeIndex !== 'object' || !values || typeof values !== 'object') return [];
+  if (
+    !timeIndex ||
+    typeof timeIndex !== "object" ||
+    !values ||
+    typeof values !== "object"
+  )
+    return [];
 
   const sortedTimeline = Object.entries(timeIndex)
     .map(([rawMonth, rawIndex]) => ({
@@ -331,18 +434,23 @@ function normalizeRatesFromEurostatIndexPayload(payload: unknown): BelgianInflat
       index: parseNumeric(rawIndex),
     }))
     .filter(
-      (item): item is { month: string, index: number } =>
+      (item): item is { month: string; index: number } =>
         Boolean(item.month) && Number.isFinite(item.index),
     )
     .sort((a, b) => a.index - b.index);
 
   if (sortedTimeline.length < 2) return [];
 
-  const monthlyIndex: { month: string, indexValue: number }[] = [];
+  const monthlyIndex: { month: string; indexValue: number }[] = [];
   for (const item of sortedTimeline) {
     const rawValue = values[item.index] ?? values[String(item.index)];
     const indexValue = parseNumeric(rawValue);
-    if (indexValue === undefined || !Number.isFinite(indexValue) || indexValue <= 0) continue;
+    if (
+      indexValue === undefined ||
+      !Number.isFinite(indexValue) ||
+      indexValue <= 0
+    )
+      continue;
     monthlyIndex.push({ month: item.month, indexValue });
   }
 
@@ -354,7 +462,7 @@ function normalizeRatesFromEurostatIndexPayload(payload: unknown): BelgianInflat
     const current = monthlyIndex[i];
     if (!previous || !current) continue;
 
-    const monthlyRate = (current.indexValue / previous.indexValue) - 1;
+    const monthlyRate = current.indexValue / previous.indexValue - 1;
     if (!Number.isFinite(monthlyRate) || Math.abs(monthlyRate) > 1) continue;
 
     rates.push({
@@ -367,20 +475,35 @@ function normalizeRatesFromEurostatIndexPayload(payload: unknown): BelgianInflat
 }
 
 async function fetchFromStatbel(): Promise<BelgianInflationRate[]> {
-  const fetchWithRetries = async (url: string): Promise<BelgianInflationRate[]> => {
+  const fetchWithRetries = async (
+    url: string,
+  ): Promise<BelgianInflationRate[]> => {
     let lastError: unknown;
 
-    for (let attempt = 0; attempt <= STATBEL_MAX_RETRIES_PER_URL; attempt += 1) {
+    for (
+      let attempt = 0;
+      attempt <= STATBEL_MAX_RETRIES_PER_URL;
+      attempt += 1
+    ) {
       try {
-        const response = await fetch(url, { signal: AbortSignal.timeout(STATBEL_REQUEST_TIMEOUT_MS) });
+        const response = await fetch(url, {
+          signal: AbortSignal.timeout(STATBEL_REQUEST_TIMEOUT_MS),
+        });
         if (!response.ok) {
           lastError = new Error(`HTTP ${response.status} from ${url}`);
         } else {
           const payload = await response.json();
           const statbelRates = normalizeRatesFromStatbelPayload(payload);
-          const rates = statbelRates.length > 0 ? statbelRates : normalizeRatesFromPayload(payload);
+          const rates =
+            statbelRates.length > 0
+              ? statbelRates
+              : normalizeRatesFromPayload(payload);
           if (rates.length > 0) {
-            logger.debug('Fetched Belgian inflation rates from Statbel', { url, count: rates.length, attempt: attempt + 1 });
+            logger.debug("Fetched Belgian inflation rates from Statbel", {
+              url,
+              count: rates.length,
+              attempt: attempt + 1,
+            });
             return rates;
           }
           lastError = new Error(`No monthly rates parsed from ${url}`);
@@ -395,7 +518,10 @@ async function fetchFromStatbel(): Promise<BelgianInflationRate[]> {
       }
     }
 
-    throw lastError ?? new Error(`Failed to fetch Belgian inflation rates from ${url}`);
+    throw (
+      lastError ??
+      new Error(`Failed to fetch Belgian inflation rates from ${url}`)
+    );
   };
 
   let lastError: unknown;
@@ -407,7 +533,10 @@ async function fetchFromStatbel(): Promise<BelgianInflationRate[]> {
     }
   }
 
-  throw lastError ?? new Error('Failed to fetch Belgian inflation rates from Statbel');
+  throw (
+    lastError ??
+    new Error("Failed to fetch Belgian inflation rates from Statbel")
+  );
 }
 
 async function fetchFromEurostat(): Promise<BelgianInflationRate[]> {
@@ -415,20 +544,29 @@ async function fetchFromEurostat(): Promise<BelgianInflationRate[]> {
 
   for (let attempt = 0; attempt <= STATBEL_MAX_RETRIES_PER_URL; attempt += 1) {
     try {
-      const response = await fetch(EUROSTAT_HICP_INDEX_URL, { signal: AbortSignal.timeout(STATBEL_REQUEST_TIMEOUT_MS) });
+      const response = await fetch(EUROSTAT_HICP_INDEX_URL, {
+        signal: AbortSignal.timeout(STATBEL_REQUEST_TIMEOUT_MS),
+      });
       if (!response.ok) {
-        lastError = new Error(`HTTP ${response.status} from Eurostat HICP endpoint`);
+        lastError = new Error(
+          `HTTP ${response.status} from Eurostat HICP endpoint`,
+        );
       } else {
         const payload = await response.json();
         const rates = normalizeRatesFromEurostatIndexPayload(payload);
         if (rates.length > 0) {
-          logger.debug('Fetched Belgian inflation rates from Eurostat HICP index', {
-            count: rates.length,
-            attempt: attempt + 1,
-          });
+          logger.debug(
+            "Fetched Belgian inflation rates from Eurostat HICP index",
+            {
+              count: rates.length,
+              attempt: attempt + 1,
+            },
+          );
           return rates;
         }
-        lastError = new Error('No monthly rates parsed from Eurostat HICP index response');
+        lastError = new Error(
+          "No monthly rates parsed from Eurostat HICP index response",
+        );
       }
     } catch (error) {
       lastError = error;
@@ -440,25 +578,30 @@ async function fetchFromEurostat(): Promise<BelgianInflationRate[]> {
     }
   }
 
-  throw lastError ?? new Error('Failed to fetch Belgian inflation rates from Eurostat');
+  throw (
+    lastError ??
+    new Error("Failed to fetch Belgian inflation rates from Eurostat")
+  );
 }
 
 async function fetchExternalInflationRates() {
   try {
     const rates = await fetchFromStatbel();
-    recordProviderSuccess('statbel');
-    return { source: 'statbel', rates };
+    recordProviderSuccess("statbel");
+    return { source: "statbel", rates };
   } catch (statbelError) {
-    logger.debug('Statbel inflation fetch failed; trying Eurostat fallback', { error: errorMessage(statbelError) });
-    recordProviderError('statbel', statbelError);
+    logger.debug("Statbel inflation fetch failed; trying Eurostat fallback", {
+      error: errorMessage(statbelError),
+    });
+    recordProviderError("statbel", statbelError);
   }
 
   try {
     const rates = await fetchFromEurostat();
-    recordProviderSuccess('eurostat');
-    return { source: 'eurostat', rates };
+    recordProviderSuccess("eurostat");
+    return { source: "eurostat", rates };
   } catch (eurostatError) {
-    recordProviderError('eurostat', eurostatError);
+    recordProviderError("eurostat", eurostatError);
     throw eurostatError;
   }
 }
@@ -480,7 +623,7 @@ function scheduleBackgroundInflationRefresh() {
   backgroundRefreshPromise = (async () => {
     try {
       const result = await refreshFromExternalAndPersist();
-      logger.debug('Belgian inflation background refresh completed', {
+      logger.debug("Belgian inflation background refresh completed", {
         source: result.source,
         count: result.rates.length,
       });
@@ -507,7 +650,10 @@ async function loadFromDatabase(
      WHERE ($1::date IS NULL OR month_date >= $1::date)
        AND ($2::date IS NULL OR month_date <= $2::date)
      ORDER BY month_date ASC`,
-    [startMonth ? `${startMonth}-01` : null, endMonth ? `${endMonth}-01` : null]
+    [
+      startMonth ? `${startMonth}-01` : null,
+      endMonth ? `${endMonth}-01` : null,
+    ],
   );
 
   return rows
@@ -524,7 +670,7 @@ const INFLATION_INSERT_CHUNK = 1000;
 
 async function saveToDatabase(
   rates: BelgianInflationRate[],
-  source = 'statbel',
+  source = "statbel",
 ): Promise<void> {
   if (!Array.isArray(rates) || rates.length === 0) return;
 
@@ -540,14 +686,14 @@ async function saveToDatabase(
 
       await client.query(
         `INSERT INTO belgian_inflation_rates (month_date, monthly_rate, source)
-         VALUES ${valueRows.join(', ')}
+         VALUES ${valueRows.join(", ")}
          ON CONFLICT (month_date)
          DO UPDATE SET
             monthly_rate = EXCLUDED.monthly_rate,
             source = EXCLUDED.source,
             fetched_at = NOW(),
             updated_at = NOW()`,
-        params
+        params,
       );
     }
   });
@@ -589,11 +735,17 @@ export async function getInflationRates({
   const normalizedEnd = normalizeMonthInput(endMonth);
   const forceRefreshMode = isTruthy(forceRefresh);
   const dbOnlyMode = !forceRefreshMode && isTruthy(dbOnly);
-  const scheduleBackgroundRefreshMode = !forceRefreshMode && isTruthy(scheduleBackgroundRefresh);
+  const scheduleBackgroundRefreshMode =
+    !forceRefreshMode && isTruthy(scheduleBackgroundRefresh);
 
-  if (!forceRefreshMode && !dbOnlyMode && memoryCache && Date.now() - memoryCache.timestamp < CACHE_LIFETIME_MS) {
+  if (
+    !forceRefreshMode &&
+    !dbOnlyMode &&
+    memoryCache &&
+    Date.now() - memoryCache.timestamp < CACHE_LIFETIME_MS
+  ) {
     return {
-      source: 'memory',
+      source: "memory",
       rates: filterRates(memoryCache.rates, normalizedStart, normalizedEnd),
     };
   }
@@ -607,14 +759,14 @@ export async function getInflationRates({
       scheduleBackgroundInflationRefresh();
     }
 
-    return { source: 'database', rates: dbRates };
+    return { source: "database", rates: dbRates };
   }
 
   if (dbOnlyMode) {
     if (scheduleBackgroundRefreshMode) {
       scheduleBackgroundInflationRefresh();
     }
-    return { source: 'database', rates: dbRates };
+    return { source: "database", rates: dbRates };
   }
 
   try {
@@ -629,19 +781,25 @@ export async function getInflationRates({
     // the subset let a later wider-range call get a truncated cache hit.
     const allDbRates = await loadFromDatabase();
     memoryCache = { rates: allDbRates, timestamp: Date.now() };
-    const fallbackRates = dbRates.length > 0
-      ? dbRates
-      : filterRates(allDbRates, normalizedStart, normalizedEnd);
-    return { source: 'database', rates: fallbackRates };
+    const fallbackRates =
+      dbRates.length > 0
+        ? dbRates
+        : filterRates(allDbRates, normalizedStart, normalizedEnd);
+    return { source: "database", rates: fallbackRates };
   }
 }
 
-export async function warmInflationCache() {
+export async function warmInflationCache({
+  allowExternal = true,
+}: { allowExternal?: boolean } = {}) {
   const result = await getInflationRates({
     dbOnly: true,
-    scheduleBackgroundRefresh: true,
+    scheduleBackgroundRefresh: allowExternal,
   });
-  logger.info('Belgian inflation cache warm completed', { source: result.source, count: result.rates.length });
+  logger.info("Belgian inflation cache warm completed", {
+    source: result.source,
+    count: result.rates.length,
+  });
   return result;
 }
 

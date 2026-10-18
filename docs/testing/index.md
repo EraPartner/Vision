@@ -2,7 +2,7 @@
 title: Testing Documentation Index
 type: testing-index
 status: active
-date: 2026-10-08
+date: 2026-10-13
 updated: 2026-10-08
 last-updated: 2026-10-06
 modified: 2026-10-06
@@ -54,6 +54,8 @@ SORT title ASC
 ```
 
 ## Quick Reference
+
+Implementation and waived live acceptance for the October audit: [[docs/testing/codebase-audit-delivery]].
 
 | Topic                                                                                                                                               | Description                                                                                        |
 | --------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |

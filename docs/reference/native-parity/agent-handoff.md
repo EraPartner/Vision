@@ -14,7 +14,7 @@ description: "Resumable checkpoint for the Swift port: published branch, current
 
 Branch **`codex/native-phase-3g`**; push only to this branch, no PR (owner's choice on
 2026-10-17). The owner gave the **phase-4 go** on 2026-10-17 with every new authority
-**default-off**, and asked to fix the macOS UI gate first. ADR-206 and ADR-207 are now
+**default-off**, and asked to fix the macOS UI gate first. ADR-209 and ADR-210 are now
 accepted on that basis. This container had no Swift toolchain (download.swift.org is denied
 by the environment's network policy), so the macOS workflow is the only compiler; each
 result below is from an actual `Native Branch Verification` run.
@@ -52,7 +52,7 @@ Run 40 (`eb59813`): app build passed; Core **1,687 tests / 231 suites passed**; 
 | `a5960a6` | `native-mac-build.sh` builds the helper into the staged frontend (`--out-dir`)                                                            | local build + 25 tests  |
 | `bca9993` | helper-mode `StartupRedirect` (`vision.startupSection`, `vision.lastRoute` allowlisted)                                                   | built (run 40)          |
 
-Historical (the helper was retired by ADR-209, see below). Opt-in was `VISION_NATIVE_HELPER_DOCUMENT=1` with a Debug build of the Demo variant and a
+Historical (the helper was retired by ADR-212, see below). Opt-in was `VISION_NATIVE_HELPER_DOCUMENT=1` with a Debug build of the Demo variant and a
 supervised backend; anything else keeps the retained web document. **No opted-in Demo run has
 happened**; none of the helper flows has run on a Mac.
 
@@ -80,13 +80,13 @@ skip-link and Reload page equivalents. Native work since the UI gate, each pushe
 - Visual effects: aurora canvas (Metal shader), page entrance, rolling numbers, hero trend hue
   and sheen, fetch shimmer, `DeltaPill`.
 - Planned payments: a failed list load retries once (`retry: 1`).
-- Phase 4: bridge restore fails closed in helper mode (ADR-207 restore policy); the e2e smoke
+- Phase 4: bridge restore fails closed in helper mode (ADR-210 restore policy); the e2e smoke
   workflow (`native-e2e.yml`) builds PostgreSQL 18.6 with OpenSSL, the payload, the Debug Demo
   app, then smokes the retained control and the helper mode with a graceful Quit.
 - Parity inventory: 87 rows moved to `native` by audit, plus the context menu, topbar, skip
   link, error fallback and Developer Tools rows. Only the sidebar logo button stays `web`.
 
-**ADR-208 (accepted 2026-10-17): finish phase 4 without web content**
+**ADR-211 (accepted 2026-10-17): finish phase 4 without web content**
 
 Tor chose to port the helper document's work to Swift and add a web-free mode, default-off:
 
@@ -164,9 +164,9 @@ behind in the same job, so it is not attributable per mode; the process tree and
 Native-only has the smallest tree and process count; the app's own RSS (~390–470 MB, about 2.5×
 Electron's main process) is the next thing to profile.
 
-**Helper retired (ADR-209, 2026-10-18)**
+**Helper retired (ADR-212, 2026-10-18)**
 
-[[docs/adr/209-vision-native-retire-helper-document|ADR-209]] retires the ADR-207 helper document
+[[docs/adr/212-vision-native-retire-helper-document|ADR-212]] retires the ADR-210 helper document
 now that native-only is the Debug Demo default. Removed: `native-helper.html`, `src/native-helper.ts`,
 `lib/nativeHelperDocument.ts` and its tests, `build-native-helper.ts` and the `build:native-helper`
 script, the backend `nativeHelperArtifacts` middleware (no reserved `/native-helper.html` or
@@ -201,11 +201,38 @@ Confirmed on run 39103892954 (`a936331`):
 `MALLOC_SMALL (empty)` fell from ~312 MB to 0.4 MB. Native-only's whole tree (app, backend,
 PostgreSQL) is now about half of the Electron Demo's.
 
+**Merged `main` (2026-10-18)**
+
+`main`'s 14 commits (bank chronology, transfer and import hardening, planned currency, bounded
+report pipeline, coordinated native recovery, widget persistence, tax filing workflow, complete
+portfolio history) are merged. Main's ADR-206 to ADR-208 kept their numbers; the native ADRs are
+now [[docs/adr/209-vision-native-staged-web-retirement|ADR-209]] to
+[[docs/adr/213-vision-native-swift-backend|ADR-213]]. Backend-only fixes reach the native app
+through the shared backend. Ported to Swift:
+
+- Tax report: only a full calendar year that is the live year, has a snapshot or a frozen
+  calculation carries the annual figures (`NativeTaxReportContext`, `NativeReportModel`; the
+  shared `taxReportContext` helper got the same rule).
+- Real estate: rent is the latest `rent_income` transaction converted from its own currency
+  (`PortfolioMonthlyRent`), loaded from each property's complete history; a missing rate shows
+  `realestate.missingRentRate`. Live properties previously showed no yield at all.
+- Widget visibility: a stored map that is not pages of booleans is neither loaded nor
+  overwritten (`InsightWidgetVisibility.isValidSetting`, all four widget models).
+- Category merge also refreshes recipients.
+- Tax filing: the live year can be filed, an estimate-only past year cannot
+  (`TaxYearMutation.canFile`); the sheet explains the prerequisite; Mark as filed and Export CSV
+  are visible buttons; a filed current year needs an explicit amend; the masthead shows Filed.
+- Import review: edits run through one queue, commit waits for them, a failed edit blocks commit
+  until Review saved edits rereads the preview, and mixed-category groups say so.
+- Mark as internal transfer refuses opening, adjustment and brokerage rows (`transfer_source`).
+- Reduce Motion was already live through SwiftUI; lazy Settings and the virtualized exclusions
+  picker are web-only performance work.
+
 **Backend direction (2026-10-18):** Tor chose a Mac-only future with a Swift backend
-(Hummingbird 2) inside the app; [[docs/adr/210-vision-native-swift-backend|ADR-210]] records it as
+(Hummingbird 2) inside the app; [[docs/adr/213-vision-native-swift-backend|ADR-213]] records it as
 proposed, with no code. Do not start the migration before it is accepted.
 
-**Swift backend** (ADR-210): not started. The phase plan and session prompts are in
+**Swift backend** (ADR-213): not started. The phase plan and session prompts are in
 [[docs/guides/swift-backend-port|the Swift backend port playbook]]; each session records here the
 operations it moved, the checks it ran and the next slice.
 
@@ -217,7 +244,7 @@ operations it moved, the checks it ran and the next slice.
    `vmmap-<mode>.txt` output of the e2e smoke.
 3. Later, with the owner, decide whether to retire the retained web document (the `retained`
    mode and the non-eligible launch path).
-4. Remaining phase-4 gates from ADR-206/208: storage takeover, bundle size and memory against the
+4. Remaining phase-4 gates from ADR-209/208: storage takeover, bundle size and memory against the
    phase-0 baseline (ADR-204 exit). Real-data switch-over stays under ADR-205.
 
 ## Resume here (2026-10-15, historical)
@@ -351,7 +378,7 @@ owners; their source is collected in **`1ba95571`**, pushed and remote-verified 
 - Deterministic watchdog/poll receipt tests; a real AI Settings paused-read replay race fixed by
   rechecking lane ownership; notice clocks fixed and repeated suspension test separated from the
   legitimate two-write cost-basis debounce.
-- Default-off native history integration with 23 new tests and proposed ADR-206, plus a dormant
+- Default-off native history integration with 23 new tests and proposed ADR-209, plus a dormant
   raw state actor with nine permanent tests. No browser import/retirement or real-data migration.
 - Scoped parity mappings and print/lifecycle architecture diagrams reconciled with actual source.
 
@@ -529,7 +556,7 @@ Additional dormant Phase-4 preparation is collected in this follow-up:
   A 32-test scoped routing proof passes at `/workspace/scratch/native-valid-alias-check`.
   Invalid import review context, source retry/cache identity and error/query policy remain
   explicit gates. Default renderer branches are unchanged; native authority is still disabled.
-- [[docs/adr/207-vision-native-helper-document|Proposed ADR-207]] records an isolated default-off
+- [[docs/adr/210-vision-native-helper-document|Proposed ADR-210]] records an isolated default-off
   Debug Demo helper document, with unchanged TypeScript financial modules and no React UI/router.
   No such SDK configuration is active. Locale/readiness, startup/native commands, cold CSV/new
   transaction, vibrancy and fail-closed artifact serving must be implemented and tested first.

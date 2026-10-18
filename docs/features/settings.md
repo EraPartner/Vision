@@ -63,6 +63,27 @@ related_code:
 
 # Settings Feature
 
+## Loading, exclusions and navigation lifetime
+
+`AppLayout` reads section IDs from the lightweight `lib/settingsSections.ts`. The Settings dialog
+loads on first open, including a `?settings=...` deep link. Its seven sections load independently
+on selection behind `SectionLoader`. The dialog remains mounted after its first open so closing
+and reopening preserves its established lifecycle. Keyboard section navigation and URLs retain
+the same behavior.
+
+Statistics exclusions memoize category and recipient membership as sets. The recipient list
+virtualizes the 200px viewport (40px estimated rows, four overscan rows). It retains the active row
+when sorting changes, exposes each row's position and total, and provides one checkbox tab stop
+with Arrow Up/Down, Home and End navigation. Space toggles the focused checkbox. Search and
+existing inactive-recipient labels remain available.
+
+Widget saves use a module-owned 500ms debounce, so navigating away from a page does not cancel
+its pending write. Writes are serialized to prevent an older response from overwriting a newer
+visibility map; save failures retain the shared settings error feedback. This is navigation
+persistence, not a guarantee that terminating the application before the debounce completes saves
+an edit. See [[docs/testing/testing]] and [[docs/performance/caching-strategies]].
+
+
 ## Overview
 
 The Settings system manages display formatting, exclusions, pagination defaults and widget visibility. Web/Electron use a unified Zustand store, three hydration bridges and a preload context. Vision Native phase 3o renders seven native panes, with one CAS writer and a retained web draft/receipt mirror. Both use the existing JSONB-backed settings API.
@@ -257,6 +278,8 @@ const { isVisible, setWidgetVisible, setAllVisible, resetToDefaults } =
 - **Page-scoped**: Each page has its own visibility state. Page keys in use: `'dashboard'` (Home widgets), `'statistics'`, `'portfolioTax'` and `'transactionsColumns'` (the optional Transactions columns Tags, Currency, Running balance and Status, all default-hidden; see [[docs/features/transactions#Toolbar, columns and View menu]]). Widget ids are the persisted keys, so renaming one silently discards saved choices for it
 - **Labels**: a `WidgetDefinition` carries either `label` or a translated `labelKey`
 - **Persisted**: Saved to `widget_visibility` setting key
+- **Hydration safety**: Toggles, all-widget changes, and resets made while loading stay visible locally. The hook replays these edits over the successful backend snapshot before saving the complete map, preserving untouched pages. A failed or malformed read blocks writes; the next edit or mount retries loading without discarding pending edits.
+- **Navigation safety**: The module owns the debounce and serial write queue, so leaving a page does not cancel its pending save.
 - **Failure feedback**: A rejected save keeps the optimistic local visibility but triggers the shared translated settings error toast, warning that the change may not survive a restart
 - **Defaultable**: Each widget defines its own `defaultVisible` state
 - **Resettable**: Can reset all widgets to their defaults
@@ -492,3 +515,8 @@ General settings generates each decimal-precision example with the selected numb
 ## Clarity and recovery feedback
 
 The settings caption distinguishes preferences that save automatically from actions with their own Save or confirmation buttons. Restore and reset retain their explicit confirmation flows. Section names can wrap in the wider desktop rail. Backup paths retain the destination end when space is limited, with the full path available in the field tooltip.
+
+
+## Feature index
+
+- [[docs/features/index]]

@@ -39,35 +39,56 @@ public protocol AuditShell: AnyObject {
     func showAuditNotice(_ message: String)
 }
 
-/// `reportAuditStatus`: "verified" clears the notice; any other status is shown once
-/// until it changes.
+/// `reportAuditStatus(status, reason)`: "verified" clears the notice; any other status is
+/// shown once until it changes. A `no_trusted_anchor` reason asks for enrollment, and a
+/// partially verified history gets its own notice; every notice points at Admin > Audit.
 public struct AuditNoticeState: Equatable, Sendable {
     public private(set) var last: String?
 
     public init() {}
 
     /// The notice key to show, or `nil`.
-    public mutating func report(_ status: String?) -> String? {
+    public mutating func report(_ status: String?, reason: String? = nil) -> String? {
         if status == "verified" {
             last = nil
             return nil
         }
-        let value = status ?? "undefined"
-        if last == value { return nil }
-        last = value
-        return status == "failed" ? "app.auditFailed" : "app.auditUnavailable"
+        let notice = reason == "no_trusted_anchor" ? "enrollment_required" : (status ?? "undefined")
+        if last == notice { return nil }
+        last = notice
+        if status == "failed" { return "app.auditFailed" }
+        if notice == "enrollment_required" { return "app.auditEnrollmentRequired" }
+        if status == "partially_verified" { return "app.auditPartial" }
+        return "app.auditUnavailable"
     }
 
     public static func message(_ key: String, strings: ShellStrings) -> String {
-        key == "app.auditFailed"
-            ? strings.t(
-                key,
-                fallback: "Audit integrity check failed. Review the audit status before trusting recent changes.")
-            : strings.t(
+        switch key {
+        case "app.auditFailed":
+            return strings.t(
                 key,
                 fallback:
-                    "Audit integrity protection is unavailable. Your data remains accessible, but changes cannot be independently verified."
+                    "Audit integrity check failed. Open Admin > Audit before trusting recent changes. Preserve your backup and audit checkpoint."
             )
+        case "app.auditEnrollmentRequired":
+            return strings.t(
+                key,
+                fallback:
+                    "Audit protection has not been started. Open Admin > Audit to review the history and explicitly start protection."
+            )
+        case "app.auditPartial":
+            return strings.t(
+                key,
+                fallback:
+                    "Recent changes are not independently verified. Open Admin > Audit to review the checkpoint before trusting them."
+            )
+        default:
+            return strings.t(
+                key,
+                fallback:
+                    "Audit integrity protection is unavailable. Open Admin > Audit to check its status. Your data remains accessible; no checkpoint has been reset."
+            )
+        }
     }
 }
 
@@ -123,8 +144,8 @@ public final class AuditChannels {
     }
 
     /// `reportAuditStatus`.
-    public func report(_ status: String?) {
-        guard let key = notices.report(status) else { return }
+    public func report(_ status: String?, reason: String? = nil) {
+        guard let key = notices.report(status, reason: reason) else { return }
         let message = AuditNoticeState.message(key, strings: strings)
         log("[audit] \(status ?? "unknown"): \(message)")
         shell?.showAuditNotice(message)
@@ -145,12 +166,18 @@ public final class AuditChannels {
     public func checkIntegrity(establishSession: Bool = false) async -> String? {
         guard let runtime = await runtimeProvider() else { return nil }
         let status: String?
+        var reason: String?
         do {
-            status = try await runtime.verifyAuditHistory(establishSession: establishSession)["status"]?.stringValue
+            let result = try await runtime.verifyAuditHistory(establishSession: establishSession)
+            status = result["status"]?.stringValue
+            reason = result["reason"]?.stringValue
+            if status != "verified" { log("[audit] Audit verification \(status ?? "unknown") \(reason ?? "")") }
         } catch {
+            // Never log the request or the error: either may contain bridge secrets.
+            log("[audit] Audit verification unavailable: bridge request failed")
             status = "unavailable"
         }
-        report(status)
+        report(status, reason: reason)
         return status
     }
 
@@ -194,7 +221,7 @@ public final class AuditChannels {
         do {
             let result = try await runtime.closeAuditCheckpoint()
             if result["reason"]?.stringValue != "live_closure_not_active" {
-                report(result["status"]?.stringValue)
+                report(result["status"]?.stringValue, reason: result["reason"]?.stringValue)
             }
             if result["status"]?.stringValue == "verified" {
                 do {
@@ -248,7 +275,7 @@ public final class AuditChannels {
             guard confirmed else { return Self.cancelled }
             let result = try await runtime.enrollExistingAuditHistory()
             let status = result["status"]?.stringValue
-            report(status)
+            report(status, reason: result["reason"]?.stringValue)
             guard let status, AuditRuntime.verifiedStatuses.contains(status) else {
                 var fields: [String: JSONValue] = ["success": .bool(false)]
                 if let value = result["status"] { fields["status"] = value }
@@ -270,7 +297,7 @@ public final class AuditChannels {
         do {
             let raw = try await runtime.readVerifiedAuditEntries(afterSequence: range.afterSequence, limit: range.limit)
             if let status = raw["verification"]?["status"]?.stringValue, status == "failed" || status == "unavailable" {
-                report(status)
+                report(status, reason: raw["verification"]?["reason"]?.stringValue)
                 var fields: [String: JSONValue] = ["success": .bool(false), "status": .string(status)]
                 if raw["verification"]?["reason"]?.stringValue == "no_trusted_anchor" {
                     fields["reason"] = .string("no_trusted_anchor")
@@ -295,7 +322,7 @@ public final class AuditChannels {
             let range = AuditViewer.ReadRange(afterSequence: 0, limit: AuditViewer.maximumPageSize)
             let raw = try await runtime.readVerifiedAuditEntries(afterSequence: 0, limit: range.limit)
             if let status = raw["verification"]?["status"]?.stringValue, status == "failed" || status == "unavailable" {
-                report(status)
+                report(status, reason: raw["verification"]?["reason"]?.stringValue)
                 return .object(["success": .bool(false), "status": .string(status)])
             }
             let snapshot = try AuditViewer.validateSnapshot(raw, range: range)

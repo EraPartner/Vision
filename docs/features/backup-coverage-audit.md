@@ -340,6 +340,25 @@ their public interfaces and supply format-specific magic values and messages:
 
 ---
 
+## Consistent native capture and restart recovery
+
+The native bundle writer captures SQL, attachments and schema head while the backend writer is
+stopped. PostgreSQL remains available for `pg_dump`. `backup/quiescent-snapshot.ts` drains audit
+closure, stops the writer, invokes capture, and always attempts restart and detailed readiness in
+`finally`, even when capture fails. It then resumes audit closure. Compression and encryption run
+after the backend returns. The main process pauses its watchdog and holds a maintenance guard
+against conflicting restore/update shutdown; quit waits for that guard. This introduces a brief
+write interruption, signalled through `backend:lost` with the localized backup-maintenance reason.
+It does not provide a distributed snapshot against external writers that bypass the native backend.
+
+Before an attachment rename, native state records the intended destination and previous tree.
+On the next launch, an unfinished database switch restores attachments and then the previous
+database before normal startup. Recovery handles interruption before either rename, between
+renames, and after activation. If database finalization is already durable, the remaining
+attachment journal only authorizes cleanup. Corrupt state or unexpected paths stop recovery;
+there is no empty replacement database fallback. See [[docs/adr/207-coordinated-native-recovery|ADR-207]]
+and [[docs/architecture/electron|Electron architecture]].
+
 ## Restore Process (Phase 1+2)
 
 **IPC Handlers** (in `packaging/electron/main.ts`):

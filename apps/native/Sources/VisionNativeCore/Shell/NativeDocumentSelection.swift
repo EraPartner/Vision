@@ -1,7 +1,7 @@
 import Foundation
 
 /// Where the shell's backend came from. Only the app's own supervisor launch can
-/// vouch for the Demo runtime; a healthy developer override never can (ADR-207).
+/// vouch for the Demo runtime; a healthy developer override never can (ADR-210).
 public enum NativeShellBackendSource: Equatable, Sendable {
     case supervised(runtimeIdentifier: String)
     case developerOverride
@@ -9,7 +9,7 @@ public enum NativeShellBackendSource: Equatable, Sendable {
 
 /// The supervised Demo origin and website data store a native-only document owns. Only a Debug
 /// build of the Demo variant whose own supervisor launched `vision_native_demo` at a loopback
-/// origin qualifies (ADR-207's eligibility rules, kept by ADR-208 and ADR-209).
+/// origin qualifies (ADR-210's eligibility rules, kept by ADR-211 and ADR-212).
 public struct NativeDocumentSource: Equatable, Sendable {
     public enum SourceError: Error, Equatable, Sendable { case ineligibleSession, invalidSource }
 
@@ -44,9 +44,9 @@ public struct NativeDocumentSource: Equatable, Sendable {
 }
 
 /// Chooses the document presentation once, before the session creates its first document.
-/// Within the eligibility rules, ADR-208's native-only mode is the default and an exact
+/// Within the eligibility rules, ADR-211's native-only mode is the default and an exact
 /// `VISION_NATIVE_WEB_FREE=0` opts out. Everything else, including any ineligible launch, keeps
-/// the retained web document (ADR-209 retired the helper document).
+/// the retained web document (ADR-212 retired the helper document).
 public enum NativeDocumentSelection: Equatable, Sendable {
     public static let nativeOnlyEnvironmentKey = "VISION_NATIVE_WEB_FREE"
 

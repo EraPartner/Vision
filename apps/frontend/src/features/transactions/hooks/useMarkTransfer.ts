@@ -14,6 +14,7 @@ export interface ExistingTransferLeg {
     currency: string;
     is_active: boolean;
     transferPeerId?: number | null | undefined;
+    transferSource?: string | null | undefined;
 }
 
 export function eligibleExistingTransferPair(
@@ -32,6 +33,7 @@ export function eligibleExistingTransferPair(
                 Number(leg.accountId) > 0 &&
                 leg.is_active &&
                 leg.transferPeerId == null &&
+                (leg.transferSource == null || ["auto", "manual"].includes(leg.transferSource)) &&
                 Number.isFinite(leg.amount) &&
                 leg.amount !== 0 &&
                 Boolean(leg.date) &&

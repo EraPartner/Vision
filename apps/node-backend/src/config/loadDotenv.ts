@@ -18,31 +18,20 @@
  */
 
 import { readFileSync, existsSync } from "fs";
-import { dirname, join } from "path";
-import { fileURLToPath } from "url";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const devLocalPath = join(__dirname, "..", "..", ".env.local"); // apps/node-backend/.env.local
-const sharedRootPath = join(__dirname, "..", "..", "..", ".env"); // <repo-root>/.env
+import { dotenvPaths, applyDotenvContent } from "./dotenvLayers.ts";
 
 function applyDotenvFile(filePath: string): string | undefined {
   if (!existsSync(filePath)) return undefined;
   const content = readFileSync(filePath, "utf-8");
-  for (const line of content.split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-    const eqIdx = trimmed.indexOf("=");
-    if (eqIdx === -1) continue;
-    const key = trimmed.slice(0, eqIdx).trim();
-    const value = trimmed.slice(eqIdx + 1).trim();
-    if (!process.env[key]) {
-      process.env[key] = value;
-    }
-  }
+  applyDotenvContent(content, process.env);
   return filePath;
 }
 
 // Dev-local first (wins), then the shared root secrets base.
-export const dotenvLoadedFrom = [devLocalPath, sharedRootPath]
+const skipFiles =
+  process.env.VISION_SKIP_DOTENV === "1" ||
+  process.env.NODE_ENV === "test" ||
+  Boolean(process.env.VISION_NATIVE_ENV_FILE);
+export const dotenvLoadedFrom = (skipFiles ? [] : dotenvPaths(import.meta.url))
   .map(applyDotenvFile)
   .filter(Boolean);

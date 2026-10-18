@@ -10,7 +10,7 @@ actor "User" as User
 participant "BackupTab\n(settings)" as UI
 participant "useBackup" as Hook
 participant "Electron main\n(packaging/electron/main.ts)" as Main
-participant "backup service\n(backup/coverage.ts)" as Backup
+participant "backup service\n(backup/restore.ts)" as Backup
 database  "PostgreSQL" as DB
 participant "Attachments\n($ATTACHMENTS_DIR)" as Files
 participant "localStorage\n(frontend-state)" as LS
@@ -19,8 +19,12 @@ group Create backup
   User -> UI : click "Create backup"\n(+ optional passphrase)
   UI -> Hook : useBackup.create({ passphrase? })
   Hook -> Main : ipc invoke 'backup:run'
-  Main -> DB   : pg_dump  >>  bundle/db.sql
+  Main -> Main : acquire maintenance guard; pause watchdog
+  Main -> Main : drain/pause audit closure; stop backend writer
+  Main -> DB   : pg_dump >> bundle/db.sql (PostgreSQL remains running)
   Main -> Files: copy $ATTACHMENTS_DIR/* >> bundle/attachments/
+  Main -> Main : finally restart backend; await detailed readiness; resume closure
+  Main -> Main : release maintenance guard; resume watchdog
   Main -> LS   : snapshot (theme, preferences) >> bundle/frontend-state.json
   Main -> Backup: encryptBundle(bundle, passphrase)
   Backup -> Backup : v2 header (magic + version + salt)\n+ scrypt(passphrase, salt, N=2^15)\n+ AES-256-GCM(plaintext, key, iv, aad=email)
@@ -46,8 +50,17 @@ group Restore backup
     Backup -> Main : BUNDLE_SCHEMA_NEWER
     Main -> UI     : "upgrade Vision first"
   end
-  Main -> DB    : pg_restore  (drop + recreate user data)
-  Main -> Files : swap $ATTACHMENTS_DIR
+  Main -> DB    : restore into staged database; retain previous database
+  Main -> Main  : persist attachment switch intent before renames
+  Main -> Files : activate staged attachment tree; retain previous tree
+  Main -> Main  : require readiness and audit verification before finalization
+  alt verification succeeds
+    Main -> DB : finalize database journal
+    Main -> Files : finalize attachment journal
+  else activation or verification fails
+    Main -> Files : restore previous attachment tree
+    Main -> DB : roll back database switch
+  end
   Main -> LS    : hydrate frontend-state.json
   Main -> UI    : { ok }
   UI -> User    : reload window
@@ -63,8 +76,10 @@ note right of Backup
 end note
 
 note right of Main
-  Coverage: 31 user-data tables
-  + attachments + 9 localStorage keys.
+  Coverage: declared user-data tables,
+  attachment tree and frontend state.
+  Next startup resolves interrupted switch journals
+  before ordinary database setup.
   CI enforces coverage on every migration.
 end note
 

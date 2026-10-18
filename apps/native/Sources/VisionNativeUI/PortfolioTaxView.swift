@@ -121,6 +121,14 @@ public struct PortfolioTaxView: View {
                 TaxYearSwitcherView(
                     overview: overview, availableYears: taxData?.yearCalculations.map(\.year) ?? [],
                     actions: tax.actions, shell: shell)
+                // YearActionsMenu: filing and CSV export are visible buttons beside the switcher.
+                if TaxYearPresentation.metadata(overview)["filing"]?.objectValue == nil {
+                    Button(strings.t("tax.yearActions.markFiled"), systemImage: "lock") { filing = true }
+                        .disabled(tax.actions.isSaving)
+                }
+                Button(strings.t("tax.yearActions.exportCsv"), systemImage: "arrow.down.document") {
+                    Task { await tax.exportYearCsv() }
+                }.disabled(tax.actions.isSaving || tax.isExporting)
                 actionsMenu(overview)
             }
             // PortfolioTaxPage always shows the button; the sheet needs loaded data, so it waits for it.
@@ -148,9 +156,6 @@ public struct PortfolioTaxView: View {
                     strings.t(frozen ? "tax.yearActions.unfreeze" : "tax.yearActions.freeze"), systemImage: "snowflake"
                 ) {
                     Task { await perform(frozen ? .unfreeze : .freeze) }
-                }
-                if overview.isHistorical {
-                    Button(strings.t("tax.yearActions.markFiled"), systemImage: "lock") { filing = true }
                 }
             } else {
                 Button(strings.t("tax.yearActions.unmarkFiled"), systemImage: "lock.open") {

@@ -460,3 +460,18 @@ describe("statisticsRepository.getCategoryPivot", () => {
     });
   });
 });
+
+it('uses bound date and effective-category/recipient exclusions instead of the unfiltered materialized view', async () => {
+  query.mockResolvedValueOnce({ rows: [] });
+  convertRowsToEur.mockResolvedValueOnce([]);
+  await statisticsRepository.getCategoryBreakdown('EUR', undefined, {
+    startDate: '2025-02-12', endDate: '2025-03-08', excludedCategoryIds: [10], excludedRecipientIds: [20],
+  });
+  const [sql, params] = query.mock.calls[0]!;
+  expect(mvAvailable).not.toHaveBeenCalled();
+  expect(sql).toContain('category_ancestors excluded');
+  expect(sql).toContain('COALESCE(r.primary_recipient_id, t.recipient_id, -1) NOT IN ($2)');
+  expect(sql).toContain('t.date >= $3');
+  expect(sql).toContain('t.date <= $4');
+  expect(params).toEqual([10, 20, '2025-02-12', '2025-03-08']);
+});

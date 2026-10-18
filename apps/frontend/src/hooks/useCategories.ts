@@ -1,7 +1,11 @@
 import { QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
-import { categoryKeys } from "@/lib/queryKeys";
+import {
+    categoryKeys,
+    recipientKeys,
+    invalidateTransactionData,
+} from "@/lib/queryKeys";
 import {
     fetchCategoriesForExclusions,
     takeStartedCategoriesPreload,
@@ -139,6 +143,9 @@ export function useMergeCategoryNode() {
         }) => apiClient.mergeCategoryNode(sourceId, targetId),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: categoryKeys.all });
+            queryClient.invalidateQueries({ queryKey: recipientKeys.all });
+            invalidateTransactionData(queryClient);
+            queryClient.invalidateQueries({ queryKey: ["research-dossiers"] });
             toast.success(t("categories.updated"));
         },
         onError: (error: Error) =>

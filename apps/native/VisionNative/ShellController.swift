@@ -30,13 +30,15 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     private let settingsTransport: URLSessionSettingsTransport
     private var settingsWriter: SettingsWriter
     private let backupService: BackupService
+    /// Lets the backup service reach this controller around a backup snapshot; set after `init`.
+    private let backupMaintenance: BackupMaintenanceRelay
     /// The six `electronAudit` channels, the closure timer and the audit notices.
     private lazy var auditChannels = makeAuditChannels()
     /// The typed API client of native screens (`client.ts`).
     private lazy var apiClient = makeAPIClient()
     private var dataSession = NativeDataSession()
     private var localStateSession = NativeLocalStateSession()
-    /// ADR-208: the native-only mode's storage; `nil` while a web document holds it.
+    /// ADR-211: the native-only mode's storage; `nil` while a web document holds it.
     private var nativeStorage: NativeShellStorage?
     /// The applied page zoom, for graphs built without a web view.
     private var currentPageZoom: Double?
@@ -66,7 +68,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     private var shellHost: NSView?
     /// The backend base URL the web view may show; `nil` until the runtime is ready.
     private(set) var appURL: URL?
-    /// Fixed once, before the first document and shell graph are created (ADR-208).
+    /// Fixed once, before the first document and shell graph are created (ADR-211).
     private(set) var documentSelection = NativeDocumentSelection.retainedWeb
     private var hasMadeShellModel = false
     private var healthWatchdogTask: Task<Void, Never>?
@@ -75,7 +77,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     private let backendNoticeSource = UUID()
     private var backendNoticeID: UUID?
     /// Native-only mode: cold CSV, new-transaction and menu intents, retained across graph
-    /// rebuilds so committed history and unconsumed intents survive (ADR-207, ADR-208).
+    /// rebuilds so committed history and unconsumed intents survive (ADR-210, ADR-211).
     private let nativeIntents = NativeShellIntentCoordinator()
     /// The first native startup seeds a new session; later documents are reloads.
     private var nativeStartupResolved = false
@@ -476,7 +478,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             nativeFallback: true,
             presentationMode: documentSelection.presentationMode,
             initialRoute: initialRoute,
-            // The native-only document has no router: native history owns every route (ADR-206).
+            // The native-only document has no router: native history owns every route (ADR-209).
             nativeNavigation: documentSelection == .retainedWeb
                 ? nil : NativeNavigationHistory(initial: NativeNavigationLocation(initialRoute.string) ?? .home),
             nativeIntents: documentSelection == .retainedWeb ? nil : nativeIntents,
@@ -648,7 +650,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         return result
     }
 
-    /// The palette's inline answers, computed natively (ADR-208); rates come from the
+    /// The palette's inline answers, computed natively (ADR-211); rates come from the
     /// graph's shared 10-minute cache.
     private func nativePaletteAnswer(
         query: String, format: NumberFormat, currency: String, decimals: Int, rates: NativePaletteRates,
@@ -682,7 +684,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
 
     private func nativeTaxReportContext(year: Int, generation: UUID) async throws -> TaxValue {
         try requireNativeGeneration(generation)
-        // ADR-208: the overview and the native projection; no helper document is involved.
+        // ADR-211: the overview and the native projection; no helper document is involved.
         let context = NativeTaxReportContextService(
             client: apiClient, localize: { [weak self] key in self?.shellModel.strings.t(key) ?? key })
         let value = try await context.context(year: year)
@@ -1446,6 +1448,8 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         settingsTransport = transport
         settingsWriter = SettingsWriter(transport: transport)
         let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let maintenanceRelay = BackupMaintenanceRelay()
+        backupMaintenance = maintenanceRelay
         backupService = BackupService(
             context: BackupContext(
                 environment: ProcessInfo.processInfo.environment,
@@ -1460,8 +1464,12 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
                 KeychainPassphraseStore(account: account, service: service)
             },
             logger: OSLogRuntimeLog(logger: AppRuntime.shellLogger),
-            auditProvider: { await AppRuntime.supervisor.auditRuntime() })
+            auditProvider: { await AppRuntime.supervisor.auditRuntime() },
+            maintenance: BackupMaintenanceHooks(
+                willBeginSnapshot: { await maintenanceRelay.owner?.backupSnapshotWillBegin() },
+                didEndSnapshot: { await maintenanceRelay.owner?.backupSnapshotDidEnd() }))
         super.init()
+        backupMaintenance.owner = self
         launchModel.onRetry = { [weak self] in self?.launch() }
         launchModel.onOpenLogs = { [weak self] in _ = try? self?.openLogs() }
     }
@@ -1530,7 +1538,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
                     documentSelection = selection
                 }
                 if case .nativeOnly = documentSelection {
-                    logger.log("[shell] Debug Demo native-only mode selected (ADR-208)")
+                    logger.log("[shell] Debug Demo native-only mode selected (ADR-211)")
                 }
             }
             if case .nativeOnly(let source) = documentSelection {
@@ -1592,6 +1600,10 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
                 strings.t("backup.failed", fallback: "Backup failed. Check the backup folder."), askIfNeeded: false)
         case nil: break
         }
+        // `await nativeMaintenanceDone`: a running backup or restore finishes before the
+        // services stop; its end may have restarted the watchdog.
+        await backupService.waitForMaintenance()
+        stopHealthWatchdog()
         // After the quit backup, before the services stop (Electron's `will-quit`).
         await auditChannels.endSession()
     }
@@ -1687,7 +1699,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         NSApp.activate()
     }
 
-    // MARK: - Native-only mode (ADR-208)
+    // MARK: - Native-only mode (ADR-211)
 
     /// Opens the raw-state store (capturing the origin's browser storage once), builds a host
     /// without a web view and marks the graph's document ready. Any store or capture failure
@@ -1874,7 +1886,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         apply(.unavailable(strings.t("app.errorPageMessage")))
     }
 
-    // MARK: - Native navigation startup (ADR-208)
+    // MARK: - Native navigation startup (ADR-211)
 
     private func applyNativeStartup(_ startup: inout NativeNavigationStartup, model: NativeShellModel) {
         guard !startup.hasResolved, let current = model.nativeNavigationLocation?.raw else { return }
@@ -2205,7 +2217,9 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
                         .init(id: 0, kind: .warning, key: "app.backendLost"), source: self.backendNoticeSource,
                         lifetime: 30, replacementKey: "backend-health")
                 case .restored:
-                    await self.auditChannels.checkIntegrity()
+                    // `endSession` on loss reset the session; trust is re-established at
+                    // the exact trusted checkpoint, never from an unanchored tail.
+                    await self.auditChannels.checkIntegrity(establishSession: true)
                     await self.auditChannels.startClosureTimer()
                     self.sendToApp(.backendRestored, .null)
                     if let id = self.backendNoticeID { self.shellModel.notices.dismiss(id) }
@@ -2220,6 +2234,25 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     private func stopHealthWatchdog() {
         healthWatchdogTask?.cancel()
         healthWatchdogTask = nil
+    }
+
+    /// `withBackupSnapshot` in main.ts, before the capture: the watchdog pauses (the
+    /// backend stops on purpose) and the page learns that changes are briefly paused.
+    fileprivate func backupSnapshotWillBegin() {
+        stopHealthWatchdog()
+        let message = strings.t(
+            "backup.maintenance", fallback: "Creating a consistent backup. Changes are briefly paused.")
+        deliver(.backendLost, .object(["message": .string(message)]))
+    }
+
+    /// After the capture, also a failed one: the watchdog restarts, and the page hears
+    /// `backend:restored` only once the backend answers again.
+    fileprivate func backupSnapshotDidEnd() async {
+        guard let url = appURL else { return }
+        startHealthWatchdog(url)
+        let status = try? await BackendHealth.status(baseURL: url, timeout: BackendHealthWatchdog.probeTimeout)
+        guard appURL == url, BackendHealthWatchdog.isHealthy(status: status) else { return }
+        deliver(.backendRestored, .null)
     }
 
     /// Applies a zoom step to the page and native screens and keeps it for the next launch.
@@ -2535,7 +2568,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
 
     /// `backup:restore`: the localized confirmation, then the restore, which stops and
     /// restarts the backend itself.
-    /// The legacy `electronBackup.restore` bridge call. ADR-207's mode policy: only the retained
+    /// The legacy `electronBackup.restore` bridge call. ADR-210's mode policy: only the retained
     /// web document owns it (its page applies the frontend state and reloads); in native mode a
     /// call that still arrives fails closed so native Settings stays the only restore owner.
     func restoreBackup(_ path: String, passphrase: String?) async -> JSONValue {
@@ -2919,4 +2952,11 @@ extension NSColor {
         let rgb = color.rgb
         return NSColor(srgbRed: rgb.red, green: rgb.green, blue: rgb.blue, alpha: alpha)
     }
+}
+
+/// A weak path from the backup service's maintenance hooks to the controller, which does
+/// not exist yet when the service is created in `ShellController.init`.
+@MainActor
+private final class BackupMaintenanceRelay {
+    weak var owner: ShellController?
 }

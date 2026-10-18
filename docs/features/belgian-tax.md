@@ -3,7 +3,7 @@ title: Feature - Belgian Tax
 type: feature
 status: active
 date: 2026-10-13
-updated: 2026-10-17
+updated: 2026-10-18
 tags:
   [
     feature,
@@ -720,7 +720,7 @@ Each entry exposes `{ year, isCurrent, hasSnapshot, hasTransactions }` for the s
 
 `/tax` is composed as the document it models — a Belgian assessment notice (_aanslagbiljet_) — rather than as a generic KPI dashboard:
 
-- **`TaxFilingMasthead`** (`features/tax/TaxFilingMasthead.tsx`) is the page's document head. It states the income year once, large (Fraunces, `glass-elevated` per ADR-105), with the filing status beside it (`live` / `estimate` / `snapshot` / `frozen` / `filed`, resolved by the same `resolveHistoricalBannerMode`), the region and marginal rate as meta, and the **effective burden as the single hero figure**. It absorbs the three outline badges the page used to render (`tax.overview.badge.*`, removed) and, on historical years, the `HistoricalYearBanner` text plus its "Create profile for {year}" / "Back to {year}" actions. `TaxYearSwitcher` and `YearActionsMenu` live inside it, so the year's identity reads as one thing.
+- **`TaxFilingMasthead`** (`features/tax/TaxFilingMasthead.tsx`) is the page's document head. It states the income year once, large (Fraunces, `glass-elevated` per ADR-105), with the filing status beside it (`live` / `estimate` / `snapshot` / `frozen` / `filed`, resolved by the same `resolveHistoricalBannerMode`), the region and marginal rate as meta, and the **effective burden as the single hero figure**. It absorbs the three outline badges the page used to render (`tax.overview.badge.*`, removed) and, on historical years, the `HistoricalYearBanner` text plus its "Create profile for {year}" / "Back to {year}" actions. `TaxYearSwitcher` and `YearActionsMenu` live in the page header above it.
 - **`TaxComputationFlow`** (`features/tax/TaxComputationFlow.tsx`) replaces the seven same-weight stat tiles (`TaxOverviewSummaryCards`, removed) with one connected downward ledger: gross income → deductions → taxable income → federal PIT after reductions → municipal surcharge → total PIT → social security & property tax → total burden → net take-home, closed by a "beyond personal income tax" coda (portfolio taxes, total incl. portfolio, total incl. property estimate). Signed operation rows only restate relations `computeBelgianPIT` holds exactly; the bracket/exemption step is prose, because the regional autonomy factor makes it not a plain subtraction — `PitBreakdownCard` itemises it directly below.
 
 Both components are pure presentation over `useTaxOverviewData`'s output: every figure is a pass-through read of `BelgianTaxCalculation`, and no value changed with the recomposition. The `summaryCards` widget id is unchanged (persisted visibility survives); only its label moved to "Computation Flow".
@@ -773,14 +773,30 @@ type BelgianTaxProfileSnapshotMeta = {
 
 `createSnapshotFromLive` and `updateSnapshot` now also append `'created'` / `'patched'` entries to the meta history. Patches store only the diff (capped at 200 entries per year).
 
+### Atomic persistence and filing confirmation
+
+The provider schedules profile, year snapshots and snapshot metadata as one debounced
+`PUT /api/settings` write. The module-owned timer survives route unmounts. The grouped save
+shares per-key queues and compare-and-swap baselines with ordinary settings saves, and advances
+baselines only after acknowledgment. A conflict or failed write requires reloading before
+saving again; a background read never silently authorizes overwriting newer data.
+
+`MarkAsFiledDialog` prepares the snapshot and frozen calculation, then awaits this atomic save
+before publishing Filed to the store or closing. While saving, confirmation and dismissal are
+disabled. A failure keeps the dialog open and the year unfiled, with an error message. Other
+profile edits retain the normal grouped debounce. No tax calculation or filing eligibility rule
+changes as part of this persistence correction.
+Acknowledgment merges only the confirmed year's snapshot and metadata into the latest local
+state. Live-profile edits and changes to other years made during the request remain available
+and are included in the next grouped save. The filed year retains its confirmation-time inputs.
+
 ### UI surfaces
 
 - **`MultiYearTrendStrip`** — compact clickable year tiles (ghost `Button`s with `aria-pressed`) in the page header showing PIT, effective rate, and a normalized bar. Clicking switches `viewedYear`.
 - **`YearComparisonCard`** — side-by-side delta table comparing the viewed year against another year (picker; defaults to the immediately preceding tracked year). Surfaces gross income, total PIT, effective rate, net take-home.
-- **`YearActionsMenu`** — the ••• "More actions" menu next to `TaxYearSwitcher` with freeze/unfreeze, mark/unmark filed, view history, export year as CSV. Pages pass their own items through `pageItems`: `/tax` adds Export PDF… and Customize…; `/portfolio/tax` adds Set up / Edit tax profile… and Customize…. On `/tax` the primary header button is _Set up tax profile_ or _Edit tax profile_; if the overview query errors, the header renders without these actions ([[docs/adr/187-completeness-sweep|ADR-187]]).
-- **`MarkAsFiledDialog`** — collects an optional free-text filing reference (Tax-on-Web id, paper return code) before marking a year as filed.
+- **`YearActionsMenu`** — visible Mark as filed (or Filed) and Export CSV buttons next to `TaxYearSwitcher`, plus the ••• menu for freeze/unfreeze, unmark filed and history. Pages pass their own items through `pageItems`: `/tax` adds Export PDF… and Customize…; `/portfolio/tax` adds Set up / Edit tax profile… and Customize…. On `/tax` the primary header button is _Set up tax profile_ or _Edit tax profile_; if the overview query errors, the header renders without these actions ([[docs/adr/187-completeness-sweep|ADR-187]]).
+- **`MarkAsFiledDialog`** — records an optional filing reference after confirmation. This records a filing in Vision; it does not submit a declaration to a tax authority. The household must be loaded and prepared for the selected year; otherwise the dialog explains the prerequisite and disables confirmation. Eligible years are the live year, a year with its own household snapshot, and a year with an explicitly frozen calculation. A past year that would only use a live estimate is not eligible. Filing the live year pins its household as that year's snapshot, so later edits do not change the filed inputs. A year that already has a `frozenCalculation` is not pinned, because the live household would disagree with the frozen figures. Filing stores `frozenHouseholdResult` next to `frozenCalculation` unless the year was already frozen. The household, household snapshots and snapshot metadata are saved in one settings request (`stores/taxPersistence.ts`) before the year shows as filed.
 - **`SnapshotHistoryDialog`** — read-only chronological list of audit entries with kind badge, timestamp, one-line patch summary, and the filing reference where applicable. An entry with `householdChanges` shows one translated line per changed section (partners with their activity count and gross income, relationship events, dependants, home, region, communal surcharge, income categories); `features/tax/historySummary.ts` builds the lines.
-- **`MarkAsFiledDialog`** also records the household: a past year without its own household snapshot is computed from the live household, so the dialog pins that household as the year's snapshot (a `'created'` entry) before filing. A year that already has a `frozenCalculation` is not pinned, because the live household would disagree with the frozen figures. Filing stores `frozenHouseholdResult` next to `frozenCalculation` unless the year was already frozen.
 - **`HistoricalYearBanner`** extended with `filed` and `frozen` modes; priority order centralized in `resolveHistoricalBannerMode` and shared between `/tax` and `/portfolio/tax`.
 - **`TaxProfileDialog`** upgrades the amber warning to an explicit "Amend this filed year" confirmation when editing a filed year; updates are blocked until the user opts in.
 
@@ -792,7 +808,7 @@ When two partners are assessed, the CSV adds a per-partner inputs section and a 
 
 ### Behavioral rules
 
-- **Filing implies freezing.** Marking a year filed captures the calculation if it isn't already frozen.
+- **Filing implies freezing.** Marking a year filed captures the profile inputs and the calculation if it is not already frozen. The current profile year also shows filed status and requires amendment confirmation before profile edits. The dialog records Filed only after the atomic profile, snapshot and metadata write is acknowledged.
 - **Pre-existing freezes win.** If a user deliberately froze a calc and _then_ filed, the deliberate freeze point is preserved.
 - **Unfiling does _not_ unfreeze.** Unfiling is a clerical correction; the frozen calc is kept for the user's reference.
 - **Banner priority.** `filed > frozen > snapshot > estimate`.

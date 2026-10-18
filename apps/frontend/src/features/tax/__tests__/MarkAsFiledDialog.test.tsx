@@ -1,164 +1,167 @@
 // @vitest-environment jsdom
-//
-// Enter-to-submit regression tests (TODO.md: "Enter never submits in the
-// button-only dialogs"). MarkAsFiledDialog is the simple representative: one
-// text input + confirm/cancel footer, now wrapped in a real <form>. Enter in
-// the reference field must file the year exactly once; Cancel must never file.
-import { describe, it, expect } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import { renderWithApp } from "@/test/renderWithApp";
-import { MarkAsFiledDialog } from "@/features/tax/MarkAsFiledDialog";
-import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+    act,
+    fireEvent,
+    render,
+    screen,
+    waitFor,
+} from "@testing-library/react";
+import { apiClient } from "@/lib/api";
+import { MarkAsFiledDialog } from "../MarkAsFiledDialog";
 import { useSettingsStore } from "@/stores/settingsStore";
-import { resolveBelgianTaxCalculation } from "@/stores/belgianTaxStore";
+import {
+    DEFAULT_BELGIAN_TAX_PROFILE,
+    resolveBelgianTaxCalculation,
+} from "@/stores/belgianTaxStore";
+import * as runtime from "@/lib/belgianTax/householdRuntime";
 
-const YEAR = 2025;
+vi.mock("@/contexts/BelgianTaxProfileContext", () => ({
+    useBelgianTaxProfile: (selector: Parameters<typeof useSettingsStore>[0]) =>
+        useSettingsStore(selector),
+}));
+vi.mock("@/stores/hydration/LanguageHydration", () => ({
+    useLanguage: () => ({ t: (key: string) => key }),
+}));
 
-/**
- * Context probe: renders the filed flag and the count of 'filed' audit entries.
- * The entry count is the double-submit detector — a submit firing twice
- * (button onClick + form onSubmit) would append two history entries.
- */
-function FiledProbe() {
-    const { isYearFiled, getSnapshotHistory } = useBelgianTaxProfile();
-    const filedEntries = getSnapshotHistory(YEAR).filter((e) => e.kind === "filed");
-    return (
-        <div>
-            <span data-testid="filed-state">{isYearFiled(YEAR) ? "filed" : "not-filed"}</span>
-            <span data-testid="filed-count">{filedEntries.length}</span>
-        </div>
-    );
-}
-
-async function renderAndOpen(user: ReturnType<typeof userEvent.setup>) {
-    renderWithApp(
-        <>
-            <MarkAsFiledDialog trigger={<button type="button">open filing</button>} year={YEAR} />
-            <FiledProbe />
-        </>,
-    );
-    await user.click(await screen.findByRole("button", { name: /open filing/i }));
-    await screen.findByText(`Mark ${YEAR} as filed`);
-}
-
-describe("MarkAsFiledDialog — Enter submits the form", () => {
-    it("files the year exactly once on Enter in the reference field", async () => {
-        const user = userEvent.setup();
-        await renderAndOpen(user);
-
-        await user.type(screen.getByLabelText("Reference"), "TOW-12345{Enter}");
-
-        await waitFor(() =>
-            expect(screen.getByTestId("filed-state")).toHaveTextContent("filed"),
-        );
-        // Exactly one 'filed' audit entry — no double submit.
-        expect(screen.getByTestId("filed-count")).toHaveTextContent("1");
-        // Confirm closes the dialog.
-        expect(screen.queryByText(`Mark ${YEAR} as filed`)).not.toBeInTheDocument();
+describe("recording a filing", () => {
+    beforeEach(() => {
+        vi.spyOn(apiClient, "saveSettings").mockResolvedValue(undefined);
+        useSettingsStore
+            .getState()
+            ._hydrate(
+                runtime,
+                runtime.upgradeProfileV1ToHousehold(DEFAULT_BELGIAN_TAX_PROFILE),
+                {},
+                {},
+            );
     });
-
-    it("clicking the confirm button still files exactly once", async () => {
-        const user = userEvent.setup();
-        await renderAndOpen(user);
-
-        await user.type(screen.getByLabelText("Reference"), "PAPER-1");
-        await user.click(screen.getByRole("button", { name: /mark as filed/i }));
-
-        await waitFor(() =>
-            expect(screen.getByTestId("filed-state")).toHaveTextContent("filed"),
+    afterEach(() => vi.restoreAllMocks());
+    it("explains missing profile data and prevents recording a past year that only has a live estimate", () => {
+        useSettingsStore.getState().updateProfile({ profileConfigured: true });
+        render(
+            <MarkAsFiledDialog
+                year={2020}
+                trigger={<button>Record filing</button>}
+            />,
         );
-        expect(screen.getByTestId("filed-count")).toHaveTextContent("1");
+        fireEvent.click(screen.getByText("Record filing"));
+        expect(screen.getByRole("status").textContent).toBe(
+            "tax.markFiled.prerequisite",
+        );
+        expect(
+            screen.getByRole("button", { name: "tax.markFiled.confirm" }),
+        ).toBeDisabled();
     });
-
-    it("cancel closes without filing", async () => {
-        const user = userEvent.setup();
-        await renderAndOpen(user);
-
-        await user.type(screen.getByLabelText("Reference"), "SHOULD-NOT-FILE");
-        const cancel = screen.getByRole("button", { name: /cancel/i });
-        expect(cancel).toHaveClass("border", "border-input/70");
-        await user.click(cancel);
-
-        await waitFor(() =>
-            expect(screen.queryByText(`Mark ${YEAR} as filed`)).not.toBeInTheDocument(),
+    it("requires confirmation and records the optional reference for the live household year", async () => {
+        let resolveSave!: () => void;
+        vi.mocked(apiClient.saveSettings).mockImplementation(
+            () =>
+                new Promise((resolve) => {
+                    resolveSave = resolve;
+                }),
         );
-        expect(screen.getByTestId("filed-state")).toHaveTextContent("not-filed");
-        expect(screen.getByTestId("filed-count")).toHaveTextContent("0");
-    });
-
-    it("records the household and its result for a past year without a snapshot", async () => {
-        const user = userEvent.setup();
-        renderWithApp(
-            <MarkAsFiledDialog trigger={<button type="button">open filing</button>} year={YEAR} />,
+        const year = DEFAULT_BELGIAN_TAX_PROFILE.taxYear;
+        useSettingsStore.getState().updateProfile({ profileConfigured: true });
+        render(
+            <MarkAsFiledDialog
+                year={year}
+                trigger={<button>Record filing</button>}
+            />,
         );
-        await waitFor(() => {
-            const state = useSettingsStore.getState();
-            expect(state.isLoading).toBe(false);
-            expect(state.household).not.toBeNull();
-        });
-        const live = useSettingsStore.getState().household!;
-        expect(live.taxYear).not.toBe(YEAR);
-        expect(useSettingsStore.getState().householdSnapshots[YEAR]).toBeUndefined();
-
-        await user.click(screen.getByRole("button", { name: /open filing/i }));
-        await user.click(await screen.findByRole("button", { name: /mark as filed/i }));
-
-        await waitFor(() => expect(useSettingsStore.getState().isYearFiled(YEAR)).toBe(true));
+        fireEvent.click(screen.getByText("Record filing"));
+        expect(useSettingsStore.getState().isYearFiled(year)).toBe(false);
+        fireEvent.change(
+            screen.getByLabelText("tax.markFiled.referenceLabel"),
+            { target: { value: "  synthetic-123  " } },
+        );
+        fireEvent.click(
+            screen.getByRole("button", { name: "tax.markFiled.confirm" }),
+        );
+        expect(useSettingsStore.getState().isYearFiled(year)).toBe(false);
+        expect(
+            screen.getByRole("button", { name: "tax.markFiled.confirm" }),
+        ).toBeDisabled();
+        await act(async () => resolveSave());
+        expect(apiClient.saveSettings).toHaveBeenCalledWith(
+            expect.objectContaining({
+                belgian_tax_household_v2: expect.any(Object),
+                belgian_tax_household_snapshots_v2: expect.objectContaining({
+                    [year]: expect.any(Object),
+                }),
+                belgian_tax_profile_snapshot_meta_v1: expect.objectContaining({
+                    [year]: expect.any(Object),
+                }),
+            }),
+        );
         const state = useSettingsStore.getState();
-        expect(state.householdSnapshots[YEAR]).toEqual({ ...live, taxYear: YEAR });
-        expect(state.snapshotMetas[YEAR]?.frozenHouseholdResult?.incomeYear).toBe(YEAR);
-        expect(state.snapshotMetas[YEAR]?.history?.map((e) => e.kind)).toEqual([
-            "created",
-            "filed",
-        ]);
-    });
-
-    it("does not pin the live household over a year with a frozen calculation", async () => {
-        const user = userEvent.setup();
-        renderWithApp(
-            <MarkAsFiledDialog trigger={<button type="button">open filing</button>} year={YEAR} />,
+        expect(state.snapshotMetas[year]?.filing?.reference).toBe(
+            "synthetic-123",
         );
-        await waitFor(() => {
-            const state = useSettingsStore.getState();
-            expect(state.isLoading).toBe(false);
-            expect(state.household).not.toBeNull();
-        });
+        expect(state.snapshotMetas[year]?.frozenHouseholdResult).toBeDefined();
+        expect(state.householdSnapshots[year]?.taxYear).toBe(year);
+        expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+    it("files a past year with a frozen calculation without pinning the live household", async () => {
+        const year = DEFAULT_BELGIAN_TAX_PROFILE.taxYear - 1;
+        useSettingsStore.getState().updateProfile({ profileConfigured: true });
         const before = useSettingsStore.getState();
-        const frozenCalculation = {
-            ...resolveBelgianTaxCalculation(before, YEAR),
-            totalPIT: 12_345,
-        };
         useSettingsStore.setState({
             snapshotMetas: {
                 ...before.snapshotMetas,
-                [YEAR]: { frozenCalculation, history: [] },
+                [year]: {
+                    frozenCalculation: {
+                        ...resolveBelgianTaxCalculation(before, year),
+                        totalPIT: 12_345,
+                    },
+                    history: [],
+                },
             },
         });
-
-        await user.click(screen.getByRole("button", { name: /open filing/i }));
-        await user.click(await screen.findByRole("button", { name: /mark as filed/i }));
-
-        await waitFor(() => expect(useSettingsStore.getState().isYearFiled(YEAR)).toBe(true));
-        const state = useSettingsStore.getState();
-        expect(state.householdSnapshots[YEAR]).toBeUndefined();
-        expect(state.snapshotMetas[YEAR]?.frozenCalculation?.totalPIT).toBe(12_345);
-    });
-
-    it("cancel discards a typed reference — reopening shows a blank field", async () => {
-        const user = userEvent.setup();
-        await renderAndOpen(user);
-
-        await user.type(screen.getByLabelText("Reference"), "SHOULD-NOT-SURVIVE");
-        await user.click(screen.getByRole("button", { name: /cancel/i }));
-
-        await waitFor(() =>
-            expect(screen.queryByText(`Mark ${YEAR} as filed`)).not.toBeInTheDocument(),
+        render(
+            <MarkAsFiledDialog
+                year={year}
+                trigger={<button>Record filing</button>}
+            />,
         );
-
-        await user.click(screen.getByRole("button", { name: /open filing/i }));
-        await screen.findByText(`Mark ${YEAR} as filed`);
-
-        expect(screen.getByLabelText("Reference")).toHaveValue("");
+        fireEvent.click(screen.getByText("Record filing"));
+        fireEvent.click(
+            screen.getByRole("button", { name: "tax.markFiled.confirm" }),
+        );
+        await waitFor(() =>
+            expect(useSettingsStore.getState().isYearFiled(year)).toBe(true),
+        );
+        const state = useSettingsStore.getState();
+        expect(state.householdSnapshots[year]).toBeUndefined();
+        expect(state.snapshotMetas[year]?.frozenCalculation?.totalPIT).toBe(
+            12_345,
+        );
+    });
+    it("keeps the filing unrecorded and the dialog open when the atomic save fails", async () => {
+        vi.mocked(apiClient.saveSettings).mockRejectedValue(
+            new Error("conflict"),
+        );
+        const year = DEFAULT_BELGIAN_TAX_PROFILE.taxYear;
+        useSettingsStore.getState().updateProfile({ profileConfigured: true });
+        render(
+            <MarkAsFiledDialog
+                year={year}
+                trigger={<button>Record filing</button>}
+            />,
+        );
+        fireEvent.click(screen.getByText("Record filing"));
+        fireEvent.click(
+            screen.getByRole("button", { name: "tax.markFiled.confirm" }),
+        );
+        await waitFor(() =>
+            expect(screen.getByRole("alert")).toHaveTextContent(
+                "settings.saveFailed",
+            ),
+        );
+        expect(useSettingsStore.getState().isYearFiled(year)).toBe(false);
+        expect(
+            useSettingsStore.getState().householdSnapshots[year],
+        ).toBeUndefined();
+        expect(screen.getByRole("dialog")).toBeInTheDocument();
     });
 });

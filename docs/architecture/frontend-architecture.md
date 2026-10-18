@@ -3,8 +3,8 @@ title: Frontend Architecture
 type: architecture
 status: active
 description: "React frontend architecture, design system, and diagrams with liquid-glass aesthetic, visx charts, Framer Motion, and Zustand store. May 2026 Tailwind v4 migration with unified CSS architecture. June 2026 Liquid Glass v2 — atmosphere layer, saturated blur tiers, CommandPalette, optimistic mutations, route preload. June 2026 Premium v3 — RollingNumber/Money/DeltaPill, chart scrub+sync, ChartSkeleton, PageTitleContext, palette v2, ShortcutsOverlay + go-to sequences, animated tabs, workspace aurora, ShaderAurora behind visual-effects tier model (ADR-075), per-widget dashboard hydration, optimistic create. 2026-06-24: --gain/--loss CSS semantic tokens unified app-wide (tokens.css baseline, skin-v2.css Okabe-Ito overrides); gain/loss Tailwind color utilities added; colorblindGainLoss default OFF/classic."
-date: 2026-10-08
-updated: 2026-10-08
+date: 2026-10-11
+updated: 2026-10-11
 tags: [architecture, frontend, uml, plantuml, react, phase-4, phase-6, phase-9, liquid-glass, liquid-glass-v2, premium-v3, visx, framer-motion, statistics-refactoring, zustand, state-management, tailwind-v4, css-architecture, command-palette, optimistic-updates, route-preload, chart-scrub, chart-sync, shader-aurora, visual-effects-tiers, auto-adapt-display, fx-reduced, role-based-glass, glass-by-default, june-2026, gain-loss, css-tokens, skin-v2, tailwind-colors]
 aliases: [frontend architecture, react architecture, frontend design, design system]
 ---
@@ -28,6 +28,17 @@ publishes light/dark browser-chrome colors. This is install metadata only: Visio
 a service worker and does not claim offline web-app behavior.
 
 > **Note**: These diagrams are generated from the codebase and should be regenerated when significant changes are made.
+
+## Deferred Settings and consumer-scoped queries
+
+The shell loads `DashboardSettingsDialog` on first open; lightweight section IDs live in
+`lib/settingsSections.ts`, and each panel is lazy-loaded behind a section loader. Statistics owns
+`VirtualRecipientExclusions`, with a bounded viewport and keyboard navigation across all rows.
+Dashboard waits for widget preferences, then enables only the queries needed by visible widgets.
+Portfolio consumers explicitly choose recent windows or complete paged history. Import review
+owns a serialized edit queue which commit must await. These relationships are reflected in the
+embedded component and data-flow diagrams. See [[docs/features/settings]], [[docs/features/portfolio]]
+and [[docs/features/import]].
 
 ## Portfolio Import Selection
 

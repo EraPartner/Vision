@@ -44,6 +44,10 @@ describe("response envelope writer convention", () => {
       calls
         .filter(({ method, argument }) => method === "send" && argument)
         .map(({ file, argument }) => ({ file, argument })),
-    ).toEqual([{ file: "routes/splits.ts", argument: "csv" }]);
+    ).toEqual([
+      // Raw file downloads: the analysis interchange export (CSV/XLSX) and the splits CSV.
+      { file: "routes/analysisInterchange.ts", argument: "Buffer.from(bytes" },
+      { file: "routes/splits.ts", argument: "csv" },
+    ]);
   });
 });

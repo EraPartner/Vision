@@ -38,6 +38,11 @@ const testRoot = path.join(backendRoot, "tests");
 // external entry point. They are not test-support seams and keep public names.
 const PUBLIC_NAMED_EXPORTS = new Set([
   // Public facades, domain helpers, and contract types.
+  // Documented Date-space recurrence API; expandOccurrences calls it locally.
+  "apps/node-backend/src/lib/calculations/recurrence.ts:calculateNextDate",
+  // Pure domain planner shared by production preview and locked commit. The
+  // imported wrapper reads state; direct callers can validate a complete plan.
+  "apps/node-backend/src/services/portfolioImportReconciliationService.ts:buildPortfolioImportReconciliationPlan",
   "apps/node-backend/src/integrations/ollama/prompts.ts:toOllamaMessage",
   "apps/node-backend/src/services/aiEvaluation/cloudPrivacy.ts:createInspectionFetch",
   "apps/node-backend/src/services/aiEvaluation/cloudPrivacy.ts:evaluateCloudPrivacyTrace",
@@ -85,6 +90,8 @@ const PUBLIC_NAMED_EXPORTS = new Set([
   "apps/node-backend/src/services/importPipeline/adapters/generic.ts:parse",
   "apps/node-backend/src/services/importPipeline/adapters/ing.ts:parse",
   "apps/node-backend/src/services/importPipeline/adapters/vision.ts:detect",
+  // Adapter registry invokes the same stable parse contract through its default object.
+  "apps/node-backend/src/services/importPipeline/adapters/vision.ts:parse",
   "apps/node-backend/src/services/importPipeline/adapters/wise.ts:parse",
   "apps/node-backend/src/services/portfolioImportPipeline/index.ts:prepareImport",
   // Literal proof is a runtime domain helper also used inside its exporting module.

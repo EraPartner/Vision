@@ -17,7 +17,7 @@ set -euo pipefail
 #
 # Options:
 #   --debug    build the Debug configuration. A Debug Demo starts in the native-only mode
-#              (ADR-208); launch it with VISION_NATIVE_WEB_FREE=0 for the retained web page.
+#              (ADR-211); launch it with VISION_NATIVE_WEB_FREE=0 for the retained web page.
 #   --measure  implies --debug; after installing, runs the end-to-end smoke CI runs for the
 #              native-only and retained modes (and the Electron Vision Demo when it is
 #              installed) and prints their memory side by side. It quits the apps it starts.

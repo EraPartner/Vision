@@ -1,3 +1,4 @@
+import { captureQuiescentSnapshot } from "./backup/quiescent-snapshot";
 import {
   app,
   BrowserWindow,
@@ -513,7 +514,47 @@ backupCrypto.init({
   loadSettings,
   updateSettings,
 });
+let nativeMaintenance = false;
+let nativeMaintenanceDone: Promise<void> = Promise.resolve();
+let finishNativeMaintenance: (() => void) | undefined;
+function beginNativeMaintenance() {
+  if (nativeMaintenance)
+    throw new Error(
+      "A native backup, restore or update is already in progress",
+    );
+  nativeMaintenance = true;
+  nativeMaintenanceDone = new Promise<void>((resolve) => {
+    finishNativeMaintenance = resolve;
+  });
+}
+function endNativeMaintenance() {
+  nativeMaintenance = false;
+  finishNativeMaintenance?.();
+  finishNativeMaintenance = undefined;
+}
 backupRestore.init({
+  withBackupSnapshot: async (capture) => {
+    if (!activeRuntime || activeRuntime.mode !== "native")
+      throw new Error("Native runtime is unavailable");
+    beginNativeMaintenance();
+    stopHealthWatchdog();
+    mainWindow?.webContents.send("backend:lost", {
+      message: t(
+        "backup.maintenance",
+        null,
+        "Creating a consistent backup. Changes are briefly paused.",
+      ),
+    });
+    try {
+      return await captureQuiescentSnapshot(activeRuntime, capture);
+    } finally {
+      endNativeMaintenance();
+      startHealthWatchdog();
+      // Only signal restored after readiness succeeds, including failed captures.
+      if (await pingHealth(3000))
+        mainWindow?.webContents.send("backend:restored");
+    }
+  },
   workDir: () => workDir ?? undefined,
   appPort: () => appPort,
   repoRootFallback: path.resolve(appRoot, "..", ".."),
@@ -549,6 +590,7 @@ updater.init({
   },
   workDir: () => workDir,
   stopRuntime: async () => {
+    if (nativeMaintenance) throw new Error("Native maintenance is in progress");
     if (activeRuntime?.mode === "native") {
       activeRuntime.endAuditSession?.();
       await activeRuntime.stop();
@@ -827,31 +869,59 @@ let healthWatchdogTimer: NodeJS.Timeout | null = null;
 let watchdogFailureCount = 0;
 let backendReportedLost = false;
 let lastAuditNotice: AuditNoticeStatus | undefined;
+let auditNotification: Notification | undefined;
 let auditClosureTimer: NodeJS.Timeout | null = null;
 let auditStartupRetries = 0;
 const MAX_AUDIT_STARTUP_RETRIES = 5;
 
-function reportAuditStatus(status: AuditNoticeStatus): void {
+function reportAuditStatus(status: AuditNoticeStatus, reason?: unknown): void {
   if (status === "verified") {
     lastAuditNotice = undefined;
+    auditNotification?.close();
+    auditNotification = undefined;
     return;
   }
-  if (lastAuditNotice === status) return;
-  lastAuditNotice = status;
+  const notice =
+    reason === "no_trusted_anchor" ? "enrollment_required" : status;
+  if (lastAuditNotice === notice) return;
+  lastAuditNotice = notice;
+  const showAuditNotice = (body: string) => {
+    auditNotification?.close();
+    if (Notification.isSupported()) {
+      auditNotification = new Notification({ title: APP_NAME, body });
+      auditNotification.show();
+    }
+  };
   if (status === "failed") {
-    notify(
+    showAuditNotice(
       t(
         "app.auditFailed",
         null,
-        "Audit integrity check failed. Review the audit status before trusting recent changes.",
+        "Audit integrity check failed. Open Admin > Audit before trusting recent changes. Preserve your backup and audit checkpoint.",
+      ),
+    );
+  } else if (notice === "enrollment_required") {
+    showAuditNotice(
+      t(
+        "app.auditEnrollmentRequired",
+        null,
+        "Audit protection has not been started. Open Admin > Audit to review the history and explicitly start protection.",
+      ),
+    );
+  } else if (status === "partially_verified") {
+    showAuditNotice(
+      t(
+        "app.auditPartial",
+        null,
+        "Recent changes are not independently verified. Open Admin > Audit to review the checkpoint before trusting them.",
       ),
     );
   } else {
-    notify(
+    showAuditNotice(
       t(
         "app.auditUnavailable",
         null,
-        "Audit integrity protection is unavailable. Your data remains accessible, but changes cannot be independently verified.",
+        "Audit integrity protection is unavailable. Open Admin > Audit to check its status. Your data remains accessible; no checkpoint has been reset.",
       ),
     );
   }
@@ -862,13 +932,23 @@ async function checkAuditIntegrity({ establishSession = false } = {}): Promise<
 > {
   if (activeRuntime?.mode !== "native") return;
   let status: AuditNoticeStatus;
+  let reason: unknown;
   try {
-    status = (await activeRuntime.verifyAuditHistory({ establishSession }))
-      .status;
+    const result = await activeRuntime.verifyAuditHistory({ establishSession });
+    status = result.status;
+    reason = result.reason;
+    if (status !== "verified") {
+      console.warn("Audit verification", {
+        status,
+        reason: result.reason,
+      });
+    }
   } catch {
+    // Do not log the request or exception: either may contain bridge secrets.
+    console.warn("Audit verification unavailable: bridge request failed");
     status = "unavailable";
   }
-  reportAuditStatus(status);
+  reportAuditStatus(status, reason);
   return status;
 }
 
@@ -901,7 +981,7 @@ function startAuditClosureTimer() {
     try {
       const result = await activeRuntime.closeAuditCheckpoint();
       if (result.reason !== "live_closure_not_active") {
-        reportAuditStatus(result.status);
+        reportAuditStatus(result.status, result.reason);
       }
       if (result.status === "verified") {
         try {
@@ -936,7 +1016,7 @@ function startHealthWatchdog() {
     const healthy = await pingHealth(3000);
     if (healthy) {
       if (backendReportedLost && mainWindow && !mainWindow.isDestroyed()) {
-        await checkAuditIntegrity();
+        await checkAuditIntegrity({ establishSession: true });
         startAuditClosureTimer();
         mainWindow.webContents.send("backend:restored");
       }
@@ -1816,7 +1896,7 @@ registerHandler("audit:enroll", async () => {
     });
     if (response !== 0) return { success: false, cancelled: true };
     const result = await activeRuntime.enrollExistingAuditHistory();
-    reportAuditStatus(result.status);
+    reportAuditStatus(result.status, result.reason);
     if (!isOneOf(result.status, ["verified", "partially_verified"])) {
       return { success: false, status: result.status };
     }
@@ -1842,7 +1922,7 @@ registerHandler("audit:read", async (_event, range) => {
   try {
     const raw = await activeRuntime.readVerifiedAuditEntries(range);
     if (isOneOf(raw?.verification?.status, ["failed", "unavailable"])) {
-      reportAuditStatus(raw.verification.status);
+      reportAuditStatus(raw.verification.status, raw.verification.reason);
       return {
         success: false,
         status: raw.verification.status,
@@ -1875,7 +1955,7 @@ registerHandler("audit:export", async () => {
     const range = { afterSequence: 0, limit: MAX_PAGE_SIZE };
     const raw = await activeRuntime.readVerifiedAuditEntries(range);
     if (isOneOf(raw?.verification?.status, ["failed", "unavailable"])) {
-      reportAuditStatus(raw.verification.status);
+      reportAuditStatus(raw.verification.status, raw.verification.reason);
       return { success: false, status: raw.verification.status };
     }
     const snapshot = validateSnapshot(raw, range);
@@ -2153,6 +2233,7 @@ registerHandler(
       return { success: false, error: "Restore cancelled by user" };
 
     // Pause health monitoring while restore stops and recreates the database.
+    beginNativeMaintenance();
     stopHealthWatchdog();
     try {
       // Route .visionbak / .visionbak.enc through the new bundle restore path;
@@ -2208,6 +2289,7 @@ registerHandler(
     } catch (err) {
       return { success: false, error: String(err) };
     } finally {
+      endNativeMaintenance();
       startHealthWatchdog();
     }
   },
@@ -3087,6 +3169,7 @@ app.on("will-quit", (e) => {
 
     doBackup
       .then(async () => {
+        await nativeMaintenanceDone;
         // Drop the watchdog's idle keep-alive socket so the backend's
         // graceful shutdown isn't held open waiting on it.
         stopHealthWatchdog();

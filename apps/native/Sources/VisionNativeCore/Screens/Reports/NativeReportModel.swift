@@ -140,7 +140,8 @@ import Observation
         errorDetail = nil
         defer { if generation == visit { isSubmitting = false } }
         do {
-            if reportType == .tax {
+            // ExportDialog: annual figures need a full calendar year; other periods send none.
+            if reportType == .tax, case .year = period {
                 guard let year = period.taxYear(today: today) else { throw APIError.invalidRequest("Report tax year") }
                 let context = try await callbacks.taxContext(year)
                 guard generation == visit else { return }

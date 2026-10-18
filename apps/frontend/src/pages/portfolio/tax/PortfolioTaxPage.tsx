@@ -1,3 +1,4 @@
+import { PageError } from "@/components/shared/PageError";
 import { useState } from "react";
 import { Link } from "react-router";
 import { LayoutGrid, SlidersHorizontal } from "lucide-react";
@@ -139,6 +140,7 @@ export default function PortfolioTaxPage() {
         cgtEstimate,
         isEmpty,
         hasProfile,
+        portfolioQuery,
     } = usePortfolioTaxData();
     const fmt = useCurrencyFormatter();
 
@@ -157,6 +159,23 @@ export default function PortfolioTaxPage() {
     const profileLabel = hasProfile
         ? t("tax.profile.edit")
         : t("tax.profile.setup");
+
+    if (portfolioQuery.isLoading)
+        return (
+            <PageShell>
+                <p role="status">{t("common.loading")}</p>
+            </PageShell>
+        );
+    if (portfolioQuery.isError)
+        return (
+            <PageShell>
+                <PageError
+                    title={t("common.error")}
+                    message={portfolioQuery.error?.message ?? t("common.error")}
+                    onRetry={() => portfolioQuery.refetch()}
+                />
+            </PageShell>
+        );
 
     return (
         <PageShell className="">

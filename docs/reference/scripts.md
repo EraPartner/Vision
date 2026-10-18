@@ -62,7 +62,7 @@ picks the standard Vision Native variant).
 | `install-native.sh` | Build Vision Native Demo (Release; `--debug`/`--measure` for Debug) and install it to `/Applications/Vision Native Demo.app` |
 
 `install-native.sh` needs `xcodegen` and `xcodebuild`. `--debug` builds the Debug configuration,
-whose Demo starts in the native-only mode ([[docs/adr/208-vision-native-without-web-content|ADR-208]];
+whose Demo starts in the native-only mode ([[docs/adr/211-vision-native-without-web-content|ADR-211]];
 `VISION_NATIVE_WEB_FREE=0` opens the retained web page). `--measure` implies `--debug` and, after
 installing, runs `.github/scripts/native-e2e-smoke.sh` for the `native` and `retained` modes (and
 `electron` when `/Applications/Vision Demo.app` exists), then prints each mode's footprint, main
@@ -90,7 +90,7 @@ The separate `Native End-to-End Smoke` workflow (`.github/workflows/native-e2e.y
 branches and on manual dispatch, on `macos-26`. It builds PostgreSQL 18.6 with OpenSSL, the Demo
 runtime payload and the Debug `Vision Native Demo.app`, then smokes the app in `retained` (control,
 `VISION_NATIVE_WEB_FREE=0`) and `native` (no variable: the Debug Demo default) modes; the helper
-mode was removed by [[docs/adr/209-vision-native-retire-helper-document|ADR-209]]. A mode
+mode was removed by [[docs/adr/212-vision-native-retire-helper-document|ADR-212]]. A mode
 passes when the app stays alive, the backend port from `settings.json` answers `/health` and, in
 native mode, the log reports `native-only document ready` (`native-only storage unavailable`
 fails it). `native-e2e.yml` and `native-branch.yml` skip
@@ -100,7 +100,7 @@ size and resident memory of the app tree and WebKit services, also written to th
 `native-e2e` artifact. A non-blocking last step builds the Electron Demo (`--demo --dir`, with `VISION_FRONTEND_DIST`
 and `VISION_CHROMIUM_SOURCE` exported from the payload step) and runs the
 `electron` mode, the phase-0 baseline that ADR-204's phase-4 exit compares the native numbers with
-([[docs/adr/208-vision-native-without-web-content|ADR-208]]).
+([[docs/adr/211-vision-native-without-web-content|ADR-211]]).
 
 ## Build and release inputs
 
@@ -113,7 +113,7 @@ and `VISION_CHROMIUM_SOURCE` exported from the payload step) and runs the
 | `native:prepare` | Prepare the pinned PostgreSQL, migration, Bun, and report-browser payload |
 
 The frontend `build:native-helper` script and `scripts/build-native-helper.ts` no longer exist;
-[[docs/adr/209-vision-native-retire-helper-document|ADR-209]] retired the ADR-207 helper document,
+[[docs/adr/212-vision-native-retire-helper-document|ADR-212]] retired the ADR-210 helper document,
 and `scripts/lib/native-mac-build.sh` stages only the ordinary frontend build.
 
 ## Static and generated checks

@@ -17,17 +17,19 @@ struct TaxYearMutationTests {
         #expect(String(decoding: encoded, as: UTF8.self).contains("123456789.01234567890123456789"))
     }
 
-    @Test func filingMissingHistoricalSnapshotPinsInputsAndRecordsCreatedBeforeFiled() throws {
-        let fixture = try MutationFixture()
+    /// MarkAsFiledDialog (main, 2026-10-18): filing the live year pins its household as that
+    /// year's snapshot before the filing is recorded.
+    @Test func filingTheLiveYearPinsInputsAndRecordsCreatedBeforeFiled() throws {
+        let fixture = try MutationFixture(year: 2025)
         let patch = try #require(
             try TaxYearMutation.patch(
                 action: .file(reference: "  synthetic-reference  "), overview: fixture.overview(),
                 computation: fixture.computation, at: mutationTimestamp))
-        let snapshot = try #require(patch.settings[TaxYearMutation.snapshotsKey]?["2024"])
-        #expect(snapshot["taxYear"] == .number(2024))
+        let snapshot = try #require(patch.settings[TaxYearMutation.snapshotsKey]?["2025"])
+        #expect(snapshot["taxYear"] == .number(2025))
         #expect(snapshot["partners"] == fixture.live["partners"])
         #expect(snapshot["futureInput"] == fixture.live["futureInput"])
-        let meta = try #require(patch.settings[TaxYearMutation.metadataKey]?["2024"])
+        let meta = try #require(patch.settings[TaxYearMutation.metadataKey]?["2025"])
         #expect(meta["frozenCalculation"] == (try TaxValue(encoding: fixture.computation.calculation)))
         #expect(meta["frozenHouseholdResult"] == (try TaxValue(encoding: fixture.computation.result)))
         #expect(meta["filing"]?["reference"] == .string("synthetic-reference"))
@@ -36,6 +38,19 @@ struct TaxYearMutationTests {
         #expect(meta["futureMeta"] == .string("keep"))
         #expect(patch.settings[TaxYearMutation.snapshotsKey]?["2023"] == fixture.snapshots["2023"])
         #expect(patch.settings[TaxYearMutation.metadataKey]?["2023"] == fixture.metadata["2023"])
+    }
+
+    /// A past year that would only use a live estimate cannot be filed.
+    @Test func anEstimateOnlyHistoricalYearCannotBeFiled() throws {
+        let fixture = try MutationFixture(year: 2024)
+        let overview = try fixture.overview()
+        #expect(!TaxYearMutation.canFile(overview))
+        #expect(
+            try TaxYearMutation.patch(
+                action: .file(reference: nil), overview: overview, computation: fixture.computation) == nil)
+        #expect(TaxYearMutation.canFile(try MutationFixture(year: 2024, frozen: true).overview()))
+        #expect(TaxYearMutation.canFile(try MutationFixture(year: 2025).overview()))
+        #expect(!TaxYearMutation.canFile(try MutationFixture(year: 2024, frozen: true, filed: true).overview()))
     }
 
     @Test func filingFrozenYearRetainsTheOldFiguresWithoutPinningTodaysLiveInputs() throws {

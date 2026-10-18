@@ -35,6 +35,7 @@ export interface NativeBackupRuntime extends NativeRestoreRuntime {
 
 /** Context threaded from main via init(). */
 export interface RestoreContext {
+  withBackupSnapshot?: <T>(capture: () => Promise<T>) => Promise<T>;
   workDir?: () => string | undefined;
   repoRootFallback?: string;
   /** Returns the active runtime; only a runtime whose mode is "native" is used. */
@@ -198,8 +199,13 @@ export async function runBundleBackup(
   const dbSqlPath = path.join(tmpDir, "db.sql");
   const attachmentsDir = path.join(tmpDir, "attachments");
   try {
-    await nativeRuntime.dumpDatabase(dbSqlPath, { format: "plain" });
-    await nativeRuntime.exportAttachments(attachmentsDir);
+    if (!ctx.withBackupSnapshot)
+      throw new Error("Consistent native backup capture is unavailable");
+    const schemaHead = await ctx.withBackupSnapshot(async () => {
+      await nativeRuntime.dumpDatabase(dbSqlPath, { format: "plain" });
+      await nativeRuntime.exportAttachments(attachmentsDir);
+      return nativeRuntime.getSchemaHead();
+    });
     let frontendState: unknown = null;
     if (frontendStateJson) {
       try {
@@ -214,7 +220,7 @@ export async function runBundleBackup(
     const { bundlePath } = await createBundle({
       destDir,
       deviceId,
-      schemaHead: await nativeRuntime.getSchemaHead(),
+      schemaHead,
       appVersion:
         typeof app.getVersion === "function" ? app.getVersion() : "unknown",
       dbSqlPath,

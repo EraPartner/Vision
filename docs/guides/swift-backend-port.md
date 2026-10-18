@@ -4,14 +4,14 @@ type: guide
 status: active
 date: 2026-10-18
 tags: [guide, swift, backend, hummingbird, openapi, native-app, migration, prompts]
-description: Phase plan and ready-to-paste Claude Code prompts for porting the TypeScript backend to an in-app Swift backend (ADR-210), run locally on a Mac with Xcode.
+description: Phase plan and ready-to-paste Claude Code prompts for porting the TypeScript backend to an in-app Swift backend (ADR-213), run locally on a Mac with Xcode.
 aliases: [swift backend playbook, backend port prompts]
 related_code: ["apps/node-backend/src/", "apps/native/", "openapi.yaml"]
 ---
 
 # Swift Backend Port Playbook
 
-How to run the [[docs/adr/210-vision-native-swift-backend|ADR-210]] port with Claude Code on a Mac
+How to run the [[docs/adr/213-vision-native-swift-backend|ADR-213]] port with Claude Code on a Mac
 with Xcode. Each phase is one or more sessions; each prompt below is meant to be pasted as the
 first message of a fresh session. The repository's `AGENTS.md` and `CLAUDE.md` load on their own.
 
@@ -19,7 +19,7 @@ first message of a fresh session. The repository's `AGENTS.md` and `CLAUDE.md` l
 
 1. Merge `codex/native-phase-3g` into `main` through a pull request so `ci.yml` runs on it (it
    never ran on the branch). Use the *Phase 0* prompt.
-2. Accept ADR-210 (or amend it) and answer its open questions; the prompts assume it is accepted.
+2. Accept ADR-213 (or amend it) and answer its open questions; the prompts assume it is accepted.
 3. Mac setup: Xcode, `brew install xcodegen postgresql@18`, `bun install`, and a throwaway test
    database for the backend's DB tests (`createdb vision_test`, then
    `export TEST_DATABASE_URL=postgres://localhost/vision_test`). Never point any tool at real data.
@@ -43,9 +43,9 @@ Every phase prompt starts with this block; paste it above the phase text.
 
 ```text
 Context: Vision is moving its TypeScript backend (apps/node-backend) into the Mac app as a Swift
-backend (ADR-210: Swift 6 strict concurrency, Hummingbird 2, PostgresNIO with plain SQL,
+backend (ADR-213: Swift 6 strict concurrency, Hummingbird 2, PostgresNIO with plain SQL,
 Foundation Decimal, swift-openapi-generator from openapi.yaml, running in the app process,
-Node as fallback owner for operations not yet ported). Read docs/adr/210-vision-native-swift-backend.md,
+Node as fallback owner for operations not yet ported). Read docs/adr/213-vision-native-swift-backend.md,
 docs/guides/swift-backend-port.md and the "Swift backend" section of
 docs/reference/native-parity/agent-handoff.md before anything else.
 
@@ -152,18 +152,18 @@ Notes per phase:
 
 ```text
 <preamble>
-Task: finish ADR-210 for the Debug Demo. Verify every operationId in openapi.yaml is Swift-owned
+Task: finish ADR-213 for the Debug Demo. Verify every operationId in openapi.yaml is Swift-owned
 (add a test that fails if one is not), make Swift the only owner, stop starting the Node child,
 remove Node, the compiled backend and Chrome Headless Shell from the native payload
 (native-mac-build.sh, install-native.sh, the payload manifest), and update the e2e smoke. Run the
 full native test suites, the e2e smoke and install-native.sh --measure; record before/after bundle
-size and memory in the handoff, and draft the ADR-210 amendment that records completion. Do not
+size and memory in the handoff, and draft the ADR-213 amendment that records completion. Do not
 touch the Electron/Docker path; it keeps the TypeScript backend until its own decision.
 ```
 
 ## Related
 
-- [[docs/adr/210-vision-native-swift-backend|ADR-210: Move the backend into the Mac app in Swift]]
+- [[docs/adr/213-vision-native-swift-backend|ADR-213: Move the backend into the Mac app in Swift]]
 - [[docs/reference/native-parity/agent-handoff|Vision Native agent handoff]]
 - [[docs/reference/api-endpoint-matrix|API endpoint matrix]]
 - [[docs/guides/native-macos-runtime|Native macOS Runtime Guide]]

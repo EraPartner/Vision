@@ -1,3 +1,8 @@
+import { verifyRuntimeManifest } from "./runtime-manifest";
+export {
+  verifyRuntimeManifest,
+  type RuntimeManifestVerification,
+} from "./runtime-manifest";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import http from "node:http";
@@ -893,111 +898,6 @@ function findFirstExecutable(
   return undefined;
 }
 
-export type RuntimeManifestVerification =
-  { status: "not-present" } | { status: "verified"; entries: number };
-
-export async function verifyRuntimeManifest(
-  runtimeRoot: string,
-  { required = false }: { required?: boolean } = {},
-): Promise<RuntimeManifestVerification> {
-  const manifestPath = path.join(runtimeRoot, "manifest.json");
-  let manifest: unknown;
-  try {
-    manifest = JSON.parse(await fs.promises.readFile(manifestPath, "utf8"));
-  } catch (error) {
-    if (!required && errorCode(error) === "ENOENT")
-      return { status: "not-present" };
-    const wrapped: NativeRuntimeError = new Error(
-      "Native runtime manifest is missing or invalid",
-    );
-    wrapped.code = "NATIVE_RUNTIME_CORRUPT";
-    throw wrapped;
-  }
-  if (
-    !isRecord(manifest) ||
-    manifest.version !== 1 ||
-    !isUnknownArray(manifest.entries)
-  ) {
-    const error: NativeRuntimeError = new Error(
-      "Native runtime manifest has an unsupported format",
-    );
-    error.code = "NATIVE_RUNTIME_CORRUPT";
-    throw error;
-  }
-  const expectedPaths = new Set<string>();
-  for (const entry of manifest.entries) {
-    if (
-      !isRecord(entry) ||
-      typeof entry.path !== "string" ||
-      !/^[A-Za-z0-9._@+/-]+$/.test(entry.path) ||
-      path.isAbsolute(entry.path) ||
-      entry.path.split("/").includes("..") ||
-      !/^[0-9a-f]{64}$/.test(String(entry.sha256 || "")) ||
-      expectedPaths.has(entry.path)
-    ) {
-      const error: NativeRuntimeError = new Error(
-        "Native runtime manifest contains an invalid entry",
-      );
-      error.code = "NATIVE_RUNTIME_CORRUPT";
-      throw error;
-    }
-    expectedPaths.add(entry.path);
-    const absolute = path.join(runtimeRoot, ...entry.path.split("/"));
-    let contents: Buffer;
-    try {
-      contents = await fs.promises.readFile(absolute);
-    } catch {
-      const error: NativeRuntimeError = new Error(
-        `Native runtime payload is missing ${entry.path}`,
-      );
-      error.code = "NATIVE_RUNTIME_CORRUPT";
-      throw error;
-    }
-    const digest = crypto.createHash("sha256").update(contents).digest("hex");
-    if (contents.length !== entry.bytes || digest !== entry.sha256) {
-      const error: NativeRuntimeError = new Error(
-        `Native runtime payload failed checksum verification: ${entry.path}`,
-      );
-      error.code = "NATIVE_RUNTIME_CORRUPT";
-      throw error;
-    }
-  }
-  const actualPaths = new Set<string>();
-  async function visit(current: string): Promise<void> {
-    const children = await fs.promises.readdir(current, {
-      withFileTypes: true,
-    });
-    for (const child of children) {
-      const absolute = path.join(current, child.name);
-      const relative = path
-        .relative(runtimeRoot, absolute)
-        .split(path.sep)
-        .join("/");
-      if (child.isSymbolicLink() || (!child.isDirectory() && !child.isFile())) {
-        const error: NativeRuntimeError = new Error(
-          `Native runtime payload contains an unsupported entry: ${relative}`,
-        );
-        error.code = "NATIVE_RUNTIME_CORRUPT";
-        throw error;
-      }
-      if (child.isDirectory()) await visit(absolute);
-      else if (relative !== "manifest.json") actualPaths.add(relative);
-    }
-  }
-  await visit(runtimeRoot);
-  if (
-    actualPaths.size !== expectedPaths.size ||
-    [...actualPaths].some((entry) => !expectedPaths.has(entry))
-  ) {
-    const error: NativeRuntimeError = new Error(
-      "Native runtime payload contains files not covered by its manifest",
-    );
-    error.code = "NATIVE_RUNTIME_CORRUPT";
-    throw error;
-  }
-  return { status: "verified", entries: manifest.entries.length };
-}
-
 export function bundledChromiumPath(
   runtimeRoot: string | undefined,
 ): string | undefined {
@@ -1188,12 +1088,13 @@ export interface DirectorySwitchToken extends DirectoryFingerprint {
 
 export interface ReplaceDirectoryOptions {
   preservePrevious?: boolean;
+  beforeSwitch?: (token: DirectorySwitchToken) => Promise<void>;
 }
 
 export async function atomicReplaceDirectory(
   sourceDir: string,
   destinationDir: string,
-  { preservePrevious = false }: ReplaceDirectoryOptions = {},
+  { preservePrevious = false, beforeSwitch }: ReplaceDirectoryOptions = {},
 ): Promise<DirectorySwitchToken> {
   const parent = path.dirname(destinationDir);
   const base = path.basename(destinationDir);
@@ -1220,6 +1121,14 @@ export async function atomicReplaceDirectory(
     .access(destinationDir)
     .then(() => true)
     .catch(() => false);
+  const switchToken: DirectorySwitchToken = {
+    ...stagingFingerprint,
+    previousDirectory:
+      preservePrevious && hadDestination ? previous : undefined,
+    destinationDirectory: destinationDir,
+  };
+  // Journal the intent before either rename, including an absent old tree.
+  await beforeSwitch?.(switchToken);
   try {
     if (hadDestination) await fs.promises.rename(destinationDir, previous);
     await fs.promises.rename(staging, destinationDir);
@@ -1240,12 +1149,7 @@ export async function atomicReplaceDirectory(
   }
   if (!preservePrevious)
     await fs.promises.rm(previous, { recursive: true, force: true });
-  return {
-    ...stagingFingerprint,
-    previousDirectory:
-      preservePrevious && hadDestination ? previous : undefined,
-    destinationDirectory: destinationDir,
-  };
+  return switchToken;
 }
 
 /** A string path from a switch token; a truthy non-string is corrupt state. */
@@ -1265,22 +1169,40 @@ export async function rollbackDirectorySwitch(
   token: unknown,
 ): Promise<DirectoryRollbackResult> {
   const fields = optionalFieldsOf(token);
-  if (!fields?.previousDirectory || !fields?.destinationDirectory)
-    return { status: "nothing-to-rollback" };
-  const previous = path.resolve(
-    switchTokenPath(fields.previousDirectory, "previous directory"),
-  );
+  if (!fields?.destinationDirectory) return { status: "nothing-to-rollback" };
   const destination = path.resolve(
     switchTokenPath(fields.destinationDirectory, "destination directory"),
   );
-  if (path.dirname(previous) !== path.dirname(destination))
+  const previous =
+    fields.previousDirectory === undefined
+      ? undefined
+      : path.resolve(
+          switchTokenPath(fields.previousDirectory, "previous directory"),
+        );
+  if (previous && path.dirname(previous) !== path.dirname(destination))
     throw new Error("Attachment rollback directories must share a parent");
+  const exists = (file: string) =>
+    fs.promises
+      .lstat(file)
+      .then(() => true)
+      .catch((error: unknown) => {
+        if (optionalFieldsOf(error)?.code === "ENOENT") return false;
+        throw error;
+      });
+  const destinationExists = await exists(destination);
+  const previousExists = previous ? await exists(previous) : false;
+  if (previous && !previousExists) {
+    if (!destinationExists)
+      throw new Error("Both attachment generations are missing");
+    return { status: "nothing-to-rollback" };
+  }
   const failed = `${destination}.failed-${Date.now()}-${process.pid}`;
-  await fs.promises.rename(destination, failed);
+  if (destinationExists) await fs.promises.rename(destination, failed);
   try {
-    await fs.promises.rename(previous, destination);
+    if (previous) await fs.promises.rename(previous, destination);
   } catch (error) {
-    await fs.promises.rename(failed, destination).catch(() => {});
+    if (destinationExists)
+      await fs.promises.rename(failed, destination).catch(() => {});
     throw error;
   }
   return { status: "rolled-back", preservedFailedDirectory: failed };
@@ -1517,6 +1439,8 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
   let child: SpawnedChild | undefined;
   let postgresChild: SpawnedChild | undefined;
   let newClusterCreatedThisLaunch = false;
+  let restoreSwitchOwnedThisLaunch = false;
+  let startupRestoreRecovery: Promise<void> | undefined;
   let freshAuditReceiptId: unknown;
   let auditSessionEstablished = false;
   let auditLiveClosureEnabled = false;
@@ -2111,10 +2035,42 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
     }
   }
 
+  async function recoverInterruptedRestore(): Promise<void> {
+    const state = await readState();
+    const attachments = state?.pendingAttachmentSwitch;
+    if (attachments) {
+      const token = fieldsOf(attachments);
+      if (
+        token.destinationDirectory !== paths.attachments ||
+        (token.previousDirectory !== undefined &&
+          (typeof token.previousDirectory !== "string" ||
+            path.dirname(token.previousDirectory) !==
+              path.dirname(paths.attachments) ||
+            !path
+              .basename(token.previousDirectory)
+              .startsWith(`${path.basename(paths.attachments)}.previous-`)))
+      ) {
+        throw new Error("Invalid pending attachment restore journal");
+      }
+    }
+    if (state?.pendingDatabaseSwitch) {
+      await stop({ keepPostgres: true });
+      if (attachments) await rollbackAttachmentSwitch(attachments);
+      await rollbackDatabaseSwitch(state.pendingDatabaseSwitch);
+    } else if (attachments) {
+      // The database commit is durable; never roll its attachment generation back.
+      await finalizeAttachmentSwitch(attachments);
+    }
+  }
+
   async function bootstrapDatabase(): Promise<NativeDatabaseConfig> {
     const config = await ensureLayout();
     await ensurePostgresReady();
     if (!tools) await discover();
+    if (!restoreSwitchOwnedThisLaunch) {
+      startupRestoreRecovery ??= recoverInterruptedRestore();
+      await startupRestoreRecovery;
+    }
     const psql = path.join(requireTools().binDir, "psql");
     const adminArgs = [
       "-h",
@@ -2275,7 +2231,9 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
 
   async function readState(): Promise<NativeRuntimeState | undefined> {
     const state = await readJson(paths.state);
-    return isRecord(state) ? state : undefined;
+    if (state === undefined) return undefined;
+    if (!isRecord(state)) throw new Error("Invalid native runtime state");
+    return state;
   }
 
   async function writeState(next: UnknownRecord): Promise<void> {
@@ -3028,6 +2986,9 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
 
   function endAuditSession(): void {
     auditLiveClosureEnabled = false;
+    // A recovered backend must establish trust again at the exact external
+    // checkpoint. A valid but unanchored tail still cannot start a session.
+    auditSessionEstablished = false;
   }
 
   async function pauseAuditClosure(): Promise<void> {
@@ -3061,7 +3022,7 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
         auditCheckpointMetadataSyncedThisLaunch = true;
         return { ...result, status: "verified" };
       } catch (error) {
-        auditLiveClosureEnabled = false;
+        endAuditSession();
         throw error;
       }
     });
@@ -3146,7 +3107,16 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
     const deadline = Date.now() + forceAfterMs;
     while (processExists(recordedPid) && Date.now() < deadline)
       await sleep(100);
-    if (processExists(recordedPid)) process.kill(recordedPid, "SIGKILL");
+    if (processExists(recordedPid)) {
+      process.kill(recordedPid, "SIGKILL");
+      const killedDeadline = Date.now() + 10_000;
+      while (processExists(recordedPid) && Date.now() < killedDeadline)
+        await sleep(50);
+      if (processExists(recordedPid))
+        throw new Error(
+          "Native backend did not stop; snapshot capture is unsafe",
+        );
+    }
     await fs.promises.unlink(paths.pid).catch(() => {});
     return { status: "stopped", service: "backend", pid: recordedPid };
   }
@@ -3506,6 +3476,7 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
       // Recovery can then distinguish every interruption point without
       // creating a replacement empty database or guessing which copy is live.
       await writeState({ pendingDatabaseSwitch: switchToken });
+      restoreSwitchOwnedThisLaunch = true;
       await stop({ keepPostgres: true });
       await terminateDatabaseConnections(config.database);
       await terminateDatabaseConnections(stagingDatabase);
@@ -3521,6 +3492,8 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
         try {
           await rollbackDatabaseSwitch(switchToken);
         } catch (recoveryCause) {
+          restoreSwitchOwnedThisLaunch = false;
+          startupRestoreRecovery = undefined;
           const recoveryError: NativeRuntimeError = new Error(
             "Native database activation failed and automatic rollback did not complete; Vision remains stopped.",
             { cause: error },
@@ -3727,6 +3700,8 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
         rolledBackAt: new Date().toISOString(),
       },
     });
+    restoreSwitchOwnedThisLaunch = false;
+    startupRestoreRecovery = undefined;
     return { status: "rolled-back", preservedFailedDatabase };
   }
 
@@ -3744,6 +3719,8 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
       previousDatabase: fieldsOf(token).previousDatabase,
       lastDatabaseSwitchAt: new Date().toISOString(),
     });
+    restoreSwitchOwnedThisLaunch = false;
+    startupRestoreRecovery = undefined;
     return {
       status: "finalized",
       previousDatabase: fieldsOf(token).previousDatabase,
@@ -3834,11 +3811,16 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
     const switchToken = await atomicReplaceDirectory(
       sourceDir,
       paths.attachments,
-      replaceOptions,
+      {
+        ...replaceOptions,
+        beforeSwitch: async (token) => {
+          if (replaceOptions.preservePrevious === true) {
+            await writeState({ pendingAttachmentSwitch: token });
+          }
+          await replaceOptions.beforeSwitch?.(token);
+        },
+      },
     );
-    if (replaceOptions.preservePrevious === true) {
-      await writeState({ pendingAttachmentSwitch: switchToken });
-    }
     return switchToken;
   }
 
@@ -3870,6 +3852,7 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
     discover,
     ensureManagedPostgresCluster,
     ensurePostgresReady,
+    recoverInterruptedRestore,
     bootstrapDatabase,
     assertNativeActive,
     readState,

@@ -608,3 +608,20 @@ Commit a reviewed batch. Honours all recipient and category overrides set above.
 - [[docs/features/import|Feature: CSV Import & Deduplication]]
 - [[docs/testing/testing|Testing Documentation]]
 - [[docs/testing/test-inventory|Test Inventory]]
+
+## Review and rollback integrity
+
+Recipient/category overrides hold the batch lock and require `awaiting_review`; otherwise they
+return `409 CONFLICT`. Commit claims `awaiting_review` (or internal automatic `matching`) as
+`committing` before processing. An earlier override is included; a later override is rejected.
+A duplicate commit cannot claim the same batch concurrently. This tightens the existing write
+contract without adding routes.
+
+Rollback rechecks batch status under a row lock inside its transaction, before discovering
+ledger rows. This serializes with commit claims and review overrides: rollback first makes
+the batch aborted and rejects later commit; commit first makes rollback reject the in-progress
+batch. Missing/aborted/in-progress checks retain their existing 404/400 responses. Rollback
+then locks affected accounts before transaction rows and deletes only the protected IDs. Closed accounts require reopening
+(`400 VALIDATION_ERROR`); linked planned executions or changed ownership return `409 CONFLICT`.
+These errors abort rollback rather than silently deleting plan history. See
+[[docs/features/import]] and [[docs/api/transactions]].

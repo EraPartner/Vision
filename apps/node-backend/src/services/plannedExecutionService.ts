@@ -11,8 +11,9 @@
  * re-running the same pair is a no-op, including after series completion.
  */
 
+import { matchesTolerance } from "../lib/plannedMatching.ts";
 import plannedTransactionService from "./plannedTransactionService.ts";
-import { withTransaction } from "../database/connection.ts";
+import { query, withTransaction } from "../database/connection.ts";
 import { nextOccurrenceYmd } from "../lib/calculations/recurrence.ts";
 import { ConflictError, NotFoundError } from "../middleware/errorHandler.ts";
 import { todayAppDateString } from "../lib/timezone.ts";
@@ -24,6 +25,9 @@ export interface ExecutePlannedArgs {
   executedTransactionId: number;
   /** 'YYYY-MM-DD'; defaults to today in the app timezone. */
   executionDate?: string | undefined;
+  /** Auto-match snapshot; reject if another execution advanced the occurrence. */
+  expectedOccurrence?: string | undefined;
+  hydrateResult?: boolean;
 }
 
 /**
@@ -36,25 +40,80 @@ export async function executePlanned({
   id,
   executedTransactionId,
   executionDate,
+  expectedOccurrence,
+  hydrateResult = true,
 }: ExecutePlannedArgs): Promise<{
   current: HydratedPlannedTransactionRow | null;
   duplicate: boolean;
 }> {
   return withTransaction(async () => {
     await plannedTransactionService.lockForExecution(id);
-    const existing = await plannedTransactionService.getById(id);
+    const existing = await plannedTransactionService.getExecutionState(
+      id,
+      executedTransactionId,
+    );
     if (!existing)
       throw new NotFoundError(`Planned transaction ${id} not found`);
 
     // A completed series still accepts a replay of its final execution.
+    if (existing.duplicate) {
+      return {
+        current: hydrateResult
+          ? await plannedTransactionService.getById(id)
+          : null,
+        duplicate: true,
+      };
+    }
+    if (!existing.is_active || existing.is_executed) {
+      throw new ConflictError("Planned transaction is inactive or complete");
+    }
+    // Lock the ledger row as well: deletion and edits must not race validation.
+    const {
+      rows: [transaction],
+    } = await query<{
+      currency: string;
+      amount: string;
+      transaction_date: Date;
+      recipient_cluster_id: number | null;
+      is_active: boolean;
+    }>(
+      `SELECT t.currency, t.amount, t.date AS transaction_date, t.is_active,
+          COALESCE(r.primary_recipient_id, t.recipient_id) AS recipient_cluster_id
+        FROM transactions t LEFT JOIN recipients r ON r.id = t.recipient_id
+        WHERE t.id = $1 FOR UPDATE OF t`,
+      [executedTransactionId],
+    );
+    if (!transaction) throw new NotFoundError("Transaction not found");
+    if (!transaction.is_active) {
+      throw new ConflictError("Executed transaction must be active");
+    }
     if (
-      (existing.executions || []).some(
-        (execution) =>
-          Number(execution.executed_transaction_id) ===
-          Number(executedTransactionId),
-      )
+      !existing.currency ||
+      existing.currency.toUpperCase() !== transaction.currency?.toUpperCase()
     ) {
-      return { current: existing, duplicate: true };
+      throw new ConflictError(
+        "Planned payment and transaction currencies must match",
+      );
+    }
+    if (expectedOccurrence !== undefined) {
+      const linked = await query(
+        "SELECT 1 FROM planned_transaction_executions WHERE executed_transaction_id = $1 LIMIT 1",
+        [executedTransactionId],
+      );
+      if (linked.rowCount)
+        throw new ConflictError(
+          "Transaction is already linked to a planned payment",
+        );
+    }
+    if (
+      expectedOccurrence !== undefined &&
+      (existing.is_loan ||
+        toWireDate(existing.planned_date) !== expectedOccurrence ||
+        !matchesTolerance(existing, transaction))
+    ) {
+      throw new ConflictError(
+        "Planned match changed; review the current occurrence",
+      );
     }
     if (
       existing.is_recurring &&
@@ -124,7 +183,9 @@ export async function executePlanned({
       tagIdsToInherit,
     );
 
-    const current = await plannedTransactionService.getById(id);
+    const current = hydrateResult
+      ? await plannedTransactionService.getById(id)
+      : null;
     return { current, duplicate };
   });
 }

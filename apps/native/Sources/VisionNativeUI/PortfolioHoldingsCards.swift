@@ -51,6 +51,8 @@ struct PortfolioAssetCard: View {
     let model: PortfolioModel
     let editing: PortfolioEditingModel
     let shell: NativeShellModel
+    /// RealEstatePage's converted latest rent, in the display currency.
+    var monthlyRent: Decimal?
     @Environment(\.visionTheme) private var theme
     private var strings: any Localizing { shell.strings }
     private var isProperty: Bool { holding.assetClass == "real_estate" }
@@ -102,11 +104,12 @@ struct PortfolioAssetCard: View {
                         signed: true,
                         tone: holding.totalAppreciation >= 0 ? theme.gain : theme.loss)
                     TaxMoneyRow(title: strings.t("portfolio.rentalIncome"), amount: holding.totalIncome, shell: shell)
-                    if let monthly = holding.estimatedMonthlyRent {
+                    if let monthly = monthlyRent ?? holding.estimatedMonthlyRent {
                         Text(
                             "~"
                                 + MoneyText.text(
-                                    monthly, currency: holding.currency, settings: shell.settings, signed: false) + " "
+                                    monthly, currency: shell.settings.defaultCurrency, settings: shell.settings,
+                                    signed: false) + " "
                                 + strings.t("realestate.perMonth")
                         )
                         .font(.caption).foregroundStyle(theme.secondaryLabel)

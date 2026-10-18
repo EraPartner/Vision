@@ -31249,6 +31249,24 @@
         }
       }
     },
+    "importReview.editsFailed": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Some review changes could not be saved. Retry the edits or reload and review the saved rows before importing."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sommige wijzigingen konden niet worden opgeslagen. Probeer opnieuw of herlaad en controleer de opgeslagen rijen voordat je importeert."
+          }
+        }
+      }
+    },
     "importReview.groups.desc": {
       "comment": "Generated from i18n/source by scripts/native-strings.ts.",
       "extractionState": "manual",
@@ -31483,6 +31501,24 @@
         }
       }
     },
+    "importReview.mixedCategories": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "These saved rows have different categories. Choose a category to apply it to every row."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deze opgeslagen rijen hebben verschillende categorieën. Kies een categorie om die op alle rijen toe te passen."
+          }
+        }
+      }
+    },
     "importReview.newRecipient": {
       "comment": "Generated from i18n/source by scripts/native-strings.ts.",
       "extractionState": "manual",
@@ -31573,6 +31609,24 @@
         }
       }
     },
+    "importReview.reviewSavedEdits": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reload saved rows for review"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opgeslagen rijen herladen ter controle"
+          }
+        }
+      }
+    },
     "importReview.rowCount": {
       "comment": "Generated from i18n/source by scripts/native-strings.ts.",
       "extractionState": "manual",
@@ -31587,6 +31641,24 @@
           "stringUnit": {
             "state": "translated",
             "value": "{n} rijen"
+          }
+        }
+      }
+    },
+    "importReview.savingEdits": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saving review changes…"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wijzigingen opslaan…"
           }
         }
       }
@@ -52791,6 +52863,24 @@
           "stringUnit": {
             "state": "translated",
             "value": "Registreer de aankoop als een Koop. Volg huurinkomsten met Huurinkomsten-transacties. Gebruik Waardestijging om de waarde van het pand bij te werken. Registreer sluitingskosten, onderhoud en onroerende voorheffing als Kosten- of Belasting-transacties."
+          }
+        }
+      }
+    },
+    "realestate.missingRentRate": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rental income cannot be converted because an exchange rate is missing. Update exchange rates in Settings, then retry."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "De huurinkomsten kunnen niet worden omgerekend omdat een wisselkoers ontbreekt. Werk de wisselkoersen bij in Instellingen en probeer opnieuw."
           }
         }
       }
@@ -75986,13 +76076,31 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Locks the inputs and freezes the calculation as the 'as-filed' record. You can unfile or amend later from the year actions menu."
+            "value": "Records a declaration you have submitted outside Vision. This does not submit anything to a tax authority. Review your profile and export the year first. Vision preserves the calculation; you can unfile or deliberately amend it later."
           }
         },
         "nl": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vergrendelt de invoer en bevriest de berekening als het 'ingediende' dossier. Je kunt dit later ongedaan maken of aanpassen via het acties-menu."
+            "value": "Registreert een aangifte die je buiten Vision hebt ingediend. Dit verstuurt niets naar de belastingdienst. Controleer eerst je profiel en exporteer het jaar. Vision bewaart de berekening; je kunt de registratie later verwijderen of bewust aanpassen."
+          }
+        }
+      }
+    },
+    "tax.markFiled.prerequisite": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set up and review the tax profile for this year first. For a historical year, choose \"Create profile\" in the year selector, then edit its inputs. Wait for settings to finish loading."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stel eerst het belastingprofiel voor dit jaar in en controleer het. Kies voor een historisch jaar \"Profiel aanmaken\" in de jaarkeuze en pas daarna de gegevens aan. Wacht tot de instellingen geladen zijn."
           }
         }
       }

@@ -1,6 +1,6 @@
 import Foundation
 
-/// The native-only shell's storage (ADR-208): every fixed page-storage script the shell
+/// The native-only shell's storage (ADR-211): every fixed page-storage script the shell
 /// runs against a page, with the same semantics, over `NativeRawStateStore`. The shell keeps its
 /// admission, generation and restore fences around these calls.
 public struct NativeShellStorage: Sendable {

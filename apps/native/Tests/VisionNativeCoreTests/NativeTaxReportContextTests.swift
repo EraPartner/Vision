@@ -10,7 +10,8 @@ import Testing
         "region": .string("wallonia"), "taxYear": .number(2020),
     ])
     private func overview(
-        partners: Int = 2, frozen: Bool = false, frozenHousehold: Bool = false, configured: Bool = true
+        partners: Int = 2, frozen: Bool = false, frozenHousehold: Bool = false, configured: Bool = true,
+        liveYear: Int = 2020, hasSnapshot: Bool = false
     ) -> TaxValue {
         let calculation: TaxValue = .object([
             "taxableIncome": .number(Self.precise), "totalPIT": .number(12345),
@@ -48,6 +49,7 @@ import Testing
         if frozenHousehold { metadata["frozenHouseholdResult"] = result }
         return .object([
             "year": .number(2020), "hasProfile": .bool(configured), "metadata": .object(metadata),
+            "liveYear": .number(Decimal(liveYear)), "hasSnapshot": .bool(hasSnapshot),
             "calculation": calculation, "result": result,
             "household": .object([
                 "version": .number(2), "taxYear": .number(2020), "unknownFutureField": .number(Self.precise),
@@ -115,6 +117,13 @@ import Testing
             overview: .object(["year": .number(2020), "hasProfile": .bool(false)]),
             requestedYear: 2020, projectedProfile: nil, localize: { $0 })
         #expect(context == .object([:]))
+    }
+    /// ExportDialog (main, 2026-10-18): only a fileable year carries the annual figures.
+    @Test func onlyTheLiveSnapshotOrFrozenYearCarriesFiscalBlocks() throws {
+        #expect(try make(overview(liveYear: 2026)) == .object([:]))
+        #expect(try make(overview(liveYear: 2026, hasSnapshot: true)).objectValue?["precomputedPIT"] != nil)
+        #expect(try make(overview(frozen: true, liveYear: 2026)).objectValue?["precomputedPIT"] != nil)
+        #expect(try make(overview()).objectValue?["taxProfile"] != nil)
     }
     @Test func missingOrDifferentYearAuthorityDoesNotFallBackToLiveData() {
         var source = overview()

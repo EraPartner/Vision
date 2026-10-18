@@ -6,12 +6,14 @@
  *
  * Reference is free-text and stored verbatim. Empty reference is permitted.
  *
- * Filing also records the household: a past year without its own household snapshot is computed
- * from the live household, so the dialog pins that household as the year's snapshot first. Later
- * edits to the live household then no longer change the filed year's inputs. A year that already
- * has a frozen calculation is filed as it is: pinning today's live household there would record
- * inputs that disagree with the frozen figures.
+ * A year can be filed when it is the live year, has its own household snapshot, or has an
+ * explicitly frozen calculation. A past year that would only use a live estimate is not eligible.
+ * Filing the live year pins its household as that year's snapshot, so later edits no longer
+ * change the filed inputs. A frozen year is filed as it is: pinning today's live household there
+ * would record inputs that disagree with the frozen figures. The filing is shown only after the
+ * household, snapshot and frozen metadata are saved together.
  */
+import { persistTaxFiling } from "@/stores/taxPersistence";
 import { useState, type ReactNode } from "react";
 import {
     Dialog,
@@ -26,6 +28,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { hasMeaningfulBelgianTaxData } from "@/stores/belgianTaxStore";
 import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
 
 interface MarkAsFiledDialogProps {
@@ -35,28 +38,44 @@ interface MarkAsFiledDialogProps {
 
 export function MarkAsFiledDialog({ trigger, year }: MarkAsFiledDialogProps) {
     const { t } = useLanguage();
-    const { markYearAsFiled, createSnapshotFromLive, needsSnapshot } =
-        useBelgianTaxProfile((state) => ({
-            markYearAsFiled: state.markYearAsFiled,
-            createSnapshotFromLive: state.createSnapshotFromLive,
-            needsSnapshot:
-                state.household != null &&
-                year !== state.household.taxYear &&
-                !Object.hasOwn(state.householdSnapshots, year) &&
-                !state.snapshotMetas[year]?.frozenCalculation,
-        }));
+    const ready = useBelgianTaxProfile(
+        (state) =>
+            !state.isLoading &&
+            !state.householdLoadFailed &&
+            state.household != null &&
+            (year === state.household.taxYear ||
+                Object.hasOwn(state.householdSnapshots, year) ||
+                Boolean(state.snapshotMetas[year]?.frozenCalculation)) &&
+            hasMeaningfulBelgianTaxData(state.profileForYear(year)),
+    );
     const [open, setOpen] = useState(false);
     const [reference, setReference] = useState("");
 
-    function handleConfirm(e: React.FormEvent) {
+    const [saving, setSaving] = useState(false);
+    const [saveFailed, setSaveFailed] = useState(false);
+
+    async function handleConfirm(e: React.FormEvent) {
         e.preventDefault();
+        if (!ready || saving) return;
         const trimmed = reference.trim();
-        if (needsSnapshot) createSnapshotFromLive(year);
-        markYearAsFiled(year, trimmed.length > 0 ? trimmed : undefined);
-        handleOpenChange(false);
+        setSaving(true);
+        setSaveFailed(false);
+        try {
+            await persistTaxFiling(
+                year,
+                trimmed.length > 0 ? trimmed : undefined,
+            );
+            setOpen(false);
+            setReference("");
+        } catch {
+            setSaveFailed(true);
+        } finally {
+            setSaving(false);
+        }
     }
 
     function handleOpenChange(o: boolean) {
+        if (saving) return;
         setOpen(o);
         if (!o) setReference("");
     }
@@ -77,6 +96,15 @@ export function MarkAsFiledDialog({ trigger, year }: MarkAsFiledDialogProps) {
                 {/* Real <form> so Enter in the reference field confirms (filing is
                     reversible — see unmarkYearAsFiled). grid gap-5 mirrors
                     DialogContent's layout, so this wrapper is layout-neutral. */}
+                {!ready && (
+                    <p
+                        role="status"
+                        className="type-footnote text-label-secondary"
+                    >
+                        {t("tax.markFiled.prerequisite")}
+                    </p>
+                )}
+                {saveFailed && <p role="alert">{t("settings.saveFailed")}</p>}
                 <form onSubmit={handleConfirm} className="grid gap-5">
                     <div className="space-y-2">
                         <Label htmlFor="filing-reference">
@@ -84,6 +112,7 @@ export function MarkAsFiledDialog({ trigger, year }: MarkAsFiledDialogProps) {
                         </Label>
                         <Input
                             id="filing-reference"
+                            disabled={saving}
                             value={reference}
                             onChange={(e) => setReference(e.target.value)}
                             placeholder={t(
@@ -98,12 +127,13 @@ export function MarkAsFiledDialog({ trigger, year }: MarkAsFiledDialogProps) {
                     <DialogFooter>
                         <Button
                             type="button"
+                            disabled={saving}
                             variant="outline"
                             onClick={() => handleOpenChange(false)}
                         >
                             {t("common.cancel")}
                         </Button>
-                        <Button type="submit">
+                        <Button type="submit" disabled={!ready || saving}>
                             {t("tax.markFiled.confirm")}
                         </Button>
                     </DialogFooter>

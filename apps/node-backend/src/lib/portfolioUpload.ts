@@ -41,7 +41,7 @@ export interface UploadedFileInfo {
   mimetype?: string;
 }
 
-export function isLikelyPortfolioFile(file: UploadedFileInfo | undefined) {
+function isLikelyPortfolioFile(file: UploadedFileInfo | undefined) {
   const name = file?.originalname?.toLowerCase() || "";
   const mime = file?.mimetype?.toLowerCase() || "";
   const commonMime = mime === "" || mime === "application/octet-stream";
@@ -399,3 +399,5 @@ export async function assertPortfolioUploadSupported(
     filePath instanceof URL ? fileURLToPath(filePath) : filePath,
   );
 }
+
+export { isLikelyPortfolioFile as __isLikelyPortfolioFile };

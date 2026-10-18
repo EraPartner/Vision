@@ -1,26 +1,31 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { makePlannedTransactionRow } from "./builders/domainRows.ts";
 import { loose } from "./helpers/partial.ts";
-import type { HydratedPlannedTransactionRow } from "../src/types/rows.ts";
 import { mockTxConnection } from "./helpers/repoMocks.ts";
 
 vi.mock("../src/services/plannedTransactionService.ts", () => ({
   default: {
     lockForExecution: vi.fn(),
     getById: vi.fn(),
+    getExecutionState: vi.fn(),
     executeAndAdvance: vi.fn().mockResolvedValue({ duplicate: false }),
   },
 }));
 vi.mock("../src/database/connection.ts", () => mockTxConnection());
 
 import rawPlannedTransactionService from "../src/services/plannedTransactionService.ts";
+import { query } from "../src/database/connection.ts";
 import { executePlanned } from "../src/services/plannedExecutionService.ts";
 
 const plannedTransactionService = vi.mocked(rawPlannedTransactionService);
 
 // Dates are the 'YYYY-MM-DD' strings the recurrence rules also accept.
 function planned(overrides: Record<string, unknown> = {}) {
-  return loose<HydratedPlannedTransactionRow>(
+  return loose<
+    NonNullable<
+      Awaited<ReturnType<typeof rawPlannedTransactionService.getExecutionState>>
+    >
+  >(
     makePlannedTransactionRow({
       planned_date: "2026-07-01",
       is_recurring: true,
@@ -28,6 +33,10 @@ function planned(overrides: Record<string, unknown> = {}) {
       recurrence_end_date: null,
       max_occurrences: null,
       execution_count: 0,
+      duplicate: false,
+      is_active: true,
+      is_executed: false,
+      currency: "EUR",
       tags: [],
       ...overrides,
     }),
@@ -41,14 +50,35 @@ function advancedFields() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(query).mockResolvedValue({
+    rows: [{ currency: "EUR", is_active: true }],
+    rowCount: 1,
+  });
   plannedTransactionService.executeAndAdvance.mockResolvedValue({
     duplicate: false,
   });
 });
 
 describe("executePlanned — recurrence bounds (migration 0071)", () => {
+  it.each([undefined, "2026-07-01"])(
+    "rejects inactive ledger rows for new execution (expected occurrence %s)",
+    async (expectedOccurrence) => {
+      plannedTransactionService.getExecutionState.mockResolvedValue(planned());
+      vi.mocked(query).mockResolvedValue({
+        rows: [{ currency: "EUR", is_active: false }],
+        rowCount: 1,
+      });
+      await expect(
+        executePlanned({ id: 1, executedTransactionId: 9, expectedOccurrence }),
+      ).rejects.toMatchObject({ status: 409 });
+      expect(
+        plannedTransactionService.executeAndAdvance,
+      ).not.toHaveBeenCalled();
+    },
+  );
+
   it("locks before reading state and rejects new executions beyond the maximum", async () => {
-    plannedTransactionService.getById.mockResolvedValue(
+    plannedTransactionService.getExecutionState.mockResolvedValue(
       planned({ max_occurrences: 1, execution_count: 1, is_executed: true }),
     );
     await expect(
@@ -57,7 +87,7 @@ describe("executePlanned — recurrence bounds (migration 0071)", () => {
     expect(
       plannedTransactionService.lockForExecution.mock.invocationCallOrder[0],
     ).toBeLessThan(
-      plannedTransactionService.getById.mock.invocationCallOrder[0]!,
+      plannedTransactionService.getExecutionState.mock.invocationCallOrder[0]!,
     );
     expect(plannedTransactionService.executeAndAdvance).not.toHaveBeenCalled();
   });
@@ -67,17 +97,17 @@ describe("executePlanned — recurrence bounds (migration 0071)", () => {
       max_occurrences: 1,
       execution_count: 1,
       is_executed: true,
-      executions: [{ executed_transaction_id: 9 }],
+      duplicate: true,
     });
-    plannedTransactionService.getById.mockResolvedValue(existing);
+    plannedTransactionService.getExecutionState.mockResolvedValue(existing);
     await expect(
       executePlanned({ id: 1, executedTransactionId: 9 }),
-    ).resolves.toEqual({ current: existing, duplicate: true });
+    ).resolves.toMatchObject({ duplicate: true });
     expect(plannedTransactionService.executeAndAdvance).not.toHaveBeenCalled();
   });
 
   it("rejects a new execution after end-date completion", async () => {
-    plannedTransactionService.getById.mockResolvedValue(
+    plannedTransactionService.getExecutionState.mockResolvedValue(
       planned({
         recurrence_end_date: "2026-07-01",
         execution_count: 1,
@@ -90,7 +120,7 @@ describe("executePlanned — recurrence bounds (migration 0071)", () => {
     expect(plannedTransactionService.executeAndAdvance).not.toHaveBeenCalled();
   });
   it("an unbounded recurrence advances to the next date", async () => {
-    plannedTransactionService.getById.mockResolvedValue(planned());
+    plannedTransactionService.getExecutionState.mockResolvedValue(planned());
     await executePlanned({
       id: 1,
       executedTransactionId: 9,
@@ -111,7 +141,7 @@ describe("executePlanned — recurrence bounds (migration 0071)", () => {
       [new Date(2026, 1, 28), "2026-03-28"],
     ]) {
       plannedTransactionService.executeAndAdvance.mockClear();
-      plannedTransactionService.getById.mockResolvedValue(
+      plannedTransactionService.getExecutionState.mockResolvedValue(
         planned({ planned_date: base }),
       );
       await executePlanned({
@@ -127,7 +157,7 @@ describe("executePlanned — recurrence bounds (migration 0071)", () => {
   });
 
   it("includes an end-date occurrence for pg DATE values", async () => {
-    plannedTransactionService.getById.mockResolvedValue(
+    plannedTransactionService.getExecutionState.mockResolvedValue(
       planned({
         planned_date: new Date(2026, 6, 1),
         recurrence_end_date: new Date(2026, 7, 1),
@@ -146,7 +176,7 @@ describe("executePlanned — recurrence bounds (migration 0071)", () => {
 
   it("completes the series when the execution count reaches max_occurrences", async () => {
     // 11 prior executions + this one = 12 = max → done, no advance.
-    plannedTransactionService.getById.mockResolvedValue(
+    plannedTransactionService.getExecutionState.mockResolvedValue(
       planned({ max_occurrences: 12, execution_count: 11 }),
     );
     await executePlanned({
@@ -161,7 +191,7 @@ describe("executePlanned — recurrence bounds (migration 0071)", () => {
   });
 
   it("keeps advancing while under max_occurrences", async () => {
-    plannedTransactionService.getById.mockResolvedValue(
+    plannedTransactionService.getExecutionState.mockResolvedValue(
       planned({ max_occurrences: 12, execution_count: 3 }),
     );
     await executePlanned({
@@ -178,7 +208,7 @@ describe("executePlanned — recurrence bounds (migration 0071)", () => {
 
   it("completes the series when the next occurrence falls past recurrence_end_date", async () => {
     // Next would be 2026-08-01 > end 2026-07-15 → done.
-    plannedTransactionService.getById.mockResolvedValue(
+    plannedTransactionService.getExecutionState.mockResolvedValue(
       planned({ recurrence_end_date: "2026-07-15" }),
     );
     await executePlanned({
@@ -193,7 +223,7 @@ describe("executePlanned — recurrence bounds (migration 0071)", () => {
   });
 
   it("accepts a pg-read Date for recurrence_end_date (local-midnight shape)", async () => {
-    plannedTransactionService.getById.mockResolvedValue(
+    plannedTransactionService.getExecutionState.mockResolvedValue(
       planned({ recurrence_end_date: new Date(2026, 11, 31) }), // Dec 31 local midnight
     );
     await executePlanned({

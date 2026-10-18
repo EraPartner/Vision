@@ -1,3 +1,7 @@
+import {
+  overrideCategory,
+  rollbackBatch,
+} from "../src/repositories/importBatchRepository.ts";
 /**
  * Real-Postgres tests for the import pipeline COMMIT phase.
  *
@@ -288,6 +292,153 @@ describeDb("importPipeline commit (real Postgres)", () => {
   });
 
   // ── the core dedup verdicts ───────────────────────────────────────────────
+
+  it.each([true, false])(
+    "serializes an override against commit (overrideFirst=%s)",
+    async (overrideFirst) => {
+      const batchId = await newBatch();
+      const rowId = Number(await stageRow(batchId, 0));
+      const categoryId = (
+        await pool.query(
+          "INSERT INTO categories (general, detail) VALUES ('Review race', 'Chosen') RETURNING id",
+        )
+      ).rows[0].id;
+      const gate = await pool.connect();
+      const work: Promise<unknown>[] = [];
+      try {
+        await gate.query("BEGIN");
+        await gate.query(
+          "SELECT id FROM import_batches WHERE id = $1 FOR UPDATE",
+          [batchId],
+        );
+        const override = () => overrideCategory({ batchId, rowId, categoryId });
+        const commit = () => commitBatch({ batchId });
+        work.push(overrideFirst ? override() : commit());
+        const observedFirst = Promise.allSettled(work);
+        const deadline = Date.now() + 5000;
+        let waiters = 0;
+        while (Date.now() < deadline) {
+          waiters = (
+            await pool.query(
+              "SELECT count(*)::int AS n FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock' AND query LIKE '%import_batches%'",
+            )
+          ).rows[0].n;
+          if (waiters) break;
+          await new Promise((resolve) => setTimeout(resolve, 20));
+        }
+        expect(waiters).toBeGreaterThan(0);
+        work.push(overrideFirst ? commit() : override());
+        const outcomes = Promise.allSettled(work);
+        await gate.query("COMMIT");
+        const results = await outcomes;
+        await observedFirst;
+        if (overrideFirst)
+          expect(results.every((result) => result.status === "fulfilled")).toBe(
+            true,
+          );
+        else
+          expect(results[1]).toMatchObject({
+            status: "rejected",
+            reason: { status: 409 },
+          });
+        const posted = await committedTxns(batchId);
+        expect(posted).toHaveLength(1);
+        expect(posted[0].category_id).toBe(
+          overrideFirst ? categoryId : fx.categoryId,
+        );
+      } finally {
+        await gate.query("ROLLBACK");
+        gate.release();
+        await Promise.allSettled(work);
+      }
+    },
+  );
+
+  it.each([true, false])(
+    "serializes rollback and commit claims (rollbackFirst=%s)",
+    async (rollbackFirst) => {
+      const batchId = await newBatch();
+      await pool.query(
+        "UPDATE import_batches SET status = 'awaiting_review' WHERE id = $1",
+        [batchId],
+      );
+      await stageRow(batchId, 0);
+      const gate = await pool.connect();
+      const work: Promise<unknown>[] = [];
+      try {
+        await gate.query("BEGIN");
+        await gate.query(
+          "SELECT id FROM import_batches WHERE id = $1 FOR UPDATE",
+          [batchId],
+        );
+        const rollback = () => rollbackBatch(batchId);
+        const commit = () => commitBatch({ batchId });
+        work.push(rollbackFirst ? rollback() : commit());
+        const firstObserved = Promise.allSettled(work);
+        const deadline = Date.now() + 5000;
+        let waiters = 0;
+        while (Date.now() < deadline) {
+          waiters = (
+            await pool.query(
+              "SELECT count(*)::int AS n FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock' AND query LIKE '%import_batches%'",
+            )
+          ).rows[0].n;
+          if (waiters) break;
+          await new Promise((resolve) => setTimeout(resolve, 20));
+        }
+        expect(waiters).toBeGreaterThan(0);
+        work.push(rollbackFirst ? commit() : rollback());
+        const outcomes = Promise.allSettled(work);
+        await gate.query("COMMIT");
+        const results = await outcomes;
+        await firstObserved;
+        expect(results[0]?.status).toBe("fulfilled");
+        expect(results[1]).toMatchObject({
+          status: "rejected",
+          reason: { status: rollbackFirst ? 409 : 400 },
+        });
+        expect(await committedTxns(batchId)).toHaveLength(
+          rollbackFirst ? 0 : 1,
+        );
+        expect(
+          (
+            await pool.query(
+              "SELECT status FROM import_batches WHERE id = $1",
+              [batchId],
+            )
+          ).rows[0].status,
+        ).toBe(rollbackFirst ? "aborted" : "committing");
+      } finally {
+        await gate.query("ROLLBACK");
+        gate.release();
+        await Promise.allSettled(work);
+      }
+    },
+  );
+
+  it("keeps a committed batch intact when its account has been closed", async () => {
+    const batchId = await newBatch();
+    await stageRow(batchId, 0);
+    expect((await commitBatch({ batchId })).imported).toBe(1);
+    await pool.query(
+      "UPDATE import_batches SET status = 'complete' WHERE id = $1",
+      [batchId],
+    );
+    await pool.query(
+      "UPDATE accounts SET is_active = false WHERE id IN (SELECT account_id FROM transactions WHERE import_batch_id = $1)",
+      [batchId],
+    );
+    await expect(rollbackBatch(batchId)).rejects.toMatchObject({ status: 400 });
+    expect(await committedTxns(batchId)).toHaveLength(1);
+    expect(
+      (
+        await pool.query(
+          "SELECT status FROM import_staging_rows WHERE batch_id = $1",
+          [batchId],
+        )
+      ).rows,
+    ).toEqual([{ status: "committed" }]);
+  });
 
   it("makes Revolut-created accounts permanently multi-currency capable", async () => {
     const batchId = await newBatch("revolut");
