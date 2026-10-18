@@ -141,15 +141,15 @@ struct LocalDataTable<Row: Identifiable, Empty: View>: View {
     private var heading: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title)
-                .font(.headline)
+                .font(.visionTitle3)
                 .accessibilityAddTraits(.isHeader)
             Text(subtitle)
                 .font(.callout)
                 .foregroundStyle(theme.secondaryLabel)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 16)
-        .padding(.bottom, 10)
+        .padding(.horizontal, 20)
+        .padding(.top, 20)
+        .padding(.bottom, 12)
     }
 
     private var toolbar: some View {
@@ -175,7 +175,7 @@ struct LocalDataTable<Row: Identifiable, Empty: View>: View {
             }
             .font(.callout)
             .padding(.horizontal, 12)
-            .frame(maxWidth: 420, minHeight: 32)
+            .frame(maxWidth: .infinity, minHeight: 32)
             .background(
                 RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
                     .fill(Color(token: theme.palette.background, opacity: 0.8)))
@@ -197,9 +197,9 @@ struct LocalDataTable<Row: Identifiable, Empty: View>: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, title.isEmpty && subtitle.isEmpty ? 16 : 0)
-        .padding(.bottom, 10)
+        .padding(.horizontal, 20)
+        .padding(.top, title.isEmpty && subtitle.isEmpty ? 20 : 0)
+        .padding(.bottom, 12)
     }
 
     private var chips: some View {

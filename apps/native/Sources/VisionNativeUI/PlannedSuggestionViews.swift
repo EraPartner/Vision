@@ -93,7 +93,7 @@ struct PlannedRecurringPanel: View {
     // MARK: Amount changes
 
     private func alertsCard(_ alerts: [PlannedRecurringPattern]) -> some View {
-        AdminCard(padding: 16, ring: theme.warning.opacity(0.4)) {
+        AdminCard(padding: 20) {
             VStack(alignment: .leading, spacing: 12) {
                 cardHeader(
                     titleKey: "recurring.amountChanges", symbol: "exclamationmark.triangle", tint: theme.warning,
@@ -111,10 +111,6 @@ struct PlannedRecurringPanel: View {
                 }
             }
         }
-        .overlay(
-            RoundedRectangle(cornerRadius: DesignTokens.Radius.card)
-                .fill(theme.warning.opacity(0.05))
-                .allowsHitTesting(false))
     }
 
     @ViewBuilder
@@ -171,7 +167,7 @@ struct PlannedRecurringPanel: View {
     // MARK: Patterns
 
     private func patternsCard(_ patterns: [PlannedRecurringPattern]) -> some View {
-        AdminCard(padding: 16) {
+        AdminCard(padding: 20) {
             VStack(alignment: .leading, spacing: 12) {
                 cardHeader(
                     titleKey: "recurring.patterns", symbol: "sparkles", tint: theme.primary, titleColor: theme.foreground,
@@ -260,7 +256,7 @@ struct PlannedRecurringPanel: View {
                     .foregroundStyle(tint)
                     .accessibilityHidden(true)
                 Text(title)
-                    .font(.callout.weight(.semibold))
+                    .font(.callout.weight(.medium))
                     .foregroundStyle(titleColor)
                     .accessibilityAddTraits(.isHeader)
                 VisionBadge(text: String(count), tone: countTone)
