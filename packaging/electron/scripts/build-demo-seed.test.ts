@@ -49,6 +49,27 @@ test("the synthetic generator is deterministic data-only SQL", async () => {
   assert.equal(sha256(firstSql).length, 64);
 });
 
+test("demo planned loans use a loan type the API contract accepts", async () => {
+  // openapi PlannedLoanType; Vision Native rejects the whole planned list on any other.
+  const demoSeedSql = await loadSql("2026-09-03");
+  const loanTypes = demoSeedSql
+    .split("\n")
+    .filter((line) => /^INSERT INTO planned_transactions \(/.test(line))
+    .flatMap((line) => [
+      ...line.matchAll(/'(amortizing|fixed_principal|interest_only|annuity)'/g),
+    ])
+    .map((match) => match[1]);
+  assert.ok(loanTypes.length > 0);
+  for (const loanType of loanTypes) {
+    assert.ok(
+      ["amortizing", "fixed_principal", "interest_only"].includes(
+        String(loanType),
+      ),
+      `unsupported loan_type ${loanType}`,
+    );
+  }
+});
+
 test("hierarchy root IDs cannot collide with explicit demo category IDs", async () => {
   const demoSeedSql = await loadSql("2026-09-03");
   const lines = demoSeedSql.split("\n");

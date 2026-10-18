@@ -219,7 +219,13 @@ export const netWorthRepository = {
     if (!firstDataDateYmd) {
       logger.info("Net worth has no source records", { targetCurrency });
       return {
-        current: { liquid: 0, liabilities: 0, investments: 0, netWorth: 0 },
+        current: {
+          liquid: 0,
+          liabilities: 0,
+          investments: 0,
+          netWorth: 0,
+          currency: targetCurrency,
+        },
         monthlyChange: 0,
         monthlyChangePercent: 0,
         snapshots: [],
@@ -615,6 +621,9 @@ export const netWorthRepository = {
         liabilities: latest.liabilities ?? 0,
         investments: latest.investments,
         netWorth: latest.netWorth,
+        // The response currency (openapi NetWorthResponse.current.currency):
+        // clients drop a response that answers a different currency request.
+        currency: targetCurrency,
       },
       monthlyChange: roundToCents(monthlyChange),
       monthlyChangePercent: roundToCents(monthlyChangePercent),

@@ -286,7 +286,11 @@
             case "/api/aggregations/recipient-by-year": body = #"{"recipientsByYear":{}}"#
             default: throw APIError.invalidRequest("Unexpected frozen row-print request: " + request.url.path)
             }
-            return APIResponse(status: 200, body: Data("{\"ok\":true,\"data\":\(body)}".utf8))
+            // Aggregations nest their payload in `{ data, meta }` inside the transport envelope.
+            let data =
+                request.url.path.hasPrefix("/api/aggregations/")
+                ? "{\"data\":\(body),\"meta\":{\"computedAt\":\"2026-10-18T00:00:00.000Z\",\"source\":\"live\"}}" : body
+            return APIResponse(status: 200, body: Data("{\"ok\":true,\"data\":\(data)}".utf8))
         }
     }
 #endif

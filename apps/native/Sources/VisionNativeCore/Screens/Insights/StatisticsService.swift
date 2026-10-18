@@ -47,34 +47,29 @@ extension StatisticsService {
 
 extension APIClient: StatisticsService {
     public func statisticsMonthly(_ query: StatisticsQuery) async throws -> InsightMonthlySummary {
-        try await send(
-            InsightRequest<OpenAPIOperations.GetMonthlySummary, InsightMonthlySummary>(
-                OpenAPIOperations.GetMonthlySummary(), query: query.queryItems(includeAllTime: true)))
+        try await sendAggregation(
+            OpenAPIOperations.GetMonthlySummary(), query: query.queryItems(includeAllTime: true))
     }
     public func statisticsCategories(_ query: StatisticsQuery) async throws -> StatisticsCategoryPivot {
-        try await send(
-            InsightRequest<OpenAPIOperations.GetCategoryPivot, StatisticsCategoryPivot>(
-                OpenAPIOperations.GetCategoryPivot(), query: query.queryItems()))
+        try await sendAggregation(
+            OpenAPIOperations.GetCategoryPivot(), query: query.queryItems())
     }
     public func statisticsRecipients(_ query: StatisticsQuery) async throws -> StatisticsRecipientInsights {
-        try await send(
-            InsightRequest<OpenAPIOperations.GetRecipientInsights, StatisticsRecipientInsights>(
-                OpenAPIOperations.GetRecipientInsights(), query: query.queryItems()))
+        try await sendAggregation(
+            OpenAPIOperations.GetRecipientInsights(), query: query.queryItems())
     }
     public func statisticsRecipientYears(_ query: StatisticsQuery) async throws -> StatisticsRecipientYears {
-        try await send(
-            InsightRequest<OpenAPIOperations.GetRecipientByYear, StatisticsRecipientYears>(
-                OpenAPIOperations.GetRecipientByYear(), query: query.queryItems()))
+        try await sendAggregation(
+            OpenAPIOperations.GetRecipientByYear(), query: query.queryItems())
     }
     public func statisticsFlow(currency: String, year: Int, exclusions: InsightExclusions) async throws
         -> StatisticsFlow
     {
-        try await send(
-            InsightRequest<OpenAPIOperations.GetSankey, StatisticsFlow>(
-                OpenAPIOperations.GetSankey(),
-                query: [
-                    URLQueryItem(name: "currency", value: currency),
-                    URLQueryItem(name: "year", value: String(year)),
-                ] + exclusions.queryItems))
+        try await sendAggregation(
+            OpenAPIOperations.GetSankey(),
+            query: [
+                URLQueryItem(name: "currency", value: currency),
+                URLQueryItem(name: "year", value: String(year)),
+            ] + exclusions.queryItems)
     }
 }
