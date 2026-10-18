@@ -249,6 +249,13 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 
 ## Recent Decisions
 
+### 2026-10-18: Move the backend into the Mac app in Swift (proposed)
+
+[[docs/adr/210-vision-native-swift-backend|ADR-210]] proposes replacing the TypeScript backend,
+route by route behind `openapi.yaml`, with a Swift backend (Hummingbird 2, PostgresNIO) running
+inside the Mac app. PostgreSQL stays supervised; Docker/Linux and Electron keep the TypeScript
+backend until they are retired. Decision record only; no code yet.
+
 ### 2026-10-18: Retire the helper document (accepted)
 
 [[docs/adr/209-vision-native-retire-helper-document|ADR-209]] supersedes ADR-207's helper

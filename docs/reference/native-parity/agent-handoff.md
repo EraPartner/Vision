@@ -180,6 +180,10 @@ has `retained`, `native` and `electron` modes and now stores `footprint` and `vm
 output per mode. The helper-specific evidence above is history; the "known divergence" note about
 helper runs no longer applies.
 
+**Backend direction (2026-10-18):** Tor chose a Mac-only future with a Swift backend
+(Hummingbird 2) inside the app; [[docs/adr/210-vision-native-swift-backend|ADR-210]] records it as
+proposed, with no code. Do not start the migration before it is accepted.
+
 **Next**
 
 1. Run the manual Mac checks: VoiceOver on the startup/failure screens, the text context menu,
