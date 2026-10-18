@@ -1946,11 +1946,14 @@ describe("Portfolio pages (integration)", () => {
             );
 
             const user = userEvent.setup();
-            renderWithApp(<WatchlistPage />);
+            const { queryClient } = renderWithApp(<WatchlistPage />);
             await screen.findByRole("heading", { name: /watchlist/i });
-            // Wait for at least 1 GET call
-            await waitFor(() => expect(getCalls).toBeGreaterThan(0));
+            await screen.findByRole("button", { name: /actions for apple/i });
+            // Count from a settled cache: on a slow runner a second mount-time
+            // list fetch can still land after the row first renders.
+            await waitFor(() => expect(queryClient.isFetching()).toBe(0));
             const before = getCalls;
+            expect(before).toBeGreaterThan(0);
 
             // Click delete on the watchlist item
             await user.click(
