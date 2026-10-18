@@ -352,6 +352,8 @@ public final class CategoriesModel {
         }
         post(.success, "categories.updated")
         if merge?.source.id == draft.source.id { merge = nil }
+        // useMergeCategoryNode: a merge also moves payee defaults, so recipients refetch too.
+        shell?.recipients.invalidate()
         await refreshAfterWrite()
     }
 
@@ -373,6 +375,9 @@ public final class CategoriesModel {
             .success, nextActive ? "categoriesPage.toast.active" : "categoriesPage.toast.inactive", ["name": node.name])
         self.notice = notice
         pendingUndo = (notice.id, node, !nextActive)
+        notices.offerAction(for: notice, titleKey: "common.undo", lifetime: 8, isUndo: true) { [weak self] in
+            await self?.restoreStatus(id: node.id, active: !nextActive)
+        }
         await refreshAfterWrite()
     }
 
@@ -381,15 +386,23 @@ public final class CategoriesModel {
         guard let pending = pendingUndo else { return }
         pendingUndo = nil
         if notice?.id == pending.noticeID { notice = nil }
+        await restoreStatus(id: pending.node.id, active: pending.restore)
+    }
+
+    private func restoreStatus(id: Int, active: Bool) async {
         isTogglingStatus = true
         defer { isTogglingStatus = false }
         do {
-            try await service.setCategoryActive(id: pending.node.id, isActive: pending.restore)
+            try await service.setCategoryActive(id: id, isActive: active)
         } catch {
             post(.error, "categoriesPage.toggleFailed")
             return
         }
         await refreshAfterWrite()
+    }
+
+    public func attachNotices(_ center: NativeNoticeCenter) {
+        notices.attach(center) { [weak self] in self?.clearNotice($0) }
     }
 
     /// The label of the toast's action: Undo while the status toast is up.

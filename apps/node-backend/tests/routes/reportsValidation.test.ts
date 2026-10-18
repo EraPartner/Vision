@@ -84,3 +84,54 @@ describe('Report exclusion id validation', () => {
     );
   });
 });
+
+describe('Shared report request contract', () => {
+  it('uses the documented defaults for an empty body', () => {
+    expect(__parseReportBody({})).toEqual({
+      currency: 'EUR',
+      period: { kind: 'rolling', months: 12 },
+      sections: [],
+      theme: { mode: 'light' },
+      excludedCategoryIds: [],
+      excludedRecipientIds: [],
+    });
+  });
+
+  it('requires a bounded discriminated period rather than obsolete top-level dates', () => {
+    expect(__parseReportBody({ start_date: '2020-01-01', end_date: '2020-12-31', year: 2020 }))
+      .toEqual(__parseReportBody({}));
+    for (const period of [
+      { kind: 'rolling', months: 0 },
+      { kind: 'rolling', months: 61 },
+      { kind: 'rolling', months: 1.5 },
+      { kind: 'year', year: 1999 },
+      { kind: 'year', year: 2101 },
+      { kind: 'custom', from: '2025-1-01', to: '2025-12-31' },
+    ]) {
+      expect(() => __parseReportBody({ period })).toThrow(/Invalid report request: period/);
+    }
+    // The current route validates shape, not calendar validity or ordering.
+    const period = { kind: 'custom', from: '2025-99-99', to: '2024-01-01' };
+    expect(__parseReportBody({ period }).period).toEqual(period);
+  });
+
+  it('accepts only HSL token triples and defaults the omitted theme mode', () => {
+    expect(__parseReportBody({ theme: { primary: '158 62% 32%' } }).theme)
+      .toEqual({ primary: '158 62% 32%', mode: 'light' });
+    for (const primary of [
+      'hsl(158 62% 32%)',
+      '0 0% 0%; } body { background: url(https://example.invalid)',
+    ]) {
+      expect(() => __parseReportBody({ theme: { primary } })).toThrow(/theme.primary/);
+    }
+  });
+
+  it('rejects explicit null for optional request fields', () => {
+    for (const field of [
+      'currency', 'period', 'sections', 'theme', 'excludedCategoryIds', 'excludedRecipientIds',
+      'taxProfile', 'precomputedPIT', 'household', 'precomputedHousehold',
+    ]) {
+      expect(() => __parseReportBody({ [field]: null })).toThrow(/Invalid report request/);
+    }
+  });
+});

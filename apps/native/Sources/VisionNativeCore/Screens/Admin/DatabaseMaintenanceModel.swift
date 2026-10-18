@@ -40,7 +40,9 @@ public struct TableRowsQuery: Equatable, Hashable, Sendable {
     public var sort: TableSort?
     public var filters: [TableFilter]
 
-    public init(limit: Int = TableRowsQuery.pageSize, cursor: String? = nil, sort: TableSort? = nil, filters: [TableFilter] = []) {
+    public init(
+        limit: Int = TableRowsQuery.pageSize, cursor: String? = nil, sort: TableSort? = nil, filters: [TableFilter] = []
+    ) {
         self.limit = limit
         self.cursor = cursor
         self.sort = sort
@@ -276,6 +278,10 @@ public final class DatabaseMaintenanceModel {
         }
     }
 
+    public func attachNotices(_ center: NativeNoticeCenter) {
+        notices.attach(center) { [weak self] in self?.clearNotice($0) }
+    }
+
     public func clearNotice(_ id: Int) {
         if notice?.id == id { notice = nil }
     }
@@ -301,6 +307,7 @@ public final class DatabaseScreens {
     public private(set) var editor: TableDataEditorModel?
 
     @ObservationIgnored private let service: any DatabaseAdminService
+    @ObservationIgnored private weak var noticeCenter: NativeNoticeCenter?
 
     public init(
         service: any DatabaseAdminService, now: @escaping @Sendable () -> Date = { Date() },
@@ -314,10 +321,24 @@ public final class DatabaseScreens {
     /// page remounts with fresh state); any other route drops an editor without pending
     /// changes, so coming back starts fresh.
     public func routeDidChange(path: String) {
-        if let table = TableEditorRoute.table(forPath: path) {
-            if editor?.table != table { editor = TableDataEditorModel(table: table, service: service) }
+        routeDidChange(table: TableEditorRoute.table(forPath: path))
+    }
+
+    /// A native router match already owns decoding; do not decode its parameter again.
+    public func routeDidChange(table: String?) {
+        if let table {
+            if editor?.table != table {
+                editor = TableDataEditorModel(table: table, service: service)
+                if let noticeCenter { editor?.attachNotices(noticeCenter) }
+            }
             return
         }
         if let editor, !editor.hasPending { self.editor = nil }
+    }
+
+    public func attachNotices(_ center: NativeNoticeCenter) {
+        noticeCenter = center
+        maintenance.attachNotices(center)
+        editor?.attachNotices(center)
     }
 }

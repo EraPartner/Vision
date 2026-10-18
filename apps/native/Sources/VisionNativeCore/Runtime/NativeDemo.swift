@@ -32,6 +32,8 @@ public protocol DemoSeedingRuntime: Sendable {
     func readState() async throws -> [String: JSONValue]?
     func writeState(set: [String: JSONValue], remove: [String]) async throws
     func ensurePostgresReady() async throws
+    /// `recoverInterruptedRestore`: both restore journals, before any seed decision.
+    func recoverInterruptedRestore() async throws
     func rollbackDatabaseSwitch(_ token: JSONValue?) async throws
     func validateCustomDump(_ path: String) async throws
     func activateRestoredDatabase(_ path: String, expectedSchemaHead: String) async throws -> DatabaseSwitchToken
@@ -150,7 +152,7 @@ public enum NativeDemo {
         try fileSystem.writeFile(layout.demoResetRequest, try request.serialized(), mode: 0o600)
     }
 
-    /// `prepareNativeDemo`: rolls back an interrupted switch, skips a current seed, or
+    /// `prepareNativeDemo`: recovers an interrupted restore, skips a current seed, or
     /// restores the packaged dump into a staging database, verifies every table count
     /// and switches it in while keeping the previous database for rollback.
     public static func prepare(
@@ -166,12 +168,11 @@ public enum NativeDemo {
         let resetRequested = try reset || hasResetRequest(layout, fileSystem: fileSystem)
         try await runtime.ensureLayout()
         try await runtime.discover()
-        var state = try await runtime.readState() ?? [:]
-        if let pending = state["pendingDatabaseSwitch"], pending.isTruthy {
-            try await runtime.ensurePostgresReady()
-            try await runtime.rollbackDatabaseSwitch(pending)
-            state = try await runtime.readState() ?? [:]
-        }
+        try await runtime.ensurePostgresReady()
+        // Recover both generations before deciding whether the seed is current (ADR-207).
+        // Database-only rollback would leave new attachments against the old data.
+        try await runtime.recoverInterruptedRestore()
+        let state = try await runtime.readState() ?? [:]
         let currentSeed = state["demoSeed"]
         if !resetRequested,
             currentSeed?["logicalSha256"] == .string(seed.manifest.logicalSha256),

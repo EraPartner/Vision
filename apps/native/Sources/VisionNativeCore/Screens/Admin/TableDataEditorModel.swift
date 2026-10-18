@@ -508,7 +508,8 @@ public final class TableDataEditorModel {
             }
         } catch {
             notice = notices.make(
-                .error, "dbEditor.previewFailed", detail: APIErrorMessage.text(APIError.wrapping(error), strings: strings))
+                .error, "dbEditor.previewFailed",
+                detail: APIErrorMessage.text(APIError.wrapping(error), strings: strings))
         }
         isPreviewing = false
     }
@@ -542,9 +543,14 @@ public final class TableDataEditorModel {
             await load(force: true)
         } catch {
             notice = notices.make(
-                .error, "dbEditor.commitFailed", detail: APIErrorMessage.text(APIError.wrapping(error), strings: strings))
+                .error, "dbEditor.commitFailed",
+                detail: APIErrorMessage.text(APIError.wrapping(error), strings: strings))
             isCommitting = false
         }
+    }
+
+    public func attachNotices(_ center: NativeNoticeCenter) {
+        notices.attach(center) { [weak self] in self?.clearNotice($0) }
     }
 
     public func clearNotice(_ id: Int) {

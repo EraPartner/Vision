@@ -79,6 +79,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/analysis/interchange/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Parse a CSV or Vision XLSX scenario attachment without persistence
+         * @description Read-only shared TypeScript value inference. CSV allows 1,000,000 bytes, 1000 rows and 32 normalized unique columns. XLSX allows 10,000,000 bytes (the tighter existing parser cap), stored ZIP Results/Provenance sheets with CRC validation, then the attachment cap of 1000 rows/32 columns. Formula cells are ignored/null and counted; dates retain Excel 1900 behavior; provenance identifiers are restored while units are stripped. Caller retains its five-attachment cap and CSV replacement versus workbook append behavior. No formulas, Analysis execution, database or settings writes.
+         */
+        post: operations["importAnalysisInterchange"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/analysis/interchange/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Export a supplied captured Analysis snapshot as CSV or value-only XLSX
+         * @description Read-only shared TypeScript export of exactly the submitted result/context. The multipart file contains UTF-8 AnalysisInterchangeExportPayload JSON and has a route-scoped 64 MiB limit, allowing 100000-row XLSX snapshots beyond the global 1 MB JSON limit. XLSX retains its 100000-row limit; CSV adds no row cap. Neither format rereads or recomputes data. CSV retains formula-prefix escaping and captured metadata; XLSX emits five stored-ZIP sheets, exact long-decimal text, Excel 1900 dates and non-executable formula definitions. Client must retain original result/input signatures and unchanged-input/export eligibility checks.
+         */
+        post: operations["exportAnalysisInterchange"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/analysis/execute": {
         parameters: {
             query?: never;
@@ -2435,7 +2475,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List portfolio transactions across all investments */
+        /**
+         * List portfolio transactions across all investments
+         * @description Ordinary portfolio transaction rows across the requested investments, ranked newest first per investment and then globally by date/id descending. This operation excludes custody and asset-adjustment events, which have separate APIs. total counts matching ordinary rows before per-investment and global limits; response limit is the requested global cap or the returned item count when omitted.
+         */
         get: operations["getBulkPortfolioTransactions"];
         put?: never;
         post?: never;
@@ -2949,6 +2992,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/belgian-tax/portfolio-dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read authoritative Portfolio Tax costs, estimates, and editable setting baselines
+         * @description Read-only parity with usePortfolioTaxData. First 500 name-ordered investments, active canonical summaries plus archived ordinary/current-FX presentation, and newest 1000 ordinary transactions per investment. Recorded costs/dividends/manual adjustments use the selected year; gains/current values retain all-time/live holdings semantics. Uses shared TypeScript tax helpers and frozen-first PIT. Original adjustment/classification settings and CAS baselines are returned without writes. Native consumers decode numeric amounts directly as Decimal.
+         */
+        get: operations["getBelgianPortfolioTaxDashboard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/belgian-tax/dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read server-computed tax charts, recorded income, and tax widget presentation
+         * @description Additive read-only operation using the shared TypeScript tax engine. Mirrors the overview web hook, including frozen PIT proportional scaling, selected category ancestry, partner/joint income attribution, latest stored FX for recorded portfolio taxes, and historical monthly reserve proration. Explicit exclusions and date bounds must be resolved by the caller; defaults are EUR and the trailing 24 calendar months through the application-timezone current date. No settings writes.
+         */
+        get: operations["getBelgianTaxDashboard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/belgian-tax/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read live or historical Belgian tax overview with frozen-result precedence
+         * @description Reads settings and baselines in one snapshot, runs the same v1/v2 hydration as the web provider, and selects the requested year. Frozen figures remain verbatim; fully frozen records do not invoke the engine. No settings or filing writes. Invalid stored v2 settings produce the existing fallback and warnings, without overwriting the stored values.
+         */
+        get: operations["getBelgianTaxOverview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/belgian-tax/compute": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Compute Belgian household tax without saving the profile
+         * @description Runs the same TypeScript engine used by the web Tax screen. Takes a complete v2 household, including unsaved edits or historical inputs; returns the household result and legacy-compatible calculation. Does not read or write settings, transactions, snapshots, or filing records. Unknown tax years retain the engine approximation and warning behavior. Uses the aggregation rate limiter and standard API CSRF guard.
+         */
+        post: operations["computeBelgianTax"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/reports/financial": {
         parameters: {
             query?: never;
@@ -2975,7 +3098,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Generate portfolio report */
+        /** Generate portfolio report PDF */
         post: operations["generatePortfolioReport"];
         delete?: never;
         options?: never;
@@ -2992,7 +3115,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Generate Belgian tax report */
+        /** Generate tax report PDF */
         post: operations["generateTaxReport"];
         delete?: never;
         options?: never;
@@ -3348,6 +3471,26 @@ export interface paths {
         put?: never;
         /** Commit import batch — writes transactions to DB */
         post: operations["commitImportBatch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/portfolio/import/probe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read-only maintained statement detection and CSV header preview
+         * @description Inspects an uploaded file without creating a batch or financial rows. Uses the same maintained-format detection and 16384-byte, five-row CSV preview rules as the web frontend. Full-file detection retains every source account identity. Detection and preview errors are independent; a supported workbook can be detected while CSV preview is unavailable. Temporary uploads are cleaned up on every outcome. The existing 50 MB upload and workbook inflation limits apply.
+         */
+        post: operations["probePortfolioImport"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4116,6 +4259,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/research/presentation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Compute Research presentation from submitted data without fetching or persisting
+         * @description Stateless shared TypeScript transformations for Compare, Chart Builder, watchlist list/chart/add previews, provider-history quotes, analyst consensus market-add two-of-three previews and Life Scenario preparation/comparison. No provider, database, settings or FX lookup. Original source ordering, warmups, thresholds and currency semantics are retained. Submit one UTF-8 JSON snapshot file; the 64 MiB scoped multipart limit bypasses the global JSON-body size limit without silently truncating history. Numeric JSON is validated as finite numbers; non-finite calculation outputs serialize as null as in the web client. Uses the existing Research market rate limiter.
+         */
+        post: operations["computeResearchPresentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/research/search": {
         parameters: {
             query?: never;
@@ -4395,6 +4558,122 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /**
+         * @description Report window. Custom dates validate their YYYY-MM-DD shape; the route does not check calendar validity or from/to ordering.
+         * @default {
+         *       "kind": "rolling",
+         *       "months": 12
+         *     }
+         */
+        ReportPeriod: {
+            /** @enum {string} */
+            kind: "ytd";
+        } | {
+            /** @enum {string} */
+            kind: "rolling";
+            months: number;
+        } | {
+            /** @enum {string} */
+            kind: "custom";
+            from: string;
+            to: string;
+        } | {
+            /** @enum {string} */
+            kind: "year";
+            year: number;
+        };
+        /**
+         * @description HSL component triple only, without hsl() or CSS declarations. The shape guard does not impose numeric hue/saturation/lightness bounds.
+         * @example 158 62% 32%
+         */
+        ReportThemeToken: string;
+        /**
+         * @description Known optional HSL tokens. Unknown properties are stripped by the route; omitted mode defaults to light.
+         * @default {
+         *       "mode": "light"
+         *     }
+         */
+        ReportTheme: {
+            primary?: components["schemas"]["ReportThemeToken"];
+            accent?: components["schemas"]["ReportThemeToken"];
+            success?: components["schemas"]["ReportThemeToken"];
+            expense?: components["schemas"]["ReportThemeToken"];
+            surface?: components["schemas"]["ReportThemeToken"];
+            text?: components["schemas"]["ReportThemeToken"];
+            muted?: components["schemas"]["ReportThemeToken"];
+            border?: components["schemas"]["ReportThemeToken"];
+            chart1?: components["schemas"]["ReportThemeToken"];
+            chart2?: components["schemas"]["ReportThemeToken"];
+            chart3?: components["schemas"]["ReportThemeToken"];
+            chart4?: components["schemas"]["ReportThemeToken"];
+            chart5?: components["schemas"]["ReportThemeToken"];
+            chart6?: components["schemas"]["ReportThemeToken"];
+            chart7?: components["schemas"]["ReportThemeToken"];
+            chart8?: components["schemas"]["ReportThemeToken"];
+            /**
+             * @default light
+             * @enum {string}
+             */
+            mode: "light" | "dark";
+        };
+        /** @default [] */
+        ReportExclusionIds: number[];
+        ReportTaxProfile: {
+            filingStatus?: string;
+            region?: string;
+            taxYear?: number;
+        };
+        /** @description Existing frontend-engine amounts; no server-side PIT calculation. Bracket rate uses percent units (25 means 25%). */
+        ReportPrecomputedPIT: {
+            taxableIncome?: number;
+            totalTax?: number;
+            brackets?: {
+                label?: string;
+                rate?: number;
+                taxableIncome?: number;
+                taxAmount?: number;
+            }[];
+        };
+        /** @description Frontend-engine per-partner figures. Partner ids must be unique; duplicate ids are rejected with 400. */
+        ReportPrecomputedHousehold: {
+            /** @enum {string} */
+            assessmentMode: "single" | "separate" | "joint";
+            legalBasis?: string;
+            quotient?: {
+                applied: boolean;
+                transfer: number;
+                /** @enum {string} */
+                fromPartnerId?: "A" | "B";
+                /** @enum {string} */
+                toPartnerId?: "A" | "B";
+                benefit: number;
+            };
+            partners: {
+                /** @enum {string} */
+                partnerId: "A" | "B";
+                grossIncome: number;
+                taxableIncome: number;
+                totalPIT: number;
+            }[];
+        };
+        /** @description Shared validated request for all three existing report routes. An empty object is valid. Unknown fields are stripped, including the obsolete top-level start_date/end_date/year; select a window through period instead. Tax context fields are accepted by all routes but forwarded to rendering only for the tax report. Null is not an omitted field. */
+        ReportRequest: {
+            /** @default EUR */
+            currency: string;
+            period?: components["schemas"]["ReportPeriod"];
+            /**
+             * @description Section ids; omitted or empty selects the renderer defaults. The route does not enforce a section-id enum.
+             * @default []
+             */
+            sections: string[];
+            theme?: components["schemas"]["ReportTheme"];
+            excludedCategoryIds?: components["schemas"]["ReportExclusionIds"];
+            excludedRecipientIds?: components["schemas"]["ReportExclusionIds"];
+            taxProfile?: components["schemas"]["ReportTaxProfile"];
+            precomputedPIT?: components["schemas"]["ReportPrecomputedPIT"];
+            household?: components["schemas"]["BelgianTaxHouseholdInput"];
+            precomputedHousehold?: components["schemas"]["ReportPrecomputedHousehold"];
+        };
+        /**
          * @description Generic custom numeric grammar, independent of the CSV delimiter. Auto rejects values with conflicting valid decimal/grouping interpretations. Choose decimal_dot or decimal_comma to disambiguate. Ambiguity rejects the complete import with a row/column diagnostic before staging.
          * @default auto
          * @enum {string}
@@ -4470,6 +4749,784 @@ export interface components {
             /** @enum {string} */
             mode: "native" | "dev";
             version: string;
+        };
+        BelgianTaxHouseholdTaxResult: {
+            /** @enum {integer} */
+            engineVersion: 2;
+            incomeYear: number;
+            assessment: components["schemas"]["BelgianTaxAssessmentDecision"];
+            partners: components["schemas"]["BelgianTaxPartnerTaxResult"][];
+            quotient: components["schemas"]["BelgianTaxMaritalQuotientResult"];
+            csss: components["schemas"]["BelgianTaxHouseholdCsssResult"];
+            propertyTaxEstimate: number;
+            totals: components["schemas"]["BelgianTaxHouseholdTotals"];
+            issues: components["schemas"]["BelgianTaxHouseholdTaxIssue"][];
+        };
+        BelgianTaxAssessmentDecision: {
+            /** @enum {string} */
+            mode: "single" | "separate" | "joint";
+            /** @enum {string} */
+            reason: "one_partner" | "no_legal_union" | "union_year" | "union_year_after_legal_cohabitation" | "union_in_force" | "factual_separation_year" | "factually_separated" | "dissolution_year" | "dissolved" | "death_year" | "death_year_joint_election" | "surviving_partner" | "treaty_exempt_income" | "legacy_assumed_joint";
+            /** @description Article the decision rests on, e.g. "WIB 92 art. 126 §2 al. 1, 1°". */
+            legalBasis: string;
+            /** @description True when the taxpayer may elect the other mode (year of death, art. 126 §3). */
+            electable?: boolean;
+            /** @description Partners assessed for the year (the survivor only after a death in an earlier year). */
+            partnerIds: ("A" | "B")[];
+        };
+        BelgianTaxPartnerTaxResult: {
+            /** @enum {string} */
+            partnerId: "A" | "B";
+            activities: components["schemas"]["BelgianTaxActivityTaxResult"][];
+            categories: components["schemas"]["BelgianTaxCategoryTaxResult"][];
+            /** @description Gross income of the activities that carry a gross figure (not `net_professional_amount`). */
+            grossIncome: number;
+            employeeSocialSecurity: number;
+            professionalExpenses: number;
+            unionDuesApplied: number;
+            netProfessionalIncome: number;
+            otherTaxableIncome: number;
+            alimonyDeduction: number;
+            /** @description Net professional + other income − alimony, before the marital quotient. */
+            taxableIncomeBeforeQuotient: number;
+            /** @description Positive when the quotient adds income to this partner, negative when it removes some. */
+            quotientAdjustment: number;
+            taxableIncome: number;
+            bracketTax: components["schemas"]["BelgianTaxBracketTax"];
+            exemption: components["schemas"]["BelgianTaxExemptionAllocation"];
+            exemptionBenefit: number;
+            pitAfterExemption: number;
+            reductions: components["schemas"]["BelgianTaxTaxReductionBreakdown"];
+            /** @enum {string} */
+            ownHomeCreditRegime: "none" | "flemish_woonbonus" | "walloon_cheque_habitat";
+            ownHomeCredit: number;
+            /** @description Reduction for pensions of this partner (WIB 92 arts 147-153, per spouse by art. 150). */
+            pensionReduction: number;
+            /**
+             * @description Reductions charged on this partner's tax: min(pension reduction + reductions + own-home
+             *     credit, tax).
+             */
+            reductionsApplied: number;
+            federalPITAfterReductions: number;
+            communalSurcharge: number;
+            totalPIT: number;
+            specialSocialSecurityContribution: number;
+            csssSubject: boolean;
+            dividendWhtReclaim: number;
+            savingsInterestTax: number;
+            marginalRate: number;
+        };
+        BelgianTaxActivityTaxResult: {
+            activityId: string;
+            /** @enum {string} */
+            kind: "employee" | "civil_servant" | "director" | "self_employed_profits" | "self_employed_fees" | "helping_spouse" | "pension" | "other_professional" | "net_professional_amount";
+            /** @enum {string} */
+            forfaitCategory: "director" | "helping_spouse" | "remuneration" | "profits" | "fees" | "none";
+            grossIncome: number;
+            employeeSocialSecurity: number;
+            /** @description Self-employed social contributions deducted before the forfait (art. 52, 7°). */
+            socialContributionsPaid: number;
+            /** @description Category expenses allocated pro rata to this activity. */
+            professionalExpenses: number;
+            netProfessionalIncome: number;
+        };
+        BelgianTaxCategoryTaxResult: {
+            /** @enum {string} */
+            category: "director" | "helping_spouse" | "remuneration" | "profits" | "fees" | "none";
+            /** @enum {string} */
+            method: "lump_sum" | "actual";
+            grossAfterContributions: number;
+            professionalExpenses: number;
+            unionDuesApplied: number;
+            /** @description Category net income, clamped at 0 (no loss offset). */
+            netIncome: number;
+        };
+        BelgianTaxBracketTax: {
+            b1: number;
+            b2: number;
+            b3: number;
+            b4: number;
+            total: number;
+        };
+        BelgianTaxExemptionAllocation: {
+            basic: number;
+            disability: number;
+            dependentSupplements: number;
+            isolatedParentSupplement: number;
+            /** @description basic + disability + dependentSupplements + isolatedParentSupplement. */
+            ownTotal: number;
+            /** @description Unused exemption received from the other spouse (joint assessment). */
+            transferredIn: number;
+            /** @description Unused exemption passed to the other spouse (joint assessment). */
+            transferredOut: number;
+            /** @description ownTotal + transferredIn − transferredOut. */
+            total: number;
+            /** @description Part of `total` charged on the taxable income: min(total, taxable income). */
+            applied: number;
+        };
+        BelgianTaxTaxReductionBreakdown: {
+            pension: number;
+            lifeInsurance: number;
+            groupInsurance: number;
+            donations: number;
+            childcare: number;
+            domesticHelp: number;
+            serviceVouchers: number;
+            /** @description Sum of the reductions above, before the cap at the tax due (own-home credit excluded). */
+            total: number;
+        };
+        BelgianTaxMaritalQuotientResult: {
+            applied: boolean;
+            transfer: number;
+            /** @enum {string} */
+            fromPartnerId?: "A" | "B";
+            /** @enum {string} */
+            toPartnerId?: "A" | "B";
+            /** @description min(30% of the household professional income, cap). */
+            target: number;
+            cap: number;
+            /** @description Combined tax saving (0 when not applied). */
+            benefit: number;
+        };
+        BelgianTaxHouseholdCsssResult: {
+            /** @enum {string} */
+            scale: "single" | "joint" | "none";
+            /** @description Household base under joint assessment, otherwise the sum of each subject partner's base. */
+            base: number;
+            total: number;
+        };
+        BelgianTaxHouseholdTotals: {
+            /** @description Cash income: gross activity income, other taxable income and already-net amounts. */
+            grossIncome: number;
+            employeeSocialSecurity: number;
+            professionalExpenses: number;
+            netProfessionalIncome: number;
+            taxableIncome: number;
+            federalPITBeforeExemption: number;
+            personalExemptionBenefit: number;
+            taxReductions: number;
+            federalPITAfterReductions: number;
+            communalSurcharge: number;
+            totalPIT: number;
+            specialSocialSecurityContribution: number;
+            propertyTaxEstimate: number;
+            totalTaxBurden: number;
+            netTakeHome: number;
+            dividendWhtReclaim: number;
+            savingsInterestTax: number;
+            /** @description Refundable child tax credit (art. 134 §3); always 0 until the formula is sourced. */
+            refundableChildCredit: number;
+        };
+        BelgianTaxHouseholdTaxIssue: {
+            /** @enum {string} */
+            code: "relationship_dates_missing" | "treaty_exempt_separate_assessment" | "deceased_partner_not_assessed" | "director_contributions_not_deducted" | "forfait_category_aggregation_unverified" | "union_dues_outside_remuneration_claim" | "loss_offset_not_modelled" | "joint_reduction_allocation_unverified" | "csss_mixed_activity_base_unverified" | "refundable_child_credit_not_modelled" | "isolated_parent_supplement_not_granted" | "senior_quotient_cap_birth_years_missing" | "woonbonus_children_at_loan_start_missing" | "pension_reduction_activity_income_not_excluded" | "pension_exclusion_other_income_counted_as_activity" | "pension_quotient_partial_exclusion_unverified" | "donation_joint_ceiling_unverified" | "mortgage_region_not_used";
+            /** @enum {string} */
+            severity: "info" | "warning" | "needs_source";
+            /** @enum {string} */
+            partnerId?: "A" | "B";
+            activityId?: string;
+        };
+        BelgianTaxCalculation: {
+            /** @description The taxpayer's own gross income (salary + other taxable income). */
+            grossIncome: number;
+            /**
+             * @description Spouse's professional income counted under a joint assessment (0 otherwise).
+             *     `totalPIT` and the special social security contribution cover both spouses, so
+             *     `householdGrossIncome`, `netTakeHome` and `effectiveRate` include it.
+             */
+            spouseProfessionalIncome: number;
+            /** @description `grossIncome + spouseProfessionalIncome`; the base of `netTakeHome` and `effectiveRate`. */
+            householdGrossIncome: number;
+            employeeSocialSecurity: number;
+            specialSocialSecurityContribution: number;
+            personalExemptionAmount: number;
+            netIncomeAfterSS: number;
+            professionalExpenses: number;
+            otherDeductionsTotal: number;
+            deductions: {
+                [key: string]: number;
+            };
+            taxableIncome: number;
+            federalPITBracket1: number;
+            federalPITBracket2: number;
+            federalPITBracket3: number;
+            federalPITBracket4: number;
+            /** @description Federal PIT before any reduction (exemption, credits). */
+            federalPITBeforeExemption: number;
+            personalExemptionBenefit: number;
+            federalTaxCredits: number;
+            /**
+             * @description Regime applied for own-home credit, if any.
+             * @enum {string}
+             */
+            ownHomeCreditRegime: "none" | "flemish_woonbonus" | "walloon_cheque_habitat";
+            /** @description Estimated regional own-home tax credit (Flemish woonbonus / Walloon chèque habitat). */
+            ownHomeCredit: number;
+            /** @description Sum of reductions actually applied to PIT (clamped — never exceeds gross PIT). */
+            taxReductions: number;
+            /**
+             * @description Reduction for pensions (WIB 92 arts 147-153), part of `federalTaxCredits`. Absent on
+             *     calculations frozen before 2026-10-11.
+             */
+            pensionReduction?: number;
+            federalPITAfterReductions: number;
+            communalSurcharge: number;
+            /** @description Federal PIT after reductions + communal surcharge (income tax only). */
+            totalPIT: number;
+            /** @description Income tax + social security + special SS contribution + property tax estimate. */
+            totalTaxBurden: number;
+            effectiveRate: number;
+            marginalRate: number;
+            netTakeHome: number;
+            monthlyTaxReserve: number;
+            propertyTaxEstimate: number;
+            /** @description Estimated dividend WHT reclaimable through the tax return (first €X of dividends). */
+            dividendWhtReclaim: number;
+            /** @description Estimated savings deposit interest non-recoverable tax (15% above exemption). */
+            savingsInterestTax: number;
+            /**
+             * @description Income transferred to the non-earning / lower-earning spouse under the marital quotient.
+             *     0 when filing status is single or when both spouses earn comparably.
+             */
+            maritalQuotientTransfer: number;
+            /** @description Estimated tax reduction attributable to the marital quotient (informational). */
+            maritalQuotientBenefit: number;
+            /** @description Estimated service-voucher regional credit (after marital quotient). */
+            serviceVoucherCredit: number;
+            breakdown: {
+                /**
+                 * @description English calculation-side label. Not a display string: the on-screen
+                 *     PIT table renders its own translated rows (`tax.pit.row.*`). Consumers
+                 *     that do surface a row translate it themselves.
+                 */
+                label: string;
+                amount: number;
+                rate?: number;
+                bracket?: string;
+                /**
+                 * @description 1-based bracket ordinal, present only on progressive-bracket rows.
+                 *     Carried explicitly because empty brackets are omitted from the array,
+                 *     so position does not imply the bracket number. Maps to the
+                 *     `tax.pit.row.bracket{n}` translation keys.
+                 */
+                bracketNumber?: number;
+            }[];
+        };
+        /** @description V2 household; accepts the same fields and limits as belgian_tax_household_v2 settings. Partner and activity IDs must be unique, partner A is required, partner references must exist, and pensionKind/netProfessionalIncome are restricted to their matching activity kinds. */
+        BelgianTaxHouseholdInput: {
+            /** @enum {integer} */
+            version: 2;
+            taxYear: number;
+            profileConfigured: boolean;
+            /** @enum {string} */
+            region: "flanders" | "wallonia" | "brussels";
+            communalSurchargePercent: number;
+            partners: components["schemas"]["BelgianTaxInputPartner"][];
+            relationship: components["schemas"]["BelgianTaxInputRelationship"];
+            dependents: components["schemas"]["BelgianTaxInputDependents"];
+            home: components["schemas"]["BelgianTaxInputHome"];
+            taxIncomeCategoryIds?: number[];
+            migratedFrom?: components["schemas"]["BelgianTaxInputMigratedFrom"];
+        } & {
+            [key: string]: unknown;
+        };
+        BelgianTaxComputation: {
+            result: components["schemas"]["BelgianTaxHouseholdTaxResult"];
+            calculation: components["schemas"]["BelgianTaxCalculation"];
+        };
+        BelgianTaxInputPartnerActivity: {
+            id: string;
+            /** @enum {string} */
+            kind: "employee" | "civil_servant" | "director" | "self_employed_profits" | "self_employed_fees" | "helping_spouse" | "pension" | "other_professional" | "net_professional_amount";
+            label?: string;
+            grossIncome: number;
+            netProfessionalIncome?: number;
+            /** @enum {string} */
+            pensionKind?: "statutory_from_legal_age" | "survivor_or_transition" | "other";
+            /** Format: date */
+            startDate?: string;
+            /** Format: date */
+            endDate?: string;
+            /** @enum {string} */
+            selfEmployedOccupation?: "main" | "secondary";
+            socialContributionsPaid?: number;
+            withholdingTax?: number;
+            prepayments?: number;
+            sourceRefs?: string[];
+        } & {
+            [key: string]: unknown;
+        };
+        BelgianTaxInputPartnerReductions: {
+            personalPensionContributions: number;
+            /** @enum {string} */
+            pensionScheme?: "1050" | "1350";
+            pensionEligible?: boolean;
+            lifeInsurancePremiums: number;
+            lifeInsuranceEligible?: boolean;
+            employeeGroupInsuranceContributions?: number;
+            employeeGroupInsuranceEligible?: boolean;
+            charitableDonations: number;
+            charitableDonationsEligible?: boolean;
+            childcareCosts: number;
+            childcareEligibleDays?: number;
+            childcareEligible?: boolean;
+            domesticHelpCosts?: number;
+            domesticHelpEligible?: boolean;
+            serviceVoucherCount?: number;
+            serviceVoucherSpend?: number;
+            serviceVoucherEligible?: boolean;
+            medicalExpenses: number;
+        } & {
+            [key: string]: unknown;
+        };
+        BelgianTaxInputPartner: {
+            /** @enum {string} */
+            id: "A" | "B";
+            displayName?: string;
+            birthYear?: number;
+            isDisabled: boolean;
+            isIsolatedParent?: boolean;
+            activities: components["schemas"]["BelgianTaxInputPartnerActivity"][];
+            professionalExpenses: {
+                [key: string]: {
+                    /** @enum {string} */
+                    method: "lump_sum" | "actual";
+                    actualAmount: number;
+                } & {
+                    [key: string]: unknown;
+                };
+            };
+            unionDues: number;
+            otherTaxableIncome: number;
+            alimonyPaid: number;
+            treatyExemptProfessionalIncome?: number;
+            reductions: components["schemas"]["BelgianTaxInputPartnerReductions"];
+            annualDividendIncome?: number;
+            annualSavingsInterest?: number;
+        } & {
+            [key: string]: unknown;
+        };
+        BelgianTaxInputRelationshipEvent: {
+            id: string;
+            /** @enum {string} */
+            kind: "marriage" | "legal_cohabitation" | "legal_cohabitation_ended" | "factual_cohabitation_start" | "factual_separation" | "divorce" | "death";
+            /** Format: date */
+            date: string;
+            /** @enum {string} */
+            partnerId?: "A" | "B";
+        } & {
+            [key: string]: unknown;
+        };
+        BelgianTaxInputRelationship: {
+            events: components["schemas"]["BelgianTaxInputRelationshipEvent"][];
+            /** @enum {string} */
+            deathYearElection?: "joint" | "separate";
+            legacyAssumedJoint?: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        BelgianTaxInputDependents: {
+            children: number;
+            childrenUnder3?: number;
+            childrenDisabled?: number;
+            otherPersons: number;
+            otherPersonsDisabled?: number;
+            /** @enum {string} */
+            claimantPartnerId?: "A" | "B";
+        } & {
+            [key: string]: unknown;
+        };
+        BelgianTaxInputHomeAdditionalResidence: {
+            label?: string;
+            cadastralIncome: number;
+            /** @enum {string} */
+            region?: "flanders" | "wallonia" | "brussels";
+            isOwnHome?: boolean;
+            centimesOverride?: number;
+        } & {
+            [key: string]: unknown;
+        };
+        BelgianTaxInputHome: {
+            cadastralIncome: number;
+            cadastralCentimesOverride?: number;
+            additionalResidences?: components["schemas"]["BelgianTaxInputHomeAdditionalResidence"][];
+            mortgageInterestPaid: number;
+            mortgageCapitalRepaid?: number;
+            mortgageStartYear?: number;
+            /** @enum {string} */
+            mortgageRegion?: "flanders" | "wallonia" | "brussels";
+            mortgageIsPrimaryResidence?: boolean;
+            /** @enum {string} */
+            mortgageCreditPartnerId?: "A" | "B";
+            mortgageSharePartnerB?: number;
+            firstQualifyingYear?: number;
+            woonbonusChildrenAtLoanStart?: number;
+        } & {
+            [key: string]: unknown;
+        };
+        BelgianTaxInputMigratedFromUnmappedField: {
+            field: string;
+            note: string;
+            value?: unknown;
+        } & {
+            [key: string]: unknown;
+        };
+        BelgianTaxInputMigratedFrom: {
+            /** @enum {number} */
+            fromVersion: 1;
+            unmappedFields: components["schemas"]["BelgianTaxInputMigratedFromUnmappedField"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /** @description Display calculation: current results contain every field. Frozen legacy calculations are returned verbatim and may lack fields introduced later; omitted figures must remain unavailable, never silently recomputed or filled with zero. */
+        BelgianTaxHistoricalCalculation: {
+            /** @description The taxpayer's own gross income (salary + other taxable income). */
+            grossIncome?: number;
+            /**
+             * @description Spouse's professional income counted under a joint assessment (0 otherwise).
+             *     `totalPIT` and the special social security contribution cover both spouses, so
+             *     `householdGrossIncome`, `netTakeHome` and `effectiveRate` include it.
+             */
+            spouseProfessionalIncome?: number;
+            /** @description `grossIncome + spouseProfessionalIncome`; the base of `netTakeHome` and `effectiveRate`. */
+            householdGrossIncome?: number;
+            employeeSocialSecurity?: number;
+            specialSocialSecurityContribution?: number;
+            personalExemptionAmount?: number;
+            netIncomeAfterSS?: number;
+            professionalExpenses?: number;
+            otherDeductionsTotal?: number;
+            deductions?: {
+                [key: string]: number;
+            };
+            taxableIncome?: number;
+            federalPITBracket1?: number;
+            federalPITBracket2?: number;
+            federalPITBracket3?: number;
+            federalPITBracket4?: number;
+            /** @description Federal PIT before any reduction (exemption, credits). */
+            federalPITBeforeExemption?: number;
+            personalExemptionBenefit?: number;
+            federalTaxCredits?: number;
+            /**
+             * @description Regime applied for own-home credit, if any.
+             * @enum {string}
+             */
+            ownHomeCreditRegime?: "none" | "flemish_woonbonus" | "walloon_cheque_habitat";
+            /** @description Estimated regional own-home tax credit (Flemish woonbonus / Walloon chèque habitat). */
+            ownHomeCredit?: number;
+            /** @description Sum of reductions actually applied to PIT (clamped — never exceeds gross PIT). */
+            taxReductions?: number;
+            /**
+             * @description Reduction for pensions (WIB 92 arts 147-153), part of `federalTaxCredits`. Absent on
+             *     calculations frozen before 2026-10-11.
+             */
+            pensionReduction?: number;
+            federalPITAfterReductions?: number;
+            communalSurcharge?: number;
+            /** @description Federal PIT after reductions + communal surcharge (income tax only). */
+            totalPIT: number;
+            /** @description Income tax + social security + special SS contribution + property tax estimate. */
+            totalTaxBurden?: number;
+            effectiveRate?: number;
+            marginalRate?: number;
+            netTakeHome?: number;
+            monthlyTaxReserve?: number;
+            propertyTaxEstimate?: number;
+            /** @description Estimated dividend WHT reclaimable through the tax return (first €X of dividends). */
+            dividendWhtReclaim?: number;
+            /** @description Estimated savings deposit interest non-recoverable tax (15% above exemption). */
+            savingsInterestTax?: number;
+            /**
+             * @description Income transferred to the non-earning / lower-earning spouse under the marital quotient.
+             *     0 when filing status is single or when both spouses earn comparably.
+             */
+            maritalQuotientTransfer?: number;
+            /** @description Estimated tax reduction attributable to the marital quotient (informational). */
+            maritalQuotientBenefit?: number;
+            /** @description Estimated service-voucher regional credit (after marital quotient). */
+            serviceVoucherCredit?: number;
+            breakdown?: {
+                /**
+                 * @description English calculation-side label. Not a display string: the on-screen
+                 *     PIT table renders its own translated rows (`tax.pit.row.*`). Consumers
+                 *     that do surface a row translate it themselves.
+                 */
+                label: string;
+                amount: number;
+                rate?: number;
+                bracket?: string;
+                /**
+                 * @description 1-based bracket ordinal, present only on progressive-bracket rows.
+                 *     Carried explicitly because empty brackets are omitted from the array,
+                 *     so position does not imply the bracket number. Maps to the
+                 *     `tax.pit.row.bracket{n}` translation keys.
+                 */
+                bracketNumber?: number;
+            }[];
+        };
+        BelgianTaxSettingsWarning: {
+            key: string;
+            /** @enum {string} */
+            kind: "invalid_stored" | "invalid_upgrade";
+            issues: string[];
+        };
+        BelgianTaxOverview: {
+            year: number;
+            liveYear: number;
+            isHistorical: boolean;
+            hasSnapshot: boolean;
+            hasProfile: boolean;
+            householdMigrationNeeded: boolean;
+            snapshotsMigrationNeeded: boolean;
+            storedValueInvalid: boolean;
+            household: components["schemas"]["BelgianTaxHouseholdInput"];
+            liveHousehold: components["schemas"]["BelgianTaxHouseholdInput"];
+            householdSnapshots: {
+                [key: string]: components["schemas"]["BelgianTaxHouseholdInput"];
+            };
+            snapshotMetas: {
+                [key: string]: {
+                    [key: string]: unknown;
+                };
+            };
+            metadata: {
+                [key: string]: unknown;
+            };
+            calculation: components["schemas"]["BelgianTaxHistoricalCalculation"];
+            result: components["schemas"]["BelgianTaxHouseholdTaxResult"];
+            /** @enum {string} */
+            calculationSource: "frozen" | "computed";
+            /** @enum {string} */
+            householdResultSource: "frozen" | "computed";
+            warnings: components["schemas"]["BelgianTaxSettingsWarning"][];
+            records: components["schemas"]["Setting"][];
+        };
+        /** @description Server-computed display totals. effectiveTaxRate is a percent; totalPIT is selected-year frozen-first. Historical realized/unrealized gains retain the web all-time holdings calculation. */
+        BelgianPortfolioTaxTotals: {
+            /** Format: double */
+            totalTaxes: number;
+            /** Format: double */
+            totalFees: number;
+            /** Format: double */
+            totalTaxesAndFees: number;
+            /** Format: double */
+            totalRecordedTaxes: number;
+            /** Format: double */
+            totalRecordedFees: number;
+            /** Format: double */
+            totalManualTaxes: number;
+            /** Format: double */
+            totalManualFees: number;
+            /** Format: double */
+            totalManualCosts: number;
+            /** Format: double */
+            totalRealizedGain: number;
+            /** Format: double */
+            totalUnrealizedGain: number;
+            /** Format: double */
+            effectiveTaxRate: number;
+            /** Format: double */
+            totalPIT: number;
+            /** Format: double */
+            portfolioTaxesPlusPIT: number;
+        };
+        BelgianPortfolioTaxCostEntry: {
+            nameKey: string;
+            /** Format: double */
+            value: number;
+        };
+        BelgianPortfolioTaxAssetCosts: {
+            assetClass: string;
+            /** Format: double */
+            taxes: number;
+            /** Format: double */
+            fees: number;
+            /** Format: double */
+            total: number;
+        };
+        /** @description realizedGain and all cost amounts are already expressed in the response currency; assetClass is the untranslated localization suffix. */
+        BelgianPortfolioTaxInvestmentCosts: {
+            id: number;
+            name: string;
+            symbol: string | null;
+            assetClass: string;
+            /** Format: double */
+            recordedTaxes: number;
+            /** Format: double */
+            recordedFees: number;
+            /** Format: double */
+            manualTaxes: number;
+            /** Format: double */
+            manualFees: number;
+            /** Format: double */
+            taxes: number;
+            /** Format: double */
+            fees: number;
+            /** Format: double */
+            total: number;
+            /** Format: double */
+            realizedGain: number;
+            currency: string;
+        };
+        /** @description YYYY-MM ordinary-transaction costs, including zero-cost months with transactions. Manual adjustments are excluded. */
+        BelgianPortfolioTaxMonthlyCosts: {
+            period: string;
+            /** Format: double */
+            taxes: number;
+            /** Format: double */
+            fees: number;
+        };
+        /** @description Unknown ordinary dividend conventions leave gross base, reclaim, and net cost null. Included-in-units dividends are excluded; married reclaim uses a doubled exemption while dividendExemption is the single-taxpayer table value. */
+        BelgianPortfolioTaxDividend: {
+            /** Format: double */
+            totalDividendIncome: number;
+            /** Format: double */
+            dividendWhtRecorded: number;
+            /** Format: double */
+            grossDividendWht: number;
+            /** Format: double */
+            dividendExemption: number;
+            /** Format: double */
+            grossDividendBase: number | null;
+            /** Format: double */
+            dividendWhtReclaim: number | null;
+            /** Format: double */
+            dividendWhtNetCost: number | null;
+            unknownDividendConventionCount: number;
+        };
+        BelgianPortfolioTaxEstimates: {
+            /** Format: double */
+            tobRecorded: number;
+            /** Format: double */
+            tobAutoEstimate: number;
+            /** Format: double */
+            tacrEstimate: number;
+            /** Format: double */
+            reyndersEstimate: number;
+            /** Format: double */
+            cgtEstimate: number;
+        };
+        /** @description Percent-valued display badges, computed by TypeScript from the fraction-valued rates. */
+        BelgianPortfolioTaxBadgePercent: {
+            /** Format: double */
+            securitiesAccountTaxRate: number;
+            /** Format: double */
+            capitalGainsTaxRate: number;
+            /** Format: double */
+            reyndersTaxRate: number;
+            /** Format: double */
+            dividendWHTRate: number;
+        };
+        BelgianPortfolioTaxRates: {
+            /** Format: double */
+            securitiesAccountTaxRate: number;
+            /** Format: double */
+            capitalGainsTaxRate: number;
+            /** Format: double */
+            reyndersTaxRate: number;
+            /** Format: double */
+            dividendWHTRate: number;
+            /** Format: double */
+            securitiesAccountTaxThreshold: number;
+            badgePercent: components["schemas"]["BelgianPortfolioTaxBadgePercent"];
+        };
+        BelgianPortfolioTaxSummary: {
+            id: number;
+            name: string;
+            symbol: string | null;
+            assetClass: string;
+            currency: string;
+        };
+        BelgianPortfolioTaxDashboard: {
+            year: number;
+            currency: string;
+            isEmpty: boolean;
+            hasProfile: boolean;
+            hasInKindIncomeUnclassified: boolean;
+            totals: components["schemas"]["BelgianPortfolioTaxTotals"];
+            taxBreakdown: components["schemas"]["BelgianPortfolioTaxCostEntry"][];
+            feeBreakdown: components["schemas"]["BelgianPortfolioTaxCostEntry"][];
+            taxByAssetClass: components["schemas"]["BelgianPortfolioTaxAssetCosts"][];
+            investmentBreakdown: components["schemas"]["BelgianPortfolioTaxInvestmentCosts"][];
+            yearlyCostTrend: components["schemas"]["BelgianPortfolioTaxMonthlyCosts"][];
+            dividend: components["schemas"]["BelgianPortfolioTaxDividend"];
+            estimates: components["schemas"]["BelgianPortfolioTaxEstimates"];
+            taxTable: components["schemas"]["BelgianPortfolioTaxRates"];
+            summaries: components["schemas"]["BelgianPortfolioTaxSummary"][];
+            records: components["schemas"]["Setting"][];
+        };
+        BelgianTaxDashboardYearCalculation: {
+            year: number;
+            calculation: components["schemas"]["BelgianTaxHistoricalCalculation"];
+            isFiled: boolean;
+            hasFrozenCalculation: boolean;
+            isCurrent: boolean;
+            hasSnapshot: boolean;
+            hasTransactions: boolean;
+        };
+        BelgianTaxDashboardYearlyIncome: {
+            year: string;
+            income: number;
+            estimatedTax: number;
+            netAfterTax: number;
+            isApproximated: boolean;
+        };
+        BelgianTaxDashboardMonthlyIncome: {
+            period: string;
+            income: number;
+            estimatedTax: number;
+        };
+        BelgianTaxDashboardRuleSection: {
+            titleKey: string;
+            itemKeys: string[];
+        };
+        BelgianTaxDashboardHouseholdRow: {
+            key: string;
+            /** @enum {string} */
+            tone: "base" | "reduction" | "adjustment" | "total";
+            partnerAmounts: {
+                [key: string]: number;
+            };
+            household: number;
+        };
+        BelgianTaxDashboard: {
+            year: number;
+            currency: string;
+            isHistorical: boolean;
+            hasIncomeSources: boolean;
+            hasStatsData: boolean;
+            isEmpty: boolean;
+            portfolioTaxesForYear: number;
+            totalTaxIncludingPortfolio: number;
+            totalTaxIncludingPropertyEstimate: number | null;
+            yearlyIncome: components["schemas"]["BelgianTaxDashboardYearlyIncome"][];
+            monthlyIncomeTax: components["schemas"]["BelgianTaxDashboardMonthlyIncome"][];
+            recordedIncomeByPartner: {
+                A: number;
+                B: number;
+            } | null;
+            yearCalculations: components["schemas"]["BelgianTaxDashboardYearCalculation"][];
+            /** @description Existing projected v1 profile for the viewed year; presentation only. The household remains the editable source. */
+            currentInputs: {
+                [key: string]: unknown;
+            };
+            /** @description Complete v1 projection for the existing input-column CSV format; includes fields omitted from the short current-inputs card. */
+            exportProfile: {
+                [key: string]: unknown;
+            };
+            suggestions: {
+                id: string;
+                titleKey: string;
+                descriptionKey: string;
+                descriptionParams?: {
+                    [key: string]: number;
+                };
+                estimate?: number;
+                noteKey?: string;
+            }[];
+            householdBreakdownRows: components["schemas"]["BelgianTaxDashboardHouseholdRow"][];
+            rules: components["schemas"]["BelgianTaxDashboardRuleSection"][];
         };
         Envelope: {
             ok: boolean;
@@ -4909,6 +5966,85 @@ export interface components {
                 offset: number;
             };
         };
+        /** @description Values as returned. PostgreSQL decimal and unsafe-integer strings remain strings; numeric workbook cells retain the existing parser conversion. */
+        AnalysisInterchangeValue: (string | number | boolean) | null;
+        AnalysisInterchangeColumn: {
+            id: string;
+            label: string;
+            /** @enum {string} */
+            type: "string" | "integer" | "decimal" | "boolean" | "date";
+        };
+        AnalysisInterchangeAttachment: {
+            id: string;
+            fileName: string;
+            /** Format: date-time */
+            importedAt: string;
+            sha256: string;
+            columns: components["schemas"]["AnalysisInterchangeColumn"][];
+            rows: {
+                [key: string]: components["schemas"]["AnalysisInterchangeValue"];
+            }[];
+        };
+        /** @description Read-only inferred scenario attachment. CSV uses a stable decoded-text SHA-derived identifier; XLSX uses a fresh workbook identifier and byte digest. Workbook formula cells are counted and become null, never executed. Units are unavailable after import. */
+        AnalysisInterchangeImport: {
+            /** @enum {string} */
+            format: "csv" | "xlsx";
+            attachment: components["schemas"]["AnalysisInterchangeAttachment"];
+            formulaCells: number;
+        };
+        /** @description UTF-8 JSON submitted as the multipart file. Preserve the captured result and context exactly. No query execution or recomputation occurs; unchanged-input/export availability checks remain caller-owned. */
+        AnalysisInterchangeExportPayload: {
+            result: {
+                requestId: string;
+                startedAt?: string;
+                completedAt: string;
+                executor?: string;
+                columns: ({
+                    id: string;
+                    type: string;
+                } & {
+                    [key: string]: unknown;
+                })[];
+                declaredColumns?: ({
+                    id: string;
+                    type: string;
+                    label?: string;
+                } & {
+                    [key: string]: unknown;
+                })[];
+                /** @description Original Analysis cells, including JSON/array columns, as returned; no currency conversion. */
+                rows: {
+                    [key: string]: unknown;
+                }[];
+                window: {
+                    [key: string]: unknown;
+                };
+                complete?: boolean;
+                coverage?: unknown;
+                transformationCoverage?: unknown;
+                preparationLineage?: unknown;
+                transformationErrors?: unknown;
+                formulaErrors?: unknown;
+                formulaSummaries?: {
+                    [key: string]: components["schemas"]["AnalysisInterchangeValue"];
+                };
+            } & {
+                [key: string]: unknown;
+            };
+            context: {
+                name: string;
+                timezone: string;
+                workspace: string;
+                definitionId?: string;
+                definitionVersion?: number;
+                datasetIds?: string[];
+                sourceReferences?: string[];
+                assumptions?: unknown;
+                formulas?: unknown;
+            } & {
+                [key: string]: unknown;
+            };
+        };
         AnalysisVisualFilter: {
             fieldId: string;
             operator: string;
@@ -5125,6 +6261,48 @@ export interface components {
         PortfolioSummaryItem: {
             /** Format: int32 */
             id: number;
+            name?: string;
+            symbol?: string | null;
+            asset_class?: string;
+            assetClass?: string;
+            currency?: string;
+            originalCurrency?: string;
+            summarySource?: string;
+            is_active?: boolean;
+            usedFallbackRate?: boolean;
+            gainLossPercent?: number;
+            interestRate?: number;
+            /** @description Ordinary history count on archivedPresentation; at most 1000 as in the existing web archive. */
+            transactionCount?: number;
+            currentPrice?: number;
+            currentValue?: number;
+            totalInvested?: number;
+            totalBuyCost?: number;
+            totalSellProceeds?: number;
+            totalFees?: number;
+            totalTaxes?: number;
+            totalDividends?: number;
+            totalIncome?: number;
+            avgCostBasis?: number;
+            realizedGain?: number;
+            unrealizedGain?: number;
+            totalGain?: number;
+            gainLoss?: number;
+            assetGain?: number;
+            fxGain?: number;
+            nativeCurrentValue?: number;
+            accruedInterest?: number;
+            projectedAnnualInterest?: number;
+            totalAppreciation?: number;
+            nativeCurrentPrice?: number;
+            nativeAvgCostBasis?: number;
+            unrealizedGainPercent?: number;
+            /** @description Latest ordinary rent amount displayed by the current RealEstatePage; retains its existing raw-amount interpretation rather than applying an additional FX conversion. */
+            estimatedMonthlyRent?: number;
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: date-time */
+            updated_at?: string;
             /** @description Current units including custody fees and unit adjustments, rounded to eight decimal places. */
             totalUnits?: number;
             /** @description Literal income already represented by acquired units, converted to the response currency. Separate from ordinary totalDividends/totalIncome and never added to gain again. Absence in an older response means zero. */
@@ -5158,18 +6336,35 @@ export interface components {
             unrealizedGain: number;
             gainLoss: number;
         };
+        PortfolioSummaryTotals: {
+            totalPortfolioValue: number;
+            totalInvested: number;
+            totalGainLoss: number;
+            totalRealizedGain: number;
+            totalUnrealizedGain: number;
+            totalGain: number;
+            totalIncome: number;
+            totalDividends: number;
+            totalInKindIncome: number;
+            totalFees: number;
+            totalTaxes: number;
+            totalAssetGain: number;
+            totalFxGain: number;
+            totalReturnPct: number;
+            usedFallbackRate: boolean;
+        };
         PortfolioSummaryData: {
             currency: string;
             /** Format: date-time */
             computed_at: string;
-            totals: {
-                /** @description Dividend share of ordinary income summed across active holdings, at transaction-date FX. Excludes in-kind income. */
-                totalDividends?: number;
-                /** @description Sum of active holdings' in-kind income, excluded from ordinary income and gains. Absence in an older response means zero. */
-                totalInKindIncome?: number;
-            } & {
-                [key: string]: number;
-            };
+            /**
+             * Format: date
+             * @description Earliest ordinary transaction on active investments, independent of selected performance chart period and investment creation dates. Custody/adjustment event dates and inactive investments are excluded. Omitted when no qualifying transaction exists.
+             */
+            firstInvestmentDate?: string;
+            totals: components["schemas"]["PortfolioSummaryTotals"];
+            /** @description Inactive-only presentation matching the web archive's ordinary CRUD replay and current quote FX. Supplied when active=false, separate from canonical dated-FX summaries/totals. In-kind income remains canonical dated data; broker byAccount remains a separate canonical snapshot. */
+            archivedPresentation?: components["schemas"]["PortfolioSummaryItem"][];
             summaries: components["schemas"]["PortfolioSummaryItem"][];
             byAccount: components["schemas"]["PortfolioSummaryByAccountItem"][];
             /** @description Imported, source-owned account fees without an instrument, converted at transaction-date rates and counted once per canonical cash transaction. Separate from investment totals, cost basis and return series. Optional for compatibility with older responses; absence means unavailable. */
@@ -5193,6 +6388,251 @@ export interface components {
         PortfolioSummaryEnvelope: components["schemas"]["Envelope"] & {
             data?: components["schemas"]["PortfolioSummaryData"];
         };
+        MarketSearchData: {
+            items: components["schemas"]["MarketSearchResult"][];
+        };
+        MarketQuoteItem: {
+            symbol: string;
+            currency: string;
+            name?: string | null;
+            exchange?: string | null;
+            type?: string | null;
+            price?: number | null;
+            change?: number | null;
+            changePercent?: number | null;
+            open?: number | null;
+            dayHigh?: number | null;
+            dayLow?: number | null;
+            prevClose?: number | null;
+            volume?: number | null;
+            avgVolume?: number | null;
+            high52w?: number | null;
+            low52w?: number | null;
+            analystConsensus?: components["schemas"]["ResearchAnalystConsensus"];
+            recentAnalystActions?: {
+                [key: string]: unknown;
+            }[];
+        } & {
+            [key: string]: unknown;
+        };
+        MarketQuoteData: {
+            items: components["schemas"]["MarketQuoteItem"][];
+            total: number;
+        };
+        MarketNewsItem: {
+            title?: string | null;
+            link?: string | null;
+            publisher?: string | null;
+            publishedAt: number | null;
+            thumbnail: string | null;
+            relatedSymbols: string[];
+        };
+        MarketNewsData: {
+            items: components["schemas"]["MarketNewsItem"][];
+            total: number;
+        };
+        WatchlistData: {
+            items: components["schemas"]["WatchlistItem"][];
+            total: number;
+            limit: number;
+            offset: number;
+        };
+        InvestmentPriceHistoryPoint: {
+            timestampMs: number;
+            price: number;
+        };
+        InvestmentPriceHistoryData: {
+            investment_id: number;
+            provider: string;
+            points: components["schemas"]["InvestmentPriceHistoryPoint"][];
+        };
+        /** @description Timestamp plus submitted-series/indicator identifiers. Missing provider volume fields may be absent; non-finite derived values serialize as null. */
+        ResearchPresentationRow: {
+            time: number;
+        } & {
+            [key: string]: number | null;
+        };
+        ResearchPresentationCompareResult: {
+            rows: components["schemas"]["ResearchPresentationRow"][];
+            stats: {
+                symbol: string;
+                totalReturn: number | null;
+                volatility: number | null;
+                maxDrawdown: number | null;
+                firstTime?: number;
+                lastTime?: number;
+            }[];
+            correlation: {
+                symbols: string[];
+                matrix: (number | null)[][];
+            };
+        };
+        ResearchPresentationChartResult: {
+            rows: components["schemas"]["ResearchPresentationRow"][];
+            oscillatorRows: components["schemas"]["ResearchPresentationRow"][];
+        };
+        ResearchPresentationWatchlistList: {
+            distancePercent: number | null;
+            absoluteDistancePercent: number | null;
+            isAtOrBelowTarget: boolean;
+            sinceAddedPercent: number | null;
+        };
+        ResearchPresentationWatchlistResult: {
+            list: components["schemas"]["ResearchPresentationWatchlistList"];
+            chart: {
+                distancePercent: number | null;
+                absoluteDistancePercent: number | null;
+                isAtOrBelowTarget: boolean;
+                hasValidTarget: boolean;
+                domain: number[];
+            };
+            preview: {
+                absolutePercent: number;
+                /** @enum {string} */
+                direction: "below" | "above";
+            } | null;
+        };
+        ResearchPresentationWatchlistBatchResult: {
+            entries: {
+                id: number;
+                list: components["schemas"]["ResearchPresentationWatchlistList"];
+            }[];
+        };
+        ResearchPresentationAnalystResult: {
+            total: number;
+            bullFraction: number;
+            bearFraction: number;
+            /** @enum {string} */
+            verdictKey: "market.strongBuy" | "market.buy" | "market.hold" | "market.sell" | "market.strongSell";
+            /** @enum {string} */
+            tone: "success" | "destructive" | "warning";
+            fractions: components["schemas"]["ResearchAnalystConsensus"];
+        } | null;
+        ResearchPresentationProviderQuoteResult: {
+            symbol: string;
+            name: string;
+            price?: number | null;
+            change: number | null;
+            changePercent: number | null;
+            currency: string;
+            exchange: string;
+            type: string;
+        } | null;
+        ResearchPresentationMarketAddResult: {
+            derivedAmount?: number | null;
+            derivedUnits?: number | null;
+            derivedPrice?: number | null;
+            effectiveAmount?: number | null;
+            effectiveUnits?: number | null;
+            effectivePrice?: number | null;
+            providedCount: number;
+            isConsistent: boolean;
+        };
+        ResearchLifeScenario: {
+            id: string;
+            /** @enum {string} */
+            kind?: "income_interruption";
+            /** @enum {integer} */
+            interruptionMonths: 3;
+            monthlySurplus: number;
+            monthlyIncomeLoss: number;
+            monthlyContribution: number;
+            goalValue?: number;
+            name?: string;
+            goalDate?: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** @description Immediate camelCase forecast input. Only horizon is validated here. monthlyContribution, targetValue, goalMonth and seed are overwritten from the scenario, so malformed discarded main money values do not block a valid scenario. Other fields pass through unchanged; the existing forecast request adapter/route retains its own normalization and validation. */
+        ResearchLifeScenarioForecastInput: {
+            horizonMonths: number;
+        } & {
+            [key: string]: unknown;
+        };
+        ResearchLifeScenarioPreparedInput: {
+            horizonMonths: number;
+            monthlyContribution: number;
+            targetValue?: number;
+            goalMonth?: number;
+            seed: string;
+        } & {
+            [key: string]: unknown;
+        };
+        ResearchLifeScenarioPrepareResult: {
+            baselineInput: components["schemas"]["ResearchLifeScenarioPreparedInput"];
+            interruptedInput: components["schemas"]["ResearchLifeScenarioPreparedInput"] & {
+                monthlyContributionSchedule: number[];
+            };
+            goalMonth?: number;
+            reducedContribution: number;
+            monthlyDeficit: number;
+        };
+        ResearchLifeScenarioCompareResult: {
+            comparable: boolean;
+            available: boolean;
+            medianGap: number | null;
+            /** @enum {string|null} */
+            errorKey: "research.lifeScenario.inputsChanged" | null;
+        };
+        /** @description Uploaded JSON discriminated by kind. compare requires series[{symbol,points}] (max 6). chart requires series[{id,field,type,points}] (max 5), indicators[{id,type,period,seriesId}] (max 20, period 1..500), rebase, oscillator and nullable oscillatorSeriesId. watchlist requires nullable targetPrice/currentPrice/addedPrice and optional points. watchlistBatch requires entries[{id,targetPrice,currentPrice,addedPrice}] (max 5000). providerQuote requires points and investment{name,currency,symbol?,priceProvider?}, with optional selectedSymbol. analyst requires nullable consensus with all five numeric count fields. marketAdd accepts positive amount/units/price and optional derive (default true). lifeScenarioPrepare requires scenario, forecastInput and optional nullable goalMonth; contribution must not exceed surplus, and a dated goal pairs a positive goalValue with goalMonth within horizon. lifeScenarioCompare requires baseline/interrupted raw forecasts and checks exactly five market-input fields with strict missing/null semantics. Points require time, with optional nullable numeric close/high/low/volume. There is no point-count truncation; transport is bounded. */
+        ResearchPresentationSnapshot: {
+            /** @enum {string} */
+            kind: "compare" | "chart" | "watchlist" | "watchlistBatch" | "providerQuote" | "analyst" | "marketAdd" | "lifeScenarioPrepare" | "lifeScenarioCompare";
+            scenario?: components["schemas"]["ResearchLifeScenario"];
+            forecastInput?: components["schemas"]["ResearchLifeScenarioForecastInput"];
+            goalMonth?: number | null;
+            baseline?: components["schemas"]["ResearchPortfolioForecastData"];
+            interrupted?: components["schemas"]["ResearchPortfolioForecastData"];
+            series?: {
+                symbol?: string;
+                id?: string;
+                /** @enum {string} */
+                field?: "price" | "volume";
+                /** @enum {string} */
+                type?: "line" | "area" | "candlestick" | "bar";
+                points?: components["schemas"]["ResearchChartPoint"][];
+            }[];
+            indicators?: {
+                id: string;
+                /** @enum {string} */
+                type: "sma" | "ema" | "bollinger";
+                period: number;
+                seriesId: string;
+            }[];
+            rebase?: boolean;
+            /** @enum {string} */
+            oscillator?: "none" | "rsi" | "macd";
+            oscillatorSeriesId?: string | null;
+            targetPrice?: number | null;
+            currentPrice?: number | null;
+            addedPrice?: number | null;
+            points?: components["schemas"]["ResearchChartPoint"][];
+            entries?: {
+                id: number;
+                targetPrice: number;
+                currentPrice: number | null;
+                addedPrice: number | null;
+            }[];
+            investment?: {
+                symbol?: string | null;
+                name: string;
+                currency: string;
+                priceProvider?: string | null;
+            };
+            selectedSymbol?: string | null;
+            consensus?: components["schemas"]["ResearchAnalystConsensus"];
+            amount?: number;
+            units?: number;
+            price?: number;
+            /** @default true */
+            derive: boolean;
+        };
+        /** @description result shape is determined by the echoed kind; unavailable analyst/providerQuote results are null. */
+        ResearchPresentationData: {
+            /** @enum {string} */
+            kind: "compare" | "chart" | "watchlist" | "watchlistBatch" | "providerQuote" | "analyst" | "marketAdd" | "lifeScenarioPrepare" | "lifeScenarioCompare";
+            result: (components["schemas"]["ResearchPresentationCompareResult"] | components["schemas"]["ResearchPresentationChartResult"] | components["schemas"]["ResearchPresentationWatchlistResult"] | components["schemas"]["ResearchPresentationWatchlistBatchResult"] | components["schemas"]["ResearchPresentationProviderQuoteResult"] | components["schemas"]["ResearchPresentationAnalystResult"] | components["schemas"]["ResearchPresentationMarketAddResult"] | components["schemas"]["ResearchLifeScenarioPrepareResult"] | components["schemas"]["ResearchLifeScenarioCompareResult"]) | null;
+        };
         ResearchMeta: {
             provider: string | null;
             /** @enum {string} */
@@ -5200,42 +6640,42 @@ export interface components {
             requestId?: string;
         };
         ResearchSearchItem: {
-            symbol: string;
-            name?: string;
-            type?: string;
-            exchange?: string;
+            symbol?: string | null;
+            name?: string | null;
+            type?: string | null;
+            exchange?: string | null;
         };
         ResearchSearchData: {
             items: components["schemas"]["ResearchSearchItem"][];
         };
         ResearchQuote: {
             symbol: string;
-            name?: string;
-            price: number;
-            change?: number;
-            changePercent?: number;
-            currency?: string;
-            exchange?: string;
-            type?: string;
-            open?: number;
-            dayHigh?: number;
-            dayLow?: number;
-            prevClose?: number;
-            volume?: number;
-            avgVolume?: number;
-            high52w?: number;
-            low52w?: number;
+            name?: string | null;
+            price?: number | null;
+            change?: number | null;
+            changePercent?: number | null;
+            currency?: string | null;
+            exchange?: string | null;
+            type?: string | null;
+            open?: number | null;
+            dayHigh?: number | null;
+            dayLow?: number | null;
+            prevClose?: number | null;
+            volume?: number | null;
+            avgVolume?: number | null;
+            high52w?: number | null;
+            low52w?: number | null;
         };
         ResearchChartPoint: {
             time: number;
-            close: number;
-            high?: number;
-            low?: number;
-            volume?: number;
+            close?: number | null;
+            high?: number | null;
+            low?: number | null;
+            volume?: number | null;
         };
         ResearchChartData: {
             symbol?: string;
-            currency?: string;
+            currency?: string | null;
             points: components["schemas"]["ResearchChartPoint"][];
         };
         ResearchFundamentals: {
@@ -5426,12 +6866,12 @@ export interface components {
         ResearchForecastPoint: {
             monthIndex: number;
             date: string;
-            netInvested: number;
-            p10: number;
-            p25: number;
-            p50: number;
-            p75: number;
-            p90: number;
+            netInvested: number | null;
+            p10: number | null;
+            p25: number | null;
+            p50: number | null;
+            p75: number | null;
+            p90: number | null;
         };
         ResearchForecastForwardHolding: {
             symbol: string;
@@ -5440,13 +6880,14 @@ export interface components {
             dividendYield?: number;
         };
         ResearchForecastProjected: {
-            mean: number;
-            p10: number;
-            p25: number;
-            p50: number;
-            p75: number;
-            p90: number;
+            mean: number | null;
+            p10: number | null;
+            p25: number | null;
+            p50: number | null;
+            p75: number | null;
+            p90: number | null;
         };
+        /** @description available=false contains a reason and optional historyDays. Computed monetary fields can serialize null on numeric overflow. Such an available response is rejected by the maintained PortfolioForecastSchema/native client validity guard; nullable wire representation never authorizes invented zero values or a comparison. */
         ResearchPortfolioForecastData: {
             available: boolean;
             /** @enum {string} */
@@ -5462,11 +6903,11 @@ export interface components {
             lowConfidence?: boolean;
             startValue?: number;
             startInvested?: number;
-            monthlyContribution?: number;
+            monthlyContribution?: number | null;
             /** @description Month at which target probability is evaluated */
             goalMonth?: number;
-            totalContributions?: number;
-            netInvested?: number;
+            totalContributions?: number | null;
+            netInvested?: number | null;
             expectedAnnualReturn?: number;
             historicalAnnualReturn?: number;
             annualVolatility?: number;
@@ -6079,35 +7520,95 @@ export interface components {
         Investment: {
             id: number;
             name: string;
-            symbol?: string;
+            symbol?: string | null;
             asset_class: components["schemas"]["AssetClass"];
             currency: string;
-            current_price?: number;
-            interest_rate?: number;
+            current_price?: number | null;
+            interest_rate?: number | null;
             /** Format: date */
-            maturity_date?: string;
-            location?: string;
-            municipality?: string;
-            cadastral_income?: number;
-            municipality_tax_rate?: number;
-            notes?: string;
+            maturity_date?: string | null;
+            location?: string | null;
+            municipality?: string | null;
+            cadastral_income?: number | null;
+            municipality_tax_rate?: number | null;
+            notes?: string | null;
             price_provider: components["schemas"]["PriceProvider"];
-            price_provider_id?: string;
-            price_provider_url?: string;
-            price_provider_latest_url?: string;
-            price_provider_latest_path?: string;
-            price_provider_history_url?: string;
-            price_provider_history_path?: string;
-            price_provider_history_ts_path?: string;
-            price_provider_history_price_path?: string;
+            price_provider_id?: string | null;
+            price_provider_url?: string | null;
+            price_provider_latest_url?: string | null;
+            price_provider_latest_path?: string | null;
+            price_provider_history_url?: string | null;
+            price_provider_history_path?: string | null;
+            price_provider_history_ts_path?: string | null;
+            price_provider_history_price_path?: string | null;
             /** Format: date-time */
-            price_updated_at?: string;
+            price_updated_at?: string | null;
             is_active: boolean;
             show_in_ticker: boolean;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
             updated_at: string;
+        };
+        InvestmentCreateRequest: {
+            name: string;
+            symbol?: string | null;
+            /** @description Asset class is immutable on updates; the existing value may be resubmitted. */
+            asset_class: string;
+            /** @description Trimmed and normalized uppercase. Omit on create for EUR; cannot be cleared. */
+            currency?: string;
+            current_price?: number | null;
+            interest_rate?: number | null;
+            cadastral_income?: number | null;
+            municipality_tax_rate?: number | null;
+            /** Format: date */
+            maturity_date?: string | null;
+            location?: string | null;
+            municipality?: string | null;
+            notes?: string | null;
+            price_provider?: string | null;
+            price_provider_id?: string | null;
+            price_provider_url?: string | null;
+            price_provider_latest_url?: string | null;
+            price_provider_latest_path?: string | null;
+            price_provider_history_url?: string | null;
+            price_provider_history_path?: string | null;
+            price_provider_history_ts_path?: string | null;
+            price_provider_history_price_path?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        InvestmentUpdateRequest: {
+            name?: string;
+            symbol?: string | null;
+            /** @description Asset class is immutable on updates; the existing value may be resubmitted. */
+            asset_class?: components["schemas"]["AssetClass"];
+            /** @description Trimmed and normalized uppercase. Omit on create for EUR; cannot be cleared. */
+            currency?: string;
+            current_price?: number | null;
+            interest_rate?: number | null;
+            cadastral_income?: number | null;
+            municipality_tax_rate?: number | null;
+            /** Format: date */
+            maturity_date?: string | null;
+            location?: string | null;
+            municipality?: string | null;
+            notes?: string | null;
+            price_provider?: string | null;
+            price_provider_id?: string | null;
+            price_provider_url?: string | null;
+            price_provider_latest_url?: string | null;
+            price_provider_latest_path?: string | null;
+            price_provider_history_url?: string | null;
+            price_provider_history_path?: string | null;
+            price_provider_history_ts_path?: string | null;
+            price_provider_history_price_path?: string | null;
+            is_active?: boolean;
+            show_in_ticker?: boolean;
+            /** Format: date-time */
+            price_updated_at?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         InvestmentList: components["schemas"]["PaginationFields"] & {
             items: components["schemas"]["Investment"][];
@@ -6549,10 +8050,30 @@ export interface components {
             toolResult?: {
                 [key: string]: unknown;
             } | null;
+            toolPresentation?: components["schemas"]["AiToolPresentation"];
             /** @enum {string} */
             status: "complete" | "streaming" | "aborted" | "error";
             /** Format: date-time */
             createdAt: string;
+        };
+        /** @description Additive outgoing-message metadata inferred by shared TypeScript from the original JSON tool result; stored results and provider prompts remain unchanged. Nested array rows and first-row ordered keys retain the existing web behavior. */
+        AiToolPresentation: {
+            renderAs: string;
+            rows: unknown[];
+            columns: string[];
+            xKey: string;
+            yKeys: string[];
+            rowCount: number;
+            pieRenderable: boolean;
+            /** @description Empty when the first y key is unavailable or the source numeric sum is not positive; otherwise retains negative values and Recharts default sector composition. */
+            pieRows: {
+                name: string;
+                value: number;
+                percent: number;
+                labelPercent: number;
+                startAngle: number;
+                endAngle: number;
+            }[];
         };
         AiTokenUsage: {
             evalCount: number | null;
@@ -6912,8 +8433,8 @@ export interface components {
             symbol: string;
             name: string;
             exchange: string;
-            currency: string;
-            type?: string;
+            currency?: string;
+            type: string;
         };
     };
     responses: never;
@@ -7122,6 +8643,113 @@ export interface operations {
             };
             /** @description VALIDATION_ERROR for a mistyped plan; otherwise an invalid or duplication-unsafe visual plan */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    importAnalysisInterchange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                    /** @enum {string} */
+                    format: "csv" | "xlsx";
+                };
+            };
+        };
+        responses: {
+            /** @description Inferred value-only attachment and raw ignored-formula count. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data: components["schemas"]["AnalysisInterchangeImport"];
+                    };
+                };
+            };
+            /** @description Invalid format */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description API or existing Analysis rate limit exceeded. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Upload source read failed. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    exportAnalysisInterchange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /**
+                     * Format: binary
+                     * @description UTF-8 JSON matching AnalysisInterchangeExportPayload; maximum 67108864 bytes.
+                     */
+                    file: string;
+                    /** @enum {string} */
+                    format: "csv" | "xlsx";
+                };
+            };
+        };
+        responses: {
+            /** @description Raw bytes with Content-Disposition attachment filename analysis.csv or analysis.xlsx. Native callers may select the captured analysis name as the save destination. */
+            200: {
+                headers: {
+                    "Content-Disposition"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
+                };
+            };
+            /** @description Missing or invalid multipart snapshot/format */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description API or existing Analysis rate limit exceeded. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Upload source read or serialization failed. */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -10604,7 +12232,15 @@ export interface operations {
     };
     getInvestments: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Filter one exact asset class. */
+                asset_class?: "stock" | "etf" | "crypto" | "metals" | "real_estate" | "savings" | "bond";
+                /** @description true restricts to active investments; false returns active and inactive investments. */
+                active?: boolean;
+                /** @description Lenient pagination parser defaults invalid limits and clamps at 1000. */
+                limit?: number;
+                offset?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -10633,24 +12269,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    name: string;
-                    symbol?: string;
-                    asset_class: string;
-                    /** @description Three-letter ISO currency code; trimmed and normalized to uppercase. Omit to default to EUR. */
-                    currency?: string;
-                    current_price?: number;
-                    interest_rate?: number;
-                    /** Format: date */
-                    maturity_date?: string;
-                    location?: string;
-                    municipality?: string;
-                    cadastral_income?: number;
-                    municipality_tax_rate?: number;
-                    notes?: string;
-                    price_provider?: string;
-                    price_provider_id?: string;
-                };
+                "application/json": components["schemas"]["InvestmentCreateRequest"];
             };
         };
         responses: {
@@ -12219,6 +13838,11 @@ export interface operations {
                                     partner: number;
                                     joint: number;
                                 };
+                                /** @description Server-side partner attribution assuming two partners; a single-person caller uses the complete total for A. */
+                                partnerShares?: {
+                                    A: number;
+                                    B: number;
+                                };
                                 categoryCount: number;
                                 categories: {
                                     category: string;
@@ -12475,6 +14099,8 @@ export interface operations {
             query?: {
                 /** @description Target currency (3-letter code; `target_currency` is an alias). A malformed code falls back to EUR. A repeated key returns 400. */
                 currency?: string;
+                /** @description Optional scope. true (default) retains active-only summaries/totals and the existing cache. false includes all holdings canonically plus an inactive-only archivedPresentation matching the existing web archive. Only literal true/false accepted; repeated keys return 400. Scope and currency have separate cache entries. */
+                active?: boolean;
             };
             header?: never;
             path?: never;
@@ -13000,9 +14626,15 @@ export interface operations {
     getBulkPortfolioTransactions: {
         parameters: {
             query: {
-                /** @description Comma-separated investment ids (`1,2,3`), the shape the frontend's `ids.join(',')` builder emits. Every element must be a positive int32; one malformed element rejects the whole request. */
+                /** @description Comma-separated investment ids (`1,2,3`), the shape the frontend's `ids.join(',')` builder emits. Every element must be a positive int32; one malformed element rejects the whole request. Repeated occurrences are also accepted by the route; generated clients use the comma-joined string. */
                 investment_ids: string;
+                /** @description Optional exact ordinary transaction type filter. */
+                type?: string;
+                /** @description Maximum newest rows per investment. Defaults invalid/non-positive values to 1000 and clamps values over 5000; native editing uses 1000, matching the web bulk loader. */
+                per_investment_limit?: number;
+                /** @description Optional global cap after per-investment ranking. Omit or leave empty for no global cap. Invalid/non-positive explicit values default to 1; positive values clamp at 200000. */
                 limit?: number;
+                /** @description Global offset after ranking and descending date/id order. Invalid/negative values fall back to zero. */
                 offset?: number;
             };
             header?: never;
@@ -13011,7 +14643,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Bulk transaction list */
+            /** @description Ordinary transaction items plus full matching total, numeric effective limit, numeric offset, and links. total can exceed items even without a global limit because of per-investment caps. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -13021,6 +14653,13 @@ export interface operations {
                         data?: components["schemas"]["PortfolioTransactionList"];
                     };
                 };
+            };
+            /** @description Missing or malformed investment_ids, or repeated/non-scalar type filter. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -13225,15 +14864,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    name?: string;
-                    symbol?: string;
-                    asset_class?: components["schemas"]["AssetClass"];
-                    /** @description Three-letter ISO currency code; normalized to uppercase and cannot be cleared. */
-                    currency?: string;
-                    is_active?: boolean;
-                    show_in_ticker?: boolean;
-                };
+                "application/json": components["schemas"]["InvestmentUpdateRequest"];
             };
         };
         responses: {
@@ -13260,8 +14891,22 @@ export interface operations {
     getInvestmentPriceHistory: {
         parameters: {
             query?: {
+                /**
+                 * @deprecated
+                 * @description Accepted but ignored; use from_ms.
+                 */
                 start_date?: string;
+                /**
+                 * @deprecated
+                 * @description Accepted but ignored; use to_ms.
+                 */
                 end_date?: string;
+                /** @description Inclusive epoch milliseconds. Missing or non-finite parsed values leave this bound absent. */
+                from_ms?: number;
+                /** @description Inclusive epoch milliseconds. Missing or non-finite parsed values leave this bound absent. */
+                to_ms?: number;
+                /** @description Defaults true; false allows the existing provider fetch/cache behavior. Lenient boolean parsing is retained. */
+                db_only?: boolean;
             };
             header?: never;
             path: {
@@ -13277,7 +14922,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["InvestmentPriceHistoryData"];
+                    };
                 };
             };
         };
@@ -13416,7 +15063,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: components["schemas"]["MarketSearchResult"][];
+                        data?: components["schemas"]["MarketSearchData"];
                     };
                 };
             };
@@ -13450,10 +15097,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: {
-                            items: Record<string, never>[];
-                            total: number;
-                        };
+                        data?: components["schemas"]["MarketQuoteData"];
                     };
                 };
             };
@@ -13532,10 +15176,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: {
-                            items: Record<string, never>[];
-                            total: number;
-                        };
+                        data?: components["schemas"]["MarketNewsData"];
                     };
                 };
             };
@@ -13550,7 +15191,14 @@ export interface operations {
     };
     getWatchlist: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Optional exact asset-class filter; repeated keys return 400. */
+                asset_class?: string;
+                /** @description Lenient integer parsing; clamped to 1..5000; malformed values use 50. */
+                limit?: number;
+                /** @description Lenient integer parsing; negative values clamp to zero. */
+                offset?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -13564,7 +15212,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: components["schemas"]["WatchlistItem"][];
+                        data?: components["schemas"]["WatchlistData"];
                     };
                 };
             };
@@ -14170,7 +15818,154 @@ export interface operations {
             };
         };
     };
-    generateFinancialReport: {
+    getBelgianPortfolioTaxDashboard: {
+        parameters: {
+            query?: {
+                /** @description Omit to use the live household year. Historical years use their snapshot or a year-pinned live estimate. */
+                year?: number;
+                /** @description Response display currency, normalized uppercase. Ordinary recorded costs use latest stored/fallback rates and retain the existing original-amount fallback when a rate is unavailable. */
+                currency?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Server-computed fiscal dashboard and original setting records. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data: components["schemas"]["BelgianPortfolioTaxDashboard"];
+                    };
+                };
+            };
+            /** @description Invalid or repeated year/currency. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description API or aggregation rate limit exceeded. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Settings */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getBelgianTaxDashboard: {
+        parameters: {
+            query?: {
+                /** @description Omit to use the live household year. */
+                year?: number;
+                currency?: string;
+                /** @description Defaults to the first day 23 calendar months before today. */
+                start_date?: string;
+                /** @description Defaults to today in the application timezone. */
+                end_date?: string;
+                excluded_category_ids?: number[];
+                excluded_recipient_ids?: number[];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Computed charts and widget data. Money is decoded directly as Decimal by the native client. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data: components["schemas"]["BelgianTaxDashboard"];
+                    };
+                };
+            };
+            /** @description Invalid year */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description API or aggregation rate limit exceeded. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Settings */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getBelgianTaxOverview: {
+        parameters: {
+            query?: {
+                /** @description Four-digit income year, 0000 through 9999. Omit to select the live household year. A missing historical snapshot, including any year outside the storable 1900–2200 range, uses a year-pinned live estimate without creating a snapshot. */
+                year?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Normalized overview, frozen/current sources, original CAS setting baselines, and safe migration warnings. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data: components["schemas"]["BelgianTaxOverview"];
+                    };
+                };
+            };
+            /** @description Malformed, repeated, or out-of-range year. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description API or aggregation rate limit exceeded. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Settings read or internal computation failed; never an empty success. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    computeBelgianTax: {
         parameters: {
             query?: never;
             header?: never;
@@ -14180,25 +15975,95 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    /** Format: date */
-                    start_date?: string;
-                    /** Format: date */
-                    end_date?: string;
-                    currency?: string;
-                    excludedCategoryIds?: number[];
-                    excludedRecipientIds?: number[];
+                    household: components["schemas"]["BelgianTaxHouseholdInput"];
                 };
             };
         };
         responses: {
-            /** @description Generated PDF download */
+            /** @description Household result and compatible PIT figures, with issue codes and approximation metadata. Monetary values are EUR, rates retain the existing engine units. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data: components["schemas"]["BelgianTaxComputation"];
+                    };
+                };
+            };
+            /** @description Invalid household, missing required input, invalid cross-field references, or unknown top-level fields. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+            /** @description Cross-site request rejected by the API CSRF guard. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description API or aggregation rate limit exceeded. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    generateFinancialReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportRequest"];
+            };
+        };
+        responses: {
+            /** @description Raw financial PDF bytes; no JSON envelope. */
+            200: {
+                headers: {
+                    /** @description Attachment filename in the form vision-financial-YYYY-MM-DD.pdf. */
+                    "Content-Disposition"?: string;
+                    /** @description PDF byte count. */
+                    "Content-Length"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
                     "application/pdf": string;
                 };
+            };
+            /** @description Invalid JSON body or report field; report validation uses VALIDATION_ERROR. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+            /** @description Cross-site request rejected by the API CSRF guard. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Global API rate limit exceeded. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Report capacity is full (two active and eight queued); retry later. */
             503: {
@@ -14220,22 +16085,45 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    currency?: string;
-                    excludedCategoryIds?: number[];
-                    excludedRecipientIds?: number[];
-                };
+                "application/json": components["schemas"]["ReportRequest"];
             };
         };
         responses: {
-            /** @description Generated PDF download */
+            /** @description Raw portfolio PDF bytes; no JSON envelope. */
             200: {
                 headers: {
+                    /** @description Attachment filename in the form vision-portfolio-YYYY-MM-DD.pdf. */
+                    "Content-Disposition"?: string;
+                    /** @description PDF byte count. */
+                    "Content-Length"?: number;
                     [name: string]: unknown;
                 };
                 content: {
                     "application/pdf": string;
                 };
+            };
+            /** @description Invalid JSON body or report field; report validation uses VALIDATION_ERROR. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+            /** @description Cross-site request rejected by the API CSRF guard. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Global API rate limit exceeded. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Report capacity is full (two active and eight queued); retry later. */
             503: {
@@ -14257,67 +16145,45 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    year?: number;
-                    currency?: string;
-                    /** @description Belgian filing context echoed into the Belgian rules section. */
-                    taxProfile?: {
-                        filingStatus?: string;
-                        region?: string;
-                        taxYear?: number;
-                    };
-                    /** @description PIT figures from the frontend engine; bracket `rate` is in percent units. */
-                    precomputedPIT?: {
-                        taxableIncome?: number;
-                        totalTax?: number;
-                        brackets?: {
-                            label?: string;
-                            rate?: number;
-                            taxableIncome?: number;
-                            taxAmount?: number;
-                        }[];
-                    };
-                    /** @description Additive (ADR-201). The year's Belgian tax household, validated like the `belgian_tax_household_v2` setting; only partner display names are rendered. */
-                    household?: {
-                        [key: string]: unknown;
-                    };
-                    /** @description Additive (ADR-201). Per-partner result from the frontend household engine. With two partners the Belgian rules section adds a row per partner, the household total, the assessment mode and the marital quotient. */
-                    precomputedHousehold?: {
-                        /** @enum {string} */
-                        assessmentMode: "single" | "separate" | "joint";
-                        legalBasis?: string;
-                        quotient?: {
-                            applied: boolean;
-                            transfer: number;
-                            /** @enum {string} */
-                            fromPartnerId?: "A" | "B";
-                            /** @enum {string} */
-                            toPartnerId?: "A" | "B";
-                            benefit: number;
-                        };
-                        /** @description One entry per partner; partner ids must be unique. */
-                        partners: {
-                            /** @enum {string} */
-                            partnerId: "A" | "B";
-                            grossIncome: number;
-                            taxableIncome: number;
-                            totalPIT: number;
-                        }[];
-                    };
-                    excludedCategoryIds?: number[];
-                    excludedRecipientIds?: number[];
-                };
+                "application/json": components["schemas"]["ReportRequest"];
             };
         };
         responses: {
-            /** @description Generated PDF download */
+            /** @description Raw tax PDF bytes; no JSON envelope. */
             200: {
                 headers: {
+                    /** @description Attachment filename in the form vision-tax-YYYY-MM-DD.pdf. */
+                    "Content-Disposition"?: string;
+                    /** @description PDF byte count. */
+                    "Content-Length"?: number;
                     [name: string]: unknown;
                 };
                 content: {
                     "application/pdf": string;
                 };
+            };
+            /** @description Invalid JSON body or report field; report validation uses VALIDATION_ERROR. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+            /** @description Cross-site request rejected by the API CSRF guard. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Global API rate limit exceeded. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Report capacity is full (two active and eight queued); retry later. */
             503: {
@@ -15186,6 +17052,73 @@ export interface operations {
             };
             /** @description Batch is not in a committable state or another commit claimed it */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    probePortfolioImport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                    /**
+                     * @description Omit to sniff the first nonempty header line.
+                     * @enum {string}
+                     */
+                    separator?: "," | ";" | "\t" | "|";
+                    /**
+                     * @description Case-insensitive and trimmed; Latin-1 aliases normalize to latin1.
+                     * @default utf-8
+                     * @enum {string}
+                     */
+                    encoding?: "utf-8" | "utf8" | "latin1" | "latin-1" | "iso-8859-1" | "windows-1252";
+                    /** @default 0 */
+                    skipRows?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Independent detection and CSV preview outcomes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: {
+                            detected: {
+                                /** @enum {string} */
+                                source: "ibkr" | "kinesis" | "nexo" | "nexo_pro" | "saxo" | "native_receipts";
+                                sourceAccountIdentities: string[];
+                                /** @enum {string} */
+                                presetKey?: "ibkr_funding_history";
+                            } | null;
+                            /** @enum {string|null} */
+                            detectionError: "parse_error" | null;
+                            preview: {
+                                headers: string[];
+                                rows: string[][];
+                            } | null;
+                            /** @enum {string|null} */
+                            previewError: "parse_error" | null;
+                            /** @enum {string} */
+                            separator: "," | ";" | "\t" | "|";
+                        };
+                    };
+                };
+            };
+            /** @description Missing or unsupported upload or invalid probe options */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -16789,6 +18722,60 @@ export interface operations {
                         };
                     };
                 };
+            };
+        };
+    };
+    computeResearchPresentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Single file field only; its JSON shape is ResearchPresentationSnapshot. Extra multipart fields and repeated files are rejected. */
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /**
+                     * Format: binary
+                     * @description UTF-8 JSON ResearchPresentationSnapshot; maximum 67,108,864 bytes.
+                     */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Computed kind-specific presentation, standard envelope; no read or write side effects. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["ResearchPresentationData"];
+                    };
+                };
+            };
+            /** @description VALIDATION_ERROR for missing/repeated/oversize file, extra multipart fields, invalid JSON or invalid/bounded snapshot. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Existing Research market rate limit. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description File I/O or unexpected calculation failure. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

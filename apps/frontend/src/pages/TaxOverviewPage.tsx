@@ -36,6 +36,7 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { PageError } from "@/components/shared/PageError";
 import { SectionLoader } from "@/components/shared/SectionLoader";
 import { ExportDialog } from "@/features/reports/ExportDialog";
+import { useReportDialogState } from "@/features/reports/useReportDialogState";
 import { PageShell } from "@/components/shared/PageShell";
 
 function getBudgetTaxWidgets(t: (key: string) => string): WidgetDefinition[] {
@@ -141,8 +142,17 @@ export default function TaxOverviewPage() {
         resetToDefaults,
         widgets: widgetDefs,
     } = useWidgetVisibility("budgetTax", WIDGETS);
-    const [exportOpen, setExportOpen] = useState(false);
+    const { exportOpen, setExportOpen } = useReportDialogState();
     const [customizeOpen, setCustomizeOpen] = useState(false);
+
+    const exportDialog = (
+        <ExportDialog
+            defaultType="tax"
+            trigger={null}
+            open={exportOpen}
+            onOpenChange={setExportOpen}
+        />
+    );
 
     const header = (
         <PageHeader
@@ -185,12 +195,6 @@ export default function TaxOverviewPage() {
                             </Button>
                         }
                     />
-                    <ExportDialog
-                        defaultType="tax"
-                        trigger={null}
-                        open={exportOpen}
-                        onOpenChange={setExportOpen}
-                    />
                     <WidgetVisibilityDialog
                         open={customizeOpen}
                         onOpenChange={setCustomizeOpen}
@@ -213,23 +217,27 @@ export default function TaxOverviewPage() {
     // empty-state/content flap plus a refetch storm.
     if (stats.isError) {
         return (
-            <PageShell className="" data-print-page="tax">
-                <PageHeader
-                    title={t("tax.page.title")}
-                    subtitle={t("tax.page.subtitle", { year: viewedYear })}
-                    icon={PAGE_ICONS["/tax"]}
-                />
-                <PageError
-                    message={t("tax.page.loadError", {
-                        msg: stats.error?.message ?? "",
-                    })}
-                />
-            </PageShell>
+            <TooltipProvider>
+                {exportDialog}
+                <PageShell className="" data-print-page="tax">
+                    <PageHeader
+                        title={t("tax.page.title")}
+                        subtitle={t("tax.page.subtitle", { year: viewedYear })}
+                        icon={PAGE_ICONS["/tax"]}
+                    />
+                    <PageError
+                        message={t("tax.page.loadError", {
+                            msg: stats.error?.message ?? "",
+                        })}
+                    />
+                </PageShell>
+            </TooltipProvider>
         );
     }
 
     return (
         <TooltipProvider>
+            {exportDialog}
             <PageShell className="" data-print-page="tax">
                 {header}
                 {/* The year is a document, not a filter: its identity, state, region,

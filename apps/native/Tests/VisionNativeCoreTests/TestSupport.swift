@@ -310,12 +310,15 @@ final class FakeProcesses: ProcessControlling, @unchecked Sendable {
     private let lock = NSLock()
     private var alive: Set<Int32> = []
     private var ignoringTerm: Set<Int32> = []
+    private var survivingKill: Set<Int32> = []
     private(set) var signals: [(Int32, Int32)] = []
 
-    func add(_ pid: Int32, ignoresTerm: Bool = false) {
+    /// `survivesKill` models a process stuck in the kernel that SIGKILL does not end.
+    func add(_ pid: Int32, ignoresTerm: Bool = false, survivesKill: Bool = false) {
         lock.lock()
         alive.insert(pid)
-        if ignoresTerm { ignoringTerm.insert(pid) }
+        if ignoresTerm || survivesKill { ignoringTerm.insert(pid) }
+        if survivesKill { survivingKill.insert(pid) }
         lock.unlock()
     }
 
@@ -335,7 +338,7 @@ final class FakeProcesses: ProcessControlling, @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         signals.append((pid, signal))
-        if signal == SIGKILL || (signal == SIGTERM && !ignoringTerm.contains(pid)) {
+        if (signal == SIGKILL && !survivingKill.contains(pid)) || (signal == SIGTERM && !ignoringTerm.contains(pid)) {
             alive.remove(pid)
         }
     }

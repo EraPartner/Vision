@@ -2,9 +2,9 @@
 title: Watchlist Feature
 type: feature
 status: active
-date: 2026-10-09
+date: 2026-10-13
 last_modified: 2026-10-09
-updated: 2026-10-09
+updated: 2026-10-13
 tags: [feature, watchlist, investments, tracking, alerts, phase-3.6, offline-resilience, online-status-detection, api-client-migration, validation, june-2026, backtest, added-price, adr-097, destructive-confirm]
 description: Investment watchlist for tracking securities not yet in the portfolio with target price alerts. June 2026: POST/PATCH return 400 ValidationError for invalid fields; what-if backtest shows return since add date using added_price (migration 0058, ADR-097).
 aliases: [watch list, price alerts, investment tracking]
@@ -241,7 +241,14 @@ Users can promote a watchlist item to a full portfolio investment with one click
 - [[docs/adr/097-portfolio-research-analytics|ADR-097]] — Watchlist backtest decision (added_price approach)
 - [[docs/api/watchlist|Watchlist API]] — added_price field and updated POST/PATCH contract
 
-
 ## Clarity and recovery feedback
 
 Watchlist list-query failures have a retry action and do not appear as empty onboarding. Cached rows remain visible after refresh failure. Target-price comparisons appear only for finite positive input, so invalid text is not interpreted as a zero target.
+
+## Shared target presentation
+
+Target distance, since-added return, Add-dialog preview and chart-domain padding now share the
+pure TypeScript Research presentation helpers. Native readers use one submitted-data batch for
+list metrics and a separate chart/add preview; list and chart target-validity conventions remain
+distinct, quote currency is not converted, and source provenance stays with the original read. See
+[[docs/api/research#POST /api/research/presentation|the read-only presentation contract]].

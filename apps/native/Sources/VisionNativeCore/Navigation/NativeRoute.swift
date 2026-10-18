@@ -5,6 +5,8 @@ public struct NativeRoute: Equatable, Sendable {
     public static let home = NativeRoute(path: "/", query: [])
     /// `shell:route-changed` messages above this size are refused.
     public static let maximumLength = 2048
+    /// Chart Builder shares allow a 20,000-character payload plus the route and other query values.
+    public static let chartBuilderMaximumLength = 32_768
 
     public let path: String
     public let query: [URLQueryItem]
@@ -15,9 +17,11 @@ public struct NativeRoute: Equatable, Sendable {
     }
 
     /// An app-relative route: one leading `/` (not `//`), no fragment, backslash or
-    /// control character, and at most `maximumLength` bytes.
+    /// control character. Chart Builder alone admits its larger, bounded share URL.
     public static func isValid(_ raw: String) -> Bool {
-        guard raw.hasPrefix("/"), !raw.hasPrefix("//"), raw.utf8.count <= maximumLength else { return false }
+        let chartBuilder = raw == "/research/charts" || raw.hasPrefix("/research/charts?")
+        let limit = chartBuilder ? chartBuilderMaximumLength : maximumLength
+        guard raw.hasPrefix("/"), !raw.hasPrefix("//"), raw.utf8.count <= limit else { return false }
         return !raw.unicodeScalars.contains { scalar in
             scalar.value < 0x20 || scalar.value == 0x7F || scalar == "\\" || scalar == "#"
         }
@@ -95,6 +99,30 @@ public struct NativeRoute: Equatable, Sendable {
 
 /// The screens Vision Native draws itself; every other route shows the web app.
 public enum NativeScreen: Equatable, Hashable, Sendable {
+    /// `/`, Home (phase 3g).
+    case home
+    /// `/statistics`, Insights (phase 3g).
+    case statistics
+    /// `/tax`, Belgian tax (phase 3h).
+    case tax
+    case portfolio
+    case portfolioHoldings(assetClass: String)
+    case rebalance
+    case netWorth
+    case portfolioTax
+    case portfolioImport
+    case portfolioImportReview(batchId: String)
+    case analysis
+    case analysisMonitors
+    case researchHome
+    case researchMarkets
+    case researchMarketLookup
+    case researchWatchlist
+    case researchCompare
+    case researchForecast
+    case researchChartBuilder
+    case researchDossiers
+    case aiChat
     case adminOverview
     case databaseMaintenance
     /// `/admin/db/:table`, with the decoded table name.
@@ -123,6 +151,16 @@ public enum NativeScreen: Equatable, Hashable, Sendable {
 
     /// The screens at a fixed path.
     public static let fixedScreens: [NativeScreen] = [
+        .home,
+        .statistics,
+        .tax,
+        .portfolio, .portfolioHoldings(assetClass: "stock"), .portfolioHoldings(assetClass: "crypto"),
+        .portfolioHoldings(assetClass: "metals"), .portfolioHoldings(assetClass: "real_estate"),
+        .portfolioHoldings(assetClass: "savings"), .rebalance, .netWorth, .portfolioTax, .portfolioImport,
+        .analysis, .analysisMonitors,
+        .researchHome, .researchMarkets, .researchMarketLookup, .researchWatchlist, .researchCompare,
+        .researchForecast, .researchChartBuilder,
+        .researchDossiers, .aiChat,
         .adminOverview, .databaseMaintenance, .providerHealth, .endpointLiveness, .exchangeRates, .plannedPayments,
         .importExport, .transactions, .accounts, .categories, .recipients,
     ]
@@ -130,6 +168,29 @@ public enum NativeScreen: Equatable, Hashable, Sendable {
     /// The route path it replaces.
     public var path: String {
         switch self {
+        case .home: return InsightsRoutes.home
+        case .statistics: return InsightsRoutes.statistics
+        case .tax: return "/tax"
+        case .portfolio: return "/portfolio"
+        case .portfolioHoldings(let assetClass):
+            return "/portfolio/"
+                + (assetClass == "real_estate" ? "real-estate" : assetClass == "stock" ? "stocks" : assetClass)
+        case .rebalance: return "/portfolio/rebalance"
+        case .netWorth: return "/portfolio/net-worth"
+        case .portfolioTax: return "/portfolio/tax"
+        case .portfolioImport: return "/portfolio/import"
+        case .portfolioImportReview(let batchId): return "/portfolio/import/\(batchId)/review"
+        case .analysis: return "/analysis"
+        case .analysisMonitors: return "/analysis/monitors"
+        case .researchHome: return "/research"
+        case .researchMarkets: return "/research/markets"
+        case .researchMarketLookup: return "/research/market"
+        case .researchWatchlist: return "/research/watchlist"
+        case .researchCompare: return "/research/compare"
+        case .researchForecast: return "/research/forecast"
+        case .researchChartBuilder: return "/research/charts"
+        case .researchDossiers: return "/research/dossiers"
+        case .aiChat: return "/ai-chat"
         case .adminOverview: return "/admin"
         case .databaseMaintenance: return TableEditorRoute.maintenancePath
         case .tableEditor(let table): return TableEditorRoute.path(for: table)
@@ -155,6 +216,12 @@ public enum NativeScreen: Equatable, Hashable, Sendable {
 
     public static func screen(forPath path: String) -> NativeScreen? {
         if let screen = fixedScreens.first(where: { $0.path == path }) { return screen }
+        let components = path.split(separator: "/", omittingEmptySubsequences: false)
+        if components.count == 5, components[0].isEmpty, components[1] == "portfolio",
+            components[2] == "import", components[4] == "review", !components[3].isEmpty
+        {
+            return .portfolioImportReview(batchId: String(components[3]))
+        }
         if TransactionsRoutes.owesIsNative && path == TransactionsRoutes.owesPath { return .owes }
         if let id = AccountsRoutes.detailId(forPath: path) { return .accountDetail(id: id) }
         if ImportRoutes.reviewIsNative, let batchId = ImportRoutes.reviewBatchId(forPath: path) {

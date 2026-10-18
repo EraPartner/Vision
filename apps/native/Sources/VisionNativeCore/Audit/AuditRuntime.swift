@@ -422,9 +422,11 @@ public actor AuditRuntime: AuditRestoreGuard {
     /// `auditSessionPending`.
     public var sessionPending: Bool { !sessionEstablished }
 
-    /// `endAuditSession`.
+    /// `endAuditSession`: a recovered backend must establish trust again at the exact
+    /// external checkpoint. A valid but unanchored tail still cannot start a session.
     public func endAuditSession() {
         liveClosureEnabled = false
+        sessionEstablished = false
     }
 
     /// `pauseAuditClosure`: no closure starts, and the running one is awaited.
@@ -469,7 +471,7 @@ public actor AuditRuntime: AuditRestoreGuard {
             fields["status"] = .string("verified")
             return .object(fields)
         } catch {
-            liveClosureEnabled = false
+            endAuditSession()
             throw error
         }
     }

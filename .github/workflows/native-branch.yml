@@ -1,0 +1,78 @@
+name: Native Branch Verification
+
+on:
+  push:
+    branches: ["codex/native-phase-*"]
+    # Documentation-only pushes must not start or replace a macOS run.
+    paths-ignore: ["docs/**"]
+
+permissions: {}
+
+concurrency:
+  group: native-branch-${{ github.ref }}
+  # Frequent safety pushes must not cancel an app build before package tests finish.
+  # GitHub still replaces an older pending run with the newest branch snapshot.
+  cancel-in-progress: false
+
+jobs:
+  native-branch-macos:
+    name: Native branch (macOS)
+    runs-on: macos-26
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+        with:
+          persist-credentials: false
+
+      - name: Select Xcode
+        run: |
+          if [ -d /Applications/Xcode_26.6.app ]; then
+            sudo xcode-select -s /Applications/Xcode_26.6.app
+          else
+            echo "::warning title=Xcode pin::/Applications/Xcode_26.6.app is not on this image; using the default Xcode"
+            ls /Applications | grep -i '^Xcode' || true
+          fi
+          xcodebuild -version
+
+      # Keep the same verified release and digest as ci.yml's native-macos job.
+      - name: Install XcodeGen
+        env:
+          XCODEGEN_VERSION: "2.46.0"
+          XCODEGEN_SHA256: "4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806"
+        run: |
+          set -euo pipefail
+          curl -fsSL -o "$RUNNER_TEMP/xcodegen.zip" \
+            "https://github.com/yonaskolb/XcodeGen/releases/download/${XCODEGEN_VERSION}/xcodegen.zip"
+          echo "${XCODEGEN_SHA256}  $RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/xcodegen/bin" >> "$GITHUB_PATH"
+
+      - name: Generate the Xcode project
+        run: |
+          xcodegen --version
+          xcodegen generate --spec apps/native/project.yml
+
+      - name: Build the app (Debug, unsigned)
+        run: xcodebuild -project apps/native/VisionNative.xcodeproj -scheme "Vision Native" -configuration Debug CODE_SIGNING_ALLOWED=NO build
+
+      - name: Test the Swift package
+        env:
+          VISION_NATIVE_INTEROP_DIR: ${{ runner.temp }}/native-branch-interop
+        run: |
+          mkdir -p "$VISION_NATIVE_INTEROP_DIR"
+          # Run AppKit layouts separately so they cannot starve Core watchdogs/polling on MainActor.
+          swift test --package-path apps/native --skip VisionNativeUITests
+          # AppKit activation, key windows and display transactions are process-global.
+          swift test --package-path apps/native --skip-build --no-parallel --filter VisionNativeUITests
+          test -f "$VISION_NATIVE_INTEROP_DIR/expected.json"
+
+      - name: Upload synthetic print diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4
+        with:
+          name: native-branch-print-diagnostics
+          path: ${{ runner.temp }}/native-branch-interop/print-render
+          if-no-files-found: ignore
+          retention-days: 3

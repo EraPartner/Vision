@@ -14,6 +14,7 @@ import Foundation
 ///         runtime-state.json      runtime marker
 ///         backend.pid.json        backend PID record
 ///         postgres.pid.json       PostgreSQL PID record
+///         raw-state.json          native-only mode's browser-storage equivalent (ADR-211)
 ///         logs/backend.log, logs/postgres.log
 ///         postgres/data/          PostgreSQL 18 cluster
 ///         attachments/, cache/
@@ -36,6 +37,8 @@ public struct RuntimeLayout: Sendable, Equatable {
     public let appLog: String
     public let instanceLock: String
     public let demoResetRequest: String
+    /// `NativeRawStateStore`'s file for the native-only mode (ADR-211).
+    public let rawState: String
 
     /// Refuses any application-data directory other than Vision Native's own.
     public init(userDataDirectory: String, runtimeId: String = VisionNativeIdentity.runtimeId) throws {
@@ -52,6 +55,7 @@ public struct RuntimeLayout: Sendable, Equatable {
         backendLog = PathUtilities.join(nativeRoot, "logs", "backend.log")
         postgresLog = PathUtilities.join(nativeRoot, "logs", "postgres.log")
         postgresPid = PathUtilities.join(nativeRoot, "postgres.pid.json")
+        rawState = PathUtilities.join(nativeRoot, "raw-state.json")
         postgresRoot = PathUtilities.join(nativeRoot, "postgres")
         postgresData = PathUtilities.join(nativeRoot, "postgres", "data")
         attachments = PathUtilities.join(nativeRoot, "attachments")

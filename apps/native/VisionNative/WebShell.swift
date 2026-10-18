@@ -33,11 +33,11 @@ final class WebShell: NSObject {
     private var crashPolicy = CrashReloadPolicy()
     /// Downloads that replace an existing file, by download, until they finish or fail.
     private var replacements: [ObjectIdentifier: (temporary: URL, destination: URL)] = [:]
-
     init(controller: ShellController) {
         let contentController = WKUserContentController()
         contentController.addUserScript(
-            WKUserScript(source: BridgeScript.source, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .page))
+            WKUserScript(
+                source: BridgeScript.source, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .page))
         let configuration = WKWebViewConfiguration()
         configuration.userContentController = contentController
         configuration.websiteDataStore = .default()
@@ -55,9 +55,33 @@ final class WebShell: NSObject {
         #endif
     }
 
+    /// View › Toggle Developer Tools (Debug builds). WebKit has no public call that opens the
+    /// inspector, so this uses the `_inspector` SPI behind `responds(to:)` checks; `false`
+    /// when it is unavailable (Safari's Develop menu still reaches the inspectable view).
+    func toggleInspector() -> Bool {
+        #if DEBUG
+            guard webView.responds(to: NSSelectorFromString("_inspector")),
+                let inspector = webView.value(forKey: "_inspector") as? NSObject
+            else { return false }
+            let visible =
+                inspector.responds(to: NSSelectorFromString("isVisible"))
+                && (inspector.value(forKey: "isVisible") as? Bool ?? false)
+            let selector = NSSelectorFromString(visible ? "close" : "show")
+            guard inspector.responds(to: selector) else { return false }
+            inspector.perform(selector)
+            return true
+        #else
+            return false
+        #endif
+    }
+
     func load(_ url: URL) {
         crashPolicy.reset()
-        webView.load(URLRequest(url: url))
+        _ = webView.load(URLRequest(url: url))
+    }
+
+    func reload() {
+        _ = webView.reload()
     }
 
     private func describe(_ url: URL?) -> String {
@@ -158,7 +182,7 @@ extension WebShell: WKNavigationDelegate {
             return
         }
         logger.error("[renderer] web content process terminated; reloading")
-        webView.reload()
+        reload()
     }
 }
 

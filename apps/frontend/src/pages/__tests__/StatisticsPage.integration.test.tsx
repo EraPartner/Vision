@@ -85,10 +85,55 @@ async function openMoreMenu(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe("StatisticsPage (integration)", () => {
+    it("opens a native report handoff and restores the Insights URL when cancelled", async () => {
+        const user = userEvent.setup();
+        useDataHandlers();
+        renderWithApp(
+            <>
+                <StatisticsPage />
+                <LocationProbe />
+            </>,
+            {
+                initialEntries: [
+                    "/statistics?tab=yearly&window=all&export=pdf",
+                ],
+            },
+        );
+        const dialog = await screen.findByRole("dialog");
+        expect(
+            within(dialog).getByRole("heading", { name: /export pdf report/i }),
+        ).toBeInTheDocument();
+        await user.click(
+            within(dialog).getByRole("button", { name: /^cancel$/i }),
+        );
+        await waitFor(() => {
+            expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+            expect(screen.getByTestId("location-search")).toHaveTextContent(
+                "?tab=yearly&window=all",
+            );
+        });
+        expect(
+            await screen.findByRole("tab", { name: /^yearly$/i }),
+        ).toHaveAttribute("aria-selected", "true");
+    });
+
+    it("keeps the native report handoff available while the web statistics cache is empty", async () => {
+        renderWithApp(<StatisticsPage />, {
+            initialEntries: ["/statistics?export=pdf"],
+        });
+        expect(await screen.findByRole("dialog")).toBeInTheDocument();
+        expect(
+            screen.getByRole("heading", { name: /export pdf report/i }),
+        ).toBeInTheDocument();
+    });
+
     it("renders the Insights page heading", async () => {
         renderWithApp(<StatisticsPage />);
         expect(
-            await screen.findByRole("heading", { name: /^insights$/i, level: 1 }),
+            await screen.findByRole("heading", {
+                name: /^insights$/i,
+                level: 1,
+            }),
         ).toBeInTheDocument();
     });
 
@@ -109,16 +154,19 @@ describe("StatisticsPage (integration)", () => {
         ).toHaveAttribute("aria-checked", "true");
         expect(screen.getByTestId("location-search")).toHaveTextContent("");
 
-        await user.click(within(range).getByRole("radio", { name: "All time" }));
+        await user.click(
+            within(range).getByRole("radio", { name: "All time" }),
+        );
 
         await waitFor(() =>
             expect(screen.getByTestId("location-search")).toHaveTextContent(
                 "?window=all",
             ),
         );
-        expect(
-            screen.getByRole("radio", { name: "All time" }),
-        ).toHaveAttribute("aria-checked", "true");
+        expect(screen.getByRole("radio", { name: "All time" })).toHaveAttribute(
+            "aria-checked",
+            "true",
+        );
     });
 
     it("renders without crashing with empty transaction data", async () => {
@@ -202,9 +250,7 @@ describe("StatisticsPage (integration)", () => {
 
         renderWithApp(<StatisticsPage />);
 
-        await user.click(
-            await screen.findByRole("tab", { name: /^payees$/i }),
-        );
+        await user.click(await screen.findByRole("tab", { name: /^payees$/i }));
 
         expect(await screen.findByText("Corner Shop")).toBeInTheDocument();
         expect(screen.getByText(/payee details/i)).toBeInTheDocument();
@@ -251,7 +297,9 @@ describe("StatisticsPage (integration)", () => {
 
         expect(await screen.findByRole("dialog")).toBeInTheDocument();
         expect(
-            await screen.findByRole("heading", { name: /customize this page/i }),
+            await screen.findByRole("heading", {
+                name: /customize this page/i,
+            }),
         ).toBeInTheDocument();
     });
 
@@ -377,9 +425,10 @@ describe("StatisticsPage (integration)", () => {
         expect(
             screen.queryByText(/No new insights right now/),
         ).not.toBeInTheDocument();
-        expect(
-            screen.getByRole("radio", { name: "All time" }),
-        ).toHaveAttribute("aria-checked", "true");
+        expect(screen.getByRole("radio", { name: "All time" })).toHaveAttribute(
+            "aria-checked",
+            "true",
+        );
     });
 
     // ─── Edge cases ────────────────────────────────────────────────────────
@@ -421,7 +470,10 @@ describe("StatisticsPage (integration)", () => {
             }),
             http.get(`${API_BASE}/api/aggregations/recipient-insights`, () => {
                 track("insights");
-                return emptyAggregation({ topMerchants: [], monthOverMonth: [] });
+                return emptyAggregation({
+                    topMerchants: [],
+                    monthOverMonth: [],
+                });
             }),
             http.get(`${API_BASE}/api/aggregations/recipient-by-year`, () => {
                 track("by-year");

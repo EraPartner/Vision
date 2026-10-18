@@ -1,3 +1,4 @@
+import { toolResultAxes as resolveAxes } from "@vision/shared-utils/ai-chat/toolPresentation";
 import {
     Bar,
     BarChart,
@@ -24,23 +25,6 @@ export interface ToolResultChartProps {
     rows: Row[];
     xKey?: string | undefined;
     yKeys?: string[] | undefined;
-}
-
-function pickNumericKeys(rows: Row[], exclude: string): string[] {
-    const firstRow = rows[0];
-    if (firstRow === undefined) return [];
-    return Object.keys(firstRow).filter(
-        (key) => key !== exclude && typeof firstRow[key] === "number",
-    );
-}
-
-function resolveAxes(rows: Row[], xKey?: string, yKeys?: string[]) {
-    const firstRow = rows[0];
-    const xk =
-        xKey ??
-        (firstRow === undefined ? "" : (Object.keys(firstRow)[0] ?? ""));
-    const yk = yKeys && yKeys.length > 0 ? yKeys : pickNumericKeys(rows, xk);
-    return { xk, yk };
 }
 
 const tooltipStyle = {

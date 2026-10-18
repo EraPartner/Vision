@@ -41,6 +41,9 @@ public struct TransactionRow: Equatable, Sendable, Identifiable {
     public var tags: [OpenAPI.TransactionTagRef]
     /// `transfer_peer_id`: the paired leg, once linked as an internal transfer.
     public var transferPeerId: Int?
+    /// `transfer_source`: how the row became (or stays) a transfer; protected classifications
+    /// (opening, adjustment, brokerage) are never relinked by hand.
+    public var transferSource: String?
 
     public init(_ wire: OpenAPI.Transaction) {
         id = wire.id
@@ -60,6 +63,7 @@ public struct TransactionRow: Equatable, Sendable, Identifiable {
         isActive = wire.isActive ?? true
         tags = wire.tags ?? []
         transferPeerId = wire.transferPeerId
+        transferSource = wire.transferSource
     }
 
     /// `applyTransactionLocalPatch` with the server's answer to a PATCH. The running balance
@@ -80,6 +84,7 @@ public struct TransactionRow: Equatable, Sendable, Identifiable {
         if let active = wire.isActive { isActive = active }
         if let tags = wire.tags { self.tags = tags }
         transferPeerId = wire.transferPeerId
+        transferSource = wire.transferSource
     }
 
     /// The date part of `transaction_date`.

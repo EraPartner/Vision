@@ -42,11 +42,27 @@ public struct NativeAppSettings: Equatable, Sendable {
     public var colorblindGainLoss: Bool
     /// `defaultPageSize`: the page size of server-paged tables such as `/transactions`.
     public var defaultPageSize: Int
+    /// Application defaults participate below explicit run and saved-analysis preferences.
+    public var analysisBenchmark: String?
+    public var aiAnswerDepth: String
+    public var aiDefaultModel: String?
+    public var openAiDefaultModel: String?
+    public var language: String
+    public var startOfWeek: String
+    public var costBasisMethod: String
+    public var startupSection: String
+    public var autoClearPlannedOnMatch: Bool
+    public var visualEffects: String
+    public var autoAdaptDisplay: Bool
 
     public init(
         defaultCurrency: String = "EUR", dateFormat: AppDateFormat = .dayMonthYearSlash,
         numberFormat: NumberFormat = .eu, showDecimalPlaces: Int = 2, adminMode: Bool = false,
-        colorblindGainLoss: Bool = false, defaultPageSize: Int = 50
+        colorblindGainLoss: Bool = false, defaultPageSize: Int = 50,
+        analysisBenchmark: String? = nil, aiAnswerDepth: String = "quick", language: String = "en",
+        aiDefaultModel: String? = nil, openAiDefaultModel: String? = nil,
+        startOfWeek: String = "monday", costBasisMethod: String = "weighted_avg", startupSection: String = "budgeting",
+        autoClearPlannedOnMatch: Bool = true, visualEffects: String = "standard", autoAdaptDisplay: Bool = true
     ) {
         self.defaultCurrency = defaultCurrency
         self.dateFormat = dateFormat
@@ -55,6 +71,17 @@ public struct NativeAppSettings: Equatable, Sendable {
         self.adminMode = adminMode
         self.colorblindGainLoss = colorblindGainLoss
         self.defaultPageSize = defaultPageSize
+        self.analysisBenchmark = analysisBenchmark
+        self.aiAnswerDepth = aiAnswerDepth
+        self.aiDefaultModel = aiDefaultModel
+        self.openAiDefaultModel = openAiDefaultModel
+        self.language = language
+        self.startOfWeek = startOfWeek
+        self.costBasisMethod = costBasisMethod
+        self.startupSection = startupSection
+        self.autoClearPlannedOnMatch = autoClearPlannedOnMatch
+        self.visualEffects = visualEffects
+        self.autoAdaptDisplay = autoAdaptDisplay
     }
 
     /// `DEFAULT_APP_SETTINGS`.
@@ -80,6 +107,36 @@ public struct NativeAppSettings: Equatable, Sendable {
         if let value = fields["adminMode"]?.boolValue { settings.adminMode = value }
         if let value = fields["colorblindGainLoss"]?.boolValue { settings.colorblindGainLoss = value }
         if let value = fields["defaultPageSize"]?.intValue, value > 0 { settings.defaultPageSize = value }
+        if let value = fields["analysisBenchmark"]?.stringValue {
+            let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            if normalized.range(of: "^[A-Z0-9][A-Z0-9._:-]{0,31}$", options: .regularExpression) != nil {
+                settings.analysisBenchmark = normalized
+            }
+        }
+        if let value = fields["aiAnswerDepth"]?.stringValue, ["quick", "detailed"].contains(value) {
+            settings.aiAnswerDepth = value
+        }
+        settings.aiDefaultModel = fields["aiDefaultModel"]?.stringValue
+        if let value = fields["openAiDefaultModel"]?.stringValue, (1...200).contains(value.utf16.count) {
+            settings.openAiDefaultModel = value
+        }
+        if let value = fields["language"]?.stringValue, ["en", "nl"].contains(value) { settings.language = value }
+        if let value = fields["startOfWeek"]?.stringValue, ["monday", "sunday"].contains(value) {
+            settings.startOfWeek = value
+        }
+        if let value = fields["costBasisMethod"]?.stringValue, ["weighted_avg", "fifo", "lifo"].contains(value) {
+            settings.costBasisMethod = value
+        }
+        if let value = fields["startupSection"]?.stringValue,
+            ["budgeting", "portfolio", "research", "ai-chat", "last"].contains(value)
+        {
+            settings.startupSection = value
+        }
+        if let value = fields["autoClearPlannedOnMatch"]?.boolValue { settings.autoClearPlannedOnMatch = value }
+        if let value = fields["visualEffects"]?.stringValue, ["reduced", "standard", "enhanced"].contains(value) {
+            settings.visualEffects = value
+        }
+        if let value = fields["autoAdaptDisplay"]?.boolValue { settings.autoAdaptDisplay = value }
         return settings
     }
 

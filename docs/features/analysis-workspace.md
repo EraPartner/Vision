@@ -2,8 +2,8 @@
 title: Analysis Workspace
 type: feature
 status: active
-date: 2026-10-11
-updated: 2026-10-11
+date: 2026-10-13
+updated: 2026-10-13
 tags:
   [
     feature,
@@ -20,6 +20,10 @@ aliases: [manual analysis, visual query builder, SQL workspace]
 related_code:
   - apps/frontend/src/pages/AnalysisWorkspacePage.tsx
   - apps/node-backend/src/routes/analysis.ts
+  - packages/shared-utils/src/analysis/workbook.ts
+  - packages/shared-utils/src/analysis/interchange.ts
+  - apps/node-backend/src/services/analysisInterchangeService.ts
+  - apps/node-backend/src/routes/analysisInterchange.ts
   - apps/node-backend/src/services/analysisExecutor.ts
   - apps/node-backend/src/services/savedAnalysisService.ts
 ---
@@ -106,6 +110,15 @@ pipeline as formula previews and saved refresh.
 
 ## Excel workbook interchange
 
+Browser compatibility modules now use shared TypeScript under `packages/shared-utils/src/analysis/`.
+Additive read-only multipart import/export operations expose that behavior to native clients;
+see [[docs/api/analysis#Read-only CSV and workbook interchange|the exact contract]]. Exports consume
+captured result/context without rerunning Analysis; 64 MiB file transport retains the XLSX
+100,000-row capability beyond the global 1 MB JSON limit. Import retains the effective
+10,000,000-byte parser cap, 1,000-row/32-column attachment bounds and caller-owned five-attachment
+cap. Browser File/crypto/XML adapters remain; golden fixtures compare them with the Node adapter.
+
+
 XLSX exports Results, typed Assumptions, Provenance, Formula definitions and Summary results.
 The Summary results sheet contains the evaluated summary formula identifiers and exact values. Dates use the Excel
 1900 calendar; values above 15 significant digits remain text to preserve precision. Formula
@@ -118,7 +131,7 @@ and Imported field labels and retains existing saved column choices when updated
 visible keyboard focus.
 
 Import supports value snapshots produced by Vision, restores identifiers from provenance, and
-rejects formula cells and unsupported ZIP compression. This is not an arbitrary Excel round trip.
+ignores/counts formula cells as null and rejects unsupported ZIP compression. This is not an arbitrary Excel round trip.
 Excel desktop opening remains a native verification task; independent workbook-reader fixtures
 check value/type reconciliation in portable tests.
 

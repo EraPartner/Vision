@@ -48,6 +48,18 @@ export const csvUpload = multer({
 
 const SAFE_BASENAME_RE = /^[A-Za-z0-9._-]+$/;
 
+/**
+ * The multer temp file as a constant tmpdir plus an allowlisted basename, the same rebuild
+ * cleanup() uses, so a route never reads through an unchecked req.file.path.
+ */
+export function uploadTempPath(filePath: string): string {
+  const basename = path.basename(filePath);
+  if (!SAFE_BASENAME_RE.test(basename) || /^\.+$/.test(basename)) {
+    throw new ValidationError('Invalid upload');
+  }
+  return path.join(os.tmpdir(), basename);
+}
+
 export function cleanup(filePath: string | null | undefined) {
   if (!filePath) return;
   const basename = path.basename(filePath);

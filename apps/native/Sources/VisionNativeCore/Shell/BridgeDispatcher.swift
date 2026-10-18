@@ -52,6 +52,19 @@ public protocol BridgeHost: AnyObject {
     /// `shell:route-changed`: the page's router is at `route`. The page also reports an
     /// unchanged route when its palette or shortcuts overlay closes.
     func routeDidChange(_ route: NativeRoute)
+    func routeDidChange(_ route: NativeRoute, onboardingPresented: Bool)
+    func changeNativeSettings(_ patch: NativeSettingsPatch) async throws
+    func openNativeOverlay(_ kind: NativeShellOverlayKind) async throws
+}
+
+extension BridgeHost {
+    public func routeDidChange(_ route: NativeRoute, onboardingPresented: Bool) { routeDidChange(route) }
+    public func changeNativeSettings(_ patch: NativeSettingsPatch) async throws {
+        throw APIError.invalidRequest("Native settings are unavailable")
+    }
+    public func openNativeOverlay(_ kind: NativeShellOverlayKind) async throws {
+        throw APIError.invalidRequest("Native overlays are unavailable")
+    }
 }
 
 /// A frame's security origin (`WKSecurityOrigin`): protocol, host and port, where port 0
@@ -195,9 +208,19 @@ public enum BridgeDispatcher {
         case .windowTitlebarDoubleClick:
             host.titlebarDoubleClicked()
             return .success
-        case .routeChanged(let route):
-            host.routeDidChange(route)
+        case .routeChanged(let route, let onboarding):
+            host.routeDidChange(route, onboardingPresented: onboarding)
             return .success
+        case .openOverlay(let kind):
+            do {
+                try await host.openNativeOverlay(kind)
+                return .success
+            } catch { return .reject(error.localizedDescription) }
+        case .settingsChange(let patch):
+            do {
+                try await host.changeNativeSettings(patch)
+                return .success
+            } catch { return .reject(error.localizedDescription) }
         case .unavailable(let channel):
             return .reject(BridgeContract.unavailableMessage(BridgeContract.entry(for: channel)))
         }

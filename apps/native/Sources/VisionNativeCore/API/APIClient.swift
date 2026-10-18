@@ -30,6 +30,17 @@ public struct APIResponse: Equatable, Sendable {
     }
 }
 
+/// A decoded success value and its original envelope metadata (provider, cache source, request id).
+public struct APIDataSnapshot<Value: Sendable>: Sendable {
+    public let data: Value
+    public let meta: JSONValue?
+
+    public init(data: Value, meta: JSONValue? = nil) {
+        self.data = data
+        self.meta = meta
+    }
+}
+
 /// Sends one request. Tests use a fake; the app uses `URLSessionAPITransport`.
 public protocol APITransport: Sendable {
     /// Throws `APIError.timedOut`, `APIError.network` or `CancellationError`.
@@ -166,6 +177,7 @@ public struct APIClient: Sendable {
     private let baseURL: @Sendable () async -> URL?
     private let adminToken: @Sendable () async -> String?
     private let transport: any APITransport
+    private let sharedAIReadFlights = NativeSettingsAIReadFlights()
     private let streamTransport: any APIStreamTransport
     private let sleep: @Sendable (Duration) async throws -> Void
     private let jitter: @Sendable () -> Double
@@ -233,7 +245,40 @@ public struct APIClient: Sendable {
 
     /// Performs the operation and returns the envelope's `data`. Throws `APIError`, or
     /// `CancellationError` when the task is cancelled.
+    /// Shares only concurrent status/model reads; callers own their source freshness and invalidation.
+    public func coalescedAIRead<Value: Codable & Sendable>(
+        key: String, load: @escaping @Sendable () async throws -> Value
+    ) async throws -> Value {
+        guard let origin = await baseURL() else { throw APIError.backendUnavailable }
+        return try await sharedAIReadFlights.value(origin: origin.absoluteString, key: key, load: load)
+    }
+    public func invalidateSharedAIReads(keys: [String]) async {
+        guard let origin = await baseURL() else { return }
+        await sharedAIReadFlights.invalidate(origin: origin.absoluteString, keys: keys)
+    }
+
     public func send<Operation: APIOperation>(_ operation: Operation) async throws -> Operation.Response {
+        try await perform(operation, preservingMeta: false).data
+    }
+
+    /// Source mutations such as conditional Settings PUTs disable retries: a lost
+    /// acknowledgement must not replay a write against a baseline that may be stale.
+    public func send<Operation: APIOperation>(_ operation: Operation, retries: Int) async throws -> Operation.Response {
+        try await perform(operation, preservingMeta: false, retryLimit: retries).data
+    }
+
+    /// Retains metadata from a success envelope with the same transport, decoding and retry policy.
+    public func sendWithMeta<Operation: APIOperation>(_ operation: Operation) async throws
+        -> APIDataSnapshot<Operation.Response>
+    {
+        try await perform(operation, preservingMeta: true)
+    }
+
+    private func perform<Operation: APIOperation>(
+        _ operation: Operation, preservingMeta: Bool, retryLimit: Int? = nil
+    ) async throws
+        -> APIDataSnapshot<Operation.Response>
+    {
         let method = Operation.method
         let label = "\(method.rawValue) \(operation.path)"
         guard let base = await baseURL() else { throw APIError.backendUnavailable }
@@ -249,21 +294,25 @@ public struct APIClient: Sendable {
         // One correlation id for every attempt, like `apiRequest`.
         let headers = await requestHeaders(contentType: operation.contentType)
         let request = APIRequest(method: method, url: url, headers: headers, body: body, timeout: timeout)
-        let retries = method.isIdempotent ? max(0, maxRetries) : 0
+        let retries = method.isIdempotent ? max(0, retryLimit ?? maxRetries) : 0
         var lastError = APIError.network("Request failed")
 
         for attempt in 0...retries {
             if attempt > 0 {
                 try await sleep(Self.backoff(attempt: attempt - 1, jitter: jitter()))
             }
-            let outcome: Result<Operation.Response, APIError>
+            let outcome: Result<APIDataSnapshot<Operation.Response>, APIError>
             do {
                 let response = try await transport.send(request)
                 if Self.retryableStatuses.contains(response.status), attempt < retries {
                     lastError = .network("Server returned \(response.status)")
                     continue
                 }
-                outcome = Self.decode(response, as: Operation.Response.self, label: label)
+                outcome = Self.decode(response, as: Operation.Response.self, label: label).map { data in
+                    let body = preservingMeta ? try? JSONValue.parse(response.body) : nil
+                    let meta = body?["ok"] == .bool(true) ? body?["meta"] : nil
+                    return APIDataSnapshot(data: data, meta: meta)
+                }
             } catch let error as APIError {
                 outcome = .failure(error)
             } catch is CancellationError {
@@ -338,13 +387,33 @@ public struct APIClient: Sendable {
         path: String, body: MultipartFormData, fallbackMessage: String,
         onEvent: (ServerSentEvent) async throws -> Void
     ) async throws {
+        try await streamResponse(
+            path: path, body: body.encoded(), contentType: body.contentType,
+            fallbackMessage: fallbackMessage, onEvent: onEvent)
+    }
+
+    /// Chat sends JSON while file staging sends multipart; both retain the same SSE transport
+    /// and failure envelope. A POST stream has one attempt, including ambiguous failures.
+    public func streamJSONEvents(
+        path: String, body: Data, fallbackMessage: String,
+        onEvent: (ServerSentEvent) async throws -> Void
+    ) async throws {
+        try await streamResponse(
+            path: path, body: body, contentType: "application/json",
+            fallbackMessage: fallbackMessage, onEvent: onEvent)
+    }
+
+    private func streamResponse(
+        path: String, body: Data, contentType: String, fallbackMessage: String,
+        onEvent: (ServerSentEvent) async throws -> Void
+    ) async throws {
         let label = "POST \(path)"
         guard let base = await baseURL() else { throw APIError.backendUnavailable }
         guard let url = Self.url(base: base, path: path, queryItems: []) else { throw APIError.invalidRequest(label) }
-        var headers = await requestHeaders(contentType: body.contentType)
+        var headers = await requestHeaders(contentType: contentType)
         headers["Accept"] = "text/event-stream"
         let request = APIRequest(
-            method: .post, url: url, headers: headers, body: body.encoded(), timeout: Self.streamTimeout)
+            method: .post, url: url, headers: headers, body: body, timeout: Self.streamTimeout)
         var parser = ServerSentEventParser()
         // The transport maps its own failures to `APIError` or `CancellationError`; an error
         // `onEvent` throws passes through.

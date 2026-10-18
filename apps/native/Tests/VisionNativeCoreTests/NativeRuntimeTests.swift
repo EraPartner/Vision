@@ -225,6 +225,19 @@ import Testing
         #expect(!harness.fileSystem.exists(harness.layout.pid))
     }
 
+    /// native.ts `stopBackend`: a backend that survives SIGKILL makes a snapshot unsafe.
+    @Test func aBackendThatSurvivesKillFailsTheStop() async throws {
+        let harness = try Harness()
+        harness.processes.add(901, survivesKill: true)
+        harness.fileSystem.addFile(harness.layout.pid, #"{"pid":901}"#)
+        let started = harness.clock.now()
+        let error = await #expect(throws: NativeRuntimeError.self) { try await harness.makeRuntime().stopBackend() }
+        #expect(error?.code == "BACKEND_STOP_FAILED")
+        #expect(harness.processes.sentSignals.map { $0.1 } == [SIGTERM, SIGKILL])
+        #expect(harness.clock.now().timeIntervalSince(started) >= 20)
+        #expect(harness.fileSystem.exists(harness.layout.pid))
+    }
+
     @Test func cooperativeBackendOnlyGetsTerm() async throws {
         let harness = try Harness()
         _ = try await harness.makeRuntime().start()

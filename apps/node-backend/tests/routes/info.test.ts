@@ -238,6 +238,50 @@ describe("Info Routes", () => {
       expect(mockGetPortfolioSummary).toHaveBeenCalledWith("USD");
       expect(res.body).toEqual(okEnvelope(summary));
     });
+    it("keeps active and all-investment cache entries separate and invalidates both", async () => {
+      const active = {
+        currency: "EUR",
+        totals: { totalPortfolioValue: 100 },
+        summaries: [],
+      };
+      const all = {
+        currency: "EUR",
+        totals: { totalPortfolioValue: 200 },
+        summaries: [],
+        archivedPresentation: [],
+      };
+      mockGetPortfolioSummary
+        .mockResolvedValueOnce(active)
+        .mockResolvedValueOnce(all);
+      const first = await api.get(`${BASE}/portfolio-summary`).expect(200);
+      const archived = await api
+        .get(`${BASE}/portfolio-summary?active=false`)
+        .expect(200);
+      expect(first.body).toEqual(okEnvelope(active));
+      expect(archived.body).toEqual(okEnvelope(all));
+      expect(mockGetPortfolioSummary).toHaveBeenNthCalledWith(1, "EUR");
+      expect(mockGetPortfolioSummary).toHaveBeenNthCalledWith(2, "EUR", {
+        activeInvestmentsOnly: false,
+        includeArchivedPresentation: true,
+      });
+      await api.get(`${BASE}/portfolio-summary?active=true`).expect(200);
+      await api.get(`${BASE}/portfolio-summary?active=false`).expect(200);
+      expect(mockGetPortfolioSummary).toHaveBeenCalledTimes(2);
+      invalidatePortfolioCaches();
+      mockGetPortfolioSummary
+        .mockResolvedValueOnce(active)
+        .mockResolvedValueOnce(all);
+      await api.get(`${BASE}/portfolio-summary`).expect(200);
+      await api.get(`${BASE}/portfolio-summary?active=false`).expect(200);
+      expect(mockGetPortfolioSummary).toHaveBeenCalledTimes(4);
+    });
+    it.each(["1", "yes", "false&active=true"])(
+      "rejects invalid/repeated scope %s",
+      async (active) => {
+        await api.get(`${BASE}/portfolio-summary?active=${active}`).expect(400);
+        expect(mockGetPortfolioSummary).not.toHaveBeenCalled();
+      },
+    );
   });
 
   describe("GET /supported-adapters", () => {

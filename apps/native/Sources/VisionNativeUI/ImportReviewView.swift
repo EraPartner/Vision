@@ -231,10 +231,24 @@ public struct ImportReviewView: View {
 
     private func footer(_ preview: ImportPreview) -> some View {
         HStack(spacing: 12) {
-            Text(strings.t("importReview.readyHint"))
-                .font(.footnote)
-                .foregroundStyle(theme.secondaryLabel)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(strings.t("importReview.readyHint"))
+                    .font(.footnote)
+                    .foregroundStyle(theme.secondaryLabel)
+                if model.isSavingEdits {
+                    Text(strings.t("importReview.savingEdits")).font(.footnote).foregroundStyle(theme.secondaryLabel)
+                }
+                if model.hasEditErrors {
+                    HStack(spacing: 8) {
+                        Text(strings.t("importReview.editsFailed")).font(.footnote).foregroundStyle(theme.destructive)
+                        Button(strings.t("importReview.reviewSavedEdits")) {
+                            Task { await model.reviewSavedEdits() }
+                        }
+                        .buttonStyle(.bordered).controlSize(.small).disabled(model.isBusy)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
             Button(strings.t(model.isDiscarding ? "importReview.discarding" : "importReview.discard")) {
                 model.requestDiscard()
             }
@@ -253,7 +267,7 @@ public struct ImportReviewView: View {
                 }
             }
             .buttonStyle(.borderedProminent)
-            .disabled(model.isBusy)
+            .disabled(model.isBusy || model.hasEditErrors)
         }
         .padding(.bottom, 32)
     }
@@ -377,15 +391,22 @@ struct ImportReviewGroupView: View {
                 Text(strings.t("importReview.category"))
                     .font(.footnote)
                     .foregroundStyle(theme.secondaryLabel)
+                // A group whose rows resolve to different categories shows none, as the web does.
+                let mixed =
+                    !state.categorySaving
+                    && Set(group.rows.map { $0.overrideCategoryId ?? group.recipientDefaultCategoryId }).count > 1
                 CategoryPicker(
-                    pickers: model.pickers, value: state.categoryId,
-                    disabled: state.categorySaving || state.recipientId == nil, strings: strings
+                    pickers: model.pickers, value: mixed ? nil : state.categoryId,
+                    disabled: model.isBusy || state.categorySaving || state.recipientId == nil, strings: strings
                 ) { id in
                     let label = model.pickers.categoryLabel(id)
                     Task { await model.setCategory(id, label: label, for: group, strings: strings) }
                 }
                 .frame(width: 260)
                 .accessibilityLabel(strings.t("importReview.category"))
+                if mixed {
+                    Text(strings.t("importReview.mixedCategories")).font(.footnote).foregroundStyle(theme.secondaryLabel)
+                }
                 if state.recipientId != nil {
                     Toggle(
                         strings.t("importReview.persistDefault"),
@@ -395,7 +416,7 @@ struct ImportReviewGroupView: View {
                     )
                     .toggleStyle(.checkbox)
                     .font(.footnote)
-                    .disabled(state.categorySaving)
+                    .disabled(model.isBusy || state.categorySaving)
                 }
             }
             Divider().opacity(0.5)

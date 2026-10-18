@@ -248,6 +248,7 @@ enum AccountsFixture {
     ) -> NativeShellModel {
         NativeShellModel(
             strings: strings, theme: ThemeSelection(appearance: .light),
+            notices: NativeNoticeCenter(now: { PlannedFixture.today }, automaticExpiry: false),
             exchangeRates: model.rates, admin: AdminFixture.screens(), planned: PlannedFixture.idleModel(),
             imports: ImportFixture.idleModel(), transactions: TransactionsFixture.idleModel(), accounts: model,
             categories: CategoriesFixture.idleModel(), recipients: RecipientsFixture.idleModel(),

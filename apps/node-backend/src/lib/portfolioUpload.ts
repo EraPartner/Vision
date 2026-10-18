@@ -118,7 +118,7 @@ export async function detectPortfolioFileFormat(
  * Bound ZIP inflation before the parser decompresses XML. XLSX imports do not
  * extract files, execute macros, evaluate formulas, or follow external links.
  */
-function assertBoundedWorkbook(bytes: Buffer) {
+export function assertBoundedWorkbook(bytes: Buffer) {
   if (bytes.length > MAX_UPLOAD_BYTES)
     throw new ValidationError("File size exceeds maximum of 50MB");
   let end = -1;

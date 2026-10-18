@@ -4,8 +4,8 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/watchlist
 description: Investment watchlist management
-date: 2026-10-08
-updated: 2026-10-08
+date: 2026-10-13
+updated: 2026-10-13
 tags:
   [
     api,
@@ -149,3 +149,11 @@ Remove item from watchlist.
 - [[apps/node-backend/tests/routes/watchlist.test.ts]] adds route-level regression coverage for query normalization (`limit`, `offset`), validation/error paths, defaulting behavior, and not-found responses for `GET /api/watchlist/:id`.
 
 Related docs: [[docs/testing/testing|Testing Documentation]], [[docs/testing/test-inventory|Test Inventory]].
+
+## Native submitted-data presentation
+
+The named OpenAPI list schema records the existing `{items,total,limit,offset}` response and
+`asset_class`/`limit`/`offset` parameters, including the 5000 limit ceiling. Native list readers can
+submit all quoted page rows in one `watchlistBatch` request to
+[[docs/api/research#POST /api/research/presentation|Research presentation]]; it computes existing
+target/since-added metrics without fetching quotes or merging them into persisted watchlist rows.

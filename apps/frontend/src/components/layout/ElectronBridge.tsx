@@ -37,6 +37,7 @@ function isThemeMode(value: unknown): value is ThemeMode {
 
 interface ElectronBridgeProps {
     onOpenSettings: (tab: string) => void;
+    onCloseSettings?: () => void;
     onOpenShortcuts: () => void;
     onOpenPalette: () => void;
 }
@@ -57,6 +58,7 @@ interface ElectronBridgeProps {
  */
 export function ElectronBridge({
     onOpenSettings,
+    onCloseSettings,
     onOpenShortcuts,
     onOpenPalette,
 }: ElectronBridgeProps) {
@@ -72,6 +74,7 @@ export function ElectronBridge({
         toggleSidebar,
         setThemeMode,
         onOpenSettings,
+        onCloseSettings,
         onOpenShortcuts,
         onOpenPalette,
     });
@@ -80,6 +83,7 @@ export function ElectronBridge({
         toggleSidebar,
         setThemeMode,
         onOpenSettings,
+        onCloseSettings,
         onOpenShortcuts,
         onOpenPalette,
     };
@@ -111,6 +115,9 @@ export function ElectronBridge({
                         break;
                     case "open-settings":
                         h.onOpenSettings("general");
+                        break;
+                    case "close-settings":
+                        h.onCloseSettings?.();
                         break;
                     case "open-shortcuts":
                         h.onOpenShortcuts();

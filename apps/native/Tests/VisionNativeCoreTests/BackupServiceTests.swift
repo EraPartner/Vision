@@ -77,6 +77,10 @@ actor FakeBackupRuntime: BackupRuntime {
 
     func migrationChainHead() async -> String { chainHead }
 
+    func stop(keepPostgres: Bool) async throws {
+        calls.append("stop:\(keepPostgres)")
+    }
+
     func activateRestoredDatabase(_ path: String, format: RestoreFormat, expectedSchemaHead: String) async throws
         -> DatabaseSwitchToken
     {
@@ -139,7 +143,8 @@ private struct ServiceFixture {
 
     init(
         environment: [String: String] = [:], runtime: FakeBackupRuntime = FakeBackupRuntime(),
-        storedPassphrase: String? = nil, runtimeAvailable: Bool = true, audit: (any AuditRestoreGuard)? = nil
+        storedPassphrase: String? = nil, runtimeAvailable: Bool = true, audit: (any AuditRestoreGuard)? = nil,
+        maintenance: BackupMaintenanceHooks = BackupMaintenanceHooks()
     ) throws {
         let directory = try makeBackupScratchDirectory()
         try BackupFiles.createDirectory(directory + "/tmp")
@@ -161,7 +166,8 @@ private struct ServiceFixture {
             passphraseStoreFactory: { _ in store },
             logger: log,
             now: { Date(timeIntervalSince1970: 1_760_000_000.125) },
-            auditProvider: { audit })
+            auditProvider: { audit },
+            maintenance: maintenance)
     }
 
     var backups: String { directory + "/Backups" }
@@ -219,8 +225,8 @@ private struct ServiceFixture {
         let calls = await fixture.runtime.calls
         #expect(
             calls == [
-                "dump", "export", "activate:plain:0130_head", "replaceAttachments", "start", "finalizeDatabase",
-                "finalizeAttachments",
+                "stop:true", "dump", "export", "start", "activate:plain:0130_head", "replaceAttachments", "start",
+                "finalizeDatabase", "finalizeAttachments",
             ])
         let dump = await fixture.runtime.restoredDump
         #expect(dump?.contains("0130_head") == true)
@@ -270,15 +276,16 @@ private struct ServiceFixture {
     }
 
     @Test func aBackendThatDoesNotStartRollsBackBothSwitches() async throws {
-        let fixture = try ServiceFixture(runtime: FakeBackupRuntime(startFailures: 2))
+        let fixture = try ServiceFixture()
         defer { fixture.remove() }
         let backup = await fixture.service.runBackup(destination: fixture.backups, frontendStateJson: nil)
         let file = try #require(backup["file"]?.stringValue)
+        await fixture.runtime.failStarts(after: 0)
         let result = await fixture.service.restore(path: file, passphrase: nil, confirm: { true })
         #expect(result == .object(["success": .bool(false), "error": .string("Error: backend did not become ready")]))
         let calls = await fixture.runtime.calls
         #expect(
-            Array(calls.dropFirst(2)) == [
+            Array(calls.dropFirst(4)) == [
                 "activate:plain:0130_head", "replaceAttachments", "start", "rollbackAttachments",
                 "rollbackDatabase:vision_previous", "start",
             ])
@@ -350,7 +357,7 @@ private struct ServiceFixture {
         #expect(log.lines.contains { $0.contains("quit: waiting") })
         release.open()
         let firstResult = await first.value
-        await quit.value
+        _ = await quit.value
         #expect(firstResult["success"] == .bool(true))
         let calls = await runtime.calls
         #expect(calls.filter { $0 == "dump" }.count == 1)
@@ -359,14 +366,16 @@ private struct ServiceFixture {
     @Test func theQuitBackupFollowsTheEffectiveSettings() async throws {
         let fixture = try ServiceFixture()
         defer { fixture.remove() }
-        await fixture.service.runQuitBackup(
+        let disabled = await fixture.service.runQuitBackup(
             rawSettings: .object(["backupDir": .string(fixture.backups), "backupOnQuit": .bool(false)]))
-        await fixture.service.runQuitBackup(rawSettings: nil)
+        let unset = await fixture.service.runQuitBackup(rawSettings: nil)
+        #expect(disabled == nil && unset == nil)
         let before = await fixture.runtime.calls
         #expect(before.isEmpty)
 
-        await fixture.service.runQuitBackup(
+        let outcome = await fixture.service.runQuitBackup(
             rawSettings: .object(["backupDir": .string(fixture.backups), "backupOnQuit": .bool(true)]))
+        #expect(outcome == .saved)
         let written = try FileManager.default.contentsOfDirectory(atPath: fixture.backups)
         #expect(written.count == 1)
         #expect(fixture.log.lines.contains { $0.contains("quit backup saved") })
@@ -387,6 +396,42 @@ private struct ServiceFixture {
         let cleared = await fixture.service.setPassphrase("   ")
         #expect(cleared.success)
         #expect(fixture.store.stored == nil)
+    }
+
+    @Test func passphraseHandlerTrimsBOMAndClearsWhitespaceOnlyInput() async {
+        let store = InMemoryPassphraseStore("previous synthetic password")
+        let service = BackupService(
+            context: BackupContext(
+                environment: [:], appVersion: "test", userDataDirectory: "/synthetic", homeDirectory: "/synthetic",
+                appName: "Synthetic"),
+            settings: FakeBackupSettings(["backupDeviceId": .string("synthetic-device")]),
+            runtimeProvider: { nil }, passphraseStoreFactory: { _ in store }, logger: RecordingLog())
+        let raw = "\u{FEFF}\u{00A0}synthetic password\u{3000}\u{FEFF}"
+        #expect(await service.setPassphrase(raw) == PassphraseUpdateResult(success: true, available: true))
+        #expect(raw == "\u{FEFF}\u{00A0}synthetic password\u{3000}\u{FEFF}")
+        #expect(await service.passphrase() == "synthetic password")
+        #expect(await service.encryptionStatus().hasStoredPassphrase)
+
+        #expect(await service.setPassphrase("\u{FEFF}\u{2028}\u{FEFF}").success)
+        #expect(store.stored == nil)
+        #expect(await service.passphrase() == nil)
+        #expect(!(await service.encryptionStatus()).hasStoredPassphrase)
+    }
+
+    @Test func passphraseHandlerPreservesNELAsPasswordContent() async {
+        let store = InMemoryPassphraseStore()
+        let service = BackupService(
+            context: BackupContext(
+                environment: [:], appVersion: "test", userDataDirectory: "/synthetic", homeDirectory: "/synthetic",
+                appName: "Synthetic"),
+            settings: FakeBackupSettings(["backupDeviceId": .string("synthetic-device")]),
+            runtimeProvider: { nil }, passphraseStoreFactory: { _ in store }, logger: RecordingLog())
+        #expect(await service.setPassphrase("\u{FEFF}\u{0085}synthetic\u{0085}\u{FEFF}").success)
+        #expect(await service.passphrase() == "\u{0085}synthetic\u{0085}")
+
+        #expect(await service.setPassphrase(" \u{0085} ").success)
+        #expect(store.stored == "\u{0085}")
+        #expect(await service.encryptionStatus().hasStoredPassphrase)
     }
 
     @Test func theSchemaCheckFallsBackToThePayloadsMigrationChain() async throws {
@@ -460,6 +505,110 @@ private struct ServiceFixture {
     }
 }
 
+/// Native maintenance around a backup (main.ts `withBackupSnapshot`, `beginNativeMaintenance`
+/// and `await nativeMaintenanceDone`).
+@Suite struct BackupMaintenanceTests {
+    @Test func theAppHooksSurroundTheQuiescentCapture() async throws {
+        let runtime = FakeBackupRuntime()
+        let events = StringBox()
+        let audit = FakeAuditGuard([])
+        let fixture = try ServiceFixture(
+            runtime: runtime, audit: audit,
+            maintenance: BackupMaintenanceHooks(
+                willBeginSnapshot: {
+                    let count = await runtime.calls.count
+                    events.append("begin:\(count)")
+                },
+                didEndSnapshot: {
+                    let count = await runtime.calls.count
+                    events.append("end:\(count)")
+                }))
+        defer { fixture.remove() }
+        let result = await fixture.service.runBackup(destination: fixture.backups, frontendStateJson: nil)
+        #expect(result["success"] == .bool(true))
+        #expect(events.values == ["begin:0", "end:4"])
+        let calls = await runtime.calls
+        #expect(calls == ["stop:true", "dump", "export", "start"])
+        let auditCalls = await audit.calls
+        #expect(auditCalls == ["pause", "resume"])
+    }
+
+    @Test func aRestoreIsRefusedWhileABackupSnapshotRuns() async throws {
+        let runtime = FakeBackupRuntime()
+        let entered = Latch()
+        let release = Latch()
+        await runtime.holdDump(entered: entered, release: release)
+        let fixture = try ServiceFixture(runtime: runtime)
+        defer { fixture.remove() }
+        let service = fixture.service
+        let destination = fixture.backups
+        let path = fixture.directory + "/legacy.sql"
+        try writeBytes(path, Array("SELECT 1;\n".utf8))
+
+        let backup = Task { await service.runBackup(destination: destination, frontendStateJson: nil) }
+        await entered.wait()
+        let asked = StringBox()
+        let refused = await service.restore(
+            path: path, passphrase: nil,
+            confirm: {
+                asked.append("confirm")
+                return true
+            })
+        #expect(
+            refused
+                == .object([
+                    "success": .bool(false),
+                    "error": .string("A native backup, restore or update is already in progress"),
+                ]))
+        #expect(asked.values.isEmpty)
+
+        // The quit waits for the running snapshot before the services stop.
+        let waited = Flag(false)
+        let quit = Task {
+            await service.waitForMaintenance()
+            waited.set(true)
+        }
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(!waited.current)
+        release.open()
+        let result = await backup.value
+        await quit.value
+        #expect(result["success"] == .bool(true))
+        #expect(waited.current)
+        let calls = await runtime.calls
+        #expect(!calls.contains { $0.hasPrefix("activate") })
+    }
+
+    @Test func theQuitWaitsForARunningRestore() async throws {
+        let runtime = FakeBackupRuntime()
+        let fixture = try ServiceFixture(runtime: runtime)
+        defer { fixture.remove() }
+        let path = fixture.directory + "/legacy.sql"
+        try writeBytes(path, Array("SELECT 1;\n".utf8))
+        let entered = Latch()
+        let release = Latch()
+        await runtime.holdRestore(entered: entered, release: release)
+        let service = fixture.service
+        let restore = Task { await service.restore(path: path, passphrase: nil, confirm: { true }) }
+        await entered.wait()
+
+        let waited = Flag(false)
+        let quit = Task {
+            await service.waitForMaintenance()
+            waited.set(true)
+        }
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(!waited.current)
+        release.open()
+        let restored = await restore.value
+        await quit.value
+        #expect(restored["success"] == .bool(true))
+        #expect(waited.current)
+        // Nothing running: the wait returns at once.
+        await service.waitForMaintenance()
+    }
+}
+
 /// The audit hooks a restore drives, with a scripted verdict per attempt.
 actor FakeAuditGuard: AuditRestoreGuard {
     private(set) var calls: [String] = []
@@ -517,10 +666,12 @@ private let auditFailure = AuditRestoreError(
         #expect(result["success"] == .bool(true))
         #expect(result["auditStatus"] == .string("unavailable"))
         let calls = await audit.calls
-        #expect(calls == ["pause", "assert:false", "resume", "pause", "assert:true", "resume", "end"])
+        // The backup's quiescent snapshot pauses the closure too.
+        #expect(
+            calls == ["pause", "resume", "pause", "assert:false", "resume", "pause", "assert:true", "resume", "end"])
         let runtimeCalls = await fixture.runtime.calls
         #expect(
-            Array(runtimeCalls.dropFirst(2)) == [
+            Array(runtimeCalls.dropFirst(4)) == [
                 "activate:plain:0130_head", "replaceAttachments", "start", "rollbackAttachments",
                 "rollbackDatabase:vision_previous", "start",
                 "activate:plain:0130_head", "replaceAttachments", "start", "finalizeDatabase", "finalizeAttachments",

@@ -19,9 +19,12 @@ struct ActionToast: View {
     /// Lifts a stacked toast above the newer ones.
     var bottomPadding: CGFloat = 20
     @Environment(\.visionTheme) var theme
+    @Environment(\.nativeNoticeCenter) private var globalNotices
+    @Environment(\.visionVisualEffects) private var effects
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var body: some View {
-        if let notice {
+        if let notice, globalNotices?.contains(notice) != true {
             let title = strings.t(notice.key, notice.variables)
             HStack(alignment: .center, spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
@@ -52,7 +55,13 @@ struct ActionToast: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.card))
+            .background {
+                if effects == "reduced" || reduceTransparency {
+                    RoundedRectangle(cornerRadius: DesignTokens.Radius.card).fill(theme.card)
+                } else {
+                    RoundedRectangle(cornerRadius: DesignTokens.Radius.card).fill(.regularMaterial)
+                }
+            }
             .foregroundStyle(notice.kind == .error ? theme.destructive : theme.foreground)
             .frame(maxWidth: 560)
             .padding(.bottom, bottomPadding)
@@ -73,6 +82,7 @@ struct ActionToast: View {
         case .success: return "checkmark.circle.fill"
         case .error: return "exclamationmark.circle.fill"
         case .info: return "info.circle.fill"
+        case .warning: return "exclamationmark.triangle.fill"
         }
     }
 

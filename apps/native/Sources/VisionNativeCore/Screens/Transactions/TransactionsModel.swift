@@ -514,6 +514,9 @@ public final class TransactionsModel {
             let notice = notices.make(.error, "txPage.loadMoreFailed", detail: strings.t("txPage.loadMoreFailedDesc"))
             self.notice = notice
             pendingAction = TransactionPendingAction(noticeID: notice.id, action: .retryLoadMore)
+            notices.offerAction(for: notice, titleKey: "common.retry", lifetime: 4, isUndo: false) { [weak self] in
+                await self?.loadMore()
+            }
         }
         if mine == listVersion { isFetchingMore = false }
     }
@@ -1017,6 +1020,9 @@ public final class TransactionsModel {
                 let notice = notices.make(.success, "transactions.deleted")
                 self.notice = notice
                 pendingAction = TransactionPendingAction(noticeID: notice.id, action: .undoDelete(row))
+                notices.offerAction(for: notice, titleKey: "common.undo", lifetime: 8, isUndo: true) { [weak self] in
+                    await self?.restoreDeleted(row)
+                }
             } else {
                 post(.success, "transactions.deleted")
             }
@@ -1042,16 +1048,24 @@ public final class TransactionsModel {
         case .retryLoadMore:
             await loadMore()
         case .undoDelete(let row):
-            guard let body = row.restoreBody else { return }
-            do {
-                _ = try await service.createTransaction(body)
-                post(.success, "transactions.restored")
-                await reload()
-                await refreshNeedsCategoryCount()
-            } catch {
-                post(.error, "transactions.restoreFailedTitle", detail: errorText(error))
-            }
+            await restoreDeleted(row)
         }
+    }
+
+    private func restoreDeleted(_ row: TransactionRow) async {
+        guard let body = row.restoreBody else { return }
+        do {
+            _ = try await service.createTransaction(body)
+            post(.success, "transactions.restored")
+            await reload()
+            await refreshNeedsCategoryCount()
+        } catch {
+            post(.error, "transactions.restoreFailedTitle", detail: errorText(error))
+        }
+    }
+
+    public func attachNotices(_ center: NativeNoticeCenter) {
+        notices.attach(center) { [weak self] in self?.clearNotice($0) }
     }
 
     /// The label of the toast's action button.
@@ -1117,7 +1131,9 @@ public final class TransactionsModel {
     static func bulkUpdatedToast(_ result: BulkUpdateResult, language: NativeLanguage)
         -> (key: String, variables: [String: String])
     {
-        func plural(_ key: String, _ count: Int, _ variables: [String: String]) -> (key: String, variables: [String: String]) {
+        func plural(_ key: String, _ count: Int, _ variables: [String: String]) -> (
+            key: String, variables: [String: String]
+        ) {
             let category = PluralCategory.of(count, language: language).rawValue
             return ("\(key).\(category)", variables.merging(["count": String(count)]) { given, _ in given })
         }

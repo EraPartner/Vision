@@ -11,13 +11,20 @@ struct MoneyText: View {
     var signed = true
     /// The web colours positive amounts `text-gain`; a total may opt out.
     var colored = true
+    /// Hero figures roll their digits (`RollingNumber`), as `fmtParts` values do on the web.
+    var rolling = false
     @Environment(\.visionTheme) var theme
 
     var body: some View {
-        Text(Self.text(amount, currency: currency, settings: settings, signed: signed))
-            .monospacedDigit()
-            .lineLimit(1)
-            .foregroundStyle(colored && amount >= 0 ? theme.gain : theme.foreground)
+        let text = Self.text(amount, currency: currency, settings: settings, signed: signed)
+        Group {
+            if rolling {
+                RollingNumber(value: text, decimalSeparator: settings.numberFormat.locale.decimalSeparator?.first)
+            } else {
+                Text(text).monospacedDigit().lineLimit(1)
+            }
+        }
+        .foregroundStyle(colored && amount >= 0 ? theme.gain : theme.foreground)
     }
 
     /// The formatted amount, for labels and tests.

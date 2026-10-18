@@ -46,6 +46,7 @@ export interface ElectronMenuAction {
   action:
     | "navigate"
     | "open-settings"
+    | "close-settings"
     | "open-shortcuts"
     | "new-transaction"
     | "toggle-sidebar"
@@ -304,7 +305,7 @@ export interface ElectronApiBridge {
    * Vision Native only: reports `pathname + search` to the native sidebar, and the same
    * route again when the command palette or shortcuts overlay closes.
    */
-  routeChanged?: (route: string) => Promise<ElectronSuccessResult>;
+  routeChanged?: (route: string, onboardingPresented?: boolean) => Promise<ElectronSuccessResult>;
 }
 
 export interface ElectronRecoveryBridge {

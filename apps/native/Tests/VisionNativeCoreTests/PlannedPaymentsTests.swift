@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import VisionNativeCore
 
 /// A gate a fake call waits on until the test opens it.
@@ -123,7 +124,8 @@ enum PlannedFixture {
             currency: row.currency, categoryId: row.categoryId, categoryName: row.categoryName, comment: row.comment,
             url: row.url, isRecurring: row.isRecurring, recurrencePattern: row.recurrencePattern,
             recurrenceEndDate: row.recurrenceEndDate, maxOccurrences: row.maxOccurrences, isLoan: row.isLoan,
-            loanType: row.loanType, loanPrincipal: row.loanPrincipal, loanAnnualInterestRate: row.loanAnnualInterestRate,
+            loanType: row.loanType, loanPrincipal: row.loanPrincipal,
+            loanAnnualInterestRate: row.loanAnnualInterestRate,
             loanTermMonths: row.loanTermMonths, loanStartDate: row.loanStartDate, loanPaymentDay: row.loanPaymentDay,
             loanRegularPaymentAmount: row.loanRegularPaymentAmount, loanFirstPaymentDate: row.loanFirstPaymentDate,
             loanSchedule: row.loanSchedule, isExecuted: row.isExecuted, lastExecutedDate: row.lastExecutedDate,
@@ -133,7 +135,8 @@ enum PlannedFixture {
     }
 
     static func execution(_ transactionId: Int, _ date: String) -> OpenAPI.PlannedTransactionExecution {
-        OpenAPI.PlannedTransactionExecution(id: transactionId * 10, executedTransactionId: transactionId, executionDate: date)
+        OpenAPI.PlannedTransactionExecution(
+            id: transactionId * 10, executedTransactionId: transactionId, executionDate: date)
     }
 
     static func transaction(
@@ -172,7 +175,7 @@ enum PlannedFixture {
         return PlannedPaymentsModel(
             service: service, editing: editing, pickers: pickers,
             rates: ExchangeRatesModel(service: FakeExchangeRatesService(rates: rates)), dismissals: dismissals,
-            calendar: calendar, now: { time.now })
+            calendar: calendar, now: { time.now }, retryDelay: .zero)
     }
 
     @MainActor
@@ -504,7 +507,8 @@ enum PlannedFixture {
 @MainActor
 @Suite struct PlannedPaymentsModelTests {
     static let rows = [
-        PlannedFixture.row(id: 1, name: "Rent", amount: -1000, category: "Housing", recurring: true, pattern: "monthly"),
+        PlannedFixture.row(
+            id: 1, name: "Rent", amount: -1000, category: "Housing", recurring: true, pattern: "monthly"),
         PlannedFixture.row(id: 2, name: "Gym", amount: -40, category: "Sport", recurring: true, pattern: "monthly"),
         PlannedFixture.row(id: 3, name: "Old plan", amount: -15, isActive: false),
     ]
@@ -552,22 +556,34 @@ enum PlannedFixture {
 
     @Test func aFailedLoadShowsTheErrorUntilRetrySucceeds() async {
         let service = FakePlannedService(rows: Self.rows)
-        await service.failLoads(1)
+        // `retry: 1`: the error shows only after the second attempt fails too.
+        await service.failLoads(2)
         let model = PlannedFixture.model(service)
         await model.appear(showAll: false, defaultCurrency: "EUR")
         #expect(model.error == .network("offline"))
         #expect(!model.isLoading)
         #expect(model.payments.isEmpty)
+        #expect(await service.loads.count == 2)
         // A failed answer is never fresh: appearing again fetches.
         await model.appear(showAll: false, defaultCurrency: "EUR")
         #expect(model.error == nil)
         #expect(model.payments.count == 2)
-        await service.failLoads(1)
+        await service.failLoads(2)
         await model.retry()
         #expect(model.error == .network("offline"))
         await model.retry()
         #expect(model.error == nil)
-        #expect(await service.loads.count == 4)
+        #expect(await service.loads.count == 6)
+    }
+
+    @Test func oneFailedAttemptIsRetriedOnceWithoutAnError() async {
+        let service = FakePlannedService(rows: Self.rows)
+        await service.failLoads(1)
+        let model = PlannedFixture.model(service)
+        await model.appear(showAll: false, defaultCurrency: "EUR")
+        #expect(model.error == nil)
+        #expect(model.payments.count == 2)
+        #expect(await service.loads == [false, false])
     }
 
     @Test func aDefaultCurrencyChangeMapsTheCachedRowsAgain() async {
@@ -583,7 +599,8 @@ enum PlannedFixture {
 
     @Test func theFiguresUseTheSharedRatesAndToday() async {
         let service = FakePlannedService(rows: [
-            PlannedFixture.row(id: 1, date: "2026-10-12", amount: -100, currency: "USD", recurring: true, pattern: "monthly"),
+            PlannedFixture.row(
+                id: 1, date: "2026-10-12", amount: -100, currency: "USD", recurring: true, pattern: "monthly"),
             PlannedFixture.row(id: 2, date: "2026-10-13", amount: -5, currency: "XYZ"),
         ])
         let model = PlannedPaymentsModel(
@@ -652,7 +669,7 @@ enum PlannedFixture {
         #expect(notice.key == "plannedPage.toast.paused")
         #expect(notice.kind == .success)
         #expect(notice.detail == "Rent")
-        #expect(model.undo == PlannedUndo(noticeID: notice.id, paymentID: 1))
+        #expect(model.undo == PlannedUndo(noticeID: notice.id, paymentID: 1, restoreActive: true))
         #expect(model.duration(of: notice) == PlannedPaymentsModel.undoDuration)
         #expect(!model.actionLoading)
         await model.undoToggle()
@@ -680,6 +697,21 @@ enum PlannedFixture {
         #expect(model.undo == nil)
         await model.undoToggle()
         #expect(await service.updates == ["3:true"])
+    }
+
+    @Test func globalUndoRestoresCapturedStatusAfterNavigationAndAReadThatOmitsThePausedRow() async {
+        let service = FakePlannedService(rows: Self.rows)
+        let model = PlannedFixture.model(service)
+        let center = NativeNoticeCenter(now: { PlannedFixture.today }, automaticExpiry: false)
+        model.attachNotices(center)
+        await model.appear(showAll: false, defaultCurrency: "EUR")
+        await model.toggleActive(model.payments[0])
+        model.disappear()
+        await model.retry()
+        #expect(!model.payments.contains { $0.id == 1 })
+        #expect(await center.consumeUndo())
+        #expect(await service.updates == ["1:false", "1:true"])
+        #expect(await center.consumeUndo() == false)
     }
 
     @Test func aFailedToggleLeavesTheRowAndSaysSo() async throws {
@@ -907,6 +939,7 @@ enum PlannedFixture {
     func makeShell(settings: NativeAppSettings, recorder: ShellRecorder) -> NativeShellModel {
         NativeShellModel(
             strings: DictionaryStrings(language: .en, table: [:]), theme: ThemeSelection(appearance: .light),
+            notices: NativeNoticeCenter(now: { PlannedFixture.today }, automaticExpiry: false),
             exchangeRates: ExchangeRatesModel(service: FakeExchangeRatesService()), admin: AdminFixture.screens(),
             planned: PlannedFixture.idleModel(), imports: ImportFixture.idleModel(),
             transactions: TransactionsFixture.idleModel(), accounts: AccountsFixture.idleModel(),

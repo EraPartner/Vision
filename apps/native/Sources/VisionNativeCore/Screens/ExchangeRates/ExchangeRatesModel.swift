@@ -27,6 +27,7 @@ public struct ScreenNotice: Equatable, Sendable, Identifiable {
         case error
         /// `toast.info`.
         case info
+        case warning
     }
 
     public let id: Int
@@ -69,12 +70,17 @@ public final class ExchangeRatesModel {
     /// The refresh call is in flight (`refreshMutation.isPending`).
     public private(set) var isRefreshPending = false
     public private(set) var notice: ScreenNotice?
+    /// A successful provider receipt invalidates other mounted stored-rate consumers.
+    @ObservationIgnored public var didRefreshRates: (@MainActor () async -> Void)?
 
     @ObservationIgnored private let service: any ExchangeRatesService
     @ObservationIgnored private let now: @Sendable () -> Date
     @ObservationIgnored private var fetchedAt: Date?
     @ObservationIgnored private var inFlight: Task<Void, Never>?
-    @ObservationIgnored private var noticeCount = 0
+    @ObservationIgnored private var inFlightID: UUID?
+    @ObservationIgnored private var inFlightRevision: UUID?
+    @ObservationIgnored private var readRevision = UUID()
+    @ObservationIgnored private var notices = NoticeCounter()
 
     public init(service: any ExchangeRatesService, now: @escaping @Sendable () -> Date = { Date() }) {
         self.service = service
@@ -100,6 +106,12 @@ public final class ExchangeRatesModel {
         return nil
     }
 
+    /// A shared refresh receipt expires this cache without discarding its known rates or issuing a provider request.
+    public func invalidate() {
+        fetchedAt = nil
+        readRevision = UUID()
+    }
+
     /// The screen appeared: fetch unless a result younger than `staleAfter` is cached.
     public func appear() async {
         if let fetchedAt, phase != .failed, now().timeIntervalSince(fetchedAt) < Self.staleAfter { return }
@@ -118,6 +130,8 @@ public final class ExchangeRatesModel {
         do {
             _ = try await service.refreshExchangeRates()
             post(.success, "exchangeRates.refreshSuccess")
+            invalidate()
+            await didRefreshRates?()
             isRefreshPending = false
             await fetch()
         } catch {
@@ -127,6 +141,10 @@ public final class ExchangeRatesModel {
     }
 
     /// The toast was shown.
+    public func attachNotices(_ center: NativeNoticeCenter) {
+        notices.attach(center) { [weak self] in self?.clearNotice($0) }
+    }
+
     public func clearNotice(_ id: Int) {
         if notice?.id == id { notice = nil }
     }
@@ -136,33 +154,51 @@ public final class ExchangeRatesModel {
     /// returning before it settles. The phase changes only when the request ends.
     private func fetch() async {
         if let inFlight {
+            let id = inFlightID
+            let token = inFlightRevision
             await inFlight.value
+            clearRead(id)
+            // A caller explicitly joining after invalidation needs the newer DB receipt.
+            if token != readRevision { await fetch() }
             return
         }
-        let request = Task { await run() }
+        let id = UUID()
+        let token = readRevision
+        let request = Task { await run(token: token) }
         inFlight = request
+        inFlightID = id
+        inFlightRevision = token
         await request.value
-        inFlight = nil
+        clearRead(id)
     }
 
-    private func run() async {
+    private func clearRead(_ id: UUID?) {
+        guard inFlightID == id else { return }
+        inFlight = nil
+        inFlightID = nil
+        inFlightRevision = nil
+    }
+
+    private func run(token: UUID) async {
         isFetching = true
         if case .idle = phase { phase = .loading }
         defer { isFetching = false }
         do {
             let data = try await service.exchangeRates()
+            guard token == readRevision else { return }
             phase = .loaded(data)
             fetchedAt = now()
         } catch is CancellationError {
+            guard token == readRevision else { return }
             if case .loading = phase { phase = .idle }
         } catch {
+            guard token == readRevision else { return }
             phase = .failed
             fetchedAt = nil
         }
     }
 
     private func post(_ kind: ScreenNotice.Kind, _ key: String) {
-        noticeCount += 1
-        notice = ScreenNotice(id: noticeCount, kind: kind, key: key)
+        notice = notices.make(kind, key)
     }
 }

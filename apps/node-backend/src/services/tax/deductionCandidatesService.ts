@@ -20,6 +20,7 @@
  * module never reads the clock.
  */
 
+import { attributeToPartners } from "@vision/shared-utils/belgian-tax/recordedIncomeAttribution";
 import { parseCategoryName } from "@vision/shared-utils";
 import { transactionRepository } from "../../repositories/transactionRepository.ts";
 import accountRepository from "../../repositories/accountRepository.ts";
@@ -48,6 +49,8 @@ export interface DeductionCandidateGroup {
   deductionType: string;
   total: number;
   byOwner: OwnerTotals;
+  /** Two-partner attribution; single-partner callers keep the whole total. */
+  partnerShares?: { A: number; B: number };
   categoryCount: number;
   categories: DeductionCandidateCategory[];
 }
@@ -179,6 +182,10 @@ export async function computeDeductionCandidates({
       byOwner: roundOwnerTotals(agg.total, agg.byOwner),
       categoryCount: agg.categories.length,
       categories: agg.categories.sort((a, b) => b.total - a.total),
+    }))
+    .map((group) => ({
+      ...group,
+      partnerShares: attributeToPartners(group.total, group.byOwner, true),
     }))
     .sort((a, b) => b.total - a.total);
 

@@ -66,6 +66,9 @@ func runBlocking<T: Sendable>(_ work: @escaping @Sendable () throws -> T) async 
 /// `backup:is-encrypted`, `backup:get-encryption-status`, `backup:set-passphrase`) and the
 /// quit-time backup, following `packaging/electron/main.ts`, `backup/restore.ts` and
 /// `backup/crypto.ts`. Dialogs stay with the app; this type has no AppKit dependency.
+/// The quit-time backup's result, for the system notification.
+public enum QuitBackupOutcome: Equatable, Sendable { case saved, failed }
+
 public actor BackupService {
     private let context: BackupContext
     private let settings: any BackupSettingsStore
@@ -79,6 +82,9 @@ public actor BackupService {
     private var backupTask: Task<JSONValue, Never>?
     /// A restore is switching the database and attachments; backups wait until it ends.
     private var restoreInFlight = false
+    /// Quit-time callers waiting for a running backup or restore (`nativeMaintenanceDone`).
+    private var maintenanceWaiters: [CheckedContinuation<Void, Never>] = []
+    private let maintenance: BackupMaintenanceHooks
 
     public init(
         context: BackupContext,
@@ -89,8 +95,10 @@ public actor BackupService {
         },
         logger: any RuntimeLogging,
         now: @escaping @Sendable () -> Date = { Date() },
-        auditProvider: @escaping @Sendable () async -> (any AuditRestoreGuard)? = { nil }
+        auditProvider: @escaping @Sendable () async -> (any AuditRestoreGuard)? = { nil },
+        maintenance: BackupMaintenanceHooks = BackupMaintenanceHooks()
     ) {
+        self.maintenance = maintenance
         self.context = context
         self.settings = settings
         self.runtimeProvider = runtimeProvider
@@ -140,7 +148,16 @@ public actor BackupService {
 
     /// `backup:set-passphrase` (the handler trims the value).
     public func setPassphrase(_ passphrase: String) async -> PassphraseUpdateResult {
-        BackupPassphrase.set(passphrase.trimmingCharacters(in: .whitespacesAndNewlines), store: await passphraseStore())
+        BackupPassphrase.set(Self.trimPassphrase(passphrase), store: await passphraseStore())
+    }
+
+    private static func trimPassphrase(_ value: String) -> String {
+        // Match the Electron handler's String.trim(): BOM is whitespace; NEL is not.
+        let whitespace = CharacterSet(
+            charactersIn:
+                "\u{0009}\u{000A}\u{000B}\u{000C}\u{000D} \u{00A0}\u{1680}\u{2000}\u{2001}\u{2002}\u{2003}\u{2004}\u{2005}\u{2006}\u{2007}\u{2008}\u{2009}\u{200A}\u{2028}\u{2029}\u{202F}\u{205F}\u{3000}\u{FEFF}"
+        )
+        return value.trimmingCharacters(in: whitespace)
     }
 
     // MARK: - Backup
@@ -164,7 +181,43 @@ public actor BackupService {
         backupTask = task
         let result = await task.value
         backupTask = nil
+        resumeMaintenanceWaiters()
         return result
+    }
+
+    /// `await nativeMaintenanceDone` before the quit stops the services: returns once no
+    /// backup or restore is running.
+    public func waitForMaintenance() async {
+        while backupTask != nil || restoreInFlight {
+            await withCheckedContinuation { maintenanceWaiters.append($0) }
+        }
+    }
+
+    private func resumeMaintenanceWaiters() {
+        guard backupTask == nil, !restoreInFlight else { return }
+        let waiters = maintenanceWaiters
+        maintenanceWaiters.removeAll()
+        for waiter in waiters { waiter.resume() }
+    }
+
+    private static let maintenanceConflict = "A native backup, restore or update is already in progress"
+
+    /// `withBackupSnapshot` in `main.ts`: the app pauses its watchdog and tells the page,
+    /// the capture runs inside `QuiescentSnapshot`, and the app resumes afterwards, also
+    /// when the capture or the restart failed.
+    private func withBackupSnapshot<T: Sendable>(
+        _ runtime: any BackupRuntime, _ capture: @Sendable () async throws -> T
+    ) async throws -> T {
+        let snapshotRuntime = BackupSnapshotRuntime(runtime: runtime, audit: await auditProvider())
+        await maintenance.willBeginSnapshot()
+        do {
+            let value = try await QuiescentSnapshot.capture(snapshotRuntime, capture)
+            await maintenance.didEndSnapshot()
+            return value
+        } catch {
+            await maintenance.didEndSnapshot()
+            throw error
+        }
     }
 
     private func backupResult(destination: String, frontendStateJson: String?) async -> JSONValue {
@@ -185,14 +238,18 @@ public actor BackupService {
         defer { BackupFiles.remove(work) }
         let dbSqlPath = PathUtilities.join(work, "db.sql")
         let attachments = PathUtilities.join(work, "attachments")
-        try await runtime.dumpDatabase(to: dbSqlPath)
-        try await runtime.exportAttachments(to: attachments)
+        // SQL, attachments and schema head come from one quiescent interval (ADR-207);
+        // compression and encryption follow the restart.
+        let schemaHead = try await withBackupSnapshot(runtime) { () async throws -> String in
+            try await runtime.dumpDatabase(to: dbSqlPath)
+            try await runtime.exportAttachments(to: attachments)
+            return try await runtime.schemaHead()
+        }
         var frontendState: JSONValue?
         if let frontendStateJson, !frontendStateJson.isEmpty {
             // Invalid optional UI state does not invalidate the database backup.
             frontendState = try? JSONValue.parse(Data(frontendStateJson.utf8))
         }
-        let schemaHead = try await runtime.schemaHead()
         let appVersion = context.appVersion
         let date = now()
         let state = frontendState
@@ -225,25 +282,29 @@ public actor BackupService {
     /// The `will-quit` backup: when the effective settings (with the iCloud Drive default)
     /// enable it, a bundle without frontend state. A backup already running is awaited
     /// instead of starting a second one. Failures are logged; the caller's quit timeout
-    /// bounds the whole step.
-    public func runQuitBackup(rawSettings: JSONValue?) async {
+    /// bounds the whole step. The outcome drives Electron's `backup.done` / `backup.failed`
+    /// notification; `nil` means no quit backup ran.
+    @discardableResult
+    public func runQuitBackup(rawSettings: JSONValue?) async -> QuitBackupOutcome? {
         if restoreInFlight {
             logger.log("warn", "[backup] quit: a restore is in progress; skipping the quit backup")
-            return
+            return nil
         }
         if let running = backupTask {
             logger.log("log", "[backup] quit: waiting for the backup already in progress")
             _ = await running.value
-            return
+            return nil
         }
         let effective = BackupSettings.resolved(rawSettings, defaultDirectory: defaultICloudBackupDirectory)
-        guard effective.backupOnQuit, !effective.backupDir.isEmpty else { return }
+        guard effective.backupOnQuit, !effective.backupDir.isEmpty else { return nil }
         let result = await runBackup(destination: effective.backupDir, frontendStateJson: nil)
         if result["success"] == .bool(true) {
             if let warning = result["warning"]?.stringValue { logger.log("warn", "[backup] \(warning)") }
             logger.log("log", "[backup] quit backup saved: \(result["file"]?.stringValue ?? "")")
+            return .saved
         } else {
             logger.log("error", "[backup] Backup on quit failed: \(result["error"]?.stringValue ?? "unknown error")")
+            return .failed
         }
     }
 
@@ -274,14 +335,24 @@ public actor BackupService {
         guard BackupFiles.exists(path) else {
             return .object(["success": .bool(false), "error": .string("Backup file not found")])
         }
+        // `beginNativeMaintenance`: a restore never overlaps a running backup snapshot.
+        guard backupTask == nil else {
+            return .object(["success": .bool(false), "error": .string(Self.maintenanceConflict)])
+        }
         guard await confirm() else {
             return .object(["success": .bool(false), "error": .string("Restore cancelled by user")])
         }
         guard !restoreInFlight else {
             return .object(["success": .bool(false), "error": .string("A restore is already in progress")])
         }
+        guard backupTask == nil else {
+            return .object(["success": .bool(false), "error": .string(Self.maintenanceConflict)])
+        }
         restoreInFlight = true
-        defer { restoreInFlight = false }
+        defer {
+            restoreInFlight = false
+            resumeMaintenanceWaiters()
+        }
         let lower = path.lowercased()
         let isBundle = lower.hasSuffix(".visionbak") || lower.hasSuffix(".visionbak.enc")
         func restoreSelected(_ allowUnverifiedAudit: Bool) async throws -> JSONValue {

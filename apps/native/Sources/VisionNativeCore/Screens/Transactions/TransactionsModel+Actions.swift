@@ -129,6 +129,9 @@ extension TransactionsModel {
         if let shell, shell.route.path == TransactionsRoutes.path {
             // `id` is read and removed by `sync`, which then selects the row in the first page.
             shell.replace(with: "\(TransactionsRoutes.path)?\(TransactionsRoutes.selectParameter)=\(created.id)")
+        } else if let shell, shell.route.path == InsightsRoutes.home {
+            shell.home?.invalidate()
+            shell.navigate(to: "\(TransactionsRoutes.path)?\(TransactionsRoutes.selectParameter)=\(created.id)")
         }
         await refreshNeedsCategoryCount()
     }
@@ -223,6 +226,7 @@ extension TransactionsModel {
         let second = legs[1]
         func eligible(_ leg: TransactionRow) -> Bool {
             guard leg.id > 0, let account = leg.accountId, account > 0, leg.isActive, leg.transferPeerId == nil,
+                leg.transferSource == nil || ["auto", "manual"].contains(leg.transferSource ?? ""),
                 leg.amount != 0, !leg.date.isEmpty, let currency = leg.currency
             else { return false }
             return currency.range(of: "^[A-Z]{3}$", options: .regularExpression) != nil

@@ -39,6 +39,8 @@ public enum BridgeChannel: String, CaseIterable, Sendable {
     case windowTitlebarDoubleClick = "native:window-titlebar-double-click"
     // The page's router reports `pathname + search` to the native sidebar (phase 2).
     case routeChanged = "shell:route-changed"
+    case settingsChange = "shell:settings-change"
+    case openOverlay = "shell:open-overlay"
 }
 
 /// The channels of `ElectronEventContract`, sent from the shell to the page.
@@ -154,7 +156,11 @@ public enum BridgeContract {
             .implemented),
         entry(.windowDrag, "", nil, [], "startWindowDrag", .nativeOnly),
         entry(.windowTitlebarDoubleClick, "", nil, [], "titlebarDoubleClicked", .nativeOnly),
-        entry(.routeChanged, "electronAPI", "routeChanged", ["route"], "routeDidChange", .nativeOnly),
+        entry(
+            .routeChanged, "electronAPI", "routeChanged", ["route", "onboardingPresented"], "routeDidChange",
+            .nativeOnly),
+        entry(.settingsChange, "", nil, ["key", "updates", "removed"], "changeNativeSettings", .nativeOnly),
+        entry(.openOverlay, "", nil, ["kind"], "openNativeOverlay", .nativeOnly),
     ]
 
     public static func entry(for channel: BridgeChannel) -> BridgeEntry {

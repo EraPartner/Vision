@@ -1,7 +1,7 @@
 ---
 title: Scripts Reference
 type: reference
-date: 2026-10-12
+date: 2026-10-18
 tags:
   [
     reference,
@@ -59,9 +59,16 @@ picks the standard Vision Native variant).
 | ------------------- | ------------------------------------------------------------------------------------------- |
 | `install.sh`        | Build the Electron Vision app and install it to `/Applications/Vision.app`                  |
 | `install-demo.sh`   | Build the Electron Vision Demo app with synthetic data                                      |
-| `install-native.sh` | Build Vision Native Demo (Release) and install it to `/Applications/Vision Native Demo.app` |
+| `install-native.sh` | Build Vision Native Demo (Release; `--debug`/`--measure` for Debug) and install it to `/Applications/Vision Native Demo.app` |
 
-`install-native.sh` needs `xcodegen` and `xcodebuild`. It prepares the runtime payload with the
+`install-native.sh` needs `xcodegen` and `xcodebuild`. `--debug` builds the Debug configuration,
+whose Demo starts in the native-only mode ([[docs/adr/211-vision-native-without-web-content|ADR-211]];
+`VISION_NATIVE_WEB_FREE=0` opens the retained web page). `--measure` implies `--debug` and, after
+installing, runs `.github/scripts/native-e2e-smoke.sh` for the `native` and `retained` modes (and
+`electron` when `/Applications/Vision Demo.app` exists), then prints each mode's footprint, main
+process RSS, app-tree RSS and process count; the per-mode files land in
+`apps/native/build/memory-<timestamp>/`. It quits the apps it starts and uses synthetic Demo data
+only. It prepares the runtime payload with the
 same steps as `install-demo.sh` (`prepare_native_macos_build`, then `prepare-native-runtime` and
 `build-demo-seed` from `packaging/electron/scripts/`) into `apps/native/build/payload/`, and the
 Xcode build stages it into `Contents/Resources/runtime/` and `Contents/Resources/demo-seed/` before
@@ -78,6 +85,23 @@ the diff cannot be classified. It uploads a plain and an encrypted backup bundle
 transfer written by the Swift code, and the `native-interop` job opens them on Linux with the
 Electron readers ([[docs/architecture/native-app|Vision Native App Architecture]]).
 
+The separate `Native End-to-End Smoke` workflow (`.github/workflows/native-e2e.yml`, run by
+`.github/scripts/native-e2e-smoke.sh <app> <out> <mode>`) runs on pushes to `codex/native-phase-*`
+branches and on manual dispatch, on `macos-26`. It builds PostgreSQL 18.6 with OpenSSL, the Demo
+runtime payload and the Debug `Vision Native Demo.app`, then smokes the app in `retained` (control,
+`VISION_NATIVE_WEB_FREE=0`) and `native` (no variable: the Debug Demo default) modes; the helper
+mode was removed by [[docs/adr/212-vision-native-retire-helper-document|ADR-212]]. A mode
+passes when the app stays alive, the backend port from `settings.json` answers `/health` and, in
+native mode, the log reports `native-only document ready` (`native-only storage unavailable`
+fails it). `native-e2e.yml` and `native-branch.yml` skip
+documentation-only pushes (`paths-ignore: docs/**`). Each run keeps the unified log, a screenshot, the app process's `footprint-<mode>.txt` and
+`vmmap-<mode>.txt` (`vmmap --summary`; the breakdown is printed in a log group), and a `metrics-<mode>.txt` (bundle
+size and resident memory of the app tree and WebKit services, also written to the step summary) as the
+`native-e2e` artifact. A non-blocking last step builds the Electron Demo (`--demo --dir`, with `VISION_FRONTEND_DIST`
+and `VISION_CHROMIUM_SOURCE` exported from the payload step) and runs the
+`electron` mode, the phase-0 baseline that ADR-204's phase-4 exit compares the native numbers with
+([[docs/adr/211-vision-native-without-web-content|ADR-211]]).
+
 ## Build and release inputs
 
 | Script           | Purpose                                                                   |
@@ -87,6 +111,10 @@ Electron readers ([[docs/architecture/native-app|Vision Native App Architecture]
 | `dist`           | Build the frontend and Electron distribution                              |
 | `version:bump`   | Update versioned manifests atomically                                     |
 | `native:prepare` | Prepare the pinned PostgreSQL, migration, Bun, and report-browser payload |
+
+The frontend `build:native-helper` script and `scripts/build-native-helper.ts` no longer exist;
+[[docs/adr/212-vision-native-retire-helper-document|ADR-212]] retired the ADR-210 helper document,
+and `scripts/lib/native-mac-build.sh` stages only the ordinary frontend build.
 
 ## Static and generated checks
 

@@ -11,13 +11,21 @@
     "./money": "./src/money.ts",
     "./portfolio": "./src/portfolio.ts",
     "./csv": "./src/csv.ts",
-    "./slugify": "./src/slugify.ts"
+    "./slugify": "./src/slugify.ts",
+    "./belgian-tax/*": "./src/belgianTax/*.ts",
+    "./portfolio-import-detection": "./src/portfolioImportDetection.ts",
+    "./csv-preview": "./src/csvPreview.ts",
+    "./csv-separator": "./src/csvSeparator.ts",
+    "./analysis/*": "./src/analysis/*.ts",
+    "./research/*": "./src/research/*.ts",
+    "./ai-chat/*": "./src/ai-chat/*.ts"
   },
   "files": [
     "src"
   ],
   "dependencies": {
     "@vision/types": "workspace:*",
-    "decimal.js": "^10.6.0"
+    "decimal.js": "^10.6.0",
+    "zod": "^4.4.3"
   }
 }

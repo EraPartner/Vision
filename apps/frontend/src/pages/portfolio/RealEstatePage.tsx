@@ -33,6 +33,8 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { DeltaPill } from "@/components/shared/DeltaPill";
 import { Money } from "@/components/shared/Money";
 import { PageShell } from "@/components/shared/PageShell";
+import { ExportDialog } from "@/features/reports/ExportDialog";
+import { useReportDialogState } from "@/features/reports/useReportDialogState";
 
 const PageIcon = PAGE_ICONS["/portfolio/real-estate"];
 
@@ -124,67 +126,90 @@ export default function RealEstatePage() {
         totalAppreciation + totalRentIncome - totalFees - totalTaxes;
     const roi = totalCost > 0 ? (totalReturn / totalCost) * 100 : 0;
 
+    const { exportOpen, setExportOpen } = useReportDialogState();
+    const exportDialog = (
+        <ExportDialog
+            defaultType="portfolio"
+            trigger={null}
+            open={exportOpen}
+            onOpenChange={setExportOpen}
+        />
+    );
+
     const headerActions = (
-        <AssetPageActions allowedAssetClasses={["real_estate"]} />
+        <AssetPageActions
+            onExport={() => setExportOpen(true)}
+            allowedAssetClasses={["real_estate"]}
+        />
     );
 
     if (isLoading || (missingRentRate && fxLoading)) {
         return (
-            <PageShell {...loadingSurfaceProps} className="">
-                <PageHeader title={t("realestate.title")} icon={PageIcon} />
-                <Skeleton className="h-40 w-full rounded-card" />
-                <Skeleton className="h-64 w-full rounded-card" />
-            </PageShell>
+            <>
+                {exportDialog}
+                <PageShell {...loadingSurfaceProps} className="">
+                    <PageHeader title={t("realestate.title")} icon={PageIcon} />
+                    <Skeleton className="h-40 w-full rounded-card" />
+                    <Skeleton className="h-64 w-full rounded-card" />
+                </PageShell>
+            </>
         );
     }
     if (isError || missingRentRate) {
         return (
-            <PageShell className="">
-                <PageHeader title={t("realestate.title")} icon={PageIcon} />
-                <PageError
-                    title={t("realestate.pageErrorTitle")}
-                    message={
-                        missingRentRate
-                            ? t("realestate.missingRentRate")
-                            : (error?.message ?? t("common.error"))
-                    }
-                    onRetry={() => {
-                        void refetch();
-                        if (missingRentRate) void refetchRates();
-                    }}
-                />
-            </PageShell>
+            <>
+                {exportDialog}
+                <PageShell className="">
+                    <PageHeader title={t("realestate.title")} icon={PageIcon} />
+                    <PageError
+                        title={t("realestate.pageErrorTitle")}
+                        message={
+                            missingRentRate
+                                ? t("realestate.missingRentRate")
+                                : (error?.message ?? t("common.error"))
+                        }
+                        onRetry={() => {
+                            void refetch();
+                            if (missingRentRate) void refetchRates();
+                        }}
+                    />
+                </PageShell>
+            </>
         );
     }
 
     if (properties.length === 0) {
         return (
-            <PageShell className="">
-                <PageHeader
-                    title={t("realestate.title")}
-                    icon={PageIcon}
-                    actions={headerActions}
-                />
-                <Card>
-                    <CardContent variant="state">
-                        <EmptyState
-                            icon={PageIcon}
-                            title={t("realestate.noProperties")}
-                            description={t("realestate.noPropertiesDesc")}
-                            action={
-                                <AddInvestmentDialog
-                                    allowedAssetClasses={["real_estate"]}
-                                />
-                            }
-                        />
-                    </CardContent>
-                </Card>
-            </PageShell>
+            <>
+                {exportDialog}
+                <PageShell className="">
+                    <PageHeader
+                        title={t("realestate.title")}
+                        icon={PageIcon}
+                        actions={headerActions}
+                    />
+                    <Card>
+                        <CardContent variant="state">
+                            <EmptyState
+                                icon={PageIcon}
+                                title={t("realestate.noProperties")}
+                                description={t("realestate.noPropertiesDesc")}
+                                action={
+                                    <AddInvestmentDialog
+                                        allowedAssetClasses={["real_estate"]}
+                                    />
+                                }
+                            />
+                        </CardContent>
+                    </Card>
+                </PageShell>
+            </>
         );
     }
 
     return (
         <>
+            {exportDialog}
             <PageShell className="">
                 <PageHeader
                     title={t("realestate.title")}

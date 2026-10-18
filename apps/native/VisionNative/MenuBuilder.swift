@@ -15,12 +15,17 @@ final class MenuCommandBox: NSObject {
 /// standard AppKit actions, sent through the responder chain; everything else calls the
 /// shell controller.
 @MainActor
-final class MenuController: NSObject {
+final class MenuController: NSObject, NSMenuItemValidation {
     weak var shell: ShellController?
 
     @objc func performMenuCommand(_ sender: NSMenuItem) {
         guard let box = sender.representedObject as? MenuCommandBox else { return }
         shell?.run(box.command)
+    }
+
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        guard let box = menuItem.representedObject as? MenuCommandBox, box.command == .print else { return true }
+        return shell?.canPrintCurrentPage == true
     }
 
     func makeMenu(title: String, entries: [MenuEntry]) -> NSMenu {
@@ -97,7 +102,7 @@ final class MenuController: NSObject {
             item.action = #selector(NSText.selectAll(_:))
         case .services:
             break
-        case .renderer, .openExternal, .about, .reload, .resetZoom, .zoomIn, .zoomOut:
+        case .renderer, .openExternal, .about, .reload, .toggleDeveloperTools, .resetZoom, .zoomIn, .zoomOut, .print:
             item.target = self
             item.action = #selector(performMenuCommand(_:))
             item.representedObject = MenuCommandBox(command)

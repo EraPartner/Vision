@@ -39,6 +39,7 @@ public struct PlannedUndo: Equatable, Sendable {
     /// The toast it belongs to.
     public let noticeID: Int
     public let paymentID: Int
+    public let restoreActive: Bool
 }
 
 /// A request to open the planned-payment sheet: `payment` is `nil` for Add payment.
@@ -121,6 +122,7 @@ public final class PlannedPaymentsModel {
     /// The suggestions refetch Mark as paid starts after it closes (tests await it).
     @ObservationIgnored private(set) var suggestionsRefresh: Task<Void, Never>?
     @ObservationIgnored private let now: @Sendable () -> Date
+    @ObservationIgnored private let retryDelay: Duration
     @ObservationIgnored public let calendar: Calendar
     @ObservationIgnored private var defaultCurrency = NativeAppSettings.defaults.defaultCurrency
     @ObservationIgnored private var inFlight: [Bool: Task<Void, Never>] = [:]
@@ -130,9 +132,11 @@ public final class PlannedPaymentsModel {
     public init(
         service: any PlannedPaymentsService, editing: any PlannedEditingService, pickers: any PickerDataService,
         rates: ExchangeRatesModel, dismissals: PlannedDismissalStore = .userDefaults,
-        calendar: Calendar = PlannedDates.local, now: @escaping @Sendable () -> Date = { Date() }
+        calendar: Calendar = PlannedDates.local, now: @escaping @Sendable () -> Date = { Date() },
+        retryDelay: Duration = .seconds(1)
     ) {
         self.service = service
+        self.retryDelay = retryDelay
         self.editing = editing
         pickerService = pickers
         self.rates = rates
@@ -200,9 +204,22 @@ public final class PlannedPaymentsModel {
         inFlight[key] = nil
     }
 
+    /// The query's `retry: 1`: a failed load is tried once more after React Query's first
+    /// retry delay before the page shows its error.
+    private func load(_ key: Bool) async throws -> [OpenAPI.PlannedTransaction] {
+        do {
+            return try await service.plannedPayments(includePaused: key)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            try await Task.sleep(for: retryDelay)
+            return try await service.plannedPayments(includePaused: key)
+        }
+    }
+
     private func run(_ key: Bool) async {
         do {
-            let rows = try await service.plannedPayments(includePaused: key)
+            let rows = try await load(key)
             let currency = defaultCurrency
             var state = lists[key] ?? ListState()
             state.payments = rows.map { PlannedPayment($0, defaultCurrency: currency) }
@@ -438,7 +455,9 @@ public final class PlannedPaymentsModel {
             await recurring.reloadPatterns()
             await invalidateLists()
         } catch {
-            post(.error, "recurring.toast.failed", ["msg": APIErrorMessage.text(APIError.wrapping(error), strings: strings)])
+            post(
+                .error, "recurring.toast.failed",
+                ["msg": APIErrorMessage.text(APIError.wrapping(error), strings: strings)])
         }
     }
 
@@ -450,7 +469,7 @@ public final class PlannedPaymentsModel {
     /// Pause or Resume: flips `is_active` of the cached row at once, then offers Undo for
     /// eight seconds. The toast names the action the row showed when it was chosen.
     public func toggleActive(_ payment: PlannedPayment) async {
-        guard !actionLoading else { return }
+        guard !actionLoading, let cached = payments.first(where: { $0.id == payment.id }) else { return }
         actionLoading = true
         defer { actionLoading = false }
         do {
@@ -459,7 +478,12 @@ public final class PlannedPaymentsModel {
                 .success, payment.isActive ? "plannedPage.toast.paused" : "plannedPage.toast.resumed",
                 detail: payment.name)
             self.notice = notice
-            undo = PlannedUndo(noticeID: notice.id, paymentID: payment.id)
+            undo = PlannedUndo(noticeID: notice.id, paymentID: payment.id, restoreActive: cached.isActive)
+            let id = payment.id
+            let restore = cached.isActive
+            notices.offerAction(for: notice, titleKey: "common.undo", lifetime: 8, isUndo: true) { [weak self] in
+                await self?.restoreStatus(id: id, active: restore)
+            }
         } catch {
             post(.error, "plannedPage.toggleFailed")
         }
@@ -470,11 +494,21 @@ public final class PlannedPaymentsModel {
         guard let undo else { return }
         self.undo = nil
         if notice?.id == undo.noticeID { notice = nil }
+        await restoreStatus(id: undo.paymentID, active: undo.restoreActive)
+    }
+
+    private func restoreStatus(id: Int, active: Bool) async {
+        let key = showAll
         do {
-            try await flipActive(id: undo.paymentID)
+            let updated = try await service.setPlannedPaymentActive(id: id, isActive: active)
+            replace(updated, in: key)
         } catch {
             post(.error, "plannedPage.toggleFailed")
         }
+    }
+
+    public func attachNotices(_ center: NativeNoticeCenter) {
+        notices.attach(center) { [weak self] in self?.clearNotice($0) }
     }
 
     /// `toggleMutation`: the cached row's `is_active` flipped; a row no longer cached is left

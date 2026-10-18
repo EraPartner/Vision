@@ -2,8 +2,8 @@
 title: Vision Native App Architecture
 type: architecture-doc
 status: active
-date: 2026-10-13
-updated: 2026-10-13
+date: 2026-10-18
+updated: 2026-10-18
 tags:
   [
     architecture,
@@ -31,7 +31,7 @@ tags:
     string-catalog,
     navigation,
   ]
-description: "Vision Native is the Swift macOS app under apps/native/ that replaces the Electron shell in phases (ADR-204). Covers the directory layout, the runtime supervisor that starts its own PostgreSQL 18 cluster and backend on synthetic Demo data, payload discovery, the phase 1c shell (window, launch state, preload bridge, web view navigation and download policy, menus, dock and vibrancy), phase 1d backup and restore (bundle format compatibility, Keychain passphrase, restore allow-list, quit-time backup), the phase 1e audit anchor and Keychain witness with restore continuity, the standard and Demo variants of one build, the Debug-only backend override, the phase 2 foundations (generated OpenAPI client, design tokens, String Catalog and sidebar registry, the native NavigationSplitView shell with the shell:route-changed bridge message, and the native Exchange rates screen), the Native (macOS) CI job with the backup and audit interop job, and install-native.sh."
+description: "Vision Native is the Swift macOS app under apps/native/ that replaces the Electron shell in phases (ADR-204). Covers the directory layout, the runtime supervisor that starts its own PostgreSQL 18 cluster and backend on synthetic Demo data, payload discovery, the phase 1c shell (window, launch state, preload bridge, web view navigation and download policy, menus, dock and vibrancy), phase 1d backup and restore (bundle format compatibility, Keychain passphrase, restore allow-list, quit-time backup), the phase 1e audit anchor and Keychain witness with restore continuity, the standard and Demo variants of one build, the Debug-only backend override, the phase 2 foundations (generated OpenAPI client, design tokens, String Catalog and sidebar registry, the native NavigationSplitView shell with the shell:route-changed bridge message, and the native Exchange rates screen), the Native (macOS) CI job with the backup and audit interop job, screen ports through phase 3p native shell overlays, onboarding and PDF reports, alongside phase 3n Research Home, Markets, Lookup, Watchlist, Compare, Forecast, Chart Builder, Dossiers and AI chat/Investigation (lossless provider data, shared TypeScript presentation, guarded local drafts/cache, and earlier Analysis/Portfolio/Tax/import screens), and install-native.sh."
 aliases: [vision native, native app, swift app]
 ---
 
@@ -48,31 +48,35 @@ aliases: [vision native, native app, swift app]
 > [[docs/reference/native-parity/phase-1-exit|the phase 1 exit checklist]] maps every shell and
 > settings action to its Swift code. Phase 2 adds a native sidebar around the web view and the
 > first native screen, Exchange rates (see
-> [[docs/architecture/native-app#Native navigation and screens (phase 2)|phase 2]]).
+> [[docs/architecture/native-app#Native navigation and screens (phase 2)|phase 2]]). Phase 3 now includes
+> native Research Home, Markets, Lookup, Watchlist, Compare, Forecast and Chart Builder, alongside Analysis, Portfolio
+> Import/review and Portfolio Tax. TypeScript retains financial calculations, restricted execution
+> and import writers. Settings and global notices are native in phase 3o; palette, banners, onboarding and shared PDF overlays are native in phase 3p. Dossiers and AI chat/Investigation
+> are native in phase 3n. macOS build and synthetic Demo visual/keyboard review remain pending.
 
 ## Layout
 
-| Path                                               | Purpose                                                                                                                       |
-| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `apps/native/project.yml`                          | XcodeGen spec: project `VisionNative`, macOS app target "Vision Native", macOS 26.0                                           |
-| `apps/native/Config/Signing.xcconfig`              | `DEVELOPMENT_TEAM` from `VISION_NATIVE_TEAM_ID`, optional gitignored `Local.xcconfig`                                         |
-| `apps/native/VisionNative/`                        | AppKit entry point, window, menus, `WKWebView` shell and the SwiftUI launch state                                             |
-| `apps/native/Package.swift`                        | SwiftPM package (Swift 6), libraries `VisionNativeCore` and `VisionNativeUI`, no deps                                         |
-| `apps/native/Sources/VisionNativeCore/`            | `BackendLocator` and `BackendHealth`: non-UI logic, testable without the Xcode UI                                             |
-| `apps/native/Sources/VisionNativeCore/API/`        | `APIClient` (the Swift `client.ts`) and the generated OpenAPI models and operations                                           |
-| `apps/native/Sources/VisionNativeCore/Design/`     | Generated design tokens and `ThemeSelection` (variant and appearance of the page)                                             |
-| `apps/native/Sources/VisionNativeCore/Navigation/` | Generated sidebar registry, routes, shortcuts and the `NativeShellModel` (phase 2)                                            |
-| `apps/native/Sources/VisionNativeCore/Screens/`    | View models of native screens (Exchange rates, Admin, Planned, Imports, Transactions, Owes, Accounts, Categories, Recipients) |
-| `apps/native/Sources/VisionNativeUI/`              | SwiftUI shell, native screens and the generated `Localizable.xcstrings` (phase 2)                                             |
-| `apps/native/openapi-operations.txt`               | The operationIds the Swift client is generated for                                                                            |
-| `apps/native/i18n-keys.txt`                        | The `i18n/source` keys copied into the String Catalog                                                                         |
-| `apps/native/Sources/VisionNativeCore/Runtime/`    | Runtime supervisor, PostgreSQL and backend lifecycle, Demo seeding, system seams                                              |
-| `apps/native/Sources/VisionNativeCore/Shell/`      | Shell logic without AppKit: bridge contract, codec, policy, menu model, window frame                                          |
-| `apps/native/Sources/VisionNativeCore/Backup/`     | Backup bundles, encryption, restore and the `electronBackup` service (phase 1d)                                               |
-| `apps/native/Sources/VisionNativeCore/Audit/`      | Audit anchor, Keychain witness, backend audit bridge and `electronAudit` (phase 1e)                                           |
-| `apps/native/Tests/VisionNativeCoreTests/`         | Swift Testing tests and fixtures (Electron backup bundle, Electron audit anchor)                                              |
-| `apps/native/Tests/VisionNativeUITests/`           | String Catalog completeness (EN and NL) and SwiftUI layout tests                                                              |
-| `install-native.sh`                                | Local Release build and install, by default to `/Applications/Vision Native Demo.app`                                         |
+| Path                                               | Purpose                                                                                                                                                                                                |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `apps/native/project.yml`                          | XcodeGen spec: project `VisionNative`, macOS app target "Vision Native", macOS 26.0                                                                                                                    |
+| `apps/native/Config/Signing.xcconfig`              | `DEVELOPMENT_TEAM` from `VISION_NATIVE_TEAM_ID`, optional gitignored `Local.xcconfig`                                                                                                                  |
+| `apps/native/VisionNative/`                        | AppKit entry point, window, menus, `WKWebView` shell and the SwiftUI launch state                                                                                                                      |
+| `apps/native/Package.swift`                        | SwiftPM package (Swift 6), libraries `VisionNativeCore` and `VisionNativeUI`, no deps                                                                                                                  |
+| `apps/native/Sources/VisionNativeCore/`            | `BackendLocator` and `BackendHealth`: non-UI logic, testable without the Xcode UI                                                                                                                      |
+| `apps/native/Sources/VisionNativeCore/API/`        | `APIClient` (the Swift `client.ts`) and the generated OpenAPI models and operations                                                                                                                    |
+| `apps/native/Sources/VisionNativeCore/Design/`     | Generated design tokens and `ThemeSelection` (variant and appearance of the page)                                                                                                                      |
+| `apps/native/Sources/VisionNativeCore/Navigation/` | Generated sidebar registry, routes, shortcuts and the `NativeShellModel` (phase 2)                                                                                                                     |
+| `apps/native/Sources/VisionNativeCore/Screens/`    | View models of native screens (Exchange rates, Admin, Planned, Imports, Transactions, Owes, Accounts, Categories, Recipients, Home/Insights, Tax, Portfolio/wealth tools, Analysis/Monitors, Research) |
+| `apps/native/Sources/VisionNativeUI/`              | SwiftUI shell, native screens and the generated `Localizable.xcstrings` (phase 2)                                                                                                                      |
+| `apps/native/openapi-operations.txt`               | The operationIds the Swift client is generated for                                                                                                                                                     |
+| `apps/native/i18n-keys.txt`                        | The `i18n/source` keys copied into the String Catalog                                                                                                                                                  |
+| `apps/native/Sources/VisionNativeCore/Runtime/`    | Runtime supervisor, PostgreSQL and backend lifecycle, Demo seeding, system seams                                                                                                                       |
+| `apps/native/Sources/VisionNativeCore/Shell/`      | Shell logic without AppKit: bridge contract, codec, policy, menu model, window frame                                                                                                                   |
+| `apps/native/Sources/VisionNativeCore/Backup/`     | Backup bundles, encryption, restore and the `electronBackup` service (phase 1d)                                                                                                                        |
+| `apps/native/Sources/VisionNativeCore/Audit/`      | Audit anchor, Keychain witness, backend audit bridge and `electronAudit` (phase 1e)                                                                                                                    |
+| `apps/native/Tests/VisionNativeCoreTests/`         | Swift Testing tests and fixtures (Electron backup bundle, Electron audit anchor)                                                                                                                       |
+| `apps/native/Tests/VisionNativeUITests/`           | String Catalog completeness (EN and NL) and SwiftUI layout tests                                                                                                                                       |
+| `install-native.sh`                                | Local Release build and install, by default to `/Applications/Vision Native Demo.app`                                                                                                                  |
 
 The generated `apps/native/VisionNative.xcodeproj`, its `Info.plist`, `apps/native/build/` and
 the SwiftPM state are gitignored. The app target uses Swift 6 with complete strict concurrency,
@@ -166,7 +170,8 @@ running, so Retry starts a fresh backend.
 4. Prepare the Demo seed. A seed whose `logicalSha256` and `schemaRevision` match the marker is
    kept. Otherwise the dump is restored into a staging database, its schema head and table counts
    are verified, and it is renamed into place while the previous database is kept for rollback.
-   An interrupted switch from an earlier launch is rolled back first.
+   An interrupted restore from an earlier launch is recovered first (see
+   [[docs/architecture/native-app#Restore|Restore]]).
 5. Start the backend. This runs `initdb` once (scram, C locale, data checksums), writes
    `vision.conf`, starts `postgres` on the loopback port with Unix sockets disabled, inspects the
    server (major 18, loopback-only, our data directory), bootstraps the roles, database and
@@ -337,8 +342,11 @@ Window and Help (Keyboard Shortcuts, Source Code, Documentation). Labels that El
 `Contents/Resources/i18n/`; role items keep Electron's English labels. `app:set-language` reloads
 the strings, persists `nativeLanguage` and rebuilds the menus. Items that act in the page send
 `menu:action` through the bridge, showing the window first. From phase 2, Toggle Sidebar hides and
-shows the native sidebar instead of the page's. The Toggle Developer Tools item is
-left out: Debug builds are inspectable from Safari's Develop menu.
+shows the native sidebar instead of the page's. Debug builds add View › Toggle Developer Tools
+(`⌥⌘I`, `ApplicationMenu.build(includeDeveloperTools:)`), as Electron does for unpackaged builds;
+`WebShell.toggleInspector()` opens or closes the Web Inspector through the `_inspector` SPI and
+logs a warning when it is unavailable, so Safari's Develop menu remains the fallback. Release
+builds omit the item.
 
 The dock menu has New transaction and Home. `app:set-badge` sets the dock badge to the planned-
 payment count (0 clears it), like `app.dock.setBadge`. Electron shows no dock progress, so neither
@@ -443,10 +451,24 @@ backend (unless the database switch could not be recovered). Errors keep Electro
 `"Error: <message>"` form, so the frontend's `PASSPHRASE_REQUIRED` and `INVALID_PASSPHRASE`
 checks reopen the passphrase prompt.
 
-A launch after a quit or crash during a restore settles `pendingAttachmentSwitch` before the
-backend starts. If `pendingDatabaseSwitch` is still persisted, the previous attachment tree goes
-back and the database switch then rolls back. Otherwise the restore had committed: the restored
-tree stays and the previous one is removed.
+Coordinated recovery and quiescent backups follow
+[[docs/adr/207-coordinated-native-recovery|ADR-207: Coordinated native recovery]]. The attachment
+journal is persisted before either rename. Startup recovery (`NativeRuntime.recoverInterruptedRestore`)
+runs before any write or Demo seed decision and before `bootstrapDatabase` could create a database.
+While `pendingDatabaseSwitch` is persisted, the backend stops, the previous attachment tree returns
+and the database switch rolls back. Otherwise the restore committed: the restored tree stays and
+the previous one is removed. Rollback is safe to repeat at every rename boundary, and a malformed
+journal, a non-object runtime marker or an ambiguous switch fails the launch closed. A bundle
+backup drains and pauses the audit closure and stops the backend writer. `pg_dump`, the
+attachment copy and the schema head run inside that interval (`QuiescentSnapshot`). The backend
+then restarts to detailed readiness, also after a failed capture. Around the capture the shell
+pauses its health watchdog and sends `backend:lost` with `backup.maintenance`, then
+`backend:restored` once `/health` answers. A restore is refused while a backup runs, and quit
+waits for a running backup or restore. A backend that survives `SIGKILL` fails the stop. A lost
+backend ends the audit session, and recovery must re-establish it at the trusted checkpoint.
+Audit notices distinguish enrollment and partial verification. Vision Native has no updater, so
+the update-installer changes do not apply. The runtime manifest is already verified off the main
+thread with streamed hashes.
 
 Audit continuity (phase 1e) follows `restoreWithAuditRecovery` in `runtime/native.ts`: the restore
 pauses the audit closure before it stops the backend and resumes it afterwards, also after a
@@ -464,7 +486,17 @@ anchor]].
 effective settings enable it and the runtime is running. It writes a bundle without frontend state.
 A backup already in progress is awaited instead of starting a second one. The app delegate's
 45-second hard limit, Electron's will-quit timeout, covers the backup and the shutdown together.
-Failures are logged to the unified log; there are no OS notifications yet.
+Results are logged to the unified log and, like Electron's `notify`, posted as a system notification
+(`backup.done` or `backup.failed`), followed by `app.stopped` once the services stop.
+
+### System notifications
+
+`VisionNative/SystemNotifier.swift` posts Electron's `notify` notices through
+`UNUserNotificationCenter`, titled with the app name: `app.running` when a launch or Retry reveals
+the page, the audit notices (`app.auditFailed`, `app.auditUnavailable`), and the quit notices above.
+Permission is asked on the first launch notice. Quit-time notices post only when permission was
+already granted, so quitting never waits on the prompt. When notifications are not allowed, an
+audit notice falls back to an informational sheet while the window is visible.
 
 ## Audit anchor and Keychain witness (phase 1e)
 
@@ -681,7 +713,8 @@ then. The native shell never redirects: an admin route shows a native screen onl
 `app_settings` says admin mode is on, and otherwise the web view, where `RequireAdmin` redirects and
 reports the new route. Screens outside the admin section (`/planned`, `/import`,
 `/import/:batchId/review`, `/transactions`, `/owes`, `/accounts`, `/accounts/:id`, `/categories`,
-`/recipients`) are native in
+`/recipients`, `/`, `/statistics`, `/tax`, `/portfolio`, its five asset pages,
+`/portfolio/rebalance`, `/portfolio/net-worth`) are native in
 either mode. The page's topbar keeps its traffic-light inset only while the native sidebar is
 hidden (`native-sidebar`).
 
@@ -869,9 +902,13 @@ invalidates Transactions and Planned.
 Linux cannot build macOS apps, so the `native-macos` job ("Native (macOS)") in
 `.github/workflows/ci.yml` runs on the GitHub-hosted `macos-26` runner. It installs XcodeGen,
 generates the project, builds the Debug app with `CODE_SIGNING_ALLOWED=NO` and runs
-`swift test --package-path apps/native`. It selects Xcode 26.6 with `xcode-select` and prints
+separate Core and UI test processes. It selects Xcode 26.6 with `xcode-select` and prints
 `xcodebuild -version`, and installs XcodeGen 2.46.0 from its release zip after checking a pinned
-SHA-256. `swift test` runs both test targets, `VisionNativeCoreTests` and `VisionNativeUITests`. CI
+SHA-256. The Core invocation skips only `VisionNativeUITests`; the UI invocation uses
+`--skip-build --no-parallel --filter VisionNativeUITests`. Explicit serial UI execution keeps
+process-global AppKit activation, key-window ownership and display transactions from racing.
+Both test targets remain covered. Failed runs upload synthetic print diagnostics from
+`VISION_NATIVE_INTEROP_DIR/print-render` for three days when those files exist. CI
 builds without a runtime payload. The generated Swift sources and String Catalog are checked on
 Linux by the Verify Generated Artifacts job (`bun run native:generate`, then no change below
 `apps/native/`). The `changes` job sets `native` to true when a pull request
@@ -889,6 +926,863 @@ must open both bundles (metadata, `db.sql`, attachments and frontend state) and 
 passphrase, and `createAuditAnchor` must import the audit transfer. A skipped test fails the job.
 Quality Gate needs both jobs and tolerates `skipped`, so a failed native build, test or interop
 check blocks "CI Complete" through Quality Gate.
+
+### Home and shared chart foundations (phase 3g part A)
+
+`/` draws with `HomeView` once app settings load. The eleven web widget ids and their defaults
+are preserved: summary cards and bank balances start hidden. The native page has the greeting
+and date, spending pace hero, Needs attention, net worth, planned payments, accounts, summary
+cards, bank balance history, monthly bars, category donut, forecast, and recent transactions.
+The UI uses the generated theme tokens and EN/NL String Catalog.
+
+`HomeModel` resolves `dashboard_settings` and hidden categories before requesting filtered
+aggregates. Exclusions are repeated query parameters, with a separate unfiltered monthly
+summary only when needed. Recent filtered rows scan additional server pages until five survive.
+The hero keeps the web's unfiltered month-to-date and stored planned-amount behavior. Financial
+responses decode directly as `Decimal` through `InsightRequest`, which specializes the generated
+OpenAPI operations without bypassing `APIClient`'s envelope or authentication handling. A failed
+refetch for the same currency and exclusion set retains successful data; changed exclusions clear old filtered totals; entering Home invalidates its snapshot so edits on other screens
+are reflected. A replaced currency request cannot publish an older answer.
+
+`InsightTimelineChart` uses Swift Charts for line, grouped-bar, and stacked-area layouts. Negative
+bank balances use lines instead of a misleading positive stack, as on the web. Hover, arrow keys,
+Home/End, Escape, and drag/Shift-arrow range comparisons display the original decimal values.
+The bank history and forecast share the selected date and range. The net sparkline scrubs the
+summary amount and returns to the latest month after release. Category slices navigate with
+`category_id`, `uncategorised`, or the remaining `category_ids`; recent rows use the native `id`
+inspector parameter.
+
+Forecast mode and rolling-day controls preserve the URL and call the existing forecast services;
+Swift does not calculate forecasts. Scheduled ledger transactions and planned payments are already
+included in the server series and are not added again. Cumulative uncertainty bands use only the
+server's cumulative bands. Diagnostics loads the rolling backtest on demand, shows MAE/RMSE/MAPE,
+persisted accuracy sparklines, and the web's shrunk inverse-MSE weight preview.
+
+Customize preserves other pages and unknown widget ids in `widget_visibility`, saves with the
+previous JSON value as `expected`, and rolls back the UI on failure. The shell binds only the
+`vision.home.dismissedAccountInactivity` and `dismissed_upcoming_planned_payments` local-storage
+keys through WebKit arguments, with a timeout. Add transaction reuses the native sheet and leave
+guard; a successful creation navigates to `/transactions?id=…`.
+
+The parity mapping is in [[docs/reference/native-parity/home-and-statistics|Home and Insights]].
+The macOS build, SwiftUI runtime behavior, and Demo visual comparison remain unverified locally.
+Insights now uses the native implementation below; the shared report dialog still uses the web view.
+
+### Insights, saved charts, and the report handoff (phase 3g part B)
+
+`/statistics` draws `StatisticsView` with the six existing tab ids. `StatisticsModel` reads
+`?window=all` or the local first day 23 months ago through today, resolves the statistics exclusion
+scope, and fetches monthly, category, payee, and payee-by-year aggregates in parallel. Tab changes
+reuse the snapshot. Each chart can independently use the filtered or unfiltered snapshot, while
+the payee details keep their server-filtered, alias-aware population. A changed currency, window,
+or exclusion set cannot display totals from the previous query; failed refreshes of the same query
+retain successful data. The shell's settings-read revision refreshes these models after the web
+settings dialog's 500 ms persistence debounce, even when date/currency formats did not change.
+
+The monthly rhythm excludes the current month from best/worst comparisons when completed months
+exist. Category amounts use the explicit income/expense split, including refunds, and ordered path
+segments take precedence over legacy colon-delimited labels. Pivot ancestor rows roll up their
+canonical descendant ids without counting transactions twice. Metric, year, expansion, 12-month
+column paging, sticky labels, and transaction drill links are native. Payee details reuse the
+shared searchable, sortable, filterable table and reveal additional loaded rows on scroll. Yearly
+summaries and Sankey flows continue to use the backend's aggregates. Sankey labels and category
+colors follow the existing reserved-id and stable-hash rules.
+
+`SavedChartsModel` retains the saved-chart schema, excludes internal `autochart:` records, and
+fetches payee/tag pivots for selected sources. The builder preserves all seven type/variant
+combinations, monthly/yearly buckets, clearable date bounds, dynamic All sources, searchable
+multi-selection, and a debounced live preview. Yearly bounds compare year prefixes, and dynamic
+sources retain eight leading entities plus Other. Saving explicitly sends null for cleared bounds.
+Historical FX fallback remains visible. Native menus edit and delete charts, with confirmation.
+`StatisticsDigestModel` reads existing deterministic findings and persists the same dismissal shapes;
+it does not run a new detection or forecast engine.
+
+The header's PDF action temporarily shows the existing React `ExportDialog` at
+`/statistics?export=pdf`, preserving tab and window parameters. Closing or downloading removes
+only `export`, with replace, and returns to the native screen. The same dialog handles financial,
+portfolio, and tax reports; tax-result serialization stays in the existing TypeScript dialog. The computation operation
+described below supplies the native Tax screen. This is a retained web surface, not a completed native report
+port, and it keeps this area's phase-3 exit gate open.
+
+### Belgian tax computation prerequisite
+
+`POST /api/belgian-tax/compute` runs the existing PIT/household engine from
+`packages/shared-utils/src/belgianTax/`, shared with the frontend through compatibility exports.
+The endpoint accepts a complete v2 household, validates the existing settings schema, and returns
+both the household result and the compatible PIT calculation. It does not read or write settings
+or filing records. Unknown-year approximation and issue codes retain the engine's behavior.
+
+`TaxComputationService` uses the generated `computeBelgianTax` operation. Generated monetary
+and rate fields decode as `Decimal`; Swift does not calculate taxes. The existing tax scenarios
+and golden parity tests exercise the moved engine, and HTTP/native-adapter tests cover the new
+boundary. `GET /api/belgian-tax/overview` now handles read-only v1/v2 hydration and live/historical selection,
+returning frozen figures and original CAS baselines. Fully frozen records skip computation; legacy
+frozen PIT with no household result retains its PIT while deriving that missing breakdown. Missing
+legacy fields stay unavailable. The native `TaxOverviewModel` caches the selected year, clears
+amounts on a failed year change, and guards against older requests replacing a newer selection.
+Shared schema/migration/default modules keep React's existing behavior and lazy loading.
+
+### Tax overview, profile, and year actions (phase 3h)
+
+`/tax` now renders in SwiftUI. `TaxOverviewView` composes the filing masthead, disclosures,
+server-computed income/reserve charts, yearly chart, frozen multi-year trend and comparison,
+current inputs, possible deductions, transaction-derived deduction review, and all eight widget
+visibility controls. Year selection remains `?year=YYYY`. Loading/read failures replace the
+statistics-dependent content; changing the year, currency, or settings invalidates old data and
+late responses cannot replace a newer selection. Missing legacy frozen fields display as
+unavailable; Swift does not reconstruct them.
+
+`GET /api/belgian-tax/dashboard` supplies chart series, recorded income per partner, recorded
+portfolio taxes, year comparison calculations, household presentation rows, rule-key groups,
+live-profile suggestions, and the viewed v1 projection for CSV. Native callers resolve the
+Statistics exclusions and send the explicit last-24-month calendar window. Owner attribution,
+frozen PIT scaling, reserve proration, and all fiscal formulas remain shared TypeScript.
+Recorded portfolio taxes retain the web latest-rate conversion; inactive investments are included.
+See [[docs/api/belgian-tax|the Tax API]] and [[docs/api/info|deduction candidates]] (`partnerShares`).
+
+The six-step `TaxProfileSheet` edits the v2 household: relationship/events and claimants,
+per-partner activities and expense methods, home/residences and regional mortgage inputs,
+category sources, deductions/dependents, and region/communal rate. `TaxProfileModel` sends
+stateless backend previews after a 300 ms debounce and persists edits after 500 ms through the
+existing atomic `saveSettings` operation. CAS baselines come from the overview and advance only
+from acknowledged writes. Save configures the profile; closing flushes pending changes. Earlier
+edits remain saved when the sheet closes, matching the web's write-through behavior. Filed
+profiles stay locked until amendment or unfiling; failures/conflicts preserve the draft and surface
+an error rather than silently overwriting another editor.
+
+`TaxActionsModel` creates missing snapshots, freezes/unfreezes calculations, marks/unmarks
+filings, and records history through the same atomic settings API. Freeze/file computations run
+in the TypeScript backend; metadata retains the frozen household result and calculation.
+`TaxYearCSV` exports the existing input/calculation columns through the native save panel, with
+Decimal precision, escaped fields, and spreadsheet-formula protection. Deduction confirmations
+use server-returned partner shares, include the incomplete-year confirmation, and persist the
+structural household patch with CAS. Dismissals retain the existing `dismissed_deduction_candidates_v1` localStorage behavior through the shell bridge.
+
+The Tax PDF menu sets `export=pdf` on `/tax`, preserving `year` and other query values. Phase 3p
+mounts the shared native report sheet; closing removes only `export` and retains the native Tax
+view. File Print/Cmd-P captures the loaded page through `NativeTaxPrintSnapshot`, independently of
+PDF export. These implementations do not establish rendered print, visual or keyboard parity;
+see [[docs/reference/native-parity/tax|Tax parity]] and the phase-3p validation notes below.
+
+The cloud checks cover portable models, API adapters, generated outputs, and the web handoff.
+Those phase-3h checks did not include a full macOS app/package run or the owner's Demo visual pass;
+subsequent automated build evidence is recorded in [[docs/reference/native-parity/agent-handoff|the handoff]].
+See [[docs/reference/native-parity/home-and-statistics|the action mapping]] and
+[[docs/features/statistics|Statistics]] for the remaining review surface.
+
+### Portfolio, holdings and wealth tools (phase 3i)
+
+`PortfolioScreens` composes shared read models, retained editor drafts, Rebalance and Net Worth.
+`PortfolioScreenView` owns the root detail sheet and the editing presentation. Nested editors
+present above the detail without losing its selection; closing a successful archive/delete closes
+an active detail. Dirty drafts register the native leave/quit guard. Explicit Cancel resets the
+form; Escape or the sheet close keeps applicable edit/trade drafts, matching the web.
+
+`PortfolioModel` consumes typed Decimal responses for canonical active summaries, performance,
+broker partitions, exposure and prices. Currency/period revisions reject late reads. The eleven
+widget choices preserve other pages and forward the complete original CAS baseline. Portfolio
+transaction histories page until complete; incomplete or oversized histories cannot enable a lot
+assignment. Ambiguous retag retries retain their UUID per request fingerprint. Broker defaults
+use instrument history, then the latest global manual trade, then an active account.
+
+The additive `portfolio-summary?active=false` scope provides canonical all-holding data and an
+explicit `archivedPresentation`. The latter retains the existing web archive's ordinary-history
+and current-FX presentation, plus its dated in-kind income bridge. Native archive views consume
+that presentation rather than substituting the active canonical calculation. Default active totals
+and their cache remain unchanged; scope and currency use separate cache entries. See
+[[docs/api/portfolio-summary|the summary contract]]. Raw quote amounts seed edit fields; display
+columns retain the canonical response currency. Optional unavailable FX decomposition is shown as
+unavailable. The OpenAPI generator keeps snake_case/camelCase compatibility aliases as distinct
+Swift members when ordinary camelization would collide.
+
+Ticker queries are restricted to Yahoo-provider identities, including the existing configured-id
+or symbol fallback. Polling stops while hidden, inactive or offline; reduced motion and hover stop
+animation. News displays six articles and validates external HTTP(S) links. Exposure imports retain
+the existing typed server contract and 1 MB limit. The five asset pages reuse guarded histories,
+price disclosures and native forms while retaining their distinct layouts.
+
+`RebalanceModel` sends targets and reserve floor to the existing TypeScript operations. It first
+loads commitment-aware candidate cash, applies the custom cap, then asks for the plan. Fiscal,
+valuation, FIFO and deployment engines remain in TypeScript. URL drafts, saved plans and CAS
+conflicts preserve the web's input behavior. No trades are executed by this screen.
+
+`NetWorthModel` reads the full daily chart series independently of newest-first table pages,
+deduplicates table dates and uses raw page counts for offsets. Its period window uses Gregorian
+calendar days in the local timezone and anchors to the latest snapshot. Account rows combine
+server broker partitions and guarded stored-rate conversions, excluding cash from holdings-only
+wallets. Reconciliation remains visible when those totals differ from the headline. Refreshes
+cannot leave an older pagination spinner active or restore a period selected before an awaited
+price refresh. Cached/historical quote notices retain the refresh metadata.
+
+Completed price refreshes invalidate the other wealth screens through the shared coordinator's
+data revision, including when navigation happens during the request. A lost acknowledgement
+still triggers authoritative reads and retains the request error; cached values cannot imply
+that the mutation succeeded.
+
+Phase 3p mounts the shared native PDF sheet on overview and asset routes. `export=pdf` preserves
+all other parameters, and closing removes only that key with replace. The legacy performance redirect
+remains owned by the web router, which reports the resulting native Portfolio route. Net worth has
+its own loaded-page native print snapshot. Rendered print and synthetic Demo visual/keyboard review
+remain open gates; see [[docs/reference/native-parity/portfolio-holdings|Portfolio parity]] and
+[[docs/reference/native-parity/portfolio-wealth-tools|Wealth tools parity]]. Portfolio import and
+Portfolio Tax were still web surfaces at phase 3i; the following phase ports them.
+
+### Portfolio Import and Portfolio Tax (phase 3j)
+
+`PortfolioImportScreens` coordinates the advanced parser, multi-statement session, paginated history
+and batch review models. Native file selection/drop reads security-scoped files with the existing
+50 MiB limit. `PortfolioImportService` sends their original bytes to the additive, read-only
+`POST /api/portfolio/import/probe`: complete-source CSV/XLS/XLSX detection, source-account identities,
+separator and bounded header/sample preview remain in shared TypeScript. Probe failures stay explicit;
+this endpoint creates no batches or financial records. The Swift controls edit parser configuration
+and routing rather than parse financial amounts or infer an ambiguous broker destination.
+
+The advanced parser retains custom mapping, maintained presets, source hints, saved parsers,
+progress and the existing custom import behavior. Multi-statement sessions stage sequentially through
+the existing SSE operation and require a verified review-required result with zero imported rows.
+Stop waits for the active upload so its batch is retained. Session checkpoints contain staged batch
+metadata and reviewed routing/policy settings, excluding file bytes. Native reads and serializes
+the same two sessionStorage keys through the retained web page, preserving its session lifetime
+and staged web receipts. A retained IBKR batch can be
+added to the review scope. Source/routing/policy changes invalidate the reviewed plan; cash-only
+funding confirmation is tied to the current source routing. Whole history, source attachment,
+source correction, in-kind income and cash-only scopes retain their existing server rules.
+
+`PortfolioImportReviewModel` rejects malformed route IDs, resolves complete server-resolvable groups
+to an active investment or explicit new holding, and refreshes the authoritative preview after writes.
+The investment picker pages and verifies the complete active source. The multi-statement model
+requires a ready, blocker-free recognized plan and sends its exact `expected_plan_fingerprint` to
+the existing reconciliation commit operation. Server proof, lot/custody, correction, income/cash and
+immutable receipt logic is reused without a new migration or import writer. Batch history retains
+pagination and guarded rollback. Uncertain acknowledgements refresh retained batches/previews and
+block blind repeats; coordinated invalidation refreshes affected wealth screens and any visible
+Home, Insights, transaction or account view after cash/ledger writes, including lost responses. See
+[[docs/api/portfolio-imports|Portfolio Import API]] and
+[[docs/reference/fund-holdings-import-contract|the evidence contract]].
+
+`TaxYearRoute` accepts exactly four ASCII digits, stored snapshot years or the live-year window
+from 30 years back through one year ahead. `TaxScreens.loadRoute` reads the authoritative live
+profile before adopting or replacing the URL, preserving unrelated parameters and an already
+viewed fallback year. It retires prior year reads before awaiting that probe, including when the
+new probe fails.
+
+`PortfolioTaxView` reuses `TaxScreens` for the shared profile, historical year/status actions and
+native CSV, with the seven configurable Portfolio Tax widgets, recorded/manual costs and PIT budget.
+`PortfolioTaxModel` uses `getBelgianPortfolioTaxDashboard`, validates the selected year/currency and
+rejects late context revisions. Custom DTOs decode financial values directly as `Decimal`; charts
+convert coordinates only. All fiscal/FX amounts, cost bucket precedence, null dividend uncertainty,
+estimates and rate badges are computed by shared TypeScript. Source parity keeps the first 500
+name-ordered investment metadata rows and newest 1000 ordinary transactions per investment, active
+canonical values and the explicit archived/current-FX presentation. Historical selections filter
+recorded costs, manual keys, dividends/buy legs and annual tables while retaining current all-time
+gains/current-value estimates and selected frozen-first PIT. See
+[[docs/api/belgian-tax#Read Portfolio Tax widget data|the exact dashboard contract]].
+
+Manual adjustments and tax classifications edit the live household year even when viewing history.
+`PortfolioTaxSettingsDraft` preserves other years, archived entries and unknown fields in both maps;
+`PortfolioTaxService` sends one existing atomic `saveSettings` CAS request with unchanged original
+baselines. Conflicts or failed acknowledgements retain the open form and its submitted baseline;
+success requires a fresh authoritative read before opening another editor. Missing settings seed empty
+maps without replacing absence baselines. Widget settings preserve other pages. The shared profile
+sheet still writes through its retained draft. Portfolio Tax has no PDF action in the existing page;
+PDF export on the earlier Tax/Portfolio routes remains the shared web dialog.
+
+Portable Core/API/route and golden estimator checks cover these paths. The full macOS package build
+and the owner's synthetic Vision Demo visual/keyboard checks remain pending. Implemented action
+mappings are recorded in [[docs/reference/native-parity/portfolio-wealth-tools|Wealth tools parity]];
+[[docs/features/portfolio-import|Portfolio Import]] and [[docs/features/portfolio-tax|Portfolio Tax]]
+retain the shared processing contracts. [[docs/flow-visualizer.html|The flow visualizer]] includes
+native probe/staging, reviewed reconciliation/commit, and Portfolio Tax read/settings journeys.
+
+### Analysis workspace and Monitors (phase 3k)
+
+![[docs/diagrams/system-architecture.puml]]
+
+`AnalysisScreens` coordinates `AnalysisModel` and `AnalysisWorkbenchModel` for `/analysis`.
+`AnalysisWorkspaceView` composes the catalog-backed visual builder, SQL editor/history, financial
+parameters, result table/charts/pivot, refinement workbench and reusable-analysis library. Native
+controls send approved dataset/column identifiers, opaque SQL and plans to the existing restricted
+TypeScript execution APIs. Financial datasets, FX, formulas, calendar/preparation operations,
+scenario evaluation, sensitivity and goal calculations stay server-owned. `AnalysisService` uses
+generated operation metadata with custom lossless dynamic DTOs; decimal strings, unsafe identifiers,
+JSON cells, units, scope, coverage and provenance survive decoding. Chart coordinates alone use
+floating point; labels and tooltips retain original values.
+
+Explicit Run/Cancel, bounded paging and request/signature guards retain the last usable result and
+mark it outdated when its inputs change. Pivot cells drill against the current pivot plan independently
+of an older main table. Workbench previews debounce and reject superseded input signatures; Apply
+runs the complete existing TypeScript transformation pipeline and preserves returned completeness,
+lineage and errors. Money-aware presentation requires compatible units and complete source scope.
+Leaving the workspace cancels previews and retires read generations, resets per-visit state and keeps
+SQL history plus already-started write acknowledgements. See
+[[docs/reference/analysis-contract|the Analysis contract]] and
+[[docs/features/analysis-workspace|Analysis Workspace]].
+
+Saved definitions, run preferences, version history/restore and generated or JSON edit proposals
+reuse the existing versioned APIs. Native selection/draft guards prevent a late response from
+replacing another selected source. Restore carries the selected expected version; proposal preview
+and Apply require the same saved definition and base version. Server conflict/error responses stay
+visible. Names, source references and presentation settings remain metadata edits rather than
+unrelated financial-query changes.
+
+`AnalysisInterchangeService` sends original CSV/XLSX bytes to read-only multipart import and captured
+result/context JSON to multipart export. Shared `packages/shared-utils/src/analysis/` serializers and
+parsers serve both frontend compatibility wrappers and the backend; Node adapts XML through the
+existing Saxes library. CSV imports retain stable SHA-derived identities and replace the same
+attachment, while workbooks receive new identities and append. Removing an attachment removes its
+`inputId` joins. Original decimal strings and provenance column IDs survive; workbook formula cells
+are ignored as null and counted, imported unit metadata is unavailable, and formulas are never
+executed. Imports keep the existing five-attachment, 1000-row and 32-column caller limits; CSV is
+bounded at 1,000,000 bytes and XLSX at the effective parser limit of 10,000,000 bytes. Export uses a
+scoped 64 MiB transport and supports 100,000 XLSX rows without silently truncating. Any defined,
+current captured snapshot can export, including a paged/truncated snapshot whose window is retained;
+chart completeness gates do not block report export. CSV formula escaping, stored ZIP/CRC checks,
+Excel 1900 dates and precision-preserving workbook text match the shared web implementation. See
+[[docs/api/analysis#Read-only CSV and workbook interchange|the exact interchange API]].
+
+`AnalysisMonitorsModel` and `AnalysisMonitorsView` implement the separate `/analysis/monitors`
+route: paged rules and dossier targets, exact string thresholds, schedule/cooldown editing,
+enable/disable, explicit Check/Delete, observations and inbox read state. The page polls rules and
+inbox while visible; target selection and observation reads have independent generations. Mutations
+retire reads both before and after the server action, then refresh authoritative state, preventing
+an earlier read from overwriting a completed write. The existing local TypeScript scheduler and
+monitor service own comparisons, persisted baselines, episodes and notifications; Swift does not
+evaluate conditions or invoke providers. See [[docs/features/analysis-monitors|Analysis Monitors]].
+
+Portable Core/presentation, backend route and browser/Node golden checks cover these paths. The full
+macOS package build and synthetic Vision Demo visual/keyboard review remain pending, including
+EN/NL layout, focus, query cancellation, chart/pivot interaction, version/proposal dialogs and monitor
+errors. [[docs/reference/native-parity/analysis|Analysis parity]] records implemented controls;
+[[docs/flow-visualizer.html|the flow visualizer]] includes native execution/refinement, saved-version,
+interchange and monitor journeys.
+
+### Research Home, Markets, Lookup, Watchlist and Compare (phase 3l)
+
+`ResearchScreens` coordinates exactly five native routes: `/research`, `/research/markets`,
+`/research/market`, `/research/watchlist` and `/research/compare`. `ResearchHomeView` and
+`ResearchMarketsView` reuse the maintained catalog, paged watchlist/holding metadata, quote batches,
+news links and native search. `ResearchMarketLookupView`, `ResearchWatchlistView` and
+`ResearchCompareView` retain the source query parameters, dialogs, filters, provenance and explicit
+error/unavailable states. At phase 3l, Chart Builder and the remaining Research/AI screens
+retained their web implementation. Native phases 3m and 3n below cover those later ports.
+
+`ResearchService` reuses existing Research/Market/Watchlist/mapping/investment operations with
+custom lossless DTOs. `APIClient.sendWithMeta` exposes the same validated data plus retained metadata
+so provider/source/request identity is available to the native provenance controls. Provider price
+leaves remain optional/nullable, decimal values decode directly as `Decimal`, and unknown fields
+remain in raw values. Missing provenance source stays unavailable rather than inventing live data.
+`ResearchReadCache` coalesces current scoped reads, caches successful replies and retains prior usable
+model rows with a scoped error on refresh failure. Search debounces and hides old-query hits;
+route/symbol/range/selection generations discard late reads. Visible children own delayed polling;
+the coordinator propagates online/route changes, resets applicable local controls on entry and
+retires departing reads while preserving already-started write acknowledgements.
+Settings and global web overlays preserve the current Analysis/Research visit, its drafts and the
+Lookup dirty-form guard. `NativeShellModel.routeDidChange` retires those visits on an actual path
+exit, including navigation that occurs while an overlay covers the native screen.
+
+The additive `computeResearchPresentation` operation accepts one multipart JSON snapshot containing
+already-fetched values. Shared `packages/shared-utils/src/research/` helpers compute Compare rebased
+rows/statistics/timestamp-aligned correlations, Chart Builder indicators/OHLC fallbacks, Watchlist
+list/chart/add target facts, provider-history quotes, analyst verdict/bar fractions and market-add
+two-of-three previews. Frontend pages and compatibility exports reuse those same helpers. The
+endpoint has a scoped 64 MiB file limit and preserves complete submitted histories without extra
+provider, database, settings, FX or quota calls. Original provider order, duplicate/gapped timestamps,
+null warmups, percentage conventions and existing quote/booking currency behavior remain intact.
+Swift performs structural sorting and chart geometry, while numerical transformations stay
+TypeScript. See [[docs/api/research#POST /api/research/presentation|the exact presentation contract]].
+
+Lookup retains provider-mode history and regular symbol-mode quote/chart/news/analyst/scorecard
+reads, existing mapping operations, Watchlist add and market buy/sell drafts. The server preview
+supplies effective/derived unit fields and consistency; the existing trade writer remains
+responsible for persistence and validation. Scope/selection guards keep previous-symbol replies
+from replacing a new draft. A changed mapping instrument/investment identity resets proposal, audit
+and selection state rather than attaching the previous context to a new holding. The quote-native
+price seed can differ from the default booking currency; this existing source behavior is retained. Writes retain explicit failed/uncertain acknowledgement state and
+coordinate portfolio/watchlist invalidation rather than blindly replaying a create.
+
+Watchlist batches list metrics after the existing list and quote reads, computes chart/add facts
+from their matching source values, and displays the existing item currency without adding FX.
+Target edits PATCH only `target_price`; the added-price snapshot is immutable. Mutations retire
+reads before and after callbacks and refresh authority on success or failure. A selected chart stays
+selected until its actual row is removed. Add requests retain quote/selection scope and guard a lost
+acknowledgement from an unverified repeat. Compare preserves repeated-symbol URL normalization,
+maximum six symbols, eager chart plus scorecard reads even on the other tab, provider/source notes,
+fundamental ordering and first/last available history hints. Its presentation response is accepted
+only for the current input/generation; undefined or constant correlations remain unavailable.
+
+Named OpenAPI schema corrections record unchanged Market search `{items}`, quote/news `{items,total}`,
+paged Watchlist `{items,total,limit,offset}`, nullable Research leaves and investment history
+`{investment_id,provider,points:[{timestampMs,price}]}` with actual `from_ms`/`to_ms`/`db_only` queries.
+No migration, fiscal semantics or provider-selection change accompanies these ports. Portable native
+model/transport tests and frontend/backend source goldens cover the paths, including an independent
+comparison against the pre-extraction source. The full macOS package build and synthetic Vision Demo
+visual/keyboard checks remain pending. [[docs/reference/native-parity/research-and-ai-chat|Research
+parity]] records action coverage; [[docs/features/research|Research]] and
+[[docs/flow-visualizer.html|the flow visualizer]] retain the shared processing boundaries.
+
+### Research Chart Builder and Forecast/Life Scenario (phase 3m)
+
+`ResearchChartBuilderScreenView` mounts `/research/charts`; `ResearchForecastScreenView` mounts
+`/research/forecast` with Life Scenario embedded in the same page. These extend the five native
+Research routes from phase 3l. Dossiers and AI Chat/Investigation now use the native phase 3n
+implementation below.
+
+`ResearchChartBuilderModel` owns series, provider-pinned macro search, indicators/oscillators,
+local layouts and clipboard sharing of portable chart URLs. Ticker/macro reads retain
+source scopes and provider metadata. One existing `computeResearchPresentation` chart request
+returns aligned price/volume/OHLC, rebasing, SMA/EMA/Bollinger and raw-close RSI/MACD rows; native
+charts convert coordinates and edit structural settings without moving numerical transformations
+to Swift. Late state/range responses lose their generation authority. Empty/unavailable series and
+warmups remain explicit. Presets, axes, log/rebase controls and series/indicator limits retain the
+source behavior. See [[docs/api/research#POST /api/research/presentation|the chart presentation contract]].
+
+`ResearchChartLayoutStore` reads and serializes the same
+`vision.research.chartBuilder.layouts.v2` localStorage key through the retained WK page. It restores
+the complete library before editing, queues writes, reports storage failures and retains the
+portable version/state format. Limits remain 20 layouts, five series, 20 indicators, periods
+1..500, 250,000 UTF-8 bytes on save and the source UTF-16 read bound. Shared URLs use the same
+versioned base64url state and 20,000-character cap; a valid share is consumed through the existing
+route update. Copy Share encodes the current structural state, resolves the retained page origin
+and copies the resulting URL to the clipboard, with a visible success or failure notice. No
+financial data or simulation result is persisted by the stateless presentation service.
+
+`ResearchForecastScreens` coordinates `ResearchForecastModel` and `ResearchLifeScenarioModel`.
+Main Forecast keeps its 450 ms debounce, five-minute cache and source defaults, calls the existing
+TypeScript projection API and rejects stale input/generation/visit results. Invalid or still-pending
+main input hides prior output. Custom DTOs retain raw Decimal bands, metadata, absent values and
+unavailable extensions. Native rendering uses the six returned percentile/capital series; no
+simulation, drift, probability or contribution arithmetic is recreated in Swift. Required numeric
+available-result fields retain the canonical client guard even where OpenAPI records nullable
+wire overflow. An overflow is an error rather than a zero projection.
+
+Life Scenario receives the immediate main input independently of whether that main forecast can
+run. `lifeScenarioPrepare` overwrites discarded main contribution/goal/seed fields and returns
+baseline/interrupted requests, the reduced contribution and monthly deficit. Native forwards two
+existing forecast requests concurrently with the same returned seed, then submits their raw replies
+to `lifeScenarioCompare`. The shared TypeScript helper retains the fixed first three reduced months,
+trailing planned contributions, exactly five market-input comparisons and a median gap only when
+known. Null available medians are rejected at the existing client-validity boundary. No additional
+provider, database or FX call accompanies these preparation/comparison kinds. New unsaved runs use
+a fresh source ID; saved definitions keep their ID/seed. Local goal-month resolution is structural.
+Draft/input/currency signatures retire obsolete preparation, projection and comparison replies.
+
+Saved `life_scenarios` definitions use the existing settings CAS, with a first-read pinned raw
+baseline and serialized acknowledgements. Rejected/lost receipts retain recovery state rather than
+blindly replaying a write; only an acknowledged save advances the baseline. Delete retains the
+source bounded Undo action. Reads cannot replace pending mutation authority; a late acknowledgement
+after leave updates the baseline without restoring a departed draft. A real route exit resets
+controls and retires previews, while temporary native overlays retain their screen instance.
+There is no added polling or leave guard. See [[docs/features/research|Research]],
+[[docs/api/settings|Settings API]] and [[docs/diagrams/life-scenario-flow.puml|Life Scenario Flow]].
+
+Shared/backend tests and immutable frontend goldens verify monetary preparation, comparability,
+missing values, overflow/client rejection and unchanged projection behavior. Native Core/UI owners
+have separate focused transport/state checks. Full macOS package, responsive drawing, VoiceOver,
+keyboard and synthetic Vision Demo review remain pending; code coverage in
+[[docs/reference/native-parity/research-and-ai-chat|Research parity]] is not a rendered verification.
+
+### AI Chat, Investigation and Research Dossiers (phase 3n)
+
+`AIChatScreenView` mounts `/ai-chat`; `ResearchDossiersScreenView` mounts `/research/dossiers`.
+`AIChatScreens` keeps Chat and Investigation mounted through mode changes. The `mode` and `c`
+query parameters retain source selection, and the Ollama banner and conversation rail belong only
+to Chat. Same-visit mode/conversation updates do not independently refetch stale page-wide provider
+queries. Native overlays retain the screen; a real route exit retires page reads and resets local
+drafts. Full macOS package and synthetic Demo review remain pending.
+
+`AIChatModel`, `AIChatService` and `AIChatStreamStore` retain conversation paging, explicit
+create/rename/delete, the composer model/tools controls and existing JSON/SSE operations. Each
+conversation’s stream generation protects tokens, tool messages and terminal receipts; the stream
+store remains separate from page-read lifetime. Leaving the page does not implicitly stop an
+ongoing chat turn. Stop keeps partial output, and Retry Last Turn remains explicit rather than
+replaying a failed POST automatically. Typed raw DTOs retain Decimal tool values, usage, message
+status and unknown provider/result fields. Existing source completeness and streaming states remain
+visible; no new tool, model route or financial engine is introduced.
+
+Outgoing tool messages receive a `toolPresentation` sibling without changing `toolResult`.
+Shared `packages/shared-utils/src/ai-chat/toolPresentation.ts` derives ordered first-row columns,
+axes and source pie proportions before Swift loses JSON member order. It retains explicit empty
+x keys, nested-array rows, ignored legacy axis metadata and Recharts default signed sector
+composition, including no sectors for a nonpositive sum. Native charts draw returned geometry and
+format retained values; stored results and model prompts stay unchanged. SSE, JSON turns and
+historical conversation reads use the same enrichment. See [[docs/api/ai|AI Chat API]].
+
+`AIInvestigationModel` uses the existing jobs, status, documents and disclosure endpoints. Form
+preferences retain exact currency/benchmark/depth/model fallback rules and EN/NL language. Public
+symbols and web queries remain separately authored; selected evidence remains the inspected text.
+Cloud Run first produces the exact preview; the next consent action creates its digest-bound grant
+and submits the preview's frozen `outboundRequest` with that grant ID. Form or resolved-context
+changes retire obsolete previews. Native rendering retains capability/reference/preflight metadata,
+facts, calculations, interpretations, evidence locators and the existing saved-analysis link.
+
+Status alone follows the source 60-second TanStack freshness and mount/reconnect policy, with
+no automatic retry loop. The global QueryClient disables ordinary window-focus refetch; focus
+continues a previously paused read. Online initial mounts and newly invalidated active reads can
+start when backgrounded, while continuation of an offline-paused read waits for focus. Successful
+status receipts are shared with Settings without another provider request. Documents remain a
+mount-only manual read.
+The current job uses the source manual 1.2-second polling policy while the page remains mounted,
+including hidden mode and offline/background intervals; failed polls are silent. A slow GET does
+not postpone later interval ticks; published snapshots restart the interval and retire older read
+authority. Polling stops at
+completed, failed, cancelled, partial or waiting. Resume uses the current scope and the source
+clarification. Cancel leaves local job state to any already-active poll. Document upload sends original
+multipart bytes; document deletion retains its confirmation. Job/history deletion and grant
+revocation keep their immediate source actions. Footer revoke clears the active grant control;
+history revoke stamps only that history row. Visit/write guards prevent late reads restoring deleted
+or departed state. No job recovery browser or additional provider request is added. See
+[[docs/api/ai-research|AI Research API]] and [[docs/features/ai-chat|AI Chat]].
+
+`ResearchDossiersModel` retains the source 500-row list pages, explicit editor drafts, current links,
+evidence/document anchors, immutable versions, conflicts and server JSON exports. Saving sends the
+captured expected version; a stale editor gets a conflict rather than overwriting newer content.
+Restore creates a new version. New/switch with unsaved edits and delete/restore/reload retain their
+source confirmations; selecting the current dossier preserves the draft. Changing a linked document
+clears its four citation anchors, and only a literally empty source title is filled automatically.
+Deleted links retain their saved labels. Export one/all reads the existing server export operation
+and saves its captured JSON; there is no dossier import or financial transformation in Swift.
+Selection/visit guards and write acknowledgements protect newer drafts from stale reads. See
+[[docs/features/research-dossiers|Research Dossiers]] and [[docs/api/research-dossiers|its API]].
+
+Focused Foundation transport/state tests and TypeScript inference/Recharts tests cover these
+contracts. The native parity inventory records code coverage; responsive rendering, VoiceOver,
+keyboard behavior and Vision Demo acceptance still require macOS. The architecture/flow catalogue
+shows native clients calling existing backend services, with tool presentation staying in shared
+TypeScript and provider disclosure remaining behind the existing consent boundary.
+
+### Settings and global notices (phase 3o)
+
+![[docs/diagrams/frontend-state-management.puml]]
+![[docs/diagrams/frontend-data-flow.puml]]
+
+See also [[docs/diagrams/system-architecture.puml|System architecture]].
+
+The native Settings window has seven panes: General, Appearance, Insights, Behavior, AI & research,
+Backup, and About & maintenance. `NativeSettingsWindow.swift` and the `NativeSettings*.swift` views
+under `apps/native/Sources/VisionNativeUI/Screens/Settings/` use shared section/group/row primitives,
+a section rail with keyboard navigation, and the existing source controls. The retained router still
+owns section query parameters and Back/close navigation. Settings and action notices now render
+natively; the retained WK page continues to host onboarding, shared PDF dialogs, and browser state.
+
+`NativeSettingsModel.swift`, `NativeSettingsDefaults.swift`, and `NativeSettingsService.swift` under
+`apps/native/Sources/VisionNativeCore/Settings/` retain the existing settings API and raw first-read
+CAS baselines. App and dashboard envelopes are migrated into editable defaults while preserving
+unknown fields; optional AI model/depth/benchmark absence stays absent. Initial hydration does not
+save. Theme writes retain the source four known fields (`mode`, `schedule`, `variant`,
+`systemAccent`). Each preference key has its own 500 ms debounce and serialized write lane. Only
+acknowledged receipts advance its baseline; a rejected or uncertain save keeps the failed lane
+sticky rather than blessing a later draft with a fresh background read. App/dashboard failures
+retain the existing save feedback, while theme persistence retains the source silent-failure policy.
+Server-only transfer and cash-category controls keep their existing operations. No new backend
+endpoint or financial calculation accompanies this screen port.
+
+The retained page and native window share one writer for `app_settings`, `dashboard_settings`, and
+`theme_settings`. `apps/frontend/src/stores/hydration/nativeSettings.ts` receives immediate native
+drafts and separate acknowledged receipts, updates Zustand without an echo, and forwards retained
+page edits as structural field deltas. The native-only `shell:settings-change` bridge accepts only
+these three keys and their supported fields; removal is restricted to the four optional app fields.
+`NativeSettingsPatch.swift`, the existing bridge codec/dispatcher, and
+`apps/native/VisionNative/ShellController.swift` apply those deltas to the same native writer.
+App/dashboard unknown fields survive; schedule changes merge only the edited clock fields. Native
+mode disables the three web hydration writers. Draft mirrors never advance the web CAS baseline;
+only a checked server receipt does. These native-only messages are separate from the endpoint
+matrix's unchanged 309 HTTP routes, two health entries, and 25 Electron IPC entries (336 total).
+
+`NativeSettingsAIModel.swift` retains independent local/OpenAI defaults, source server-default
+fallbacks, benchmark-on-blur validation, and absent product-default depth. Secure provider drafts
+clear on submission, including failures; Clear appears only for settings-backed keys. Provider
+writes invalidate masked key status only. AgentCloak uses the existing status/configuration
+operations and refreshes desktop/OpenAI status after an acknowledgment. Successful status/model
+receipts are shared with Chat and Investigation; only pending typed reads for the same backend
+scope coalesce. Ordinary focus refetch is disabled globally, paused reads resume with focus,
+and Ollama keeps healthy/down polling intervals. An offline-paused mutation waits for online and
+foreground continuation even after its pane unmounts. `ShellRootView.swift` supplies app-lifetime
+connectivity and scene state to that model.
+
+Appearance keeps the five canonical palettes and source light/dark/system/schedule behavior. A
+system accent changes exactly `primary`, `primaryForeground`, `ring`, `sidebarPrimary`,
+`sidebarPrimaryForeground`, and `sidebarRing`. Both foreground tokens use the same source contrast
+pair; palette swatches and the palette accent remain canonical. Display size uses physical
+pixels, with the source cap above 6,000,000 pixels: auto-adapt defaults to reduced effects, and an
+explicit override stays session-only. `NativeSettingsAppearanceResolver.swift`,
+`Design/ThemeSelection.swift`, `VisionTheme.swift`, and the SDK host apply the same appearance to
+native chrome and the retained page.
+
+Backup/About use the existing native picker, encrypted bundle, passphrase, restore, services,
+update and onboarding bridges. `NativeSettingsStorageBridge.swift` captures the source localStorage
+registry without file bytes and restores captured strings without clearing omitted keys. Confirmed
+restore remains a lifecycle boundary. `NativeSettingsModel.suspendForRestore()` holds the latest
+debounced drafts, retires late reads, and waits for Main-accepted requests and writer queues before
+the database switch. A failed/cancelled restore resumes those drafts with the same opaque baselines
+and sticky failed lanes; it does not reread/rebase them. Successful reload retires callbacks and old
+writers and constructs fresh models/baselines.
+
+`API/NativeDataSession.swift` supplies `NativeSessionAPITransport` to the shared APIClient's HTTP
+and SSE paths. Confirmed restore pauses new mutation admission, waits for accepted transport writes,
+and stops current chat and import streams through the SDK. New reads are refused while paused, and a read
+admission epoch rejects pre-attempt results/read-stream chunks even if the restore fails and resumes
+the original database. A failed restore resumes the same session. Success retires it, rejecting old
+admissions and late HTTP/SSE delivery; a new client uses a fresh session.
+Transport cancellation does not assert that a server write rolled back. The Main fence has focused
+portable gated tests, and the shared transport has 13 focused cases; SDK/macOS verification
+remains unverified at this checkpoint. The common SDK restore path serves native Settings and retained
+web onboarding. A UUID owns each entered fence, so an overlapping operation cannot resume or retire
+another operation’s session. Main and legacy preference writers drain first, chat/import streams stop,
+and the shared transport drains before the existing Backup service switches the database through its
+unfenced transport. A successful restore marks the old graph for retirement; native reload and the
+renderer-ready path share one generation-checked rebuild task. Fresh models, the API session and
+preference writers replace the old graph once, including when the retained onboarding page reloads.
+
+`Shell/NativeRendererReadiness.swift` adds document authority alongside graph generation.
+Native load/reload enters an awaiting-commit state: outgoing ready receipts cannot release queues
+or publish UI readiness until WebKit commits the incoming document. Startup rechecks document,
+model identity and generation between each awaited stage. Reconstructed graphs preserve their route
+without constructor I/O; seeded detail and Settings/report presentation activate after readiness and
+settings, and a newer renderer route report supersedes that seed. Accepted restore keeps its existing
+mounted wizard/Backup view alive while readiness is false.
+Rebuilt graphs also retain their input/reload gate until checked startup. Acquiring that gate
+resigns a WebKit descendant responder and hides the retained view, preventing direct web input
+from reopening while the fresh native graph is still awaiting its document.
+
+Native-owned restore tracks fresh frontend writes and fresh-database onboarding completion in
+separate sessions. Its delayed reload drains actual callback/transport completion, including a callback
+arriving after the caller's timeout, before retiring those sessions and reconstructing the graph.
+Retained web restore still owns its own navigation. About's ordinary restart uses the same accepted-action
+drains and leave confirmation as Reload. These SDK paths await macOS semantic/runtime verification.
+
+AI Settings reconnect/focus handling rechecks each paused lane before forcing its read. An overlapping
+resume can claim a later lane while another callback awaits an earlier lane; the earlier callback's
+stale pending set must not replay that already-completed read. Controlled receipt tests preserve the
+single-read contract without relying on foreground scheduling speed.
+
+`Shell/NativeNoticeCenter.swift`, `Components/NativeNoticeHost.swift`, and `ActionToast.swift`
+provide app-lifetime notices and consume captured actions before awaiting them. Shell construction accepts an optional notice center so tests can control expiry and clock time; normal app construction retains automatic expiry. `AdminScreens.make` and `PortfolioScreens`
+also accept an optional shared cache clock; their app defaults remain wall-clock time. Transactions,
+Planned payments, Categories, Recipients, Chart Builder, and Life Scenario retain eight-second
+Undo actions and the source one-slot shortcut registry. Editor typing keeps its own Undo; route
+changes preserve eligible notices. Retry, Create rule, and Import actions remain non-Undo actions
+with their source callbacks/routes. No new retry or confirmation workflow is added.
+
+`.github/workflows/native-branch.yml` now verifies `codex/native-phase-*` branch pushes with an
+unsigned Debug macOS app build and Swift package tests. The `ca7a25ea` checkpoint built the app
+and package and passed all 1,617 Core tests; its UI run exposed blank SwiftUI PDF text and four
+focus-restoration failures. Updated display/key-window fixtures await their own Mac execution;
+the complete branch gate remains open. Read the handoff for newer checkpoint results.
+Portable source/transport tests and UI syntax checks do not replace macOS SDK or rendered
+VoiceOver/Demo verification. Those checks remain recorded gaps; the user's authorization continues
+later phases without a manual Demo-review intermission. See [[docs/features/settings|Settings]],
+[[docs/api/settings|Settings API]], and [[docs/reference/native-parity/shell-and-settings|Settings parity]].
+
+### Shell overlays and reports (phase 3p)
+
+`NativeCommandPaletteModel` and `NativeCommandPaletteView` own palette selection, recent actions,
+navigation and native shortcuts help. Inline answers are native ([[docs/adr/211-vision-native-without-web-content|ADR-211]]):
+`NativePaletteCalculator` (`Navigation/NativePaletteCalculator.swift`) ports the source's locale-aware
+arithmetic and `<amount> <cur> [in|to|naar <cur>]` conversion, and `NativePaletteRates` serves the
+exchange rates from `exchangeRates()` through a shared 10-minute cache. `ShellController` no longer
+calls `__visionNativePaletteAnswer`. `NativeShellNotificationsModel`
+owns the global FX state, Home upcoming-payment reminders and backup reminder. Their dismissal state
+uses the app-lifetime local-state queue, which drains accepted writes before restore.
+
+`lib/nativeHelperRuntime.ts` (kept after [[docs/adr/212-vision-native-retire-helper-document|ADR-212]]) installs and retires the fixed source callbacks and
+overlay keyboard bridge. The palette answer and the two tax-report callbacks
+(`__visionNativePaletteAnswer`, `__visionNativeTaxReportProfile`, `__visionNativeTaxReportContext`)
+are no longer called by the shell; their native replacements are described here and in ADR-211. `NativePaletteAnswerBridge.tsx` still owns its React lifetime, QueryClient
+and live translation reference; extraction does not retire the renderer or change financial logic.
+
+`NativeOverlayFocusReturn.swift` captures a weak route-window opener before the shared sheet
+presents and restores it after final dismissal. Graph, underlying route, window ownership and
+reload/restore checks reject stale returns; field editors retain their owning control and valid
+selection. The sheet-local bridge separately restores covered overlays. Palette Escape is handled
+at the container and its Close control has the cancel shortcut. Synthetic window tests are added;
+their macOS execution, outside-click behavior and VoiceOver remain unverified.
+
+`NativeOnboardingModel` and `NativeOnboardingView` replace the seven-step Welcome, Overview, Categories,
+Bank, Import, Tour and Backup wizard. Draft progress stays in the existing local-storage shape;
+completion uses the common settings writer. CSV review and backup restore reuse their existing owners.
+The strict native capability suppresses the competing web wizard before its hooks run.
+
+`NativeReportModel` and `NativeReportSheet` provide the shared financial, portfolio and tax export form.
+The initial period remains rolling twelve months, including exports opened from a historical Tax page.
+The source section order, twelve currencies, date/year validation, all-selected empty section array,
+financial exclusion scope and submit-time theme are preserved. Closing and reopening on the same path
+retains the draft; leaving the page resets it. Canceling the native save panel keeps the dialog and
+produces no success notice. Closing removes only the current route's `export` parameter.
+
+The hand-written binary request uses the existing `/api/reports/{type}` routes through a dedicated
+900-second client sharing `NativeDataSession`; PDF data and response headers are retained, with no
+retry. `NativeTaxReportContextService` reads the original selected-year overview and projects the
+report's three profile fields natively with `NativeTaxReportProfile` (partner A's primary activity sets
+the employment type; region and tax year are the household's), so no shared TypeScript projection runs
+([[docs/adr/211-vision-native-without-web-content|ADR-211]]). Frozen PIT/household precedence and legacy
+missing-household fields are preserved, including Decimal values and unknown household fields. Every
+four-digit report year reads `GET /api/belgian-tax/overview`: the route now accepts years 0000 through
+9999, and a year outside the storable 1900–2200 snapshot range gets the year-pinned live estimate the
+web report fallback computes ([[docs/api/belgian-tax|Belgian Tax API]]). The former source-context
+fallback (`__visionNativeTaxReportContext`) is gone. No report endpoint or fiscal formula changes.
+
+File → Print is a separate current-page operation. `NativeTaxPrintSnapshot` freezes the already loaded
+Tax year, visible widgets, comparison year, disclosure state and deduction state. The inert presentation
+and `NativeTaxPrintDocument` reuse section views without query lifecycle hooks or fiscal recalculation.
+Printer-only tables remove horizontal viewport clipping; Statistics pivots receive actual printable
+width. Each document's `printBlocks(presentation:width:)` factory returns ordinary section views and
+`NativePagePrintTableBlock` markers to `VisionNativeUI/Screens/Reports/NativePagePrintPagesView.swift`.
+The paginator measures each table's header, ordered variable-height rows and optional final footer.
+Rows that fit below a fresh header move whole to the next page when needed, and each continuation
+repeats the header. Column widths come from the complete frozen table once per printable width,
+so page subsets cannot shift columns. The footer appears once and stays with the final row when
+the pair fits. Effective paper or margin changes rebuild the frozen layout, including changes in
+the print panel.
+
+Tax adapters preserve expanded PIT/household tables, bracket notes, recorded-income rows and the
+captured comparison year. Statistics adapters cover pivot, payee and yearly-summary tables; Net worth
+adapters cover account allocations and loaded daily history. They preserve captured formatting,
+filters, totals, failures and footer notes without new reads or financial recomputation.
+An individual row or footer taller than the space below a fresh header can continue in clipped
+slices with repeated headers. If the header consumes the usable paper height, the paginator falls
+back to ordinary blocks to preserve the content; that fallback cannot repeat table headers.
+Ordinary non-table sections retain section-block pagination.
+
+Focused AppKit/PDF tests are on disk for row bounds, repeated headers, footer placement, long labels,
+narrow paper, changed margins/orientation and the three frozen documents. Their macOS execution for
+this slice remains pending; source implementation and parsing do not establish rendered or physical
+printer parity. The SDK checks route, generation, restore state and overlays again before paginated
+`NSPrintOperation` presentation. Statistics and Net worth retain their own immutable snapshots and
+inert documents. These additions do not complete the phase-3 exit gate.
+
+Print blocks are hosted in `NativePrintHostingView` (a Tax/Statistics/Net-worth replacement for
+`NSHostingView`): `NSPrintOperation` did not capture `NSHostingView` layers and PDFs were blank, so
+when not drawing to the screen the view draws the same SwiftUI root via `ImageRenderer`. Because
+`ImageRenderer` cannot draw AppKit-backed controls, the three Tax disclosures use `VisionDisclosure`,
+which prints as plain SwiftUI (title plus content when expanded) and is a `DisclosureGroup` on screen.
+macOS print/PDF test execution for this fix is still pending.
+
+The immutable combined Foundation proof passed **1,271 tests in 161 suites** for the mounted phase-3p
+Core graph (239 production and 86 test files); it excludes subsequent current-page print additions.
+Focused Reports proof passed **37 tests in two suites**. The retained source fiscal context and export
+regression passed **179 tests across 16 files**, with source typecheck, lint and build passing. These
+checks do not verify SwiftUI/AppKit compilation, accessibility, visual layout or real printer output.
+See [[docs/reference/native-parity/shell-and-settings|shell parity]],
+[[docs/reference/native-parity/tax|Tax parity]], [[docs/features/onboarding|onboarding]],
+[[docs/features/pdf-report-export|PDF export]] and [[docs/diagrams/index|structural diagrams]].
+
+### Staged native route and storage authority (phase 4 preparation)
+
+[[docs/adr/209-vision-native-staged-web-retirement|Proposed ADR-209]] introduces opt-in
+`NativeNavigationHistory`/`NativeNavigationLocation` and dormant `NativeRawStateStore` boundaries.
+The SDK retains renderer routing and browser storage. Native history tests cover exact raw queries,
+guarded push/replace/back/forward, Settings ownership, admin hydration and legacy redirects. The
+new `NativeNavigationStartup` selects the source boot mirror/last route without doing I/O or
+route admission, distinguishing a new-session seed from replacement after document reload.
+`NativeNavigationLocation.match` keeps decoded parameters separate from raw path/query;
+opt-in shell/table/Portfolio consumers use those values without decoding again. Numeric-ID
+coercion parity and the host request/commit/leave-guard protocol remain activation gates. The
+raw store requires an explicit origin, website-store identity, caller-selected file URL and complete
+capture provenance; atomic commits preserve unknown/raw local strings while session values remain
+in memory. It exports the existing 15-key backup subset and accepts only already-source-normalized
+restore strings. Missing, corrupt or incomplete migration state never silently becomes empty state.
+
+`NativeRawStateCaptureBridge` provides a dormant fixed read-only capture script and strict receipt
+decoder. It compares actual origin before storage access, reads all raw local entries and exactly
+four session keys, detects unstable rereads and rejects incomplete or mismatched replies. Request
+UUIDs correlate graph/document/capture receipts; echoed store identity does not verify WebKit.
+Host-exclusive admission, physical callback drains and current-generation checks are still required.
+`NativeNavigationIdentifier` separately models JavaScript Number coercion for route IDs only;
+its binary64 conversion is not a financial calculation and is not yet a complete import error policy.
+
+The detached `lib/nativeRouteAdapter.ts` delegates explicit requests to the actual source router
+after a native preflight lease, then observes source acceptance before reporting a commit. It adds
+no blocker, global history override or App wiring. Existing web leave guards remain authoritative;
+resolved-target admission, unified interception and host projection atomicity are still gates.
+[[docs/adr/210-vision-native-helper-document|ADR-210]] (accepted 2026-10-17) had recorded a separate
+default-off Debug Demo helper document. [[docs/adr/212-vision-native-retire-helper-document|ADR-212]]
+(2026-10-18) retired it: ADR-211's native-only mode replaced its purpose, and every helper
+artifact (HTML entry, `lib/nativeHelperDocument.ts`, `build:native-helper`, the backend
+`/native-helper.html` and `/native-helper-assets` namespace, the Swift session, bridge and
+selection types, and the `VISION_NATIVE_HELPER_DOCUMENT` opt-in) was deleted. The ADR-210 account
+below survives only as history in the ADR and in
+[[docs/reference/native-parity/agent-handoff|the agent handoff]].
+
+`lib/nativeHelperRuntime.ts` is the one survivor of the helper work: the retained React page still
+uses it through `NativePaletteAnswerBridge` for the overlay keyboard bridge (see the shell
+overlays section above).
+
+`NativeShellPresentationMode` is fixed at model construction and defaults to `retainedWeb`; it has
+two cases, `retainedWeb` and `nativeOnly`. Native-only maps startup to native loading and
+failure/missing native owners to native unavailable, and returns native Not Found for unknown
+routes. Its infrastructure is enclosed by a hidden AppKit parent that rejects hit testing and
+accessibility children. `printDisposition` blocks loading/error snapshots.
+
+Document selection and shell startup are shared by native-only mode. `ShellState.ready` carries
+`NativeShellBackendSource`; `NativeDocumentSelection` (`VisionNativeCore/Shell/NativeDocumentSelection.swift`)
+chooses `retainedWeb` or `nativeOnly` once, and `NativeDocumentSource` holds the eligible supervised
+origin and website data store. `ShellController` owns native history with one
+`NativeShellIntentCoordinator`, native menu admission, the locale command, vibrancy from the
+effective `enhanced` tier and `StartupRedirect` ownership (`vision.startupSection` and
+`vision.lastRoute` joined `NativeSettingsStorageBridge.LocalKey`) through the shared
+`applyNativeStartup`, `persistNativeNavigation` and `trackNativeNavigation` functions. `WebShell`
+has no helper script handler or `WKNavigation` tracking. `NativeDocumentState`
+(`setNativeDocumentState` / `nativeDocumentState`, renamed from `NativeHelperDocumentState` by
+ADR-212) carries the document state. `scripts/lib/native-mac-build.sh` stages only the ordinary
+frontend build.
+
+Optional `NativeShellIntentCoordinator` ownership keeps cold CSV/new-transaction actions and
+native menu commands outside renderer queues. A graph lease rejects retired consumers; readiness
+requires document/settings/onboarding/input gates and an explicit destination acknowledgment.
+Committed raw history and pending actions survive ordinary graph replacement; registered CSV
+expiry remains absolute, consumed drafts do not replay, and a replacement drops old Leave prompts.
+The first attachment preserves a legitimate initial pending startup request. The optional model
+parameter defaults to nil; SDK ingress/consumer wiring and fresh restore authority are still gates.
+Seven scoped coordinator tests pass with declared route/value adapters; seven full shell integration
+tests await macOS. No existing renderer event owner is retired by this preparatory code.
+
+
+
+### Native-only mode (ADR-211)
+
+[[docs/adr/211-vision-native-without-web-content|ADR-211]] adds the `nativeOnly` presentation, which
+runs the shell with no web view at all; [[docs/adr/212-vision-native-retire-helper-document|ADR-212]]
+removed the intermediate helper presentation, leaving `NativeShellPresentationMode` with
+`retainedWeb` and `nativeOnly`. `NativeDocumentSelection.select` makes native-only the default for
+an eligible launch (Debug build, Demo variant, supervised `vision_native_demo` backend at a
+loopback origin). An exact `VISION_NATIVE_WEB_FREE=0` opts out to the retained web document.
+`VISION_NATIVE_HELPER_DOCUMENT` no longer has any effect. Ineligible launches stay on the retained
+web document.
+
+- **Storage.** `NativeShellStorage` answers the fixed storage scripts (typed local keys,
+  backup export/restore) from `NativeRawStateStore`, which persists to
+  `native/<runtimeId>/raw-state.json` (`RuntimeLayout.rawState`, exposed as
+  `RuntimeSupervisor.rawStatePath`).
+- **One-time capture.** On the first run `ShellController` has `NativeStorageCapture` load the
+  backend `/health` document in a transient, unpresented web view. That document runs no
+  application script, so `NativeRawStateCaptureBridge` reads the origin's browser storage
+  exclusively; the view is then released. A capture with no local or session values records the
+  `startedEmpty` marker.
+- **Recorded source.** Once migrated, `NativeRawStateStore.recordedSource(at:)` returns the source
+  the file was captured from and the store opens under it, even if the backend port changed. Only
+  an unmigrated store stays bound to the current origin.
+- **Failure.** A store or capture failure shows the unavailable state (`NativeShellUnavailableView`);
+  the mode never starts from an assumed empty store.
+- **No web view.** `ShellController.startNativeOnly` builds a host without a `WKWebView`
+  (`NativeShellWebPresentation` renders nothing) and marks the document ready, logging
+  `native-only document ready`. A reload is a graph rebuild; the new graph is ready at once.
+
+The sidebar header shows the Vision logo button (`NativeSidebar.brandButton` in
+`ShellRootView.swift`), which toggles the sidebar like the web logo.
+
+### Native topbar and delta chips (phase 4)
+
+`NativeTopbar` (`VisionNativeUI/Components/NativeTopbar.swift`) is AppLayout's topbar drawn by
+`ShellRootView` in the transparent titlebar strip over native detail screens: the sidebar trigger and
+search button while the sidebar is hidden, and the page title once the page scrolls past 96 pt
+(`PageScrollObserver`, reset on route change). It takes no clicks outside its buttons, so the strip
+still drags the window. `DeltaPill` (`Components/DeltaPill.swift`) is the shared change chip (tinted
+capsule with a direction arrow, `invert` for spending); the Portfolio holdings, Research and
+Statistics/Tax chart views use it in place of ad hoc chips. In native-only mode, `ShellController.restoreBackup`
+(the bridge entry) refuses with "Restore is not available here" because native Settings owns restore.
+
+The Native End-to-End Smoke workflow (`.github/workflows/native-e2e.yml`) is described in
+[[docs/reference/scripts|Scripts]].
 
 ## Install
 

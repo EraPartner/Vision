@@ -79,7 +79,10 @@ import { SymbolSearchResultItem } from "@/components/shared/SymbolSearchResultIt
 import { SymbolSearchBox } from "@/components/shared/SymbolSearchBox";
 import { useSymbolSearch } from "@/hooks/useSymbolSearch";
 import { apiClient } from "@/lib/api";
-import { sma, ema, bollinger, rsi, macd } from "@/lib/research/indicators";
+import {
+    chartPresentation,
+    chartOscillatorPresentation,
+} from "@vision/shared-utils/research/presentation";
 import type { MacroSeriesItem, ResearchChartPoint } from "@/types/research";
 import { RESEARCH_RANGES as RANGES } from "@/lib/research/ranges";
 import { cn } from "@/lib/utils";
@@ -471,88 +474,16 @@ export default function ChartBuilderPage() {
 
     // ── Build the unified row set + ComposedChart series ──
     const { rows, composed } = useMemo(() => {
-        const pointsBySeries = new Map<string, ResearchChartPoint[]>();
-        for (const s of series)
-            pointsBySeries.set(s.id, pointsByKey.get(seriesKey(s)) ?? []);
-
-        // Per-series rebase factor (close-based), applied to price values & OHLC.
-        const factor = new Map<string, number>();
-        for (const s of series) {
-            const pts = pointsBySeries.get(s.id) ?? [];
-            const firstClose = pts.find(
-                (p) => Number.isFinite(p.close) && p.close > 0,
-            )?.close;
-            factor.set(s.id, rebaseAll && firstClose ? 100 / firstClose : 1);
-        }
-
-        const timeSet = new Set<number>();
-        for (const pts of pointsBySeries.values())
-            for (const p of pts) timeSet.add(p.time);
-        const times = Array.from(timeSet).sort((a, b) => a - b);
-
-        const byTime = new Map<string, Map<number, ResearchChartPoint>>();
-        for (const s of series)
-            byTime.set(
-                s.id,
-                new Map(
-                    (pointsBySeries.get(s.id) ?? []).map((p) => [p.time, p]),
-                ),
-            );
-
-        const rows: Row[] = times.map((time) => {
-            const row: Row = { time };
-            for (const s of series) {
-                const p = byTime.get(s.id)!.get(time);
-                const f = factor.get(s.id)!;
-                if (s.field === "volume") {
-                    row[`${s.id}`] = p ? p.volume : null;
-                } else {
-                    row[`${s.id}`] =
-                        p && Number.isFinite(p.close) ? p.close * f : null;
-                    row[`${s.id}_o`] =
-                        p && Number.isFinite(p.close) ? p.close * f : null; // open ~ prev close fallback
-                    row[`${s.id}_h`] =
-                        p && Number.isFinite(p.high) ? p.high * f : null;
-                    row[`${s.id}_l`] =
-                        p && Number.isFinite(p.low) ? p.low * f : null;
-                }
-            }
-            return row;
+        const { rows } = chartPresentation({
+            series: series.map((s) => ({
+                ...s,
+                points: pointsByKey.get(seriesKey(s)) ?? [],
+            })),
+            indicators,
+            rebase: rebaseAll,
+            oscillator: "none",
+            oscillatorSeriesId: null,
         });
-        // Candlestick open = previous row's close of that series (chart endpoint has no open).
-        for (const s of series) {
-            if (s.type !== "candlestick") continue;
-            let prev: number | null = null;
-            for (const row of rows) {
-                const close = row[`${s.id}`] ?? null;
-                row[`${s.id}_o`] = prev ?? close;
-                prev = close ?? prev;
-            }
-        }
-
-        // Indicators (computed on each indicator's source series, aligned by time).
-        for (const ind of indicators) {
-            const pts = pointsBySeries.get(ind.seriesId) ?? [];
-            const f = factor.get(ind.seriesId) ?? 1;
-            const closes = pts.map((p) =>
-                Number.isFinite(p.close) ? p.close * f : NaN,
-            );
-            const assign = (key: string, values: (number | null)[]) => {
-                const m = new Map<number, number | null>();
-                pts.forEach((p, i) => m.set(p.time, values[i] ?? null));
-                for (const row of rows) row[key] = m.get(row.time) ?? null;
-            };
-            if (ind.type === "sma") assign(ind.id, sma(closes, ind.period));
-            else if (ind.type === "ema")
-                assign(ind.id, ema(closes, ind.period));
-            else if (ind.type === "bollinger") {
-                const b = bollinger(closes, ind.period, 2);
-                assign(ind.id, b.middle);
-                assign(`${ind.id}_u`, b.upper);
-                assign(`${ind.id}_l`, b.lower);
-            }
-        }
-
         const composed: ComposedSeries<Row>[] = [];
         series.forEach((s, i) => {
             const color = getChartColor(i);
@@ -636,13 +567,12 @@ export default function ChartBuilderPage() {
                 oscRefs: [],
             };
         const pts = pointsByKey.get(seriesKey(src)) ?? [];
-        const closes = pts.map((p) => p.close);
-        const oscRows: Row[] = pts.map((p) => ({ time: p.time }));
+        const oscRows: Row[] = chartOscillatorPresentation(
+            [{ ...src, points: pts }],
+            oscillator,
+            src.id,
+        );
         if (oscillator === "rsi") {
-            const r = rsi(closes, 14);
-            oscRows.forEach((row, i) => {
-                row.rsi = r[i] ?? null;
-            });
             return {
                 oscRows,
                 oscSeries: [
@@ -660,12 +590,6 @@ export default function ChartBuilderPage() {
                 ],
             };
         }
-        const m = macd(closes);
-        oscRows.forEach((row, i) => {
-            row.macd = m.macd[i] ?? null;
-            row.signal = m.signal[i] ?? null;
-            row.hist = m.histogram[i] ?? null;
-        });
         return {
             oscRows,
             oscSeries: [

@@ -14,6 +14,26 @@ set -euo pipefail
 #
 # VISION_NATIVE_SKIP_PAYLOAD=1 builds without a payload (the app then explains how to
 # provide one). The payload uses the same prepare scripts as install-demo.sh.
+#
+# Options:
+#   --debug    build the Debug configuration. A Debug Demo starts in the native-only mode
+#              (ADR-211); launch it with VISION_NATIVE_WEB_FREE=0 for the retained web page.
+#   --measure  implies --debug; after installing, runs the end-to-end smoke CI runs for the
+#              native-only and retained modes (and the Electron Vision Demo when it is
+#              installed) and prints their memory side by side. It quits the apps it starts.
+
+CONFIGURATION=Release
+MEASURE=0
+for arg in "$@"; do
+  case "$arg" in
+    --debug) CONFIGURATION=Debug ;;
+    --measure) CONFIGURATION=Debug; MEASURE=1 ;;
+    *)
+      echo "ERROR: unknown option $arg (use --debug or --measure)."
+      exit 1
+      ;;
+  esac
+done
 
 REPO_PATH="$(cd "$(dirname "$0")" && pwd)"
 NATIVE_PATH="$REPO_PATH/apps/native"
@@ -41,7 +61,11 @@ source "$REPO_PATH/scripts/lib/mac-install.sh"
 
 echo "==> Vision Native builder"
 echo "    Repo: $REPO_PATH"
-echo "    Variant: $VARIANT ($APP_NAME)"
+echo "    Variant: $VARIANT ($APP_NAME), $CONFIGURATION"
+if [ "$MEASURE" = "1" ] && { [ "$VARIANT" != "demo" ] || [ "${VISION_NATIVE_SKIP_PAYLOAD:-}" = "1" ]; }; then
+  echo "ERROR: --measure needs the Demo variant with its payload."
+  exit 1
+fi
 
 # The documented Local.xcconfig line `VISION_NATIVE_TEAM_ID = <id>` must win over the
 # ad-hoc fallback below, which would otherwise override it on the command line.
@@ -112,11 +136,11 @@ else
   )
 fi
 
-echo "==> Building $APP_NAME (Release)..."
+echo "==> Building $APP_NAME ($CONFIGURATION)..."
 xcodebuild \
   -project "$NATIVE_PATH/VisionNative.xcodeproj" \
   -scheme "Vision Native" \
-  -configuration Release \
+  -configuration "$CONFIGURATION" \
   -derivedDataPath "$DERIVED_DATA" \
   "VISION_NATIVE_VARIANT=$VARIANT" \
   "${SIGNING_ARGS[@]}" \
@@ -124,7 +148,7 @@ xcodebuild \
   build
 
 APP_SRC="$(find_built_app \
-  "$DERIVED_DATA/Build/Products/Release/$APP_NAME.app")" || {
+  "$DERIVED_DATA/Build/Products/$CONFIGURATION/$APP_NAME.app")" || {
   echo "ERROR: could not find the completed $APP_NAME.app."
   exit 1
 }
@@ -155,4 +179,42 @@ echo "  It starts its own PostgreSQL 18 cluster and backend on synthetic Demo da
 echo "  ~/Library/Application Support/$APP_NAME/. Your Vision and Vision Demo data are untouched."
 if [ "$VARIANT" = "demo" ]; then
   echo "  Reset its synthetic dataset with: bun run demo:reset-vision-native (then reopen it)."
+fi
+if [ "$CONFIGURATION" = "Debug" ] && [ "$VARIANT" = "demo" ]; then
+  echo "  Debug build: it starts native-only (no web view). For the retained web page:"
+  echo "    VISION_NATIVE_WEB_FREE=0 \"$APP_DEST/Contents/MacOS/$APP_NAME\""
+fi
+
+if [ "$MEASURE" = "1" ]; then
+  MEASURE_DIR="$NATIVE_PATH/build/memory-$(date +%Y%m%d-%H%M%S)"
+  SMOKE="$REPO_PATH/.github/scripts/native-e2e-smoke.sh"
+  echo ""
+  echo "==> Measuring memory (synthetic Demo data; results in $MEASURE_DIR)..."
+  mkdir -p "$MEASURE_DIR"
+  modes=(native retained)
+  [ -d "/Applications/Vision Demo.app" ] && modes+=(electron)
+  for mode in "${modes[@]}"; do
+    app="$APP_DEST"
+    [ "$mode" = "electron" ] && app="/Applications/Vision Demo.app"
+    echo "--> $mode"
+    bash "$SMOKE" "$app" "$MEASURE_DIR" "$mode" >"$MEASURE_DIR/run-$mode.log" 2>&1 \
+      || echo "    $mode did not reach its ready state; see $MEASURE_DIR/run-$mode.log"
+  done
+  echo ""
+  echo "  Memory after startup, MB (Activity Monitor's Memory column is the footprint):"
+  printf '  %-10s %12s %12s %16s %10s\n' mode footprint main-RSS "app+backend+db" processes
+  # KiB -> MB; a missing value prints "?".
+  mb() { [ -n "$1" ] && echo $(($1 / 1024)) || echo "?"; }
+  for mode in "${modes[@]}"; do
+    metrics="$MEASURE_DIR/metrics-$mode.txt"
+    [ -f "$metrics" ] || { printf '  %-10s %s\n' "$mode" "no result"; continue; }
+    value() { sed -n "s/^$1=//p" "$metrics"; }
+    # `footprint` prints the app's physical footprint, which leaves shared system libraries out.
+    footprint="$(sed -n 's/.*[Ff]ootprint:[[:space:]]*\([0-9.]*[[:space:]]*[KMG]B\).*/\1/p' \
+      "$MEASURE_DIR/footprint-$mode.txt" 2>/dev/null | head -n 1 || true)"
+    printf '  %-10s %12s %12s %16s %10s\n' "$mode" "${footprint:-?}" \
+      "$(mb "$(value app_rss_kib)")" "$(mb "$(value app_tree_rss_kib)")" "$(value processes)"
+  done
+  echo ""
+  echo "  Per-mode details (footprint, vmmap summary, logs, screenshot): $MEASURE_DIR"
 fi

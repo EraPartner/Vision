@@ -7,6 +7,8 @@ public protocol BackupRuntime: Sendable {
     func dumpDatabase(to destination: String) async throws
     /// `exportAttachments(destination)`: a copy of the attachments tree (empty when none).
     func exportAttachments(to destination: String) async throws
+    /// `stop({ keepPostgres })`: the backend writer, and PostgreSQL unless `keepPostgres`.
+    func stop(keepPostgres: Bool) async throws
     /// `getSchemaHead()`: the highest Alembic revision of the live database.
     func schemaHead() async throws -> String
     /// `getLocalMigrationChainHead()`: the newest revision the installed payload carries;

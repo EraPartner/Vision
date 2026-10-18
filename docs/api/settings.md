@@ -4,8 +4,8 @@ type: endpoint
 method: GET, PUT, DELETE
 path: /api/settings
 description: User preferences and application settings
-date: 2026-10-11
-updated: 2026-10-11
+date: 2026-10-13
+updated: 2026-10-13
 tags: [api, settings, preferences, phase-3, auto-link, planned-match, june-2026]
 status: active
 aliases: [settings-api, preferences-api, user-settings, app-settings]
@@ -292,6 +292,7 @@ Per-user theme variant, color palette mode, and optional schedule for mode trans
 **Fields:**
 
 - **`variant`** (string, required): One of five curated color palettes. Defaults to `'default'` (Apple liquid glass with emerald + gold).
+- **`systemAccent`** (boolean, optional): Apply the macOS primary/ring accent family; defaults to false.
 - **`mode`** (string, required): Theme display mode.
   - `'light'`: Always light palette
   - `'dark'`: Always dark palette
@@ -357,6 +358,33 @@ Code links: [[apps/frontend/src/features/planned/PlannedPaymentForm.tsx]], [[app
 Shared date utilities include app-settings-aware date-time helpers used by settings propagation across date/time labels.
 
 Code links: [[apps/frontend/src/lib/dateUtils.ts]], [[apps/frontend/src/features/settings/DashboardSettingsDialog.tsx]], [[apps/frontend/src/features/settings/sections/AboutSection.tsx]], [[apps/frontend/src/pages/admin/ExchangeRatesPage.tsx]], [[apps/frontend/src/pages/research/MarketLookupPage.tsx]]
+
+## Native Settings writer (phase 3o)
+
+The native Settings window uses these same operations; this port adds no HTTP endpoint.
+`NativeSettingsService.swift` sends each conditional `PUT /api/settings/:key` with the original
+raw expected token and disables transport replay for these CAS writes. Its per-key persistence
+actor serializes writes, advances only acknowledged baselines, and retains rejected/uncertain lanes.
+App/dashboard editable defaults preserve unknown fields; the original expected JSON is unchanged.
+Theme writes contain `mode`, `schedule`, `variant`, and `systemAccent`.
+
+Confirmed restore suspends Main debounces and settles already accepted per-key queues before the
+database switch. Failure resumes the same raw baselines and sticky failures; success retires that
+writer. `NativeDataSession` gates the shared native HTTP/SSE transport without changing these API
+contracts. Reads are refused while paused, and pre-attempt read admissions stay invalid after a
+failed restore resumes. A transport cancellation never implies that a server write was rolled back.
+The SDK common restore path is UUID-owned and serves native Settings and retained web onboarding.
+Main and legacy writers drain before chat/import streams stop and the shared transport drains; the
+Backup service uses its existing unfenced restore transport. Native reload and renderer-ready recovery
+share a generation-checked rebuild task. Portable Main/transport tests exist; SDK/macOS verification
+remains pending.
+
+For the retained WK page, native-only `shell:settings-change` forwards supported deltas for
+`app_settings`, `dashboard_settings`, and `theme_settings` to that same writer. Draft mirrors do
+not count as receipts. `acknowledgeNativeSettingReceipt` validates the returned value/expected
+pair before updating a web baseline. This bridge is separate from the existing Electron IPC
+and HTTP endpoint counts. See [[docs/features/settings|Settings]] and
+[[docs/architecture/native-app#Settings and global notices (phase 3o)|Native Settings architecture]].
 
 ## Conflict and writer policy
 

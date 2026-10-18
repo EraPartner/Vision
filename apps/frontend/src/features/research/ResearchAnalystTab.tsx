@@ -1,3 +1,4 @@
+import { analystPresentation } from "@vision/shared-utils/research/presentation";
 import {
     useCurrencyFormatter,
     useCurrencyFormatSettings,
@@ -58,15 +59,9 @@ export function ResearchAnalystTab({
 
     const a = result?.data;
     const consensus = a?.consensus;
-    const total = consensus
-        ? consensus.strongBuy +
-          consensus.buy +
-          consensus.hold +
-          consensus.sell +
-          consensus.strongSell
-        : 0;
-
-    if (!a || total === 0) {
+    const presentation = analystPresentation(consensus ?? null);
+    const total = presentation?.total ?? 0;
+    if (!a || !presentation) {
         return (
             <p className="py-4 text-center type-callout text-label-secondary">
                 {t("research.analyst.none")}
@@ -75,22 +70,11 @@ export function ResearchAnalystTab({
     }
 
     const { strongBuy, buy, hold, sell, strongSell } = consensus!;
-    const bullPct = (strongBuy + buy) / total;
-    const bearPct = (sell + strongSell) / total;
-    const verdict =
-        bullPct >= 0.6
-            ? t("market.strongBuy")
-            : bullPct >= 0.45
-              ? t("market.buy")
-              : bearPct >= 0.6
-                ? t("market.strongSell")
-                : bearPct >= 0.45
-                  ? t("market.sell")
-                  : t("market.hold");
+    const verdict = t(presentation.verdictKey);
     const verdictColor =
-        bullPct >= 0.45
+        presentation.tone === "success"
             ? "text-success"
-            : bearPct >= 0.45
+            : presentation.tone === "destructive"
               ? "text-destructive"
               : "text-warning";
 
@@ -115,29 +99,34 @@ export function ResearchAnalystTab({
                         {
                             label: t("market.strongBuy"),
                             count: strongBuy,
+                            fraction: presentation.fractions.strongBuy,
                             barClass: "bg-success",
                         },
                         {
                             label: t("market.buy"),
                             count: buy,
+                            fraction: presentation.fractions.buy,
                             barClass: "bg-success/60",
                         },
                         {
                             label: t("market.hold"),
                             count: hold,
+                            fraction: presentation.fractions.hold,
                             barClass: "bg-warning",
                         },
                         {
                             label: t("market.sell"),
                             count: sell,
+                            fraction: presentation.fractions.sell,
                             barClass: "bg-destructive/60",
                         },
                         {
                             label: t("market.strongSell"),
                             count: strongSell,
+                            fraction: presentation.fractions.strongSell,
                             barClass: "bg-destructive",
                         },
-                    ].map(({ label, count, barClass }) => (
+                    ].map(({ label, count, fraction, barClass }) => (
                         <div
                             key={label}
                             className="flex items-center gap-2 type-footnote"
@@ -152,7 +141,7 @@ export function ResearchAnalystTab({
                                         barClass,
                                     )}
                                     style={{
-                                        width: `${(count / total) * 100}%`,
+                                        width: `${fraction * 100}%`,
                                     }}
                                 />
                             </div>

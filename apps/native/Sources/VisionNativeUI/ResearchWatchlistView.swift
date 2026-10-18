@@ -1,0 +1,224 @@
+import SwiftUI
+import VisionNativeCore
+
+public struct ResearchWatchlistView: View {
+    let model: ResearchWatchlistModel
+    let shell: NativeShellModel
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.visionTheme) private var theme
+    public init(model: ResearchWatchlistModel, shell: NativeShellModel) {
+        self.model = model
+        self.shell = shell
+    }
+    private var strings: any Localizing { shell.strings }
+    public var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                VisionPageHeader(
+                    title: strings.t("watchlist.title"), subtitle: strings.t("watchlist.subtitle"), symbol: "scope"
+                ) {
+                    addButton
+                }
+                if model.quotesUnavailable, !(model.page?.items.isEmpty ?? true) {
+                    Label(strings.t("watchlist.quotesOffline"), systemImage: "wifi.slash")
+                        .font(.callout).foregroundStyle(theme.warning)
+                }
+                if model.error != nil {
+                    ResearchCard {
+                        HStack {
+                            Text(strings.t("common.loadFailedRetry")).foregroundStyle(theme.destructive)
+                            Spacer()
+                            Button(strings.t("common.retry")) { Task { await model.load(force: true) } }
+                                .disabled(model.isLoading)
+                        }
+                    }
+                }
+                if model.isLoading && model.page == nil {
+                    ForEach(0..<3) { _ in ResearchCard { ProgressView().frame(maxWidth: .infinity).padding(20) } }
+                } else if let page = model.page {
+                    if page.items.isEmpty {
+                        ResearchCard {
+                            let lines = strings.t("watchlist.empty").components(separatedBy: "\n")
+                            VisionEmptyState(
+                                symbol: "scope", title: lines.first ?? "",
+                                description: lines.dropFirst().joined(separator: "\n")
+                            ) { addButton }
+                        }
+                    } else {
+                        VStack(spacing: 0) {
+                            ForEach(Array(page.items.enumerated()), id: \.element.id) { index, item in
+                                ResearchWatchlistRow(item: item, model: model, shell: shell)
+                                if index < page.items.count - 1 { Divider() }
+                            }
+                        }.background(theme.card, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.card))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: DesignTokens.Radius.card).stroke(
+                                    theme.border.opacity(0.6)))
+                    }
+                }
+            }.padding(24).frame(maxWidth: 1280, alignment: .leading).frame(maxWidth: .infinity)
+        }
+        .sheet(isPresented: Binding(get: { model.add.isPresented }, set: { if !$0 { model.add.close() } })) {
+            ResearchWatchlistAddSheet(model: model.add, shell: shell)
+        }
+        .sheet(isPresented: Binding(get: { model.selectedItem != nil }, set: { if !$0 { model.closeChart() } })) {
+            ResearchWatchlistChartSheet(model: model, shell: shell)
+        }
+        .confirmationDialog(
+            strings.t("watchlist.removeTitle"),
+            isPresented: Binding(get: { model.deletingItem != nil }, set: { if !$0 { model.deletingItem = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button(strings.t("watchlist.removeConfirm"), role: .destructive) { Task { await model.deleteConfirmed() } }
+            Button(strings.t("common.cancel"), role: .cancel) { model.deletingItem = nil }
+        } message: {
+            Text(strings.t("watchlist.removeDesc", ["name": model.deletingItem.map(ResearchWatchlistUI.name) ?? ""]))
+        }
+        .overlay(alignment: .bottom) {
+            NoticeToast(notice: model.add.notice ?? model.notice, strings: strings) { id in
+                model.add.clearNotice(id)
+                model.clearNotice(id)
+            }
+        }
+        .task(id: scenePhase) {
+            guard scenePhase == .active else { return }
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(60)) } catch { break }
+                if scenePhase == .active && model.isOnline { await model.poll() }
+            }
+        }
+    }
+    private var addButton: some View {
+        Button(strings.t("watchlist.addButton"), systemImage: "plus") {
+            model.add.begin(numberFormat: shell.settings.numberFormat)
+        }.buttonStyle(.borderedProminent)
+    }
+}
+
+private struct ResearchWatchlistRow: View {
+    let item: ResearchWatchlistItem
+    let model: ResearchWatchlistModel
+    let shell: NativeShellModel
+    @Environment(\.visionTheme) private var theme
+    private var strings: any Localizing { shell.strings }
+    private var metric: ResearchWatchlistMetrics? { model.metrics[item.id] }
+    var body: some View {
+        HStack(alignment: .top, spacing: 14) {
+            Image(
+                systemName: item.assetClass == "crypto"
+                    ? "bitcoinsign.circle" : item.assetClass == "metals" ? "diamond" : "chart.line.uptrend.xyaxis"
+            )
+            .foregroundStyle(theme.secondaryLabel).frame(width: 24).padding(.top, 4).accessibilityHidden(true)
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .top, spacing: 20) {
+                    identity.frame(minWidth: 240, maxWidth: .infinity, alignment: .leading)
+                    prices
+                }
+                VStack(alignment: .leading, spacing: 12) {
+                    identity
+                    prices
+                }
+            }
+            HStack(spacing: 5) {
+                Button {
+                    Task { await model.openChart(id: item.id) }
+                } label: {
+                    Image(systemName: "chart.xyaxis.line")
+                }
+                .buttonStyle(.borderless).accessibilityLabel(
+                    strings.t("watchlist.openChart") + ": " + ResearchWatchlistUI.name(item)
+                )
+                .help(strings.t("watchlist.openChart"))
+                Menu {
+                    Button(strings.t("watchlist.openChart"), systemImage: "chart.xyaxis.line") {
+                        Task { await model.openChart(id: item.id) }
+                    }
+                    Button(strings.t("watchlist.openLookup"), systemImage: "magnifyingglass", action: lookup).disabled(
+                        item.symbol?.isEmpty ?? true)
+                    Divider()
+                    Button(strings.t("aria.removeFromWatchlist"), systemImage: "trash", role: .destructive) {
+                        model.deletingItem = item
+                    }
+                    .disabled(model.isMutating)
+                } label: {
+                    Image(systemName: "ellipsis")
+                }
+                .menuStyle(.borderlessButton).fixedSize()
+                .accessibilityLabel(strings.t("watchlist.rowMenu", ["name": ResearchWatchlistUI.name(item)]))
+            }.padding(.top, 4)
+        }.padding(18).background(metric?.isAtOrBelowTarget == true ? theme.gain.opacity(0.06) : .clear)
+    }
+    private var identity: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                if let symbol = item.symbol, !symbol.isEmpty {
+                    Button(ResearchWatchlistUI.name(item), action: lookup).buttonStyle(.link).font(.headline)
+                        .multilineTextAlignment(.leading)
+                    Text(symbol).font(.caption.monospaced()).padding(.horizontal, 5).padding(.vertical, 2)
+                        .background(theme.foreground.opacity(0.04), in: RoundedRectangle(cornerRadius: 4))
+                } else {
+                    Text(ResearchWatchlistUI.name(item)).font(.headline)
+                }
+            }
+            Text(strings.t("addWatchlist." + item.assetClass)).font(.caption).foregroundStyle(theme.secondaryLabel)
+            if let value = metric?.sinceAddedPercent {
+                HStack(spacing: 6) {
+                    Text(
+                        strings.t(
+                            "watchlist.sinceAdded",
+                            ["date": VisionFormat.appDate(item.createdAt, format: shell.settings.dateFormat)]))
+                    DeltaPill(
+                        value, label: (value > 0 ? "+" : "") + ResearchWatchlistUI.percent(value, digits: 1, shell: shell))
+                }.font(.caption)
+            }
+            if let notes = item.notes, !notes.isEmpty {
+                Text(notes).font(.caption).foregroundStyle(theme.secondaryLabel).fixedSize(
+                    horizontal: false, vertical: true)
+            }
+        }
+    }
+    private var prices: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            if let price = item.symbol.flatMap({ model.quotes[$0]?.price }) {
+                Text(ResearchWatchlistUI.money(price, currency: item.currency, shell: shell)).font(.headline)
+                    .monospacedDigit()
+            } else {
+                Text(strings.t("watchlist.quoteUnavailable")).font(.callout).foregroundStyle(theme.secondaryLabel)
+            }
+            Text(
+                strings.t("watchlist.targetPrice") + " "
+                    + ResearchWatchlistUI.money(item.targetPrice, currency: item.currency, shell: shell)
+            )
+            .font(.caption).monospacedDigit()
+            if metric?.isAtOrBelowTarget == true {
+                Label(strings.t("watchlist.atTargetShort"), systemImage: "checkmark").font(.caption).foregroundStyle(
+                    theme.gain
+                )
+                .help(strings.t("watchlist.atTarget"))
+            } else if let percent = metric?.absoluteDistancePercent, let signed = metric?.distancePercent, signed > 0 {
+                DeltaPill(
+                    signed,
+                    label: ResearchWatchlistUI.percent(percent, digits: 1, shell: shell) + " "
+                        + strings.t("watchlist.aboveTarget"), invert: true)
+            }
+        }.fixedSize(horizontal: false, vertical: true)
+    }
+    private func lookup() {
+        guard let symbol = item.symbol else { return }
+        var components = URLComponents()
+        components.queryItems = [URLQueryItem(name: "symbol", value: symbol)]
+        shell.navigate(to: "/research/market?" + (components.percentEncodedQuery ?? ""))
+    }
+}
+
+enum ResearchWatchlistUI {
+    static func name(_ item: ResearchWatchlistItem) -> String { item.name.isEmpty ? item.symbol ?? "" : item.name }
+    @MainActor static func money(_ value: Decimal, currency: String, shell: NativeShellModel) -> String {
+        VisionFormat.currency(
+            value, code: currency, locale: shell.settings.numberFormat.locale,
+            fractionDigits: shell.settings.showDecimalPlaces)
+    }
+    @MainActor static func percent(_ value: Decimal, digits: Int, shell: NativeShellModel) -> String {
+        VisionFormat.percent(value, digits: digits, locale: shell.settings.numberFormat.locale)
+    }
+}

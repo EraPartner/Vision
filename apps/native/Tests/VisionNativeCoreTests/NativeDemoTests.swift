@@ -11,6 +11,8 @@ final class FakeDemoRuntime: DemoSeedingRuntime, @unchecked Sendable {
     var stats: DatabaseStats
     var statsAfterStart: DatabaseStats?
     private var statsReads = 0
+    /// Replaces the default recovery, which clears both restore journals.
+    var recoveryFailure: Error?
     let token = DatabaseSwitchToken(
         version: 1, liveDatabase: "vision_native", previousDatabase: "vision_native_previous_aaaaaaaaaa",
         activatedDatabase: "vision_native_restore_bbbbbbbbbb", activatedAt: "2026-10-12T00:00:00.000Z")
@@ -53,6 +55,15 @@ final class FakeDemoRuntime: DemoSeedingRuntime, @unchecked Sendable {
     }
 
     func ensurePostgresReady() async throws { record("ensurePostgresReady") }
+
+    func recoverInterruptedRestore() async throws {
+        record("recoverInterruptedRestore")
+        if let recoveryFailure { throw recoveryFailure }
+        lock.withLock {
+            _ = stateValue?.removeValue(forKey: "pendingDatabaseSwitch")
+            _ = stateValue?.removeValue(forKey: "pendingAttachmentSwitch")
+        }
+    }
 
     func rollbackDatabaseSwitch(_ token: JSONValue?) async throws {
         record("rollback:\(token?["activatedDatabase"]?.stringValue ?? "-")")
@@ -181,7 +192,8 @@ private let fixedNow: @Sendable () -> Date = { Date(timeIntervalSince1970: 1_790
         #expect(runtime.state?["demoSeedInProgress"]?["schemaRevision"] == .string("0130_head"))
         #expect(
             runtime.events == [
-                "ensureLayout", "discover", "writeState", "validate:demo-seed.dump", "activate:0130_head", "stats",
+                "ensureLayout", "discover", "ensurePostgresReady", "recoverInterruptedRestore", "writeState",
+                "validate:demo-seed.dump", "activate:0130_head", "stats",
             ])
 
         let warning = try await NativeDemo.finalize(
@@ -219,7 +231,7 @@ private let fixedNow: @Sendable () -> Date = { Date(timeIntervalSince1970: 1_790
         #expect(!runtime.events.contains("finalizeSwitch"))
     }
 
-    @Test func interruptedSwitchIsRolledBackFirst() async throws {
+    @Test func interruptedRestoreIsRecoveredFirst() async throws {
         let harness = try Harness()
         harness.installSeed()
         let pending = JSONValue.object(["liveDatabase": .string("vision_native"), "activatedDatabase": .string("x")])
@@ -227,7 +239,62 @@ private let fixedNow: @Sendable () -> Date = { Date(timeIntervalSince1970: 1_790
             layout: harness.layout, state: ["pendingDatabaseSwitch": pending], stats: seedStats())
         _ = try await NativeDemo.prepare(
             runtime: runtime, seedRoot: testSeedRoot, fileSystem: harness.fileSystem, now: fixedNow)
-        #expect(Array(runtime.events.prefix(4)) == ["ensureLayout", "discover", "ensurePostgresReady", "rollback:x"])
+        #expect(
+            Array(runtime.events.prefix(4)) == [
+                "ensureLayout", "discover", "ensurePostgresReady", "recoverInterruptedRestore",
+            ])
+        #expect(!runtime.events.contains("rollback:x"))
+    }
+
+    /// native-demo.test.ts: paired journals are recovered before a current seed is trusted.
+    @Test func pairedRestoreJournalsAreRecoveredBeforeTrustingACurrentSeed() async throws {
+        let harness = try Harness()
+        harness.installSeed()
+        let seed = try NativeDemo.loadSeed(seedRoot: testSeedRoot, fileSystem: harness.fileSystem)
+        let runtime = FakeDemoRuntime(
+            layout: harness.layout,
+            state: [
+                "pendingDatabaseSwitch": .object(["previousDatabase": .string("vision_native_previous")]),
+                "pendingAttachmentSwitch": .object(["previousDirectory": .string("attachments.previous")]),
+                "demoSeed": .object([
+                    "logicalSha256": .string(seed.manifest.logicalSha256),
+                    "schemaRevision": .string(seed.manifest.schemaRevision),
+                ]),
+            ],
+            stats: seedStats())
+        let prepared = try await NativeDemo.prepare(
+            runtime: runtime, seedRoot: testSeedRoot, fileSystem: harness.fileSystem, now: fixedNow)
+        #expect(prepared.status == .current)
+        #expect(runtime.state?["pendingDatabaseSwitch"] == nil)
+        #expect(runtime.state?["pendingAttachmentSwitch"] == nil)
+        let events = runtime.events
+        let recovered = try #require(events.firstIndex(of: "recoverInterruptedRestore"))
+        let ready = try #require(events.firstIndex(of: "ensurePostgresReady"))
+        let firstWrite = try #require(events.firstIndex(of: "writeState"))
+        #expect(ready < recovered)
+        #expect(firstWrite > recovered)
+        #expect(!events.contains { $0.hasPrefix("rollback") || $0.hasPrefix("activate") })
+    }
+
+    /// native-demo.test.ts: a failed coordinated recovery stops the preparation before
+    /// any write, rollback or seed restore.
+    @Test func aFailedCoordinatedRecoveryStopsDemoPreparation() async throws {
+        let harness = try Harness()
+        harness.installSeed()
+        let journals: [String: JSONValue] = [
+            "pendingDatabaseSwitch": .object(["previousDatabase": .string("vision_native_previous")]),
+            "pendingAttachmentSwitch": .object(["previousDirectory": .string("attachments.previous")]),
+        ]
+        let runtime = FakeDemoRuntime(layout: harness.layout, state: journals, stats: seedStats())
+        runtime.recoveryFailure = NativeRuntimeError("SYNTHETIC", "Synthetic recovery failure")
+        let error = await #expect(throws: NativeRuntimeError.self) {
+            try await NativeDemo.prepare(
+                runtime: runtime, seedRoot: testSeedRoot, fileSystem: harness.fileSystem, now: fixedNow)
+        }
+        #expect(error?.code == "SYNTHETIC")
+        #expect(runtime.state == journals)
+        #expect(!runtime.events.contains("writeState"))
+        #expect(!runtime.events.contains { $0.hasPrefix("rollback") || $0.hasPrefix("activate") })
     }
 
     @Test func rollbackRestoresThePreviousSeedMarker() async throws {

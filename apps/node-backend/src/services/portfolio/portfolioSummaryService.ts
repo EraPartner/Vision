@@ -21,7 +21,11 @@ import type {
   ArchivedIncomeDbRow,
   SummaryInvestmentDbRow,
 } from "../../database/rows/portfolio.ts";
-import { convertToCurrency } from "../currency/currencyConversionService.ts";
+import {
+  convertToCurrency,
+  listLatestStoredRates,
+  FALLBACK_RATES,
+} from "../currency/currencyConversionService.ts";
 import {
   buildHistoricalRateIndex,
   findRateOnOrBeforeInIndex,
@@ -31,9 +35,11 @@ import { asPartitionedTxns } from "./portfolioTransactionRules.ts";
 import { settingsRepository } from "../../repositories/settingsRepository.ts";
 import { portfolioTransactionRepository } from "../../repositories/portfolioTransactionRepository.ts";
 import { todayAppDateString } from "../../lib/timezone.ts";
+import { buildArchivedPortfolioPresentation } from "./archivedPortfolioPresentation.ts";
 import { toYmd } from "../../lib/dateFormat.ts";
 import {
   toDecimal,
+  toNumber,
   addAll,
   multiply,
   divide,
@@ -97,6 +103,7 @@ export interface PortfolioSummaryOptions {
   throughDate?: string | undefined;
   activeInvestmentsOnly?: boolean | undefined;
   includeBrokerSnapshotParity?: boolean;
+  includeArchivedPresentation?: boolean;
 }
 
 /**
@@ -125,16 +132,19 @@ export async function getPortfolioSummary(
     throughDate = undefined,
     activeInvestmentsOnly = true,
     includeBrokerSnapshotParity = false,
+    includeArchivedPresentation = false,
   }: PortfolioSummaryOptions = {},
 ): Promise<{
   currency: string;
   computed_at: string;
+  firstInvestmentDate?: string;
   totals: PortfolioTotals;
   summaries: InvestmentSummary[];
   byAccount: AccountBreakdownRow[];
   archivedInKindIncome: { id: number; totalInKindIncome: number }[];
   brokerageCashFees: Awaited<ReturnType<typeof getBrokerageCashFees>>;
   brokerSnapshotParity?: { totalValue: string; partitionValue: string };
+  archivedPresentation?: ReturnType<typeof buildArchivedPortfolioPresentation>;
 }> {
   const target = (targetCurrency || "EUR").toUpperCase();
 
@@ -163,6 +173,27 @@ export async function getPortfolioSummary(
   const includedTxnRows = throughDate
     ? txnRows.filter((txn) => toYmd(txn.date) <= throughDate)
     : txnRows;
+  const activeIds = new Set(
+    investmentRows.filter((inv) => inv.is_active).map((inv) => Number(inv.id)),
+  );
+  const firstInvestmentDate = includedTxnRows
+    .filter(
+      (txn) =>
+        activeIds.has(Number(txn.investment_id)) &&
+        txn.type !== "asset_transfer" &&
+        txn.type !== "asset_adjustment",
+    )
+    .map((txn) => toYmd(txn.date))
+    .sort()[0];
+  // The web archive replays ordinary CRUD history at current quote FX; retain that
+  // presentation separately from canonical dated-FX summaries and active totals.
+  const archivedOrdinaryRows = includeArchivedPresentation
+    ? includedTxnRows
+        .filter(
+          (t) => t.type !== "asset_transfer" && t.type !== "asset_adjustment",
+        )
+        .map((t) => ({ ...t }))
+    : [];
 
   const txnsByInvestment = new Map<number, AnnotatedTxRow[]>();
   for (const txn of includedTxnRows) {
@@ -298,15 +329,47 @@ export async function getPortfolioSummary(
     throughDate ?? todayYmd,
     totals.totalGainLoss,
   );
+  let archivedMultipliers = multiplierByCurrency;
+  if (includeArchivedPresentation) {
+    const latest = await listLatestStoredRates();
+    const rates: Record<string, number> = { ...FALLBACK_RATES, EUR: 1 };
+    for (const row of latest.rows)
+      if (Number(row.rate_to_eur) > 0)
+        rates[row.currency_code.toUpperCase()] = Number(row.rate_to_eur);
+    archivedMultipliers = new Map(
+      investmentRows.map((inv) => {
+        const from = (inv.currency || "EUR").toUpperCase();
+        return [
+          from,
+          from === target || !rates[from] || !rates[target]
+            ? 1
+            : divide(rates[from], rates[target]).toNumber(),
+        ];
+      }),
+    );
+  }
 
   return {
     currency: target,
     computed_at: new Date().toISOString(),
+    ...(firstInvestmentDate ? { firstInvestmentDate } : {}),
     totals,
     summaries,
     byAccount,
     archivedInKindIncome,
     brokerageCashFees,
+    ...(includeArchivedPresentation
+      ? {
+          archivedPresentation: buildArchivedPortfolioPresentation(
+            investmentRows,
+            archivedOrdinaryRows,
+            summaries,
+            archivedMultipliers,
+            costBasisMethod,
+            todayYmd,
+          ),
+        }
+      : {}),
     // Snapshot parity must compare the same unrounded valuation tracks. Public
     // totals sum individually rounded investments; account rows round once.
     ...(includeBrokerSnapshotParity
@@ -756,6 +819,23 @@ function buildInvestmentSummary(
     // `originalCurrency` so the UI can still display it as a label.
     currency: targetCurrency,
     originalCurrency: invCurrency,
+    nativeCurrentPrice: Number(inv.current_price) || 0,
+    nativeAvgCostBasis: toNumber(core.avgCostBasis),
+    unrealizedGainPercent: multiply(
+      round2(convertedAvgCostBasis),
+      round8(totalUnits),
+    ).gt(0)
+      ? divide(
+          round2(convertedUnrealizedGain),
+          multiply(round2(convertedAvgCostBasis), round8(totalUnits)),
+        )
+          .times(100)
+          .toNumber()
+      : 0,
+    // RealEstatePage displays the latest ordinary rent amount directly because its
+    // summary currency already equals the display currency. Preserve that behavior.
+    estimatedMonthlyRent:
+      Number(txns.filter((t) => t.type === "rent_income").at(-1)?.amount) || 0,
 
     // Computed numerics — pre-converted to targetCurrency
     totalUnits: round8(totalUnits),

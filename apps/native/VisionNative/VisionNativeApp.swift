@@ -85,6 +85,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // backup needs the running services, so both finish before the shutdown.
             await shell.prepareForQuit()
             await AppRuntime.supervisor.shutdown()
+            await shell.announceStopped()
             self.finishShutdown(sender)
         }
         Task {

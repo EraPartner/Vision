@@ -2,8 +2,8 @@
 title: "Native parity inventory"
 type: reference
 status: active
-date: 2026-10-12
-updated: 2026-10-12
+date: 2026-10-17
+updated: 2026-10-17
 tags: [reference, swift-rewrite, native-parity, index, adr-203]
 description: "Index of the code-derived inventory of every screen, dialog and user action in the web UI. It is the parity checklist for the Swift rewrite (ADR-204): each row is web today and flips to native when a screen PR ports it."
 aliases: [native parity, parity inventory, swift parity checklist]
@@ -44,6 +44,9 @@ Counts are the pages' own. The 44 screens are the 40 manifest routes, the `/port
 
 ## Phase 1 exit
 
+[[docs/reference/native-parity/agent-handoff|The active agent handoff]] records the published
+branch, current phase, parallel ownership, unfinished work and validation gaps for continuation.
+
 [[docs/reference/native-parity/phase-1-exit|The phase 1 exit checklist]] maps each of the shell
 page's 205 action rows, its keyboard shortcuts and its bridge methods to the Vision Native code at
 the end of phase 1, and counts the gaps that remain for the hand-over
@@ -51,7 +54,7 @@ the end of phase 1, and counts the gaps that remain for the hand-over
 
 ## Findings that change the plan
 
-- **The Belgian tax engine runs in the frontend**, not the backend: `apps/frontend/src/lib/belgianTax/` (about 9,500 lines), lazy-loaded by `BelgianTaxProfileContext`. The backend stores the profile and renders the PDF. The rewrite plan assumed a backend service; Tor decided on 2026-10-12 that the engine moves behind a backend OpenAPI operation before the Tax screen goes native (ADR-204 §6).
+- **The Belgian tax engine now has a backend operation**: `POST /api/belgian-tax/compute` runs the shared TypeScript engine in `packages/shared-utils/src/belgianTax/`. The web app uses compatibility exports and retains its lazy loading. This satisfies ADR-204's computation prerequisite. Phase 3h now implements native Tax widgets/charts, the six-step write-through profile sheet, snapshot/freeze/filing/history actions, deductions and CSV. Overview/dashboard APIs preserve frozen figures and keep fiscal derivation server-owned. Phase 3p mounts the native PDF report sheet and loaded-page Tax/Statistics/Net worth print documents. App compilation has passed on macOS; the full package gate, rendered print and Demo interaction/accessibility parity remain under verification. See [[docs/api/belgian-tax|Belgian Tax API]].
 - **Two routes were missing from [[docs/reference/frontend-routes|Frontend Routes]]**: `/analysis/monitors` and `/research/dossiers`. Both are in `appRouteManifest` and the sidebar; the routes page now lists them.
 - **Electron-only surfaces** (application and dock menus, badge, CSV open-with, vibrancy, accent colour, the `electronBackup`, `electronAudit`, `electronUpdater`, `electronServices`, `electronAPI` and `electronRecovery` bridges) are inventoried on the shell page. The updater rows are the one deliberate cut (ADR-204 §5).
 
@@ -60,6 +63,7 @@ the end of phase 1, and counts the gaps that remain for the hand-over
 | Rows                                                                                    | Decision                                                                        |
 | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
 | Shell: Updates section of Settings › About, `electronUpdater` bridge, update menu items | Not ported; the install script is the update path (ADR-204 §5, Tor 2026-10-11). |
+| Shell: Help › About on non-macOS (app menu row 16)                                       | Not applicable; Vision Native is macOS-only and its app menu has About (owner 2026-10-17). |
 
 ## Doc and code conflicts
 

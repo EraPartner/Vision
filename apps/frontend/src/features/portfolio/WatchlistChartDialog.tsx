@@ -1,3 +1,4 @@
+import { watchlistPresentation } from "@vision/shared-utils/research/presentation";
 import { useEffect, useState } from "react";
 import { MAX_NUMERIC_18_6, parseDecimal } from "@/lib/decimal";
 import { useQueryClient } from "@tanstack/react-query";
@@ -137,12 +138,18 @@ export function WatchlistChartDialog({
     const hasValidTarget =
         Number.isFinite(rawTargetPrice) && rawTargetPrice > 0;
     const currentPrice = quoteData?.price ?? null;
-    const isBelowTarget =
-        currentPrice != null && hasValidTarget && currentPrice <= targetPrice;
-    const priceDiff =
-        currentPrice != null && hasValidTarget
-            ? ((currentPrice - targetPrice) / targetPrice) * 100
-            : null;
+    const {
+        chart: {
+            isAtOrBelowTarget: isBelowTarget,
+            distancePercent: priceDiff,
+            domain: [minPrice, maxPrice],
+        },
+    } = watchlistPresentation({
+        targetPrice: rawTargetPrice,
+        currentPrice,
+        addedPrice: item.added_price ?? null,
+        points: chartData?.points ?? [],
+    });
 
     // Format chart data
     const formattedData =
@@ -154,15 +161,6 @@ export function WatchlistChartDialog({
             price: p.close,
             time: p.time,
         })) || [];
-
-    // Find min/max for chart domain
-    const prices = formattedData
-        .map((d) => d.price)
-        .filter((p): p is number => Number.isFinite(p) && p > 0);
-    const allPrices = hasValidTarget ? [...prices, targetPrice] : prices;
-    const hasChartDomain = allPrices.length > 0;
-    const minPrice = hasChartDomain ? Math.min(...allPrices) * 0.98 : 0;
-    const maxPrice = hasChartDomain ? Math.max(...allPrices) * 1.02 : 1;
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>

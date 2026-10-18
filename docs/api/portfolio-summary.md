@@ -2,12 +2,40 @@
 title: Portfolio Summary API
 type: endpoint
 status: active
-date: 2026-10-08
-updated: 2026-10-08
-tags: [endpoint, api, portfolio, realtime, summary, totals, dashboard, performance, net-worth, live-overlay, fx-attribution, asset-gain, fx-gain, purchase-date-rates, per-account, byAccount, adr-091, adr-100]
+date: 2026-10-13
+updated: 2026-10-13
+tags:
+  [
+    endpoint,
+    api,
+    portfolio,
+    realtime,
+    summary,
+    totals,
+    dashboard,
+    performance,
+    net-worth,
+    live-overlay,
+    fx-attribution,
+    asset-gain,
+    fx-gain,
+    purchase-date-rates,
+    per-account,
+    byAccount,
+    adr-091,
+    adr-100,
+  ]
 description: "Realtime portfolio totals endpoint serving as single source of truth for dashboard, performance, and (from 2026-05-31) net-worth current-point metrics. Single computation path, consistent FX timing, 60s cache TTL. 2026-06-11 (ADR-074): flows convert at transaction-date FX; gainLoss = assetGain + fxGain. 2026-06-18 (ADR-091/ADR-100): additive byAccount array. 2026-08-10 (ADR-108): byAccount carries full per-broker P&L from the partitioned lot engine, summaries carry fullyAssigned, Σ byAccount ≡ totals parity-tested under all cost-basis methods."
 aliases: [portfolio-totals, portfolio-metrics, summary-api]
-related_code: ["apps/node-backend/src/services/portfolio/portfolioSummaryService.ts", "apps/node-backend/src/routes/info/portfolioSummary.ts", "apps/node-backend/src/routes/info/_cache.js", "apps/node-backend/src/routes/info/_liveSummary.js", "apps/frontend/src/hooks/portfolio/usePortfolioSummary.ts", "apps/frontend/src/lib/api/info.ts"]
+related_code:
+  [
+    "apps/node-backend/src/services/portfolio/portfolioSummaryService.ts",
+    "apps/node-backend/src/routes/info/portfolioSummary.ts",
+    "apps/node-backend/src/routes/info/_cache.js",
+    "apps/node-backend/src/routes/info/_liveSummary.js",
+    "apps/frontend/src/hooks/portfolio/usePortfolioSummary.ts",
+    "apps/frontend/src/lib/api/info.ts",
+  ]
 ---
 
 # Portfolio Summary API
@@ -60,6 +88,38 @@ those returns as investment returns and separately shows broker account fees and
 account fees. It does not allocate account fees to individual securities or reconstruct cash FX
 principal. See [[docs/features/portfolio]] and [[docs/adr/095-brokerage-account-import|ADR-095]].
 
+## Scope and archived presentation (phase 3i)
+
+The optional `active` query is additive and defaults to `true`: existing active-only totals,
+canonical summaries, dated FX, cache-warmer entries, and invalidation behavior are unchanged.
+`active=false` requests canonical summaries/totals for all active and inactive investments.
+Only single literal `true` / `false` values are accepted; malformed or repeated scope values
+return `400 VALIDATION_ERROR`. The global API limit and this endpoint's existing 60/min limit
+still apply. No write or migration is added.
+
+The all-investment response also supplies `archivedPresentation`, containing inactive holdings
+only. This preserves `usePortfolioSummaries` archive behavior: ordinary CRUD history is limited
+to the newest 1000 rows per investment and replayed by the shared TypeScript portfolio helper,
+then converted at the latest stored quote-currency rate with the same static-rate/original-value
+fallback as the web. Custody and adjustment events remain in the canonical summaries, rather
+than being introduced into the retained ordinary archive display. `totalInKindIncome` alone
+continues to use the canonical transaction-date bridge. `transactionCount` records the archive
+history count; `summarySource` is `local`. Converted ordinary values retain web precision.
+
+Native archive views must use `archivedPresentation` for those ordinary figures, keeping the
+active response for current totals. They must not replace these display values with canonical
+all-investment P&L: a historical purchase rate and today's quote rate can produce different
+costs, and this frontend migration preserves that distinction. Canonical `byAccount` remains a
+separate broker snapshot, matching existing detail API reads. Archive presentation omits
+canonical-only `assetGain`, `fxGain`, `nativeCurrentValue` and `usedFallbackRate`; clients show
+these as unavailable rather than borrowing the canonical decomposition.
+
+The active cache retains its currency key; all-investment requests use `all:<currency>`. Both
+are cleared by existing investment/transaction mutation invalidation. Synthetic tests verify
+scope isolation/invalidation and historical-versus-current FX divergence. See
+[[docs/api/investments|investment metadata and write fields]], [[docs/features/portfolio|Portfolio]],
+and [[docs/api/index|API index]].
+
 ## Endpoint Details
 
 | Property           | Value                                  |
@@ -87,6 +147,7 @@ principal. See [[docs/features/portfolio]] and [[docs/adr/095-brokerage-account-
 - `/api/info/portfolio-summary` — Totals in EUR (default)
 - `/api/info/portfolio-summary?currency=USD` — Totals in USD
 - `/api/info/portfolio-summary?currency=GBP` — Totals in GBP
+- `/api/info/portfolio-summary?currency=EUR&active=false` — All canonical holdings plus the retained archive presentation
 
 ### Headers
 
@@ -101,87 +162,77 @@ Content-Type: application/json
 ```json
 {
   "currency": "EUR",
-  "computed_at": "2026-06-11T12:34:56.000Z",
+  "computed_at": "2026-10-13T12:00:00Z",
   "totals": {
-    "currentValue": 125000.0,
-    "totalInvested": 100000.0,
-    "totalGainLoss": 25000.0,
-    "totalAssetGain": 22000.0,
-    "totalFxGain": 3000.0,
-    "realized": 5000.0,
-    "unrealized": 20000.0,
-    "fees": 0.0,
-    "taxes": 0.0,
-    "income": 0.0,
-    "totalReturnPct": 25.0,
+    "totalPortfolioValue": 1250,
+    "totalInvested": 1000,
+    "totalGainLoss": 250,
+    "totalRealizedGain": 0,
+    "totalUnrealizedGain": 250,
+    "totalGain": 250,
+    "totalIncome": 0,
+    "totalDividends": 0,
+    "totalInKindIncome": 0,
+    "totalFees": 0,
+    "totalTaxes": 0,
+    "totalAssetGain": 250,
+    "totalFxGain": 0,
+    "totalReturnPct": 25,
     "usedFallbackRate": false
   },
   "summaries": [
     {
+      "id": 1,
+      "name": "Synthetic holding",
       "asset_class": "stock",
-      "currentValue": 80000.0,
-      "invested": 60000.0,
-      "gainLoss": 20000.0,
-      "assetGain": 17500.0,
-      "fxGain": 2500.0,
-      "nativeCurrentValue": 87000.0,
-      "realized": 3000.0,
-      "unrealized": 17000.0,
-      "fees": 0.0,
-      "taxes": 0.0,
-      "income": 0.0,
-      "returnPct": 33.33,
-      "count": 5,
-      "usedFallbackRate": false
-    },
-    {
-      "asset_class": "crypto",
-      "currentValue": 45000.0,
-      "invested": 40000.0,
-      "gainLoss": 5000.0,
-      "assetGain": 4500.0,
-      "fxGain": 500.0,
-      "nativeCurrentValue": 45000.0,
-      "realized": 2000.0,
-      "unrealized": 3000.0,
-      "fees": 0.0,
-      "taxes": 0.0,
-      "income": 0.0,
-      "returnPct": 12.5,
-      "count": 3,
-      "usedFallbackRate": false
+      "assetClass": "stock",
+      "currency": "EUR",
+      "originalCurrency": "EUR",
+      "is_active": true,
+      "currentValue": 1250,
+      "totalBuyCost": 1000,
+      "totalUnits": 10,
+      "currentPrice": 125,
+      "avgCostBasis": 100,
+      "realizedGain": 0,
+      "unrealizedGain": 250,
+      "gainLoss": 250,
+      "gainLossPercent": 25,
+      "totalIncome": 0,
+      "totalDividends": 0,
+      "totalInKindIncome": 0,
+      "assetGain": 250,
+      "fxGain": 0,
+      "nativeCurrentValue": 1250,
+      "usedFallbackRate": false,
+      "fullyAssigned": true,
+      "oversold": false,
+      "byAccount": [
+        {
+          "account_id": 1,
+          "assignment": "account",
+          "contribution_kind": "position",
+          "oversold": false,
+          "currentValue": 1250,
+          "totalInvested": 1000,
+          "realizedGain": 0,
+          "unrealizedGain": 250,
+          "gainLoss": 250
+        }
+      ]
     }
   ],
   "byAccount": [
     {
-      "account_id": 3,
+      "account_id": 1,
       "assignment": "account",
+      "contribution_kind": "position",
       "oversold": false,
-      "currentValue": 90000.0,
-      "totalInvested": 72000.0,
-      "realizedGain": 4000.0,
-      "unrealizedGain": 14000.0,
-      "gainLoss": 18000.0
-    },
-    {
-      "account_id": 7,
-      "assignment": "account",
-      "oversold": false,
-      "currentValue": 35000.0,
-      "totalInvested": 28000.0,
-      "realizedGain": 1000.0,
-      "unrealizedGain": 6000.0,
-      "gainLoss": 7000.0
-    },
-    {
-      "account_id": null,
-      "assignment": "unassigned",
-      "oversold": false,
-      "currentValue": 0.0,
-      "totalInvested": 0.0,
-      "realizedGain": 0.0,
-      "unrealizedGain": 0.0,
-      "gainLoss": 0.0
+      "currentValue": 1250,
+      "totalInvested": 1000,
+      "realizedGain": 0,
+      "unrealizedGain": 250,
+      "gainLoss": 250
     }
   ]
 }
@@ -246,30 +297,30 @@ improving repair edits.
 
 **totals object:**
 
-| Field              | Type    | Description                                                                                                                            |
-| ------------------ | ------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `currentValue`     | number  | Sum of all investments' current market value in target currency (today's FX)                                                           |
-| `totalInvested`    | number  | Sum of all cost basis at **transaction-date** FX rates (does not drift with today's FX)                                                |
-| `totalGainLoss`    | number  | `currentValue − totalInvested`; includes both asset and FX components (`= totalAssetGain + totalFxGain`)                               |
-| `totalAssetGain`   | number  | **New (ADR-074).** Pure asset-performance component: native-currency gain × today's rate                                               |
-| `totalFxGain`      | number  | **New (ADR-074).** Currency-movement component: `totalGainLoss − totalAssetGain`                                                       |
-| `realized`         | number  | Realized gains/losses from closed positions (converted at transaction-date rates)                                                      |
-| `unrealized`       | number  | Unrealized gains/losses from open positions (current − cost basis at purchase-date rates)                                              |
-| `fees`             | number  | Cumulative fees paid (converted at transaction-date rates)                                                                             |
-| `taxes`            | number  | Cumulative taxes paid (converted at transaction-date rates)                                                                            |
-| `income`           | number  | Cumulative dividends/interest/yield received (converted at transaction-date rates)                                                     |
-| `totalDividends`   | number  | Dividend share of ordinary income, summed across holdings (converted at transaction-date rates); excludes in-kind income               |
-| `totalReturnPct`   | number  | Total return percentage: `(totalGainLoss / totalInvested) × 100`                                                                       |
-| `usedFallbackRate` | boolean | **New (ADR-074).** `true` if any investment lacked a transaction-date rate and fell back to today's rate; a disclosure flag for the UI |
+| Field                 | Type    | Description                                                                                                                            |
+| --------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `totalPortfolioValue` | number  | Sum of all investments' current market value in target currency (today's FX)                                                           |
+| `totalInvested`       | number  | Sum of all cost basis at **transaction-date** FX rates (does not drift with today's FX)                                                |
+| `totalGainLoss`       | number  | Net gain including ordinary income and recorded costs; includes asset and FX components (`= totalAssetGain + totalFxGain`)             |
+| `totalAssetGain`      | number  | **New (ADR-074).** Pure asset-performance component: native-currency gain × today's rate                                               |
+| `totalFxGain`         | number  | **New (ADR-074).** Currency-movement component: `totalGainLoss − totalAssetGain`                                                       |
+| `totalRealizedGain`   | number  | Realized gains/losses from closed positions (converted at transaction-date rates)                                                      |
+| `totalUnrealizedGain` | number  | Unrealized gains/losses from open positions (current − cost basis at purchase-date rates)                                              |
+| `totalFees`           | number  | Cumulative fees paid (converted at transaction-date rates)                                                                             |
+| `totalTaxes`          | number  | Cumulative taxes paid (converted at transaction-date rates)                                                                            |
+| `totalIncome`         | number  | Cumulative dividends/interest/yield received (converted at transaction-date rates)                                                     |
+| `totalDividends`      | number  | Dividend share of ordinary income, summed across holdings (converted at transaction-date rates); excludes in-kind income               |
+| `totalReturnPct`      | number  | Total return percentage: `(totalGainLoss / totalInvested) × 100`                                                                       |
+| `usedFallbackRate`    | boolean | **New (ADR-074).** `true` if any investment lacked a transaction-date rate and fell back to today's rate; a disclosure flag for the UI |
 
-**summaries[] object (one per asset class):**
+**summaries[] object (one per investment; selected fields):**
 
 | Field                | Type    | Description                                                                                        |
 | -------------------- | ------- | -------------------------------------------------------------------------------------------------- |
 | `asset_class`        | string  | Asset class: `stock`, `etf`, `crypto`, `metals`, `real_estate`, `savings`, or `bonds`              |
 | `currentValue`       | number  | Current market value in target currency (today's FX)                                               |
-| `invested`           | number  | Cost basis at transaction-date FX rates                                                            |
-| `gainLoss`           | number  | `currentValue − invested` (= `assetGain + fxGain`)                                                 |
+| `totalBuyCost`       | number  | Cost basis at transaction-date FX rates                                                            |
+| `gainLoss`           | number  | Net gain including ordinary income and costs (= `assetGain + fxGain`)                              |
 | `assetGain`          | number  | **New (ADR-074).** Pure asset-performance component for this class                                 |
 | `fxGain`             | number  | **New (ADR-074).** Currency-movement component for this class                                      |
 | `nativeCurrentValue` | number  | **New (ADR-074).** Current market value in the investment's native currency (before FX conversion) |
@@ -285,8 +336,8 @@ improving repair edits.
 **Reconciliation invariants (verified by test):**
 
 ```
-sum(summaries[].currentValue) === totals.currentValue
-sum(summaries[].invested)     === totals.totalInvested
+sum(summaries[].currentValue) === totals.totalPortfolioValue
+sum(summaries[].totalBuyCost)     === totals.totalInvested
 sum(summaries[].gainLoss)     === totals.totalGainLoss
 sum(summaries[].assetGain)    === totals.totalAssetGain
 sum(summaries[].fxGain)       === totals.totalFxGain
@@ -296,16 +347,32 @@ gainLoss === assetGain + fxGain   (per-investment AND in totals)
 
 ### Error Responses
 
-| Status | Description           | Example                                                                                     |
-| ------ | --------------------- | ------------------------------------------------------------------------------------------- |
-| 400    | Invalid currency code | `{ "ok": false, "error": { "code": "APP_ERROR", "message": "Unsupported currency: XYZ" } }` |
-| 401    | Not authenticated     | User session expired                                                                        |
-| 429    | Rate limited          | User exceeded 60 req/min quota                                                              |
-| 500    | Server error          | Database or conversion service unavailable                                                  |
+| Status | Description               | Example                                                                |
+| ------ | ------------------------- | ---------------------------------------------------------------------- |
+| 400    | Malformed/repeated scalar | ``VALIDATION_ERROR`; malformed currency codes retain the EUR fallback` |
+| 401    | Not authenticated         | User session expired                                                   |
+| 429    | Rate limited              | User exceeded 60 req/min quota                                         |
+| 500    | Server error              | Database or conversion service unavailable                             |
 
 ```json
 { "ok": false, "error": { "code": "APP_ERROR", "message": "Error message" } }
 ```
+
+### Additional typed display fields
+
+Optional top-level `firstInvestmentDate` is the earliest ordinary transaction date on active
+investments, independent of selected performance periods and record creation timestamps. It
+excludes inactive holdings and custody/adjustment event dates; absence means no qualifying
+transaction is known. Native all-time annualized hints can use this date without relabeling a
+period-scoped chart start as the investment start.
+
+Summary items expose `nativeCurrentPrice` and `nativeAvgCostBasis` in the investment quote
+currency, plus server-computed `unrealizedGainPercent` against the held basis. `estimatedMonthlyRent`
+preserves the existing RealEstatePage's latest ordinary rent amount interpretation, including
+its raw-amount display behavior; this port does not apply an additional FX conversion to that
+number. Fields, totals and nullability are declared in `openapi.yaml`; generated/native readers
+can decode money and unit/rate quantities directly as Decimal. Metadata that is null in storage
+remains nullable. `totals.usedFallbackRate` is boolean, rather than a numeric dynamic-map entry.
 
 ## Caching Strategy
 

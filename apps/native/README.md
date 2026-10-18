@@ -17,25 +17,25 @@ stays the project-file tool (ADR-204 decision 3). The deployment target and the 
 
 ## Layout
 
-| Path                                   | Purpose                                                    |
-| -------------------------------------- | ---------------------------------------------------------- |
-| `project.yml`                          | XcodeGen spec for the "Vision Native" app target           |
-| `Config/Signing.xcconfig`              | Signing team from `VISION_NATIVE_TEAM_ID`                  |
-| `VisionNative/`                        | AppKit app, window, menus and the `WKWebView` shell        |
-| `Package.swift`                        | SwiftPM package: `VisionNativeCore`, `VisionNativeUI`      |
-| `Sources/VisionNativeCore/`            | Non-UI logic: runtime supervision, health, override        |
-| `Sources/VisionNativeCore/Shell/`      | Bridge contract and codec, web view policy, menus          |
-| `Sources/VisionNativeCore/Backup/`     | Backup bundles, encryption and restore (phase 1d)          |
-| `Sources/VisionNativeCore/Audit/`      | Audit anchor, Keychain witness, audit bridge (1e)          |
-| `Sources/VisionNativeCore/API/`        | `APIClient` and the generated OpenAPI client (2)           |
-| `Sources/VisionNativeCore/Design/`     | Generated design tokens, `ThemeSelection` (2)              |
-| `Sources/VisionNativeCore/Navigation/` | Generated sidebar registry, routes, shell model (2)        |
-| `Sources/VisionNativeCore/Screens/`    | Screen models: Rates, Admin, Planned, Import, Transactions |
-| `Sources/VisionNativeUI/`              | SwiftUI shell and screens, `Localizable.xcstrings`         |
-| `openapi-operations.txt`               | operationIds the Swift client is generated for             |
-| `i18n-keys.txt`                        | `i18n/source` keys copied into the String Catalog          |
-| `Tests/VisionNativeCoreTests/`         | Swift Testing tests and `Fixtures/` from Electron          |
-| `Tests/VisionNativeUITests/`           | String Catalog (EN and NL) and SwiftUI layout tests        |
+| Path                                   | Purpose                                                                        |
+| -------------------------------------- | ------------------------------------------------------------------------------ |
+| `project.yml`                          | XcodeGen spec for the "Vision Native" app target                               |
+| `Config/Signing.xcconfig`              | Signing team from `VISION_NATIVE_TEAM_ID`                                      |
+| `VisionNative/`                        | AppKit app, window, menus and the `WKWebView` shell                            |
+| `Package.swift`                        | SwiftPM package: `VisionNativeCore`, `VisionNativeUI`                          |
+| `Sources/VisionNativeCore/`            | Non-UI logic: runtime supervision, health, override                            |
+| `Sources/VisionNativeCore/Shell/`      | Bridge contract and codec, web view policy, menus                              |
+| `Sources/VisionNativeCore/Backup/`     | Backup bundles, encryption and restore (phase 1d)                              |
+| `Sources/VisionNativeCore/Audit/`      | Audit anchor, Keychain witness, audit bridge (1e)                              |
+| `Sources/VisionNativeCore/API/`        | `APIClient` and the generated OpenAPI client (2)                               |
+| `Sources/VisionNativeCore/Design/`     | Generated design tokens, `ThemeSelection` (2)                                  |
+| `Sources/VisionNativeCore/Navigation/` | Generated sidebar registry, routes, shell model (2)                            |
+| `Sources/VisionNativeCore/Screens/`    | Screen models: Rates, Admin, Planned, Import, Transactions, Accounts, Insights |
+| `Sources/VisionNativeUI/`              | SwiftUI shell and screens, `Localizable.xcstrings`                             |
+| `openapi-operations.txt`               | operationIds the Swift client is generated for                                 |
+| `i18n-keys.txt`                        | `i18n/source` keys copied into the String Catalog                              |
+| `Tests/VisionNativeCoreTests/`         | Swift Testing tests and `Fixtures/` from Electron                              |
+| `Tests/VisionNativeUITests/`           | String Catalog (EN and NL) and SwiftUI layout tests                            |
 
 `VisionNative.xcodeproj`, `VisionNative/Info.plist`, `build/`, `.build/` and
 `Config/Local.xcconfig` are generated or local and are gitignored.
@@ -139,6 +139,81 @@ See [the architecture page](../../docs/architecture/native-app.md#native-navigat
   and a detail column with the web view or a native screen. The page reports its route through
   `electronAPI.routeChanged` (`shell:route-changed`) and hides its own sidebar when
   `electronAPI.nativeNavigation` is set.
+- `/` is native once `app_settings` loads (phase 3g part A): the eleven Home widgets, native
+  charts with hover and keyboard readouts, balance/forecast range comparisons, exclusion toggles,
+  forecast controls and diagnostics, widget customization, inactivity dismissals, and links into
+  the native transaction inspector. Add transaction reuses the native sheet and opens its created
+  row in Transactions.
+- `/statistics` draws all six tabs natively (phase 3g part B): monthly rhythm and charts, category
+  metrics and hierarchy pivot with drill links, payee table, yearly totals, Sankey flow, deterministic
+  findings, and saved charts with all seven variants and live preview. The PDF menu temporarily
+  opens the existing web report dialog with `?export=pdf`; closing restores the native tab/window.
+  Financial, portfolio, and tax report options remain available through the shared dialog. This report surface and the Mac review remain phase-3 exit requirements.
+- `/tax` is native (phase 3h): the filing masthead, eight configurable widgets, server-computed
+  charts and comparisons, household breakdown, deduction review, six-step write-through profile
+  sheet, snapshot/freeze/filing/history actions, and CSV export. Tax formulas remain shared
+  TypeScript behind the compute/overview/dashboard operations; Swift decodes money as Decimal.
+  PDF export opens the shared web dialog with `?export=pdf`, retaining the selected year.
+- `/portfolio` and the five asset pages are native (phase 3i): canonical server totals and
+  chart data, broker-filtered holdings, ticker/news/exposure, configurable widgets, read-only
+  archived details, investment/trade forms, and confirmed lot assignment with complete history.
+  Native editors preserve explicit null clears and ambiguous-write retry identities. PDF actions
+  retain the shared web dialog on the current route via `?export=pdf`.
+- `/portfolio/rebalance` uses the existing TypeScript commitment-aware cash and rebalance
+  operations with URL drafts, custom/preset targets, caps, and conditional saved-plan writes.
+- `/portfolio/net-worth` renders full daily chart history, account reconciliation and a separate
+  newest-first paginated table. Period changes retain the full chart series; stale currency reads
+  cannot replace the current values. Full macOS compilation and Demo review remain pending.
+- `/portfolio/import` and `/portfolio/import/:batchId/review` are native (phase 3j): maintained
+  CSV/XLS/XLSX detection uses a read-only server probe; staging, parser configuration, history,
+  mapping, reconciliation and commits retain the existing TypeScript contracts. Native and web
+  views share session metadata through the two existing sessionStorage keys, without file bytes.
+- `/portfolio/tax` displays authoritative TypeScript costs and fiscal estimates, with the shared
+  tax year/profile/snapshot/filing/history/CSV actions and seven widget preferences. Manual costs
+  and classifications edit the live year with original CAS baselines, even from historical views.
+  Both tax routes validate and mirror the viewed year in the URL after reading the live profile
+  and snapshots. Portfolio Tax has no PDF action in the existing app.
+- `/analysis` is native (phase 3k): visual and SQL queries, saved versions/proposals, table/chart/
+  pivot results, contributing records, and the preparation/formula/scenario workbench use the
+  existing TypeScript operations. CSV/XLSX parsing and captured-result exports use shared
+  TypeScript interchange operations. Exact values, units, provenance and partial-result metadata
+  are retained. Page drafts reset on leaving; the existing ten-entry SQL history stays in the
+  web view's `vision.analysis.sqlHistory` localStorage key.
+- `/analysis/monitors` is native (phase 3k): saved-analysis/dossier targets, conditions, schedules,
+  observations, unread notifications and rule actions retain server-owned evaluation. Neither
+  Analysis route requires admin mode. Full macOS build and Demo parity review remain pending.
+- `/research`, `/research/markets`, `/research/market`, `/research/watchlist` and `/research/compare`
+  are native (phase 3l): search, regional/sector markets, provider-aware instrument details and
+  mapping, portfolio/watchlist actions, target charts, and comparative performance/fundamentals.
+  Provider/cache metadata and nullable Decimal values survive the HTTP envelope. Comparison,
+  indicators, target/return metrics and trade previews use shared TypeScript presentation code;
+  the submitted-data endpoint makes no provider requests. Quotes/news retain source polling and
+  fresh caches; late replies cannot replace another symbol, range, editor or route. Market lookup's
+  retained Add to portfolio drafts use the existing leave guard and broker-history defaults.
+  Dossiers and AI chat are ported in phase 3n below. Mac/Demo review is pending.
+- `/research/forecast` and `/research/charts` are native (phase 3m). Forecast retains its
+  debounced controls, cached authoritative simulations and independent Life scenario comparisons.
+  Saved scenarios use the existing `life_scenarios` settings CAS contract, with delete/Undo.
+  Chart Builder keeps the original v2 localStorage library, presets, series/indicators, dual axes,
+  saved layouts and share links. Failed storage reads block writes until authority is restored;
+  late provider, storage and presentation replies cannot apply to an obsolete visit. Financial
+  schedules, comparison gaps, indicators and chart projection remain shared TypeScript.
+  Settings coverage preserves drafts; leaving resets Forecast and retains Chart Builder metadata.
+  Full macOS build, native chart interaction and synthetic Demo review remain pending. Cross-route
+  Undo availability remains a shared shell parity gap for the later shell/Settings pass.
+- `/research/dossiers` and `/ai-chat` are native (phase 3n). Dossiers keeps lists of 500 records,
+  linked records, evidence pins, immutable versions, version CAS, confirmations and captured JSON
+  exports. Dirty drafts keep their acknowledged version even after a background read; late writes
+  cannot retarget another editor. New/selection use the source discard prompt, without a route guard.
+- AI chat retains conversation paging, model/tool controls, literal messages and per-conversation
+  streams across navigation. JSON SSE uses the shared native HTTP transport, source 120-second
+  stall policy, completion/error handling and explicit Stop/retry. Both Chat and Investigation
+  remain mounted across mode changes. Investigation retains its inspected disclosure/grant flow,
+  documents, evidence answers, clarification and manual job polling every 1.2 seconds.
+  Status alone follows its source freshness/online policy. Text/Markdown/HTML uploads retain the 5 MiB backend limit.
+  Tool tables/charts consume additive TypeScript presentation metadata for original member order,
+  axes and pie values; raw tool results and model prompts remain unchanged. Full macOS/VoiceOver/
+  Demo verification and the shared global notice/Undo host remain pending.
 - `/admin`, `/admin/providers`, `/admin/endpoints` and `/admin/exchange-rates` are native, in
   admin mode only, and so are `/admin/db` and `/admin/db/:table`; the table editor holds
   navigation and Quit behind a native Leave this page? alert while it has pending changes. The admin token card writes the page's
@@ -352,12 +427,48 @@ these steps touches Electron Vision or its data.
     Delete a row from its context menu: the alert asks, the row leaves, and Undo (or `⌘Z`) brings
     it back.
 
+20. **Home (phase 3g part A).** Open Home with admin mode off. Expected: the native greeting,
+    spending hero, Needs attention, net worth, upcoming payments, accounts, monthly bars, category
+    donut, forecast, and recent transactions. More actions > Customize shows all eleven widgets;
+    enable Summary cards and Account balances, close, and revisit Home to confirm persistence.
+    In Settings configure an exclusion, return to Home, and toggle exclusions separately on
+    Monthly trends, Category distribution, and Recent transactions. Drill through an income or
+    spending total, a category/Other/Uncategorised slice, and a recent row; check the filters or
+    selected inspector. Scrub the net sparkline, use arrows/Home/End/Escape, and check the latest
+    amount returns after release. Hover and drag bank history and forecast to compare dates and
+    values. Switch forecast mode, every rolling window, cumulative/daily, With planned, and
+    method choices; reopen Diagnostics and check its table and persisted trend. Dismiss and
+    restore an inactivity alert. Add a transaction from Home, exercise the unsaved-changes guard,
+    save, and confirm Transactions opens the created row. Repeat in Dutch and a narrow window.
+    These Mac checks have not been run in the Linux cloud workspace.
+
+21. **Insights (phase 3g part B).** Open Insights and switch Last 24 months/All time and every
+    tab; confirm the URL retains `window` and `tab`. Customize, toggle each chart's exclusions,
+    scrub Monthly rhythm, and show the 3-month averages. On Categories choose a year and each
+    metric, expand ancestors, page month columns, and drill group/child/Uncategorised/total cells.
+    On Payees search, filter, sort, and scroll the details table; check the year picker and full
+    names in the chart readout. Check yearly totals. On Flow switch years, hover nodes/links, and
+    resize the window. Dismiss a deterministic finding. On Custom charts create/edit all seven
+    variants with category/payee/tag sources, All sources, date clearing, and yearly bounds;
+    verify live preview, Other, save, and delete confirmation. Export PDF opens the existing web
+    dialog; exercise its three report types and cancel/download, then confirm the native tab and
+    window return. Repeat in Dutch. These Mac checks remain unperformed in the Linux workspace.
+
 ## Developer backend override
 
 In Debug builds only, `VISION_NATIVE_BACKEND_URL` skips supervision and loads a backend that is
 already running, for example `http://localhost:3002`. The host must be `localhost`, `127.0.0.1` or
 `::1`. Other hosts, malformed values and the variable in a Release build are ignored with a logged
 reason, and the app starts its own runtime.
+
+22. **Taxes (phase 3h, pending Mac review).** Open Tax in EN and NL and choose live, saved,
+    frozen, and filed years. Check masthead status, disclosures, chart hover/keyboard readouts,
+    partner columns, trend/comparison, all eight widget switches, and no-income/error states.
+    Edit each of the six profile steps; verify backend previews and that closing keeps saved
+    edits. Check filed locks, amendment/unfiling, incomplete deduction confirmations and
+    dismissal. Exercise snapshot/freeze/filing/history actions and native CSV export. Open PDF
+    export, then cancel: the selected `year` must survive and the native screen must return.
+    A stale response or a failed year/currency change must not relabel prior tax amounts.
 
 Apps launched from Finder or the Dock do not inherit your shell environment. Set both variables in
 the Xcode scheme, or pass them with `open`:
@@ -366,3 +477,75 @@ the Xcode scheme, or pass them with `open`:
 open --env VISION_NATIVE_RUNTIME_DIR="$PWD/apps/native/build/payload/native-runtime" \
   "<DerivedData>/Build/Products/Debug/Vision Native.app"
 ```
+
+Tax uses `TaxComputationService` and the OpenAPI compute/overview/dashboard operations.
+The TypeScript engine is shared with the web app; Swift displays its results as `Decimal`.
+Profile and year actions use existing atomic settings writes with original CAS baselines. The
+profile sheet previews unsaved inputs through the backend and persists edits as they are made;
+closing flushes pending writes. CSV is native; the PDF dialog remains web. Full macOS build and
+Demo visual/keyboard checks remain pending.
+
+23. **Portfolio and asset pages (phase 3i, pending Mac review).** Open the overview and all five
+    asset pages in EN/NL and each number/date format. Inspect every widget, broker filter,
+    disclosure, ticker pause/offline behavior, exposure import, and chart hover/range/keyboard
+    interaction. Open active and archived details, edit/add a trade, test Cancel versus Escape,
+    assign unassigned lots after complete history loads, and check ambiguous retry recovery.
+    PDF must open on the current route and preserve its parameters when closed.
+24. **Rebalance and Net Worth (phase 3i, pending Mac review).** Reload custom/preset/saved
+    target URLs, verify commitment-aware caps and CAS conflict handling, and inspect Net Worth
+    account totals, full daily series, each period and newest-first table pagination. Change
+    currency during a read and period during price refresh; old values must not reappear under
+    new labels. Verify offline refresh, fallback notices and retained web printing.
+
+25. **Portfolio Import (phase 3j, pending Mac review).** Compare maintained CSV, original IBKR
+    funding XLS/XLSX and supported Saxo XLSX detection with the web view on synthetic files.
+    Inspect source identity ambiguity, header/sample preview, broker and transfer routing, custom
+    parser save/update/delete, session restoration from staged web metadata, and history rollback.
+    Review evidence and scope policies, map unresolved groups, create holdings, repair broker
+    routing and commit. Cancel during uploads and simulate lost responses: retain receipts, block
+    unverified replay and invalidate the other wealth screens. No file bytes may enter storage.
+26. **Portfolio Tax (phase 3j, pending Mac review).** Compare all seven widgets, tax and fee
+    breakdowns, unknown dividend conventions and inactive investments against the web app.
+    Open historical and frozen years, change currency during reads, and test invalid/missing year
+    URLs. Edit live-year manual costs/classifications from a historical view, exercise CAS conflicts
+    and lost acknowledgements, and confirm unknown settings survive. Test profile/year actions,
+    filing history and CSV export in EN/NL and each number/date format.
+27. **Analysis (phase 3k, pending Mac review).** Compare visual and SQL queries, templates,
+    parameter coercion, joins, ten-entry SQL history, saved versions and proposals in EN/NL.
+    Check successful-run focus, cancellation, late replies after editing or leaving, last-result
+    retention, table/chart/pivot drill, and exact decimal values and units. Exercise preparation,
+    calendar/formulas/assumptions, scenarios, sensitivity and goal seeking. Import synthetic CSV/
+    XLSX files and compare captured exports, including paged/truncated result metadata. Leaving
+    resets page drafts while SQL history survives a return.
+28. **Analysis Monitors (phase 3k, pending Mac review).** Create and edit each target/condition,
+    verify interval and cooldown limits, enable/disable a rule during an unsaved edit, and inspect
+    observations and unread notifications. Check manual evaluation, delete confirmation, polling,
+    error states and late reads after writes or navigation; no stale reply may undo a newer edit.
+29. **Research (phase 3l, pending Mac review).** Compare all regions/sectors, archived holding
+    markers, search keyboard controls and safe news links in EN/NL. Open Yahoo and held-provider
+    instrument URLs; change symbol, range, tab and currency while reads are pending. Inspect
+    fundamentals/analyst/news provenance, mapping context changes, the two Add to portfolio steps,
+    broker defaults and dirty drafts after dismissal. Simulate repeated Record clicks and lost
+    acknowledgements; no ambiguous write may be replayed implicitly. Exercise Watchlist target
+    edits, add/remove and chart ranges, including leaving during a write. Compare up to six symbols,
+    null/missing history, correlation, sorting and late range replies. Reconnect on another route;
+    hidden screens must not start provider reads. Open Settings or the command palette during a
+    draft; the draft and its leave guard must survive coverage. Review chart focus/tooltips and
+    VoiceOver on Mac.
+
+30. **Forecast and Chart Builder (phase 3m, pending Mac review).** Exercise every horizon, return
+    source, method, path count, currency and localized money input. Check stale-input rendering,
+    unavailable simulations, independent Life inputs, calendar months, saved scenario CAS conflicts,
+    deletion and eight-second Undo. On Charts, compare presets, price/OHLC and macro data, dual axes,
+    logarithmic fallback, indicators and tooltips. Test saved layouts across route changes, failed
+    storage reads/writes and retries, malformed/oversized shared charts and preserved URL parameters.
+    Verify Settings and palette coverage, text-field Cmd-Z, chart keyboard focus, EN/NL and VoiceOver.
+
+31. **Dossiers and AI chat (phase 3n, pending Mac review).** Exercise dossier paging, dirty selection,
+    deleted links, evidence anchors, CAS conflicts, newer writes arriving during reads, restore and
+    captured full-history exports. Check both retained AI modes, literal transcripts, model/tool
+    states, Enter/Shift-Enter, UTF16 limits, partial Stop/retry, unknown SSE frames, terminal errors
+    and active streams through navigation. Compare tool tables/axes/pie against the existing app.
+    Test stale status focus/reconnect, exact consent preview and grants, 5 MiB text uploads, selected
+    artifacts, waiting/partial job clarification, cancellation, record/grant controls and safe evidence
+    links. Confirm EN/NL, focus, VoiceOver and synthetic Demo rendering on Mac.

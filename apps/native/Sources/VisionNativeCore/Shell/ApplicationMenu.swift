@@ -11,6 +11,8 @@ public struct MenuAction: Hashable, Sendable {
     }
 
     public static let openSettings = MenuAction("open-settings")
+    /// The source router decides Back versus query replacement when Settings closes.
+    public static let closeSettings = MenuAction("close-settings")
     public static let openShortcuts = MenuAction("open-shortcuts")
     public static let newTransaction = MenuAction("new-transaction")
     public static let toggleSidebar = MenuAction("toggle-sidebar")
@@ -47,7 +49,10 @@ public enum MenuCommand: Hashable, Sendable {
     case copy
     case paste
     case selectAll
+    case print
     case reload
+    /// Debug builds only: the web view's inspector (Electron's unpackaged `toggleDevTools`).
+    case toggleDeveloperTools
     case resetZoom
     case zoomIn
     case zoomOut
@@ -133,7 +138,11 @@ public enum ApplicationMenu {
         ("schedule", "layout.schedule"),
     ]
 
-    public static func build(appName: String, strings: ShellStrings) -> [MenuEntry] {
+    /// `includeDeveloperTools`: Electron adds Toggle Developer Tools (⌥⌘I) to unpackaged
+    /// builds only; Vision Native adds it to Debug builds.
+    public static func build(
+        appName: String, strings: ShellStrings, includeDeveloperTools: Bool = false
+    ) -> [MenuEntry] {
         let t = { (key: String) in strings.t(key) }
         let app: [MenuEntry] = [
             .item(MenuItemModel("About \(appName)", .about)),
@@ -154,6 +163,8 @@ public enum ApplicationMenu {
                 MenuItemModel(
                     t("menu.importCsv"), .renderer(.navigate("/import")), KeyEquivalent("i", [.command, .shift]))),
             .separator,
+            .item(MenuItemModel("Print…", .print, KeyEquivalent("p"))),
+            .separator,
             .item(MenuItemModel("Close Window", .closeWindow, KeyEquivalent("w"))),
         ]
         let edit: [MenuEntry] = [
@@ -168,15 +179,22 @@ public enum ApplicationMenu {
         let appearance: [MenuEntry] = themeModes.map { mode in
             .item(MenuItemModel(t(mode.titleKey), .renderer(.setTheme(mode.id))))
         }
-        // Electron adds Toggle Developer Tools in unpackaged builds only; Debug builds of
-        // Vision Native are inspectable from Safari's Develop menu instead.
+        let developerTools: [MenuEntry] =
+            includeDeveloperTools
+            ? [
+                .item(
+                    MenuItemModel(
+                        "Toggle Developer Tools", .toggleDeveloperTools, KeyEquivalent("i", [.command, .option])))
+            ] : []
         let view: [MenuEntry] = [
             .item(
-                MenuItemModel(t("menu.toggleSidebar"), .renderer(.toggleSidebar), KeyEquivalent("s", [.command, .control]))
+                MenuItemModel(
+                    t("menu.toggleSidebar"), .renderer(.toggleSidebar), KeyEquivalent("s", [.command, .control]))
             ),
             .submenu(title: t("menu.appearance"), role: .plain, entries: appearance),
             .separator,
             .item(MenuItemModel("Reload", .reload, KeyEquivalent("r"))),
+        ] + developerTools + [
             .separator,
             .item(MenuItemModel("Actual Size", .resetZoom, KeyEquivalent("0"))),
             .item(MenuItemModel("Zoom In", .zoomIn, KeyEquivalent("+"))),

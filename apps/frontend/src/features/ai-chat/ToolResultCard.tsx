@@ -1,3 +1,7 @@
+import {
+    toolResultRows as asRows,
+    toolResultColumns as inferColumns,
+} from "@vision/shared-utils/ai-chat/toolPresentation";
 import { lazy, memo, Suspense, useEffect, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { logger } from "@/lib/logger";
@@ -41,18 +45,6 @@ interface ToolResultCardProps {
 
 type Row = Record<string, unknown>;
 
-function asRows(data: unknown): Row[] {
-    if (Array.isArray(data)) {
-        return data.filter(
-            (r): r is Row => r !== null && typeof r === "object",
-        );
-    }
-    if (data && typeof data === "object") {
-        return [data as Row];
-    }
-    return [];
-}
-
 // App number-format locale, not the browser locale — an eu-format user with
 // an en-US browser otherwise got US separators in tool-result tables.
 function formatCell(value: unknown, locale: string): string {
@@ -69,12 +61,6 @@ function formatCell(value: unknown, locale: string): string {
     } catch {
         return String(value);
     }
-}
-
-function inferColumns(rows: Row[], preferred?: string[]): string[] {
-    if (preferred && preferred.length > 0) return preferred;
-    const firstRow = rows[0];
-    return firstRow === undefined ? [] : Object.keys(firstRow);
 }
 
 function ToolResultCardInner({ toolName, result }: ToolResultCardProps) {

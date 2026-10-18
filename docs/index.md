@@ -2,9 +2,9 @@
 title: Vision Project Knowledge Base
 type: index
 status: active
-date: 2026-10-13
-updated: 2026-10-11
-last_modified: 2026-10-11
+date: 2026-10-18
+updated: 2026-10-18
+last_modified: 2026-10-18
 tags:
   [
     knowledge-base,
@@ -120,7 +120,7 @@ LIMIT 5
 > 2. **Use ADRs for decisions** - Document significant design choices in `docs/adr/`
 > 3. **Update relevant docs** - Keep API, features, and guides docs in sync with code
 > 4. **Use templates** - Start new documents from templates in `docs/templates/`
-> 5. **Use wiki-links** - Link to code with `[[apps/node-backend/src/routes/file.js]]` format
+> 5. **Use wiki-links** - Link to code with `[[apps/node-backend/src/routes/settings.ts]]` format
 > 6. **Search first** - Use repository search to find existing docs
 
 **Start here:** [[AGENTS.md]] → [[docs/guides/ai-agent-kb-usage|AI Agent KB Usage]] → [[docs/guides/kb-maintenance|KB Maintenance]]
@@ -178,7 +178,7 @@ LIMIT 20
 **View all diagrams:** [[docs/diagrams/index|Diagrams Index]] | [[docs/architecture/index|Architecture Overview]] | [Interactive Flow Visualizer](flow-visualizer.html)
 
 > [!tip] Interactive Flow Visualizer
-> [Open the visualizer](flow-visualizer.html#api-request) for 81 components and 49 flows. Journey view shows one ordered handoff at a time; Architecture map shows the full system. Five learning paths cover foundations, everyday money, portfolio, research/AI, and backup/trust. Each flow links to its notes and keeps payload/source details folded until needed. Start with [[docs/guides/visual-learning|Understand Vision Visually]] for small conceptual diagrams and a reading order.
+> [Open the visualizer](flow-visualizer.html#api-request) for 106 components and 82 flows. Journey view shows one ordered handoff at a time; Architecture map shows the full system. Five learning paths cover foundations, everyday money, portfolio, research/AI, and backup/trust. Each flow links to its notes and keeps payload/source details folded until needed. Start with [[docs/guides/visual-learning|Understand Vision Visually]] for small conceptual diagrams and a reading order.
 
 | Resource                                 | Description                           |
 | ---------------------------------------- | ------------------------------------- |

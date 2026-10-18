@@ -193,6 +193,50 @@ private struct RuntimeFixture {
         #expect(!enabled)
     }
 
+    /// native.test.ts: an ended session (a lost backend or a failed closure) must be
+    /// established again at the exact trusted checkpoint; an unanchored tail cannot.
+    @Test func anEndedSessionMustBeEstablishedAgainAtTheTrustedCheckpoint() async throws {
+        let fixture = try RuntimeFixture(newCluster: false)
+        defer { fixture.remove() }
+        _ = try await fixture.anchor.initializeFirstCheckpoint(head: auditHead(4), legacyCutover: auditCutover)
+        fixture.backend.always("checkpoint", .object([:]))
+        fixture.backend.answer("verify", verified("verified", 4))
+        _ = try await fixture.runtime.verifyAuditHistory(establishSession: true)
+
+        await fixture.runtime.endAuditSession()
+        let pendingAfterEnd = await fixture.runtime.sessionPending
+        #expect(pendingAfterEnd)
+        fixture.backend.answer("verify", verified("verified", 4))
+        let reestablished = try await fixture.runtime.verifyAuditHistory(establishSession: true)
+        #expect(reestablished["status"] == .string("verified"))
+        let enabledAfterEstablish = await fixture.runtime.closureEnabled
+        #expect(enabledAfterEstablish)
+
+        // A temporary bridge failure during the closure ends the session.
+        await #expect(throws: (any Error).self) { try await fixture.runtime.closeAuditCheckpoint() }
+        let enabledAfterFailure = await fixture.runtime.closureEnabled
+        #expect(!enabledAfterFailure)
+        let pendingAfterFailure = await fixture.runtime.sessionPending
+        #expect(pendingAfterFailure)
+        fixture.backend.answer("verify", verified("verified", 4))
+        let recovered = try await fixture.runtime.verifyAuditHistory(establishSession: true)
+        #expect(recovered["status"] == .string("verified"))
+        let enabledAfterRecovery = await fixture.runtime.closureEnabled
+        #expect(enabledAfterRecovery)
+
+        // Writes after the session ended stay unanchored and never start a new session.
+        await fixture.runtime.endAuditSession()
+        let inactive = try await fixture.runtime.closeAuditCheckpoint()
+        #expect(inactive["reason"] == .string("live_closure_not_active"))
+        fixture.backend.answer("verify", verified("partially_verified", 6))
+        let partial = try await fixture.runtime.verifyAuditHistory(establishSession: true)
+        #expect(partial["status"] == .string("partially_verified"))
+        let enabledForTail = await fixture.runtime.closureEnabled
+        #expect(!enabledForTail)
+        let trusted = try await fixture.anchor.readTrustedCheckpoint()
+        #expect(trusted.sequence == 4)
+    }
+
     @Test func aRestoredHistoryMustVerifyAgainstTheAnchor() async throws {
         let fixture = try RuntimeFixture(newCluster: false)
         defer { fixture.remove() }

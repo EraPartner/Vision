@@ -548,6 +548,26 @@ enum ReviewFixture {
         #expect(!review.state(for: ReviewFixture.bakery).categorySaving)
     }
 
+    /// useImportReviewData (main, 2026-10-18): a failed edit blocks commit until the saved
+    /// edits are reviewed, which rereads the persisted preview.
+    @Test func aFailedEditBlocksCommitUntilTheSavedEditsAreReviewed() async {
+        let service = FakeImportReviewService()
+        await service.failOverride(row: "102")
+        let review = ReviewFixture.model(service).review
+        await review.appear(batchId: 42)
+        await review.setRecipient(77, name: "Other", for: ReviewFixture.bakery, strings: ImportFixture.strings)
+        #expect(review.hasEditErrors && !review.isSavingEdits)
+        await review.commit(strings: ImportFixture.strings)
+        #expect(await service.commits.isEmpty)
+        let loads = await service.previewLoads.count
+        await review.reviewSavedEdits()
+        #expect(!review.hasEditErrors && review.groupStates.isEmpty)
+        #expect(await service.previewLoads.count == loads + 1)
+        await service.failOverride(row: nil)
+        await review.commit(strings: ImportFixture.strings)
+        #expect(await service.commits == [42])
+    }
+
     @Test func discardAsksFirstThenReturnsToImport() async {
         let service = FakeImportReviewService()
         let page = ReviewFixture.model(service)

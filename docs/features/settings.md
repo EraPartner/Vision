@@ -3,10 +3,12 @@ title: Settings Feature
 type: feature
 status: active
 date: 2026-10-13
-updated: 2026-10-11
+updated: 2026-10-13
 tags:
   [
     feature,
+    native-app,
+    swift,
     settings,
     configuration,
     preferences,
@@ -32,9 +34,12 @@ tags:
     design-system,
     adr-183,
   ]
-description: Application settings system with JSONB storage, preload optimization, propagation across all pages, and the instant-apply Settings window (DashboardSettingsDialog, ADR-084 and ADR-183).
+description: Application settings with JSONB CAS storage, native seven-pane Settings and a retained web draft/receipt mirror, alongside the web/Electron instant-apply window (ADR-084, ADR-183 and ADR-204).
 aliases: [preferences, configuration, app settings, user settings]
 related_code:
+  - apps/native/Sources/VisionNativeCore/Settings/NativeSettingsModel.swift
+  - apps/native/Sources/VisionNativeUI/Screens/Settings/NativeSettingsWindow.swift
+  - apps/frontend/src/stores/hydration/nativeSettings.ts
   - apps/frontend/src/stores/settingsStore.ts
   - apps/frontend/src/features/settings/DashboardSettingsDialog.tsx
   - apps/frontend/src/features/settings/SettingsPrimitives.tsx
@@ -81,7 +86,7 @@ an edit. See [[docs/testing/testing]] and [[docs/performance/caching-strategies]
 
 ## Overview
 
-The Settings system manages all application preferences, from display formatting (currency, date format, number format) to behavioral settings (exclusions, pagination defaults, widget visibility). It uses a unified Zustand store, three hydration bridges, a preload context, and a JSONB-backed storage system.
+The Settings system manages display formatting, exclusions, pagination defaults and widget visibility. Web/Electron use a unified Zustand store, three hydration bridges and a preload context. Vision Native phase 3o renders seven native panes, with one CAS writer and a retained web draft/receipt mirror. Both use the existing JSONB-backed settings API.
 
 The Settings dialog was reworked in June 2026 from a 5-tab Save/Cancel form into a **sidebar-navigated, instant-apply** surface ([[docs/adr/084-settings-instant-apply-sidebar|ADR-084]]), and in October 2026 into a macOS-style **Settings window** on the design system (ADR-183).
 
@@ -157,8 +162,8 @@ A well-formed (possibly partial) blob produces exactly the pre-validation `{ ...
 | `defaultPageSize`              | number                 | `50`                                   | Default table page size                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `excludedCategoryIds`          | number[]               | `[]`                                   | Categories to exclude from stats                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `excludedRecipientIds`         | number[]               | `[]`                                   | Recipients to exclude from stats                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `excludeHiddenCategories`      | boolean                | `false`                                | Exclude inactive categories                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `exclusionScope`               | string                 | `'nowhere'`                            | Where exclusions apply                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `excludeHiddenCategories`      | boolean                | `true`                                | Exclude inactive categories                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `exclusionScope`               | string                 | `'everywhere'`                            | Where exclusions apply                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | `theme_settings`               | object                 | `{variant: 'default', mode: 'system'}` | Theme variant and mode preferences                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `widget_visibility`            | object                 | `{}`                                   | Per-page widget visibility                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `portfolio_tax_adjustments_v1` | object                 | `{}`                                   | Manual tax adjustments                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
@@ -289,7 +294,7 @@ Settings control which categories and recipients are excluded from statistics:
 - **`exclusionScope`**: Controls where exclusions apply:
   - `'everywhere'`: All pages
   - `'statistics'`: Insights and related pages only (the stored key remains unchanged)
-  - `'nowhere'`: Exclusions disabled
+  - `'dashboard'`: Home dashboard only
 
 ## Propagation Behavior
 
@@ -445,6 +450,51 @@ save, reload Vision before saving that key again. Browser queues and Electron's 
 writer advance their baselines only after acknowledged persistence. Failed preload or an offline
 local mirror does not authorize overwriting database state.
 
+
+## Native Settings (phase 3o)
+
+Vision Native renders all seven Settings panes using `NativeSettingsWindow.swift` and the views
+under `apps/native/Sources/VisionNativeUI/Screens/Settings/`. The existing router keeps section
+query parameters, Back and close behavior. The native window retains source controls and copy;
+Backup/About use the existing native desktop bridges. Full macOS/VoiceOver/Demo verification
+remains pending and does not interrupt the authorized later implementation phases.
+
+`apps/native/Sources/VisionNativeCore/Settings/NativeSettingsModel.swift` uses the existing API
+with raw first-read CAS baselines and independent 500 ms preference write lanes. App/dashboard
+migration preserves unknown fields and optional-field absence; theme writes contain the source
+four known fields. Rejected or uncertain writes leave their lane sticky. Initial hydration never
+saves, and a draft cannot advance a persisted baseline.
+
+The retained web page mirrors drafts and acknowledged receipts through
+`apps/frontend/src/stores/hydration/nativeSettings.ts`; native mode disables its three competing
+hydration writers. Retained page edits send supported field deltas through native-only
+`shell:settings-change` for `app_settings`, `dashboard_settings`, or `theme_settings`.
+`NativeSettingsPatch.swift` validates the keys/fields; the native writer remains authoritative.
+Only an acknowledged receipt updates the retained page's CAS baseline.
+
+AI settings share successful status/model receipts with native Chat and Investigation, without
+forcing quote/news refreshes. Provider input clears on Save even on failure; Clear is limited to
+settings-backed credentials. OpenAI and local default model selections remain independent.
+Benchmark edits save on blur; clearing or product-default depth removes its optional field.
+System accent changes six paired primary/ring/sidebar tokens; appearance auto-adaptation caps
+effects above six million physical pixels and retains only session overrides. Global native notices
+retain six eight-second Undo owners and existing non-Undo Retry/Create rule/Import actions.
+
+Restore fencing is implemented: Main holds the latest preference debounces and drains accepted
+requests/queues before switching databases. Failed restore resumes the same drafts, baselines and
+sticky failures; successful reload retires the old writer and builds fresh models. The shared
+`API/NativeDataSession.swift` transport pauses mutation admission, refuses paused reads, and
+invalidates pre-attempt read results even after failed restore resumes. Retired HTTP/SSE
+requests/replies are rejected. A cancelled transport never proves a server write rolled back. Main has portable
+gated test coverage, and shared transport has 13 focused cases; SDK/macOS verification remains pending.
+The SDK common restore path also serves retained web onboarding, with UUID ownership for each fence.
+It drains Main and legacy preference writers, stops chat/import streams, then drains shared transport
+before the existing Backup service switches the database. Native reload and renderer-ready recovery
+share a generation-checked rebuild task that creates fresh models and writers once. See [[docs/architecture/native-app#Settings and global notices (phase 3o)|Native Settings architecture]],
+[[docs/api/settings|Settings API]], and [[docs/reference/native-parity/shell-and-settings|Settings parity]].
+
+[Native Settings journey](../flow-visualizer.html#native-settings-instant-apply) and
+[global notice actions](../flow-visualizer.html#native-global-notice-actions) show the native handoffs.
 
 ## Related Features
 

@@ -2,8 +2,8 @@
 title: Reports API
 type: endpoint
 status: active
-date: 2026-10-11
-updated: 2026-10-11
+date: 2026-10-13
+updated: 2026-10-13
 tags:
   - api
   - reports
@@ -24,7 +24,7 @@ tags:
   - white-bar-fix
   - table-overflow-fix
   - page-continuation
-description: PDF report generation endpoints with Puppeteer rendering, modular sections, and theme-aware styling. Phase 5 adds paginated footers, white-bar fix, and table-overflow fix. Phase 6 adds i18n. Phase 7 adds filter exclusions with dual-chart comparison. Phase 8 implements full portfolio (6 sections) and tax (7 sections) reports with real data fetchers; tax endpoint accepts optional taxProfile and precomputedPIT for Belgian tax rules. Three POST endpoints (financial, portfolio, tax) with legacy GET fallback.
+description: PDF report generation endpoints with Puppeteer rendering, modular sections, and theme-aware styling. Phase 5 adds paginated footers, white-bar fix, and table-overflow fix. Phase 6 adds i18n. Phase 7 adds filter exclusions with dual-chart comparison. Phase 8 implements full portfolio (6 sections) and tax (7 sections) reports with real data fetchers; tax endpoint accepts optional taxProfile and precomputedPIT for Belgian tax rules. Three existing POST endpoints (financial, portfolio, tax) return binary PDF downloads; legacy GET was removed in ADR-038.
 aliases:
   - reports
   - pdf export
@@ -43,7 +43,16 @@ related_code:
 
 # Reports API
 
-Server-side PDF generation via **Puppeteer headless Chrome** (Phase 3 redesign). Returns a binary stream (`application/pdf`), not the standard [[docs/adr/026-unified-api-response-envelope|ADR-026 JSON envelope]].
+Server-side PDF generation via **Puppeteer headless Chrome** (Phase 3 redesign). Successful responses return raw PDF bytes (`application/pdf`) with `Content-Disposition` and `Content-Length`. Validation failures use the standard [[docs/adr/026-unified-api-response-envelope|ADR-026 JSON envelope]].
+
+The OpenAPI contract now describes the existing binary response and shared validated request for all
+three routes. This corrects stale JSON-envelope responses and top-level `start_date`, `end_date`,
+and `year` fields in the specification; it changes no route or backend behavior. Native callers
+must use a binary download transport rather than the envelope-decoding API client. The endpoint
+count remains 309 HTTP operations (336 including health and Electron IPC).
+This is a breaking correction for clients generated from the old specification: success is binary
+and the obsolete date properties are removed. Existing callers that already send the runtime
+request and download PDF bytes retain the same behavior.
 
 **Key Features:**
 
@@ -55,6 +64,16 @@ Server-side PDF generation via **Puppeteer headless Chrome** (Phase 3 redesign).
 - **Full i18n support** (Phase 6): 32 translation keys for dialog UI, period labels, section toggles, and actions (en/nl)
 - **Source failures**: Any requested source failure aborts export; successful empty results remain distinct from unavailable data (see [[#Performance]])
 - **Three report types**: Financial (complete), Portfolio (Phase 8 — 6 sections), Tax (Phase 8 — 7 sections + Belgian tax pass-through)
+
+## Native client ownership
+
+The phase-3p native sheet uses these existing binary operations through a dedicated 900-second
+single-attempt client sharing the restore-fenced data session. Tax submission preserves raw Decimal
+and frozen-result values. Its fixed retained TypeScript projection/context callbacks reuse the source
+fiscal engine; the extreme-year callback receives only a fresh five-key fiscal settings snapshot.
+No HTTP operation is added. See [[docs/architecture/native-app#Shell overlays and reports (phase 3p)|native architecture]]
+and [[docs/features/pdf-report-export|export behavior]].
+
 
 ## Phase Updates
 
@@ -213,16 +232,27 @@ Generate a theme-aware financial PDF report with custom section selection and pe
 | `currency`             | string        | `EUR`                             | 3-letter ISO currency code (e.g., EUR, USD, GBP)                                                                                              |
 | `period`               | object        | `{ kind: "rolling", months: 12 }` | Period descriptor (see Period Options below)                                                                                                  |
 | `sections`             | array         | `[]` (uses defaults)              | List of section IDs to include; empty = default sections                                                                                      |
-| `theme`                | object        | `{}`                              | Theme tokens (HSL values); omit to use defaults                                                                                               |
+| `theme`                | object        | `{ mode: "light" }`                              | Theme tokens (HSL values); omit to use defaults                                                                                               |
 | `excludedCategoryIds`  | integer array | `[]`                              | Category IDs to exclude from filtered view; each ID must be in PostgreSQL `int4` range 1..2,147,483,647 (generates filter impact comparison)  |
 | `excludedRecipientIds` | integer array | `[]`                              | Recipient IDs to exclude from filtered view; each ID must be in PostgreSQL `int4` range 1..2,147,483,647 (generates filter impact comparison) |
+
+**Validation and defaults**
+
+An empty JSON object is valid and receives the defaults above. An omitted body is invalid. Currency
+must match `^[A-Z]{3}$`; this checks the uppercase shape, not membership in an ISO currency registry.
+All fields are optional, but `null` is rejected. Unknown top-level and known nested-object fields
+are stripped. `start_date`, `end_date`, and top-level `year` are ignored; use `period`.
+Theme colors must match the source HSL component shape (for example `158 62% 32%`), without
+`hsl()` wrappers or CSS declarations; the route does not impose additional numeric bounds.
+Section IDs are strings; the route does not enforce an enum. Tax-context fields are validated
+by all three routes, but only the tax route forwards them to rendering.
 
 **Period Options**
 
 - `{ "kind": "ytd" }` — Current calendar year (January 1 to today)
 - `{ "kind": "rolling", "months": N }` — Last N months (N = 1 to 60)
-- `{ "kind": "custom", "from": "2025-01-01", "to": "2025-12-31" }` — Date range
-- `{ "kind": "year", "year": 2025 }` — Specific calendar year
+- `{ "kind": "custom", "from": "2025-01-01", "to": "2025-12-31" }` — Date range; the route checks `YYYY-MM-DD` shape, not calendar validity or ordering
+- `{ "kind": "year", "year": 2025 }` — Integer calendar year from 2000 through 2100
 
 **Available Sections**
 
@@ -254,7 +284,11 @@ Content-Length: <byte-count>
 
 ```json
 {
-  "error": "Invalid report request: currency: currency must be a 3-letter ISO code"
+  "ok": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Invalid report request: currency: currency must be a 3-letter ISO code"
+  }
 }
 ```
 
@@ -328,7 +362,7 @@ Generate a tax PDF report with 7 data-backed sections (Phase 8).
     "brackets": [
       {
         "label": "25%",
-        "rate": 0.25,
+        "rate": 25,
         "taxableIncome": 15200,
         "taxAmount": 3800
       }
@@ -363,18 +397,9 @@ Generate a tax PDF report with 7 data-backed sections (Phase 8).
 - `kind: 'rolling'` → current calendar year (note on cover)
 - `kind: 'custom'` → respects date range; bracket lookup uses year of `period.from`
 
-### GET /api/reports/financial (Legacy)
+### Removed legacy endpoint
 
-Kept for backward compatibility; falls back to legacy PDFKit renderer.
-
-**Query Parameters**
-
-| Parameter         | Type   | Default | Description                                                |
-| ----------------- | ------ | ------- | ---------------------------------------------------------- |
-| `currency`        | string | `EUR`   | 3-letter ISO currency code                                 |
-| `target_currency` | string | —       | Alternative name for currency (accepted for compatibility) |
-
-**Deprecated.** Use POST endpoint instead to access theme customization and section selection.
+The former `GET /api/reports/financial` PDFKit endpoint was removed in [[docs/adr/038-dependency-slim-down-supply-chain-risk|ADR-038]]. It is not an available fallback. Use one of the three POST endpoints above.
 
 ## Frontend Usage
 
@@ -475,6 +500,8 @@ Backend gracefully closes Puppeteer browser on SIGINT/SIGTERM via `closePuppetee
 
 ## Related
 
+- [[docs/api/index|API index]] — available operation groups
+- [[docs/reference/api-endpoint-matrix|Endpoint matrix]] — operation inventory and contract correction
 - [[docs/features/pdf-report-export|PDF Report Export feature doc]] — user-facing feature
 - [[docs/api/aggregations|Aggregations API]] — source data endpoints
 - [[docs/adr/026-unified-api-response-envelope|ADR-026]] — why this route does _not_ use the standard envelope

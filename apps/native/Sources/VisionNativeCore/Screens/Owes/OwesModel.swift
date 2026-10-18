@@ -115,7 +115,10 @@ public final class OwesModel {
     /// Bumped by `invalidate()`: a fetch that started before it does not count as fresh.
     @ObservationIgnored private var cacheGeneration = 0
 
-    public init(service: any SplitsService, calendar: Calendar = PlannedDates.local, now: @escaping @Sendable () -> Date = { Date() }) {
+    public init(
+        service: any SplitsService, calendar: Calendar = PlannedDates.local,
+        now: @escaping @Sendable () -> Date = { Date() }
+    ) {
         self.service = service
         self.calendar = calendar
         self.now = now
@@ -209,7 +212,8 @@ public final class OwesModel {
 
     /// A person row's subtitle: the count, Paid and Total.
     public func personSubtitle(_ item: OpenAPI.SplitOwed) -> String {
-        let count = strings.t(item.splitCount == 1 ? "owesPage.split" : "owesPage.splits", ["n": String(item.splitCount)])
+        let count = strings.t(
+            item.splitCount == 1 ? "owesPage.split" : "owesPage.splits", ["n": String(item.splitCount)])
         let paid = strings.t("owesPage.paid", ["amount": money(item.totalPaid)])
         let total = strings.t("owesPage.totalLabel", ["amount": money(item.totalOwed)])
         return "\(count) · \(paid) · \(total)"
@@ -322,7 +326,10 @@ public final class OwesModel {
     public nonisolated static func transactionLink(_ id: Int, label: String) -> String {
         NativeRoute(
             path: TransactionsRoutes.path,
-            query: [URLQueryItem(name: "transaction_id", value: String(id)), URLQueryItem(name: "filter_label", value: label)]
+            query: [
+                URLQueryItem(name: "transaction_id", value: String(id)),
+                URLQueryItem(name: "filter_label", value: label),
+            ]
         ).string
     }
 
@@ -589,11 +596,17 @@ public final class OwesModel {
 
     // MARK: Toasts
 
+    public func attachNotices(_ center: NativeNoticeCenter) {
+        notices.attach(center) { [weak self] in self?.clearNotice($0) }
+    }
+
     public func clearNotice(_ id: Int) {
         if notice?.id == id { notice = nil }
     }
 
-    private func post(_ kind: ScreenNotice.Kind, _ key: String, _ variables: [String: String] = [:], detail: String? = nil) {
+    private func post(
+        _ kind: ScreenNotice.Kind, _ key: String, _ variables: [String: String] = [:], detail: String? = nil
+    ) {
         notice = notices.make(kind, key, variables, detail: detail)
     }
 

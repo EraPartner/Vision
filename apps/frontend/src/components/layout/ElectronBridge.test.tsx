@@ -131,6 +131,21 @@ describe("ElectronBridge menu routes", () => {
         expect(onOpenSettings).toHaveBeenCalledWith("general");
     });
 
+    it("delegates native Settings close to the existing route-history handler", () => {
+        const onCloseSettings = vi.fn();
+        render(
+            <ElectronBridge
+                onOpenSettings={vi.fn()}
+                onCloseSettings={onCloseSettings}
+                onOpenShortcuts={vi.fn()}
+                onOpenPalette={vi.fn()}
+            />,
+        );
+        act(() => { mocks.menuAction?.({ action: "close-settings" }); });
+        expect(onCloseSettings).toHaveBeenCalledTimes(1);
+        expect(mocks.navigate).not.toHaveBeenCalled();
+    });
+
     it("applies View › Appearance modes and ignores unknown payloads", () => {
         render(
             <ElectronBridge

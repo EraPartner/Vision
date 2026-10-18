@@ -230,13 +230,34 @@ public enum AdminErrorState: Equatable, Sendable {
 }
 
 /// Posts toasts with increasing ids.
-struct NoticeCounter {
+@MainActor struct NoticeCounter {
     private var count = 0
+    private let source = UUID()
+    private weak var center: NativeNoticeCenter?
+    private var clear: @MainActor (Int) -> Void = { _ in }
+
+    mutating func attach(_ center: NativeNoticeCenter, clear: @escaping @MainActor (Int) -> Void) {
+        self.center = center
+        self.clear = clear
+    }
 
     mutating func make(
         _ kind: ScreenNotice.Kind, _ key: String, _ variables: [String: String] = [:], detail: String? = nil
     ) -> ScreenNotice {
         count += 1
-        return ScreenNotice(id: count, kind: kind, key: key, variables: variables, detail: detail)
+        let notice = ScreenNotice(id: count, kind: kind, key: key, variables: variables, detail: detail)
+        let clear = clear
+        center?.publish(notice, source: source, clear: { clear(notice.id) })
+        return notice
+    }
+
+    func offerAction(
+        for notice: ScreenNotice, titleKey: String, lifetime: TimeInterval, isUndo: Bool,
+        action: @escaping @MainActor () async -> Void
+    ) {
+        let clear = clear
+        center?.publish(
+            notice, source: source, lifetime: lifetime, actionTitleKey: titleKey,
+            isUndo: isUndo, action: action, clear: { clear(notice.id) })
     }
 }

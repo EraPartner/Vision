@@ -43,7 +43,8 @@ struct AdminCard<Content: View>: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: DesignTokens.Radius.card)
-                    .fill(theme.card))
+                    .fill(theme.card)
+            )
             .overlay(
                 RoundedRectangle(cornerRadius: DesignTokens.Radius.card)
                     .strokeBorder(ring ?? theme.border.opacity(0.6), lineWidth: 1))
@@ -62,7 +63,8 @@ struct AdminIconBadge: View {
             .frame(width: 40, height: 40)
             .background(
                 RoundedRectangle(cornerRadius: DesignTokens.Radius.control)
-                    .fill(theme.primary.opacity(0.12)))
+                    .fill(theme.primary.opacity(0.12))
+            )
             .accessibilityHidden(true)
     }
 }
@@ -116,10 +118,12 @@ struct AdminErrorBanner: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: DesignTokens.Radius.card)
-                .fill(theme.destructive.opacity(0.06)))
+                .fill(theme.destructive.opacity(0.06))
+        )
         .overlay(
             RoundedRectangle(cornerRadius: DesignTokens.Radius.card)
-                .strokeBorder(theme.destructive.opacity(0.4), lineWidth: 1))
+                .strokeBorder(theme.destructive.opacity(0.4), lineWidth: 1)
+        )
         .accessibilityElement(children: .contain)
         .accessibilityAddTraits(.isStaticText)
         // `role="alert"`: the failure is announced when it appears or changes.
@@ -142,13 +146,15 @@ struct NoticeToast: View {
     let strings: any Localizing
     let clear: (Int) -> Void
     @Environment(\.visionTheme) var theme
+    @Environment(\.nativeNoticeCenter) private var globalNotices
 
     var body: some View {
-        if let notice {
+        if let notice, globalNotices?.contains(notice) != true {
             let title = strings.t(notice.key, notice.variables)
             VStack(alignment: .leading, spacing: 2) {
                 Label(
-                    title, systemImage: notice.kind == .success ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                    title,
+                    systemImage: notice.kind == .success ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
                 if let detail = notice.detail, !detail.isEmpty {
                     Text(detail)
                         .font(.footnote)
@@ -174,9 +180,28 @@ struct NoticeToast: View {
 }
 
 /// The scrolling page frame of the admin screens.
+/// A page's history scroll restoration: the offset to restore (only on Back/Forward),
+/// where to record it, and how to load more rows until the content can reach it.
+struct NativeScrollRestoration {
+    let target: @MainActor () -> Double?
+    let record: @MainActor (Double) -> Void
+    var isLoading: @MainActor () -> Bool = { false }
+    var canGrow: @MainActor () -> Bool = { false }
+    var grow: @MainActor () async -> Void = {}
+}
+
 struct AdminPage<Content: View>: View {
-    @ViewBuilder var content: () -> Content
+    private let restoration: NativeScrollRestoration?
+    private let content: () -> Content
     @Environment(\.visionTheme) var theme
+    @State private var position = ScrollPosition(edge: .top)
+    @State private var maximumOffset: CGFloat = 0
+    @State private var isRestoring = true
+
+    init(restoration: NativeScrollRestoration? = nil, @ViewBuilder content: @escaping () -> Content) {
+        self.restoration = restoration
+        self.content = content
+    }
 
     var body: some View {
         ScrollView {
@@ -187,6 +212,36 @@ struct AdminPage<Content: View>: View {
             .frame(maxWidth: 1200, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .scrollPosition($position)
+        .onScrollGeometryChange(for: CGFloat.self) { geometry in
+            geometry.contentOffset.y
+        } action: { _, offset in
+            if let restoration, !isRestoring { restoration.record(Double(offset)) }
+        }
+        .onScrollGeometryChange(for: CGFloat.self) { geometry in
+            max(0, geometry.contentSize.height - geometry.containerSize.height)
+        } action: { _, maximum in
+            maximumOffset = maximum
+        }
+        .task { await restore() }
         .foregroundStyle(theme.foreground)
+    }
+
+    /// VirtualDataTable: Back/Forward returns to the entry's offset, loading further pages
+    /// until the content is tall enough (bounded), then hands recording back to scrolling.
+    private func restore() async {
+        defer { isRestoring = false }
+        guard let restoration, let target = restoration.target(), target > 0 else { return }
+        for _ in 0..<80 {
+            if maximumOffset >= CGFloat(target) { break }
+            if !restoration.isLoading(), restoration.canGrow() {
+                await restoration.grow()
+            } else if !restoration.isLoading() {
+                break
+            }
+            try? await Task.sleep(for: .milliseconds(50))
+            if Task.isCancelled { return }
+        }
+        position.scrollTo(y: min(CGFloat(target), maximumOffset))
     }
 }

@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import VisionNativeCore
 
 @MainActor
@@ -16,6 +17,9 @@ final class RecordingBridgeHost: BridgeHost {
     var pickedDirectory: String? = "/Users/me/Backups"
     var pickedFile: String? = "/Users/me/b.visionbak.enc"
     var encrypted = true
+    var settingsPatches: [NativeSettingsPatch] = []
+    var onboardingPresentations: [Bool] = []
+    var openedOverlays: [NativeShellOverlayKind] = []
 
     func rendererDidFail(_ failure: RendererFailure) { calls.append("fail:\(failure.kind):\(failure.name)") }
     func rendererDidBecomeReady() { calls.append("ready") }
@@ -48,7 +52,9 @@ final class RecordingBridgeHost: BridgeHost {
     }
     func runBackup(destination: String, frontendStateJson: String?) async -> JSONValue {
         calls.append("runBackup:\(destination):\(frontendStateJson ?? "nil")")
-        return .object(["success": .bool(true), "file": .string("\(destination)/b.visionbak"), "encrypted": .bool(false)])
+        return .object([
+            "success": .bool(true), "file": .string("\(destination)/b.visionbak"), "encrypted": .bool(false),
+        ])
     }
     func selectBackupDirectory() async -> String? {
         calls.append("selectDir")
@@ -106,6 +112,18 @@ final class RecordingBridgeHost: BridgeHost {
     func startWindowDrag() { calls.append("drag") }
     func titlebarDoubleClicked() { calls.append("double-click") }
     func routeDidChange(_ route: NativeRoute) { calls.append("route:\(route.string)") }
+    func routeDidChange(_ route: NativeRoute, onboardingPresented: Bool) {
+        routeDidChange(route)
+        onboardingPresentations.append(onboardingPresented)
+    }
+    func changeNativeSettings(_ patch: NativeSettingsPatch) async throws {
+        if let saveError { throw saveError }
+        settingsPatches.append(patch)
+    }
+    func openNativeOverlay(_ kind: NativeShellOverlayKind) async throws {
+        if let saveError { throw saveError }
+        openedOverlays.append(kind)
+    }
 }
 
 @MainActor
@@ -131,23 +149,101 @@ final class RecordingBridgeHost: BridgeHost {
             BridgeSender(isMainFrame: true, origin: BridgeOrigin(scheme: "", host: "", port: 0)),
             BridgeSender(isMainFrame: true, origin: nil),
         ] {
-            #expect(await reply(body, host: host, sender: sender) == .reject(BridgeDispatcher.unauthorizedSenderMessage))
+            #expect(
+                await reply(body, host: host, sender: sender) == .reject(BridgeDispatcher.unauthorizedSenderMessage))
         }
-        #expect(await BridgeDispatcher.reply(to: body, sender: trusted, appURL: nil, host: host) == .reject("Unauthorized sender"))
+        #expect(
+            await BridgeDispatcher.reply(to: body, sender: trusted, appURL: nil, host: host)
+                == .reject("Unauthorized sender"))
         #expect(host.calls.isEmpty)
     }
 
     @Test func theSenderIsJudgedByItsSecurityOrigin() {
         let app = URL(string: "http://localhost:41000")!
-        #expect(BridgeSender(isMainFrame: true, origin: BridgeOrigin(scheme: "HTTP", host: "LocalHost", port: 41000)).isTrusted(appURL: app))
+        #expect(
+            BridgeSender(isMainFrame: true, origin: BridgeOrigin(scheme: "HTTP", host: "LocalHost", port: 41000))
+                .isTrusted(appURL: app))
         // Port 0 is the protocol's default port.
         let defaultPort = URL(string: "http://localhost")!
-        #expect(BridgeSender(isMainFrame: true, origin: BridgeOrigin(scheme: "http", host: "localhost", port: 0)).isTrusted(appURL: defaultPort))
-        #expect(!BridgeSender(isMainFrame: true, origin: BridgeOrigin(scheme: "http", host: "localhost", port: 0)).isTrusted(appURL: app))
+        #expect(
+            BridgeSender(isMainFrame: true, origin: BridgeOrigin(scheme: "http", host: "localhost", port: 0)).isTrusted(
+                appURL: defaultPort))
+        #expect(
+            !BridgeSender(isMainFrame: true, origin: BridgeOrigin(scheme: "http", host: "localhost", port: 0))
+                .isTrusted(appURL: app))
         let ipv6 = URL(string: "http://[::1]:41000")!
-        #expect(BridgeSender(isMainFrame: true, origin: BridgeOrigin(scheme: "http", host: "::1", port: 41000)).isTrusted(appURL: ipv6))
-        #expect(BridgeSender(isMainFrame: true, origin: BridgeOrigin(scheme: "http", host: "[::1]", port: 41000)).isTrusted(appURL: ipv6))
-        #expect(!BridgeSender(isMainFrame: true, origin: BridgeOrigin(scheme: "http", host: "::1", port: 41000)).isTrusted(appURL: app))
+        #expect(
+            BridgeSender(isMainFrame: true, origin: BridgeOrigin(scheme: "http", host: "::1", port: 41000)).isTrusted(
+                appURL: ipv6))
+        #expect(
+            BridgeSender(isMainFrame: true, origin: BridgeOrigin(scheme: "http", host: "[::1]", port: 41000)).isTrusted(
+                appURL: ipv6))
+        #expect(
+            !BridgeSender(isMainFrame: true, origin: BridgeOrigin(scheme: "http", host: "::1", port: 41000)).isTrusted(
+                appURL: app))
+    }
+
+    @Test func nativeOverlaysRequireTheTrustedMainFrameAndRestrictedKinds() async {
+        let host = RecordingBridgeHost()
+        let palette = #"{"channel":"shell:open-overlay","args":["palette"]}"#
+        let subframe = BridgeSender(isMainFrame: false, origin: trusted.origin)
+        #expect(
+            await reply(palette, host: host, sender: subframe) == .reject(BridgeDispatcher.unauthorizedSenderMessage))
+        #expect(host.openedOverlays.isEmpty)
+        for arguments in [
+            #"["settings"]"#, #"["report"]"#, #"["onboarding"]"#, #"["Palette"]"#, "[]", "[true]", #"["palette",0]"#,
+        ] {
+            #expect(await reply("{\"channel\":\"shell:open-overlay\",\"args\":\(arguments)}", host: host) == .failure)
+        }
+        #expect(host.openedOverlays.isEmpty)
+        #expect(await reply(palette, host: host) == .success)
+        #expect(await reply(#"{"channel":"shell:open-overlay","args":["shortcuts"]}"#, host: host) == .success)
+        #expect(host.openedOverlays == [.palette, .shortcuts])
+        host.saveError = SettingsWriteError("Restore in progress")
+        #expect(await reply(palette, host: host) == .reject("Restore in progress"))
+        #expect(host.openedOverlays == [.palette, .shortcuts])
+    }
+
+    @Test func nativePreferenceChangesRequireTheTrustedMainFrame() async throws {
+        let host = RecordingBridgeHost()
+        let body = #"{"channel":"shell:settings-change","args":["app_settings",{"language":"nl"},["aiDefaultModel"]]}"#
+        let subframe = BridgeSender(isMainFrame: false, origin: trusted.origin)
+        #expect(await reply(body, host: host, sender: subframe) == .reject(BridgeDispatcher.unauthorizedSenderMessage))
+        #expect(host.settingsPatches.isEmpty)
+        #expect(await reply(body, host: host) == .success)
+        #expect(
+            host.settingsPatches == [
+                try NativeSettingsPatch(
+                    key: "app_settings", updates: ["language": .string("nl")], removed: ["aiDefaultModel"])
+            ])
+    }
+
+    @Test func nativePreferenceChangesRejectOtherSettingsAndReportSaveFailures() async {
+        let host = RecordingBridgeHost()
+        for invalid in [
+            #"{"channel":"shell:settings-change","args":["backup_settings",{"backupDir":"/tmp"},[]]}"#,
+            #"{"channel":"shell:settings-change","args":["app_settings",{"credentials":"secret"},[]]}"#,
+            #"{"channel":"shell:settings-change","args":["app_settings",{},["language"]]}"#,
+        ] {
+            #expect(await reply(invalid, host: host) == .failure)
+        }
+        #expect(host.settingsPatches.isEmpty)
+        host.saveError = SettingsWriteError("Restore in progress")
+        #expect(
+            await reply(
+                #"{"channel":"shell:settings-change","args":["app_settings",{"language":"nl"},[]]}"#, host: host)
+                == .reject("Restore in progress"))
+        #expect(host.settingsPatches.isEmpty)
+    }
+
+    @Test func onboardingCanOpenAndCloseWithoutChangingTheRoute() async {
+        let host = RecordingBridgeHost()
+        #expect(await reply(#"{"channel":"shell:route-changed","args":["/"]}"#, host: host) == .success)
+        #expect(await reply(#"{"channel":"shell:route-changed","args":["/",true]}"#, host: host) == .success)
+        #expect(await reply(#"{"channel":"shell:route-changed","args":["/",false]}"#, host: host) == .success)
+        #expect(host.onboardingPresentations == [false, true, false])
+        #expect(await reply(#"{"channel":"shell:route-changed","args":["/","true"]}"#, host: host) == .failure)
+        #expect(host.onboardingPresentations == [false, true, false])
     }
 
     @Test func implementedChannelsReachTheHost() async {
@@ -155,7 +251,8 @@ final class RecordingBridgeHost: BridgeHost {
         #expect(await reply(#"{"channel":"app:renderer-ready","args":[]}"#, host: host) == .success)
         #expect(await reply(#"{"channel":"app:set-badge","args":[1200]}"#, host: host) == .success)
         #expect(await reply(#"{"channel":"app:set-vibrancy","args":[true]}"#, host: host) == .success)
-        #expect(await reply(#"{"channel":"app:get-accent-color","args":[]}"#, host: host) == .resolve(.string("0a84ffff")))
+        #expect(
+            await reply(#"{"channel":"app:get-accent-color","args":[]}"#, host: host) == .resolve(.string("0a84ffff")))
         #expect(await reply(#"{"channel":"recovery:retry","args":[]}"#, host: host) == .success)
         #expect(
             await reply(#"{"channel":"recovery:open-logs","args":[]}"#, host: host)
@@ -215,7 +312,8 @@ final class RecordingBridgeHost: BridgeHost {
     @Test func removedChannelsRejectWithoutReachingTheHost() async {
         let host = RecordingBridgeHost()
         let updater = await reply(#"{"channel":"update:pre-update-backup","args":[]}"#, host: host)
-        #expect(updater == .reject(BridgeContract.unavailableMessage(BridgeContract.entry(for: .updatePreUpdateBackup))))
+        #expect(
+            updater == .reject(BridgeContract.unavailableMessage(BridgeContract.entry(for: .updatePreUpdateBackup))))
         #expect(host.calls.isEmpty)
     }
 
@@ -246,16 +344,18 @@ final class RecordingBridgeHost: BridgeHost {
         let host = RecordingBridgeHost()
         #expect(
             await reply(#"{"channel":"audit:transfer-export","args":["short"]}"#, host: host)
-                == .resolve(.object([
-                    "success": .bool(false), "status": .string("failed"),
-                    "reason": .string("transfer_password_invalid"),
-                ])))
+                == .resolve(
+                    .object([
+                        "success": .bool(false), "status": .string("failed"),
+                        "reason": .string("transfer_password_invalid"),
+                    ])))
         #expect(
             await reply(#"{"channel":"audit:read","args":[{"limit":501}]}"#, host: host)
-                == .resolve(.object([
-                    "success": .bool(false), "status": .string("failed"),
-                    "error": .string("Invalid audit read range"),
-                ])))
+                == .resolve(
+                    .object([
+                        "success": .bool(false), "status": .string("failed"),
+                        "error": .string("Invalid audit read range"),
+                    ])))
         #expect(
             await reply(#"{"channel":"audit:rotate-key","args":[1]}"#, host: host)
                 == .failed("Unexpected IPC arguments"))
@@ -269,9 +369,11 @@ final class RecordingBridgeHost: BridgeHost {
         let result = await reply(body, host: host)
         #expect(
             result
-                == .resolve(.object([
-                    "success": .bool(true), "file": .string("/Users/me/Backups/b.visionbak"), "encrypted": .bool(false),
-                ])))
+                == .resolve(
+                    .object([
+                        "success": .bool(true), "file": .string("/Users/me/Backups/b.visionbak"),
+                        "encrypted": .bool(false),
+                    ])))
         #expect(host.calls == ["runBackup:/Users/me/Backups:\(snapshot)"])
     }
 
@@ -291,9 +393,10 @@ final class RecordingBridgeHost: BridgeHost {
         #expect(await reply(encryptedBody, host: host) == .resolve(.bool(true)))
         #expect(
             await reply(restoreBody, host: host)
-                == .resolve(.object([
-                    "success": .bool(true), "file": .string("/Users/me/b.visionbak.enc"), "frontendState": .null,
-                ])))
+                == .resolve(
+                    .object([
+                        "success": .bool(true), "file": .string("/Users/me/b.visionbak.enc"), "frontendState": .null,
+                    ])))
         #expect(
             host.calls == [
                 "selectFile", "isEncrypted:/Users/me/b.visionbak.enc", "restore:/Users/me/b.visionbak.enc:p",
@@ -306,10 +409,11 @@ final class RecordingBridgeHost: BridgeHost {
         let host = RecordingBridgeHost()
         #expect(
             await reply(#"{"channel":"backup:get-encryption-status","args":[]}"#, host: host)
-                == .resolve(.object([
-                    "success": .bool(true), "hasEnvPassphrase": .bool(false), "hasStoredPassphrase": .bool(true),
-                    "secureStorageAvailable": .bool(true),
-                ])))
+                == .resolve(
+                    .object([
+                        "success": .bool(true), "hasEnvPassphrase": .bool(false), "hasStoredPassphrase": .bool(true),
+                        "secureStorageAvailable": .bool(true),
+                    ])))
         #expect(
             await reply(#"{"channel":"backup:set-passphrase","args":[" secret "]}"#, host: host)
                 == .resolve(.object(["success": .bool(true), "available": .bool(true)])))
@@ -325,14 +429,18 @@ final class RecordingBridgeHost: BridgeHost {
             await reply(#"{"channel":"backup:load-settings","args":[]}"#, host: host)
                 == .resolve(.object(["backupDir": .string("/Users/me/Backups"), "backupOnQuit": .bool(true)])))
         #expect(
-            await reply(#"{"channel":"backup:save-settings","args":[{"backupDir":"/Volumes/B","backupOnQuit":false}]}"#, host: host)
+            await reply(
+                #"{"channel":"backup:save-settings","args":[{"backupDir":"/Volumes/B","backupOnQuit":false}]}"#,
+                host: host)
                 == .success)
         #expect(
-            await reply(#"{"channel":"backup:save-settings","args":[{"backupDir":"/usr/x","backupOnQuit":false}]}"#, host: host)
+            await reply(
+                #"{"channel":"backup:save-settings","args":[{"backupDir":"/usr/x","backupOnQuit":false}]}"#, host: host)
                 == .failed("Backup to system directories is not allowed"))
         host.saveError = SettingsWriteError("Setting changed since it was loaded")
         #expect(
-            await reply(#"{"channel":"backup:save-settings","args":[{"backupDir":"","backupOnQuit":false}]}"#, host: host)
+            await reply(
+                #"{"channel":"backup:save-settings","args":[{"backupDir":"","backupOnQuit":false}]}"#, host: host)
                 == .failed("Setting changed since it was loaded"))
         #expect(host.calls == ["loadBackup", "saveBackup:/Volumes/B:false", "saveBackup::false"])
     }

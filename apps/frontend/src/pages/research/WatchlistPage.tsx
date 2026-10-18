@@ -1,3 +1,4 @@
+import { watchlistListPresentation } from "@vision/shared-utils/research/presentation";
 import { PageError } from "@/components/shared/PageError";
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { useState } from "react";
@@ -190,25 +191,15 @@ export default function WatchlistPage() {
                             ? priceMap.get(item.symbol)
                             : null;
                         const currentPrice = quote?.price ?? null;
-                        const priceDiff =
-                            currentPrice != null
-                                ? ((currentPrice - item.target_price) /
-                                      item.target_price) *
-                                  100
-                                : null;
-                        const isBelowTarget =
-                            currentPrice != null &&
-                            currentPrice <= item.target_price;
-                        // What-if backtest (ADR-097): return since the day it was added, using the
-                        // price snapshotted at add time. Only when both prices are known.
-                        const addedPrice = item.added_price ?? null;
-                        const sinceAddedPct =
-                            addedPrice != null &&
-                            addedPrice > 0 &&
-                            currentPrice != null
-                                ? ((currentPrice - addedPrice) / addedPrice) *
-                                  100
-                                : null;
+                        const {
+                            distancePercent: priceDiff,
+                            isAtOrBelowTarget: isBelowTarget,
+                            sinceAddedPercent: sinceAddedPct,
+                        } = watchlistListPresentation(
+                            item.target_price,
+                            currentPrice,
+                            item.added_price ?? null,
+                        );
                         const addedDate = formatDateStringWithAppSettings(
                             item.created_at,
                             appSettings.dateFormat,

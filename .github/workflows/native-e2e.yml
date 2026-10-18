@@ -1,0 +1,152 @@
+name: Native End-to-End Smoke
+
+# ADR-211 gate for the native-only Debug Demo default: build the real Demo runtime payload,
+# launch the Debug Demo app natively and with the retained web document, and check that the
+# supervised runtime starts and the shell stays up. Synthetic data only.
+on:
+  push:
+    branches: ["codex/native-phase-*"]
+    # Documentation-only pushes must not start or replace a macOS run.
+    paths-ignore: ["docs/**"]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: native-e2e-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  native-e2e:
+    name: Native end-to-end smoke (macOS)
+    runs-on: macos-26
+    timeout-minutes: 75
+    permissions:
+      contents: read
+    env:
+      POSTGRES_VERSION: "18.6"
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+        with:
+          persist-credentials: false
+
+      - name: Select Xcode
+        run: |
+          if [ -d /Applications/Xcode_26.6.app ]; then sudo xcode-select -s /Applications/Xcode_26.6.app; fi
+          xcodebuild -version
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.4.2"
+
+      - name: Setup Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v5
+        with:
+          python-version: "3.12"
+
+      - name: Install XcodeGen
+        env:
+          XCODEGEN_VERSION: "2.46.0"
+          XCODEGEN_SHA256: "4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806"
+        run: |
+          set -euo pipefail
+          curl -fsSL -o "$RUNNER_TEMP/xcodegen.zip" \
+            "https://github.com/yonaskolb/XcodeGen/releases/download/${XCODEGEN_VERSION}/xcodegen.zip"
+          echo "${XCODEGEN_SHA256}  $RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/xcodegen/bin" >> "$GITHUB_PATH"
+
+      # The packaged runtime pins PostgreSQL 18.6 exactly; build that release from source
+      # (C locale only, so no ICU) instead of relying on a runner package version. OpenSSL
+      # is required for the pgcrypto extension the migrations create.
+      - name: Build PostgreSQL ${{ env.POSTGRES_VERSION }}
+        run: |
+          set -euo pipefail
+          src="$RUNNER_TEMP/postgresql-$POSTGRES_VERSION"
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/pg.tar.bz2" \
+            "https://ftp.postgresql.org/pub/source/v$POSTGRES_VERSION/postgresql-$POSTGRES_VERSION.tar.bz2"
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/pg.tar.bz2.sha256" \
+            "https://ftp.postgresql.org/pub/source/v$POSTGRES_VERSION/postgresql-$POSTGRES_VERSION.tar.bz2.sha256"
+          (cd "$RUNNER_TEMP" && awk '{print $1"  pg.tar.bz2"}' pg.tar.bz2.sha256 | shasum -a 256 -c -)
+          tar -xjf "$RUNNER_TEMP/pg.tar.bz2" -C "$RUNNER_TEMP"
+          cd "$src"
+          ssl="$(brew --prefix openssl@3)"
+          ./configure --prefix="$RUNNER_TEMP/pg18" --without-icu --without-readline --with-openssl \
+            --with-includes="$ssl/include" --with-libraries="$ssl/lib" >/dev/null
+          make -j"$(sysctl -n hw.ncpu)" world-bin >/dev/null
+          make install-world-bin >/dev/null
+          "$RUNNER_TEMP/pg18/bin/postgres" --version
+          echo "VISION_POSTGRES_SOURCE_BIN=$RUNNER_TEMP/pg18/bin" >> "$GITHUB_ENV"
+
+      - name: Install the pinned migration build dependencies
+        run: |
+          set -euo pipefail
+          python -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --require-hashes -r config/requirements.txt
+          "$RUNNER_TEMP/venv/bin/pip" install PyInstaller==6.22.2
+          echo "VISION_PYTHON_BIN=$RUNNER_TEMP/venv/bin/python" >> "$GITHUB_ENV"
+
+      - name: Build the Demo runtime payload
+        env:
+          CHROMIUM_VERSION: "150.0.7871.24"
+        run: |
+          set -euo pipefail
+          REPO_PATH="$PWD"
+          payload="$RUNNER_TEMP/payload"
+          # shellcheck source=scripts/lib/native-mac-build.sh
+          source scripts/lib/native-mac-build.sh
+          prepare_native_macos_build
+          cd "$REPO_PATH/packaging/electron"
+          VISION_BUN_BIN="$(command -v bun)"
+          export VISION_BUN_BIN
+          bun build.ts
+          VISION_NATIVE_RUNTIME_DESTINATION="$payload/native-runtime" node out/scripts/prepare-native-runtime.js
+          VISION_NATIVE_PAYLOAD_ROOT="$payload/native-runtime" node out/scripts/build-demo-seed.js
+          ditto "$REPO_PATH/packaging/electron/demo-seed" "$payload/demo-seed"
+          echo "VISION_NATIVE_PAYLOAD_DIR=$payload" >> "$GITHUB_ENV"
+          # The Electron baseline step packages from the same staged frontend and Chromium.
+          echo "VISION_FRONTEND_DIST=$VISION_FRONTEND_DIST" >> "$GITHUB_ENV"
+          echo "VISION_CHROMIUM_SOURCE=${VISION_CHROMIUM_SOURCE:-}" >> "$GITHUB_ENV"
+
+      - name: Build the Debug Demo app with its payload
+        run: |
+          set -euo pipefail
+          xcodegen generate --spec apps/native/project.yml
+          xcodebuild -project apps/native/VisionNative.xcodeproj -scheme "Vision Native" \
+            -configuration Debug -derivedDataPath "$RUNNER_TEMP/derived" \
+            VISION_NATIVE_VARIANT=demo "VISION_NATIVE_PAYLOAD_DIR=$VISION_NATIVE_PAYLOAD_DIR" \
+            CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=YES DEVELOPMENT_TEAM= CODE_SIGN_STYLE=Manual build
+          echo "VISION_E2E_APP=$RUNNER_TEMP/derived/Build/Products/Debug/Vision Native Demo.app" >> "$GITHUB_ENV"
+
+      - name: Smoke the retained web document (control)
+        run: bash .github/scripts/native-e2e-smoke.sh "$VISION_E2E_APP" "$RUNNER_TEMP/e2e" retained
+
+      - name: Smoke the native-only mode (no web view)
+        if: ${{ !cancelled() }}
+        run: bash .github/scripts/native-e2e-smoke.sh "$VISION_E2E_APP" "$RUNNER_TEMP/e2e" native
+
+      # Non-blocking: the Electron Demo's bundle size and memory, measured the same way, are
+      # the baseline ADR-204's phase-4 exit compares the native numbers with.
+      - name: Measure the Electron Demo baseline
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          cd packaging/electron
+          VISION_BUN_BIN="$(command -v bun)"
+          export VISION_BUN_BIN
+          CSC_IDENTITY_AUTO_DISCOVERY=false node out/scripts/build-native-package.js --demo --dir
+          app="$(find "$PWD/dist-demo" -maxdepth 3 -name "Vision Demo.app" -type d | head -1)"
+          [ -n "$app" ] || { echo "::error::Electron Demo app not built"; exit 1; }
+          cd "$GITHUB_WORKSPACE"
+          bash .github/scripts/native-e2e-smoke.sh "$app" "$RUNNER_TEMP/e2e" electron
+
+      - name: Upload smoke logs and screenshots
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4
+        with:
+          name: native-e2e
+          path: ${{ runner.temp }}/e2e
+          if-no-files-found: ignore
+          retention-days: 7

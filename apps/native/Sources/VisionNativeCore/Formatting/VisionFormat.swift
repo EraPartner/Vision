@@ -77,7 +77,8 @@ public enum VisionFormat {
     /// timestamp is shown in the local zone; anything else is returned unchanged.
     public static func appDate(_ text: String, format: AppDateFormat, timeZone: TimeZone = .current) -> String {
         if text.isEmpty { return "" }
-        let ymd = text.split(separator: "T", maxSplits: 1, omittingEmptySubsequences: false).first.map(String.init) ?? text
+        let ymd =
+            text.split(separator: "T", maxSplits: 1, omittingEmptySubsequences: false).first.map(String.init) ?? text
         if let parts = ymdParts(ymd) {
             return appDate(year: parts.year, month: parts.month, day: parts.day, format: format)
         }
@@ -94,7 +95,8 @@ public enum VisionFormat {
     ) -> String {
         if text.isEmpty { return "" }
         if text.contains("T"), let instant = parseTimestamp(text) {
-            return "\(appDate(instant, format: format, timeZone: timeZone)) \(time(instant, locale: locale, timeZone: timeZone))"
+            return
+                "\(appDate(instant, format: format, timeZone: timeZone)) \(time(instant, locale: locale, timeZone: timeZone))"
         }
         let dateOnly = appDate(text, format: format, timeZone: timeZone)
         guard let parts = ymdParts(text) else { return dateOnly }
@@ -106,7 +108,7 @@ public enum VisionFormat {
     }
 
     /// The local calendar day of an instant, in the app date format.
-    public static func appDate(_ instant: Date, format: AppDateFormat, timeZone: TimeZone) -> String {
+    public static func appDate(_ instant: Date, format: AppDateFormat, timeZone: TimeZone = .current) -> String {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = timeZone
         let parts = calendar.dateComponents([.year, .month, .day], from: instant)

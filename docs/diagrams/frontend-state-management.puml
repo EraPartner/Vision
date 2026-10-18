@@ -295,4 +295,130 @@ useTabParam ..> BrowserRouter : uses (useSearchParams)
 useTaxYearParam ..> BrowserRouter : uses (useSearchParams)
 useTaxYearParam ..> BelgianTaxProfileContext : reads/writes viewedYear
 
+package "Retained Zustand settings" {
+  class useSettingsStore {
+    +appSettings / dashboardSettings / theme state
+    +migrated editable values
+  }
+}
+package "Native Settings and retained WK state (phase 3o)" {
+  class "ShellController" as NativeSettingsHost {
+    +ShellController UUID-owned restore / generation reload
+  }
+  class NativeDataSession <<actor>> {
+    +suspendAndDrain(): async
+    +resumeAfterFailedRestore()
+    +retireForReload()
+    +paused reads refused / read epochs invalidated
+  }
+  class NativeSettingsModel {
+    +migrated app/dashboard editable envelopes
+    +unknown fields and optional absence preserved
+    +500 ms per-key debounce
+    +draft callbacks / acknowledged receipts
+  }
+  class "NativeSettingsPersistence" as NativeSettingsPersistence {
+    +raw first-read CAS baselines
+    +serialized per-key writes
+    +sticky rejected / uncertain lane
+  }
+  class "nativeSettings.ts" as NativeSettingsMirror {
+    +apply drafts without echo
+    +forward supported field deltas
+    +advance baseline only from checked receipt
+  }
+  class NativeSettingsPatch {
+    +app_settings / dashboard_settings / theme_settings
+    +restricted fields and optional removals
+  }
+  class NativeNoticeCenter {
+    +app-lifetime notices / captured actions
+    +six eight-second Undo owners
+    +source typing guard / one-slot shortcut
+  }
+}
+NativeSettingsHost --> NativeSettingsModel : suspend drafts / failure resume / success retire
+NativeSettingsHost --> NativeDataSession : drain / resume / retire shared + fresh-completion transports
+NativeSettingsPersistence ..> NativeDataSession : shared APIClient transport admission
+NativeSettingsModel --> NativeSettingsPersistence : existing conditional settings API
+NativeSettingsModel --> NativeSettingsMirror : draft then receipt
+NativeSettingsMirror --> NativeSettingsPatch : native-only shell:settings-change
+NativeSettingsPatch --> NativeSettingsModel : same writer
+NativeSettingsMirror --> useSettingsStore : mirror three preference slices
+NativeSettingsMirror ..> ThemeHydration : skip competing persistence in native mode
+NativeSettingsMirror ..> AppSettingsHydration : skip competing persistence in native mode
+NativeSettingsMirror ..> SettingsHydration : skip competing persistence in native mode
+NativeSettingsModel ..> NativeNoticeCenter : existing save feedback
+
+
+package "Native shell overlays and reports (phase 3p)" {
+  class NativeCommandPaletteModel
+  class NativeShellNotificationsModel
+  class NativeOnboardingModel
+  class NativeReportModel
+  class "Tax / Statistics / Net worth print snapshots" as NativePagePrintSnapshots
+  class "Fixed retained TypeScript callbacks" as NativeSourceCallbacks
+}
+NativeSettingsHost --> NativeCommandPaletteModel : native graph / generation
+NativeSettingsHost --> NativeShellNotificationsModel : app-lifetime reminders
+NativeSettingsHost --> NativeOnboardingModel : seven-step draft owner
+NativeSettingsHost --> NativeReportModel : same-path draft / page-leave reset
+NativeCommandPaletteModel --> NativeSourceCallbacks : source answers
+NativeReportModel --> NativeSourceCallbacks : original fiscal projection / extreme context
+NativeReportModel --> NativeDataSession : binary request / restore fence
+NativeOnboardingModel --> NativeSettingsModel : completion writer
+NativeSettingsHost --> NativePagePrintSnapshots : active route / immutable visible state / no queries
+
+class NativeRendererReadiness
+NativeSettingsHost --> NativeRendererReadiness : actual document commit / checked ready token
+class NativeOverlayFocusReturn
+NativeSettingsHost --> NativeOverlayFocusReturn : route-window opener / final sheet dismissal
+note right of NativeOverlayFocusReturn
+  Weak control/field-editor owner and selection.
+  Reject stale graph, route, window or restore/reload state.
+end note
+
+package "Staged phase 4 (SDK takeover disabled)" {
+  class NativeNavigationHistory <<opt-in>>
+  class NativeNavigationLocation
+  class NativeNavigationStartup <<unwired policy>>
+  class NativeRawStateStore <<dormant actor>>
+  class NativeRawStateCaptureBridge <<unwired read-only>>
+  class NativeNavigationIdentifier <<identifier coercion>>
+  class "nativeRouteAdapter.ts" as NativeRouteAdapter <<detached proof>>
+  class NativeShellPresentationMode <<retainedWeb | nativeOnly>>
+  class NativeShellIntentCoordinator <<optional session owner>>
+}
+NativeShellIntentCoordinator --> NativeNavigationHistory : graph lease / committed raw history
+note right of NativeShellIntentCoordinator
+  Pending CSV / transaction and native menu commands.
+  Explicit startup gates and destination acknowledgment.
+  SDK ingress and UI consumer wiring remain disabled.
+end note
+note right of NativeShellPresentationMode
+  retainedWeb | nativeOnly; native-only is the eligible Debug Demo default
+  (VISION_NATIVE_WEB_FREE=0 opts out). Helper retired by ADR-212.
+  Native-only: native loading/error/notFound.
+  SDK print checks disposition before and after preparation.
+end note
+NativeRawStateCaptureBridge --> NativeRawStateStore : strict complete typed capture / host admission still required
+note right of NativeRouteAdapter
+  Native preflight lease, then source-router acceptance.
+  Existing leave guard remains sole blocker.
+  No SDK, App or global history wiring.
+end note
+NativeNavigationHistory --> NativeNavigationLocation : exact raw query / decoded route
+NativeNavigationLocation --> NativeNavigationIdentifier : native numeric aliases / consumer ID bounds
+NativeNavigationStartup ..> NativeNavigationHistory : raw seed or document replacement / admission deferred
+note right of NativeNavigationLocation
+  Raw location and matched parameters stay separate.
+  Native-only consumers avoid repeated decoding.
+  Numeric-coercion parity remains an activation gate.
+end note
+note right of NativeRawStateStore
+  Explicit origin + website-store identity + complete capture.
+  Atomic raw local strings; session map stays in memory.
+  Existing host admission and TypeScript helpers remain required.
+end note
+
 @enduml

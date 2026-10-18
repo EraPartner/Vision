@@ -37,9 +37,14 @@ final class FakeAuditShell: AuditShell {
     }
 }
 
-private let failedNotice = "Audit integrity check failed. Review the audit status before trusting recent changes."
+private let failedNotice =
+    "Audit integrity check failed. Open Admin > Audit before trusting recent changes. Preserve your backup and audit checkpoint."
 private let unavailableNotice =
-    "Audit integrity protection is unavailable. Your data remains accessible, but changes cannot be independently verified."
+    "Audit integrity protection is unavailable. Open Admin > Audit to check its status. Your data remains accessible; no checkpoint has been reset."
+private let enrollmentNotice =
+    "Audit protection has not been started. Open Admin > Audit to review the history and explicitly start protection."
+private let partialNotice =
+    "Recent changes are not independently verified. Open Admin > Audit to review the checkpoint before trusting them."
 private let channelsUnavailable = JSONValue.object(["success": .bool(false), "status": .string("unavailable")])
 private let channelsCancelled = JSONValue.object(["success": .bool(false), "cancelled": .bool(true)])
 private let transferPassword = "a transfer password"
@@ -180,7 +185,7 @@ private struct ChannelFixture {
                 == .object([
                     "success": .bool(false), "status": .string("unavailable"), "reason": .string("no_trusted_anchor"),
                 ]))
-        #expect(fixture.shell.notices == [unavailableNotice])
+        #expect(fixture.shell.notices == [enrollmentNotice])
 
         _ = try await fixture.anchor.initializeFirstCheckpoint(head: auditHead(2), legacyCutover: auditCutover)
         let verification = viewerVerification(head: 2)
@@ -199,7 +204,7 @@ private struct ChannelFixture {
         fixture.backend.answer("read", viewerPage(viewerVerification(head: 2, anchored: 1), entries))
         let failed = await fixture.channels.read(range)
         #expect(failed == .object(["success": .bool(false), "status": .string("failed")]))
-        #expect(fixture.shell.notices == [unavailableNotice, failedNotice])
+        #expect(fixture.shell.notices == [enrollmentNotice, failedNotice])
     }
 
     @Test @MainActor func exportSnapshotSavesWhereTheUserSays() async throws {
@@ -363,6 +368,21 @@ private struct ChannelFixture {
         #expect(undefined == "app.auditUnavailable")
         #expect(undefinedLast == "undefined")
         #expect(undefinedAgain == nil)
+
+        // main.ts `reportAuditStatus(status, reason)`: a missing anchor asks for enrollment,
+        // and a partially verified history has its own notice.
+        var reasons = AuditNoticeState()
+        let enrollment = reasons.report("unavailable", reason: "no_trusted_anchor")
+        let enrollmentAgain = reasons.report("unavailable", reason: "no_trusted_anchor")
+        let otherUnavailable = reasons.report("unavailable", reason: "bridge_or_anchor_unavailable")
+        let partial = reasons.report("partially_verified")
+        #expect(enrollment == "app.auditEnrollmentRequired")
+        #expect(enrollmentAgain == nil)
+        #expect(otherUnavailable == "app.auditUnavailable")
+        #expect(partial == "app.auditPartial")
+        let fallbackStrings = ShellStrings(language: .en, table: [:])
+        #expect(AuditNoticeState.message("app.auditEnrollmentRequired", strings: fallbackStrings) == enrollmentNotice)
+        #expect(AuditNoticeState.message("app.auditPartial", strings: fallbackStrings) == partialNotice)
 
         let shell = FakeAuditShell()
         shell.strings = ShellStrings(language: .nl, table: ["app.auditFailed": "Auditcontrole mislukt."])

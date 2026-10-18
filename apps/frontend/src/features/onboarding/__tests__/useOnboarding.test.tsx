@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { http } from "msw";
-import { screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { toast } from "sonner";
 import { useOnboarding } from "@/features/onboarding/useOnboarding";
@@ -9,6 +9,8 @@ import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { err, ok } from "@/test/msw/handlers";
 import { LOCAL_STORAGE_KEYS } from "@/lib/localStorage-keys";
+import { apiClient } from "@/lib/api";
+import { NATIVE_ONBOARDING_EVENT, type NativeOnboardingState } from "@/lib/nativeShell";
 
 vi.mock("sonner", () => ({
     toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
@@ -61,7 +63,61 @@ beforeEach(() => {
     localStorage.removeItem(LOCAL_STORAGE_KEYS.ONBOARDING_DRAFT);
 });
 
+afterEach(() => {
+    Reflect.deleteProperty(window, "__VISION_NATIVE_ONBOARDING__");
+    Reflect.deleteProperty(window, "__VISION_NATIVE_ONBOARDING_STATE__");
+    vi.restoreAllMocks();
+});
+
 describe("useOnboarding", () => {
+    it("keeps native onboarding unknown until a host receipt and never writes from web callbacks", async () => {
+        const user = userEvent.setup();
+        Object.defineProperty(window, "__VISION_NATIVE_ONBOARDING__", { value: true, configurable: true });
+        const mirror: NativeOnboardingState = { complete: null, presented: false };
+        Object.defineProperty(window, "__VISION_NATIVE_ONBOARDING_STATE__", { value: mirror, configurable: true });
+        const reads = vi.spyOn(apiClient, "getSetting");
+        const writes = vi.spyOn(apiClient, "saveSetting");
+        renderWithApp(<Probe />);
+        expect(screen.getByTestId("complete")).toHaveTextContent("false");
+        expect(screen.getByTestId("loading")).toHaveTextContent("true");
+        expect(reads.mock.calls.filter(([key]) => key === "onboarding_complete")).toHaveLength(0);
+        localStorage.setItem(LOCAL_STORAGE_KEYS.ONBOARDING_DRAFT, "native-owned draft");
+        const publish = (complete: boolean | null, presented: boolean) => act(() => {
+            mirror.complete = complete;
+            mirror.presented = presented;
+            window.dispatchEvent(new CustomEvent(NATIVE_ONBOARDING_EVENT, { detail: { complete, presented } }));
+        });
+        publish(false, true);
+        expect(screen.getByTestId("complete")).toHaveTextContent("false");
+        expect(screen.getByTestId("loading")).toHaveTextContent("false");
+        await user.click(screen.getByRole("button", { name: "Complete" }));
+        await user.click(screen.getByRole("button", { name: "Reset" }));
+        expect(screen.getByTestId("complete")).toHaveTextContent("false");
+        expect(writes.mock.calls.filter(([key]) => key === "onboarding_complete")).toHaveLength(0);
+        expect(localStorage.getItem(LOCAL_STORAGE_KEYS.ONBOARDING_DRAFT)).toBe("native-owned draft");
+        publish(true, false);
+        expect(screen.getByTestId("complete")).toHaveTextContent("true");
+        publish(null, false);
+        expect(screen.getByTestId("complete")).toHaveTextContent("false");
+        expect(screen.getByTestId("loading")).toHaveTextContent("true");
+        publish(false, true);
+        expect(screen.getByTestId("loading")).toHaveTextContent("false");
+    });
+
+    it("reads a pre-mount native ACK and ignores malformed status events", () => {
+        Object.defineProperty(window, "__VISION_NATIVE_ONBOARDING__", { value: true, configurable: true });
+        Object.defineProperty(window, "__VISION_NATIVE_ONBOARDING_STATE__", {
+            value: { complete: true, presented: false }, configurable: true,
+        });
+        renderWithApp(<Probe />);
+        expect(screen.getByTestId("complete")).toHaveTextContent("true");
+        expect(screen.getByTestId("loading")).toHaveTextContent("false");
+        act(() => window.dispatchEvent(new CustomEvent(NATIVE_ONBOARDING_EVENT, {
+            detail: { complete: "false", presented: false },
+        })));
+        expect(screen.getByTestId("complete")).toHaveTextContent("true");
+    });
+
     it("starts complete while loading and accepts only a strict true setting", async () => {
         server.use(
             http.get(`${API_BASE}/api/settings/onboarding_complete`, () =>

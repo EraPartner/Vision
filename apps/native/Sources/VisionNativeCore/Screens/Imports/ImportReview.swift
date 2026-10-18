@@ -476,6 +476,13 @@ public final class ImportReviewModel {
     public private(set) var expandedGroups: Set<String> = []
     public private(set) var isCommitting = false
     public private(set) var isDiscarding = false
+    /// useImportReviewData's edit queue: edits run one after another, commit waits for them,
+    /// and a failed edit blocks commit until the saved edits are reviewed.
+    public private(set) var pendingEdits = 0
+    public private(set) var editFailures: Set<String> = []
+    public var isSavingEdits: Bool { pendingEdits > 0 }
+    public var hasEditErrors: Bool { !editFailures.isEmpty }
+    @ObservationIgnored private var editTail: Task<Void, Never>?
     /// The Discard this import? alert is up.
     public private(set) var isDiscardConfirmationPresented = false
     /// A navigation the view performs, then calls `didHandleNavigation()`.
@@ -595,7 +602,55 @@ public final class ImportReviewModel {
 
     public var newAccountCount: Int { accountDisclosure.filter(\.isNew).count }
 
-    public var isBusy: Bool { isCommitting || isDiscarding }
+    public var isBusy: Bool { isCommitting || isDiscarding || isSavingEdits }
+
+    private func edit(_ key: String, _ work: @escaping @MainActor () async throws -> Void) async throws {
+        guard !isCommitting else { throw APIError.invalidRequest("Import review edits are being committed") }
+        pendingEdits += 1
+        let previous = editTail
+        let operation = Task { @MainActor [weak self] () throws -> Void in
+            await previous?.value
+            guard let self else { return }
+            defer { self.pendingEdits -= 1 }
+            do {
+                try await work()
+                self.editFailures.remove(key)
+            } catch {
+                self.editFailures.insert(key)
+                throw error
+            }
+        }
+        editTail = Task { _ = try? await operation.value }
+        try await operation.value
+    }
+
+    /// `updateRows`: every row's override settles, the persisted preview is read again, then
+    /// the first failure is reported.
+    private func updateRows(_ rowIds: [String], _ write: @escaping @Sendable (String) async throws -> Void) async throws {
+        var failure: (any Error)?
+        await withTaskGroup(of: (any Error)?.self) { tasks in
+            for rowId in rowIds {
+                tasks.addTask {
+                    do {
+                        try await write(rowId)
+                        return nil
+                    } catch { return error }
+                }
+            }
+            for await error in tasks { if failure == nil, let error { failure = error } }
+        }
+        await load(force: true)
+        if let failure { throw failure }
+    }
+
+    /// Review saved edits: wait for queued edits, read the persisted preview and clear the
+    /// local overrides and failures.
+    public func reviewSavedEdits() async {
+        await editTail?.value
+        await load(force: true)
+        editFailures = []
+        groupStates = [:]
+    }
 
     public func state(for group: ImportPreviewGroup) -> ImportReviewGroupState {
         groupStates[group.key] ?? ImportReviewGroupState(group: group)
@@ -643,13 +698,11 @@ public final class ImportReviewModel {
         let service = service
         let rowIds = group.rows.map(\.id)
         do {
-            try await withThrowingTaskGroup(of: Void.self) { tasks in
-                for rowId in rowIds {
-                    tasks.addTask { try await service.overrideImportRow(batchId: batchId, rowId: rowId, recipientId: recipientId) }
+            try await edit("recipient:" + rowIds.joined(separator: ",")) { [weak self] in
+                try await self?.updateRows(rowIds) {
+                    try await service.overrideImportRow(batchId: batchId, rowId: $0, recipientId: recipientId)
                 }
-                try await tasks.waitForAll()
             }
-            await load(force: true)
             update(group) { $0.recipientSaving = false }
         } catch {
             toasts.post(.error, "importReview.toast.overrideFailed", detail: ImportErrorText.text(error, strings: strings))
@@ -674,27 +727,27 @@ public final class ImportReviewModel {
         let service = service
         let rowIds = group.rows.map(\.id)
         do {
-            try await withThrowingTaskGroup(of: Void.self) { tasks in
-                for rowId in rowIds {
-                    tasks.addTask {
-                        try await service.overrideImportRowCategory(batchId: batchId, rowId: rowId, categoryId: categoryId)
-                    }
-                }
-                try await tasks.waitForAll()
-            }
-            update(group) { $0.categorySaving = false }
-            if before.persistAsDefault, let recipientId = before.recipientId, let categoryId {
-                do {
-                    try await service.setRecipientDefaultCategory(recipientId: recipientId, categoryId: categoryId)
-                } catch {
-                    toasts.post(
-                        .error, "importReview.toast.persistDefaultFailed", detail: ImportErrorText.text(error, strings: strings))
+            try await edit("category:" + rowIds.joined(separator: ",")) { [weak self] in
+                try await self?.updateRows(rowIds) {
+                    try await service.overrideImportRowCategory(batchId: batchId, rowId: $0, categoryId: categoryId)
                 }
             }
         } catch {
             toasts.post(
                 .error, "importReview.toast.categoryOverrideFailed", detail: ImportErrorText.text(error, strings: strings))
-            update(group) { $0.categorySaving = false }
+            groupStates[group.key] = nil
+            return
+        }
+        update(group) { $0.categorySaving = false }
+        if before.persistAsDefault, let recipientId = before.recipientId, let categoryId {
+            do {
+                try await edit("default:\(recipientId)") {
+                    try await service.setRecipientDefaultCategory(recipientId: recipientId, categoryId: categoryId)
+                }
+            } catch {
+                toasts.post(
+                    .error, "importReview.toast.persistDefaultFailed", detail: ImportErrorText.text(error, strings: strings))
+            }
         }
     }
 
@@ -738,12 +791,15 @@ public final class ImportReviewModel {
     /// Import {n} rows: the batch commits; the toasts follow (counts, planned payments paid,
     /// new accounts with Review accounts), and `/import` shows the receipt.
     public func commit(strings: any Localizing) async {
-        guard let batchId, !isBusy else { return }
+        guard let batchId, !isCommitting, !isDiscarding else { return }
         let range = preview?.dateRange
         let newAccounts = newAccountCount
         isCommitting = true
         defer { isCommitting = false }
         do {
+            // Queued edits land first; a failed one must be reviewed before committing.
+            await editTail?.value
+            guard editFailures.isEmpty else { throw APIError.invalidRequest(strings.t("importReview.editsFailed")) }
             let result = try await service.commitImportBatch(batchId: batchId)
             toasts.post(
                 .success, "importReview.toast.success",

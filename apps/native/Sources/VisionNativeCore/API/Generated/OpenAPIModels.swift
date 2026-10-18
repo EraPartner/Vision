@@ -294,6 +294,905 @@ extension OpenAPI {
         }
     }
 
+    public struct AgentCloakDesktopStatus: Codable, Equatable, Sendable {
+        /// Effective Desktop preference and mode
+        public let enabled: Bool
+        /// Fresh bounded loopback detection probe
+        public let available: Bool
+        /// Valid local reference mapping key exists
+        public let mappingKeyConfigured: Bool
+        /// Effective OpenAI API route availability
+        public let openAiEnabled: Bool
+
+        public init(enabled: Bool, available: Bool, mappingKeyConfigured: Bool, openAiEnabled: Bool) {
+            self.enabled = enabled
+            self.available = available
+            self.mappingKeyConfigured = mappingKeyConfigured
+            self.openAiEnabled = openAiEnabled
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case enabled = "enabled"
+            case available = "available"
+            case mappingKeyConfigured = "mappingKeyConfigured"
+            case openAiEnabled = "openAiEnabled"
+        }
+    }
+
+    public struct AiAnalysisEditProposal: Codable, Equatable, Sendable {
+        public let schemaVersion: Int
+        public let savedAnalysisId: String
+        public let baseVersion: Int
+        public let rationale: String
+        public let operations: [OperationsItem]
+
+        public init(schemaVersion: Int, savedAnalysisId: String, baseVersion: Int, rationale: String, operations: [OperationsItem]) {
+            self.schemaVersion = schemaVersion
+            self.savedAnalysisId = savedAnalysisId
+            self.baseVersion = baseVersion
+            self.rationale = rationale
+            self.operations = operations
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case schemaVersion = "schemaVersion"
+            case savedAnalysisId = "savedAnalysisId"
+            case baseVersion = "baseVersion"
+            case rationale = "rationale"
+            case operations = "operations"
+        }
+
+        public struct OperationsItem: Codable, Equatable, Sendable {
+            public let op: String
+            public let path: String
+            public let value: JSONValue?
+
+            public init(op: String, path: String, value: JSONValue? = nil) {
+                self.op = op
+                self.path = path
+                self.value = value
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case op = "op"
+                case path = "path"
+                case value = "value"
+            }
+        }
+    }
+
+    public struct AiConversation: Codable, Equatable, Sendable {
+        public let id: String
+        public let title: String
+        public let model: String
+        public let createdAt: String
+        public let updatedAt: String
+
+        public init(id: String, title: String, model: String, createdAt: String, updatedAt: String) {
+            self.id = id
+            self.title = title
+            self.model = model
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case title = "title"
+            case model = "model"
+            case createdAt = "createdAt"
+            case updatedAt = "updatedAt"
+        }
+    }
+
+    public struct AiConversationDetail: Codable, Equatable, Sendable {
+        public let conversation: OpenAPI.AiConversation
+        public let messages: [OpenAPI.AiMessage]
+
+        public init(conversation: OpenAPI.AiConversation, messages: [OpenAPI.AiMessage]) {
+            self.conversation = conversation
+            self.messages = messages
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case conversation = "conversation"
+            case messages = "messages"
+        }
+    }
+
+    public struct AiInvestigationRequest: Codable, Equatable, Sendable {
+        public let question: String
+        public let route: String?
+        public let researchMode: String?
+        /// Separately authored public-only cloud planning question; never derived from question.
+        public let publicQuestion: String?
+        /// Explicit public-only search text; never derived from question.
+        public let publicWebQuery: String?
+        public let publicSymbols: [String]?
+        public let publicMacroQueries: [String]?
+        public let clarification: String?
+        /// OpenAI model selected from the server-configured allowlist, or the configured default when
+        /// omitted.
+        public let model: String?
+        public let depth: String?
+        public let language: String?
+        public let scope: Scope
+        public let grantId: String?
+        public let selectedSummary: String?
+        /// Exact manually selected task and evidence for consent-bound cloud final synthesis; never
+        /// populated from local records by the server.
+        public let selectedEvidence: String?
+        /// One-use local scope returned by disclosure preview for typed reversible references.
+        public let referenceScopeId: String?
+        public let savedAnalysisId: String?
+
+        public init(question: String, route: String? = nil, researchMode: String? = nil, publicQuestion: String? = nil, publicWebQuery: String? = nil, publicSymbols: [String]? = nil, publicMacroQueries: [String]? = nil, clarification: String? = nil, model: String? = nil, depth: String? = nil, language: String? = nil, scope: Scope, grantId: String? = nil, selectedSummary: String? = nil, selectedEvidence: String? = nil, referenceScopeId: String? = nil, savedAnalysisId: String? = nil) {
+            self.question = question
+            self.route = route
+            self.researchMode = researchMode
+            self.publicQuestion = publicQuestion
+            self.publicWebQuery = publicWebQuery
+            self.publicSymbols = publicSymbols
+            self.publicMacroQueries = publicMacroQueries
+            self.clarification = clarification
+            self.model = model
+            self.depth = depth
+            self.language = language
+            self.scope = scope
+            self.grantId = grantId
+            self.selectedSummary = selectedSummary
+            self.selectedEvidence = selectedEvidence
+            self.referenceScopeId = referenceScopeId
+            self.savedAnalysisId = savedAnalysisId
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case question = "question"
+            case route = "route"
+            case researchMode = "researchMode"
+            case publicQuestion = "publicQuestion"
+            case publicWebQuery = "publicWebQuery"
+            case publicSymbols = "publicSymbols"
+            case publicMacroQueries = "publicMacroQueries"
+            case clarification = "clarification"
+            case model = "model"
+            case depth = "depth"
+            case language = "language"
+            case scope = "scope"
+            case grantId = "grantId"
+            case selectedSummary = "selectedSummary"
+            case selectedEvidence = "selectedEvidence"
+            case referenceScopeId = "referenceScopeId"
+            case savedAnalysisId = "savedAnalysisId"
+        }
+
+        public struct Scope: Codable, Equatable, Sendable {
+            public let workspaces: [String]
+            public let accountIds: [Int]?
+            public let investmentIds: [Int]?
+            public let dateFrom: String?
+            public let dateTo: String?
+            public let currency: String?
+            public let constraints: [String]?
+
+            public init(workspaces: [String], accountIds: [Int]? = nil, investmentIds: [Int]? = nil, dateFrom: String? = nil, dateTo: String? = nil, currency: String? = nil, constraints: [String]? = nil) {
+                self.workspaces = workspaces
+                self.accountIds = accountIds
+                self.investmentIds = investmentIds
+                self.dateFrom = dateFrom
+                self.dateTo = dateTo
+                self.currency = currency
+                self.constraints = constraints
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case workspaces = "workspaces"
+                case accountIds = "accountIds"
+                case investmentIds = "investmentIds"
+                case dateFrom = "dateFrom"
+                case dateTo = "dateTo"
+                case currency = "currency"
+                case constraints = "constraints"
+            }
+        }
+    }
+
+    public struct AiMessage: Codable, Equatable, Sendable {
+        public let id: String
+        public let conversationId: String
+        public let role: String
+        public let content: String?
+        public let toolName: String?
+        public let toolArgs: JSONValue?
+        public let toolResult: JSONValue?
+        public let toolPresentation: OpenAPI.AiToolPresentation?
+        public let status: String
+        public let createdAt: String
+
+        public init(id: String, conversationId: String, role: String, content: String? = nil, toolName: String? = nil, toolArgs: JSONValue? = nil, toolResult: JSONValue? = nil, toolPresentation: OpenAPI.AiToolPresentation? = nil, status: String, createdAt: String) {
+            self.id = id
+            self.conversationId = conversationId
+            self.role = role
+            self.content = content
+            self.toolName = toolName
+            self.toolArgs = toolArgs
+            self.toolResult = toolResult
+            self.toolPresentation = toolPresentation
+            self.status = status
+            self.createdAt = createdAt
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case conversationId = "conversationId"
+            case role = "role"
+            case content = "content"
+            case toolName = "toolName"
+            case toolArgs = "toolArgs"
+            case toolResult = "toolResult"
+            case toolPresentation = "toolPresentation"
+            case status = "status"
+            case createdAt = "createdAt"
+        }
+    }
+
+    /// Additive outgoing-message metadata inferred by shared TypeScript from the original JSON tool
+    /// result; stored results and provider prompts remain unchanged. Nested array rows and first-row
+    /// ordered keys retain the existing web behavior.
+    public struct AiToolPresentation: Codable, Equatable, Sendable {
+        public let renderAs: String
+        public let rows: [JSONValue]
+        public let columns: [String]
+        public let xKey: String
+        public let yKeys: [String]
+        public let rowCount: Int
+        public let pieRenderable: Bool
+        /// Empty when the first y key is unavailable or the source numeric sum is not positive;
+        /// otherwise retains negative values and Recharts default sector composition.
+        public let pieRows: [PieRowsItem]
+
+        public init(renderAs: String, rows: [JSONValue], columns: [String], xKey: String, yKeys: [String], rowCount: Int, pieRenderable: Bool, pieRows: [PieRowsItem]) {
+            self.renderAs = renderAs
+            self.rows = rows
+            self.columns = columns
+            self.xKey = xKey
+            self.yKeys = yKeys
+            self.rowCount = rowCount
+            self.pieRenderable = pieRenderable
+            self.pieRows = pieRows
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case renderAs = "renderAs"
+            case rows = "rows"
+            case columns = "columns"
+            case xKey = "xKey"
+            case yKeys = "yKeys"
+            case rowCount = "rowCount"
+            case pieRenderable = "pieRenderable"
+            case pieRows = "pieRows"
+        }
+
+        public struct PieRowsItem: Codable, Equatable, Sendable {
+            public let name: String
+            public let value: Decimal
+            public let percent: Decimal
+            public let labelPercent: Decimal
+            public let startAngle: Decimal
+            public let endAngle: Decimal
+
+            public init(name: String, value: Decimal, percent: Decimal, labelPercent: Decimal, startAngle: Decimal, endAngle: Decimal) {
+                self.name = name
+                self.value = value
+                self.percent = percent
+                self.labelPercent = labelPercent
+                self.startAngle = startAngle
+                self.endAngle = endAngle
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case name = "name"
+                case value = "value"
+                case percent = "percent"
+                case labelPercent = "labelPercent"
+                case startAngle = "startAngle"
+                case endAngle = "endAngle"
+            }
+        }
+    }
+
+    public struct AnalysisColumnRef: Codable, Equatable, Sendable {
+        public let id: String
+
+        public init(id: String) {
+            self.id = id
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+        }
+    }
+
+    public struct AnalysisMonitor: Codable, Equatable, Sendable {
+        public let id: String
+        public let kind: String
+        public let title: String
+        public let enabled: Bool
+        public let savedAnalysisId: String?
+        public let dossierId: String?
+        public let historicalTargetId: String
+        public let targetLabel: String
+        public let targetAvailable: Bool
+        public let fieldId: String?
+        public let `operator`: String?
+        public let threshold: String?
+        public let intervalMinutes: Int
+        public let cooldownMinutes: Int
+        public let nextDueAt: String
+        public let lastCheckedAt: String?
+        public let lastStatus: String?
+        public let lastObservation: LastObservation?
+        public let createdAt: String
+        public let updatedAt: String
+
+        public init(id: String, kind: String, title: String, enabled: Bool, savedAnalysisId: String? = nil, dossierId: String? = nil, historicalTargetId: String, targetLabel: String, targetAvailable: Bool, fieldId: String? = nil, `operator`: String? = nil, threshold: String? = nil, intervalMinutes: Int, cooldownMinutes: Int, nextDueAt: String, lastCheckedAt: String? = nil, lastStatus: String? = nil, lastObservation: LastObservation? = nil, createdAt: String, updatedAt: String) {
+            self.id = id
+            self.kind = kind
+            self.title = title
+            self.enabled = enabled
+            self.savedAnalysisId = savedAnalysisId
+            self.dossierId = dossierId
+            self.historicalTargetId = historicalTargetId
+            self.targetLabel = targetLabel
+            self.targetAvailable = targetAvailable
+            self.fieldId = fieldId
+            self.operator = `operator`
+            self.threshold = threshold
+            self.intervalMinutes = intervalMinutes
+            self.cooldownMinutes = cooldownMinutes
+            self.nextDueAt = nextDueAt
+            self.lastCheckedAt = lastCheckedAt
+            self.lastStatus = lastStatus
+            self.lastObservation = lastObservation
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case kind = "kind"
+            case title = "title"
+            case enabled = "enabled"
+            case savedAnalysisId = "savedAnalysisId"
+            case dossierId = "dossierId"
+            case historicalTargetId = "historicalTargetId"
+            case targetLabel = "targetLabel"
+            case targetAvailable = "targetAvailable"
+            case fieldId = "fieldId"
+            case `operator` = "operator"
+            case threshold = "threshold"
+            case intervalMinutes = "intervalMinutes"
+            case cooldownMinutes = "cooldownMinutes"
+            case nextDueAt = "nextDueAt"
+            case lastCheckedAt = "lastCheckedAt"
+            case lastStatus = "lastStatus"
+            case lastObservation = "lastObservation"
+            case createdAt = "createdAt"
+            case updatedAt = "updatedAt"
+        }
+
+        public struct LastObservation: Codable, Equatable, Sendable {
+            public let id: String
+            public let monitorId: String
+            public let status: String
+            public let previousValue: String?
+            public let currentValue: String?
+            public let previousEvidenceVersion: Int?
+            public let currentEvidenceVersion: Int?
+            public let analysisDefinitionVersion: Int?
+            public let analysisRunId: String?
+            public let historicalAnalysisRunId: String?
+            public let analysisRunStatus: String?
+            public let analysisWindow: JSONValue?
+            public let coverage: Coverage
+            public let reasonCode: String
+            public let reason: String
+            public let checkedAt: String
+
+            public init(id: String, monitorId: String, status: String, previousValue: String? = nil, currentValue: String? = nil, previousEvidenceVersion: Int? = nil, currentEvidenceVersion: Int? = nil, analysisDefinitionVersion: Int? = nil, analysisRunId: String? = nil, historicalAnalysisRunId: String? = nil, analysisRunStatus: String? = nil, analysisWindow: JSONValue? = nil, coverage: Coverage, reasonCode: String, reason: String, checkedAt: String) {
+                self.id = id
+                self.monitorId = monitorId
+                self.status = status
+                self.previousValue = previousValue
+                self.currentValue = currentValue
+                self.previousEvidenceVersion = previousEvidenceVersion
+                self.currentEvidenceVersion = currentEvidenceVersion
+                self.analysisDefinitionVersion = analysisDefinitionVersion
+                self.analysisRunId = analysisRunId
+                self.historicalAnalysisRunId = historicalAnalysisRunId
+                self.analysisRunStatus = analysisRunStatus
+                self.analysisWindow = analysisWindow
+                self.coverage = coverage
+                self.reasonCode = reasonCode
+                self.reason = reason
+                self.checkedAt = checkedAt
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case id = "id"
+                case monitorId = "monitorId"
+                case status = "status"
+                case previousValue = "previousValue"
+                case currentValue = "currentValue"
+                case previousEvidenceVersion = "previousEvidenceVersion"
+                case currentEvidenceVersion = "currentEvidenceVersion"
+                case analysisDefinitionVersion = "analysisDefinitionVersion"
+                case analysisRunId = "analysisRunId"
+                case historicalAnalysisRunId = "historicalAnalysisRunId"
+                case analysisRunStatus = "analysisRunStatus"
+                case analysisWindow = "analysisWindow"
+                case coverage = "coverage"
+                case reasonCode = "reasonCode"
+                case reason = "reason"
+                case checkedAt = "checkedAt"
+            }
+
+            public struct Coverage: Codable, Equatable, Sendable {
+                public let status: String
+                public let reason: String
+
+                public init(status: String, reason: String) {
+                    self.status = status
+                    self.reason = reason
+                }
+
+                enum CodingKeys: String, CodingKey {
+                    case status = "status"
+                    case reason = "reason"
+                }
+            }
+        }
+    }
+
+    /// A oneOf/anyOf schema, decoded as plain JSON.
+    public typealias AnalysisMonitorCreate = JSONValue
+
+    public struct AnalysisMonitorEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let data: OpenAPI.AnalysisMonitor?
+        public let error: OpenAPI.ErrorPayload?
+
+        public init(ok: Bool, data: OpenAPI.AnalysisMonitor? = nil, error: OpenAPI.ErrorPayload? = nil) {
+            self.ok = ok
+            self.data = data
+            self.error = error
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case data = "data"
+            case error = "error"
+        }
+    }
+
+    public struct AnalysisMonitorListEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let data: Data?
+        public let error: OpenAPI.ErrorPayload?
+
+        public init(ok: Bool, data: Data? = nil, error: OpenAPI.ErrorPayload? = nil) {
+            self.ok = ok
+            self.data = data
+            self.error = error
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case data = "data"
+            case error = "error"
+        }
+
+        public struct Data: Codable, Equatable, Sendable {
+            public let items: [OpenAPI.AnalysisMonitor]
+            public let total: Int
+            public let limit: Int
+            public let offset: Int
+
+            public init(items: [OpenAPI.AnalysisMonitor], total: Int, limit: Int, offset: Int) {
+                self.items = items
+                self.total = total
+                self.limit = limit
+                self.offset = offset
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case items = "items"
+                case total = "total"
+                case limit = "limit"
+                case offset = "offset"
+            }
+        }
+    }
+
+    public struct AnalysisMonitorNotification: Codable, Equatable, Sendable {
+        public let id: String
+        public let monitorId: String
+        public let observationId: String
+        public let kind: String
+        public let title: String
+        public let reasonCode: String
+        public let reason: String
+        public let previousValue: String?
+        public let currentValue: String?
+        public let createdAt: String
+        public let readAt: String?
+
+        public init(id: String, monitorId: String, observationId: String, kind: String, title: String, reasonCode: String, reason: String, previousValue: String? = nil, currentValue: String? = nil, createdAt: String, readAt: String? = nil) {
+            self.id = id
+            self.monitorId = monitorId
+            self.observationId = observationId
+            self.kind = kind
+            self.title = title
+            self.reasonCode = reasonCode
+            self.reason = reason
+            self.previousValue = previousValue
+            self.currentValue = currentValue
+            self.createdAt = createdAt
+            self.readAt = readAt
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case monitorId = "monitorId"
+            case observationId = "observationId"
+            case kind = "kind"
+            case title = "title"
+            case reasonCode = "reasonCode"
+            case reason = "reason"
+            case previousValue = "previousValue"
+            case currentValue = "currentValue"
+            case createdAt = "createdAt"
+            case readAt = "readAt"
+        }
+    }
+
+    public struct AnalysisMonitorNotificationEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let data: OpenAPI.AnalysisMonitorNotification?
+        public let error: OpenAPI.ErrorPayload?
+
+        public init(ok: Bool, data: OpenAPI.AnalysisMonitorNotification? = nil, error: OpenAPI.ErrorPayload? = nil) {
+            self.ok = ok
+            self.data = data
+            self.error = error
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case data = "data"
+            case error = "error"
+        }
+    }
+
+    public struct AnalysisMonitorNotificationListEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let data: Data?
+        public let error: OpenAPI.ErrorPayload?
+
+        public init(ok: Bool, data: Data? = nil, error: OpenAPI.ErrorPayload? = nil) {
+            self.ok = ok
+            self.data = data
+            self.error = error
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case data = "data"
+            case error = "error"
+        }
+
+        public struct Data: Codable, Equatable, Sendable {
+            public let items: [OpenAPI.AnalysisMonitorNotification]
+            public let total: Int
+            public let unreadCount: Int
+            public let limit: Int
+            public let offset: Int
+
+            public init(items: [OpenAPI.AnalysisMonitorNotification], total: Int, unreadCount: Int, limit: Int, offset: Int) {
+                self.items = items
+                self.total = total
+                self.unreadCount = unreadCount
+                self.limit = limit
+                self.offset = offset
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case items = "items"
+                case total = "total"
+                case unreadCount = "unreadCount"
+                case limit = "limit"
+                case offset = "offset"
+            }
+        }
+    }
+
+    public struct AnalysisMonitorObservation: Codable, Equatable, Sendable {
+        public let id: String
+        public let monitorId: String
+        public let status: String
+        public let previousValue: String?
+        public let currentValue: String?
+        public let previousEvidenceVersion: Int?
+        public let currentEvidenceVersion: Int?
+        public let analysisDefinitionVersion: Int?
+        public let analysisRunId: String?
+        public let historicalAnalysisRunId: String?
+        public let analysisRunStatus: String?
+        public let analysisWindow: JSONValue?
+        public let coverage: Coverage
+        public let reasonCode: String
+        public let reason: String
+        public let checkedAt: String
+
+        public init(id: String, monitorId: String, status: String, previousValue: String? = nil, currentValue: String? = nil, previousEvidenceVersion: Int? = nil, currentEvidenceVersion: Int? = nil, analysisDefinitionVersion: Int? = nil, analysisRunId: String? = nil, historicalAnalysisRunId: String? = nil, analysisRunStatus: String? = nil, analysisWindow: JSONValue? = nil, coverage: Coverage, reasonCode: String, reason: String, checkedAt: String) {
+            self.id = id
+            self.monitorId = monitorId
+            self.status = status
+            self.previousValue = previousValue
+            self.currentValue = currentValue
+            self.previousEvidenceVersion = previousEvidenceVersion
+            self.currentEvidenceVersion = currentEvidenceVersion
+            self.analysisDefinitionVersion = analysisDefinitionVersion
+            self.analysisRunId = analysisRunId
+            self.historicalAnalysisRunId = historicalAnalysisRunId
+            self.analysisRunStatus = analysisRunStatus
+            self.analysisWindow = analysisWindow
+            self.coverage = coverage
+            self.reasonCode = reasonCode
+            self.reason = reason
+            self.checkedAt = checkedAt
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case monitorId = "monitorId"
+            case status = "status"
+            case previousValue = "previousValue"
+            case currentValue = "currentValue"
+            case previousEvidenceVersion = "previousEvidenceVersion"
+            case currentEvidenceVersion = "currentEvidenceVersion"
+            case analysisDefinitionVersion = "analysisDefinitionVersion"
+            case analysisRunId = "analysisRunId"
+            case historicalAnalysisRunId = "historicalAnalysisRunId"
+            case analysisRunStatus = "analysisRunStatus"
+            case analysisWindow = "analysisWindow"
+            case coverage = "coverage"
+            case reasonCode = "reasonCode"
+            case reason = "reason"
+            case checkedAt = "checkedAt"
+        }
+
+        public struct Coverage: Codable, Equatable, Sendable {
+            public let status: String
+            public let reason: String
+
+            public init(status: String, reason: String) {
+                self.status = status
+                self.reason = reason
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case status = "status"
+                case reason = "reason"
+            }
+        }
+    }
+
+    public struct AnalysisMonitorObservationEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let data: OpenAPI.AnalysisMonitorObservation?
+        public let error: OpenAPI.ErrorPayload?
+
+        public init(ok: Bool, data: OpenAPI.AnalysisMonitorObservation? = nil, error: OpenAPI.ErrorPayload? = nil) {
+            self.ok = ok
+            self.data = data
+            self.error = error
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case data = "data"
+            case error = "error"
+        }
+    }
+
+    public struct AnalysisMonitorObservationListEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let data: Data?
+        public let error: OpenAPI.ErrorPayload?
+
+        public init(ok: Bool, data: Data? = nil, error: OpenAPI.ErrorPayload? = nil) {
+            self.ok = ok
+            self.data = data
+            self.error = error
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case data = "data"
+            case error = "error"
+        }
+
+        public struct Data: Codable, Equatable, Sendable {
+            public let items: [OpenAPI.AnalysisMonitorObservation]
+            public let total: Int
+            public let limit: Int
+            public let offset: Int
+
+            public init(items: [OpenAPI.AnalysisMonitorObservation], total: Int, limit: Int, offset: Int) {
+                self.items = items
+                self.total = total
+                self.limit = limit
+                self.offset = offset
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case items = "items"
+                case total = "total"
+                case limit = "limit"
+                case offset = "offset"
+            }
+        }
+    }
+
+    /// Numeric condition fields are valid only for analysis-threshold monitors.
+    public struct AnalysisMonitorUpdate: Codable, Equatable, Sendable {
+        public let title: String?
+        public let enabled: Bool?
+        public let fieldId: String?
+        public let `operator`: String?
+        public let threshold: String?
+        public let intervalMinutes: Int?
+        public let cooldownMinutes: Int?
+
+        public init(title: String? = nil, enabled: Bool? = nil, fieldId: String? = nil, `operator`: String? = nil, threshold: String? = nil, intervalMinutes: Int? = nil, cooldownMinutes: Int? = nil) {
+            self.title = title
+            self.enabled = enabled
+            self.fieldId = fieldId
+            self.operator = `operator`
+            self.threshold = threshold
+            self.intervalMinutes = intervalMinutes
+            self.cooldownMinutes = cooldownMinutes
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case title = "title"
+            case enabled = "enabled"
+            case fieldId = "fieldId"
+            case `operator` = "operator"
+            case threshold = "threshold"
+            case intervalMinutes = "intervalMinutes"
+            case cooldownMinutes = "cooldownMinutes"
+        }
+    }
+
+    /// A oneOf/anyOf schema, decoded as plain JSON.
+    public typealias AnalysisQuerySpec = JSONValue
+
+    public struct AnalysisVisualFilter: Codable, Equatable, Sendable {
+        public let fieldId: String
+        public let `operator`: String
+        public let value: JSONValue?
+
+        public init(fieldId: String, `operator`: String, value: JSONValue? = nil) {
+            self.fieldId = fieldId
+            self.operator = `operator`
+            self.value = value
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case fieldId = "fieldId"
+            case `operator` = "operator"
+            case value = "value"
+        }
+    }
+
+    /// Visual analysis plan. The route checks these field types; the catalog compiler owns semantic
+    /// validation. Unknown keys are kept. A null option means the same as leaving it out.
+    public struct AnalysisVisualPlan: Codable, Equatable, Sendable {
+        public let datasetId: String
+        public let fields: [String]?
+        public let groups: [String]?
+        public let measures: [String]?
+        public let joins: [String]?
+        public let filters: [OpenAPI.AnalysisVisualFilter]?
+        public let orderBy: [OrderByItem]?
+        public let limit: Decimal?
+        public let reportingCurrency: String?
+        public let from: String?
+        public let to: String?
+        public let symbol: String?
+        public let range: String?
+        public let costBasisMethod: String?
+        public let generatedSql: String?
+
+        public init(datasetId: String, fields: [String]? = nil, groups: [String]? = nil, measures: [String]? = nil, joins: [String]? = nil, filters: [OpenAPI.AnalysisVisualFilter]? = nil, orderBy: [OrderByItem]? = nil, limit: Decimal? = nil, reportingCurrency: String? = nil, from: String? = nil, to: String? = nil, symbol: String? = nil, range: String? = nil, costBasisMethod: String? = nil, generatedSql: String? = nil) {
+            self.datasetId = datasetId
+            self.fields = fields
+            self.groups = groups
+            self.measures = measures
+            self.joins = joins
+            self.filters = filters
+            self.orderBy = orderBy
+            self.limit = limit
+            self.reportingCurrency = reportingCurrency
+            self.from = from
+            self.to = to
+            self.symbol = symbol
+            self.range = range
+            self.costBasisMethod = costBasisMethod
+            self.generatedSql = generatedSql
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case datasetId = "datasetId"
+            case fields = "fields"
+            case groups = "groups"
+            case measures = "measures"
+            case joins = "joins"
+            case filters = "filters"
+            case orderBy = "orderBy"
+            case limit = "limit"
+            case reportingCurrency = "reportingCurrency"
+            case from = "from"
+            case to = "to"
+            case symbol = "symbol"
+            case range = "range"
+            case costBasisMethod = "costBasisMethod"
+            case generatedSql = "generatedSql"
+        }
+
+        public struct OrderByItem: Codable, Equatable, Sendable {
+            public let id: String
+            public let direction: String
+
+            public init(id: String, direction: String) {
+                self.id = id
+                self.direction = direction
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case id = "id"
+                case direction = "direction"
+            }
+        }
+    }
+
+    public struct AnalysisWorkbenchInput: Codable, Equatable, Sendable {
+        public let steps: [JSONValue]?
+        public let time: JSONValue?
+
+        public init(steps: [JSONValue]? = nil, time: JSONValue? = nil) {
+            self.steps = steps
+            self.time = time
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case steps = "steps"
+            case time = "time"
+        }
+    }
+
+    public enum AssetClass: String, Codable, Sendable, CaseIterable {
+        case stock = "stock"
+        case etf = "etf"
+        case crypto = "crypto"
+        case metals = "metals"
+        case realEstate = "real_estate"
+        case savings = "savings"
+        case bond = "bond"
+    }
+
     public struct Attachment: Codable, Equatable, Sendable {
         /// BIGSERIAL identity, serialized as a decimal string.
         public let id: String
@@ -322,6 +1221,1866 @@ extension OpenAPI {
             case mimeType = "mime_type"
             case sizeBytes = "size_bytes"
             case createdAt = "created_at"
+        }
+    }
+
+    public struct BelgianPortfolioTaxAssetCosts: Codable, Equatable, Sendable {
+        public let assetClass: String
+        public let taxes: Decimal
+        public let fees: Decimal
+        public let total: Decimal
+
+        public init(assetClass: String, taxes: Decimal, fees: Decimal, total: Decimal) {
+            self.assetClass = assetClass
+            self.taxes = taxes
+            self.fees = fees
+            self.total = total
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case assetClass = "assetClass"
+            case taxes = "taxes"
+            case fees = "fees"
+            case total = "total"
+        }
+    }
+
+    /// Percent-valued display badges, computed by TypeScript from the fraction-valued rates.
+    public struct BelgianPortfolioTaxBadgePercent: Codable, Equatable, Sendable {
+        public let securitiesAccountTaxRate: Decimal
+        public let capitalGainsTaxRate: Decimal
+        public let reyndersTaxRate: Decimal
+        public let dividendWHTRate: Decimal
+
+        public init(securitiesAccountTaxRate: Decimal, capitalGainsTaxRate: Decimal, reyndersTaxRate: Decimal, dividendWHTRate: Decimal) {
+            self.securitiesAccountTaxRate = securitiesAccountTaxRate
+            self.capitalGainsTaxRate = capitalGainsTaxRate
+            self.reyndersTaxRate = reyndersTaxRate
+            self.dividendWHTRate = dividendWHTRate
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case securitiesAccountTaxRate = "securitiesAccountTaxRate"
+            case capitalGainsTaxRate = "capitalGainsTaxRate"
+            case reyndersTaxRate = "reyndersTaxRate"
+            case dividendWHTRate = "dividendWHTRate"
+        }
+    }
+
+    public struct BelgianPortfolioTaxCostEntry: Codable, Equatable, Sendable {
+        public let nameKey: String
+        public let value: Decimal
+
+        public init(nameKey: String, value: Decimal) {
+            self.nameKey = nameKey
+            self.value = value
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case nameKey = "nameKey"
+            case value = "value"
+        }
+    }
+
+    public struct BelgianPortfolioTaxDashboard: Codable, Equatable, Sendable {
+        public let year: Int
+        public let currency: String
+        public let isEmpty: Bool
+        public let hasProfile: Bool
+        public let hasInKindIncomeUnclassified: Bool
+        public let totals: OpenAPI.BelgianPortfolioTaxTotals
+        public let taxBreakdown: [OpenAPI.BelgianPortfolioTaxCostEntry]
+        public let feeBreakdown: [OpenAPI.BelgianPortfolioTaxCostEntry]
+        public let taxByAssetClass: [OpenAPI.BelgianPortfolioTaxAssetCosts]
+        public let investmentBreakdown: [OpenAPI.BelgianPortfolioTaxInvestmentCosts]
+        public let yearlyCostTrend: [OpenAPI.BelgianPortfolioTaxMonthlyCosts]
+        public let dividend: OpenAPI.BelgianPortfolioTaxDividend
+        public let estimates: OpenAPI.BelgianPortfolioTaxEstimates
+        public let taxTable: OpenAPI.BelgianPortfolioTaxRates
+        public let summaries: [OpenAPI.BelgianPortfolioTaxSummary]
+        public let records: [OpenAPI.Setting]
+
+        public init(year: Int, currency: String, isEmpty: Bool, hasProfile: Bool, hasInKindIncomeUnclassified: Bool, totals: OpenAPI.BelgianPortfolioTaxTotals, taxBreakdown: [OpenAPI.BelgianPortfolioTaxCostEntry], feeBreakdown: [OpenAPI.BelgianPortfolioTaxCostEntry], taxByAssetClass: [OpenAPI.BelgianPortfolioTaxAssetCosts], investmentBreakdown: [OpenAPI.BelgianPortfolioTaxInvestmentCosts], yearlyCostTrend: [OpenAPI.BelgianPortfolioTaxMonthlyCosts], dividend: OpenAPI.BelgianPortfolioTaxDividend, estimates: OpenAPI.BelgianPortfolioTaxEstimates, taxTable: OpenAPI.BelgianPortfolioTaxRates, summaries: [OpenAPI.BelgianPortfolioTaxSummary], records: [OpenAPI.Setting]) {
+            self.year = year
+            self.currency = currency
+            self.isEmpty = isEmpty
+            self.hasProfile = hasProfile
+            self.hasInKindIncomeUnclassified = hasInKindIncomeUnclassified
+            self.totals = totals
+            self.taxBreakdown = taxBreakdown
+            self.feeBreakdown = feeBreakdown
+            self.taxByAssetClass = taxByAssetClass
+            self.investmentBreakdown = investmentBreakdown
+            self.yearlyCostTrend = yearlyCostTrend
+            self.dividend = dividend
+            self.estimates = estimates
+            self.taxTable = taxTable
+            self.summaries = summaries
+            self.records = records
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case year = "year"
+            case currency = "currency"
+            case isEmpty = "isEmpty"
+            case hasProfile = "hasProfile"
+            case hasInKindIncomeUnclassified = "hasInKindIncomeUnclassified"
+            case totals = "totals"
+            case taxBreakdown = "taxBreakdown"
+            case feeBreakdown = "feeBreakdown"
+            case taxByAssetClass = "taxByAssetClass"
+            case investmentBreakdown = "investmentBreakdown"
+            case yearlyCostTrend = "yearlyCostTrend"
+            case dividend = "dividend"
+            case estimates = "estimates"
+            case taxTable = "taxTable"
+            case summaries = "summaries"
+            case records = "records"
+        }
+    }
+
+    /// Unknown ordinary dividend conventions leave gross base, reclaim, and net cost null.
+    /// Included-in-units dividends are excluded; married reclaim uses a doubled exemption while
+    /// dividendExemption is the single-taxpayer table value.
+    public struct BelgianPortfolioTaxDividend: Codable, Equatable, Sendable {
+        public let totalDividendIncome: Decimal
+        public let dividendWhtRecorded: Decimal
+        public let grossDividendWht: Decimal
+        public let dividendExemption: Decimal
+        public let grossDividendBase: Decimal?
+        public let dividendWhtReclaim: Decimal?
+        public let dividendWhtNetCost: Decimal?
+        public let unknownDividendConventionCount: Int
+
+        public init(totalDividendIncome: Decimal, dividendWhtRecorded: Decimal, grossDividendWht: Decimal, dividendExemption: Decimal, grossDividendBase: Decimal? = nil, dividendWhtReclaim: Decimal? = nil, dividendWhtNetCost: Decimal? = nil, unknownDividendConventionCount: Int) {
+            self.totalDividendIncome = totalDividendIncome
+            self.dividendWhtRecorded = dividendWhtRecorded
+            self.grossDividendWht = grossDividendWht
+            self.dividendExemption = dividendExemption
+            self.grossDividendBase = grossDividendBase
+            self.dividendWhtReclaim = dividendWhtReclaim
+            self.dividendWhtNetCost = dividendWhtNetCost
+            self.unknownDividendConventionCount = unknownDividendConventionCount
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case totalDividendIncome = "totalDividendIncome"
+            case dividendWhtRecorded = "dividendWhtRecorded"
+            case grossDividendWht = "grossDividendWht"
+            case dividendExemption = "dividendExemption"
+            case grossDividendBase = "grossDividendBase"
+            case dividendWhtReclaim = "dividendWhtReclaim"
+            case dividendWhtNetCost = "dividendWhtNetCost"
+            case unknownDividendConventionCount = "unknownDividendConventionCount"
+        }
+    }
+
+    public struct BelgianPortfolioTaxEstimates: Codable, Equatable, Sendable {
+        public let tobRecorded: Decimal
+        public let tobAutoEstimate: Decimal
+        public let tacrEstimate: Decimal
+        public let reyndersEstimate: Decimal
+        public let cgtEstimate: Decimal
+
+        public init(tobRecorded: Decimal, tobAutoEstimate: Decimal, tacrEstimate: Decimal, reyndersEstimate: Decimal, cgtEstimate: Decimal) {
+            self.tobRecorded = tobRecorded
+            self.tobAutoEstimate = tobAutoEstimate
+            self.tacrEstimate = tacrEstimate
+            self.reyndersEstimate = reyndersEstimate
+            self.cgtEstimate = cgtEstimate
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case tobRecorded = "tobRecorded"
+            case tobAutoEstimate = "tobAutoEstimate"
+            case tacrEstimate = "tacrEstimate"
+            case reyndersEstimate = "reyndersEstimate"
+            case cgtEstimate = "cgtEstimate"
+        }
+    }
+
+    /// realizedGain and all cost amounts are already expressed in the response currency; assetClass is
+    /// the untranslated localization suffix.
+    public struct BelgianPortfolioTaxInvestmentCosts: Codable, Equatable, Sendable {
+        public let id: Int
+        public let name: String
+        public let symbol: String?
+        public let assetClass: String
+        public let recordedTaxes: Decimal
+        public let recordedFees: Decimal
+        public let manualTaxes: Decimal
+        public let manualFees: Decimal
+        public let taxes: Decimal
+        public let fees: Decimal
+        public let total: Decimal
+        public let realizedGain: Decimal
+        public let currency: String
+
+        public init(id: Int, name: String, symbol: String? = nil, assetClass: String, recordedTaxes: Decimal, recordedFees: Decimal, manualTaxes: Decimal, manualFees: Decimal, taxes: Decimal, fees: Decimal, total: Decimal, realizedGain: Decimal, currency: String) {
+            self.id = id
+            self.name = name
+            self.symbol = symbol
+            self.assetClass = assetClass
+            self.recordedTaxes = recordedTaxes
+            self.recordedFees = recordedFees
+            self.manualTaxes = manualTaxes
+            self.manualFees = manualFees
+            self.taxes = taxes
+            self.fees = fees
+            self.total = total
+            self.realizedGain = realizedGain
+            self.currency = currency
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case name = "name"
+            case symbol = "symbol"
+            case assetClass = "assetClass"
+            case recordedTaxes = "recordedTaxes"
+            case recordedFees = "recordedFees"
+            case manualTaxes = "manualTaxes"
+            case manualFees = "manualFees"
+            case taxes = "taxes"
+            case fees = "fees"
+            case total = "total"
+            case realizedGain = "realizedGain"
+            case currency = "currency"
+        }
+    }
+
+    /// YYYY-MM ordinary-transaction costs, including zero-cost months with transactions. Manual
+    /// adjustments are excluded.
+    public struct BelgianPortfolioTaxMonthlyCosts: Codable, Equatable, Sendable {
+        public let period: String
+        public let taxes: Decimal
+        public let fees: Decimal
+
+        public init(period: String, taxes: Decimal, fees: Decimal) {
+            self.period = period
+            self.taxes = taxes
+            self.fees = fees
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case period = "period"
+            case taxes = "taxes"
+            case fees = "fees"
+        }
+    }
+
+    public struct BelgianPortfolioTaxRates: Codable, Equatable, Sendable {
+        public let securitiesAccountTaxRate: Decimal
+        public let capitalGainsTaxRate: Decimal
+        public let reyndersTaxRate: Decimal
+        public let dividendWHTRate: Decimal
+        public let securitiesAccountTaxThreshold: Decimal
+        public let badgePercent: OpenAPI.BelgianPortfolioTaxBadgePercent
+
+        public init(securitiesAccountTaxRate: Decimal, capitalGainsTaxRate: Decimal, reyndersTaxRate: Decimal, dividendWHTRate: Decimal, securitiesAccountTaxThreshold: Decimal, badgePercent: OpenAPI.BelgianPortfolioTaxBadgePercent) {
+            self.securitiesAccountTaxRate = securitiesAccountTaxRate
+            self.capitalGainsTaxRate = capitalGainsTaxRate
+            self.reyndersTaxRate = reyndersTaxRate
+            self.dividendWHTRate = dividendWHTRate
+            self.securitiesAccountTaxThreshold = securitiesAccountTaxThreshold
+            self.badgePercent = badgePercent
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case securitiesAccountTaxRate = "securitiesAccountTaxRate"
+            case capitalGainsTaxRate = "capitalGainsTaxRate"
+            case reyndersTaxRate = "reyndersTaxRate"
+            case dividendWHTRate = "dividendWHTRate"
+            case securitiesAccountTaxThreshold = "securitiesAccountTaxThreshold"
+            case badgePercent = "badgePercent"
+        }
+    }
+
+    public struct BelgianPortfolioTaxSummary: Codable, Equatable, Sendable {
+        public let id: Int
+        public let name: String
+        public let symbol: String?
+        public let assetClass: String
+        public let currency: String
+
+        public init(id: Int, name: String, symbol: String? = nil, assetClass: String, currency: String) {
+            self.id = id
+            self.name = name
+            self.symbol = symbol
+            self.assetClass = assetClass
+            self.currency = currency
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case name = "name"
+            case symbol = "symbol"
+            case assetClass = "assetClass"
+            case currency = "currency"
+        }
+    }
+
+    /// Server-computed display totals. effectiveTaxRate is a percent; totalPIT is selected-year
+    /// frozen-first. Historical realized/unrealized gains retain the web all-time holdings calculation.
+    public struct BelgianPortfolioTaxTotals: Codable, Equatable, Sendable {
+        public let totalTaxes: Decimal
+        public let totalFees: Decimal
+        public let totalTaxesAndFees: Decimal
+        public let totalRecordedTaxes: Decimal
+        public let totalRecordedFees: Decimal
+        public let totalManualTaxes: Decimal
+        public let totalManualFees: Decimal
+        public let totalManualCosts: Decimal
+        public let totalRealizedGain: Decimal
+        public let totalUnrealizedGain: Decimal
+        public let effectiveTaxRate: Decimal
+        public let totalPIT: Decimal
+        public let portfolioTaxesPlusPIT: Decimal
+
+        public init(totalTaxes: Decimal, totalFees: Decimal, totalTaxesAndFees: Decimal, totalRecordedTaxes: Decimal, totalRecordedFees: Decimal, totalManualTaxes: Decimal, totalManualFees: Decimal, totalManualCosts: Decimal, totalRealizedGain: Decimal, totalUnrealizedGain: Decimal, effectiveTaxRate: Decimal, totalPIT: Decimal, portfolioTaxesPlusPIT: Decimal) {
+            self.totalTaxes = totalTaxes
+            self.totalFees = totalFees
+            self.totalTaxesAndFees = totalTaxesAndFees
+            self.totalRecordedTaxes = totalRecordedTaxes
+            self.totalRecordedFees = totalRecordedFees
+            self.totalManualTaxes = totalManualTaxes
+            self.totalManualFees = totalManualFees
+            self.totalManualCosts = totalManualCosts
+            self.totalRealizedGain = totalRealizedGain
+            self.totalUnrealizedGain = totalUnrealizedGain
+            self.effectiveTaxRate = effectiveTaxRate
+            self.totalPIT = totalPIT
+            self.portfolioTaxesPlusPIT = portfolioTaxesPlusPIT
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case totalTaxes = "totalTaxes"
+            case totalFees = "totalFees"
+            case totalTaxesAndFees = "totalTaxesAndFees"
+            case totalRecordedTaxes = "totalRecordedTaxes"
+            case totalRecordedFees = "totalRecordedFees"
+            case totalManualTaxes = "totalManualTaxes"
+            case totalManualFees = "totalManualFees"
+            case totalManualCosts = "totalManualCosts"
+            case totalRealizedGain = "totalRealizedGain"
+            case totalUnrealizedGain = "totalUnrealizedGain"
+            case effectiveTaxRate = "effectiveTaxRate"
+            case totalPIT = "totalPIT"
+            case portfolioTaxesPlusPIT = "portfolioTaxesPlusPIT"
+        }
+    }
+
+    public struct BelgianTaxActivityTaxResult: Codable, Equatable, Sendable {
+        public let activityId: String
+        public let kind: String
+        public let forfaitCategory: String
+        public let grossIncome: Decimal
+        public let employeeSocialSecurity: Decimal
+        /// Self-employed social contributions deducted before the forfait (art. 52, 7°).
+        public let socialContributionsPaid: Decimal
+        /// Category expenses allocated pro rata to this activity.
+        public let professionalExpenses: Decimal
+        public let netProfessionalIncome: Decimal
+
+        public init(activityId: String, kind: String, forfaitCategory: String, grossIncome: Decimal, employeeSocialSecurity: Decimal, socialContributionsPaid: Decimal, professionalExpenses: Decimal, netProfessionalIncome: Decimal) {
+            self.activityId = activityId
+            self.kind = kind
+            self.forfaitCategory = forfaitCategory
+            self.grossIncome = grossIncome
+            self.employeeSocialSecurity = employeeSocialSecurity
+            self.socialContributionsPaid = socialContributionsPaid
+            self.professionalExpenses = professionalExpenses
+            self.netProfessionalIncome = netProfessionalIncome
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case activityId = "activityId"
+            case kind = "kind"
+            case forfaitCategory = "forfaitCategory"
+            case grossIncome = "grossIncome"
+            case employeeSocialSecurity = "employeeSocialSecurity"
+            case socialContributionsPaid = "socialContributionsPaid"
+            case professionalExpenses = "professionalExpenses"
+            case netProfessionalIncome = "netProfessionalIncome"
+        }
+    }
+
+    public struct BelgianTaxAssessmentDecision: Codable, Equatable, Sendable {
+        public let mode: String
+        public let reason: String
+        /// Article the decision rests on, e.g. "WIB 92 art. 126 §2 al. 1, 1°".
+        public let legalBasis: String
+        /// True when the taxpayer may elect the other mode (year of death, art. 126 §3).
+        public let electable: Bool?
+        /// Partners assessed for the year (the survivor only after a death in an earlier year).
+        public let partnerIds: [String]
+
+        public init(mode: String, reason: String, legalBasis: String, electable: Bool? = nil, partnerIds: [String]) {
+            self.mode = mode
+            self.reason = reason
+            self.legalBasis = legalBasis
+            self.electable = electable
+            self.partnerIds = partnerIds
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case mode = "mode"
+            case reason = "reason"
+            case legalBasis = "legalBasis"
+            case electable = "electable"
+            case partnerIds = "partnerIds"
+        }
+    }
+
+    public struct BelgianTaxBracketTax: Codable, Equatable, Sendable {
+        public let b1: Decimal
+        public let b2: Decimal
+        public let b3: Decimal
+        public let b4: Decimal
+        public let total: Decimal
+
+        public init(b1: Decimal, b2: Decimal, b3: Decimal, b4: Decimal, total: Decimal) {
+            self.b1 = b1
+            self.b2 = b2
+            self.b3 = b3
+            self.b4 = b4
+            self.total = total
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case b1 = "b1"
+            case b2 = "b2"
+            case b3 = "b3"
+            case b4 = "b4"
+            case total = "total"
+        }
+    }
+
+    public struct BelgianTaxCalculation: Codable, Equatable, Sendable {
+        /// The taxpayer's own gross income (salary + other taxable income).
+        public let grossIncome: Decimal
+        /// Spouse's professional income counted under a joint assessment (0 otherwise). `totalPIT` and
+        /// the special social security contribution cover both spouses, so `householdGrossIncome`,
+        /// `netTakeHome` and `effectiveRate` include it.
+        public let spouseProfessionalIncome: Decimal
+        /// `grossIncome + spouseProfessionalIncome`; the base of `netTakeHome` and `effectiveRate`.
+        public let householdGrossIncome: Decimal
+        public let employeeSocialSecurity: Decimal
+        public let specialSocialSecurityContribution: Decimal
+        public let personalExemptionAmount: Decimal
+        public let netIncomeAfterSS: Decimal
+        public let professionalExpenses: Decimal
+        public let otherDeductionsTotal: Decimal
+        public let deductions: [String: Decimal]
+        public let taxableIncome: Decimal
+        public let federalPITBracket1: Decimal
+        public let federalPITBracket2: Decimal
+        public let federalPITBracket3: Decimal
+        public let federalPITBracket4: Decimal
+        /// Federal PIT before any reduction (exemption, credits).
+        public let federalPITBeforeExemption: Decimal
+        public let personalExemptionBenefit: Decimal
+        public let federalTaxCredits: Decimal
+        /// Regime applied for own-home credit, if any.
+        public let ownHomeCreditRegime: String
+        /// Estimated regional own-home tax credit (Flemish woonbonus / Walloon chèque habitat).
+        public let ownHomeCredit: Decimal
+        /// Sum of reductions actually applied to PIT (clamped — never exceeds gross PIT).
+        public let taxReductions: Decimal
+        /// Reduction for pensions (WIB 92 arts 147-153), part of `federalTaxCredits`. Absent on
+        /// calculations frozen before 2026-10-11.
+        public let pensionReduction: Decimal?
+        public let federalPITAfterReductions: Decimal
+        public let communalSurcharge: Decimal
+        /// Federal PIT after reductions + communal surcharge (income tax only).
+        public let totalPIT: Decimal
+        /// Income tax + social security + special SS contribution + property tax estimate.
+        public let totalTaxBurden: Decimal
+        public let effectiveRate: Decimal
+        public let marginalRate: Decimal
+        public let netTakeHome: Decimal
+        public let monthlyTaxReserve: Decimal
+        public let propertyTaxEstimate: Decimal
+        /// Estimated dividend WHT reclaimable through the tax return (first €X of dividends).
+        public let dividendWhtReclaim: Decimal
+        /// Estimated savings deposit interest non-recoverable tax (15% above exemption).
+        public let savingsInterestTax: Decimal
+        /// Income transferred to the non-earning / lower-earning spouse under the marital quotient. 0
+        /// when filing status is single or when both spouses earn comparably.
+        public let maritalQuotientTransfer: Decimal
+        /// Estimated tax reduction attributable to the marital quotient (informational).
+        public let maritalQuotientBenefit: Decimal
+        /// Estimated service-voucher regional credit (after marital quotient).
+        public let serviceVoucherCredit: Decimal
+        public let breakdown: [BreakdownItem]
+
+        public init(grossIncome: Decimal, spouseProfessionalIncome: Decimal, householdGrossIncome: Decimal, employeeSocialSecurity: Decimal, specialSocialSecurityContribution: Decimal, personalExemptionAmount: Decimal, netIncomeAfterSS: Decimal, professionalExpenses: Decimal, otherDeductionsTotal: Decimal, deductions: [String: Decimal], taxableIncome: Decimal, federalPITBracket1: Decimal, federalPITBracket2: Decimal, federalPITBracket3: Decimal, federalPITBracket4: Decimal, federalPITBeforeExemption: Decimal, personalExemptionBenefit: Decimal, federalTaxCredits: Decimal, ownHomeCreditRegime: String, ownHomeCredit: Decimal, taxReductions: Decimal, pensionReduction: Decimal? = nil, federalPITAfterReductions: Decimal, communalSurcharge: Decimal, totalPIT: Decimal, totalTaxBurden: Decimal, effectiveRate: Decimal, marginalRate: Decimal, netTakeHome: Decimal, monthlyTaxReserve: Decimal, propertyTaxEstimate: Decimal, dividendWhtReclaim: Decimal, savingsInterestTax: Decimal, maritalQuotientTransfer: Decimal, maritalQuotientBenefit: Decimal, serviceVoucherCredit: Decimal, breakdown: [BreakdownItem]) {
+            self.grossIncome = grossIncome
+            self.spouseProfessionalIncome = spouseProfessionalIncome
+            self.householdGrossIncome = householdGrossIncome
+            self.employeeSocialSecurity = employeeSocialSecurity
+            self.specialSocialSecurityContribution = specialSocialSecurityContribution
+            self.personalExemptionAmount = personalExemptionAmount
+            self.netIncomeAfterSS = netIncomeAfterSS
+            self.professionalExpenses = professionalExpenses
+            self.otherDeductionsTotal = otherDeductionsTotal
+            self.deductions = deductions
+            self.taxableIncome = taxableIncome
+            self.federalPITBracket1 = federalPITBracket1
+            self.federalPITBracket2 = federalPITBracket2
+            self.federalPITBracket3 = federalPITBracket3
+            self.federalPITBracket4 = federalPITBracket4
+            self.federalPITBeforeExemption = federalPITBeforeExemption
+            self.personalExemptionBenefit = personalExemptionBenefit
+            self.federalTaxCredits = federalTaxCredits
+            self.ownHomeCreditRegime = ownHomeCreditRegime
+            self.ownHomeCredit = ownHomeCredit
+            self.taxReductions = taxReductions
+            self.pensionReduction = pensionReduction
+            self.federalPITAfterReductions = federalPITAfterReductions
+            self.communalSurcharge = communalSurcharge
+            self.totalPIT = totalPIT
+            self.totalTaxBurden = totalTaxBurden
+            self.effectiveRate = effectiveRate
+            self.marginalRate = marginalRate
+            self.netTakeHome = netTakeHome
+            self.monthlyTaxReserve = monthlyTaxReserve
+            self.propertyTaxEstimate = propertyTaxEstimate
+            self.dividendWhtReclaim = dividendWhtReclaim
+            self.savingsInterestTax = savingsInterestTax
+            self.maritalQuotientTransfer = maritalQuotientTransfer
+            self.maritalQuotientBenefit = maritalQuotientBenefit
+            self.serviceVoucherCredit = serviceVoucherCredit
+            self.breakdown = breakdown
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case grossIncome = "grossIncome"
+            case spouseProfessionalIncome = "spouseProfessionalIncome"
+            case householdGrossIncome = "householdGrossIncome"
+            case employeeSocialSecurity = "employeeSocialSecurity"
+            case specialSocialSecurityContribution = "specialSocialSecurityContribution"
+            case personalExemptionAmount = "personalExemptionAmount"
+            case netIncomeAfterSS = "netIncomeAfterSS"
+            case professionalExpenses = "professionalExpenses"
+            case otherDeductionsTotal = "otherDeductionsTotal"
+            case deductions = "deductions"
+            case taxableIncome = "taxableIncome"
+            case federalPITBracket1 = "federalPITBracket1"
+            case federalPITBracket2 = "federalPITBracket2"
+            case federalPITBracket3 = "federalPITBracket3"
+            case federalPITBracket4 = "federalPITBracket4"
+            case federalPITBeforeExemption = "federalPITBeforeExemption"
+            case personalExemptionBenefit = "personalExemptionBenefit"
+            case federalTaxCredits = "federalTaxCredits"
+            case ownHomeCreditRegime = "ownHomeCreditRegime"
+            case ownHomeCredit = "ownHomeCredit"
+            case taxReductions = "taxReductions"
+            case pensionReduction = "pensionReduction"
+            case federalPITAfterReductions = "federalPITAfterReductions"
+            case communalSurcharge = "communalSurcharge"
+            case totalPIT = "totalPIT"
+            case totalTaxBurden = "totalTaxBurden"
+            case effectiveRate = "effectiveRate"
+            case marginalRate = "marginalRate"
+            case netTakeHome = "netTakeHome"
+            case monthlyTaxReserve = "monthlyTaxReserve"
+            case propertyTaxEstimate = "propertyTaxEstimate"
+            case dividendWhtReclaim = "dividendWhtReclaim"
+            case savingsInterestTax = "savingsInterestTax"
+            case maritalQuotientTransfer = "maritalQuotientTransfer"
+            case maritalQuotientBenefit = "maritalQuotientBenefit"
+            case serviceVoucherCredit = "serviceVoucherCredit"
+            case breakdown = "breakdown"
+        }
+
+        public struct BreakdownItem: Codable, Equatable, Sendable {
+            /// English calculation-side label. Not a display string: the on-screen PIT table renders its
+            /// own translated rows (`tax.pit.row.*`). Consumers that do surface a row translate it
+            /// themselves.
+            public let label: String
+            public let amount: Decimal
+            public let rate: Decimal?
+            public let bracket: String?
+            /// 1-based bracket ordinal, present only on progressive-bracket rows. Carried explicitly
+            /// because empty brackets are omitted from the array, so position does not imply the bracket
+            /// number. Maps to the `tax.pit.row.bracket{n}` translation keys.
+            public let bracketNumber: Decimal?
+
+            public init(label: String, amount: Decimal, rate: Decimal? = nil, bracket: String? = nil, bracketNumber: Decimal? = nil) {
+                self.label = label
+                self.amount = amount
+                self.rate = rate
+                self.bracket = bracket
+                self.bracketNumber = bracketNumber
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case label = "label"
+                case amount = "amount"
+                case rate = "rate"
+                case bracket = "bracket"
+                case bracketNumber = "bracketNumber"
+            }
+        }
+    }
+
+    public struct BelgianTaxCategoryTaxResult: Codable, Equatable, Sendable {
+        public let category: String
+        public let method: String
+        public let grossAfterContributions: Decimal
+        public let professionalExpenses: Decimal
+        public let unionDuesApplied: Decimal
+        /// Category net income, clamped at 0 (no loss offset).
+        public let netIncome: Decimal
+
+        public init(category: String, method: String, grossAfterContributions: Decimal, professionalExpenses: Decimal, unionDuesApplied: Decimal, netIncome: Decimal) {
+            self.category = category
+            self.method = method
+            self.grossAfterContributions = grossAfterContributions
+            self.professionalExpenses = professionalExpenses
+            self.unionDuesApplied = unionDuesApplied
+            self.netIncome = netIncome
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case category = "category"
+            case method = "method"
+            case grossAfterContributions = "grossAfterContributions"
+            case professionalExpenses = "professionalExpenses"
+            case unionDuesApplied = "unionDuesApplied"
+            case netIncome = "netIncome"
+        }
+    }
+
+    public struct BelgianTaxComputation: Codable, Equatable, Sendable {
+        public let result: OpenAPI.BelgianTaxHouseholdTaxResult
+        public let calculation: OpenAPI.BelgianTaxCalculation
+
+        public init(result: OpenAPI.BelgianTaxHouseholdTaxResult, calculation: OpenAPI.BelgianTaxCalculation) {
+            self.result = result
+            self.calculation = calculation
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case result = "result"
+            case calculation = "calculation"
+        }
+    }
+
+    public struct BelgianTaxDashboard: Codable, Equatable, Sendable {
+        public let year: Int
+        public let currency: String
+        public let isHistorical: Bool
+        public let hasIncomeSources: Bool
+        public let hasStatsData: Bool
+        public let isEmpty: Bool
+        public let portfolioTaxesForYear: Decimal
+        public let totalTaxIncludingPortfolio: Decimal
+        public let totalTaxIncludingPropertyEstimate: Decimal?
+        public let yearlyIncome: [OpenAPI.BelgianTaxDashboardYearlyIncome]
+        public let monthlyIncomeTax: [OpenAPI.BelgianTaxDashboardMonthlyIncome]
+        public let recordedIncomeByPartner: RecordedIncomeByPartner?
+        public let yearCalculations: [OpenAPI.BelgianTaxDashboardYearCalculation]
+        /// Existing projected v1 profile for the viewed year; presentation only. The household remains
+        /// the editable source.
+        public let currentInputs: JSONValue
+        /// Complete v1 projection for the existing input-column CSV format; includes fields omitted
+        /// from the short current-inputs card.
+        public let exportProfile: JSONValue
+        public let suggestions: [SuggestionsItem]
+        public let householdBreakdownRows: [OpenAPI.BelgianTaxDashboardHouseholdRow]
+        public let rules: [OpenAPI.BelgianTaxDashboardRuleSection]
+
+        public init(year: Int, currency: String, isHistorical: Bool, hasIncomeSources: Bool, hasStatsData: Bool, isEmpty: Bool, portfolioTaxesForYear: Decimal, totalTaxIncludingPortfolio: Decimal, totalTaxIncludingPropertyEstimate: Decimal? = nil, yearlyIncome: [OpenAPI.BelgianTaxDashboardYearlyIncome], monthlyIncomeTax: [OpenAPI.BelgianTaxDashboardMonthlyIncome], recordedIncomeByPartner: RecordedIncomeByPartner? = nil, yearCalculations: [OpenAPI.BelgianTaxDashboardYearCalculation], currentInputs: JSONValue, exportProfile: JSONValue, suggestions: [SuggestionsItem], householdBreakdownRows: [OpenAPI.BelgianTaxDashboardHouseholdRow], rules: [OpenAPI.BelgianTaxDashboardRuleSection]) {
+            self.year = year
+            self.currency = currency
+            self.isHistorical = isHistorical
+            self.hasIncomeSources = hasIncomeSources
+            self.hasStatsData = hasStatsData
+            self.isEmpty = isEmpty
+            self.portfolioTaxesForYear = portfolioTaxesForYear
+            self.totalTaxIncludingPortfolio = totalTaxIncludingPortfolio
+            self.totalTaxIncludingPropertyEstimate = totalTaxIncludingPropertyEstimate
+            self.yearlyIncome = yearlyIncome
+            self.monthlyIncomeTax = monthlyIncomeTax
+            self.recordedIncomeByPartner = recordedIncomeByPartner
+            self.yearCalculations = yearCalculations
+            self.currentInputs = currentInputs
+            self.exportProfile = exportProfile
+            self.suggestions = suggestions
+            self.householdBreakdownRows = householdBreakdownRows
+            self.rules = rules
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case year = "year"
+            case currency = "currency"
+            case isHistorical = "isHistorical"
+            case hasIncomeSources = "hasIncomeSources"
+            case hasStatsData = "hasStatsData"
+            case isEmpty = "isEmpty"
+            case portfolioTaxesForYear = "portfolioTaxesForYear"
+            case totalTaxIncludingPortfolio = "totalTaxIncludingPortfolio"
+            case totalTaxIncludingPropertyEstimate = "totalTaxIncludingPropertyEstimate"
+            case yearlyIncome = "yearlyIncome"
+            case monthlyIncomeTax = "monthlyIncomeTax"
+            case recordedIncomeByPartner = "recordedIncomeByPartner"
+            case yearCalculations = "yearCalculations"
+            case currentInputs = "currentInputs"
+            case exportProfile = "exportProfile"
+            case suggestions = "suggestions"
+            case householdBreakdownRows = "householdBreakdownRows"
+            case rules = "rules"
+        }
+
+        public struct RecordedIncomeByPartner: Codable, Equatable, Sendable {
+            public let a: Decimal
+            public let b: Decimal
+
+            public init(a: Decimal, b: Decimal) {
+                self.a = a
+                self.b = b
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case a = "A"
+                case b = "B"
+            }
+        }
+
+        public struct SuggestionsItem: Codable, Equatable, Sendable {
+            public let id: String
+            public let titleKey: String
+            public let descriptionKey: String
+            public let descriptionParams: [String: Decimal]?
+            public let estimate: Decimal?
+            public let noteKey: String?
+
+            public init(id: String, titleKey: String, descriptionKey: String, descriptionParams: [String: Decimal]? = nil, estimate: Decimal? = nil, noteKey: String? = nil) {
+                self.id = id
+                self.titleKey = titleKey
+                self.descriptionKey = descriptionKey
+                self.descriptionParams = descriptionParams
+                self.estimate = estimate
+                self.noteKey = noteKey
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case id = "id"
+                case titleKey = "titleKey"
+                case descriptionKey = "descriptionKey"
+                case descriptionParams = "descriptionParams"
+                case estimate = "estimate"
+                case noteKey = "noteKey"
+            }
+        }
+    }
+
+    public struct BelgianTaxDashboardHouseholdRow: Codable, Equatable, Sendable {
+        public let key: String
+        public let tone: String
+        public let partnerAmounts: [String: Decimal]
+        public let household: Decimal
+
+        public init(key: String, tone: String, partnerAmounts: [String: Decimal], household: Decimal) {
+            self.key = key
+            self.tone = tone
+            self.partnerAmounts = partnerAmounts
+            self.household = household
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case key = "key"
+            case tone = "tone"
+            case partnerAmounts = "partnerAmounts"
+            case household = "household"
+        }
+    }
+
+    public struct BelgianTaxDashboardMonthlyIncome: Codable, Equatable, Sendable {
+        public let period: String
+        public let income: Decimal
+        public let estimatedTax: Decimal
+
+        public init(period: String, income: Decimal, estimatedTax: Decimal) {
+            self.period = period
+            self.income = income
+            self.estimatedTax = estimatedTax
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case period = "period"
+            case income = "income"
+            case estimatedTax = "estimatedTax"
+        }
+    }
+
+    public struct BelgianTaxDashboardRuleSection: Codable, Equatable, Sendable {
+        public let titleKey: String
+        public let itemKeys: [String]
+
+        public init(titleKey: String, itemKeys: [String]) {
+            self.titleKey = titleKey
+            self.itemKeys = itemKeys
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case titleKey = "titleKey"
+            case itemKeys = "itemKeys"
+        }
+    }
+
+    public struct BelgianTaxDashboardYearCalculation: Codable, Equatable, Sendable {
+        public let year: Int
+        public let calculation: OpenAPI.BelgianTaxHistoricalCalculation
+        public let isFiled: Bool
+        public let hasFrozenCalculation: Bool
+        public let isCurrent: Bool
+        public let hasSnapshot: Bool
+        public let hasTransactions: Bool
+
+        public init(year: Int, calculation: OpenAPI.BelgianTaxHistoricalCalculation, isFiled: Bool, hasFrozenCalculation: Bool, isCurrent: Bool, hasSnapshot: Bool, hasTransactions: Bool) {
+            self.year = year
+            self.calculation = calculation
+            self.isFiled = isFiled
+            self.hasFrozenCalculation = hasFrozenCalculation
+            self.isCurrent = isCurrent
+            self.hasSnapshot = hasSnapshot
+            self.hasTransactions = hasTransactions
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case year = "year"
+            case calculation = "calculation"
+            case isFiled = "isFiled"
+            case hasFrozenCalculation = "hasFrozenCalculation"
+            case isCurrent = "isCurrent"
+            case hasSnapshot = "hasSnapshot"
+            case hasTransactions = "hasTransactions"
+        }
+    }
+
+    public struct BelgianTaxDashboardYearlyIncome: Codable, Equatable, Sendable {
+        public let year: String
+        public let income: Decimal
+        public let estimatedTax: Decimal
+        public let netAfterTax: Decimal
+        public let isApproximated: Bool
+
+        public init(year: String, income: Decimal, estimatedTax: Decimal, netAfterTax: Decimal, isApproximated: Bool) {
+            self.year = year
+            self.income = income
+            self.estimatedTax = estimatedTax
+            self.netAfterTax = netAfterTax
+            self.isApproximated = isApproximated
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case year = "year"
+            case income = "income"
+            case estimatedTax = "estimatedTax"
+            case netAfterTax = "netAfterTax"
+            case isApproximated = "isApproximated"
+        }
+    }
+
+    public struct BelgianTaxExemptionAllocation: Codable, Equatable, Sendable {
+        public let basic: Decimal
+        public let disability: Decimal
+        public let dependentSupplements: Decimal
+        public let isolatedParentSupplement: Decimal
+        /// basic + disability + dependentSupplements + isolatedParentSupplement.
+        public let ownTotal: Decimal
+        /// Unused exemption received from the other spouse (joint assessment).
+        public let transferredIn: Decimal
+        /// Unused exemption passed to the other spouse (joint assessment).
+        public let transferredOut: Decimal
+        /// ownTotal + transferredIn − transferredOut.
+        public let total: Decimal
+        /// Part of `total` charged on the taxable income: min(total, taxable income).
+        public let applied: Decimal
+
+        public init(basic: Decimal, disability: Decimal, dependentSupplements: Decimal, isolatedParentSupplement: Decimal, ownTotal: Decimal, transferredIn: Decimal, transferredOut: Decimal, total: Decimal, applied: Decimal) {
+            self.basic = basic
+            self.disability = disability
+            self.dependentSupplements = dependentSupplements
+            self.isolatedParentSupplement = isolatedParentSupplement
+            self.ownTotal = ownTotal
+            self.transferredIn = transferredIn
+            self.transferredOut = transferredOut
+            self.total = total
+            self.applied = applied
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case basic = "basic"
+            case disability = "disability"
+            case dependentSupplements = "dependentSupplements"
+            case isolatedParentSupplement = "isolatedParentSupplement"
+            case ownTotal = "ownTotal"
+            case transferredIn = "transferredIn"
+            case transferredOut = "transferredOut"
+            case total = "total"
+            case applied = "applied"
+        }
+    }
+
+    /// Display calculation: current results contain every field. Frozen legacy calculations are
+    /// returned verbatim and may lack fields introduced later; omitted figures must remain unavailable,
+    /// never silently recomputed or filled with zero.
+    public struct BelgianTaxHistoricalCalculation: Codable, Equatable, Sendable {
+        /// The taxpayer's own gross income (salary + other taxable income).
+        public let grossIncome: Decimal?
+        /// Spouse's professional income counted under a joint assessment (0 otherwise). `totalPIT` and
+        /// the special social security contribution cover both spouses, so `householdGrossIncome`,
+        /// `netTakeHome` and `effectiveRate` include it.
+        public let spouseProfessionalIncome: Decimal?
+        /// `grossIncome + spouseProfessionalIncome`; the base of `netTakeHome` and `effectiveRate`.
+        public let householdGrossIncome: Decimal?
+        public let employeeSocialSecurity: Decimal?
+        public let specialSocialSecurityContribution: Decimal?
+        public let personalExemptionAmount: Decimal?
+        public let netIncomeAfterSS: Decimal?
+        public let professionalExpenses: Decimal?
+        public let otherDeductionsTotal: Decimal?
+        public let deductions: [String: Decimal]?
+        public let taxableIncome: Decimal?
+        public let federalPITBracket1: Decimal?
+        public let federalPITBracket2: Decimal?
+        public let federalPITBracket3: Decimal?
+        public let federalPITBracket4: Decimal?
+        /// Federal PIT before any reduction (exemption, credits).
+        public let federalPITBeforeExemption: Decimal?
+        public let personalExemptionBenefit: Decimal?
+        public let federalTaxCredits: Decimal?
+        /// Regime applied for own-home credit, if any.
+        public let ownHomeCreditRegime: String?
+        /// Estimated regional own-home tax credit (Flemish woonbonus / Walloon chèque habitat).
+        public let ownHomeCredit: Decimal?
+        /// Sum of reductions actually applied to PIT (clamped — never exceeds gross PIT).
+        public let taxReductions: Decimal?
+        /// Reduction for pensions (WIB 92 arts 147-153), part of `federalTaxCredits`. Absent on
+        /// calculations frozen before 2026-10-11.
+        public let pensionReduction: Decimal?
+        public let federalPITAfterReductions: Decimal?
+        public let communalSurcharge: Decimal?
+        /// Federal PIT after reductions + communal surcharge (income tax only).
+        public let totalPIT: Decimal
+        /// Income tax + social security + special SS contribution + property tax estimate.
+        public let totalTaxBurden: Decimal?
+        public let effectiveRate: Decimal?
+        public let marginalRate: Decimal?
+        public let netTakeHome: Decimal?
+        public let monthlyTaxReserve: Decimal?
+        public let propertyTaxEstimate: Decimal?
+        /// Estimated dividend WHT reclaimable through the tax return (first €X of dividends).
+        public let dividendWhtReclaim: Decimal?
+        /// Estimated savings deposit interest non-recoverable tax (15% above exemption).
+        public let savingsInterestTax: Decimal?
+        /// Income transferred to the non-earning / lower-earning spouse under the marital quotient. 0
+        /// when filing status is single or when both spouses earn comparably.
+        public let maritalQuotientTransfer: Decimal?
+        /// Estimated tax reduction attributable to the marital quotient (informational).
+        public let maritalQuotientBenefit: Decimal?
+        /// Estimated service-voucher regional credit (after marital quotient).
+        public let serviceVoucherCredit: Decimal?
+        public let breakdown: [BreakdownItem]?
+
+        public init(grossIncome: Decimal? = nil, spouseProfessionalIncome: Decimal? = nil, householdGrossIncome: Decimal? = nil, employeeSocialSecurity: Decimal? = nil, specialSocialSecurityContribution: Decimal? = nil, personalExemptionAmount: Decimal? = nil, netIncomeAfterSS: Decimal? = nil, professionalExpenses: Decimal? = nil, otherDeductionsTotal: Decimal? = nil, deductions: [String: Decimal]? = nil, taxableIncome: Decimal? = nil, federalPITBracket1: Decimal? = nil, federalPITBracket2: Decimal? = nil, federalPITBracket3: Decimal? = nil, federalPITBracket4: Decimal? = nil, federalPITBeforeExemption: Decimal? = nil, personalExemptionBenefit: Decimal? = nil, federalTaxCredits: Decimal? = nil, ownHomeCreditRegime: String? = nil, ownHomeCredit: Decimal? = nil, taxReductions: Decimal? = nil, pensionReduction: Decimal? = nil, federalPITAfterReductions: Decimal? = nil, communalSurcharge: Decimal? = nil, totalPIT: Decimal, totalTaxBurden: Decimal? = nil, effectiveRate: Decimal? = nil, marginalRate: Decimal? = nil, netTakeHome: Decimal? = nil, monthlyTaxReserve: Decimal? = nil, propertyTaxEstimate: Decimal? = nil, dividendWhtReclaim: Decimal? = nil, savingsInterestTax: Decimal? = nil, maritalQuotientTransfer: Decimal? = nil, maritalQuotientBenefit: Decimal? = nil, serviceVoucherCredit: Decimal? = nil, breakdown: [BreakdownItem]? = nil) {
+            self.grossIncome = grossIncome
+            self.spouseProfessionalIncome = spouseProfessionalIncome
+            self.householdGrossIncome = householdGrossIncome
+            self.employeeSocialSecurity = employeeSocialSecurity
+            self.specialSocialSecurityContribution = specialSocialSecurityContribution
+            self.personalExemptionAmount = personalExemptionAmount
+            self.netIncomeAfterSS = netIncomeAfterSS
+            self.professionalExpenses = professionalExpenses
+            self.otherDeductionsTotal = otherDeductionsTotal
+            self.deductions = deductions
+            self.taxableIncome = taxableIncome
+            self.federalPITBracket1 = federalPITBracket1
+            self.federalPITBracket2 = federalPITBracket2
+            self.federalPITBracket3 = federalPITBracket3
+            self.federalPITBracket4 = federalPITBracket4
+            self.federalPITBeforeExemption = federalPITBeforeExemption
+            self.personalExemptionBenefit = personalExemptionBenefit
+            self.federalTaxCredits = federalTaxCredits
+            self.ownHomeCreditRegime = ownHomeCreditRegime
+            self.ownHomeCredit = ownHomeCredit
+            self.taxReductions = taxReductions
+            self.pensionReduction = pensionReduction
+            self.federalPITAfterReductions = federalPITAfterReductions
+            self.communalSurcharge = communalSurcharge
+            self.totalPIT = totalPIT
+            self.totalTaxBurden = totalTaxBurden
+            self.effectiveRate = effectiveRate
+            self.marginalRate = marginalRate
+            self.netTakeHome = netTakeHome
+            self.monthlyTaxReserve = monthlyTaxReserve
+            self.propertyTaxEstimate = propertyTaxEstimate
+            self.dividendWhtReclaim = dividendWhtReclaim
+            self.savingsInterestTax = savingsInterestTax
+            self.maritalQuotientTransfer = maritalQuotientTransfer
+            self.maritalQuotientBenefit = maritalQuotientBenefit
+            self.serviceVoucherCredit = serviceVoucherCredit
+            self.breakdown = breakdown
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case grossIncome = "grossIncome"
+            case spouseProfessionalIncome = "spouseProfessionalIncome"
+            case householdGrossIncome = "householdGrossIncome"
+            case employeeSocialSecurity = "employeeSocialSecurity"
+            case specialSocialSecurityContribution = "specialSocialSecurityContribution"
+            case personalExemptionAmount = "personalExemptionAmount"
+            case netIncomeAfterSS = "netIncomeAfterSS"
+            case professionalExpenses = "professionalExpenses"
+            case otherDeductionsTotal = "otherDeductionsTotal"
+            case deductions = "deductions"
+            case taxableIncome = "taxableIncome"
+            case federalPITBracket1 = "federalPITBracket1"
+            case federalPITBracket2 = "federalPITBracket2"
+            case federalPITBracket3 = "federalPITBracket3"
+            case federalPITBracket4 = "federalPITBracket4"
+            case federalPITBeforeExemption = "federalPITBeforeExemption"
+            case personalExemptionBenefit = "personalExemptionBenefit"
+            case federalTaxCredits = "federalTaxCredits"
+            case ownHomeCreditRegime = "ownHomeCreditRegime"
+            case ownHomeCredit = "ownHomeCredit"
+            case taxReductions = "taxReductions"
+            case pensionReduction = "pensionReduction"
+            case federalPITAfterReductions = "federalPITAfterReductions"
+            case communalSurcharge = "communalSurcharge"
+            case totalPIT = "totalPIT"
+            case totalTaxBurden = "totalTaxBurden"
+            case effectiveRate = "effectiveRate"
+            case marginalRate = "marginalRate"
+            case netTakeHome = "netTakeHome"
+            case monthlyTaxReserve = "monthlyTaxReserve"
+            case propertyTaxEstimate = "propertyTaxEstimate"
+            case dividendWhtReclaim = "dividendWhtReclaim"
+            case savingsInterestTax = "savingsInterestTax"
+            case maritalQuotientTransfer = "maritalQuotientTransfer"
+            case maritalQuotientBenefit = "maritalQuotientBenefit"
+            case serviceVoucherCredit = "serviceVoucherCredit"
+            case breakdown = "breakdown"
+        }
+
+        public struct BreakdownItem: Codable, Equatable, Sendable {
+            /// English calculation-side label. Not a display string: the on-screen PIT table renders its
+            /// own translated rows (`tax.pit.row.*`). Consumers that do surface a row translate it
+            /// themselves.
+            public let label: String
+            public let amount: Decimal
+            public let rate: Decimal?
+            public let bracket: String?
+            /// 1-based bracket ordinal, present only on progressive-bracket rows. Carried explicitly
+            /// because empty brackets are omitted from the array, so position does not imply the bracket
+            /// number. Maps to the `tax.pit.row.bracket{n}` translation keys.
+            public let bracketNumber: Decimal?
+
+            public init(label: String, amount: Decimal, rate: Decimal? = nil, bracket: String? = nil, bracketNumber: Decimal? = nil) {
+                self.label = label
+                self.amount = amount
+                self.rate = rate
+                self.bracket = bracket
+                self.bracketNumber = bracketNumber
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case label = "label"
+                case amount = "amount"
+                case rate = "rate"
+                case bracket = "bracket"
+                case bracketNumber = "bracketNumber"
+            }
+        }
+    }
+
+    public struct BelgianTaxHouseholdCsssResult: Codable, Equatable, Sendable {
+        public let scale: String
+        /// Household base under joint assessment, otherwise the sum of each subject partner's base.
+        public let base: Decimal
+        public let total: Decimal
+
+        public init(scale: String, base: Decimal, total: Decimal) {
+            self.scale = scale
+            self.base = base
+            self.total = total
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case scale = "scale"
+            case base = "base"
+            case total = "total"
+        }
+    }
+
+    /// V2 household; accepts the same fields and limits as belgian_tax_household_v2 settings. Partner
+    /// and activity IDs must be unique, partner A is required, partner references must exist, and
+    /// pensionKind/netProfessionalIncome are restricted to their matching activity kinds.
+    public struct BelgianTaxHouseholdInput: Codable, Equatable, Sendable {
+        public let version: Int
+        public let taxYear: Int
+        public let profileConfigured: Bool
+        public let region: String
+        public let communalSurchargePercent: Decimal
+        public let partners: [OpenAPI.BelgianTaxInputPartner]
+        public let relationship: OpenAPI.BelgianTaxInputRelationship
+        public let dependents: OpenAPI.BelgianTaxInputDependents
+        public let home: OpenAPI.BelgianTaxInputHome
+        public let taxIncomeCategoryIds: [Int]?
+        public let migratedFrom: OpenAPI.BelgianTaxInputMigratedFrom?
+
+        public init(version: Int, taxYear: Int, profileConfigured: Bool, region: String, communalSurchargePercent: Decimal, partners: [OpenAPI.BelgianTaxInputPartner], relationship: OpenAPI.BelgianTaxInputRelationship, dependents: OpenAPI.BelgianTaxInputDependents, home: OpenAPI.BelgianTaxInputHome, taxIncomeCategoryIds: [Int]? = nil, migratedFrom: OpenAPI.BelgianTaxInputMigratedFrom? = nil) {
+            self.version = version
+            self.taxYear = taxYear
+            self.profileConfigured = profileConfigured
+            self.region = region
+            self.communalSurchargePercent = communalSurchargePercent
+            self.partners = partners
+            self.relationship = relationship
+            self.dependents = dependents
+            self.home = home
+            self.taxIncomeCategoryIds = taxIncomeCategoryIds
+            self.migratedFrom = migratedFrom
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case version = "version"
+            case taxYear = "taxYear"
+            case profileConfigured = "profileConfigured"
+            case region = "region"
+            case communalSurchargePercent = "communalSurchargePercent"
+            case partners = "partners"
+            case relationship = "relationship"
+            case dependents = "dependents"
+            case home = "home"
+            case taxIncomeCategoryIds = "taxIncomeCategoryIds"
+            case migratedFrom = "migratedFrom"
+        }
+    }
+
+    public struct BelgianTaxHouseholdTaxIssue: Codable, Equatable, Sendable {
+        public let code: String
+        public let severity: String
+        public let partnerId: String?
+        public let activityId: String?
+
+        public init(code: String, severity: String, partnerId: String? = nil, activityId: String? = nil) {
+            self.code = code
+            self.severity = severity
+            self.partnerId = partnerId
+            self.activityId = activityId
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case code = "code"
+            case severity = "severity"
+            case partnerId = "partnerId"
+            case activityId = "activityId"
+        }
+    }
+
+    public struct BelgianTaxHouseholdTaxResult: Codable, Equatable, Sendable {
+        public let engineVersion: Int
+        public let incomeYear: Int
+        public let assessment: OpenAPI.BelgianTaxAssessmentDecision
+        public let partners: [OpenAPI.BelgianTaxPartnerTaxResult]
+        public let quotient: OpenAPI.BelgianTaxMaritalQuotientResult
+        public let csss: OpenAPI.BelgianTaxHouseholdCsssResult
+        public let propertyTaxEstimate: Decimal
+        public let totals: OpenAPI.BelgianTaxHouseholdTotals
+        public let issues: [OpenAPI.BelgianTaxHouseholdTaxIssue]
+
+        public init(engineVersion: Int, incomeYear: Int, assessment: OpenAPI.BelgianTaxAssessmentDecision, partners: [OpenAPI.BelgianTaxPartnerTaxResult], quotient: OpenAPI.BelgianTaxMaritalQuotientResult, csss: OpenAPI.BelgianTaxHouseholdCsssResult, propertyTaxEstimate: Decimal, totals: OpenAPI.BelgianTaxHouseholdTotals, issues: [OpenAPI.BelgianTaxHouseholdTaxIssue]) {
+            self.engineVersion = engineVersion
+            self.incomeYear = incomeYear
+            self.assessment = assessment
+            self.partners = partners
+            self.quotient = quotient
+            self.csss = csss
+            self.propertyTaxEstimate = propertyTaxEstimate
+            self.totals = totals
+            self.issues = issues
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case engineVersion = "engineVersion"
+            case incomeYear = "incomeYear"
+            case assessment = "assessment"
+            case partners = "partners"
+            case quotient = "quotient"
+            case csss = "csss"
+            case propertyTaxEstimate = "propertyTaxEstimate"
+            case totals = "totals"
+            case issues = "issues"
+        }
+    }
+
+    public struct BelgianTaxHouseholdTotals: Codable, Equatable, Sendable {
+        /// Cash income: gross activity income, other taxable income and already-net amounts.
+        public let grossIncome: Decimal
+        public let employeeSocialSecurity: Decimal
+        public let professionalExpenses: Decimal
+        public let netProfessionalIncome: Decimal
+        public let taxableIncome: Decimal
+        public let federalPITBeforeExemption: Decimal
+        public let personalExemptionBenefit: Decimal
+        public let taxReductions: Decimal
+        public let federalPITAfterReductions: Decimal
+        public let communalSurcharge: Decimal
+        public let totalPIT: Decimal
+        public let specialSocialSecurityContribution: Decimal
+        public let propertyTaxEstimate: Decimal
+        public let totalTaxBurden: Decimal
+        public let netTakeHome: Decimal
+        public let dividendWhtReclaim: Decimal
+        public let savingsInterestTax: Decimal
+        /// Refundable child tax credit (art. 134 §3); always 0 until the formula is sourced.
+        public let refundableChildCredit: Decimal
+
+        public init(grossIncome: Decimal, employeeSocialSecurity: Decimal, professionalExpenses: Decimal, netProfessionalIncome: Decimal, taxableIncome: Decimal, federalPITBeforeExemption: Decimal, personalExemptionBenefit: Decimal, taxReductions: Decimal, federalPITAfterReductions: Decimal, communalSurcharge: Decimal, totalPIT: Decimal, specialSocialSecurityContribution: Decimal, propertyTaxEstimate: Decimal, totalTaxBurden: Decimal, netTakeHome: Decimal, dividendWhtReclaim: Decimal, savingsInterestTax: Decimal, refundableChildCredit: Decimal) {
+            self.grossIncome = grossIncome
+            self.employeeSocialSecurity = employeeSocialSecurity
+            self.professionalExpenses = professionalExpenses
+            self.netProfessionalIncome = netProfessionalIncome
+            self.taxableIncome = taxableIncome
+            self.federalPITBeforeExemption = federalPITBeforeExemption
+            self.personalExemptionBenefit = personalExemptionBenefit
+            self.taxReductions = taxReductions
+            self.federalPITAfterReductions = federalPITAfterReductions
+            self.communalSurcharge = communalSurcharge
+            self.totalPIT = totalPIT
+            self.specialSocialSecurityContribution = specialSocialSecurityContribution
+            self.propertyTaxEstimate = propertyTaxEstimate
+            self.totalTaxBurden = totalTaxBurden
+            self.netTakeHome = netTakeHome
+            self.dividendWhtReclaim = dividendWhtReclaim
+            self.savingsInterestTax = savingsInterestTax
+            self.refundableChildCredit = refundableChildCredit
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case grossIncome = "grossIncome"
+            case employeeSocialSecurity = "employeeSocialSecurity"
+            case professionalExpenses = "professionalExpenses"
+            case netProfessionalIncome = "netProfessionalIncome"
+            case taxableIncome = "taxableIncome"
+            case federalPITBeforeExemption = "federalPITBeforeExemption"
+            case personalExemptionBenefit = "personalExemptionBenefit"
+            case taxReductions = "taxReductions"
+            case federalPITAfterReductions = "federalPITAfterReductions"
+            case communalSurcharge = "communalSurcharge"
+            case totalPIT = "totalPIT"
+            case specialSocialSecurityContribution = "specialSocialSecurityContribution"
+            case propertyTaxEstimate = "propertyTaxEstimate"
+            case totalTaxBurden = "totalTaxBurden"
+            case netTakeHome = "netTakeHome"
+            case dividendWhtReclaim = "dividendWhtReclaim"
+            case savingsInterestTax = "savingsInterestTax"
+            case refundableChildCredit = "refundableChildCredit"
+        }
+    }
+
+    public struct BelgianTaxInputDependents: Codable, Equatable, Sendable {
+        public let children: Int
+        public let childrenUnder3: Int?
+        public let childrenDisabled: Int?
+        public let otherPersons: Int
+        public let otherPersonsDisabled: Int?
+        public let claimantPartnerId: String?
+
+        public init(children: Int, childrenUnder3: Int? = nil, childrenDisabled: Int? = nil, otherPersons: Int, otherPersonsDisabled: Int? = nil, claimantPartnerId: String? = nil) {
+            self.children = children
+            self.childrenUnder3 = childrenUnder3
+            self.childrenDisabled = childrenDisabled
+            self.otherPersons = otherPersons
+            self.otherPersonsDisabled = otherPersonsDisabled
+            self.claimantPartnerId = claimantPartnerId
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case children = "children"
+            case childrenUnder3 = "childrenUnder3"
+            case childrenDisabled = "childrenDisabled"
+            case otherPersons = "otherPersons"
+            case otherPersonsDisabled = "otherPersonsDisabled"
+            case claimantPartnerId = "claimantPartnerId"
+        }
+    }
+
+    public struct BelgianTaxInputHome: Codable, Equatable, Sendable {
+        public let cadastralIncome: Decimal
+        public let cadastralCentimesOverride: Decimal?
+        public let additionalResidences: [OpenAPI.BelgianTaxInputHomeAdditionalResidence]?
+        public let mortgageInterestPaid: Decimal
+        public let mortgageCapitalRepaid: Decimal?
+        public let mortgageStartYear: Int?
+        public let mortgageRegion: String?
+        public let mortgageIsPrimaryResidence: Bool?
+        public let mortgageCreditPartnerId: String?
+        public let mortgageSharePartnerB: Decimal?
+        public let firstQualifyingYear: Int?
+        public let woonbonusChildrenAtLoanStart: Int?
+
+        public init(cadastralIncome: Decimal, cadastralCentimesOverride: Decimal? = nil, additionalResidences: [OpenAPI.BelgianTaxInputHomeAdditionalResidence]? = nil, mortgageInterestPaid: Decimal, mortgageCapitalRepaid: Decimal? = nil, mortgageStartYear: Int? = nil, mortgageRegion: String? = nil, mortgageIsPrimaryResidence: Bool? = nil, mortgageCreditPartnerId: String? = nil, mortgageSharePartnerB: Decimal? = nil, firstQualifyingYear: Int? = nil, woonbonusChildrenAtLoanStart: Int? = nil) {
+            self.cadastralIncome = cadastralIncome
+            self.cadastralCentimesOverride = cadastralCentimesOverride
+            self.additionalResidences = additionalResidences
+            self.mortgageInterestPaid = mortgageInterestPaid
+            self.mortgageCapitalRepaid = mortgageCapitalRepaid
+            self.mortgageStartYear = mortgageStartYear
+            self.mortgageRegion = mortgageRegion
+            self.mortgageIsPrimaryResidence = mortgageIsPrimaryResidence
+            self.mortgageCreditPartnerId = mortgageCreditPartnerId
+            self.mortgageSharePartnerB = mortgageSharePartnerB
+            self.firstQualifyingYear = firstQualifyingYear
+            self.woonbonusChildrenAtLoanStart = woonbonusChildrenAtLoanStart
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case cadastralIncome = "cadastralIncome"
+            case cadastralCentimesOverride = "cadastralCentimesOverride"
+            case additionalResidences = "additionalResidences"
+            case mortgageInterestPaid = "mortgageInterestPaid"
+            case mortgageCapitalRepaid = "mortgageCapitalRepaid"
+            case mortgageStartYear = "mortgageStartYear"
+            case mortgageRegion = "mortgageRegion"
+            case mortgageIsPrimaryResidence = "mortgageIsPrimaryResidence"
+            case mortgageCreditPartnerId = "mortgageCreditPartnerId"
+            case mortgageSharePartnerB = "mortgageSharePartnerB"
+            case firstQualifyingYear = "firstQualifyingYear"
+            case woonbonusChildrenAtLoanStart = "woonbonusChildrenAtLoanStart"
+        }
+    }
+
+    public struct BelgianTaxInputHomeAdditionalResidence: Codable, Equatable, Sendable {
+        public let label: String?
+        public let cadastralIncome: Decimal
+        public let region: String?
+        public let isOwnHome: Bool?
+        public let centimesOverride: Decimal?
+
+        public init(label: String? = nil, cadastralIncome: Decimal, region: String? = nil, isOwnHome: Bool? = nil, centimesOverride: Decimal? = nil) {
+            self.label = label
+            self.cadastralIncome = cadastralIncome
+            self.region = region
+            self.isOwnHome = isOwnHome
+            self.centimesOverride = centimesOverride
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case label = "label"
+            case cadastralIncome = "cadastralIncome"
+            case region = "region"
+            case isOwnHome = "isOwnHome"
+            case centimesOverride = "centimesOverride"
+        }
+    }
+
+    public struct BelgianTaxInputMigratedFrom: Codable, Equatable, Sendable {
+        public let fromVersion: Decimal
+        public let unmappedFields: [OpenAPI.BelgianTaxInputMigratedFromUnmappedField]
+
+        public init(fromVersion: Decimal, unmappedFields: [OpenAPI.BelgianTaxInputMigratedFromUnmappedField]) {
+            self.fromVersion = fromVersion
+            self.unmappedFields = unmappedFields
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case fromVersion = "fromVersion"
+            case unmappedFields = "unmappedFields"
+        }
+    }
+
+    public struct BelgianTaxInputMigratedFromUnmappedField: Codable, Equatable, Sendable {
+        public let field: String
+        public let note: String
+        public let value: JSONValue?
+
+        public init(field: String, note: String, value: JSONValue? = nil) {
+            self.field = field
+            self.note = note
+            self.value = value
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case field = "field"
+            case note = "note"
+            case value = "value"
+        }
+    }
+
+    public struct BelgianTaxInputPartner: Codable, Equatable, Sendable {
+        public let id: String
+        public let displayName: String?
+        public let birthYear: Int?
+        public let isDisabled: Bool
+        public let isIsolatedParent: Bool?
+        public let activities: [OpenAPI.BelgianTaxInputPartnerActivity]
+        public let professionalExpenses: [String: ProfessionalExpensesValue]
+        public let unionDues: Decimal
+        public let otherTaxableIncome: Decimal
+        public let alimonyPaid: Decimal
+        public let treatyExemptProfessionalIncome: Decimal?
+        public let reductions: OpenAPI.BelgianTaxInputPartnerReductions
+        public let annualDividendIncome: Decimal?
+        public let annualSavingsInterest: Decimal?
+
+        public init(id: String, displayName: String? = nil, birthYear: Int? = nil, isDisabled: Bool, isIsolatedParent: Bool? = nil, activities: [OpenAPI.BelgianTaxInputPartnerActivity], professionalExpenses: [String: ProfessionalExpensesValue], unionDues: Decimal, otherTaxableIncome: Decimal, alimonyPaid: Decimal, treatyExemptProfessionalIncome: Decimal? = nil, reductions: OpenAPI.BelgianTaxInputPartnerReductions, annualDividendIncome: Decimal? = nil, annualSavingsInterest: Decimal? = nil) {
+            self.id = id
+            self.displayName = displayName
+            self.birthYear = birthYear
+            self.isDisabled = isDisabled
+            self.isIsolatedParent = isIsolatedParent
+            self.activities = activities
+            self.professionalExpenses = professionalExpenses
+            self.unionDues = unionDues
+            self.otherTaxableIncome = otherTaxableIncome
+            self.alimonyPaid = alimonyPaid
+            self.treatyExemptProfessionalIncome = treatyExemptProfessionalIncome
+            self.reductions = reductions
+            self.annualDividendIncome = annualDividendIncome
+            self.annualSavingsInterest = annualSavingsInterest
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case displayName = "displayName"
+            case birthYear = "birthYear"
+            case isDisabled = "isDisabled"
+            case isIsolatedParent = "isIsolatedParent"
+            case activities = "activities"
+            case professionalExpenses = "professionalExpenses"
+            case unionDues = "unionDues"
+            case otherTaxableIncome = "otherTaxableIncome"
+            case alimonyPaid = "alimonyPaid"
+            case treatyExemptProfessionalIncome = "treatyExemptProfessionalIncome"
+            case reductions = "reductions"
+            case annualDividendIncome = "annualDividendIncome"
+            case annualSavingsInterest = "annualSavingsInterest"
+        }
+
+        public struct ProfessionalExpensesValue: Codable, Equatable, Sendable {
+            public let method: String
+            public let actualAmount: Decimal
+
+            public init(method: String, actualAmount: Decimal) {
+                self.method = method
+                self.actualAmount = actualAmount
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case method = "method"
+                case actualAmount = "actualAmount"
+            }
+        }
+    }
+
+    public struct BelgianTaxInputPartnerActivity: Codable, Equatable, Sendable {
+        public let id: String
+        public let kind: String
+        public let label: String?
+        public let grossIncome: Decimal
+        public let netProfessionalIncome: Decimal?
+        public let pensionKind: String?
+        public let startDate: String?
+        public let endDate: String?
+        public let selfEmployedOccupation: String?
+        public let socialContributionsPaid: Decimal?
+        public let withholdingTax: Decimal?
+        public let prepayments: Decimal?
+        public let sourceRefs: [String]?
+
+        public init(id: String, kind: String, label: String? = nil, grossIncome: Decimal, netProfessionalIncome: Decimal? = nil, pensionKind: String? = nil, startDate: String? = nil, endDate: String? = nil, selfEmployedOccupation: String? = nil, socialContributionsPaid: Decimal? = nil, withholdingTax: Decimal? = nil, prepayments: Decimal? = nil, sourceRefs: [String]? = nil) {
+            self.id = id
+            self.kind = kind
+            self.label = label
+            self.grossIncome = grossIncome
+            self.netProfessionalIncome = netProfessionalIncome
+            self.pensionKind = pensionKind
+            self.startDate = startDate
+            self.endDate = endDate
+            self.selfEmployedOccupation = selfEmployedOccupation
+            self.socialContributionsPaid = socialContributionsPaid
+            self.withholdingTax = withholdingTax
+            self.prepayments = prepayments
+            self.sourceRefs = sourceRefs
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case kind = "kind"
+            case label = "label"
+            case grossIncome = "grossIncome"
+            case netProfessionalIncome = "netProfessionalIncome"
+            case pensionKind = "pensionKind"
+            case startDate = "startDate"
+            case endDate = "endDate"
+            case selfEmployedOccupation = "selfEmployedOccupation"
+            case socialContributionsPaid = "socialContributionsPaid"
+            case withholdingTax = "withholdingTax"
+            case prepayments = "prepayments"
+            case sourceRefs = "sourceRefs"
+        }
+    }
+
+    public struct BelgianTaxInputPartnerReductions: Codable, Equatable, Sendable {
+        public let personalPensionContributions: Decimal
+        public let pensionScheme: String?
+        public let pensionEligible: Bool?
+        public let lifeInsurancePremiums: Decimal
+        public let lifeInsuranceEligible: Bool?
+        public let employeeGroupInsuranceContributions: Decimal?
+        public let employeeGroupInsuranceEligible: Bool?
+        public let charitableDonations: Decimal
+        public let charitableDonationsEligible: Bool?
+        public let childcareCosts: Decimal
+        public let childcareEligibleDays: Int?
+        public let childcareEligible: Bool?
+        public let domesticHelpCosts: Decimal?
+        public let domesticHelpEligible: Bool?
+        public let serviceVoucherCount: Int?
+        public let serviceVoucherSpend: Decimal?
+        public let serviceVoucherEligible: Bool?
+        public let medicalExpenses: Decimal
+
+        public init(personalPensionContributions: Decimal, pensionScheme: String? = nil, pensionEligible: Bool? = nil, lifeInsurancePremiums: Decimal, lifeInsuranceEligible: Bool? = nil, employeeGroupInsuranceContributions: Decimal? = nil, employeeGroupInsuranceEligible: Bool? = nil, charitableDonations: Decimal, charitableDonationsEligible: Bool? = nil, childcareCosts: Decimal, childcareEligibleDays: Int? = nil, childcareEligible: Bool? = nil, domesticHelpCosts: Decimal? = nil, domesticHelpEligible: Bool? = nil, serviceVoucherCount: Int? = nil, serviceVoucherSpend: Decimal? = nil, serviceVoucherEligible: Bool? = nil, medicalExpenses: Decimal) {
+            self.personalPensionContributions = personalPensionContributions
+            self.pensionScheme = pensionScheme
+            self.pensionEligible = pensionEligible
+            self.lifeInsurancePremiums = lifeInsurancePremiums
+            self.lifeInsuranceEligible = lifeInsuranceEligible
+            self.employeeGroupInsuranceContributions = employeeGroupInsuranceContributions
+            self.employeeGroupInsuranceEligible = employeeGroupInsuranceEligible
+            self.charitableDonations = charitableDonations
+            self.charitableDonationsEligible = charitableDonationsEligible
+            self.childcareCosts = childcareCosts
+            self.childcareEligibleDays = childcareEligibleDays
+            self.childcareEligible = childcareEligible
+            self.domesticHelpCosts = domesticHelpCosts
+            self.domesticHelpEligible = domesticHelpEligible
+            self.serviceVoucherCount = serviceVoucherCount
+            self.serviceVoucherSpend = serviceVoucherSpend
+            self.serviceVoucherEligible = serviceVoucherEligible
+            self.medicalExpenses = medicalExpenses
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case personalPensionContributions = "personalPensionContributions"
+            case pensionScheme = "pensionScheme"
+            case pensionEligible = "pensionEligible"
+            case lifeInsurancePremiums = "lifeInsurancePremiums"
+            case lifeInsuranceEligible = "lifeInsuranceEligible"
+            case employeeGroupInsuranceContributions = "employeeGroupInsuranceContributions"
+            case employeeGroupInsuranceEligible = "employeeGroupInsuranceEligible"
+            case charitableDonations = "charitableDonations"
+            case charitableDonationsEligible = "charitableDonationsEligible"
+            case childcareCosts = "childcareCosts"
+            case childcareEligibleDays = "childcareEligibleDays"
+            case childcareEligible = "childcareEligible"
+            case domesticHelpCosts = "domesticHelpCosts"
+            case domesticHelpEligible = "domesticHelpEligible"
+            case serviceVoucherCount = "serviceVoucherCount"
+            case serviceVoucherSpend = "serviceVoucherSpend"
+            case serviceVoucherEligible = "serviceVoucherEligible"
+            case medicalExpenses = "medicalExpenses"
+        }
+    }
+
+    public struct BelgianTaxInputRelationship: Codable, Equatable, Sendable {
+        public let events: [OpenAPI.BelgianTaxInputRelationshipEvent]
+        public let deathYearElection: String?
+        public let legacyAssumedJoint: Bool?
+
+        public init(events: [OpenAPI.BelgianTaxInputRelationshipEvent], deathYearElection: String? = nil, legacyAssumedJoint: Bool? = nil) {
+            self.events = events
+            self.deathYearElection = deathYearElection
+            self.legacyAssumedJoint = legacyAssumedJoint
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case events = "events"
+            case deathYearElection = "deathYearElection"
+            case legacyAssumedJoint = "legacyAssumedJoint"
+        }
+    }
+
+    public struct BelgianTaxInputRelationshipEvent: Codable, Equatable, Sendable {
+        public let id: String
+        public let kind: String
+        public let date: String
+        public let partnerId: String?
+
+        public init(id: String, kind: String, date: String, partnerId: String? = nil) {
+            self.id = id
+            self.kind = kind
+            self.date = date
+            self.partnerId = partnerId
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case kind = "kind"
+            case date = "date"
+            case partnerId = "partnerId"
+        }
+    }
+
+    public struct BelgianTaxMaritalQuotientResult: Codable, Equatable, Sendable {
+        public let applied: Bool
+        public let transfer: Decimal
+        public let fromPartnerId: String?
+        public let toPartnerId: String?
+        /// min(30% of the household professional income, cap).
+        public let target: Decimal
+        public let cap: Decimal
+        /// Combined tax saving (0 when not applied).
+        public let benefit: Decimal
+
+        public init(applied: Bool, transfer: Decimal, fromPartnerId: String? = nil, toPartnerId: String? = nil, target: Decimal, cap: Decimal, benefit: Decimal) {
+            self.applied = applied
+            self.transfer = transfer
+            self.fromPartnerId = fromPartnerId
+            self.toPartnerId = toPartnerId
+            self.target = target
+            self.cap = cap
+            self.benefit = benefit
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case applied = "applied"
+            case transfer = "transfer"
+            case fromPartnerId = "fromPartnerId"
+            case toPartnerId = "toPartnerId"
+            case target = "target"
+            case cap = "cap"
+            case benefit = "benefit"
+        }
+    }
+
+    public struct BelgianTaxOverview: Codable, Equatable, Sendable {
+        public let year: Int
+        public let liveYear: Int
+        public let isHistorical: Bool
+        public let hasSnapshot: Bool
+        public let hasProfile: Bool
+        public let householdMigrationNeeded: Bool
+        public let snapshotsMigrationNeeded: Bool
+        public let storedValueInvalid: Bool
+        public let household: OpenAPI.BelgianTaxHouseholdInput
+        public let liveHousehold: OpenAPI.BelgianTaxHouseholdInput
+        public let householdSnapshots: [String: OpenAPI.BelgianTaxHouseholdInput]
+        public let snapshotMetas: [String: JSONValue]
+        public let metadata: JSONValue
+        public let calculation: OpenAPI.BelgianTaxHistoricalCalculation
+        public let result: OpenAPI.BelgianTaxHouseholdTaxResult
+        public let calculationSource: String
+        public let householdResultSource: String
+        public let warnings: [OpenAPI.BelgianTaxSettingsWarning]
+        public let records: [OpenAPI.Setting]
+
+        public init(year: Int, liveYear: Int, isHistorical: Bool, hasSnapshot: Bool, hasProfile: Bool, householdMigrationNeeded: Bool, snapshotsMigrationNeeded: Bool, storedValueInvalid: Bool, household: OpenAPI.BelgianTaxHouseholdInput, liveHousehold: OpenAPI.BelgianTaxHouseholdInput, householdSnapshots: [String: OpenAPI.BelgianTaxHouseholdInput], snapshotMetas: [String: JSONValue], metadata: JSONValue, calculation: OpenAPI.BelgianTaxHistoricalCalculation, result: OpenAPI.BelgianTaxHouseholdTaxResult, calculationSource: String, householdResultSource: String, warnings: [OpenAPI.BelgianTaxSettingsWarning], records: [OpenAPI.Setting]) {
+            self.year = year
+            self.liveYear = liveYear
+            self.isHistorical = isHistorical
+            self.hasSnapshot = hasSnapshot
+            self.hasProfile = hasProfile
+            self.householdMigrationNeeded = householdMigrationNeeded
+            self.snapshotsMigrationNeeded = snapshotsMigrationNeeded
+            self.storedValueInvalid = storedValueInvalid
+            self.household = household
+            self.liveHousehold = liveHousehold
+            self.householdSnapshots = householdSnapshots
+            self.snapshotMetas = snapshotMetas
+            self.metadata = metadata
+            self.calculation = calculation
+            self.result = result
+            self.calculationSource = calculationSource
+            self.householdResultSource = householdResultSource
+            self.warnings = warnings
+            self.records = records
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case year = "year"
+            case liveYear = "liveYear"
+            case isHistorical = "isHistorical"
+            case hasSnapshot = "hasSnapshot"
+            case hasProfile = "hasProfile"
+            case householdMigrationNeeded = "householdMigrationNeeded"
+            case snapshotsMigrationNeeded = "snapshotsMigrationNeeded"
+            case storedValueInvalid = "storedValueInvalid"
+            case household = "household"
+            case liveHousehold = "liveHousehold"
+            case householdSnapshots = "householdSnapshots"
+            case snapshotMetas = "snapshotMetas"
+            case metadata = "metadata"
+            case calculation = "calculation"
+            case result = "result"
+            case calculationSource = "calculationSource"
+            case householdResultSource = "householdResultSource"
+            case warnings = "warnings"
+            case records = "records"
+        }
+    }
+
+    public struct BelgianTaxPartnerTaxResult: Codable, Equatable, Sendable {
+        public let partnerId: String
+        public let activities: [OpenAPI.BelgianTaxActivityTaxResult]
+        public let categories: [OpenAPI.BelgianTaxCategoryTaxResult]
+        /// Gross income of the activities that carry a gross figure (not `net_professional_amount`).
+        public let grossIncome: Decimal
+        public let employeeSocialSecurity: Decimal
+        public let professionalExpenses: Decimal
+        public let unionDuesApplied: Decimal
+        public let netProfessionalIncome: Decimal
+        public let otherTaxableIncome: Decimal
+        public let alimonyDeduction: Decimal
+        /// Net professional + other income − alimony, before the marital quotient.
+        public let taxableIncomeBeforeQuotient: Decimal
+        /// Positive when the quotient adds income to this partner, negative when it removes some.
+        public let quotientAdjustment: Decimal
+        public let taxableIncome: Decimal
+        public let bracketTax: OpenAPI.BelgianTaxBracketTax
+        public let exemption: OpenAPI.BelgianTaxExemptionAllocation
+        public let exemptionBenefit: Decimal
+        public let pitAfterExemption: Decimal
+        public let reductions: OpenAPI.BelgianTaxTaxReductionBreakdown
+        public let ownHomeCreditRegime: String
+        public let ownHomeCredit: Decimal
+        /// Reduction for pensions of this partner (WIB 92 arts 147-153, per spouse by art. 150).
+        public let pensionReduction: Decimal
+        /// Reductions charged on this partner's tax: min(pension reduction + reductions + own-home
+        /// credit, tax).
+        public let reductionsApplied: Decimal
+        public let federalPITAfterReductions: Decimal
+        public let communalSurcharge: Decimal
+        public let totalPIT: Decimal
+        public let specialSocialSecurityContribution: Decimal
+        public let csssSubject: Bool
+        public let dividendWhtReclaim: Decimal
+        public let savingsInterestTax: Decimal
+        public let marginalRate: Decimal
+
+        public init(partnerId: String, activities: [OpenAPI.BelgianTaxActivityTaxResult], categories: [OpenAPI.BelgianTaxCategoryTaxResult], grossIncome: Decimal, employeeSocialSecurity: Decimal, professionalExpenses: Decimal, unionDuesApplied: Decimal, netProfessionalIncome: Decimal, otherTaxableIncome: Decimal, alimonyDeduction: Decimal, taxableIncomeBeforeQuotient: Decimal, quotientAdjustment: Decimal, taxableIncome: Decimal, bracketTax: OpenAPI.BelgianTaxBracketTax, exemption: OpenAPI.BelgianTaxExemptionAllocation, exemptionBenefit: Decimal, pitAfterExemption: Decimal, reductions: OpenAPI.BelgianTaxTaxReductionBreakdown, ownHomeCreditRegime: String, ownHomeCredit: Decimal, pensionReduction: Decimal, reductionsApplied: Decimal, federalPITAfterReductions: Decimal, communalSurcharge: Decimal, totalPIT: Decimal, specialSocialSecurityContribution: Decimal, csssSubject: Bool, dividendWhtReclaim: Decimal, savingsInterestTax: Decimal, marginalRate: Decimal) {
+            self.partnerId = partnerId
+            self.activities = activities
+            self.categories = categories
+            self.grossIncome = grossIncome
+            self.employeeSocialSecurity = employeeSocialSecurity
+            self.professionalExpenses = professionalExpenses
+            self.unionDuesApplied = unionDuesApplied
+            self.netProfessionalIncome = netProfessionalIncome
+            self.otherTaxableIncome = otherTaxableIncome
+            self.alimonyDeduction = alimonyDeduction
+            self.taxableIncomeBeforeQuotient = taxableIncomeBeforeQuotient
+            self.quotientAdjustment = quotientAdjustment
+            self.taxableIncome = taxableIncome
+            self.bracketTax = bracketTax
+            self.exemption = exemption
+            self.exemptionBenefit = exemptionBenefit
+            self.pitAfterExemption = pitAfterExemption
+            self.reductions = reductions
+            self.ownHomeCreditRegime = ownHomeCreditRegime
+            self.ownHomeCredit = ownHomeCredit
+            self.pensionReduction = pensionReduction
+            self.reductionsApplied = reductionsApplied
+            self.federalPITAfterReductions = federalPITAfterReductions
+            self.communalSurcharge = communalSurcharge
+            self.totalPIT = totalPIT
+            self.specialSocialSecurityContribution = specialSocialSecurityContribution
+            self.csssSubject = csssSubject
+            self.dividendWhtReclaim = dividendWhtReclaim
+            self.savingsInterestTax = savingsInterestTax
+            self.marginalRate = marginalRate
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case partnerId = "partnerId"
+            case activities = "activities"
+            case categories = "categories"
+            case grossIncome = "grossIncome"
+            case employeeSocialSecurity = "employeeSocialSecurity"
+            case professionalExpenses = "professionalExpenses"
+            case unionDuesApplied = "unionDuesApplied"
+            case netProfessionalIncome = "netProfessionalIncome"
+            case otherTaxableIncome = "otherTaxableIncome"
+            case alimonyDeduction = "alimonyDeduction"
+            case taxableIncomeBeforeQuotient = "taxableIncomeBeforeQuotient"
+            case quotientAdjustment = "quotientAdjustment"
+            case taxableIncome = "taxableIncome"
+            case bracketTax = "bracketTax"
+            case exemption = "exemption"
+            case exemptionBenefit = "exemptionBenefit"
+            case pitAfterExemption = "pitAfterExemption"
+            case reductions = "reductions"
+            case ownHomeCreditRegime = "ownHomeCreditRegime"
+            case ownHomeCredit = "ownHomeCredit"
+            case pensionReduction = "pensionReduction"
+            case reductionsApplied = "reductionsApplied"
+            case federalPITAfterReductions = "federalPITAfterReductions"
+            case communalSurcharge = "communalSurcharge"
+            case totalPIT = "totalPIT"
+            case specialSocialSecurityContribution = "specialSocialSecurityContribution"
+            case csssSubject = "csssSubject"
+            case dividendWhtReclaim = "dividendWhtReclaim"
+            case savingsInterestTax = "savingsInterestTax"
+            case marginalRate = "marginalRate"
+        }
+    }
+
+    public struct BelgianTaxSettingsWarning: Codable, Equatable, Sendable {
+        public let key: String
+        public let kind: String
+        public let issues: [String]
+
+        public init(key: String, kind: String, issues: [String]) {
+            self.key = key
+            self.kind = kind
+            self.issues = issues
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case key = "key"
+            case kind = "kind"
+            case issues = "issues"
+        }
+    }
+
+    public struct BelgianTaxTaxReductionBreakdown: Codable, Equatable, Sendable {
+        public let pension: Decimal
+        public let lifeInsurance: Decimal
+        public let groupInsurance: Decimal
+        public let donations: Decimal
+        public let childcare: Decimal
+        public let domesticHelp: Decimal
+        public let serviceVouchers: Decimal
+        /// Sum of the reductions above, before the cap at the tax due (own-home credit excluded).
+        public let total: Decimal
+
+        public init(pension: Decimal, lifeInsurance: Decimal, groupInsurance: Decimal, donations: Decimal, childcare: Decimal, domesticHelp: Decimal, serviceVouchers: Decimal, total: Decimal) {
+            self.pension = pension
+            self.lifeInsurance = lifeInsurance
+            self.groupInsurance = groupInsurance
+            self.donations = donations
+            self.childcare = childcare
+            self.domesticHelp = domesticHelp
+            self.serviceVouchers = serviceVouchers
+            self.total = total
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case pension = "pension"
+            case lifeInsurance = "lifeInsurance"
+            case groupInsurance = "groupInsurance"
+            case donations = "donations"
+            case childcare = "childcare"
+            case domesticHelp = "domesticHelp"
+            case serviceVouchers = "serviceVouchers"
+            case total = "total"
         }
     }
 
@@ -390,6 +3149,81 @@ extension OpenAPI {
             case added = "added"
             case removed = "removed"
             case transactionsAffected = "transactions_affected"
+        }
+    }
+
+    public struct Category: Codable, Equatable, Sendable {
+        public let id: Int
+        public let general: String
+        public let detail: String
+        public let description: String?
+        public let isActive: Bool
+        public let createdAt: String
+        public let updatedAt: String?
+        public let links: [OpenAPI.Link]
+
+        public init(id: Int, general: String, detail: String, description: String? = nil, isActive: Bool, createdAt: String, updatedAt: String? = nil, links: [OpenAPI.Link]) {
+            self.id = id
+            self.general = general
+            self.detail = detail
+            self.description = description
+            self.isActive = isActive
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
+            self.links = links
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case general = "general"
+            case detail = "detail"
+            case description = "description"
+            case isActive = "is_active"
+            case createdAt = "created_at"
+            case updatedAt = "updated_at"
+            case links = "links"
+        }
+    }
+
+    public struct CategoryCreate: Codable, Equatable, Sendable {
+        public let general: String
+        public let detail: String
+        public let description: String?
+
+        public init(general: String, detail: String, description: String? = nil) {
+            self.general = general
+            self.detail = detail
+            self.description = description
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case general = "general"
+            case detail = "detail"
+            case description = "description"
+        }
+    }
+
+    public struct CategoryList: Codable, Equatable, Sendable {
+        public let total: Int
+        public let limit: Int?
+        public let offset: Int?
+        public let items: [OpenAPI.Category]
+        public let links: [OpenAPI.Link]
+
+        public init(total: Int, limit: Int? = nil, offset: Int? = nil, items: [OpenAPI.Category], links: [OpenAPI.Link]) {
+            self.total = total
+            self.limit = limit
+            self.offset = offset
+            self.items = items
+            self.links = links
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case total = "total"
+            case limit = "limit"
+            case offset = "offset"
+            case items = "items"
+            case links = "links"
         }
     }
 
@@ -490,6 +3324,72 @@ extension OpenAPI {
             case parentId = "parentId"
             case description = "description"
             case isActive = "is_active"
+        }
+    }
+
+    public struct CategoryPivotData: Codable, Equatable, Sendable {
+        public let categoryPivot: [String: [CategoryPivotValueItem]]
+
+        public init(categoryPivot: [String: [CategoryPivotValueItem]]) {
+            self.categoryPivot = categoryPivot
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case categoryPivot = "categoryPivot"
+        }
+
+        public struct CategoryPivotValueItem: Codable, Equatable, Sendable {
+            public let categoryId: Int?
+            public let categoryName: String
+            public let categoryPathIds: [Int]
+            public let categoryPathSegments: [String]
+            public let total: Decimal
+            public let income: Decimal
+            public let expense: Decimal
+            public let transactionCount: Int
+            /// Additive (ADR-201). Part of `income` booked on accounts whose owner is `partner` or `joint`;
+            /// present only when one of them is non-zero. The rest of `income` is on `me` accounts or on
+            /// transactions without an account.
+            public let incomeByOwner: IncomeByOwner?
+
+            public init(categoryId: Int? = nil, categoryName: String, categoryPathIds: [Int], categoryPathSegments: [String], total: Decimal, income: Decimal, expense: Decimal, transactionCount: Int, incomeByOwner: IncomeByOwner? = nil) {
+                self.categoryId = categoryId
+                self.categoryName = categoryName
+                self.categoryPathIds = categoryPathIds
+                self.categoryPathSegments = categoryPathSegments
+                self.total = total
+                self.income = income
+                self.expense = expense
+                self.transactionCount = transactionCount
+                self.incomeByOwner = incomeByOwner
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case categoryId = "categoryId"
+                case categoryName = "categoryName"
+                case categoryPathIds = "categoryPathIds"
+                case categoryPathSegments = "categoryPathSegments"
+                case total = "total"
+                case income = "income"
+                case expense = "expense"
+                case transactionCount = "transactionCount"
+                case incomeByOwner = "incomeByOwner"
+            }
+
+            public struct IncomeByOwner: Codable, Equatable, Sendable {
+                public let partner: Decimal?
+                public let joint: Decimal?
+
+                public init(partner: Decimal? = nil, joint: Decimal? = nil) {
+                    self.partner = partner
+                    self.joint = joint
+                }
+
+                enum CodingKeys: String, CodingKey {
+                    case partner = "partner"
+                    case joint = "joint"
+                }
+            }
         }
     }
 
@@ -897,6 +3797,222 @@ extension OpenAPI {
         }
     }
 
+    public struct FundHoldingRow: Codable, Equatable, Sendable {
+        public let provenance: Provenance
+        public let name: String
+        public let identifiers: [OpenAPI.PortfolioSecurityIdentifier]
+        public let instrumentType: String
+        public let exposureKind: String
+        public let exposureStatus: String
+        public let unsupportedReason: String?
+        public let weightPercent: String
+        public let currency: String?
+        public let countryCode: String?
+
+        public init(provenance: Provenance, name: String, identifiers: [OpenAPI.PortfolioSecurityIdentifier], instrumentType: String, exposureKind: String, exposureStatus: String, unsupportedReason: String? = nil, weightPercent: String, currency: String? = nil, countryCode: String? = nil) {
+            self.provenance = provenance
+            self.name = name
+            self.identifiers = identifiers
+            self.instrumentType = instrumentType
+            self.exposureKind = exposureKind
+            self.exposureStatus = exposureStatus
+            self.unsupportedReason = unsupportedReason
+            self.weightPercent = weightPercent
+            self.currency = currency
+            self.countryCode = countryCode
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case provenance = "provenance"
+            case name = "name"
+            case identifiers = "identifiers"
+            case instrumentType = "instrumentType"
+            case exposureKind = "exposureKind"
+            case exposureStatus = "exposureStatus"
+            case unsupportedReason = "unsupportedReason"
+            case weightPercent = "weightPercent"
+            case currency = "currency"
+            case countryCode = "countryCode"
+        }
+
+        public struct Provenance: Codable, Equatable, Sendable {
+            public let rowNumber: Int
+            public let sheetName: String?
+
+            public init(rowNumber: Int, sheetName: String? = nil) {
+                self.rowNumber = rowNumber
+                self.sheetName = sheetName
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case rowNumber = "rowNumber"
+                case sheetName = "sheetName"
+            }
+        }
+    }
+
+    public struct FundHoldingsDocument: Codable, Equatable, Sendable {
+        public let contractVersion: Int
+        public let fund: OpenAPI.FundHoldingsIdentity
+        public let shareClass: OpenAPI.FundHoldingsShareClass
+        public let source: Source
+        public let holdings: [OpenAPI.FundHoldingRow]
+        public let coverage: Coverage
+        public let staleness: Staleness
+
+        public init(contractVersion: Int, fund: OpenAPI.FundHoldingsIdentity, shareClass: OpenAPI.FundHoldingsShareClass, source: Source, holdings: [OpenAPI.FundHoldingRow], coverage: Coverage, staleness: Staleness) {
+            self.contractVersion = contractVersion
+            self.fund = fund
+            self.shareClass = shareClass
+            self.source = source
+            self.holdings = holdings
+            self.coverage = coverage
+            self.staleness = staleness
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case contractVersion = "contractVersion"
+            case fund = "fund"
+            case shareClass = "shareClass"
+            case source = "source"
+            case holdings = "holdings"
+            case coverage = "coverage"
+            case staleness = "staleness"
+        }
+
+        public struct Source: Codable, Equatable, Sendable {
+            public let kind: String
+            public let providerName: String?
+            public let fileName: String
+            public let sourceUrl: String?
+            public let asOfDate: String
+            public let retrievedAt: String
+            public let license: License
+
+            public init(kind: String, providerName: String? = nil, fileName: String, sourceUrl: String? = nil, asOfDate: String, retrievedAt: String, license: License) {
+                self.kind = kind
+                self.providerName = providerName
+                self.fileName = fileName
+                self.sourceUrl = sourceUrl
+                self.asOfDate = asOfDate
+                self.retrievedAt = retrievedAt
+                self.license = license
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case kind = "kind"
+                case providerName = "providerName"
+                case fileName = "fileName"
+                case sourceUrl = "sourceUrl"
+                case asOfDate = "asOfDate"
+                case retrievedAt = "retrievedAt"
+                case license = "license"
+            }
+
+            public struct License: Codable, Equatable, Sendable {
+                public let status: String
+                public let redistribution: String
+                public let termsUrl: String?
+                public let note: String?
+
+                public init(status: String, redistribution: String, termsUrl: String? = nil, note: String? = nil) {
+                    self.status = status
+                    self.redistribution = redistribution
+                    self.termsUrl = termsUrl
+                    self.note = note
+                }
+
+                enum CodingKeys: String, CodingKey {
+                    case status = "status"
+                    case redistribution = "redistribution"
+                    case termsUrl = "termsUrl"
+                    case note = "note"
+                }
+            }
+        }
+
+        public struct Coverage: Codable, Equatable, Sendable {
+            public let status: String
+            public let reportedWeightPercent: String
+            public let supportedWeightPercent: String
+            public let unsupportedWeightPercent: String
+            public let missingWeightPercent: String
+
+            public init(status: String, reportedWeightPercent: String, supportedWeightPercent: String, unsupportedWeightPercent: String, missingWeightPercent: String) {
+                self.status = status
+                self.reportedWeightPercent = reportedWeightPercent
+                self.supportedWeightPercent = supportedWeightPercent
+                self.unsupportedWeightPercent = unsupportedWeightPercent
+                self.missingWeightPercent = missingWeightPercent
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case status = "status"
+                case reportedWeightPercent = "reportedWeightPercent"
+                case supportedWeightPercent = "supportedWeightPercent"
+                case unsupportedWeightPercent = "unsupportedWeightPercent"
+                case missingWeightPercent = "missingWeightPercent"
+            }
+        }
+
+        public struct Staleness: Codable, Equatable, Sendable {
+            public let evaluatedAt: String
+            public let maximumAgeDays: Int
+            public let ageDays: Int
+            public let status: String
+
+            public init(evaluatedAt: String, maximumAgeDays: Int, ageDays: Int, status: String) {
+                self.evaluatedAt = evaluatedAt
+                self.maximumAgeDays = maximumAgeDays
+                self.ageDays = ageDays
+                self.status = status
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case evaluatedAt = "evaluatedAt"
+                case maximumAgeDays = "maximumAgeDays"
+                case ageDays = "ageDays"
+                case status = "status"
+            }
+        }
+    }
+
+    public struct FundHoldingsIdentity: Codable, Equatable, Sendable {
+        public let name: String
+        public let identifiers: [OpenAPI.PortfolioSecurityIdentifier]
+        public let currency: String?
+
+        public init(name: String, identifiers: [OpenAPI.PortfolioSecurityIdentifier], currency: String? = nil) {
+            self.name = name
+            self.identifiers = identifiers
+            self.currency = currency
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case name = "name"
+            case identifiers = "identifiers"
+            case currency = "currency"
+        }
+    }
+
+    public struct FundHoldingsShareClass: Codable, Equatable, Sendable {
+        public let name: String
+        public let identifiers: [OpenAPI.PortfolioSecurityIdentifier]
+        public let currency: String
+
+        public init(name: String, identifiers: [OpenAPI.PortfolioSecurityIdentifier], currency: String) {
+            self.name = name
+            self.identifiers = identifiers
+            self.currency = currency
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case name = "name"
+            case identifiers = "identifiers"
+            case currency = "currency"
+        }
+    }
+
     public struct ImportBatch: Codable, Equatable, Sendable {
         /// PostgreSQL BIGINT serialized by node-postgres as a string.
         public let id: String
@@ -963,6 +4079,479 @@ extension OpenAPI {
         }
     }
 
+    /// A oneOf/anyOf schema, decoded as plain JSON.
+    public typealias InsightDismissalRequest = JSONValue
+
+    public struct InsightsCountData: Codable, Equatable, Sendable {
+        public let count: Int?
+        public let status: String
+        public let computedAt: String?
+
+        public init(count: Int? = nil, status: String, computedAt: String? = nil) {
+            self.count = count
+            self.status = status
+            self.computedAt = computedAt
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case count = "count"
+            case status = "status"
+            case computedAt = "computed_at"
+        }
+    }
+
+    public struct InsightsCountEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let data: OpenAPI.InsightsCountData?
+        public let error: OpenAPI.ErrorPayload?
+
+        public init(ok: Bool, data: OpenAPI.InsightsCountData? = nil, error: OpenAPI.ErrorPayload? = nil) {
+            self.ok = ok
+            self.data = data
+            self.error = error
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case data = "data"
+            case error = "error"
+        }
+    }
+
+    public struct InsightsDigestData: Codable, Equatable, Sendable {
+        public let subscriptionCreep: SubscriptionCreep
+        public let categoryOutliers: [JSONValue]
+        public let cashForecast: CashForecast?
+
+        public init(subscriptionCreep: SubscriptionCreep, categoryOutliers: [JSONValue], cashForecast: CashForecast? = nil) {
+            self.subscriptionCreep = subscriptionCreep
+            self.categoryOutliers = categoryOutliers
+            self.cashForecast = cashForecast
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case subscriptionCreep = "subscriptionCreep"
+            case categoryOutliers = "categoryOutliers"
+            case cashForecast = "cashForecast"
+        }
+
+        public struct SubscriptionCreep: Codable, Equatable, Sendable {
+            public let new: [JSONValue]
+            public let priceChanges: [JSONValue]
+
+            public init(new: [JSONValue], priceChanges: [JSONValue]) {
+                self.new = new
+                self.priceChanges = priceChanges
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case new = "new"
+                case priceChanges = "priceChanges"
+            }
+        }
+
+        public struct CashForecast: Codable, Equatable, Sendable {
+            public let month: String
+            public let currency: String
+            /// Zero-based expected income minus outflows at month end; not an account balance.
+            public let monthEndNetCashflow: Decimal
+            public let monthEndNetCashflowLow: Decimal?
+            public let monthEndNetCashflowHigh: Decimal?
+            public let movedSignificantly: Bool
+            public let prominence: String
+            public let methodId: String
+
+            public init(month: String, currency: String, monthEndNetCashflow: Decimal, monthEndNetCashflowLow: Decimal? = nil, monthEndNetCashflowHigh: Decimal? = nil, movedSignificantly: Bool, prominence: String, methodId: String) {
+                self.month = month
+                self.currency = currency
+                self.monthEndNetCashflow = monthEndNetCashflow
+                self.monthEndNetCashflowLow = monthEndNetCashflowLow
+                self.monthEndNetCashflowHigh = monthEndNetCashflowHigh
+                self.movedSignificantly = movedSignificantly
+                self.prominence = prominence
+                self.methodId = methodId
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case month = "month"
+                case currency = "currency"
+                case monthEndNetCashflow = "monthEndNetCashflow"
+                case monthEndNetCashflowLow = "monthEndNetCashflowLow"
+                case monthEndNetCashflowHigh = "monthEndNetCashflowHigh"
+                case movedSignificantly = "movedSignificantly"
+                case prominence = "prominence"
+                case methodId = "methodId"
+            }
+        }
+    }
+
+    public struct InsightsDigestEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let data: OpenAPI.InsightsDigestData?
+        public let error: OpenAPI.ErrorPayload?
+
+        public init(ok: Bool, data: OpenAPI.InsightsDigestData? = nil, error: OpenAPI.ErrorPayload? = nil) {
+            self.ok = ok
+            self.data = data
+            self.error = error
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case data = "data"
+            case error = "error"
+        }
+    }
+
+    public struct InstrumentProviderMapping: Codable, Equatable, Sendable {
+        public let id: Int
+        public let instrumentKey: String
+        public let keyType: String
+        public let provider: String
+        public let providerSymbol: String?
+        public let resolvedName: String?
+        public let exchange: String?
+        public let currency: String?
+        public let status: String
+        public let verifiedAt: String?
+        public let createdAt: String?
+        public let updatedAt: String?
+
+        public init(id: Int, instrumentKey: String, keyType: String, provider: String, providerSymbol: String? = nil, resolvedName: String? = nil, exchange: String? = nil, currency: String? = nil, status: String, verifiedAt: String? = nil, createdAt: String? = nil, updatedAt: String? = nil) {
+            self.id = id
+            self.instrumentKey = instrumentKey
+            self.keyType = keyType
+            self.provider = provider
+            self.providerSymbol = providerSymbol
+            self.resolvedName = resolvedName
+            self.exchange = exchange
+            self.currency = currency
+            self.status = status
+            self.verifiedAt = verifiedAt
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case instrumentKey = "instrument_key"
+            case keyType = "key_type"
+            case provider = "provider"
+            case providerSymbol = "provider_symbol"
+            case resolvedName = "resolved_name"
+            case exchange = "exchange"
+            case currency = "currency"
+            case status = "status"
+            case verifiedAt = "verified_at"
+            case createdAt = "created_at"
+            case updatedAt = "updated_at"
+        }
+    }
+
+    public struct Investment: Codable, Equatable, Sendable {
+        public let id: Int
+        public let name: String
+        public let symbol: String?
+        public let assetClass: OpenAPI.AssetClass
+        public let currency: String
+        public let currentPrice: Decimal?
+        public let interestRate: Decimal?
+        public let maturityDate: String?
+        public let location: String?
+        public let municipality: String?
+        public let cadastralIncome: Decimal?
+        public let municipalityTaxRate: Decimal?
+        public let notes: String?
+        public let priceProvider: OpenAPI.PriceProvider?
+        public let priceProviderId: String?
+        public let priceProviderUrl: String?
+        public let priceProviderLatestUrl: String?
+        public let priceProviderLatestPath: String?
+        public let priceProviderHistoryUrl: String?
+        public let priceProviderHistoryPath: String?
+        public let priceProviderHistoryTsPath: String?
+        public let priceProviderHistoryPricePath: String?
+        public let priceUpdatedAt: String?
+        public let isActive: Bool
+        public let showInTicker: Bool
+        public let createdAt: String
+        public let updatedAt: String
+
+        public init(id: Int, name: String, symbol: String? = nil, assetClass: OpenAPI.AssetClass, currency: String, currentPrice: Decimal? = nil, interestRate: Decimal? = nil, maturityDate: String? = nil, location: String? = nil, municipality: String? = nil, cadastralIncome: Decimal? = nil, municipalityTaxRate: Decimal? = nil, notes: String? = nil, priceProvider: OpenAPI.PriceProvider? = nil, priceProviderId: String? = nil, priceProviderUrl: String? = nil, priceProviderLatestUrl: String? = nil, priceProviderLatestPath: String? = nil, priceProviderHistoryUrl: String? = nil, priceProviderHistoryPath: String? = nil, priceProviderHistoryTsPath: String? = nil, priceProviderHistoryPricePath: String? = nil, priceUpdatedAt: String? = nil, isActive: Bool, showInTicker: Bool, createdAt: String, updatedAt: String) {
+            self.id = id
+            self.name = name
+            self.symbol = symbol
+            self.assetClass = assetClass
+            self.currency = currency
+            self.currentPrice = currentPrice
+            self.interestRate = interestRate
+            self.maturityDate = maturityDate
+            self.location = location
+            self.municipality = municipality
+            self.cadastralIncome = cadastralIncome
+            self.municipalityTaxRate = municipalityTaxRate
+            self.notes = notes
+            self.priceProvider = priceProvider
+            self.priceProviderId = priceProviderId
+            self.priceProviderUrl = priceProviderUrl
+            self.priceProviderLatestUrl = priceProviderLatestUrl
+            self.priceProviderLatestPath = priceProviderLatestPath
+            self.priceProviderHistoryUrl = priceProviderHistoryUrl
+            self.priceProviderHistoryPath = priceProviderHistoryPath
+            self.priceProviderHistoryTsPath = priceProviderHistoryTsPath
+            self.priceProviderHistoryPricePath = priceProviderHistoryPricePath
+            self.priceUpdatedAt = priceUpdatedAt
+            self.isActive = isActive
+            self.showInTicker = showInTicker
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case name = "name"
+            case symbol = "symbol"
+            case assetClass = "asset_class"
+            case currency = "currency"
+            case currentPrice = "current_price"
+            case interestRate = "interest_rate"
+            case maturityDate = "maturity_date"
+            case location = "location"
+            case municipality = "municipality"
+            case cadastralIncome = "cadastral_income"
+            case municipalityTaxRate = "municipality_tax_rate"
+            case notes = "notes"
+            case priceProvider = "price_provider"
+            case priceProviderId = "price_provider_id"
+            case priceProviderUrl = "price_provider_url"
+            case priceProviderLatestUrl = "price_provider_latest_url"
+            case priceProviderLatestPath = "price_provider_latest_path"
+            case priceProviderHistoryUrl = "price_provider_history_url"
+            case priceProviderHistoryPath = "price_provider_history_path"
+            case priceProviderHistoryTsPath = "price_provider_history_ts_path"
+            case priceProviderHistoryPricePath = "price_provider_history_price_path"
+            case priceUpdatedAt = "price_updated_at"
+            case isActive = "is_active"
+            case showInTicker = "show_in_ticker"
+            case createdAt = "created_at"
+            case updatedAt = "updated_at"
+        }
+    }
+
+    public struct InvestmentCreateRequest: Codable, Equatable, Sendable {
+        public let name: String
+        public let symbol: String?
+        /// Asset class is immutable on updates; the existing value may be resubmitted.
+        public let assetClass: String
+        /// Trimmed and normalized uppercase. Omit on create for EUR; cannot be cleared.
+        public let currency: String?
+        public let currentPrice: Decimal?
+        public let interestRate: Decimal?
+        public let cadastralIncome: Decimal?
+        public let municipalityTaxRate: Decimal?
+        public let maturityDate: String?
+        public let location: String?
+        public let municipality: String?
+        public let notes: String?
+        public let priceProvider: String?
+        public let priceProviderId: String?
+        public let priceProviderUrl: String?
+        public let priceProviderLatestUrl: String?
+        public let priceProviderLatestPath: String?
+        public let priceProviderHistoryUrl: String?
+        public let priceProviderHistoryPath: String?
+        public let priceProviderHistoryTsPath: String?
+        public let priceProviderHistoryPricePath: String?
+
+        public init(name: String, symbol: String? = nil, assetClass: String, currency: String? = nil, currentPrice: Decimal? = nil, interestRate: Decimal? = nil, cadastralIncome: Decimal? = nil, municipalityTaxRate: Decimal? = nil, maturityDate: String? = nil, location: String? = nil, municipality: String? = nil, notes: String? = nil, priceProvider: String? = nil, priceProviderId: String? = nil, priceProviderUrl: String? = nil, priceProviderLatestUrl: String? = nil, priceProviderLatestPath: String? = nil, priceProviderHistoryUrl: String? = nil, priceProviderHistoryPath: String? = nil, priceProviderHistoryTsPath: String? = nil, priceProviderHistoryPricePath: String? = nil) {
+            self.name = name
+            self.symbol = symbol
+            self.assetClass = assetClass
+            self.currency = currency
+            self.currentPrice = currentPrice
+            self.interestRate = interestRate
+            self.cadastralIncome = cadastralIncome
+            self.municipalityTaxRate = municipalityTaxRate
+            self.maturityDate = maturityDate
+            self.location = location
+            self.municipality = municipality
+            self.notes = notes
+            self.priceProvider = priceProvider
+            self.priceProviderId = priceProviderId
+            self.priceProviderUrl = priceProviderUrl
+            self.priceProviderLatestUrl = priceProviderLatestUrl
+            self.priceProviderLatestPath = priceProviderLatestPath
+            self.priceProviderHistoryUrl = priceProviderHistoryUrl
+            self.priceProviderHistoryPath = priceProviderHistoryPath
+            self.priceProviderHistoryTsPath = priceProviderHistoryTsPath
+            self.priceProviderHistoryPricePath = priceProviderHistoryPricePath
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case name = "name"
+            case symbol = "symbol"
+            case assetClass = "asset_class"
+            case currency = "currency"
+            case currentPrice = "current_price"
+            case interestRate = "interest_rate"
+            case cadastralIncome = "cadastral_income"
+            case municipalityTaxRate = "municipality_tax_rate"
+            case maturityDate = "maturity_date"
+            case location = "location"
+            case municipality = "municipality"
+            case notes = "notes"
+            case priceProvider = "price_provider"
+            case priceProviderId = "price_provider_id"
+            case priceProviderUrl = "price_provider_url"
+            case priceProviderLatestUrl = "price_provider_latest_url"
+            case priceProviderLatestPath = "price_provider_latest_path"
+            case priceProviderHistoryUrl = "price_provider_history_url"
+            case priceProviderHistoryPath = "price_provider_history_path"
+            case priceProviderHistoryTsPath = "price_provider_history_ts_path"
+            case priceProviderHistoryPricePath = "price_provider_history_price_path"
+        }
+    }
+
+    public struct InvestmentList: Codable, Equatable, Sendable {
+        public let total: Int
+        public let limit: Int
+        public let offset: Int
+        public let items: [OpenAPI.Investment]
+        public let links: [OpenAPI.Link]
+
+        public init(total: Int, limit: Int, offset: Int, items: [OpenAPI.Investment], links: [OpenAPI.Link]) {
+            self.total = total
+            self.limit = limit
+            self.offset = offset
+            self.items = items
+            self.links = links
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case total = "total"
+            case limit = "limit"
+            case offset = "offset"
+            case items = "items"
+            case links = "links"
+        }
+    }
+
+    public struct InvestmentPriceHistoryData: Codable, Equatable, Sendable {
+        public let investmentId: Int
+        public let provider: String
+        public let points: [OpenAPI.InvestmentPriceHistoryPoint]
+
+        public init(investmentId: Int, provider: String, points: [OpenAPI.InvestmentPriceHistoryPoint]) {
+            self.investmentId = investmentId
+            self.provider = provider
+            self.points = points
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case investmentId = "investment_id"
+            case provider = "provider"
+            case points = "points"
+        }
+    }
+
+    public struct InvestmentPriceHistoryPoint: Codable, Equatable, Sendable {
+        public let timestampMs: Decimal
+        public let price: Decimal
+
+        public init(timestampMs: Decimal, price: Decimal) {
+            self.timestampMs = timestampMs
+            self.price = price
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case timestampMs = "timestampMs"
+            case price = "price"
+        }
+    }
+
+    public struct InvestmentUpdateRequest: Codable, Equatable, Sendable {
+        public let name: String?
+        public let symbol: String?
+        /// Asset class is immutable on updates; the existing value may be resubmitted.
+        public let assetClass: OpenAPI.AssetClass?
+        /// Trimmed and normalized uppercase. Omit on create for EUR; cannot be cleared.
+        public let currency: String?
+        public let currentPrice: Decimal?
+        public let interestRate: Decimal?
+        public let cadastralIncome: Decimal?
+        public let municipalityTaxRate: Decimal?
+        public let maturityDate: String?
+        public let location: String?
+        public let municipality: String?
+        public let notes: String?
+        public let priceProvider: String?
+        public let priceProviderId: String?
+        public let priceProviderUrl: String?
+        public let priceProviderLatestUrl: String?
+        public let priceProviderLatestPath: String?
+        public let priceProviderHistoryUrl: String?
+        public let priceProviderHistoryPath: String?
+        public let priceProviderHistoryTsPath: String?
+        public let priceProviderHistoryPricePath: String?
+        public let isActive: Bool?
+        public let showInTicker: Bool?
+        public let priceUpdatedAt: String?
+
+        public init(name: String? = nil, symbol: String? = nil, assetClass: OpenAPI.AssetClass? = nil, currency: String? = nil, currentPrice: Decimal? = nil, interestRate: Decimal? = nil, cadastralIncome: Decimal? = nil, municipalityTaxRate: Decimal? = nil, maturityDate: String? = nil, location: String? = nil, municipality: String? = nil, notes: String? = nil, priceProvider: String? = nil, priceProviderId: String? = nil, priceProviderUrl: String? = nil, priceProviderLatestUrl: String? = nil, priceProviderLatestPath: String? = nil, priceProviderHistoryUrl: String? = nil, priceProviderHistoryPath: String? = nil, priceProviderHistoryTsPath: String? = nil, priceProviderHistoryPricePath: String? = nil, isActive: Bool? = nil, showInTicker: Bool? = nil, priceUpdatedAt: String? = nil) {
+            self.name = name
+            self.symbol = symbol
+            self.assetClass = assetClass
+            self.currency = currency
+            self.currentPrice = currentPrice
+            self.interestRate = interestRate
+            self.cadastralIncome = cadastralIncome
+            self.municipalityTaxRate = municipalityTaxRate
+            self.maturityDate = maturityDate
+            self.location = location
+            self.municipality = municipality
+            self.notes = notes
+            self.priceProvider = priceProvider
+            self.priceProviderId = priceProviderId
+            self.priceProviderUrl = priceProviderUrl
+            self.priceProviderLatestUrl = priceProviderLatestUrl
+            self.priceProviderLatestPath = priceProviderLatestPath
+            self.priceProviderHistoryUrl = priceProviderHistoryUrl
+            self.priceProviderHistoryPath = priceProviderHistoryPath
+            self.priceProviderHistoryTsPath = priceProviderHistoryTsPath
+            self.priceProviderHistoryPricePath = priceProviderHistoryPricePath
+            self.isActive = isActive
+            self.showInTicker = showInTicker
+            self.priceUpdatedAt = priceUpdatedAt
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case name = "name"
+            case symbol = "symbol"
+            case assetClass = "asset_class"
+            case currency = "currency"
+            case currentPrice = "current_price"
+            case interestRate = "interest_rate"
+            case cadastralIncome = "cadastral_income"
+            case municipalityTaxRate = "municipality_tax_rate"
+            case maturityDate = "maturity_date"
+            case location = "location"
+            case municipality = "municipality"
+            case notes = "notes"
+            case priceProvider = "price_provider"
+            case priceProviderId = "price_provider_id"
+            case priceProviderUrl = "price_provider_url"
+            case priceProviderLatestUrl = "price_provider_latest_url"
+            case priceProviderLatestPath = "price_provider_latest_path"
+            case priceProviderHistoryUrl = "price_provider_history_url"
+            case priceProviderHistoryPath = "price_provider_history_path"
+            case priceProviderHistoryTsPath = "price_provider_history_ts_path"
+            case priceProviderHistoryPricePath = "price_provider_history_price_path"
+            case isActive = "is_active"
+            case showInTicker = "show_in_ticker"
+            case priceUpdatedAt = "price_updated_at"
+        }
+    }
+
     public struct Link: Codable, Equatable, Sendable {
         public let rel: String
         public let href: String
@@ -981,6 +4570,305 @@ extension OpenAPI {
             case href = "href"
             case method = "method"
             case title = "title"
+        }
+    }
+
+    public struct MarketNewsData: Codable, Equatable, Sendable {
+        public let items: [OpenAPI.MarketNewsItem]
+        public let total: Int
+
+        public init(items: [OpenAPI.MarketNewsItem], total: Int) {
+            self.items = items
+            self.total = total
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case items = "items"
+            case total = "total"
+        }
+    }
+
+    public struct MarketNewsItem: Codable, Equatable, Sendable {
+        public let title: String?
+        public let link: String?
+        public let publisher: String?
+        public let publishedAt: Decimal?
+        public let thumbnail: String?
+        public let relatedSymbols: [String]
+
+        public init(title: String? = nil, link: String? = nil, publisher: String? = nil, publishedAt: Decimal? = nil, thumbnail: String? = nil, relatedSymbols: [String]) {
+            self.title = title
+            self.link = link
+            self.publisher = publisher
+            self.publishedAt = publishedAt
+            self.thumbnail = thumbnail
+            self.relatedSymbols = relatedSymbols
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case title = "title"
+            case link = "link"
+            case publisher = "publisher"
+            case publishedAt = "publishedAt"
+            case thumbnail = "thumbnail"
+            case relatedSymbols = "relatedSymbols"
+        }
+    }
+
+    public struct MarketQuoteData: Codable, Equatable, Sendable {
+        public let items: [OpenAPI.MarketQuoteItem]
+        public let total: Int
+
+        public init(items: [OpenAPI.MarketQuoteItem], total: Int) {
+            self.items = items
+            self.total = total
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case items = "items"
+            case total = "total"
+        }
+    }
+
+    public struct MarketQuoteItem: Codable, Equatable, Sendable {
+        public let symbol: String
+        public let currency: String
+        public let name: String?
+        public let exchange: String?
+        public let type: String?
+        public let price: Decimal?
+        public let change: Decimal?
+        public let changePercent: Decimal?
+        public let open: Decimal?
+        public let dayHigh: Decimal?
+        public let dayLow: Decimal?
+        public let prevClose: Decimal?
+        public let volume: Decimal?
+        public let avgVolume: Decimal?
+        public let high52w: Decimal?
+        public let low52w: Decimal?
+        public let analystConsensus: OpenAPI.ResearchAnalystConsensus?
+        public let recentAnalystActions: [JSONValue]?
+
+        public init(symbol: String, currency: String, name: String? = nil, exchange: String? = nil, type: String? = nil, price: Decimal? = nil, change: Decimal? = nil, changePercent: Decimal? = nil, open: Decimal? = nil, dayHigh: Decimal? = nil, dayLow: Decimal? = nil, prevClose: Decimal? = nil, volume: Decimal? = nil, avgVolume: Decimal? = nil, high52w: Decimal? = nil, low52w: Decimal? = nil, analystConsensus: OpenAPI.ResearchAnalystConsensus? = nil, recentAnalystActions: [JSONValue]? = nil) {
+            self.symbol = symbol
+            self.currency = currency
+            self.name = name
+            self.exchange = exchange
+            self.type = type
+            self.price = price
+            self.change = change
+            self.changePercent = changePercent
+            self.open = open
+            self.dayHigh = dayHigh
+            self.dayLow = dayLow
+            self.prevClose = prevClose
+            self.volume = volume
+            self.avgVolume = avgVolume
+            self.high52w = high52w
+            self.low52w = low52w
+            self.analystConsensus = analystConsensus
+            self.recentAnalystActions = recentAnalystActions
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case symbol = "symbol"
+            case currency = "currency"
+            case name = "name"
+            case exchange = "exchange"
+            case type = "type"
+            case price = "price"
+            case change = "change"
+            case changePercent = "changePercent"
+            case open = "open"
+            case dayHigh = "dayHigh"
+            case dayLow = "dayLow"
+            case prevClose = "prevClose"
+            case volume = "volume"
+            case avgVolume = "avgVolume"
+            case high52w = "high52w"
+            case low52w = "low52w"
+            case analystConsensus = "analystConsensus"
+            case recentAnalystActions = "recentAnalystActions"
+        }
+    }
+
+    public struct MarketSearchData: Codable, Equatable, Sendable {
+        public let items: [OpenAPI.MarketSearchResult]
+
+        public init(items: [OpenAPI.MarketSearchResult]) {
+            self.items = items
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case items = "items"
+        }
+    }
+
+    public struct MarketSearchResult: Codable, Equatable, Sendable {
+        public let symbol: String
+        public let name: String
+        public let exchange: String
+        public let currency: String?
+        public let type: String
+
+        public init(symbol: String, name: String, exchange: String, currency: String? = nil, type: String) {
+            self.symbol = symbol
+            self.name = name
+            self.exchange = exchange
+            self.currency = currency
+            self.type = type
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case symbol = "symbol"
+            case name = "name"
+            case exchange = "exchange"
+            case currency = "currency"
+            case type = "type"
+        }
+    }
+
+    public struct NetWorthResponse: Codable, Equatable, Sendable {
+        public let current: Current
+        public let monthlyChange: Decimal
+        public let monthlyChangePercent: Decimal
+        public let snapshots: [OpenAPI.NetWorthSnapshot]
+        public let snapshotsTotal: Int?
+        public let snapshotsLimit: Int?
+        public let snapshotsOffset: Int?
+
+        public init(current: Current, monthlyChange: Decimal, monthlyChangePercent: Decimal, snapshots: [OpenAPI.NetWorthSnapshot], snapshotsTotal: Int? = nil, snapshotsLimit: Int? = nil, snapshotsOffset: Int? = nil) {
+            self.current = current
+            self.monthlyChange = monthlyChange
+            self.monthlyChangePercent = monthlyChangePercent
+            self.snapshots = snapshots
+            self.snapshotsTotal = snapshotsTotal
+            self.snapshotsLimit = snapshotsLimit
+            self.snapshotsOffset = snapshotsOffset
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case current = "current"
+            case monthlyChange = "monthlyChange"
+            case monthlyChangePercent = "monthlyChangePercent"
+            case snapshots = "snapshots"
+            case snapshotsTotal = "snapshotsTotal"
+            case snapshotsLimit = "snapshotsLimit"
+            case snapshotsOffset = "snapshotsOffset"
+        }
+
+        public struct Current: Codable, Equatable, Sendable {
+            public let liquid: Decimal
+            public let liabilities: Decimal
+            public let investments: Decimal
+            public let netWorth: Decimal
+            public let currency: String
+
+            public init(liquid: Decimal, liabilities: Decimal, investments: Decimal, netWorth: Decimal, currency: String) {
+                self.liquid = liquid
+                self.liabilities = liabilities
+                self.investments = investments
+                self.netWorth = netWorth
+                self.currency = currency
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case liquid = "liquid"
+                case liabilities = "liabilities"
+                case investments = "investments"
+                case netWorth = "netWorth"
+                case currency = "currency"
+            }
+        }
+    }
+
+    public struct NetWorthSnapshot: Codable, Equatable, Sendable {
+        public let date: String
+        public let liquid: Decimal
+        /// Σ liability-account balances (negative); split out of liquid so debt is not counted as a
+        /// liquid asset (ADR-092).
+        public let liabilities: Decimal
+        public let investments: Decimal
+        public let netWorth: Decimal
+
+        public init(date: String, liquid: Decimal, liabilities: Decimal, investments: Decimal, netWorth: Decimal) {
+            self.date = date
+            self.liquid = liquid
+            self.liabilities = liabilities
+            self.investments = investments
+            self.netWorth = netWorth
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case date = "date"
+            case liquid = "liquid"
+            case liabilities = "liabilities"
+            case investments = "investments"
+            case netWorth = "netWorth"
+        }
+    }
+
+    public struct OllamaModel: Codable, Equatable, Sendable {
+        public let name: String
+        public let size: Int?
+        public let family: String?
+        public let parameterSize: String?
+        public let quantization: String?
+        public let modifiedAt: String?
+
+        public init(name: String, size: Int? = nil, family: String? = nil, parameterSize: String? = nil, quantization: String? = nil, modifiedAt: String? = nil) {
+            self.name = name
+            self.size = size
+            self.family = family
+            self.parameterSize = parameterSize
+            self.quantization = quantization
+            self.modifiedAt = modifiedAt
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case name = "name"
+            case size = "size"
+            case family = "family"
+            case parameterSize = "parameterSize"
+            case quantization = "quantization"
+            case modifiedAt = "modifiedAt"
+        }
+    }
+
+    public struct OllamaStatus: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let baseUrl: String
+        public let displayUrl: String
+        public let modelCount: Int
+        public let error: String?
+        public let code: String?
+        public let hint: String?
+        public let defaultModel: String
+        public let enabled: Bool
+
+        public init(ok: Bool, baseUrl: String, displayUrl: String, modelCount: Int, error: String? = nil, code: String? = nil, hint: String? = nil, defaultModel: String, enabled: Bool) {
+            self.ok = ok
+            self.baseUrl = baseUrl
+            self.displayUrl = displayUrl
+            self.modelCount = modelCount
+            self.error = error
+            self.code = code
+            self.hint = hint
+            self.defaultModel = defaultModel
+            self.enabled = enabled
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case baseUrl = "baseUrl"
+            case displayUrl = "displayUrl"
+            case modelCount = "modelCount"
+            case error = "error"
+            case code = "code"
+            case hint = "hint"
+            case defaultModel = "defaultModel"
+            case enabled = "enabled"
         }
     }
 
@@ -1317,6 +5205,819 @@ extension OpenAPI {
         }
     }
 
+    public struct PortfolioExposure: Codable, Equatable, Sendable {
+        public let currency: String
+        public let computedAt: String
+        public let totalValue: Decimal
+        public let uncoveredValue: Decimal
+        public let uncoveredWeightPercent: Decimal
+        public let coveredCashValue: Decimal
+        public let coveredCashWeightPercent: Decimal
+        public let fundSources: [OpenAPI.PortfolioExposureFundSource]
+        public let issuer: OpenAPI.PortfolioExposureDimension
+        public let sector: OpenAPI.PortfolioExposureDimension
+        public let issuerCountry: OpenAPI.PortfolioExposureDimension
+        public let warnings: [JSONValue]
+        public let scopeNotes: [String]
+
+        public init(currency: String, computedAt: String, totalValue: Decimal, uncoveredValue: Decimal, uncoveredWeightPercent: Decimal, coveredCashValue: Decimal, coveredCashWeightPercent: Decimal, fundSources: [OpenAPI.PortfolioExposureFundSource], issuer: OpenAPI.PortfolioExposureDimension, sector: OpenAPI.PortfolioExposureDimension, issuerCountry: OpenAPI.PortfolioExposureDimension, warnings: [JSONValue], scopeNotes: [String]) {
+            self.currency = currency
+            self.computedAt = computedAt
+            self.totalValue = totalValue
+            self.uncoveredValue = uncoveredValue
+            self.uncoveredWeightPercent = uncoveredWeightPercent
+            self.coveredCashValue = coveredCashValue
+            self.coveredCashWeightPercent = coveredCashWeightPercent
+            self.fundSources = fundSources
+            self.issuer = issuer
+            self.sector = sector
+            self.issuerCountry = issuerCountry
+            self.warnings = warnings
+            self.scopeNotes = scopeNotes
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case currency = "currency"
+            case computedAt = "computedAt"
+            case totalValue = "totalValue"
+            case uncoveredValue = "uncoveredValue"
+            case uncoveredWeightPercent = "uncoveredWeightPercent"
+            case coveredCashValue = "coveredCashValue"
+            case coveredCashWeightPercent = "coveredCashWeightPercent"
+            case fundSources = "fundSources"
+            case issuer = "issuer"
+            case sector = "sector"
+            case issuerCountry = "issuerCountry"
+            case warnings = "warnings"
+            case scopeNotes = "scopeNotes"
+        }
+    }
+
+    public struct PortfolioExposureBundle: Codable, Equatable, Sendable {
+        public let classifications: [OpenAPI.PortfolioExposureClassification]
+        public let fundDocuments: [FundDocumentsItem]
+
+        public init(classifications: [OpenAPI.PortfolioExposureClassification], fundDocuments: [FundDocumentsItem]) {
+            self.classifications = classifications
+            self.fundDocuments = fundDocuments
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case classifications = "classifications"
+            case fundDocuments = "fundDocuments"
+        }
+
+        public struct FundDocumentsItem: Codable, Equatable, Sendable {
+            public let investmentId: Int
+            public let shareClassIdentifier: OpenAPI.PortfolioSecurityIdentifier
+            public let document: OpenAPI.FundHoldingsDocument
+
+            public init(investmentId: Int, shareClassIdentifier: OpenAPI.PortfolioSecurityIdentifier, document: OpenAPI.FundHoldingsDocument) {
+                self.investmentId = investmentId
+                self.shareClassIdentifier = shareClassIdentifier
+                self.document = document
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case investmentId = "investmentId"
+                case shareClassIdentifier = "shareClassIdentifier"
+                case document = "document"
+            }
+        }
+    }
+
+    /// Exactly one of investmentId or identifier must be present.
+    public struct PortfolioExposureClassification: Codable, Equatable, Sendable {
+        public let investmentId: Int?
+        public let identifier: OpenAPI.PortfolioSecurityIdentifier?
+        public let issuerId: String
+        public let issuerName: String
+        public let sector: String?
+        public let issuerCountryCode: String?
+        public let sourceLabel: String
+
+        public init(investmentId: Int? = nil, identifier: OpenAPI.PortfolioSecurityIdentifier? = nil, issuerId: String, issuerName: String, sector: String? = nil, issuerCountryCode: String? = nil, sourceLabel: String) {
+            self.investmentId = investmentId
+            self.identifier = identifier
+            self.issuerId = issuerId
+            self.issuerName = issuerName
+            self.sector = sector
+            self.issuerCountryCode = issuerCountryCode
+            self.sourceLabel = sourceLabel
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case investmentId = "investmentId"
+            case identifier = "identifier"
+            case issuerId = "issuerId"
+            case issuerName = "issuerName"
+            case sector = "sector"
+            case issuerCountryCode = "issuerCountryCode"
+            case sourceLabel = "sourceLabel"
+        }
+    }
+
+    public struct PortfolioExposureContribution: Codable, Equatable, Sendable {
+        public let sourceType: String
+        public let investmentId: Int
+        public let investmentName: String
+        public let sourceFundName: String?
+        public let amount: Decimal
+        public let sourceAsOfDate: String?
+        public let stale: Bool
+
+        public init(sourceType: String, investmentId: Int, investmentName: String, sourceFundName: String? = nil, amount: Decimal, sourceAsOfDate: String? = nil, stale: Bool) {
+            self.sourceType = sourceType
+            self.investmentId = investmentId
+            self.investmentName = investmentName
+            self.sourceFundName = sourceFundName
+            self.amount = amount
+            self.sourceAsOfDate = sourceAsOfDate
+            self.stale = stale
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case sourceType = "sourceType"
+            case investmentId = "investmentId"
+            case investmentName = "investmentName"
+            case sourceFundName = "sourceFundName"
+            case amount = "amount"
+            case sourceAsOfDate = "sourceAsOfDate"
+            case stale = "stale"
+        }
+    }
+
+    public struct PortfolioExposureDimension: Codable, Equatable, Sendable {
+        public let rows: [RowsItem]
+        public let classifiedValue: Decimal
+        public let classifiedWeightPercent: Decimal
+        public let unclassifiedValue: Decimal
+        public let unclassifiedWeightPercent: Decimal
+
+        public init(rows: [RowsItem], classifiedValue: Decimal, classifiedWeightPercent: Decimal, unclassifiedValue: Decimal, unclassifiedWeightPercent: Decimal) {
+            self.rows = rows
+            self.classifiedValue = classifiedValue
+            self.classifiedWeightPercent = classifiedWeightPercent
+            self.unclassifiedValue = unclassifiedValue
+            self.unclassifiedWeightPercent = unclassifiedWeightPercent
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case rows = "rows"
+            case classifiedValue = "classifiedValue"
+            case classifiedWeightPercent = "classifiedWeightPercent"
+            case unclassifiedValue = "unclassifiedValue"
+            case unclassifiedWeightPercent = "unclassifiedWeightPercent"
+        }
+
+        public struct RowsItem: Codable, Equatable, Sendable {
+            public let id: String
+            public let label: String
+            public let amount: Decimal
+            public let weightPercent: Decimal
+            public let contributions: [OpenAPI.PortfolioExposureContribution]
+
+            public init(id: String, label: String, amount: Decimal, weightPercent: Decimal, contributions: [OpenAPI.PortfolioExposureContribution]) {
+                self.id = id
+                self.label = label
+                self.amount = amount
+                self.weightPercent = weightPercent
+                self.contributions = contributions
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case id = "id"
+                case label = "label"
+                case amount = "amount"
+                case weightPercent = "weightPercent"
+                case contributions = "contributions"
+            }
+        }
+    }
+
+    public struct PortfolioExposureFundSource: Codable, Equatable, Sendable {
+        public let investmentId: Int
+        public let investmentName: String
+        public let asOfDate: String
+        public let evaluatedAt: String
+        public let ageDays: Int
+        public let maximumAgeDays: Int
+        public let stale: Bool
+        public let coverageStatus: String
+
+        public init(investmentId: Int, investmentName: String, asOfDate: String, evaluatedAt: String, ageDays: Int, maximumAgeDays: Int, stale: Bool, coverageStatus: String) {
+            self.investmentId = investmentId
+            self.investmentName = investmentName
+            self.asOfDate = asOfDate
+            self.evaluatedAt = evaluatedAt
+            self.ageDays = ageDays
+            self.maximumAgeDays = maximumAgeDays
+            self.stale = stale
+            self.coverageStatus = coverageStatus
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case investmentId = "investmentId"
+            case investmentName = "investmentName"
+            case asOfDate = "asOfDate"
+            case evaluatedAt = "evaluatedAt"
+            case ageDays = "ageDays"
+            case maximumAgeDays = "maximumAgeDays"
+            case stale = "stale"
+            case coverageStatus = "coverageStatus"
+        }
+    }
+
+    public struct PortfolioImportBatch: Codable, Equatable, Sendable {
+        public let id: String
+        public let adapterName: String
+        public let sourceFilename: String?
+        public let sourceSizeBytes: Int?
+        public let status: String
+        public let rowsTotal: Int
+        public let rowsImported: Int
+        public let rowsDuplicate: Int
+        public let rowsError: Int
+        public let errorSummary: String?
+        public let startedAt: String
+        public let completedAt: String?
+
+        public init(id: String, adapterName: String, sourceFilename: String? = nil, sourceSizeBytes: Int? = nil, status: String, rowsTotal: Int, rowsImported: Int, rowsDuplicate: Int, rowsError: Int, errorSummary: String? = nil, startedAt: String, completedAt: String? = nil) {
+            self.id = id
+            self.adapterName = adapterName
+            self.sourceFilename = sourceFilename
+            self.sourceSizeBytes = sourceSizeBytes
+            self.status = status
+            self.rowsTotal = rowsTotal
+            self.rowsImported = rowsImported
+            self.rowsDuplicate = rowsDuplicate
+            self.rowsError = rowsError
+            self.errorSummary = errorSummary
+            self.startedAt = startedAt
+            self.completedAt = completedAt
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case adapterName = "adapter_name"
+            case sourceFilename = "source_filename"
+            case sourceSizeBytes = "source_size_bytes"
+            case status = "status"
+            case rowsTotal = "rows_total"
+            case rowsImported = "rows_imported"
+            case rowsDuplicate = "rows_duplicate"
+            case rowsError = "rows_error"
+            case errorSummary = "error_summary"
+            case startedAt = "started_at"
+            case completedAt = "completed_at"
+        }
+    }
+
+    public struct PortfolioImportPreviewData: Codable, Equatable, Sendable {
+        public let batchId: Int
+        public let accountId: Int?
+        public let accountName: String?
+        /// True only when account_id still names an active portfolio account.
+        public let accountValid: Bool
+        public let groups: [JSONValue]
+        public let totals: [String: Int]
+
+        public init(batchId: Int, accountId: Int? = nil, accountName: String? = nil, accountValid: Bool, groups: [JSONValue], totals: [String: Int]) {
+            self.batchId = batchId
+            self.accountId = accountId
+            self.accountName = accountName
+            self.accountValid = accountValid
+            self.groups = groups
+            self.totals = totals
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case batchId = "batch_id"
+            case accountId = "account_id"
+            case accountName = "account_name"
+            case accountValid = "account_valid"
+            case groups = "groups"
+            case totals = "totals"
+        }
+    }
+
+    public struct PortfolioImportPreviewEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let data: OpenAPI.PortfolioImportPreviewData?
+        public let error: OpenAPI.ErrorPayload?
+
+        public init(ok: Bool, data: OpenAPI.PortfolioImportPreviewData? = nil, error: OpenAPI.ErrorPayload? = nil) {
+            self.ok = ok
+            self.data = data
+            self.error = error
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case data = "data"
+            case error = "error"
+        }
+    }
+
+    /// Present only in record_cash_only on every cash, duplicate or settled action. The complete
+    /// original source and all cash balance chains are proved before selection; every group member
+    /// selects together. memberCount includes new and repeated cash actions, and equals selected group
+    /// action count. Event identities are unique, and fileHash is common within a source batch/group.
+    /// Repeats identify a positive existingTransactionId and create no cash again. Proof is bound to
+    /// the reviewed fingerprint and confirmed own-account funding policy; it does not authorize
+    /// portfolio or custody actions.
+    public struct PortfolioImportReconciliationCashProof: Codable, Equatable, Sendable {
+        public let kind: String
+        public let groupKey: String
+        public let eventKey: String
+        public let eventKind: String
+        public let fileHash: String
+        public let memberCount: Int
+        /// One ledger component
+        public let componentCount: Int
+
+        public init(kind: String, groupKey: String, eventKey: String, eventKind: String, fileHash: String, memberCount: Int, componentCount: Int) {
+            self.kind = kind
+            self.groupKey = groupKey
+            self.eventKey = eventKey
+            self.eventKind = eventKind
+            self.fileHash = fileHash
+            self.memberCount = memberCount
+            self.componentCount = componentCount
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case kind = "kind"
+            case groupKey = "groupKey"
+            case eventKey = "eventKey"
+            case eventKind = "eventKind"
+            case fileHash = "fileHash"
+            case memberCount = "memberCount"
+            case componentCount = "componentCount"
+        }
+    }
+
+    /// Signed cash ledger values for a proved source event. Required for a new cash action, optional on
+    /// proved duplicate/settled repeats. Trade quotes and confirmed own-account funding use
+    /// isTransfer=true; card expenses use false. Every row has brokerage origin and no invented peer. A
+    /// separately quoted own-account withdrawal fee is retained as a second negative expense component;
+    /// the transfer component is net of that fee. Card spending already includes its quoted fee and
+    /// creates no extra fee row.
+    public struct PortfolioImportReconciliationCashValues: Codable, Equatable, Sendable {
+        public let date: String
+        public let amount: String
+        public let currency: String
+        public let accountId: Int
+        public let isTransfer: Bool
+        public let transferSource: String
+        public let transferPeerId: Int?
+
+        public init(date: String, amount: String, currency: String, accountId: Int, isTransfer: Bool, transferSource: String, transferPeerId: Int? = nil) {
+            self.date = date
+            self.amount = amount
+            self.currency = currency
+            self.accountId = accountId
+            self.isTransfer = isTransfer
+            self.transferSource = transferSource
+            self.transferPeerId = transferPeerId
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case date = "date"
+            case amount = "amount"
+            case currency = "currency"
+            case accountId = "accountId"
+            case isTransfer = "isTransfer"
+            case transferSource = "transferSource"
+            case transferPeerId = "transferPeerId"
+        }
+    }
+
+    public struct PortfolioImportReconciliationCommitResult: Codable, Equatable, Sendable {
+        public let imported: Int
+        public let duplicates: Int
+        public let adopted: Int
+        public let repaired: Int
+        public let errors: Int
+        /// Additive aggregate and batch subtotal of newly recorded cash ledger components. In full
+        /// history it is a subset of imported alongside recordedIncome and ordinary records. In
+        /// record_cash_only it equals imported, includes separately quoted withdrawal fee expenses, and
+        /// adopted/repaired/recordedIncome are zero; summary.cash counts source actions and may be
+        /// smaller. Repeated settlement records no new cash.
+        public let recordedCash: Int?
+        /// Additive aggregate and batch subtotal of newly recorded paired canonical income rows. In
+        /// full history it is a subset of imported; the paired Gift is recorded or adopted once in the
+        /// same commit. In record_in_kind_income_only it equals imported and no units/acquisitions are
+        /// created; adopted/repaired are zero. Repeats may settle duplicates but recordedIncome is
+        /// zero. Missing subtotals remain valid for older full responses.
+        public let recordedIncome: Int?
+        public let reconciliationScope: String?
+        /// Excluded unsettled source rows after selected actions; per-batch counts sum to the session
+        /// total.
+        public let pending: Int?
+        /// True exactly when pending is zero.
+        public let complete: Bool?
+        /// Pending rows grouped by staged event kind, including dividend, gift, sell, cash,
+        /// asset_transfer, asset_adjustment, account_internal and unsupported when present. Values sum
+        /// to pending.
+        public let deferredCounts: [String: Int]?
+        /// Present for every bounded scope; server-derived staging IDs, never caller-selectable.
+        /// Already settled actions need not add to duplicates.
+        public let selectedRowIds: [Int]?
+        public let batches: [BatchesItem]
+
+        public init(imported: Int, duplicates: Int, adopted: Int, repaired: Int, errors: Int, recordedCash: Int? = nil, recordedIncome: Int? = nil, reconciliationScope: String? = nil, pending: Int? = nil, complete: Bool? = nil, deferredCounts: [String: Int]? = nil, selectedRowIds: [Int]? = nil, batches: [BatchesItem]) {
+            self.imported = imported
+            self.duplicates = duplicates
+            self.adopted = adopted
+            self.repaired = repaired
+            self.errors = errors
+            self.recordedCash = recordedCash
+            self.recordedIncome = recordedIncome
+            self.reconciliationScope = reconciliationScope
+            self.pending = pending
+            self.complete = complete
+            self.deferredCounts = deferredCounts
+            self.selectedRowIds = selectedRowIds
+            self.batches = batches
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case imported = "imported"
+            case duplicates = "duplicates"
+            case adopted = "adopted"
+            case repaired = "repaired"
+            case errors = "errors"
+            case recordedCash = "recordedCash"
+            case recordedIncome = "recordedIncome"
+            case reconciliationScope = "reconciliationScope"
+            case pending = "pending"
+            case complete = "complete"
+            case deferredCounts = "deferredCounts"
+            case selectedRowIds = "selectedRowIds"
+            case batches = "batches"
+        }
+
+        public struct BatchesItem: Codable, Equatable, Sendable {
+            public let imported: Int
+            public let duplicates: Int
+            public let adopted: Int
+            public let repaired: Int
+            public let errors: Int
+            /// Additive aggregate and batch subtotal of newly recorded cash ledger components. In full
+            /// history it is a subset of imported alongside recordedIncome and ordinary records. In
+            /// record_cash_only it equals imported, includes separately quoted withdrawal fee expenses, and
+            /// adopted/repaired/recordedIncome are zero; summary.cash counts source actions and may be
+            /// smaller. Repeated settlement records no new cash.
+            public let recordedCash: Int?
+            /// Additive aggregate and batch subtotal of newly recorded paired canonical income rows. In
+            /// full history it is a subset of imported; the paired Gift is recorded or adopted once in the
+            /// same commit. In record_in_kind_income_only it equals imported and no units/acquisitions are
+            /// created; adopted/repaired are zero. Repeats may settle duplicates but recordedIncome is
+            /// zero. Missing subtotals remain valid for older full responses.
+            public let recordedIncome: Int?
+            public let reconciliationScope: String?
+            /// Excluded unsettled source rows after selected actions; per-batch counts sum to the session
+            /// total.
+            public let pending: Int?
+            /// True exactly when pending is zero.
+            public let complete: Bool?
+            /// Pending rows grouped by staged event kind, including dividend, gift, sell, cash,
+            /// asset_transfer, asset_adjustment, account_internal and unsupported when present. Values sum
+            /// to pending.
+            public let deferredCounts: [String: Int]?
+            public let batchId: Int
+
+            public init(imported: Int, duplicates: Int, adopted: Int, repaired: Int, errors: Int, recordedCash: Int? = nil, recordedIncome: Int? = nil, reconciliationScope: String? = nil, pending: Int? = nil, complete: Bool? = nil, deferredCounts: [String: Int]? = nil, batchId: Int) {
+                self.imported = imported
+                self.duplicates = duplicates
+                self.adopted = adopted
+                self.repaired = repaired
+                self.errors = errors
+                self.recordedCash = recordedCash
+                self.recordedIncome = recordedIncome
+                self.reconciliationScope = reconciliationScope
+                self.pending = pending
+                self.complete = complete
+                self.deferredCounts = deferredCounts
+                self.batchId = batchId
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case imported = "imported"
+                case duplicates = "duplicates"
+                case adopted = "adopted"
+                case repaired = "repaired"
+                case errors = "errors"
+                case recordedCash = "recordedCash"
+                case recordedIncome = "recordedIncome"
+                case reconciliationScope = "reconciliationScope"
+                case pending = "pending"
+                case complete = "complete"
+                case deferredCounts = "deferredCounts"
+                case batchId = "batch_id"
+            }
+        }
+    }
+
+    /// Present only on a correct_existing_only prefer_source date-only adoption of a proved closed
+    /// Kinesis yield group. Existing and source dates equal recordedDate and paymentDate respectively.
+    /// Quantities, type and all financial values are unchanged. memberCount includes unchanged yield
+    /// anchors, which need not be selected correction actions; complete group closure and atomic
+    /// selection are proved by the server and bound in the reviewed fingerprint.
+    public struct PortfolioImportReconciliationDateProof: Codable, Equatable, Sendable {
+        public let kind: String
+        public let groupKey: String
+        public let recordedDate: String
+        public let paymentDate: String
+        public let memberCount: Int
+
+        public init(kind: String, groupKey: String, recordedDate: String, paymentDate: String, memberCount: Int) {
+            self.kind = kind
+            self.groupKey = groupKey
+            self.recordedDate = recordedDate
+            self.paymentDate = paymentDate
+            self.memberCount = memberCount
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case kind = "kind"
+            case groupKey = "groupKey"
+            case recordedDate = "recordedDate"
+            case paymentDate = "paymentDate"
+            case memberCount = "memberCount"
+        }
+    }
+
+    /// Present on proved record_income, duplicate or settled paired-income actions in full history or
+    /// record_in_kind_income_only. Narrow scope requires unitTransactionId and forbids unitRowId. Full
+    /// scope requires unitRowId binding the distinct selected Gift action in the same
+    /// batch/investment/payment date. A paired Gift insert has no canonical unit ID until the same
+    /// atomic commit creates it; a paired adoption or existing Gift requires unitTransactionId, as do
+    /// repeated income actions. Repeats also identify the distinct existing income through
+    /// existingTransactionId and may omit source/existing bodies. The server proves literal zero-basis
+    /// income/units identity and immutable receipt images, binds proof into the fingerprint, and writes
+    /// income only after its unit is proved. Each income and unit identity is unique; the proof cannot
+    /// record income again or add another acquisition.
+    /// A oneOf/anyOf schema, decoded as plain JSON.
+    public typealias PortfolioImportReconciliationIncomeProof = JSONValue
+
+    public struct PortfolioImportReconciliationPlan: Codable, Equatable, Sendable {
+        public let reconciliationScope: String?
+        /// Excluded unsettled source rows after selected actions; per-batch counts sum to the session
+        /// total.
+        public let pending: Int?
+        /// True exactly when pending is zero.
+        public let complete: Bool?
+        /// Pending rows grouped by staged event kind, including dividend, gift, sell, cash,
+        /// asset_transfer, asset_adjustment, account_internal and unsupported when present. Values sum
+        /// to pending.
+        public let deferredCounts: [String: Int]?
+        public let batchIds: [Int]
+        public let adoptPolicy: String?
+        public let batchPolicies: [BatchPoliciesItem]
+        public let planFingerprint: String
+        public let ready: Bool
+        /// Full-scope reviewed actions; attachment/correction selects adopt/duplicate/settled,
+        /// record_in_kind_income_only selects record_income/duplicate/settled, and record_cash_only
+        /// selects cash/duplicate/settled only.
+        public let actions: [ActionsItem]
+        public let blockers: [JSONValue]
+        /// Counts of actions in this plan; narrow scope excludes deferred events.
+        public let summary: [String: Int]
+        /// Present for every bounded scope; exactly the distinct row IDs in selected actions, derived
+        /// by the server.
+        public let selectedRowIds: [Int]?
+        /// Present only in narrow preview; commit reports progress within batches instead.
+        public let batchProgress: [BatchProgressItem]?
+
+        public init(reconciliationScope: String? = nil, pending: Int? = nil, complete: Bool? = nil, deferredCounts: [String: Int]? = nil, batchIds: [Int], adoptPolicy: String? = nil, batchPolicies: [BatchPoliciesItem], planFingerprint: String, ready: Bool, actions: [ActionsItem], blockers: [JSONValue], summary: [String: Int], selectedRowIds: [Int]? = nil, batchProgress: [BatchProgressItem]? = nil) {
+            self.reconciliationScope = reconciliationScope
+            self.pending = pending
+            self.complete = complete
+            self.deferredCounts = deferredCounts
+            self.batchIds = batchIds
+            self.adoptPolicy = adoptPolicy
+            self.batchPolicies = batchPolicies
+            self.planFingerprint = planFingerprint
+            self.ready = ready
+            self.actions = actions
+            self.blockers = blockers
+            self.summary = summary
+            self.selectedRowIds = selectedRowIds
+            self.batchProgress = batchProgress
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case reconciliationScope = "reconciliationScope"
+            case pending = "pending"
+            case complete = "complete"
+            case deferredCounts = "deferredCounts"
+            case batchIds = "batchIds"
+            case adoptPolicy = "adoptPolicy"
+            case batchPolicies = "batchPolicies"
+            case planFingerprint = "planFingerprint"
+            case ready = "ready"
+            case actions = "actions"
+            case blockers = "blockers"
+            case summary = "summary"
+            case selectedRowIds = "selectedRowIds"
+            case batchProgress = "batchProgress"
+        }
+
+        public struct BatchPoliciesItem: Codable, Equatable, Sendable {
+            public let batchId: Int
+            public let adoptPolicy: String
+
+            public init(batchId: Int, adoptPolicy: String) {
+                self.batchId = batchId
+                self.adoptPolicy = adoptPolicy
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case batchId = "batchId"
+                case adoptPolicy = "adoptPolicy"
+            }
+        }
+
+        public struct ActionsItem: Codable, Equatable, Sendable {
+            /// Resolved investment identity; required on full paired income and its selected Gift action,
+            /// including bodyless repeats.
+            public let investmentId: Int?
+            /// Existing canonical identity for adoption or owned duplicate/settled actions. Full paired
+            /// income requires distinct existing income and unit identities on repeats.
+            public let existingTransactionId: Int?
+            /// True for proven native IBKR funding corrections. existingTransactionId identifies the cash
+            /// ledger; investmentId is null. Only amount and currency can change, retaining the original
+            /// date, notes and financial provenance.
+            public let isCash: Bool?
+            public let dateProof: OpenAPI.PortfolioImportReconciliationDateProof?
+            public let incomeProof: OpenAPI.PortfolioImportReconciliationIncomeProof?
+            public let cashProof: OpenAPI.PortfolioImportReconciliationCashProof?
+            public let cashValues: OpenAPI.PortfolioImportReconciliationCashValues?
+            /// Required on new componentCount=2 own-account withdrawals. Negative
+            /// same-date/currency/account fee expense with isTransfer=false, brokerage origin and null
+            /// peer. Main cashValues is the net withdrawal and isTransfer=true; no separate fee is invented
+            /// for card payments. Optional alongside main values on repeats.
+            public let cashFeeValues: CashFeeValues?
+            /// Required on duplicate/settled componentCount=2 repeats; a distinct existing fee transaction
+            /// whose complete after-image is guarded. Forbidden for single-component actions.
+            public let existingCashFeeTransactionId: Int?
+
+            public init(investmentId: Int? = nil, existingTransactionId: Int? = nil, isCash: Bool? = nil, dateProof: OpenAPI.PortfolioImportReconciliationDateProof? = nil, incomeProof: OpenAPI.PortfolioImportReconciliationIncomeProof? = nil, cashProof: OpenAPI.PortfolioImportReconciliationCashProof? = nil, cashValues: OpenAPI.PortfolioImportReconciliationCashValues? = nil, cashFeeValues: CashFeeValues? = nil, existingCashFeeTransactionId: Int? = nil) {
+                self.investmentId = investmentId
+                self.existingTransactionId = existingTransactionId
+                self.isCash = isCash
+                self.dateProof = dateProof
+                self.incomeProof = incomeProof
+                self.cashProof = cashProof
+                self.cashValues = cashValues
+                self.cashFeeValues = cashFeeValues
+                self.existingCashFeeTransactionId = existingCashFeeTransactionId
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case investmentId = "investmentId"
+                case existingTransactionId = "existingTransactionId"
+                case isCash = "isCash"
+                case dateProof = "dateProof"
+                case incomeProof = "incomeProof"
+                case cashProof = "cashProof"
+                case cashValues = "cashValues"
+                case cashFeeValues = "cashFeeValues"
+                case existingCashFeeTransactionId = "existingCashFeeTransactionId"
+            }
+
+            public struct CashFeeValues: Codable, Equatable, Sendable {
+                public let date: String
+                public let amount: String
+                public let currency: String
+                public let accountId: Int
+                public let isTransfer: Bool
+                public let transferSource: String
+                public let transferPeerId: Int?
+
+                public init(date: String, amount: String, currency: String, accountId: Int, isTransfer: Bool, transferSource: String, transferPeerId: Int? = nil) {
+                    self.date = date
+                    self.amount = amount
+                    self.currency = currency
+                    self.accountId = accountId
+                    self.isTransfer = isTransfer
+                    self.transferSource = transferSource
+                    self.transferPeerId = transferPeerId
+                }
+
+                enum CodingKeys: String, CodingKey {
+                    case date = "date"
+                    case amount = "amount"
+                    case currency = "currency"
+                    case accountId = "accountId"
+                    case isTransfer = "isTransfer"
+                    case transferSource = "transferSource"
+                    case transferPeerId = "transferPeerId"
+                }
+            }
+        }
+
+        public struct BatchProgressItem: Codable, Equatable, Sendable {
+            public let reconciliationScope: String?
+            /// Excluded unsettled source rows after selected actions; per-batch counts sum to the session
+            /// total.
+            public let pending: Int
+            /// True exactly when pending is zero.
+            public let complete: Bool
+            /// Pending rows grouped by staged event kind, including dividend, gift, sell, cash,
+            /// asset_transfer, asset_adjustment, account_internal and unsupported when present. Values sum
+            /// to pending.
+            public let deferredCounts: [String: Int]
+            public let batchId: Int
+
+            public init(reconciliationScope: String? = nil, pending: Int, complete: Bool, deferredCounts: [String: Int], batchId: Int) {
+                self.reconciliationScope = reconciliationScope
+                self.pending = pending
+                self.complete = complete
+                self.deferredCounts = deferredCounts
+                self.batchId = batchId
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case reconciliationScope = "reconciliationScope"
+                case pending = "pending"
+                case complete = "complete"
+                case deferredCounts = "deferredCounts"
+                case batchId = "batchId"
+            }
+        }
+    }
+
+    public struct PortfolioParserConfig: Codable, Equatable, Sendable {
+        public let id: Int
+        public let name: String
+        public let config: Config
+        public let createdAt: String?
+        public let updatedAt: String?
+
+        public init(id: Int, name: String, config: Config, createdAt: String? = nil, updatedAt: String? = nil) {
+            self.id = id
+            self.name = name
+            self.config = config
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case name = "name"
+            case config = "config"
+            case createdAt = "created_at"
+            case updatedAt = "updated_at"
+        }
+
+        public struct Config: Codable, Equatable, Sendable {
+            /// Optional active portfolio account used as the file-level broker destination.
+            public let accountId: Int?
+            /// Optional custody account receiving asset withdrawals.
+            public let transferDestinationAccountId: Int?
+            /// Optional custody account supplying incoming asset returns.
+            public let transferOriginAccountId: Int?
+            /// Optional explicit known-zero basis policy for Kinesis yield unit receipts and reversals.
+            public let yieldBasisPolicy: String?
+
+            public init(accountId: Int? = nil, transferDestinationAccountId: Int? = nil, transferOriginAccountId: Int? = nil, yieldBasisPolicy: String? = nil) {
+                self.accountId = accountId
+                self.transferDestinationAccountId = transferDestinationAccountId
+                self.transferOriginAccountId = transferOriginAccountId
+                self.yieldBasisPolicy = yieldBasisPolicy
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case accountId = "accountId"
+                case transferDestinationAccountId = "transferDestinationAccountId"
+                case transferOriginAccountId = "transferOriginAccountId"
+                case yieldBasisPolicy = "yieldBasisPolicy"
+            }
+        }
+    }
+
+    public struct PortfolioSecurityIdentifier: Codable, Equatable, Sendable {
+        public let type: String
+        public let value: String
+        /// Allowed only for ticker identifiers.
+        public let exchange: String?
+
+        public init(type: String, value: String, exchange: String? = nil) {
+            self.type = type
+            self.value = value
+            self.exchange = exchange
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case type = "type"
+            case value = "value"
+            case exchange = "exchange"
+        }
+    }
+
     public struct PortfolioSummaryByAccountItem: Codable, Equatable, Sendable {
         public let accountId: Int?
         /// Stable machine-readable identity for accountless contributions.
@@ -1358,7 +6059,15 @@ extension OpenAPI {
     public struct PortfolioSummaryData: Codable, Equatable, Sendable {
         public let currency: String
         public let computedAt: String
-        public let totals: Totals
+        /// Earliest ordinary transaction on active investments, independent of selected performance
+        /// chart period and investment creation dates. Custody/adjustment event dates and inactive
+        /// investments are excluded. Omitted when no qualifying transaction exists.
+        public let firstInvestmentDate: String?
+        public let totals: OpenAPI.PortfolioSummaryTotals
+        /// Inactive-only presentation matching the web archive's ordinary CRUD replay and current quote
+        /// FX. Supplied when active=false, separate from canonical dated-FX summaries/totals. In-kind
+        /// income remains canonical dated data; broker byAccount remains a separate canonical snapshot.
+        public let archivedPresentation: [OpenAPI.PortfolioSummaryItem]?
         public let summaries: [OpenAPI.PortfolioSummaryItem]
         public let byAccount: [OpenAPI.PortfolioSummaryByAccountItem]
         /// Imported, source-owned account fees without an instrument, converted at transaction-date
@@ -1373,10 +6082,12 @@ extension OpenAPI {
         /// remain unchanged.
         public let archivedInKindIncome: [ArchivedInKindIncomeItem]?
 
-        public init(currency: String, computedAt: String, totals: Totals, summaries: [OpenAPI.PortfolioSummaryItem], byAccount: [OpenAPI.PortfolioSummaryByAccountItem], brokerageCashFees: BrokerageCashFees? = nil, archivedInKindIncome: [ArchivedInKindIncomeItem]? = nil) {
+        public init(currency: String, computedAt: String, firstInvestmentDate: String? = nil, totals: OpenAPI.PortfolioSummaryTotals, archivedPresentation: [OpenAPI.PortfolioSummaryItem]? = nil, summaries: [OpenAPI.PortfolioSummaryItem], byAccount: [OpenAPI.PortfolioSummaryByAccountItem], brokerageCashFees: BrokerageCashFees? = nil, archivedInKindIncome: [ArchivedInKindIncomeItem]? = nil) {
             self.currency = currency
             self.computedAt = computedAt
+            self.firstInvestmentDate = firstInvestmentDate
             self.totals = totals
+            self.archivedPresentation = archivedPresentation
             self.summaries = summaries
             self.byAccount = byAccount
             self.brokerageCashFees = brokerageCashFees
@@ -1386,30 +6097,13 @@ extension OpenAPI {
         enum CodingKeys: String, CodingKey {
             case currency = "currency"
             case computedAt = "computed_at"
+            case firstInvestmentDate = "firstInvestmentDate"
             case totals = "totals"
+            case archivedPresentation = "archivedPresentation"
             case summaries = "summaries"
             case byAccount = "byAccount"
             case brokerageCashFees = "brokerageCashFees"
             case archivedInKindIncome = "archivedInKindIncome"
-        }
-
-        public struct Totals: Codable, Equatable, Sendable {
-            /// Dividend share of ordinary income summed across active holdings, at transaction-date FX.
-            /// Excludes in-kind income.
-            public let totalDividends: Decimal?
-            /// Sum of active holdings' in-kind income, excluded from ordinary income and gains. Absence in
-            /// an older response means zero.
-            public let totalInKindIncome: Decimal?
-
-            public init(totalDividends: Decimal? = nil, totalInKindIncome: Decimal? = nil) {
-                self.totalDividends = totalDividends
-                self.totalInKindIncome = totalInKindIncome
-            }
-
-            enum CodingKeys: String, CodingKey {
-                case totalDividends = "totalDividends"
-                case totalInKindIncome = "totalInKindIncome"
-            }
         }
 
         public struct BrokerageCashFees: Codable, Equatable, Sendable {
@@ -1486,6 +6180,47 @@ extension OpenAPI {
 
     public struct PortfolioSummaryItem: Codable, Equatable, Sendable {
         public let id: Int
+        public let name: String?
+        public let symbol: String?
+        public let asset_class: String?
+        public let assetClass: String?
+        public let currency: String?
+        public let originalCurrency: String?
+        public let summarySource: String?
+        public let isActive: Bool?
+        public let usedFallbackRate: Bool?
+        public let gainLossPercent: Decimal?
+        public let interestRate: Decimal?
+        /// Ordinary history count on archivedPresentation; at most 1000 as in the existing web archive.
+        public let transactionCount: Int?
+        public let currentPrice: Decimal?
+        public let currentValue: Decimal?
+        public let totalInvested: Decimal?
+        public let totalBuyCost: Decimal?
+        public let totalSellProceeds: Decimal?
+        public let totalFees: Decimal?
+        public let totalTaxes: Decimal?
+        public let totalDividends: Decimal?
+        public let totalIncome: Decimal?
+        public let avgCostBasis: Decimal?
+        public let realizedGain: Decimal?
+        public let unrealizedGain: Decimal?
+        public let totalGain: Decimal?
+        public let gainLoss: Decimal?
+        public let assetGain: Decimal?
+        public let fxGain: Decimal?
+        public let nativeCurrentValue: Decimal?
+        public let accruedInterest: Decimal?
+        public let projectedAnnualInterest: Decimal?
+        public let totalAppreciation: Decimal?
+        public let nativeCurrentPrice: Decimal?
+        public let nativeAvgCostBasis: Decimal?
+        public let unrealizedGainPercent: Decimal?
+        /// Latest ordinary rent amount displayed by the current RealEstatePage; retains its existing
+        /// raw-amount interpretation rather than applying an additional FX conversion.
+        public let estimatedMonthlyRent: Decimal?
+        public let createdAt: String?
+        public let updatedAt: String?
         /// Current units including custody fees and unit adjustments, rounded to eight decimal places.
         public let totalUnits: Decimal?
         /// Literal income already represented by acquired units, converted to the response currency.
@@ -1499,8 +6234,46 @@ extension OpenAPI {
         /// Exact current holdings and profit/loss partitions for this investment.
         public let byAccount: [OpenAPI.PortfolioSummaryByAccountItem]
 
-        public init(id: Int, totalUnits: Decimal? = nil, totalInKindIncome: Decimal? = nil, fullyAssigned: Bool, oversold: Bool, byAccount: [OpenAPI.PortfolioSummaryByAccountItem]) {
+        public init(id: Int, name: String? = nil, symbol: String? = nil, asset_class: String? = nil, assetClass: String? = nil, currency: String? = nil, originalCurrency: String? = nil, summarySource: String? = nil, isActive: Bool? = nil, usedFallbackRate: Bool? = nil, gainLossPercent: Decimal? = nil, interestRate: Decimal? = nil, transactionCount: Int? = nil, currentPrice: Decimal? = nil, currentValue: Decimal? = nil, totalInvested: Decimal? = nil, totalBuyCost: Decimal? = nil, totalSellProceeds: Decimal? = nil, totalFees: Decimal? = nil, totalTaxes: Decimal? = nil, totalDividends: Decimal? = nil, totalIncome: Decimal? = nil, avgCostBasis: Decimal? = nil, realizedGain: Decimal? = nil, unrealizedGain: Decimal? = nil, totalGain: Decimal? = nil, gainLoss: Decimal? = nil, assetGain: Decimal? = nil, fxGain: Decimal? = nil, nativeCurrentValue: Decimal? = nil, accruedInterest: Decimal? = nil, projectedAnnualInterest: Decimal? = nil, totalAppreciation: Decimal? = nil, nativeCurrentPrice: Decimal? = nil, nativeAvgCostBasis: Decimal? = nil, unrealizedGainPercent: Decimal? = nil, estimatedMonthlyRent: Decimal? = nil, createdAt: String? = nil, updatedAt: String? = nil, totalUnits: Decimal? = nil, totalInKindIncome: Decimal? = nil, fullyAssigned: Bool, oversold: Bool, byAccount: [OpenAPI.PortfolioSummaryByAccountItem]) {
             self.id = id
+            self.name = name
+            self.symbol = symbol
+            self.asset_class = asset_class
+            self.assetClass = assetClass
+            self.currency = currency
+            self.originalCurrency = originalCurrency
+            self.summarySource = summarySource
+            self.isActive = isActive
+            self.usedFallbackRate = usedFallbackRate
+            self.gainLossPercent = gainLossPercent
+            self.interestRate = interestRate
+            self.transactionCount = transactionCount
+            self.currentPrice = currentPrice
+            self.currentValue = currentValue
+            self.totalInvested = totalInvested
+            self.totalBuyCost = totalBuyCost
+            self.totalSellProceeds = totalSellProceeds
+            self.totalFees = totalFees
+            self.totalTaxes = totalTaxes
+            self.totalDividends = totalDividends
+            self.totalIncome = totalIncome
+            self.avgCostBasis = avgCostBasis
+            self.realizedGain = realizedGain
+            self.unrealizedGain = unrealizedGain
+            self.totalGain = totalGain
+            self.gainLoss = gainLoss
+            self.assetGain = assetGain
+            self.fxGain = fxGain
+            self.nativeCurrentValue = nativeCurrentValue
+            self.accruedInterest = accruedInterest
+            self.projectedAnnualInterest = projectedAnnualInterest
+            self.totalAppreciation = totalAppreciation
+            self.nativeCurrentPrice = nativeCurrentPrice
+            self.nativeAvgCostBasis = nativeAvgCostBasis
+            self.unrealizedGainPercent = unrealizedGainPercent
+            self.estimatedMonthlyRent = estimatedMonthlyRent
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
             self.totalUnits = totalUnits
             self.totalInKindIncome = totalInKindIncome
             self.fullyAssigned = fullyAssigned
@@ -1510,12 +6283,235 @@ extension OpenAPI {
 
         enum CodingKeys: String, CodingKey {
             case id = "id"
+            case name = "name"
+            case symbol = "symbol"
+            case asset_class = "asset_class"
+            case assetClass = "assetClass"
+            case currency = "currency"
+            case originalCurrency = "originalCurrency"
+            case summarySource = "summarySource"
+            case isActive = "is_active"
+            case usedFallbackRate = "usedFallbackRate"
+            case gainLossPercent = "gainLossPercent"
+            case interestRate = "interestRate"
+            case transactionCount = "transactionCount"
+            case currentPrice = "currentPrice"
+            case currentValue = "currentValue"
+            case totalInvested = "totalInvested"
+            case totalBuyCost = "totalBuyCost"
+            case totalSellProceeds = "totalSellProceeds"
+            case totalFees = "totalFees"
+            case totalTaxes = "totalTaxes"
+            case totalDividends = "totalDividends"
+            case totalIncome = "totalIncome"
+            case avgCostBasis = "avgCostBasis"
+            case realizedGain = "realizedGain"
+            case unrealizedGain = "unrealizedGain"
+            case totalGain = "totalGain"
+            case gainLoss = "gainLoss"
+            case assetGain = "assetGain"
+            case fxGain = "fxGain"
+            case nativeCurrentValue = "nativeCurrentValue"
+            case accruedInterest = "accruedInterest"
+            case projectedAnnualInterest = "projectedAnnualInterest"
+            case totalAppreciation = "totalAppreciation"
+            case nativeCurrentPrice = "nativeCurrentPrice"
+            case nativeAvgCostBasis = "nativeAvgCostBasis"
+            case unrealizedGainPercent = "unrealizedGainPercent"
+            case estimatedMonthlyRent = "estimatedMonthlyRent"
+            case createdAt = "created_at"
+            case updatedAt = "updated_at"
             case totalUnits = "totalUnits"
             case totalInKindIncome = "totalInKindIncome"
             case fullyAssigned = "fullyAssigned"
             case oversold = "oversold"
             case byAccount = "byAccount"
         }
+    }
+
+    public struct PortfolioSummaryTotals: Codable, Equatable, Sendable {
+        public let totalPortfolioValue: Decimal
+        public let totalInvested: Decimal
+        public let totalGainLoss: Decimal
+        public let totalRealizedGain: Decimal
+        public let totalUnrealizedGain: Decimal
+        public let totalGain: Decimal
+        public let totalIncome: Decimal
+        public let totalDividends: Decimal
+        public let totalInKindIncome: Decimal
+        public let totalFees: Decimal
+        public let totalTaxes: Decimal
+        public let totalAssetGain: Decimal
+        public let totalFxGain: Decimal
+        public let totalReturnPct: Decimal
+        public let usedFallbackRate: Bool
+
+        public init(totalPortfolioValue: Decimal, totalInvested: Decimal, totalGainLoss: Decimal, totalRealizedGain: Decimal, totalUnrealizedGain: Decimal, totalGain: Decimal, totalIncome: Decimal, totalDividends: Decimal, totalInKindIncome: Decimal, totalFees: Decimal, totalTaxes: Decimal, totalAssetGain: Decimal, totalFxGain: Decimal, totalReturnPct: Decimal, usedFallbackRate: Bool) {
+            self.totalPortfolioValue = totalPortfolioValue
+            self.totalInvested = totalInvested
+            self.totalGainLoss = totalGainLoss
+            self.totalRealizedGain = totalRealizedGain
+            self.totalUnrealizedGain = totalUnrealizedGain
+            self.totalGain = totalGain
+            self.totalIncome = totalIncome
+            self.totalDividends = totalDividends
+            self.totalInKindIncome = totalInKindIncome
+            self.totalFees = totalFees
+            self.totalTaxes = totalTaxes
+            self.totalAssetGain = totalAssetGain
+            self.totalFxGain = totalFxGain
+            self.totalReturnPct = totalReturnPct
+            self.usedFallbackRate = usedFallbackRate
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case totalPortfolioValue = "totalPortfolioValue"
+            case totalInvested = "totalInvested"
+            case totalGainLoss = "totalGainLoss"
+            case totalRealizedGain = "totalRealizedGain"
+            case totalUnrealizedGain = "totalUnrealizedGain"
+            case totalGain = "totalGain"
+            case totalIncome = "totalIncome"
+            case totalDividends = "totalDividends"
+            case totalInKindIncome = "totalInKindIncome"
+            case totalFees = "totalFees"
+            case totalTaxes = "totalTaxes"
+            case totalAssetGain = "totalAssetGain"
+            case totalFxGain = "totalFxGain"
+            case totalReturnPct = "totalReturnPct"
+            case usedFallbackRate = "usedFallbackRate"
+        }
+    }
+
+    public struct PortfolioTransaction: Codable, Equatable, Sendable {
+        public let id: Int
+        public let investmentId: Int
+        public let type: OpenAPI.PortfolioTxnType
+        public let date: String
+        public let amount: Decimal
+        public let units: Decimal?
+        public let pricePerUnit: Decimal?
+        public let fees: Decimal?
+        public let taxes: Decimal?
+        /// Whether a dividend transaction's amount is before or after withholding tax. Unknown for
+        /// legacy or unclassified rows and ignored for non-dividend transactions.
+        public let dividendAmountConvention: String
+        /// Read-only accounting role. included_in_units is allowed only for dividends whose literal
+        /// income is already represented by proved acquired units. Amount and source facts are
+        /// retained, but ordinary income and gain totals exclude the row. The role does not classify
+        /// legal tax treatment. Older responses and immutable snapshots without this field mean
+        /// standard; explicit role setters are rejected by create/update endpoints.
+        public let incomeRecognitionRole: String?
+        public let currency: String
+        public let fxRateToEur: Decimal?
+        /// Owning account for the lot (ADR-091); null = unassigned/global
+        public let accountId: Int?
+        /// Portfolio-import batch that created the row. PostgreSQL BIGINT is serialized by
+        /// node-postgres as a string; null means the transaction was created manually or predates batch
+        /// attribution.
+        public let importBatchId: String?
+        public let note: String?
+        public let isRecurring: Bool
+        public let recurrenceInterval: OpenAPI.RecurrenceInterval?
+        public let recurrenceEndDate: String?
+        public let createdAt: String
+        public let updatedAt: String
+
+        public init(id: Int, investmentId: Int, type: OpenAPI.PortfolioTxnType, date: String, amount: Decimal, units: Decimal? = nil, pricePerUnit: Decimal? = nil, fees: Decimal? = nil, taxes: Decimal? = nil, dividendAmountConvention: String, incomeRecognitionRole: String? = nil, currency: String, fxRateToEur: Decimal? = nil, accountId: Int? = nil, importBatchId: String? = nil, note: String? = nil, isRecurring: Bool, recurrenceInterval: OpenAPI.RecurrenceInterval? = nil, recurrenceEndDate: String? = nil, createdAt: String, updatedAt: String) {
+            self.id = id
+            self.investmentId = investmentId
+            self.type = type
+            self.date = date
+            self.amount = amount
+            self.units = units
+            self.pricePerUnit = pricePerUnit
+            self.fees = fees
+            self.taxes = taxes
+            self.dividendAmountConvention = dividendAmountConvention
+            self.incomeRecognitionRole = incomeRecognitionRole
+            self.currency = currency
+            self.fxRateToEur = fxRateToEur
+            self.accountId = accountId
+            self.importBatchId = importBatchId
+            self.note = note
+            self.isRecurring = isRecurring
+            self.recurrenceInterval = recurrenceInterval
+            self.recurrenceEndDate = recurrenceEndDate
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case investmentId = "investment_id"
+            case type = "type"
+            case date = "date"
+            case amount = "amount"
+            case units = "units"
+            case pricePerUnit = "price_per_unit"
+            case fees = "fees"
+            case taxes = "taxes"
+            case dividendAmountConvention = "dividend_amount_convention"
+            case incomeRecognitionRole = "income_recognition_role"
+            case currency = "currency"
+            case fxRateToEur = "fx_rate_to_eur"
+            case accountId = "account_id"
+            case importBatchId = "import_batch_id"
+            case note = "note"
+            case isRecurring = "is_recurring"
+            case recurrenceInterval = "recurrence_interval"
+            case recurrenceEndDate = "recurrence_end_date"
+            case createdAt = "created_at"
+            case updatedAt = "updated_at"
+        }
+    }
+
+    public struct PortfolioTransactionList: Codable, Equatable, Sendable {
+        public let total: Int
+        public let limit: Int
+        public let offset: Int
+        public let items: [OpenAPI.PortfolioTransaction]
+        public let links: [OpenAPI.Link]
+
+        public init(total: Int, limit: Int, offset: Int, items: [OpenAPI.PortfolioTransaction], links: [OpenAPI.Link]) {
+            self.total = total
+            self.limit = limit
+            self.offset = offset
+            self.items = items
+            self.links = links
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case total = "total"
+            case limit = "limit"
+            case offset = "offset"
+            case items = "items"
+            case links = "links"
+        }
+    }
+
+    public enum PortfolioTxnType: String, Codable, Sendable, CaseIterable {
+        case buy = "buy"
+        case sell = "sell"
+        case dividend = "dividend"
+        case fee = "fee"
+        case tax = "tax"
+        case interest = "interest"
+        case rentIncome = "rent_income"
+        case appreciation = "appreciation"
+        case gift = "gift"
+        case split = "split"
+        case merger = "merger"
+        case spinoff = "spinoff"
+        case returnOfCapital = "return_of_capital"
+    }
+
+    public enum PriceProvider: String, Codable, Sendable, CaseIterable {
+        case manual = "manual"
+        case binance = "binance"
+        case yahoo = "yahoo"
+        case custom = "custom"
+        case kinesis = "kinesis"
     }
 
     public struct ProbeResult: Codable, Equatable, Sendable {
@@ -1739,6 +6735,1528 @@ extension OpenAPI {
         }
     }
 
+    public enum RecurrenceInterval: String, Codable, Sendable, CaseIterable {
+        case daily = "daily"
+        case weekly = "weekly"
+        case biweekly = "biweekly"
+        case monthly = "monthly"
+        case quarterly = "quarterly"
+        case yearly = "yearly"
+    }
+
+    public struct ResearchAnalystAction: Codable, Equatable, Sendable {
+        public let date: JSONValue?
+        public let firm: String?
+        public let toGrade: String?
+        public let fromGrade: String?
+        public let action: String?
+
+        public init(date: JSONValue? = nil, firm: String? = nil, toGrade: String? = nil, fromGrade: String? = nil, action: String? = nil) {
+            self.date = date
+            self.firm = firm
+            self.toGrade = toGrade
+            self.fromGrade = fromGrade
+            self.action = action
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case date = "date"
+            case firm = "firm"
+            case toGrade = "toGrade"
+            case fromGrade = "fromGrade"
+            case action = "action"
+        }
+    }
+
+    public struct ResearchAnalystConsensus: Codable, Equatable, Sendable {
+        public let strongBuy: Decimal
+        public let buy: Decimal
+        public let hold: Decimal
+        public let sell: Decimal
+        public let strongSell: Decimal
+
+        public init(strongBuy: Decimal, buy: Decimal, hold: Decimal, sell: Decimal, strongSell: Decimal) {
+            self.strongBuy = strongBuy
+            self.buy = buy
+            self.hold = hold
+            self.sell = sell
+            self.strongSell = strongSell
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case strongBuy = "strongBuy"
+            case buy = "buy"
+            case hold = "hold"
+            case sell = "sell"
+            case strongSell = "strongSell"
+        }
+    }
+
+    public struct ResearchAnalystData: Codable, Equatable, Sendable {
+        public let symbol: String?
+        public let consensus: OpenAPI.ResearchAnalystConsensus?
+        public let targetMean: Decimal?
+        public let targetHigh: Decimal?
+        public let targetLow: Decimal?
+        public let numberOfAnalysts: Decimal?
+        public let recentActions: [OpenAPI.ResearchAnalystAction]?
+
+        public init(symbol: String? = nil, consensus: OpenAPI.ResearchAnalystConsensus? = nil, targetMean: Decimal? = nil, targetHigh: Decimal? = nil, targetLow: Decimal? = nil, numberOfAnalysts: Decimal? = nil, recentActions: [OpenAPI.ResearchAnalystAction]? = nil) {
+            self.symbol = symbol
+            self.consensus = consensus
+            self.targetMean = targetMean
+            self.targetHigh = targetHigh
+            self.targetLow = targetLow
+            self.numberOfAnalysts = numberOfAnalysts
+            self.recentActions = recentActions
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case symbol = "symbol"
+            case consensus = "consensus"
+            case targetMean = "targetMean"
+            case targetHigh = "targetHigh"
+            case targetLow = "targetLow"
+            case numberOfAnalysts = "numberOfAnalysts"
+            case recentActions = "recentActions"
+        }
+    }
+
+    public struct ResearchAnalystEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let meta: OpenAPI.ResearchMeta?
+        public let error: OpenAPI.ErrorPayload?
+        public let data: OpenAPI.ResearchAnalystData?
+
+        public init(ok: Bool, meta: OpenAPI.ResearchMeta? = nil, error: OpenAPI.ErrorPayload? = nil, data: OpenAPI.ResearchAnalystData? = nil) {
+            self.ok = ok
+            self.meta = meta
+            self.error = error
+            self.data = data
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case meta = "meta"
+            case error = "error"
+            case data = "data"
+        }
+    }
+
+    public struct ResearchChartData: Codable, Equatable, Sendable {
+        public let symbol: String?
+        public let currency: String?
+        public let points: [OpenAPI.ResearchChartPoint]
+
+        public init(symbol: String? = nil, currency: String? = nil, points: [OpenAPI.ResearchChartPoint]) {
+            self.symbol = symbol
+            self.currency = currency
+            self.points = points
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case symbol = "symbol"
+            case currency = "currency"
+            case points = "points"
+        }
+    }
+
+    public struct ResearchChartEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let meta: OpenAPI.ResearchMeta?
+        public let error: OpenAPI.ErrorPayload?
+        public let data: OpenAPI.ResearchChartData?
+
+        public init(ok: Bool, meta: OpenAPI.ResearchMeta? = nil, error: OpenAPI.ErrorPayload? = nil, data: OpenAPI.ResearchChartData? = nil) {
+            self.ok = ok
+            self.meta = meta
+            self.error = error
+            self.data = data
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case meta = "meta"
+            case error = "error"
+            case data = "data"
+        }
+    }
+
+    public struct ResearchChartPoint: Codable, Equatable, Sendable {
+        public let time: Decimal
+        public let close: Decimal?
+        public let high: Decimal?
+        public let low: Decimal?
+        public let volume: Decimal?
+
+        public init(time: Decimal, close: Decimal? = nil, high: Decimal? = nil, low: Decimal? = nil, volume: Decimal? = nil) {
+            self.time = time
+            self.close = close
+            self.high = high
+            self.low = low
+            self.volume = volume
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case time = "time"
+            case close = "close"
+            case high = "high"
+            case low = "low"
+            case volume = "volume"
+        }
+    }
+
+    public struct ResearchDossier: Codable, Equatable, Sendable {
+        public let title: String
+        public let workspace: String
+        public let question: String
+        public let userThesis: String?
+        public let assumptions: [String]?
+        public let openQuestions: [String]?
+        public let conclusion: String?
+        public let reviewDate: String?
+        public let evidence: [OpenAPI.ResearchDossierEvidence]?
+        public let links: OpenAPI.ResearchDossierLinks?
+        public let id: String
+        public let version: Int
+        public let linkDetails: [LinkDetailsItem]
+        public let createdAt: String
+        public let updatedAt: String
+
+        public init(title: String, workspace: String, question: String, userThesis: String? = nil, assumptions: [String]? = nil, openQuestions: [String]? = nil, conclusion: String? = nil, reviewDate: String? = nil, evidence: [OpenAPI.ResearchDossierEvidence]? = nil, links: OpenAPI.ResearchDossierLinks? = nil, id: String, version: Int, linkDetails: [LinkDetailsItem], createdAt: String, updatedAt: String) {
+            self.title = title
+            self.workspace = workspace
+            self.question = question
+            self.userThesis = userThesis
+            self.assumptions = assumptions
+            self.openQuestions = openQuestions
+            self.conclusion = conclusion
+            self.reviewDate = reviewDate
+            self.evidence = evidence
+            self.links = links
+            self.id = id
+            self.version = version
+            self.linkDetails = linkDetails
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case title = "title"
+            case workspace = "workspace"
+            case question = "question"
+            case userThesis = "userThesis"
+            case assumptions = "assumptions"
+            case openQuestions = "openQuestions"
+            case conclusion = "conclusion"
+            case reviewDate = "reviewDate"
+            case evidence = "evidence"
+            case links = "links"
+            case id = "id"
+            case version = "version"
+            case linkDetails = "linkDetails"
+            case createdAt = "createdAt"
+            case updatedAt = "updatedAt"
+        }
+
+        public struct LinkDetailsItem: Codable, Equatable, Sendable {
+            public let kind: String
+            public let historicalId: String
+            public let labelSnapshot: String
+            /// Integer for category/investment, string for saved analysis; null after deletion.
+            public let liveId: JSONValue?
+            public let status: String
+
+            public init(kind: String, historicalId: String, labelSnapshot: String, liveId: JSONValue? = nil, status: String) {
+                self.kind = kind
+                self.historicalId = historicalId
+                self.labelSnapshot = labelSnapshot
+                self.liveId = liveId
+                self.status = status
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case kind = "kind"
+                case historicalId = "historicalId"
+                case labelSnapshot = "labelSnapshot"
+                case liveId = "liveId"
+                case status = "status"
+            }
+        }
+    }
+
+    /// User-authored research record. Optional arrays, strings and links receive empty defaults;
+    /// evidence id may be omitted on input and is generated on save. The server rejects unknown request
+    /// properties; this reusable content schema also describes version snapshots.
+    public struct ResearchDossierContent: Codable, Equatable, Sendable {
+        public let title: String
+        public let workspace: String
+        public let question: String
+        public let userThesis: String?
+        public let assumptions: [String]?
+        public let openQuestions: [String]?
+        public let conclusion: String?
+        public let reviewDate: String?
+        public let evidence: [OpenAPI.ResearchDossierEvidence]?
+        public let links: OpenAPI.ResearchDossierLinks?
+
+        public init(title: String, workspace: String, question: String, userThesis: String? = nil, assumptions: [String]? = nil, openQuestions: [String]? = nil, conclusion: String? = nil, reviewDate: String? = nil, evidence: [OpenAPI.ResearchDossierEvidence]? = nil, links: OpenAPI.ResearchDossierLinks? = nil) {
+            self.title = title
+            self.workspace = workspace
+            self.question = question
+            self.userThesis = userThesis
+            self.assumptions = assumptions
+            self.openQuestions = openQuestions
+            self.conclusion = conclusion
+            self.reviewDate = reviewDate
+            self.evidence = evidence
+            self.links = links
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case title = "title"
+            case workspace = "workspace"
+            case question = "question"
+            case userThesis = "userThesis"
+            case assumptions = "assumptions"
+            case openQuestions = "openQuestions"
+            case conclusion = "conclusion"
+            case reviewDate = "reviewDate"
+            case evidence = "evidence"
+            case links = "links"
+        }
+    }
+
+    public struct ResearchDossierEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let data: OpenAPI.ResearchDossier?
+        public let error: OpenAPI.ErrorPayload?
+
+        public init(ok: Bool, data: OpenAPI.ResearchDossier? = nil, error: OpenAPI.ErrorPayload? = nil) {
+            self.ok = ok
+            self.data = data
+            self.error = error
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case data = "data"
+            case error = "error"
+        }
+    }
+
+    public struct ResearchDossierEvidence: Codable, Equatable, Sendable {
+        public let id: String?
+        public let stance: String
+        public let origin: String
+        public let claim: String
+        public let source: OpenAPI.ResearchDossierSource
+        public let notes: String?
+
+        public init(id: String? = nil, stance: String, origin: String, claim: String, source: OpenAPI.ResearchDossierSource, notes: String? = nil) {
+            self.id = id
+            self.stance = stance
+            self.origin = origin
+            self.claim = claim
+            self.source = source
+            self.notes = notes
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case stance = "stance"
+            case origin = "origin"
+            case claim = "claim"
+            case source = "source"
+            case notes = "notes"
+        }
+    }
+
+    public struct ResearchDossierExport: Codable, Equatable, Sendable {
+        public let schemaVersion: Int
+        public let exportedAt: String
+        public let dossiers: [DossiersItem]
+
+        public init(schemaVersion: Int, exportedAt: String, dossiers: [DossiersItem]) {
+            self.schemaVersion = schemaVersion
+            self.exportedAt = exportedAt
+            self.dossiers = dossiers
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case schemaVersion = "schemaVersion"
+            case exportedAt = "exportedAt"
+            case dossiers = "dossiers"
+        }
+
+        public struct DossiersItem: Codable, Equatable, Sendable {
+            public let title: String
+            public let workspace: String
+            public let question: String
+            public let userThesis: String?
+            public let assumptions: [String]?
+            public let openQuestions: [String]?
+            public let conclusion: String?
+            public let reviewDate: String?
+            public let evidence: [OpenAPI.ResearchDossierEvidence]?
+            public let links: OpenAPI.ResearchDossierLinks?
+            public let id: String
+            public let version: Int
+            public let linkDetails: [LinkDetailsItem]
+            public let createdAt: String
+            public let updatedAt: String
+            public let versions: [OpenAPI.ResearchDossierVersion]
+
+            public init(title: String, workspace: String, question: String, userThesis: String? = nil, assumptions: [String]? = nil, openQuestions: [String]? = nil, conclusion: String? = nil, reviewDate: String? = nil, evidence: [OpenAPI.ResearchDossierEvidence]? = nil, links: OpenAPI.ResearchDossierLinks? = nil, id: String, version: Int, linkDetails: [LinkDetailsItem], createdAt: String, updatedAt: String, versions: [OpenAPI.ResearchDossierVersion]) {
+                self.title = title
+                self.workspace = workspace
+                self.question = question
+                self.userThesis = userThesis
+                self.assumptions = assumptions
+                self.openQuestions = openQuestions
+                self.conclusion = conclusion
+                self.reviewDate = reviewDate
+                self.evidence = evidence
+                self.links = links
+                self.id = id
+                self.version = version
+                self.linkDetails = linkDetails
+                self.createdAt = createdAt
+                self.updatedAt = updatedAt
+                self.versions = versions
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case title = "title"
+                case workspace = "workspace"
+                case question = "question"
+                case userThesis = "userThesis"
+                case assumptions = "assumptions"
+                case openQuestions = "openQuestions"
+                case conclusion = "conclusion"
+                case reviewDate = "reviewDate"
+                case evidence = "evidence"
+                case links = "links"
+                case id = "id"
+                case version = "version"
+                case linkDetails = "linkDetails"
+                case createdAt = "createdAt"
+                case updatedAt = "updatedAt"
+                case versions = "versions"
+            }
+
+            public struct LinkDetailsItem: Codable, Equatable, Sendable {
+                public let kind: String
+                public let historicalId: String
+                public let labelSnapshot: String
+                /// Integer for category/investment, string for saved analysis; null after deletion.
+                public let liveId: JSONValue?
+                public let status: String
+
+                public init(kind: String, historicalId: String, labelSnapshot: String, liveId: JSONValue? = nil, status: String) {
+                    self.kind = kind
+                    self.historicalId = historicalId
+                    self.labelSnapshot = labelSnapshot
+                    self.liveId = liveId
+                    self.status = status
+                }
+
+                enum CodingKeys: String, CodingKey {
+                    case kind = "kind"
+                    case historicalId = "historicalId"
+                    case labelSnapshot = "labelSnapshot"
+                    case liveId = "liveId"
+                    case status = "status"
+                }
+            }
+        }
+    }
+
+    public struct ResearchDossierExportEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let data: OpenAPI.ResearchDossierExport?
+        public let error: OpenAPI.ErrorPayload?
+
+        public init(ok: Bool, data: OpenAPI.ResearchDossierExport? = nil, error: OpenAPI.ErrorPayload? = nil) {
+            self.ok = ok
+            self.data = data
+            self.error = error
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case data = "data"
+            case error = "error"
+        }
+    }
+
+    /// Current live links only; deleted targets appear in linkDetails instead.
+    public struct ResearchDossierLinks: Codable, Equatable, Sendable {
+        public let categoryIds: [Int]
+        public let investmentIds: [Int]
+        public let savedAnalysisIds: [String]
+
+        public init(categoryIds: [Int], investmentIds: [Int], savedAnalysisIds: [String]) {
+            self.categoryIds = categoryIds
+            self.investmentIds = investmentIds
+            self.savedAnalysisIds = savedAnalysisIds
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case categoryIds = "categoryIds"
+            case investmentIds = "investmentIds"
+            case savedAnalysisIds = "savedAnalysisIds"
+        }
+    }
+
+    public struct ResearchDossierListEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let data: Data?
+        public let error: OpenAPI.ErrorPayload?
+
+        public init(ok: Bool, data: Data? = nil, error: OpenAPI.ErrorPayload? = nil) {
+            self.ok = ok
+            self.data = data
+            self.error = error
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case data = "data"
+            case error = "error"
+        }
+
+        public struct Data: Codable, Equatable, Sendable {
+            public let items: [OpenAPI.ResearchDossierSummary]
+            public let total: Int
+            public let limit: Int
+            public let offset: Int
+
+            public init(items: [OpenAPI.ResearchDossierSummary], total: Int, limit: Int, offset: Int) {
+                self.items = items
+                self.total = total
+                self.limit = limit
+                self.offset = offset
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case items = "items"
+                case total = "total"
+                case limit = "limit"
+                case offset = "offset"
+            }
+        }
+    }
+
+    /// Citation snapshot. Document metadata is optional, but requires documentId when present; the
+    /// server pins document version and digest on save. The snapshot remains after source deletion.
+    public struct ResearchDossierSource: Codable, Equatable, Sendable {
+        public let title: String
+        public let reference: String
+        public let sourceDate: String?
+        public let accessedAt: String?
+        public let documentId: String?
+        public let documentVersion: Int?
+        public let passageOrdinal: Int?
+        public let contentSha256: String?
+
+        public init(title: String, reference: String, sourceDate: String? = nil, accessedAt: String? = nil, documentId: String? = nil, documentVersion: Int? = nil, passageOrdinal: Int? = nil, contentSha256: String? = nil) {
+            self.title = title
+            self.reference = reference
+            self.sourceDate = sourceDate
+            self.accessedAt = accessedAt
+            self.documentId = documentId
+            self.documentVersion = documentVersion
+            self.passageOrdinal = passageOrdinal
+            self.contentSha256 = contentSha256
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case title = "title"
+            case reference = "reference"
+            case sourceDate = "sourceDate"
+            case accessedAt = "accessedAt"
+            case documentId = "documentId"
+            case documentVersion = "documentVersion"
+            case passageOrdinal = "passageOrdinal"
+            case contentSha256 = "contentSha256"
+        }
+    }
+
+    public struct ResearchDossierSummary: Codable, Equatable, Sendable {
+        public let id: String
+        public let title: String
+        public let workspace: String
+        public let version: Int
+        public let question: String
+        public let reviewDate: String?
+        public let createdAt: String
+        public let updatedAt: String
+
+        public init(id: String, title: String, workspace: String, version: Int, question: String, reviewDate: String? = nil, createdAt: String, updatedAt: String) {
+            self.id = id
+            self.title = title
+            self.workspace = workspace
+            self.version = version
+            self.question = question
+            self.reviewDate = reviewDate
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case title = "title"
+            case workspace = "workspace"
+            case version = "version"
+            case question = "question"
+            case reviewDate = "reviewDate"
+            case createdAt = "createdAt"
+            case updatedAt = "updatedAt"
+        }
+    }
+
+    public struct ResearchDossierVersion: Codable, Equatable, Sendable {
+        public let version: Int
+        public let snapshot: OpenAPI.ResearchDossierContent
+        public let createdAt: String
+
+        public init(version: Int, snapshot: OpenAPI.ResearchDossierContent, createdAt: String) {
+            self.version = version
+            self.snapshot = snapshot
+            self.createdAt = createdAt
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case version = "version"
+            case snapshot = "snapshot"
+            case createdAt = "createdAt"
+        }
+    }
+
+    public struct ResearchDossierVersionsEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let data: Data?
+        public let error: OpenAPI.ErrorPayload?
+
+        public init(ok: Bool, data: Data? = nil, error: OpenAPI.ErrorPayload? = nil) {
+            self.ok = ok
+            self.data = data
+            self.error = error
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case data = "data"
+            case error = "error"
+        }
+
+        public struct Data: Codable, Equatable, Sendable {
+            public let items: [OpenAPI.ResearchDossierVersion]
+
+            public init(items: [OpenAPI.ResearchDossierVersion]) {
+                self.items = items
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case items = "items"
+            }
+        }
+    }
+
+    public struct ResearchForecastForwardHolding: Codable, Equatable, Sendable {
+        public let symbol: String
+        public let expectedAnnual: Decimal
+        public let growth: Decimal
+        public let dividendYield: Decimal?
+
+        public init(symbol: String, expectedAnnual: Decimal, growth: Decimal, dividendYield: Decimal? = nil) {
+            self.symbol = symbol
+            self.expectedAnnual = expectedAnnual
+            self.growth = growth
+            self.dividendYield = dividendYield
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case symbol = "symbol"
+            case expectedAnnual = "expectedAnnual"
+            case growth = "growth"
+            case dividendYield = "dividendYield"
+        }
+    }
+
+    public struct ResearchForecastPoint: Codable, Equatable, Sendable {
+        public let monthIndex: Int
+        public let date: String
+        public let netInvested: Decimal?
+        public let p10: Decimal?
+        public let p25: Decimal?
+        public let p50: Decimal?
+        public let p75: Decimal?
+        public let p90: Decimal?
+
+        public init(monthIndex: Int, date: String, netInvested: Decimal? = nil, p10: Decimal? = nil, p25: Decimal? = nil, p50: Decimal? = nil, p75: Decimal? = nil, p90: Decimal? = nil) {
+            self.monthIndex = monthIndex
+            self.date = date
+            self.netInvested = netInvested
+            self.p10 = p10
+            self.p25 = p25
+            self.p50 = p50
+            self.p75 = p75
+            self.p90 = p90
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case monthIndex = "monthIndex"
+            case date = "date"
+            case netInvested = "netInvested"
+            case p10 = "p10"
+            case p25 = "p25"
+            case p50 = "p50"
+            case p75 = "p75"
+            case p90 = "p90"
+        }
+    }
+
+    public struct ResearchForecastProjected: Codable, Equatable, Sendable {
+        public let mean: Decimal?
+        public let p10: Decimal?
+        public let p25: Decimal?
+        public let p50: Decimal?
+        public let p75: Decimal?
+        public let p90: Decimal?
+
+        public init(mean: Decimal? = nil, p10: Decimal? = nil, p25: Decimal? = nil, p50: Decimal? = nil, p75: Decimal? = nil, p90: Decimal? = nil) {
+            self.mean = mean
+            self.p10 = p10
+            self.p25 = p25
+            self.p50 = p50
+            self.p75 = p75
+            self.p90 = p90
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case mean = "mean"
+            case p10 = "p10"
+            case p25 = "p25"
+            case p50 = "p50"
+            case p75 = "p75"
+            case p90 = "p90"
+        }
+    }
+
+    public struct ResearchFundamentals: Codable, Equatable, Sendable {
+        public let symbol: String?
+        public let name: String?
+        public let currency: String?
+        public let marketCap: Decimal?
+        public let pe: Decimal?
+        public let forwardPE: Decimal?
+        public let dividendYield: Decimal?
+        public let eps: Decimal?
+        public let beta: Decimal?
+        public let priceToBook: Decimal?
+        public let profitMargin: Decimal?
+        public let revenue: Decimal?
+        public let returnOnEquity: Decimal?
+        public let sector: String?
+        public let pegRatio: Decimal?
+        public let payoutRatio: Decimal?
+        public let grossMargin: Decimal?
+        public let operatingMargin: Decimal?
+        public let revenueGrowth: Decimal?
+        public let earningsGrowth: Decimal?
+        public let debtToEquity: Decimal?
+        public let currentRatio: Decimal?
+        public let quickRatio: Decimal?
+        public let interestCoverage: Decimal?
+        public let freeCashFlow: Decimal?
+        public let fcfYield: Decimal?
+
+        public init(symbol: String? = nil, name: String? = nil, currency: String? = nil, marketCap: Decimal? = nil, pe: Decimal? = nil, forwardPE: Decimal? = nil, dividendYield: Decimal? = nil, eps: Decimal? = nil, beta: Decimal? = nil, priceToBook: Decimal? = nil, profitMargin: Decimal? = nil, revenue: Decimal? = nil, returnOnEquity: Decimal? = nil, sector: String? = nil, pegRatio: Decimal? = nil, payoutRatio: Decimal? = nil, grossMargin: Decimal? = nil, operatingMargin: Decimal? = nil, revenueGrowth: Decimal? = nil, earningsGrowth: Decimal? = nil, debtToEquity: Decimal? = nil, currentRatio: Decimal? = nil, quickRatio: Decimal? = nil, interestCoverage: Decimal? = nil, freeCashFlow: Decimal? = nil, fcfYield: Decimal? = nil) {
+            self.symbol = symbol
+            self.name = name
+            self.currency = currency
+            self.marketCap = marketCap
+            self.pe = pe
+            self.forwardPE = forwardPE
+            self.dividendYield = dividendYield
+            self.eps = eps
+            self.beta = beta
+            self.priceToBook = priceToBook
+            self.profitMargin = profitMargin
+            self.revenue = revenue
+            self.returnOnEquity = returnOnEquity
+            self.sector = sector
+            self.pegRatio = pegRatio
+            self.payoutRatio = payoutRatio
+            self.grossMargin = grossMargin
+            self.operatingMargin = operatingMargin
+            self.revenueGrowth = revenueGrowth
+            self.earningsGrowth = earningsGrowth
+            self.debtToEquity = debtToEquity
+            self.currentRatio = currentRatio
+            self.quickRatio = quickRatio
+            self.interestCoverage = interestCoverage
+            self.freeCashFlow = freeCashFlow
+            self.fcfYield = fcfYield
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case symbol = "symbol"
+            case name = "name"
+            case currency = "currency"
+            case marketCap = "marketCap"
+            case pe = "pe"
+            case forwardPE = "forwardPE"
+            case dividendYield = "dividendYield"
+            case eps = "eps"
+            case beta = "beta"
+            case priceToBook = "priceToBook"
+            case profitMargin = "profitMargin"
+            case revenue = "revenue"
+            case returnOnEquity = "returnOnEquity"
+            case sector = "sector"
+            case pegRatio = "pegRatio"
+            case payoutRatio = "payoutRatio"
+            case grossMargin = "grossMargin"
+            case operatingMargin = "operatingMargin"
+            case revenueGrowth = "revenueGrowth"
+            case earningsGrowth = "earningsGrowth"
+            case debtToEquity = "debtToEquity"
+            case currentRatio = "currentRatio"
+            case quickRatio = "quickRatio"
+            case interestCoverage = "interestCoverage"
+            case freeCashFlow = "freeCashFlow"
+            case fcfYield = "fcfYield"
+        }
+    }
+
+    public struct ResearchMacroSearchData: Codable, Equatable, Sendable {
+        public let items: [OpenAPI.ResearchMacroSeriesItem]
+
+        public init(items: [OpenAPI.ResearchMacroSeriesItem]) {
+            self.items = items
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case items = "items"
+        }
+    }
+
+    public struct ResearchMacroSearchEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let meta: OpenAPI.ResearchMeta?
+        public let error: OpenAPI.ErrorPayload?
+        public let data: OpenAPI.ResearchMacroSearchData?
+
+        public init(ok: Bool, meta: OpenAPI.ResearchMeta? = nil, error: OpenAPI.ErrorPayload? = nil, data: OpenAPI.ResearchMacroSearchData? = nil) {
+            self.ok = ok
+            self.meta = meta
+            self.error = error
+            self.data = data
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case meta = "meta"
+            case error = "error"
+            case data = "data"
+        }
+    }
+
+    public struct ResearchMacroSeriesData: Codable, Equatable, Sendable {
+        public let provider: String
+        public let seriesId: String
+        public let title: String?
+        public let units: String?
+        public let frequency: String?
+        public let points: [OpenAPI.ResearchChartPoint]
+
+        public init(provider: String, seriesId: String, title: String? = nil, units: String? = nil, frequency: String? = nil, points: [OpenAPI.ResearchChartPoint]) {
+            self.provider = provider
+            self.seriesId = seriesId
+            self.title = title
+            self.units = units
+            self.frequency = frequency
+            self.points = points
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case provider = "provider"
+            case seriesId = "seriesId"
+            case title = "title"
+            case units = "units"
+            case frequency = "frequency"
+            case points = "points"
+        }
+    }
+
+    public struct ResearchMacroSeriesEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let meta: OpenAPI.ResearchMeta?
+        public let error: OpenAPI.ErrorPayload?
+        public let data: OpenAPI.ResearchMacroSeriesData?
+
+        public init(ok: Bool, meta: OpenAPI.ResearchMeta? = nil, error: OpenAPI.ErrorPayload? = nil, data: OpenAPI.ResearchMacroSeriesData? = nil) {
+            self.ok = ok
+            self.meta = meta
+            self.error = error
+            self.data = data
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case meta = "meta"
+            case error = "error"
+            case data = "data"
+        }
+    }
+
+    public struct ResearchMacroSeriesItem: Codable, Equatable, Sendable {
+        public let provider: String
+        public let seriesId: String
+        public let title: String?
+        public let region: String?
+        public let units: String?
+        public let frequency: String?
+        public let source: String?
+
+        public init(provider: String, seriesId: String, title: String? = nil, region: String? = nil, units: String? = nil, frequency: String? = nil, source: String? = nil) {
+            self.provider = provider
+            self.seriesId = seriesId
+            self.title = title
+            self.region = region
+            self.units = units
+            self.frequency = frequency
+            self.source = source
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case provider = "provider"
+            case seriesId = "seriesId"
+            case title = "title"
+            case region = "region"
+            case units = "units"
+            case frequency = "frequency"
+            case source = "source"
+        }
+    }
+
+    public struct ResearchMappingAuditData: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let quotes: [QuotesItem]
+        public let discrepancies: [JSONValue]
+
+        public init(ok: Bool, quotes: [QuotesItem], discrepancies: [JSONValue]) {
+            self.ok = ok
+            self.quotes = quotes
+            self.discrepancies = discrepancies
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case quotes = "quotes"
+            case discrepancies = "discrepancies"
+        }
+
+        public struct QuotesItem: Codable, Equatable, Sendable {
+            public let provider: String
+            public let currency: String?
+            public let price: Decimal?
+            public let skipped: String?
+            public let error: String?
+
+            public init(provider: String, currency: String? = nil, price: Decimal? = nil, skipped: String? = nil, error: String? = nil) {
+                self.provider = provider
+                self.currency = currency
+                self.price = price
+                self.skipped = skipped
+                self.error = error
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case provider = "provider"
+                case currency = "currency"
+                case price = "price"
+                case skipped = "skipped"
+                case error = "error"
+            }
+        }
+    }
+
+    public struct ResearchMappingAuditEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let meta: OpenAPI.ResearchMeta?
+        public let error: OpenAPI.ErrorPayload?
+        public let data: OpenAPI.ResearchMappingAuditData?
+
+        public init(ok: Bool, meta: OpenAPI.ResearchMeta? = nil, error: OpenAPI.ErrorPayload? = nil, data: OpenAPI.ResearchMappingAuditData? = nil) {
+            self.ok = ok
+            self.meta = meta
+            self.error = error
+            self.data = data
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case meta = "meta"
+            case error = "error"
+            case data = "data"
+        }
+    }
+
+    public struct ResearchMappingProposal: Codable, Equatable, Sendable {
+        public let provider: String
+        public let status: String
+        public let providerSymbol: String?
+        public let resolvedName: String?
+        public let exchange: String?
+        public let currency: String?
+        public let candidates: [OpenAPI.ResearchSearchItem]?
+        public let fromStore: Bool?
+        public let fromHolding: Bool?
+        public let reason: String?
+        public let error: String?
+
+        public init(provider: String, status: String, providerSymbol: String? = nil, resolvedName: String? = nil, exchange: String? = nil, currency: String? = nil, candidates: [OpenAPI.ResearchSearchItem]? = nil, fromStore: Bool? = nil, fromHolding: Bool? = nil, reason: String? = nil, error: String? = nil) {
+            self.provider = provider
+            self.status = status
+            self.providerSymbol = providerSymbol
+            self.resolvedName = resolvedName
+            self.exchange = exchange
+            self.currency = currency
+            self.candidates = candidates
+            self.fromStore = fromStore
+            self.fromHolding = fromHolding
+            self.reason = reason
+            self.error = error
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case provider = "provider"
+            case status = "status"
+            case providerSymbol = "providerSymbol"
+            case resolvedName = "resolvedName"
+            case exchange = "exchange"
+            case currency = "currency"
+            case candidates = "candidates"
+            case fromStore = "fromStore"
+            case fromHolding = "fromHolding"
+            case reason = "reason"
+            case error = "error"
+        }
+    }
+
+    public struct ResearchMappingResolveData: Codable, Equatable, Sendable {
+        public let instrumentKey: String
+        public let keyType: String
+        public let proposals: [OpenAPI.ResearchMappingProposal]
+        public let existing: [OpenAPI.InstrumentProviderMapping]
+
+        public init(instrumentKey: String, keyType: String, proposals: [OpenAPI.ResearchMappingProposal], existing: [OpenAPI.InstrumentProviderMapping]) {
+            self.instrumentKey = instrumentKey
+            self.keyType = keyType
+            self.proposals = proposals
+            self.existing = existing
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case instrumentKey = "instrument_key"
+            case keyType = "key_type"
+            case proposals = "proposals"
+            case existing = "existing"
+        }
+    }
+
+    public struct ResearchMappingResolveEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let meta: OpenAPI.ResearchMeta?
+        public let error: OpenAPI.ErrorPayload?
+        public let data: OpenAPI.ResearchMappingResolveData?
+
+        public init(ok: Bool, meta: OpenAPI.ResearchMeta? = nil, error: OpenAPI.ErrorPayload? = nil, data: OpenAPI.ResearchMappingResolveData? = nil) {
+            self.ok = ok
+            self.meta = meta
+            self.error = error
+            self.data = data
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case meta = "meta"
+            case error = "error"
+            case data = "data"
+        }
+    }
+
+    public struct ResearchMappingsData: Codable, Equatable, Sendable {
+        public let items: [OpenAPI.InstrumentProviderMapping]
+        public let total: Int
+
+        public init(items: [OpenAPI.InstrumentProviderMapping], total: Int) {
+            self.items = items
+            self.total = total
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case items = "items"
+            case total = "total"
+        }
+    }
+
+    public struct ResearchMappingsEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let meta: OpenAPI.ResearchMeta?
+        public let error: OpenAPI.ErrorPayload?
+        public let data: OpenAPI.ResearchMappingsData?
+
+        public init(ok: Bool, meta: OpenAPI.ResearchMeta? = nil, error: OpenAPI.ErrorPayload? = nil, data: OpenAPI.ResearchMappingsData? = nil) {
+            self.ok = ok
+            self.meta = meta
+            self.error = error
+            self.data = data
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case meta = "meta"
+            case error = "error"
+            case data = "data"
+        }
+    }
+
+    public struct ResearchMeta: Codable, Equatable, Sendable {
+        public let provider: String?
+        public let source: String
+        public let requestId: String?
+
+        public init(provider: String? = nil, source: String, requestId: String? = nil) {
+            self.provider = provider
+            self.source = source
+            self.requestId = requestId
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case provider = "provider"
+            case source = "source"
+            case requestId = "requestId"
+        }
+    }
+
+    public struct ResearchNewsArticle: Codable, Equatable, Sendable {
+        public let title: String?
+        public let link: String?
+        public let publisher: String?
+        public let publishedAt: Decimal?
+        public let thumbnail: String?
+        public let relatedSymbols: [String]?
+
+        public init(title: String? = nil, link: String? = nil, publisher: String? = nil, publishedAt: Decimal? = nil, thumbnail: String? = nil, relatedSymbols: [String]? = nil) {
+            self.title = title
+            self.link = link
+            self.publisher = publisher
+            self.publishedAt = publishedAt
+            self.thumbnail = thumbnail
+            self.relatedSymbols = relatedSymbols
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case title = "title"
+            case link = "link"
+            case publisher = "publisher"
+            case publishedAt = "publishedAt"
+            case thumbnail = "thumbnail"
+            case relatedSymbols = "relatedSymbols"
+        }
+    }
+
+    public struct ResearchNewsData: Codable, Equatable, Sendable {
+        public let articles: [OpenAPI.ResearchNewsArticle]
+
+        public init(articles: [OpenAPI.ResearchNewsArticle]) {
+            self.articles = articles
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case articles = "articles"
+        }
+    }
+
+    public struct ResearchNewsEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let meta: OpenAPI.ResearchMeta?
+        public let error: OpenAPI.ErrorPayload?
+        public let data: OpenAPI.ResearchNewsData?
+
+        public init(ok: Bool, meta: OpenAPI.ResearchMeta? = nil, error: OpenAPI.ErrorPayload? = nil, data: OpenAPI.ResearchNewsData? = nil) {
+            self.ok = ok
+            self.meta = meta
+            self.error = error
+            self.data = data
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case meta = "meta"
+            case error = "error"
+            case data = "data"
+        }
+    }
+
+    /// available=false contains a reason and optional historyDays. Computed monetary fields can
+    /// serialize null on numeric overflow. Such an available response is rejected by the maintained
+    /// PortfolioForecastSchema/native client validity guard; nullable wire representation never
+    /// authorizes invented zero values or a comparison.
+    public struct ResearchPortfolioForecastData: Codable, Equatable, Sendable {
+        public let available: Bool
+        public let reason: String?
+        public let currency: String?
+        public let method: String?
+        public let horizonMonths: Int?
+        public let paths: Int?
+        public let seed: String?
+        public let historyDays: Int?
+        public let flowArtifactDays: Int?
+        public let lowConfidence: Bool?
+        public let startValue: Decimal?
+        public let startInvested: Decimal?
+        public let monthlyContribution: Decimal?
+        /// Month at which target probability is evaluated
+        public let goalMonth: Int?
+        public let totalContributions: Decimal?
+        public let netInvested: Decimal?
+        public let expectedAnnualReturn: Decimal?
+        public let historicalAnnualReturn: Decimal?
+        public let annualVolatility: Decimal?
+        public let forwardBlend: Decimal?
+        public let usedForward: Bool?
+        public let forwardHoldings: [OpenAPI.ResearchForecastForwardHolding]?
+        public let projected: OpenAPI.ResearchForecastProjected?
+        public let probBelowInvested: Decimal?
+        public let targetValue: Decimal?
+        public let probTarget: Decimal?
+        public let points: [OpenAPI.ResearchForecastPoint]?
+
+        public init(available: Bool, reason: String? = nil, currency: String? = nil, method: String? = nil, horizonMonths: Int? = nil, paths: Int? = nil, seed: String? = nil, historyDays: Int? = nil, flowArtifactDays: Int? = nil, lowConfidence: Bool? = nil, startValue: Decimal? = nil, startInvested: Decimal? = nil, monthlyContribution: Decimal? = nil, goalMonth: Int? = nil, totalContributions: Decimal? = nil, netInvested: Decimal? = nil, expectedAnnualReturn: Decimal? = nil, historicalAnnualReturn: Decimal? = nil, annualVolatility: Decimal? = nil, forwardBlend: Decimal? = nil, usedForward: Bool? = nil, forwardHoldings: [OpenAPI.ResearchForecastForwardHolding]? = nil, projected: OpenAPI.ResearchForecastProjected? = nil, probBelowInvested: Decimal? = nil, targetValue: Decimal? = nil, probTarget: Decimal? = nil, points: [OpenAPI.ResearchForecastPoint]? = nil) {
+            self.available = available
+            self.reason = reason
+            self.currency = currency
+            self.method = method
+            self.horizonMonths = horizonMonths
+            self.paths = paths
+            self.seed = seed
+            self.historyDays = historyDays
+            self.flowArtifactDays = flowArtifactDays
+            self.lowConfidence = lowConfidence
+            self.startValue = startValue
+            self.startInvested = startInvested
+            self.monthlyContribution = monthlyContribution
+            self.goalMonth = goalMonth
+            self.totalContributions = totalContributions
+            self.netInvested = netInvested
+            self.expectedAnnualReturn = expectedAnnualReturn
+            self.historicalAnnualReturn = historicalAnnualReturn
+            self.annualVolatility = annualVolatility
+            self.forwardBlend = forwardBlend
+            self.usedForward = usedForward
+            self.forwardHoldings = forwardHoldings
+            self.projected = projected
+            self.probBelowInvested = probBelowInvested
+            self.targetValue = targetValue
+            self.probTarget = probTarget
+            self.points = points
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case available = "available"
+            case reason = "reason"
+            case currency = "currency"
+            case method = "method"
+            case horizonMonths = "horizonMonths"
+            case paths = "paths"
+            case seed = "seed"
+            case historyDays = "historyDays"
+            case flowArtifactDays = "flowArtifactDays"
+            case lowConfidence = "lowConfidence"
+            case startValue = "startValue"
+            case startInvested = "startInvested"
+            case monthlyContribution = "monthlyContribution"
+            case goalMonth = "goalMonth"
+            case totalContributions = "totalContributions"
+            case netInvested = "netInvested"
+            case expectedAnnualReturn = "expectedAnnualReturn"
+            case historicalAnnualReturn = "historicalAnnualReturn"
+            case annualVolatility = "annualVolatility"
+            case forwardBlend = "forwardBlend"
+            case usedForward = "usedForward"
+            case forwardHoldings = "forwardHoldings"
+            case projected = "projected"
+            case probBelowInvested = "probBelowInvested"
+            case targetValue = "targetValue"
+            case probTarget = "probTarget"
+            case points = "points"
+        }
+    }
+
+    public struct ResearchPortfolioForecastEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let meta: OpenAPI.ResearchMeta?
+        public let error: OpenAPI.ErrorPayload?
+        public let data: OpenAPI.ResearchPortfolioForecastData?
+
+        public init(ok: Bool, meta: OpenAPI.ResearchMeta? = nil, error: OpenAPI.ErrorPayload? = nil, data: OpenAPI.ResearchPortfolioForecastData? = nil) {
+            self.ok = ok
+            self.meta = meta
+            self.error = error
+            self.data = data
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case meta = "meta"
+            case error = "error"
+            case data = "data"
+        }
+    }
+
+    public struct ResearchProviderKeyStatus: Codable, Equatable, Sendable {
+        public let provider: String
+        public let label: String
+        public let envVar: String
+        public let configured: Bool
+        public let source: String
+        public let masked: String?
+
+        public init(provider: String, label: String, envVar: String, configured: Bool, source: String, masked: String? = nil) {
+            self.provider = provider
+            self.label = label
+            self.envVar = envVar
+            self.configured = configured
+            self.source = source
+            self.masked = masked
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case provider = "provider"
+            case label = "label"
+            case envVar = "envVar"
+            case configured = "configured"
+            case source = "source"
+            case masked = "masked"
+        }
+    }
+
+    public struct ResearchProviderKeysData: Codable, Equatable, Sendable {
+        public let items: [OpenAPI.ResearchProviderKeyStatus]
+        public let total: Int
+
+        public init(items: [OpenAPI.ResearchProviderKeyStatus], total: Int) {
+            self.items = items
+            self.total = total
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case items = "items"
+            case total = "total"
+        }
+    }
+
+    public struct ResearchProviderKeysEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let meta: OpenAPI.ResearchMeta?
+        public let error: OpenAPI.ErrorPayload?
+        public let data: OpenAPI.ResearchProviderKeysData?
+
+        public init(ok: Bool, meta: OpenAPI.ResearchMeta? = nil, error: OpenAPI.ErrorPayload? = nil, data: OpenAPI.ResearchProviderKeysData? = nil) {
+            self.ok = ok
+            self.meta = meta
+            self.error = error
+            self.data = data
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case meta = "meta"
+            case error = "error"
+            case data = "data"
+        }
+    }
+
+    public struct ResearchScorecard: Codable, Equatable, Sendable {
+        public let score: Decimal?
+        public let grade: String
+        public let evaluated: Int
+        public let counts: Counts
+        public let flags: [OpenAPI.ResearchScorecardFlag]
+
+        public init(score: Decimal? = nil, grade: String, evaluated: Int, counts: Counts, flags: [OpenAPI.ResearchScorecardFlag]) {
+            self.score = score
+            self.grade = grade
+            self.evaluated = evaluated
+            self.counts = counts
+            self.flags = flags
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case score = "score"
+            case grade = "grade"
+            case evaluated = "evaluated"
+            case counts = "counts"
+            case flags = "flags"
+        }
+
+        public struct Counts: Codable, Equatable, Sendable {
+            public let ok: Int
+            public let caution: Int
+            public let warn: Int
+            public let risk: Int
+
+            public init(ok: Int, caution: Int, warn: Int, risk: Int) {
+                self.ok = ok
+                self.caution = caution
+                self.warn = warn
+                self.risk = risk
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case ok = "ok"
+                case caution = "caution"
+                case warn = "warn"
+                case risk = "risk"
+            }
+        }
+    }
+
+    public struct ResearchScorecardData: Codable, Equatable, Sendable {
+        public let symbol: String
+        public let fundamentals: OpenAPI.ResearchFundamentals
+        public let scorecard: OpenAPI.ResearchScorecard
+
+        public init(symbol: String, fundamentals: OpenAPI.ResearchFundamentals, scorecard: OpenAPI.ResearchScorecard) {
+            self.symbol = symbol
+            self.fundamentals = fundamentals
+            self.scorecard = scorecard
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case symbol = "symbol"
+            case fundamentals = "fundamentals"
+            case scorecard = "scorecard"
+        }
+    }
+
+    public struct ResearchScorecardEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let meta: OpenAPI.ResearchMeta?
+        public let error: OpenAPI.ErrorPayload?
+        public let data: OpenAPI.ResearchScorecardData?
+
+        public init(ok: Bool, meta: OpenAPI.ResearchMeta? = nil, error: OpenAPI.ErrorPayload? = nil, data: OpenAPI.ResearchScorecardData? = nil) {
+            self.ok = ok
+            self.meta = meta
+            self.error = error
+            self.data = data
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case meta = "meta"
+            case error = "error"
+            case data = "data"
+        }
+    }
+
+    public struct ResearchScorecardFlag: Codable, Equatable, Sendable {
+        public let metric: String
+        public let category: String
+        public let better: String
+        public let value: Decimal
+        public let severity: String
+        public let code: String
+        public let reasonKey: String
+        public let reason: String
+        public let benchmark: String
+
+        public init(metric: String, category: String, better: String, value: Decimal, severity: String, code: String, reasonKey: String, reason: String, benchmark: String) {
+            self.metric = metric
+            self.category = category
+            self.better = better
+            self.value = value
+            self.severity = severity
+            self.code = code
+            self.reasonKey = reasonKey
+            self.reason = reason
+            self.benchmark = benchmark
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case metric = "metric"
+            case category = "category"
+            case better = "better"
+            case value = "value"
+            case severity = "severity"
+            case code = "code"
+            case reasonKey = "reasonKey"
+            case reason = "reason"
+            case benchmark = "benchmark"
+        }
+    }
+
+    public struct ResearchSearchData: Codable, Equatable, Sendable {
+        public let items: [OpenAPI.ResearchSearchItem]
+
+        public init(items: [OpenAPI.ResearchSearchItem]) {
+            self.items = items
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case items = "items"
+        }
+    }
+
+    public struct ResearchSearchEnvelope: Codable, Equatable, Sendable {
+        public let ok: Bool
+        public let meta: OpenAPI.ResearchMeta?
+        public let error: OpenAPI.ErrorPayload?
+        public let data: OpenAPI.ResearchSearchData?
+
+        public init(ok: Bool, meta: OpenAPI.ResearchMeta? = nil, error: OpenAPI.ErrorPayload? = nil, data: OpenAPI.ResearchSearchData? = nil) {
+            self.ok = ok
+            self.meta = meta
+            self.error = error
+            self.data = data
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case ok = "ok"
+            case meta = "meta"
+            case error = "error"
+            case data = "data"
+        }
+    }
+
+    public struct ResearchSearchItem: Codable, Equatable, Sendable {
+        public let symbol: String?
+        public let name: String?
+        public let type: String?
+        public let exchange: String?
+
+        public init(symbol: String? = nil, name: String? = nil, type: String? = nil, exchange: String? = nil) {
+            self.symbol = symbol
+            self.name = name
+            self.type = type
+            self.exchange = exchange
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case symbol = "symbol"
+            case name = "name"
+            case type = "type"
+            case exchange = "exchange"
+        }
+    }
+
     public struct RouteMetric: Codable, Equatable, Sendable {
         /// METHOD:path
         public let route: String
@@ -1789,6 +8307,65 @@ extension OpenAPI {
         enum CodingKeys: String, CodingKey {
             case items = "items"
             case total = "total"
+        }
+    }
+
+    public struct SavedChart: Codable, Equatable, Sendable {
+        public let id: Int
+        public let name: String
+        public let chartType: String
+        /// ranked is only valid with chart_type=bar; line:ranked and area:ranked return 400
+        public let chartVariant: String
+        /// Ignored when chart_variant=ranked
+        public let timeBucket: String
+        /// Ignored when all_categories=true
+        public let categoryIds: [Int]
+        /// Ignored when all_recipients=true
+        public let recipientIds: [Int]
+        /// Ignored when all_tags=true
+        public let tagIds: [Int]
+        public let allCategories: Bool
+        public let allRecipients: Bool
+        public let allTags: Bool
+        public let dateRangeStart: String?
+        public let dateRangeEnd: String?
+        public let createdAt: String
+        public let updatedAt: String
+
+        public init(id: Int, name: String, chartType: String, chartVariant: String, timeBucket: String, categoryIds: [Int], recipientIds: [Int], tagIds: [Int], allCategories: Bool, allRecipients: Bool, allTags: Bool, dateRangeStart: String? = nil, dateRangeEnd: String? = nil, createdAt: String, updatedAt: String) {
+            self.id = id
+            self.name = name
+            self.chartType = chartType
+            self.chartVariant = chartVariant
+            self.timeBucket = timeBucket
+            self.categoryIds = categoryIds
+            self.recipientIds = recipientIds
+            self.tagIds = tagIds
+            self.allCategories = allCategories
+            self.allRecipients = allRecipients
+            self.allTags = allTags
+            self.dateRangeStart = dateRangeStart
+            self.dateRangeEnd = dateRangeEnd
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case name = "name"
+            case chartType = "chart_type"
+            case chartVariant = "chart_variant"
+            case timeBucket = "time_bucket"
+            case categoryIds = "category_ids"
+            case recipientIds = "recipient_ids"
+            case tagIds = "tag_ids"
+            case allCategories = "all_categories"
+            case allRecipients = "all_recipients"
+            case allTags = "all_tags"
+            case dateRangeStart = "date_range_start"
+            case dateRangeEnd = "date_range_end"
+            case createdAt = "created_at"
+            case updatedAt = "updated_at"
         }
     }
 
@@ -2324,6 +8901,70 @@ extension OpenAPI {
             case comment = "comment"
             case isActive = "is_active"
             case tags = "tags"
+        }
+    }
+
+    public struct WatchlistData: Codable, Equatable, Sendable {
+        public let items: [OpenAPI.WatchlistItem]
+        public let total: Int
+        public let limit: Int
+        public let offset: Int
+
+        public init(items: [OpenAPI.WatchlistItem], total: Int, limit: Int, offset: Int) {
+            self.items = items
+            self.total = total
+            self.limit = limit
+            self.offset = offset
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case items = "items"
+            case total = "total"
+            case limit = "limit"
+            case offset = "offset"
+        }
+    }
+
+    public struct WatchlistItem: Codable, Equatable, Sendable {
+        public let id: Int
+        public let name: String
+        public let symbol: String?
+        public let assetClass: String
+        public let targetPrice: Decimal
+        public let currency: String
+        public let notes: String?
+        public let priceProviderId: String?
+        /// Live price snapshotted when the item was added (ADR-097 backtest).
+        public let addedPrice: Decimal?
+        public let createdAt: String
+        public let updatedAt: String
+
+        public init(id: Int, name: String, symbol: String? = nil, assetClass: String, targetPrice: Decimal, currency: String, notes: String? = nil, priceProviderId: String? = nil, addedPrice: Decimal? = nil, createdAt: String, updatedAt: String) {
+            self.id = id
+            self.name = name
+            self.symbol = symbol
+            self.assetClass = assetClass
+            self.targetPrice = targetPrice
+            self.currency = currency
+            self.notes = notes
+            self.priceProviderId = priceProviderId
+            self.addedPrice = addedPrice
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id = "id"
+            case name = "name"
+            case symbol = "symbol"
+            case assetClass = "asset_class"
+            case targetPrice = "target_price"
+            case currency = "currency"
+            case notes = "notes"
+            case priceProviderId = "price_provider_id"
+            case addedPrice = "added_price"
+            case createdAt = "created_at"
+            case updatedAt = "updated_at"
         }
     }
 }

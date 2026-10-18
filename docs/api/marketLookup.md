@@ -2,8 +2,8 @@
 title: Market Lookup API
 type: endpoint
 status: active
-date: 2026-10-08
-updated: 2026-10-08
+date: 2026-10-13
+updated: 2026-10-13
 tags:
   - api
   - market
@@ -323,3 +323,12 @@ Backend import route tests were updated to validate the unified API response env
 - News search failure tolerance returning `{"items": [], "total": 0}`.
 
 Code links: [[apps/node-backend/tests/routes/marketLookup.test.ts]], [[apps/node-backend/src/routes/marketLookup.ts]], [[apps/node-backend/tests/routes/import.test.ts]]
+
+## Maintained response schemas
+
+OpenAPI now names the unchanged collection shapes: search returns `{items}` without `total`,
+while quote and news return `{items,total}`. Search rows require symbol/name/type/exchange and
+carry no required currency. Provider quote/news leaves can be absent or null as documented by
+the runtime contracts. Derived analyst/provider-history/market-add display values are available
+without another provider call through [[docs/api/research#POST /api/research/presentation|Research
+presentation]].

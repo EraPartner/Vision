@@ -124,7 +124,9 @@ import Testing
         }
         #expect(source.contains("platform: \"darwin\""))
         #expect(source.contains("    nativeNavigation: true,"))
-        #expect(source.contains("    routeChanged: (route) => invoke(\"shell:route-changed\", [route]),"))
+        #expect(source.contains("Object.defineProperty(window, \"__VISION_NATIVE_SETTINGS__\", { value: true });"))
+        #expect(source.contains("invoke(\"shell:settings-change\", [key, updates, removed])"))
+        #expect(source.contains("    routeChanged: (route, onboardingPresented) => invoke(\"shell:route-changed\", [route, onboardingPresented]),"))
         #expect(source.contains("handlers.\(BridgeContract.messageHandlerName)"))
         #expect(source.contains("\"app:renderer-failure\""))
     }

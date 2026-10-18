@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import VisionNativeCore
 
 @Suite struct NativeAppSettingsTests {
@@ -9,9 +10,11 @@ import Testing
             "adminMode": .bool(true), "colorblindGainLoss": .bool(true), "unrelated": .string("x"),
         ])
         let settings = NativeAppSettings.migrate(raw)
-        #expect(settings == NativeAppSettings(
-            dateFormat: .dayMonthYearDot, numberFormat: .in, showDecimalPlaces: 0, adminMode: true,
-            colorblindGainLoss: true))
+        #expect(
+            settings
+                == NativeAppSettings(
+                    dateFormat: .dayMonthYearDot, numberFormat: .in, showDecimalPlaces: 0, adminMode: true,
+                    colorblindGainLoss: true))
         let invalid = NativeAppSettings.migrate(.object(["dateFormat": .string("YY"), "numberFormat": .int(1)]))
         #expect(invalid == .defaults)
         #expect(NativeAppSettings.migrate(.string("nope")) == .defaults)
@@ -110,6 +113,10 @@ import Testing
     }
 
     @Test func theAdminScreensAreBehindTheAdminGateAndPlannedIsNot() {
+        #expect(NativeScreen.screen(forPath: "/") == .home)
+        #expect(!NativeScreen.home.requiresAdmin)
+        #expect(NativeScreen.screen(forPath: "/statistics") == .statistics)
+        #expect(!NativeScreen.statistics.requiresAdmin)
         #expect(NativeScreen.screen(forPath: "/admin/exchange-rates") == .exchangeRates)
         #expect(NativeScreen.screen(forPath: "/admin/exchange-rates/x") == nil)
         #expect(NativeScreen.exchangeRates.requiresAdmin)
@@ -117,12 +124,13 @@ import Testing
         #expect(NativeScreen.screen(forPath: "/admin/providers") == .providerHealth)
         #expect(NativeScreen.screen(forPath: "/admin/endpoints") == .endpointLiveness)
         #expect(NativeScreen.screen(forPath: "/admin/db") == .databaseMaintenance)
-        #expect(NativeScreen.screen(forPath: "/admin/db/transactions") == NativeScreen.tableEditor(table: "transactions"))
-        let adminScreens = NativeScreen.fixedScreens.filter {
-            $0 != .plannedPayments && $0 != .importExport && $0 != .transactions && $0 != .accounts
-                && $0 != .categories && $0 != .recipients
-        }
-        #expect(adminScreens.allSatisfy { screen in screen.requiresAdmin })
+        #expect(
+            NativeScreen.screen(forPath: "/admin/db/transactions") == NativeScreen.tableEditor(table: "transactions"))
+        let adminScreens: [NativeScreen] = [
+            .adminOverview, .databaseMaintenance, .providerHealth, .endpointLiveness, .exchangeRates,
+        ]
+        #expect(NativeScreen.fixedScreens.filter(\.requiresAdmin) == adminScreens)
+        #expect(NativeScreen.fixedScreens.filter { !adminScreens.contains($0) }.allSatisfy { !$0.requiresAdmin })
         #expect(NativeScreen.tableEditor(table: "x").requiresAdmin)
         #expect(NativeScreen.screen(forPath: "/planned") == .plannedPayments)
         #expect(!NativeScreen.plannedPayments.requiresAdmin)
@@ -185,6 +193,14 @@ import Testing
         #expect(shortcuts.handle(key: "x", command: true, path: "/", now: start) == .ignored)
     }
 
+    @Test func commandBTogglesTheSidebarLikeTheShadcnSidebar() {
+        var shortcuts = NativeShortcuts()
+        #expect(shortcuts.handle(key: "b", command: true, path: "/", now: start) == .toggleSidebar)
+        #expect(shortcuts.handle(key: "B", control: true, path: "/", now: start) == .toggleSidebar)
+        #expect(shortcuts.handle(key: "b", command: true, shift: true, path: "/", now: start) == .ignored)
+        #expect(shortcuts.handle(key: "b", path: "/", now: start) == .ignored)
+    }
+
     @Test func singleKeyShortcuts() {
         var shortcuts = NativeShortcuts()
         #expect(shortcuts.handle(key: "n", path: "/", now: start) == .navigate("/transactions?new=1"))
@@ -193,6 +209,17 @@ import Testing
         #expect(shortcuts.handle(key: "[", path: "/admin/exchange-rates", now: start) == .navigate("/research"))
         #expect(shortcuts.handle(key: "]", path: "/research/markets", now: start) == .navigate("/"))
         #expect(shortcuts.handle(key: "q", path: "/", now: start) == .ignored)
+    }
+
+    @Test func typingKeepsSingleKeysInertButNotCommandShortcuts() {
+        var shortcuts = NativeShortcuts()
+        _ = shortcuts.handle(key: "g", path: "/", now: start)
+        for key in ["h", "n", "?", "[", "]", "g"] {
+            #expect(shortcuts.handle(key: key, path: "/", typing: true, now: start) == .ignored)
+        }
+        #expect(shortcuts.handle(key: "h", path: "/", now: start) == .ignored)
+        #expect(shortcuts.handle(key: "k", command: true, path: "/", typing: true, now: start) == .openPalette)
+        #expect(shortcuts.handle(key: "b", command: true, path: "/", typing: true, now: start) == .toggleSidebar)
     }
 
     @Test func goToRoutesFollowTheShortcutKeys() {

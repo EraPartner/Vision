@@ -49,6 +49,134 @@ components:
       description: Rows to skip. Omit (together with limit) to receive the whole collection.
 
   schemas:
+    ReportPeriod:
+      description: Report window. Custom dates validate their YYYY-MM-DD shape; the route does not check calendar validity or from/to ordering.
+      default: { kind: rolling, months: 12 }
+      oneOf:
+        - type: object
+          required: [kind]
+          properties:
+            kind: { type: string, enum: [ytd] }
+        - type: object
+          required: [kind, months]
+          properties:
+            kind: { type: string, enum: [rolling] }
+            months: { type: integer, minimum: 1, maximum: 60 }
+        - type: object
+          required: [kind, from, to]
+          properties:
+            kind: { type: string, enum: [custom] }
+            from: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+            to: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+        - type: object
+          required: [kind, year]
+          properties:
+            kind: { type: string, enum: [year] }
+            year: { type: integer, minimum: 2000, maximum: 2100 }
+      discriminator:
+        propertyName: kind
+    ReportThemeToken:
+      type: string
+      pattern: '^\d{1,3}(?:\.\d+)?\s+\d{1,3}(?:\.\d+)?%\s+\d{1,3}(?:\.\d+)?%$'
+      description: HSL component triple only, without hsl() or CSS declarations. The shape guard does not impose numeric hue/saturation/lightness bounds.
+      example: '158 62% 32%'
+    ReportTheme:
+      type: object
+      default: { mode: light }
+      description: Known optional HSL tokens. Unknown properties are stripped by the route; omitted mode defaults to light.
+      properties:
+        primary: { $ref: "#/components/schemas/ReportThemeToken" }
+        accent: { $ref: "#/components/schemas/ReportThemeToken" }
+        success: { $ref: "#/components/schemas/ReportThemeToken" }
+        expense: { $ref: "#/components/schemas/ReportThemeToken" }
+        surface: { $ref: "#/components/schemas/ReportThemeToken" }
+        text: { $ref: "#/components/schemas/ReportThemeToken" }
+        muted: { $ref: "#/components/schemas/ReportThemeToken" }
+        border: { $ref: "#/components/schemas/ReportThemeToken" }
+        chart1: { $ref: "#/components/schemas/ReportThemeToken" }
+        chart2: { $ref: "#/components/schemas/ReportThemeToken" }
+        chart3: { $ref: "#/components/schemas/ReportThemeToken" }
+        chart4: { $ref: "#/components/schemas/ReportThemeToken" }
+        chart5: { $ref: "#/components/schemas/ReportThemeToken" }
+        chart6: { $ref: "#/components/schemas/ReportThemeToken" }
+        chart7: { $ref: "#/components/schemas/ReportThemeToken" }
+        chart8: { $ref: "#/components/schemas/ReportThemeToken" }
+        mode: { type: string, enum: [light, dark], default: light }
+    ReportExclusionIds:
+      type: array
+      default: []
+      items: { type: integer, format: int32, minimum: 1, maximum: 2147483647 }
+    ReportTaxProfile:
+      type: object
+      properties:
+        filingStatus: { type: string }
+        region: { type: string }
+        taxYear: { type: integer }
+    ReportPrecomputedPIT:
+      type: object
+      description: Existing frontend-engine amounts; no server-side PIT calculation. Bracket rate uses percent units (25 means 25%).
+      properties:
+        taxableIncome: { type: number }
+        totalTax: { type: number }
+        brackets:
+          type: array
+          items:
+            type: object
+            properties:
+              label: { type: string }
+              rate: { type: number }
+              taxableIncome: { type: number }
+              taxAmount: { type: number }
+    ReportPrecomputedHousehold:
+      type: object
+      description: Frontend-engine per-partner figures. Partner ids must be unique; duplicate ids are rejected with 400.
+      required: [assessmentMode, partners]
+      properties:
+        assessmentMode: { type: string, enum: [single, separate, joint] }
+        legalBasis: { type: string, maxLength: 200 }
+        quotient:
+          type: object
+          required: [applied, transfer, benefit]
+          properties:
+            applied: { type: boolean }
+            transfer: { type: number }
+            fromPartnerId: { type: string, enum: [A, B] }
+            toPartnerId: { type: string, enum: [A, B] }
+            benefit: { type: number }
+        partners:
+          type: array
+          minItems: 1
+          maxItems: 2
+          items:
+            type: object
+            required: [partnerId, grossIncome, taxableIncome, totalPIT]
+            properties:
+              partnerId: { type: string, enum: [A, B] }
+              grossIncome: { type: number }
+              taxableIncome: { type: number }
+              totalPIT: { type: number }
+    ReportRequest:
+      type: object
+      description: >-
+        Shared validated request for all three existing report routes. An empty object is valid.
+        Unknown fields are stripped, including the obsolete top-level start_date/end_date/year;
+        select a window through period instead. Tax context fields are accepted by all routes
+        but forwarded to rendering only for the tax report. Null is not an omitted field.
+      properties:
+        currency: { type: string, pattern: '^[A-Z]{3}$', default: EUR }
+        period: { $ref: "#/components/schemas/ReportPeriod" }
+        sections:
+          type: array
+          default: []
+          items: { type: string }
+          description: Section ids; omitted or empty selects the renderer defaults. The route does not enforce a section-id enum.
+        theme: { $ref: "#/components/schemas/ReportTheme" }
+        excludedCategoryIds: { $ref: "#/components/schemas/ReportExclusionIds" }
+        excludedRecipientIds: { $ref: "#/components/schemas/ReportExclusionIds" }
+        taxProfile: { $ref: "#/components/schemas/ReportTaxProfile" }
+        precomputedPIT: { $ref: "#/components/schemas/ReportPrecomputedPIT" }
+        household: { $ref: "#/components/schemas/BelgianTaxHouseholdInput" }
+        precomputedHousehold: { $ref: "#/components/schemas/ReportPrecomputedHousehold" }
     CsvNumberFormat:
       type: string
       enum: [auto, decimal_dot, decimal_comma]
@@ -173,6 +301,1795 @@ components:
             ]
         mode: { type: string, enum: [native, dev] }
         version: { type: string, pattern: "^v?[0-9][0-9A-Za-z.+-]{0,63}$" }
+    # Shared TypeScript tax engine (ADR-204); existing web calculations remain compatible.
+    BelgianTaxHouseholdTaxResult:
+      type: object
+      required:
+        - engineVersion
+        - incomeYear
+        - assessment
+        - partners
+        - quotient
+        - csss
+        - propertyTaxEstimate
+        - totals
+        - issues
+      properties:
+        engineVersion:
+          type: integer
+          enum:
+            - 2
+        incomeYear:
+          type: integer
+        assessment:
+          $ref: "#/components/schemas/BelgianTaxAssessmentDecision"
+        partners:
+          type: array
+          items:
+            $ref: "#/components/schemas/BelgianTaxPartnerTaxResult"
+        quotient:
+          $ref: "#/components/schemas/BelgianTaxMaritalQuotientResult"
+        csss:
+          $ref: "#/components/schemas/BelgianTaxHouseholdCsssResult"
+        propertyTaxEstimate:
+          type: number
+        totals:
+          $ref: "#/components/schemas/BelgianTaxHouseholdTotals"
+        issues:
+          type: array
+          items:
+            $ref: "#/components/schemas/BelgianTaxHouseholdTaxIssue"
+    BelgianTaxAssessmentDecision:
+      type: object
+      required:
+        - mode
+        - reason
+        - legalBasis
+        - partnerIds
+      properties:
+        mode:
+          type: string
+          enum:
+            - single
+            - separate
+            - joint
+        reason:
+          type: string
+          enum:
+            - one_partner
+            - no_legal_union
+            - union_year
+            - union_year_after_legal_cohabitation
+            - union_in_force
+            - factual_separation_year
+            - factually_separated
+            - dissolution_year
+            - dissolved
+            - death_year
+            - death_year_joint_election
+            - surviving_partner
+            - treaty_exempt_income
+            - legacy_assumed_joint
+        legalBasis:
+          type: string
+          description: Article the decision rests on, e.g. "WIB 92 art. 126 §2 al. 1, 1°".
+        electable:
+          type: boolean
+          description: True when the taxpayer may elect the other mode (year of death, art. 126 §3).
+        partnerIds:
+          type: array
+          items:
+            type: string
+            enum:
+              - A
+              - B
+          description: Partners assessed for the year (the survivor only after a death in an earlier year).
+    BelgianTaxPartnerTaxResult:
+      type: object
+      required:
+        - partnerId
+        - activities
+        - categories
+        - grossIncome
+        - employeeSocialSecurity
+        - professionalExpenses
+        - unionDuesApplied
+        - netProfessionalIncome
+        - otherTaxableIncome
+        - alimonyDeduction
+        - taxableIncomeBeforeQuotient
+        - quotientAdjustment
+        - taxableIncome
+        - bracketTax
+        - exemption
+        - exemptionBenefit
+        - pitAfterExemption
+        - reductions
+        - ownHomeCreditRegime
+        - ownHomeCredit
+        - pensionReduction
+        - reductionsApplied
+        - federalPITAfterReductions
+        - communalSurcharge
+        - totalPIT
+        - specialSocialSecurityContribution
+        - csssSubject
+        - dividendWhtReclaim
+        - savingsInterestTax
+        - marginalRate
+      properties:
+        partnerId:
+          type: string
+          enum:
+            - A
+            - B
+        activities:
+          type: array
+          items:
+            $ref: "#/components/schemas/BelgianTaxActivityTaxResult"
+        categories:
+          type: array
+          items:
+            $ref: "#/components/schemas/BelgianTaxCategoryTaxResult"
+        grossIncome:
+          type: number
+          description: Gross income of the activities that carry a gross figure (not `net_professional_amount`).
+        employeeSocialSecurity:
+          type: number
+        professionalExpenses:
+          type: number
+        unionDuesApplied:
+          type: number
+        netProfessionalIncome:
+          type: number
+        otherTaxableIncome:
+          type: number
+        alimonyDeduction:
+          type: number
+        taxableIncomeBeforeQuotient:
+          type: number
+          description: Net professional + other income − alimony, before the marital quotient.
+        quotientAdjustment:
+          type: number
+          description: Positive when the quotient adds income to this partner, negative when it removes some.
+        taxableIncome:
+          type: number
+        bracketTax:
+          $ref: "#/components/schemas/BelgianTaxBracketTax"
+        exemption:
+          $ref: "#/components/schemas/BelgianTaxExemptionAllocation"
+        exemptionBenefit:
+          type: number
+        pitAfterExemption:
+          type: number
+        reductions:
+          $ref: "#/components/schemas/BelgianTaxTaxReductionBreakdown"
+        ownHomeCreditRegime:
+          type: string
+          enum:
+            - none
+            - flemish_woonbonus
+            - walloon_cheque_habitat
+        ownHomeCredit:
+          type: number
+        pensionReduction:
+          type: number
+          description: Reduction for pensions of this partner (WIB 92 arts 147-153, per spouse by art. 150).
+        reductionsApplied:
+          type: number
+          description:
+            "Reductions charged on this partner's tax: min(pension reduction + reductions + own-home
+
+            credit, tax)."
+        federalPITAfterReductions:
+          type: number
+        communalSurcharge:
+          type: number
+        totalPIT:
+          type: number
+        specialSocialSecurityContribution:
+          type: number
+        csssSubject:
+          type: boolean
+        dividendWhtReclaim:
+          type: number
+        savingsInterestTax:
+          type: number
+        marginalRate:
+          type: number
+    BelgianTaxActivityTaxResult:
+      type: object
+      required:
+        - activityId
+        - kind
+        - forfaitCategory
+        - grossIncome
+        - employeeSocialSecurity
+        - socialContributionsPaid
+        - professionalExpenses
+        - netProfessionalIncome
+      properties:
+        activityId:
+          type: string
+        kind:
+          type: string
+          enum:
+            - employee
+            - civil_servant
+            - director
+            - self_employed_profits
+            - self_employed_fees
+            - helping_spouse
+            - pension
+            - other_professional
+            - net_professional_amount
+        forfaitCategory:
+          type: string
+          enum:
+            - director
+            - helping_spouse
+            - remuneration
+            - profits
+            - fees
+            - none
+        grossIncome:
+          type: number
+        employeeSocialSecurity:
+          type: number
+        socialContributionsPaid:
+          type: number
+          description: Self-employed social contributions deducted before the forfait (art. 52, 7°).
+        professionalExpenses:
+          type: number
+          description: Category expenses allocated pro rata to this activity.
+        netProfessionalIncome:
+          type: number
+    BelgianTaxCategoryTaxResult:
+      type: object
+      required:
+        - category
+        - method
+        - grossAfterContributions
+        - professionalExpenses
+        - unionDuesApplied
+        - netIncome
+      properties:
+        category:
+          type: string
+          enum:
+            - director
+            - helping_spouse
+            - remuneration
+            - profits
+            - fees
+            - none
+        method:
+          type: string
+          enum:
+            - lump_sum
+            - actual
+        grossAfterContributions:
+          type: number
+        professionalExpenses:
+          type: number
+        unionDuesApplied:
+          type: number
+        netIncome:
+          type: number
+          description: Category net income, clamped at 0 (no loss offset).
+    BelgianTaxBracketTax:
+      type: object
+      required:
+        - b1
+        - b2
+        - b3
+        - b4
+        - total
+      properties:
+        b1:
+          type: number
+        b2:
+          type: number
+        b3:
+          type: number
+        b4:
+          type: number
+        total:
+          type: number
+    BelgianTaxExemptionAllocation:
+      type: object
+      required:
+        - basic
+        - disability
+        - dependentSupplements
+        - isolatedParentSupplement
+        - ownTotal
+        - transferredIn
+        - transferredOut
+        - total
+        - applied
+      properties:
+        basic:
+          type: number
+        disability:
+          type: number
+        dependentSupplements:
+          type: number
+        isolatedParentSupplement:
+          type: number
+        ownTotal:
+          type: number
+          description: basic + disability + dependentSupplements + isolatedParentSupplement.
+        transferredIn:
+          type: number
+          description: Unused exemption received from the other spouse (joint assessment).
+        transferredOut:
+          type: number
+          description: Unused exemption passed to the other spouse (joint assessment).
+        total:
+          type: number
+          description: ownTotal + transferredIn − transferredOut.
+        applied:
+          type: number
+          description: "Part of `total` charged on the taxable income: min(total, taxable income)."
+    BelgianTaxTaxReductionBreakdown:
+      type: object
+      required:
+        - pension
+        - lifeInsurance
+        - groupInsurance
+        - donations
+        - childcare
+        - domesticHelp
+        - serviceVouchers
+        - total
+      properties:
+        pension:
+          type: number
+        lifeInsurance:
+          type: number
+        groupInsurance:
+          type: number
+        donations:
+          type: number
+        childcare:
+          type: number
+        domesticHelp:
+          type: number
+        serviceVouchers:
+          type: number
+        total:
+          type: number
+          description: Sum of the reductions above, before the cap at the tax due (own-home credit excluded).
+    BelgianTaxMaritalQuotientResult:
+      type: object
+      required:
+        - applied
+        - transfer
+        - target
+        - cap
+        - benefit
+      properties:
+        applied:
+          type: boolean
+        transfer:
+          type: number
+        fromPartnerId:
+          type: string
+          enum:
+            - A
+            - B
+        toPartnerId:
+          type: string
+          enum:
+            - A
+            - B
+        target:
+          type: number
+          description: min(30% of the household professional income, cap).
+        cap:
+          type: number
+        benefit:
+          type: number
+          description: Combined tax saving (0 when not applied).
+    BelgianTaxHouseholdCsssResult:
+      type: object
+      required:
+        - scale
+        - base
+        - total
+      properties:
+        scale:
+          type: string
+          enum:
+            - single
+            - joint
+            - none
+        base:
+          type: number
+          description: Household base under joint assessment, otherwise the sum of each subject partner's base.
+        total:
+          type: number
+    BelgianTaxHouseholdTotals:
+      type: object
+      required:
+        - grossIncome
+        - employeeSocialSecurity
+        - professionalExpenses
+        - netProfessionalIncome
+        - taxableIncome
+        - federalPITBeforeExemption
+        - personalExemptionBenefit
+        - taxReductions
+        - federalPITAfterReductions
+        - communalSurcharge
+        - totalPIT
+        - specialSocialSecurityContribution
+        - propertyTaxEstimate
+        - totalTaxBurden
+        - netTakeHome
+        - dividendWhtReclaim
+        - savingsInterestTax
+        - refundableChildCredit
+      properties:
+        grossIncome:
+          type: number
+          description: "Cash income: gross activity income, other taxable income and already-net amounts."
+        employeeSocialSecurity:
+          type: number
+        professionalExpenses:
+          type: number
+        netProfessionalIncome:
+          type: number
+        taxableIncome:
+          type: number
+        federalPITBeforeExemption:
+          type: number
+        personalExemptionBenefit:
+          type: number
+        taxReductions:
+          type: number
+        federalPITAfterReductions:
+          type: number
+        communalSurcharge:
+          type: number
+        totalPIT:
+          type: number
+        specialSocialSecurityContribution:
+          type: number
+        propertyTaxEstimate:
+          type: number
+        totalTaxBurden:
+          type: number
+        netTakeHome:
+          type: number
+        dividendWhtReclaim:
+          type: number
+        savingsInterestTax:
+          type: number
+        refundableChildCredit:
+          type: number
+          description: Refundable child tax credit (art. 134 §3); always 0 until the formula is sourced.
+    BelgianTaxHouseholdTaxIssue:
+      type: object
+      required:
+        - code
+        - severity
+      properties:
+        code:
+          type: string
+          enum:
+            - relationship_dates_missing
+            - treaty_exempt_separate_assessment
+            - deceased_partner_not_assessed
+            - director_contributions_not_deducted
+            - forfait_category_aggregation_unverified
+            - union_dues_outside_remuneration_claim
+            - loss_offset_not_modelled
+            - joint_reduction_allocation_unverified
+            - csss_mixed_activity_base_unverified
+            - refundable_child_credit_not_modelled
+            - isolated_parent_supplement_not_granted
+            - senior_quotient_cap_birth_years_missing
+            - woonbonus_children_at_loan_start_missing
+            - pension_reduction_activity_income_not_excluded
+            - pension_exclusion_other_income_counted_as_activity
+            - pension_quotient_partial_exclusion_unverified
+            - donation_joint_ceiling_unverified
+            - mortgage_region_not_used
+        severity:
+          type: string
+          enum:
+            - info
+            - warning
+            - needs_source
+        partnerId:
+          type: string
+          enum:
+            - A
+            - B
+        activityId:
+          type: string
+    BelgianTaxCalculation:
+      type: object
+      required:
+        - grossIncome
+        - spouseProfessionalIncome
+        - householdGrossIncome
+        - employeeSocialSecurity
+        - specialSocialSecurityContribution
+        - personalExemptionAmount
+        - netIncomeAfterSS
+        - professionalExpenses
+        - otherDeductionsTotal
+        - deductions
+        - taxableIncome
+        - federalPITBracket1
+        - federalPITBracket2
+        - federalPITBracket3
+        - federalPITBracket4
+        - federalPITBeforeExemption
+        - personalExemptionBenefit
+        - federalTaxCredits
+        - ownHomeCreditRegime
+        - ownHomeCredit
+        - taxReductions
+        - federalPITAfterReductions
+        - communalSurcharge
+        - totalPIT
+        - totalTaxBurden
+        - effectiveRate
+        - marginalRate
+        - netTakeHome
+        - monthlyTaxReserve
+        - propertyTaxEstimate
+        - dividendWhtReclaim
+        - savingsInterestTax
+        - maritalQuotientTransfer
+        - maritalQuotientBenefit
+        - serviceVoucherCredit
+        - breakdown
+      properties:
+        grossIncome:
+          type: number
+          description: The taxpayer's own gross income (salary + other taxable income).
+        spouseProfessionalIncome:
+          type: number
+          description:
+            "Spouse's professional income counted under a joint assessment (0 otherwise).
+
+            `totalPIT` and the special social security contribution cover both spouses, so
+
+            `householdGrossIncome`, `netTakeHome` and `effectiveRate` include it."
+        householdGrossIncome:
+          type: number
+          description: "`grossIncome + spouseProfessionalIncome`; the base of `netTakeHome` and `effectiveRate`."
+        employeeSocialSecurity:
+          type: number
+        specialSocialSecurityContribution:
+          type: number
+        personalExemptionAmount:
+          type: number
+        netIncomeAfterSS:
+          type: number
+        professionalExpenses:
+          type: number
+        otherDeductionsTotal:
+          type: number
+        deductions:
+          type: object
+          additionalProperties:
+            type: number
+        taxableIncome:
+          type: number
+        federalPITBracket1:
+          type: number
+        federalPITBracket2:
+          type: number
+        federalPITBracket3:
+          type: number
+        federalPITBracket4:
+          type: number
+        federalPITBeforeExemption:
+          type: number
+          description: Federal PIT before any reduction (exemption, credits).
+        personalExemptionBenefit:
+          type: number
+        federalTaxCredits:
+          type: number
+        ownHomeCreditRegime:
+          type: string
+          enum:
+            - none
+            - flemish_woonbonus
+            - walloon_cheque_habitat
+          description: Regime applied for own-home credit, if any.
+        ownHomeCredit:
+          type: number
+          description: Estimated regional own-home tax credit (Flemish woonbonus / Walloon chèque habitat).
+        taxReductions:
+          type: number
+          description: Sum of reductions actually applied to PIT (clamped — never exceeds gross PIT).
+        pensionReduction:
+          type: number
+          description:
+            "Reduction for pensions (WIB 92 arts 147-153), part of `federalTaxCredits`. Absent on
+
+            calculations frozen before 2026-10-11."
+        federalPITAfterReductions:
+          type: number
+        communalSurcharge:
+          type: number
+        totalPIT:
+          type: number
+          description: Federal PIT after reductions + communal surcharge (income tax only).
+        totalTaxBurden:
+          type: number
+          description: Income tax + social security + special SS contribution + property tax estimate.
+        effectiveRate:
+          type: number
+        marginalRate:
+          type: number
+        netTakeHome:
+          type: number
+        monthlyTaxReserve:
+          type: number
+        propertyTaxEstimate:
+          type: number
+        dividendWhtReclaim:
+          type: number
+          description: Estimated dividend WHT reclaimable through the tax return (first €X of dividends).
+        savingsInterestTax:
+          type: number
+          description: Estimated savings deposit interest non-recoverable tax (15% above exemption).
+        maritalQuotientTransfer:
+          type: number
+          description:
+            "Income transferred to the non-earning / lower-earning spouse under the marital quotient.
+
+            0 when filing status is single or when both spouses earn comparably."
+        maritalQuotientBenefit:
+          type: number
+          description: Estimated tax reduction attributable to the marital quotient (informational).
+        serviceVoucherCredit:
+          type: number
+          description: Estimated service-voucher regional credit (after marital quotient).
+        breakdown:
+          type: array
+          items:
+            type: object
+            required:
+              - label
+              - amount
+            properties:
+              label:
+                type: string
+                description:
+                  "English calculation-side label. Not a display string: the on-screen
+
+                  PIT table renders its own translated rows (`tax.pit.row.*`). Consumers
+
+                  that do surface a row translate it themselves."
+              amount:
+                type: number
+              rate:
+                type: number
+              bracket:
+                type: string
+              bracketNumber:
+                type: number
+                description:
+                  "1-based bracket ordinal, present only on progressive-bracket rows.
+
+                  Carried explicitly because empty brackets are omitted from the array,
+
+                  so position does not imply the bracket number. Maps to the
+
+                  `tax.pit.row.bracket{n}` translation keys."
+    BelgianTaxHouseholdInput:
+      type: object
+      properties:
+        version:
+          type: integer
+          enum:
+            - 2
+        taxYear:
+          type: integer
+          minimum: 1900
+          maximum: 2200
+        profileConfigured:
+          type: boolean
+        region:
+          type: string
+          enum:
+            - flanders
+            - wallonia
+            - brussels
+        communalSurchargePercent:
+          type: number
+          minimum: 0
+          maximum: 9
+        partners:
+          minItems: 1
+          maxItems: 2
+          type: array
+          items:
+            $ref: "#/components/schemas/BelgianTaxInputPartner"
+        relationship:
+          $ref: "#/components/schemas/BelgianTaxInputRelationship"
+        dependents:
+          $ref: "#/components/schemas/BelgianTaxInputDependents"
+        home:
+          $ref: "#/components/schemas/BelgianTaxInputHome"
+        taxIncomeCategoryIds:
+          maxItems: 1000
+          type: array
+          items:
+            type: integer
+            minimum: 1
+            maximum: 9007199254740991
+        migratedFrom:
+          $ref: "#/components/schemas/BelgianTaxInputMigratedFrom"
+      required:
+        - version
+        - taxYear
+        - profileConfigured
+        - region
+        - communalSurchargePercent
+        - partners
+        - relationship
+        - dependents
+        - home
+      additionalProperties: {}
+      description: V2 household; accepts the same fields and limits as belgian_tax_household_v2 settings. Partner and activity IDs must be unique, partner A is required, partner references must exist, and pensionKind/netProfessionalIncome are restricted to their matching activity kinds.
+    BelgianTaxComputation:
+      type: object
+      required:
+        - result
+        - calculation
+      properties:
+        result:
+          $ref: "#/components/schemas/BelgianTaxHouseholdTaxResult"
+        calculation:
+          $ref: "#/components/schemas/BelgianTaxCalculation"
+    BelgianTaxInputPartnerActivity:
+      type: object
+      properties:
+        id:
+          type: string
+          pattern: ^act_[A-Za-z0-9_-]{1,64}$
+        kind:
+          type: string
+          enum:
+            - employee
+            - civil_servant
+            - director
+            - self_employed_profits
+            - self_employed_fees
+            - helping_spouse
+            - pension
+            - other_professional
+            - net_professional_amount
+        label:
+          type: string
+          maxLength: 200
+        grossIncome:
+          type: number
+          minimum: 0
+          maximum: 1000000000000
+        netProfessionalIncome:
+          type: number
+          minimum: 0
+          maximum: 1000000000000
+        pensionKind:
+          type: string
+          enum:
+            - statutory_from_legal_age
+            - survivor_or_transition
+            - other
+        startDate:
+          type: string
+          format: date
+          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+        endDate:
+          type: string
+          format: date
+          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+        selfEmployedOccupation:
+          type: string
+          enum:
+            - main
+            - secondary
+        socialContributionsPaid:
+          type: number
+          minimum: 0
+          maximum: 1000000000000
+        withholdingTax:
+          type: number
+          minimum: 0
+          maximum: 1000000000000
+        prepayments:
+          type: number
+          minimum: 0
+          maximum: 1000000000000
+        sourceRefs:
+          maxItems: 100
+          type: array
+          items:
+            type: string
+            maxLength: 200
+      required:
+        - id
+        - kind
+        - grossIncome
+      additionalProperties: {}
+    BelgianTaxInputPartnerReductions:
+      type: object
+      properties:
+        personalPensionContributions:
+          type: number
+          minimum: 0
+          maximum: 1000000000000
+        pensionScheme:
+          type: string
+          enum:
+            - "1050"
+            - "1350"
+        pensionEligible:
+          type: boolean
+        lifeInsurancePremiums:
+          type: number
+          minimum: 0
+          maximum: 1000000000000
+        lifeInsuranceEligible:
+          type: boolean
+        employeeGroupInsuranceContributions:
+          type: number
+          minimum: 0
+          maximum: 1000000000000
+        employeeGroupInsuranceEligible:
+          type: boolean
+        charitableDonations:
+          type: number
+          minimum: 0
+          maximum: 1000000000000
+        charitableDonationsEligible:
+          type: boolean
+        childcareCosts:
+          type: number
+          minimum: 0
+          maximum: 1000000000000
+        childcareEligibleDays:
+          type: integer
+          minimum: 0
+          maximum: 1000
+        childcareEligible:
+          type: boolean
+        domesticHelpCosts:
+          type: number
+          minimum: 0
+          maximum: 1000000000000
+        domesticHelpEligible:
+          type: boolean
+        serviceVoucherCount:
+          type: integer
+          minimum: 0
+          maximum: 1000
+        serviceVoucherSpend:
+          type: number
+          minimum: 0
+          maximum: 1000000000000
+        serviceVoucherEligible:
+          type: boolean
+        medicalExpenses:
+          type: number
+          minimum: 0
+          maximum: 1000000000000
+      required:
+        - personalPensionContributions
+        - lifeInsurancePremiums
+        - charitableDonations
+        - childcareCosts
+        - medicalExpenses
+      additionalProperties: {}
+    BelgianTaxInputPartner:
+      type: object
+      properties:
+        id:
+          type: string
+          enum:
+            - A
+            - B
+        displayName:
+          type: string
+          maxLength: 80
+        birthYear:
+          type: integer
+          minimum: 1900
+          maximum: 2200
+        isDisabled:
+          type: boolean
+        isIsolatedParent:
+          type: boolean
+        activities:
+          maxItems: 20
+          type: array
+          items:
+            $ref: "#/components/schemas/BelgianTaxInputPartnerActivity"
+        professionalExpenses:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              method:
+                type: string
+                enum:
+                  - lump_sum
+                  - actual
+              actualAmount:
+                type: number
+                minimum: 0
+                maximum: 1000000000000
+            required:
+              - method
+              - actualAmount
+            additionalProperties: {}
+        unionDues:
+          type: number
+          minimum: 0
+          maximum: 1000000000000
+        otherTaxableIncome:
+          type: number
+          minimum: 0
+          maximum: 1000000000000
+        alimonyPaid:
+          type: number
+          minimum: 0
+          maximum: 1000000000000
+        treatyExemptProfessionalIncome:
+          type: number
+          minimum: 0
+          maximum: 1000000000000
+        reductions:
+          $ref: "#/components/schemas/BelgianTaxInputPartnerReductions"
+        annualDividendIncome:
+          type: number
+          minimum: 0
+          maximum: 1000000000000
+        annualSavingsInterest:
+          type: number
+          minimum: 0
+          maximum: 1000000000000
+      required:
+        - id
+        - isDisabled
+        - activities
+        - professionalExpenses
+        - unionDues
+        - otherTaxableIncome
+        - alimonyPaid
+        - reductions
+      additionalProperties: {}
+    BelgianTaxInputRelationshipEvent:
+      type: object
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 64
+        kind:
+          type: string
+          enum:
+            - marriage
+            - legal_cohabitation
+            - legal_cohabitation_ended
+            - factual_cohabitation_start
+            - factual_separation
+            - divorce
+            - death
+        date:
+          type: string
+          format: date
+          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+        partnerId:
+          type: string
+          enum:
+            - A
+            - B
+      required:
+        - id
+        - kind
+        - date
+      additionalProperties: {}
+    BelgianTaxInputRelationship:
+      type: object
+      properties:
+        events:
+          maxItems: 50
+          type: array
+          items:
+            $ref: "#/components/schemas/BelgianTaxInputRelationshipEvent"
+        deathYearElection:
+          type: string
+          enum:
+            - joint
+            - separate
+        legacyAssumedJoint:
+          type: boolean
+      required:
+        - events
+      additionalProperties: {}
+    BelgianTaxInputDependents:
+      type: object
+      properties:
+        children:
+          type: integer
+          minimum: 0
+          maximum: 1000
+        childrenUnder3:
+          type: integer
+          minimum: 0
+          maximum: 1000
+        childrenDisabled:
+          type: integer
+          minimum: 0
+          maximum: 1000
+        otherPersons:
+          type: integer
+          minimum: 0
+          maximum: 1000
+        otherPersonsDisabled:
+          type: integer
+          minimum: 0
+          maximum: 1000
+        claimantPartnerId:
+          type: string
+          enum:
+            - A
+            - B
+      required:
+        - children
+        - otherPersons
+      additionalProperties: {}
+    BelgianTaxInputHomeAdditionalResidence:
+      type: object
+      properties:
+        label:
+          type: string
+          maxLength: 200
+        cadastralIncome:
+          type: number
+          minimum: 0
+          maximum: 1000000000000
+        region:
+          type: string
+          enum:
+            - flanders
+            - wallonia
+            - brussels
+        isOwnHome:
+          type: boolean
+        centimesOverride:
+          type: number
+          minimum: 0
+          maximum: 100000
+      required:
+        - cadastralIncome
+      additionalProperties: {}
+    BelgianTaxInputHome:
+      type: object
+      properties:
+        cadastralIncome:
+          type: number
+          minimum: 0
+          maximum: 1000000000000
+        cadastralCentimesOverride:
+          type: number
+          minimum: 0
+          maximum: 100000
+        additionalResidences:
+          maxItems: 50
+          type: array
+          items:
+            $ref: "#/components/schemas/BelgianTaxInputHomeAdditionalResidence"
+        mortgageInterestPaid:
+          type: number
+          minimum: 0
+          maximum: 1000000000000
+        mortgageCapitalRepaid:
+          type: number
+          minimum: 0
+          maximum: 1000000000000
+        mortgageStartYear:
+          type: integer
+          minimum: 1900
+          maximum: 2200
+        mortgageRegion:
+          type: string
+          enum:
+            - flanders
+            - wallonia
+            - brussels
+        mortgageIsPrimaryResidence:
+          type: boolean
+        mortgageCreditPartnerId:
+          type: string
+          enum:
+            - A
+            - B
+        mortgageSharePartnerB:
+          type: number
+          minimum: 0
+          maximum: 100
+        firstQualifyingYear:
+          type: integer
+          minimum: 1900
+          maximum: 2200
+        woonbonusChildrenAtLoanStart:
+          type: integer
+          minimum: 0
+          maximum: 1000
+      required:
+        - cadastralIncome
+        - mortgageInterestPaid
+      additionalProperties: {}
+    BelgianTaxInputMigratedFromUnmappedField:
+      type: object
+      properties:
+        field:
+          type: string
+          maxLength: 100
+        note:
+          type: string
+          maxLength: 100
+        value: {}
+      required:
+        - field
+        - note
+      additionalProperties: {}
+    BelgianTaxInputMigratedFrom:
+      type: object
+      properties:
+        fromVersion:
+          type: number
+          enum:
+            - 1
+        unmappedFields:
+          maxItems: 200
+          type: array
+          items:
+            $ref: "#/components/schemas/BelgianTaxInputMigratedFromUnmappedField"
+      required:
+        - fromVersion
+        - unmappedFields
+      additionalProperties: {}
+
+    BelgianTaxHistoricalCalculation:
+      type: object
+      required:
+        - totalPIT
+      properties:
+        grossIncome:
+          type: number
+          description: The taxpayer's own gross income (salary + other taxable income).
+        spouseProfessionalIncome:
+          type: number
+          description:
+            "Spouse's professional income counted under a joint assessment (0 otherwise).
+
+            `totalPIT` and the special social security contribution cover both spouses, so
+
+            `householdGrossIncome`, `netTakeHome` and `effectiveRate` include it."
+        householdGrossIncome:
+          type: number
+          description: "`grossIncome + spouseProfessionalIncome`; the base of `netTakeHome` and `effectiveRate`."
+        employeeSocialSecurity:
+          type: number
+        specialSocialSecurityContribution:
+          type: number
+        personalExemptionAmount:
+          type: number
+        netIncomeAfterSS:
+          type: number
+        professionalExpenses:
+          type: number
+        otherDeductionsTotal:
+          type: number
+        deductions:
+          type: object
+          additionalProperties:
+            type: number
+        taxableIncome:
+          type: number
+        federalPITBracket1:
+          type: number
+        federalPITBracket2:
+          type: number
+        federalPITBracket3:
+          type: number
+        federalPITBracket4:
+          type: number
+        federalPITBeforeExemption:
+          type: number
+          description: Federal PIT before any reduction (exemption, credits).
+        personalExemptionBenefit:
+          type: number
+        federalTaxCredits:
+          type: number
+        ownHomeCreditRegime:
+          type: string
+          enum:
+            - none
+            - flemish_woonbonus
+            - walloon_cheque_habitat
+          description: Regime applied for own-home credit, if any.
+        ownHomeCredit:
+          type: number
+          description: Estimated regional own-home tax credit (Flemish woonbonus / Walloon chèque habitat).
+        taxReductions:
+          type: number
+          description: Sum of reductions actually applied to PIT (clamped — never exceeds gross PIT).
+        pensionReduction:
+          type: number
+          description:
+            "Reduction for pensions (WIB 92 arts 147-153), part of `federalTaxCredits`. Absent on
+
+            calculations frozen before 2026-10-11."
+        federalPITAfterReductions:
+          type: number
+        communalSurcharge:
+          type: number
+        totalPIT:
+          type: number
+          description: Federal PIT after reductions + communal surcharge (income tax only).
+        totalTaxBurden:
+          type: number
+          description: Income tax + social security + special SS contribution + property tax estimate.
+        effectiveRate:
+          type: number
+        marginalRate:
+          type: number
+        netTakeHome:
+          type: number
+        monthlyTaxReserve:
+          type: number
+        propertyTaxEstimate:
+          type: number
+        dividendWhtReclaim:
+          type: number
+          description: Estimated dividend WHT reclaimable through the tax return (first €X of dividends).
+        savingsInterestTax:
+          type: number
+          description: Estimated savings deposit interest non-recoverable tax (15% above exemption).
+        maritalQuotientTransfer:
+          type: number
+          description:
+            "Income transferred to the non-earning / lower-earning spouse under the marital quotient.
+
+            0 when filing status is single or when both spouses earn comparably."
+        maritalQuotientBenefit:
+          type: number
+          description: Estimated tax reduction attributable to the marital quotient (informational).
+        serviceVoucherCredit:
+          type: number
+          description: Estimated service-voucher regional credit (after marital quotient).
+        breakdown:
+          type: array
+          items:
+            type: object
+            required:
+              - label
+              - amount
+            properties:
+              label:
+                type: string
+                description:
+                  "English calculation-side label. Not a display string: the on-screen
+
+                  PIT table renders its own translated rows (`tax.pit.row.*`). Consumers
+
+                  that do surface a row translate it themselves."
+              amount:
+                type: number
+              rate:
+                type: number
+              bracket:
+                type: string
+              bracketNumber:
+                type: number
+                description:
+                  "1-based bracket ordinal, present only on progressive-bracket rows.
+
+                  Carried explicitly because empty brackets are omitted from the array,
+
+                  so position does not imply the bracket number. Maps to the
+
+                  `tax.pit.row.bracket{n}` translation keys."
+      description: "Display calculation: current results contain every field. Frozen legacy calculations are returned verbatim and may lack fields introduced later; omitted figures must remain unavailable, never silently recomputed or filled with zero."
+    BelgianTaxSettingsWarning:
+      type: object
+      required:
+        - key
+        - kind
+        - issues
+      properties:
+        key:
+          type: string
+        kind:
+          type: string
+          enum:
+            - invalid_stored
+            - invalid_upgrade
+        issues:
+          type: array
+          items:
+            type: string
+    BelgianTaxOverview:
+      type: object
+      required:
+        - year
+        - liveYear
+        - isHistorical
+        - hasSnapshot
+        - hasProfile
+        - household
+        - liveHousehold
+        - householdSnapshots
+        - snapshotMetas
+        - metadata
+        - calculation
+        - result
+        - calculationSource
+        - householdResultSource
+        - householdMigrationNeeded
+        - snapshotsMigrationNeeded
+        - storedValueInvalid
+        - warnings
+        - records
+      properties:
+        year:
+          type: integer
+        liveYear:
+          type: integer
+        isHistorical:
+          type: boolean
+        hasSnapshot:
+          type: boolean
+        hasProfile:
+          type: boolean
+        householdMigrationNeeded:
+          type: boolean
+        snapshotsMigrationNeeded:
+          type: boolean
+        storedValueInvalid:
+          type: boolean
+        household:
+          $ref: "#/components/schemas/BelgianTaxHouseholdInput"
+        liveHousehold:
+          $ref: "#/components/schemas/BelgianTaxHouseholdInput"
+        householdSnapshots:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/BelgianTaxHouseholdInput"
+        snapshotMetas:
+          type: object
+          additionalProperties:
+            type: object
+            additionalProperties: true
+        metadata:
+          type: object
+          additionalProperties: true
+        calculation:
+          $ref: "#/components/schemas/BelgianTaxHistoricalCalculation"
+        result:
+          $ref: "#/components/schemas/BelgianTaxHouseholdTaxResult"
+        calculationSource:
+          type: string
+          enum:
+            - frozen
+            - computed
+        householdResultSource:
+          type: string
+          enum:
+            - frozen
+            - computed
+        warnings:
+          type: array
+          items:
+            $ref: "#/components/schemas/BelgianTaxSettingsWarning"
+        records:
+          type: array
+          items:
+            $ref: "#/components/schemas/Setting"
+
+    BelgianPortfolioTaxTotals:
+      type: object
+      description: Server-computed display totals. effectiveTaxRate is a percent; totalPIT is selected-year frozen-first. Historical realized/unrealized gains retain the web all-time holdings calculation.
+      required:
+        [
+          totalTaxes,
+          totalFees,
+          totalTaxesAndFees,
+          totalRecordedTaxes,
+          totalRecordedFees,
+          totalManualTaxes,
+          totalManualFees,
+          totalManualCosts,
+          totalRealizedGain,
+          totalUnrealizedGain,
+          effectiveTaxRate,
+          totalPIT,
+          portfolioTaxesPlusPIT,
+        ]
+      properties:
+        totalTaxes: { type: number, format: double }
+        totalFees: { type: number, format: double }
+        totalTaxesAndFees: { type: number, format: double }
+        totalRecordedTaxes: { type: number, format: double }
+        totalRecordedFees: { type: number, format: double }
+        totalManualTaxes: { type: number, format: double }
+        totalManualFees: { type: number, format: double }
+        totalManualCosts: { type: number, format: double }
+        totalRealizedGain: { type: number, format: double }
+        totalUnrealizedGain: { type: number, format: double }
+        effectiveTaxRate: { type: number, format: double }
+        totalPIT: { type: number, format: double }
+        portfolioTaxesPlusPIT: { type: number, format: double }
+
+    BelgianPortfolioTaxCostEntry:
+      type: object
+      required: [nameKey, value]
+      properties:
+        nameKey: { type: string }
+        value: { type: number, format: double }
+
+    BelgianPortfolioTaxAssetCosts:
+      type: object
+      required: [assetClass, taxes, fees, total]
+      properties:
+        assetClass: { type: string }
+        taxes: { type: number, format: double }
+        fees: { type: number, format: double }
+        total: { type: number, format: double }
+
+    BelgianPortfolioTaxInvestmentCosts:
+      type: object
+      description: realizedGain and all cost amounts are already expressed in the response currency; assetClass is the untranslated localization suffix.
+      required:
+        [
+          id,
+          name,
+          symbol,
+          assetClass,
+          recordedTaxes,
+          recordedFees,
+          manualTaxes,
+          manualFees,
+          taxes,
+          fees,
+          total,
+          realizedGain,
+          currency,
+        ]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        symbol: { type: string, nullable: true }
+        assetClass: { type: string }
+        recordedTaxes: { type: number, format: double }
+        recordedFees: { type: number, format: double }
+        manualTaxes: { type: number, format: double }
+        manualFees: { type: number, format: double }
+        taxes: { type: number, format: double }
+        fees: { type: number, format: double }
+        total: { type: number, format: double }
+        realizedGain: { type: number, format: double }
+        currency: { type: string }
+
+    BelgianPortfolioTaxMonthlyCosts:
+      type: object
+      description: YYYY-MM ordinary-transaction costs, including zero-cost months with transactions. Manual adjustments are excluded.
+      required: [period, taxes, fees]
+      properties:
+        period: { type: string }
+        taxes: { type: number, format: double }
+        fees: { type: number, format: double }
+
+    BelgianPortfolioTaxDividend:
+      type: object
+      description: Unknown ordinary dividend conventions leave gross base, reclaim, and net cost null. Included-in-units dividends are excluded; married reclaim uses a doubled exemption while dividendExemption is the single-taxpayer table value.
+      required:
+        [
+          totalDividendIncome,
+          dividendWhtRecorded,
+          grossDividendWht,
+          dividendExemption,
+          grossDividendBase,
+          dividendWhtReclaim,
+          dividendWhtNetCost,
+          unknownDividendConventionCount,
+        ]
+      properties:
+        totalDividendIncome: { type: number, format: double }
+        dividendWhtRecorded: { type: number, format: double }
+        grossDividendWht: { type: number, format: double }
+        dividendExemption: { type: number, format: double }
+        grossDividendBase: { type: number, format: double, nullable: true }
+        dividendWhtReclaim: { type: number, format: double, nullable: true }
+        dividendWhtNetCost: { type: number, format: double, nullable: true }
+        unknownDividendConventionCount: { type: integer }
+
+    BelgianPortfolioTaxEstimates:
+      type: object
+      required:
+        [
+          tobRecorded,
+          tobAutoEstimate,
+          tacrEstimate,
+          reyndersEstimate,
+          cgtEstimate,
+        ]
+      properties:
+        tobRecorded: { type: number, format: double }
+        tobAutoEstimate: { type: number, format: double }
+        tacrEstimate: { type: number, format: double }
+        reyndersEstimate: { type: number, format: double }
+        cgtEstimate: { type: number, format: double }
+
+    BelgianPortfolioTaxBadgePercent:
+      type: object
+      description: Percent-valued display badges, computed by TypeScript from the fraction-valued rates.
+      required:
+        [
+          securitiesAccountTaxRate,
+          capitalGainsTaxRate,
+          reyndersTaxRate,
+          dividendWHTRate,
+        ]
+      properties:
+        securitiesAccountTaxRate: { type: number, format: double }
+        capitalGainsTaxRate: { type: number, format: double }
+        reyndersTaxRate: { type: number, format: double }
+        dividendWHTRate: { type: number, format: double }
+
+    BelgianPortfolioTaxRates:
+      type: object
+      required:
+        [
+          securitiesAccountTaxRate,
+          capitalGainsTaxRate,
+          reyndersTaxRate,
+          dividendWHTRate,
+          securitiesAccountTaxThreshold,
+          badgePercent,
+        ]
+      properties:
+        securitiesAccountTaxRate: { type: number, format: double }
+        capitalGainsTaxRate: { type: number, format: double }
+        reyndersTaxRate: { type: number, format: double }
+        dividendWHTRate: { type: number, format: double }
+        securitiesAccountTaxThreshold: { type: number, format: double }
+        badgePercent:
+          { $ref: "#/components/schemas/BelgianPortfolioTaxBadgePercent" }
+
+    BelgianPortfolioTaxSummary:
+      type: object
+      required: [id, name, symbol, assetClass, currency]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        symbol: { type: string, nullable: true }
+        assetClass: { type: string }
+        currency: { type: string }
+
+    BelgianPortfolioTaxDashboard:
+      type: object
+      required:
+        [
+          year,
+          currency,
+          isEmpty,
+          hasProfile,
+          hasInKindIncomeUnclassified,
+          totals,
+          taxBreakdown,
+          feeBreakdown,
+          taxByAssetClass,
+          investmentBreakdown,
+          yearlyCostTrend,
+          dividend,
+          estimates,
+          taxTable,
+          summaries,
+          records,
+        ]
+      properties:
+        year: { type: integer }
+        currency: { type: string }
+        isEmpty: { type: boolean }
+        hasProfile: { type: boolean }
+        hasInKindIncomeUnclassified: { type: boolean }
+        totals: { $ref: "#/components/schemas/BelgianPortfolioTaxTotals" }
+        taxBreakdown:
+          {
+            type: array,
+            items:
+              { $ref: "#/components/schemas/BelgianPortfolioTaxCostEntry" },
+          }
+        feeBreakdown:
+          {
+            type: array,
+            items:
+              { $ref: "#/components/schemas/BelgianPortfolioTaxCostEntry" },
+          }
+        taxByAssetClass:
+          {
+            type: array,
+            items:
+              { $ref: "#/components/schemas/BelgianPortfolioTaxAssetCosts" },
+          }
+        investmentBreakdown:
+          {
+            type: array,
+            items:
+              {
+                $ref: "#/components/schemas/BelgianPortfolioTaxInvestmentCosts",
+              },
+          }
+        yearlyCostTrend:
+          {
+            type: array,
+            items:
+              { $ref: "#/components/schemas/BelgianPortfolioTaxMonthlyCosts" },
+          }
+        dividend: { $ref: "#/components/schemas/BelgianPortfolioTaxDividend" }
+        estimates: { $ref: "#/components/schemas/BelgianPortfolioTaxEstimates" }
+        taxTable: { $ref: "#/components/schemas/BelgianPortfolioTaxRates" }
+        summaries:
+          {
+            type: array,
+            items: { $ref: "#/components/schemas/BelgianPortfolioTaxSummary" },
+          }
+        records:
+          { type: array, items: { $ref: "#/components/schemas/Setting" } }
+
+    BelgianTaxDashboardYearCalculation:
+      type: object
+      required:
+        [
+          year,
+          calculation,
+          isFiled,
+          hasFrozenCalculation,
+          isCurrent,
+          hasSnapshot,
+          hasTransactions,
+        ]
+      properties:
+        year: { type: integer }
+        calculation:
+          { $ref: "#/components/schemas/BelgianTaxHistoricalCalculation" }
+        isFiled: { type: boolean }
+        hasFrozenCalculation: { type: boolean }
+        isCurrent: { type: boolean }
+        hasSnapshot: { type: boolean }
+        hasTransactions: { type: boolean }
+    BelgianTaxDashboardYearlyIncome:
+      type: object
+      required: [year, income, estimatedTax, netAfterTax, isApproximated]
+      properties:
+        year: { type: string }
+        income: { type: number }
+        estimatedTax: { type: number }
+        netAfterTax: { type: number }
+        isApproximated: { type: boolean }
+    BelgianTaxDashboardMonthlyIncome:
+      type: object
+      required: [period, income, estimatedTax]
+      properties:
+        period: { type: string }
+        income: { type: number }
+        estimatedTax: { type: number }
+    BelgianTaxDashboardRuleSection:
+      type: object
+      required: [titleKey, itemKeys]
+      properties:
+        titleKey: { type: string }
+        itemKeys:
+          type: array
+          items: { type: string }
+    BelgianTaxDashboardHouseholdRow:
+      type: object
+      required: [key, tone, partnerAmounts, household]
+      properties:
+        key: { type: string }
+        tone: { type: string, enum: [base, reduction, adjustment, total] }
+        partnerAmounts:
+          type: object
+          additionalProperties: { type: number }
+        household: { type: number }
+    BelgianTaxDashboard:
+      type: object
+      required:
+        [
+          year,
+          currency,
+          isHistorical,
+          hasIncomeSources,
+          hasStatsData,
+          isEmpty,
+          portfolioTaxesForYear,
+          totalTaxIncludingPortfolio,
+          totalTaxIncludingPropertyEstimate,
+          yearlyIncome,
+          monthlyIncomeTax,
+          recordedIncomeByPartner,
+          yearCalculations,
+          currentInputs,
+          exportProfile,
+          suggestions,
+          householdBreakdownRows,
+          rules,
+        ]
+      properties:
+        year: { type: integer }
+        currency: { type: string }
+        isHistorical: { type: boolean }
+        hasIncomeSources: { type: boolean }
+        hasStatsData: { type: boolean }
+        isEmpty: { type: boolean }
+        portfolioTaxesForYear: { type: number }
+        totalTaxIncludingPortfolio: { type: number }
+        totalTaxIncludingPropertyEstimate: { type: number, nullable: true }
+        yearlyIncome:
+          type: array
+          items:
+            { $ref: "#/components/schemas/BelgianTaxDashboardYearlyIncome" }
+        monthlyIncomeTax:
+          type: array
+          items:
+            { $ref: "#/components/schemas/BelgianTaxDashboardMonthlyIncome" }
+        recordedIncomeByPartner:
+          type: object
+          nullable: true
+          required: [A, B]
+          properties:
+            A: { type: number }
+            B: { type: number }
+        yearCalculations:
+          type: array
+          items:
+            { $ref: "#/components/schemas/BelgianTaxDashboardYearCalculation" }
+        currentInputs:
+          type: object
+          description: Existing projected v1 profile for the viewed year; presentation only. The household remains the editable source.
+          additionalProperties: true
+        exportProfile:
+          type: object
+          description: Complete v1 projection for the existing input-column CSV format; includes fields omitted from the short current-inputs card.
+          additionalProperties: true
+        suggestions:
+          type: array
+          items:
+            type: object
+            required: [id, titleKey, descriptionKey]
+            properties:
+              id: { type: string }
+              titleKey: { type: string }
+              descriptionKey: { type: string }
+              descriptionParams:
+                type: object
+                additionalProperties: { type: number }
+              estimate: { type: number }
+              noteKey: { type: string }
+        householdBreakdownRows:
+          type: array
+          items:
+            { $ref: "#/components/schemas/BelgianTaxDashboardHouseholdRow" }
+        rules:
+          type: array
+          items: { $ref: "#/components/schemas/BelgianTaxDashboardRuleSection" }
+
     # ADR-026 API envelope
     Envelope:
       type: object
@@ -266,13 +2183,24 @@ components:
         schemaname: { type: string }
         table_name: { type: string }
         live_rows:
-          { type: string, description: "BIGINT estimate from pg_stat_user_tables, as decimal text" }
+          {
+            type: string,
+            description: "BIGINT estimate from pg_stat_user_tables, as decimal text",
+          }
         dead_rows:
-          { type: string, description: "BIGINT estimate from pg_stat_user_tables, as decimal text" }
+          {
+            type: string,
+            description: "BIGINT estimate from pg_stat_user_tables, as decimal text",
+          }
         last_autovacuum: { type: string, nullable: true }
         last_autoanalyze: { type: string, nullable: true }
-        size: { type: string, description: pg_size_pretty of the total relation size }
-        size_bytes: { type: string, description: "BIGINT byte count, as decimal text" }
+        size:
+          {
+            type: string,
+            description: pg_size_pretty of the total relation size,
+          }
+        size_bytes:
+          { type: string, description: "BIGINT byte count, as decimal text" }
     DbStats:
       type: object
       required: [tables, db_size]
@@ -281,17 +2209,26 @@ components:
           type: array
           items: { $ref: "#/components/schemas/DbTableStat" }
         db_size:
-          { type: string, nullable: true, description: pg_size_pretty of the database size }
+          {
+            type: string,
+            nullable: true,
+            description: pg_size_pretty of the database size,
+          }
     # POST /api/admin/database/vacuum (routes/admin.ts)
     DbVacuumResult:
       type: object
       required: [vacuumed]
       properties:
-        vacuumed: { type: string, description: "The vacuumed table, or `all` for every table" }
+        vacuumed:
+          {
+            type: string,
+            description: "The vacuumed table, or `all` for every table",
+          }
     # /api/admin/database/tables/* (services/dbEditor.ts, packages/types/src/contracts/admin.ts, ADR-101)
     DbEditorColumn:
       type: object
-      required: [name, dataType, udtName, nullable, hasDefault, generated, writable]
+      required:
+        [name, dataType, udtName, nullable, hasDefault, generated, writable]
       properties:
         name: { type: string }
         dataType: { type: string, description: information_schema data_type }
@@ -300,7 +2237,10 @@ components:
         hasDefault: { type: boolean }
         generated: { type: boolean }
         writable:
-          { type: boolean, description: "False for generated and identity-always columns" }
+          {
+            type: boolean,
+            description: "False for generated and identity-always columns",
+          }
     DbEditorTableSchema:
       type: object
       required: [table, columns, primaryKey]
@@ -328,13 +2268,21 @@ components:
             limit: { type: integer }
             hasMore: { type: boolean }
             nextCursor:
-              { type: string, nullable: true, description: "Opaque cursor of the next page, null on the last page" }
+              {
+                type: string,
+                nullable: true,
+                description: "Opaque cursor of the next page, null on the last page",
+              }
     DbEditorStatement:
       type: object
       required: [op, preview]
       properties:
         op: { type: string }
-        preview: { type: string, description: The SQL statement with its parameters rendered as literals }
+        preview:
+          {
+            type: string,
+            description: The SQL statement with its parameters rendered as literals,
+          }
     DbEditorMutationResult:
       type: object
       description: "A dry run returns `count` and `statements`; a commit returns `applied`, `results` and `refreshScheduled`."
@@ -360,7 +2308,10 @@ components:
                 additionalProperties: {}
                 description: The written row; absent for a delete
         refreshScheduled:
-          { type: boolean, description: "Commit only; true when the dashboard materialized views refresh" }
+          {
+            type: boolean,
+            description: "Commit only; true when the dashboard materialized views refresh",
+          }
     # /api/admin/providers/* (services/providerHealthService.ts, ProviderHealthSchema)
     ProviderHealth:
       type: object
@@ -378,7 +2329,10 @@ components:
       properties:
         provider: { type: string }
         kind:
-          { type: string, description: "The provider kind: price, fx, inflation or research" }
+          {
+            type: string,
+            description: "The provider kind: price, fx, inflation or research",
+          }
         label: { type: string }
         last_success_at: { type: string, format: date-time, nullable: true }
         last_error_at: { type: string, format: date-time, nullable: true }
@@ -399,7 +2353,11 @@ components:
       properties:
         ok: { type: boolean }
         provider: { $ref: "#/components/schemas/ProviderHealth" }
-        error: { type: string, description: "The probe error, only when ok is false" }
+        error:
+          {
+            type: string,
+            description: "The probe error, only when ok is false",
+          }
     # GET /api/admin/metrics/requests (middleware/requestMetrics.ts, RouteMetricSchema)
     RouteMetric:
       type: object
@@ -878,6 +2836,115 @@ components:
                 limit: { type: integer, minimum: 1, maximum: 200 }
                 offset: { type: integer, minimum: 0, maximum: 1000000 }
 
+    AnalysisInterchangeValue:
+      nullable: true
+      oneOf:
+        - { type: string }
+        - { type: number, format: double }
+        - { type: boolean }
+      description: Values as returned. PostgreSQL decimal and unsafe-integer strings remain strings; numeric workbook cells retain the existing parser conversion.
+    AnalysisInterchangeColumn:
+      type: object
+      required: [id, label, type]
+      properties:
+        id: { type: string }
+        label: { type: string }
+        type:
+          type: string
+          enum: [string, integer, decimal, boolean, date]
+    AnalysisInterchangeAttachment:
+      type: object
+      required: [id, fileName, importedAt, sha256, columns, rows]
+      properties:
+        id: { type: string }
+        fileName: { type: string }
+        importedAt: { type: string, format: date-time }
+        sha256: { type: string, pattern: "^[0-9a-f]{64}$" }
+        columns:
+          type: array
+          maxItems: 32
+          items: { $ref: "#/components/schemas/AnalysisInterchangeColumn" }
+        rows:
+          type: array
+          maxItems: 1000
+          items:
+            type: object
+            additionalProperties:
+              { $ref: "#/components/schemas/AnalysisInterchangeValue" }
+    AnalysisInterchangeImport:
+      type: object
+      required: [format, attachment, formulaCells]
+      properties:
+        format: { type: string, enum: [csv, xlsx] }
+        attachment:
+          { $ref: "#/components/schemas/AnalysisInterchangeAttachment" }
+        formulaCells: { type: integer, minimum: 0 }
+      description: Read-only inferred scenario attachment. CSV uses a stable decoded-text SHA-derived identifier; XLSX uses a fresh workbook identifier and byte digest. Workbook formula cells are counted and become null, never executed. Units are unavailable after import.
+    AnalysisInterchangeExportPayload:
+      type: object
+      required: [result, context]
+      description: UTF-8 JSON submitted as the multipart file. Preserve the captured result and context exactly. No query execution or recomputation occurs; unchanged-input/export availability checks remain caller-owned.
+      properties:
+        result:
+          type: object
+          additionalProperties: true
+          required: [requestId, completedAt, rows, columns, window]
+          properties:
+            requestId: { type: string }
+            startedAt: { type: string }
+            completedAt: { type: string }
+            executor: { type: string }
+            columns:
+              type: array
+              items:
+                type: object
+                required: [id, type]
+                additionalProperties: true
+                properties:
+                  id: { type: string }
+                  type: { type: string }
+            declaredColumns:
+              type: array
+              items:
+                type: object
+                required: [id, type]
+                additionalProperties: true
+                properties:
+                  id: { type: string }
+                  type: { type: string }
+                  label: { type: string }
+            rows:
+              type: array
+              items:
+                type: object
+                additionalProperties: {}
+              description: Original Analysis cells, including JSON/array columns, as returned; no currency conversion.
+            window: { type: object, additionalProperties: true }
+            complete: { type: boolean }
+            coverage: {}
+            transformationCoverage: {}
+            preparationLineage: {}
+            transformationErrors: {}
+            formulaErrors: {}
+            formulaSummaries:
+              type: object
+              additionalProperties:
+                { $ref: "#/components/schemas/AnalysisInterchangeValue" }
+        context:
+          type: object
+          additionalProperties: true
+          required: [name, timezone, workspace]
+          properties:
+            name: { type: string }
+            timezone: { type: string }
+            workspace: { type: string }
+            definitionId: { type: string }
+            definitionVersion: { type: integer }
+            datasetIds: { type: array, items: { type: string } }
+            sourceReferences: { type: array, items: { type: string } }
+            assumptions: {}
+            formulas: {}
+
     AnalysisVisualFilter:
       type: object
       required: [fieldId, operator]
@@ -976,7 +3043,8 @@ components:
     AiAnalysisEditProposal:
       type: object
       additionalProperties: false
-      required: [schemaVersion, savedAnalysisId, baseVersion, rationale, operations]
+      required:
+        [schemaVersion, savedAnalysisId, baseVersion, rationale, operations]
       properties:
         schemaVersion: { type: integer, enum: [1] }
         savedAnalysisId: { type: string, minLength: 1 }
@@ -1195,6 +3263,50 @@ components:
       additionalProperties: true
       properties:
         id: { type: integer, format: int32 }
+        name: { type: string }
+        symbol: { type: string, nullable: true }
+        asset_class: { type: string }
+        assetClass: { type: string }
+        currency: { type: string }
+        originalCurrency: { type: string }
+        summarySource: { type: string }
+        is_active: { type: boolean }
+        usedFallbackRate: { type: boolean }
+        gainLossPercent: { type: number }
+        interestRate: { type: number }
+        transactionCount:
+          {
+            type: integer,
+            description: Ordinary history count on archivedPresentation; at most 1000 as in the existing web archive.,
+          }
+        currentPrice: { type: number }
+        currentValue: { type: number }
+        totalInvested: { type: number }
+        totalBuyCost: { type: number }
+        totalSellProceeds: { type: number }
+        totalFees: { type: number }
+        totalTaxes: { type: number }
+        totalDividends: { type: number }
+        totalIncome: { type: number }
+        avgCostBasis: { type: number }
+        realizedGain: { type: number }
+        unrealizedGain: { type: number }
+        totalGain: { type: number }
+        gainLoss: { type: number }
+        assetGain: { type: number }
+        fxGain: { type: number }
+        nativeCurrentValue: { type: number }
+        accruedInterest: { type: number }
+        projectedAnnualInterest: { type: number }
+        totalAppreciation: { type: number }
+        nativeCurrentPrice: { type: number }
+        nativeAvgCostBasis: { type: number }
+        unrealizedGainPercent: { type: number }
+        estimatedMonthlyRent:
+          type: number
+          description: Latest ordinary rent amount displayed by the current RealEstatePage; retains its existing raw-amount interpretation rather than applying an additional FX conversion.
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
         totalUnits:
           type: number
           description: Current units including custody fees and unit adjustments, rounded to eight decimal places.
@@ -1243,22 +3355,59 @@ components:
         unrealizedGain: { type: number }
         gainLoss: { type: number }
 
+    PortfolioSummaryTotals:
+      type: object
+      required:
+        [
+          totalPortfolioValue,
+          totalInvested,
+          totalGainLoss,
+          totalRealizedGain,
+          totalUnrealizedGain,
+          totalGain,
+          totalIncome,
+          totalDividends,
+          totalInKindIncome,
+          totalFees,
+          totalTaxes,
+          totalAssetGain,
+          totalFxGain,
+          totalReturnPct,
+          usedFallbackRate,
+        ]
+      properties:
+        totalPortfolioValue: { type: number }
+        totalInvested: { type: number }
+        totalGainLoss: { type: number }
+        totalRealizedGain: { type: number }
+        totalUnrealizedGain: { type: number }
+        totalGain: { type: number }
+        totalIncome: { type: number }
+        totalDividends: { type: number }
+        totalInKindIncome: { type: number }
+        totalFees: { type: number }
+        totalTaxes: { type: number }
+        totalAssetGain: { type: number }
+        totalFxGain: { type: number }
+        totalReturnPct: { type: number }
+        usedFallbackRate: { type: boolean }
+
     PortfolioSummaryData:
       type: object
       required: [currency, computed_at, totals, summaries, byAccount]
       properties:
         currency: { type: string }
         computed_at: { type: string, format: date-time }
+        firstInvestmentDate:
+          type: string
+          format: date
+          description: Earliest ordinary transaction on active investments, independent of selected performance chart period and investment creation dates. Custody/adjustment event dates and inactive investments are excluded. Omitted when no qualifying transaction exists.
         totals:
-          type: object
-          additionalProperties: { type: number }
-          properties:
-            totalDividends:
-              type: number
-              description: Dividend share of ordinary income summed across active holdings, at transaction-date FX. Excludes in-kind income.
-            totalInKindIncome:
-              type: number
-              description: Sum of active holdings' in-kind income, excluded from ordinary income and gains. Absence in an older response means zero.
+          $ref: "#/components/schemas/PortfolioSummaryTotals"
+        archivedPresentation:
+          type: array
+          description: Inactive-only presentation matching the web archive's ordinary CRUD replay and current quote FX. Supplied when active=false, separate from canonical dated-FX summaries/totals. In-kind income remains canonical dated data; broker byAccount remains a separate canonical snapshot.
+          items: { $ref: "#/components/schemas/PortfolioSummaryItem" }
         summaries:
           type: array
           items: { $ref: "#/components/schemas/PortfolioSummaryItem" }
@@ -1313,9 +3462,491 @@ components:
           properties:
             data: { $ref: "#/components/schemas/PortfolioSummaryData" }
 
+    MarketSearchData:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/MarketSearchResult" }
+
+    MarketQuoteItem:
+      type: object
+      additionalProperties: true
+      required: [symbol, currency]
+      properties:
+        symbol: { type: string }
+        currency: { type: string }
+        name: { type: string, nullable: true }
+        exchange: { type: string, nullable: true }
+        type: { type: string, nullable: true }
+        price: { type: number, nullable: true }
+        change: { type: number, nullable: true }
+        changePercent: { type: number, nullable: true }
+        open: { type: number, nullable: true }
+        dayHigh: { type: number, nullable: true }
+        dayLow: { type: number, nullable: true }
+        prevClose: { type: number, nullable: true }
+        volume: { type: number, nullable: true }
+        avgVolume: { type: number, nullable: true }
+        high52w: { type: number, nullable: true }
+        low52w: { type: number, nullable: true }
+        analystConsensus:
+          {
+            $ref: "#/components/schemas/ResearchAnalystConsensus",
+            nullable: true,
+          }
+        recentAnalystActions:
+          type: array
+          items: { type: object, additionalProperties: true }
+
+    MarketQuoteData:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/MarketQuoteItem" }
+        total: { type: integer, minimum: 0 }
+
+    MarketNewsItem:
+      type: object
+      required: [publishedAt, thumbnail, relatedSymbols]
+      properties:
+        title: { type: string, nullable: true }
+        link: { type: string, nullable: true }
+        publisher: { type: string, nullable: true }
+        publishedAt: { type: number, nullable: true }
+        thumbnail: { type: string, nullable: true }
+        relatedSymbols:
+          type: array
+          items: { type: string }
+
+    MarketNewsData:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/MarketNewsItem" }
+        total: { type: integer, minimum: 0 }
+
+    WatchlistData:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/WatchlistItem" }
+        total: { type: integer, minimum: 0 }
+        limit: { type: integer, minimum: 1 }
+        offset: { type: integer, minimum: 0 }
+
+    InvestmentPriceHistoryPoint:
+      type: object
+      required: [timestampMs, price]
+      properties:
+        timestampMs: { type: number }
+        price: { type: number }
+
+    InvestmentPriceHistoryData:
+      type: object
+      required: [investment_id, provider, points]
+      properties:
+        investment_id: { type: integer, minimum: 1 }
+        provider: { type: string }
+        points:
+          type: array
+          items: { $ref: "#/components/schemas/InvestmentPriceHistoryPoint" }
+
     # Research wire contracts. These are named even where most provider fields
     # are optional so generated clients and the hand-written UI adapters cannot
     # silently drift apart.
+    ResearchPresentationRow:
+      type: object
+      required: [time]
+      description: Timestamp plus submitted-series/indicator identifiers. Missing provider volume fields may be absent; non-finite derived values serialize as null.
+      properties:
+        time: { type: number }
+      additionalProperties: { type: number, nullable: true }
+
+    ResearchPresentationCompareResult:
+      type: object
+      required: [rows, stats, correlation]
+      properties:
+        rows:
+          type: array
+          items: { $ref: "#/components/schemas/ResearchPresentationRow" }
+        stats:
+          type: array
+          items:
+            type: object
+            required: [symbol, totalReturn, volatility, maxDrawdown]
+            properties:
+              symbol: { type: string }
+              totalReturn: { type: number, nullable: true }
+              volatility: { type: number, nullable: true }
+              maxDrawdown: { type: number, nullable: true }
+              firstTime: { type: number }
+              lastTime: { type: number }
+        correlation:
+          type: object
+          required: [symbols, matrix]
+          properties:
+            symbols: { type: array, items: { type: string } }
+            matrix:
+              type: array
+              items:
+                type: array
+                items: { type: number, nullable: true }
+
+    ResearchPresentationChartResult:
+      type: object
+      required: [rows, oscillatorRows]
+      properties:
+        rows:
+          type: array
+          items: { $ref: "#/components/schemas/ResearchPresentationRow" }
+        oscillatorRows:
+          type: array
+          items: { $ref: "#/components/schemas/ResearchPresentationRow" }
+
+    ResearchPresentationWatchlistList:
+      type: object
+      required:
+        [
+          distancePercent,
+          absoluteDistancePercent,
+          isAtOrBelowTarget,
+          sinceAddedPercent,
+        ]
+      properties:
+        distancePercent: { type: number, nullable: true }
+        absoluteDistancePercent: { type: number, nullable: true }
+        isAtOrBelowTarget: { type: boolean }
+        sinceAddedPercent: { type: number, nullable: true }
+
+    ResearchPresentationWatchlistResult:
+      type: object
+      required: [list, chart, preview]
+      properties:
+        list: { $ref: "#/components/schemas/ResearchPresentationWatchlistList" }
+        chart:
+          type: object
+          required:
+            [
+              distancePercent,
+              absoluteDistancePercent,
+              isAtOrBelowTarget,
+              hasValidTarget,
+              domain,
+            ]
+          properties:
+            distancePercent: { type: number, nullable: true }
+            absoluteDistancePercent: { type: number, nullable: true }
+            isAtOrBelowTarget: { type: boolean }
+            hasValidTarget: { type: boolean }
+            domain:
+              type: array
+              minItems: 2
+              maxItems: 2
+              items: { type: number }
+        preview:
+          type: object
+          nullable: true
+          required: [absolutePercent, direction]
+          properties:
+            absolutePercent: { type: number }
+            direction: { type: string, enum: [below, above] }
+
+    ResearchPresentationWatchlistBatchResult:
+      type: object
+      required: [entries]
+      properties:
+        entries:
+          type: array
+          items:
+            type: object
+            required: [id, list]
+            properties:
+              id: { type: integer, minimum: 1 }
+              list:
+                {
+                  $ref: "#/components/schemas/ResearchPresentationWatchlistList",
+                }
+
+    ResearchPresentationAnalystResult:
+      type: object
+      nullable: true
+      required: [total, bullFraction, bearFraction, verdictKey, tone, fractions]
+      properties:
+        total: { type: number }
+        bullFraction: { type: number }
+        bearFraction: { type: number }
+        verdictKey:
+          {
+            type: string,
+            enum:
+              [
+                market.strongBuy,
+                market.buy,
+                market.hold,
+                market.sell,
+                market.strongSell,
+              ],
+          }
+        tone: { type: string, enum: [success, destructive, warning] }
+        fractions: { $ref: "#/components/schemas/ResearchAnalystConsensus" }
+
+    ResearchPresentationProviderQuoteResult:
+      type: object
+      nullable: true
+      required: [symbol, name, change, changePercent, currency, exchange, type]
+      properties:
+        symbol: { type: string }
+        name: { type: string }
+        price: { type: number, nullable: true }
+        change: { type: number, nullable: true }
+        changePercent: { type: number, nullable: true }
+        currency: { type: string }
+        exchange: { type: string }
+        type: { type: string }
+
+    ResearchPresentationMarketAddResult:
+      type: object
+      required: [providedCount, isConsistent]
+      properties:
+        derivedAmount: { type: number, nullable: true }
+        derivedUnits: { type: number, nullable: true }
+        derivedPrice: { type: number, nullable: true }
+        effectiveAmount: { type: number, nullable: true }
+        effectiveUnits: { type: number, nullable: true }
+        effectivePrice: { type: number, nullable: true }
+        providedCount: { type: integer, minimum: 0, maximum: 3 }
+        isConsistent: { type: boolean }
+
+    ResearchLifeScenario:
+      type: object
+      additionalProperties: true
+      required:
+        [
+          id,
+          interruptionMonths,
+          monthlySurplus,
+          monthlyIncomeLoss,
+          monthlyContribution,
+        ]
+      properties:
+        id: { type: string, minLength: 1 }
+        kind: { type: string, enum: [income_interruption] }
+        interruptionMonths: { type: integer, enum: [3] }
+        monthlySurplus: { type: number, minimum: 0 }
+        monthlyIncomeLoss: { type: number, minimum: 0 }
+        monthlyContribution: { type: number, minimum: 0 }
+        goalValue: { type: number, exclusiveMinimum: 0 }
+        name: { type: string }
+        goalDate: { type: string }
+
+    ResearchLifeScenarioForecastInput:
+      type: object
+      additionalProperties: true
+      required: [horizonMonths]
+      description: >-
+        Immediate camelCase forecast input. Only horizon is validated here.
+        monthlyContribution, targetValue, goalMonth and seed are overwritten from
+        the scenario, so malformed discarded main money values do not block a
+        valid scenario. Other fields pass through unchanged; the existing forecast
+        request adapter/route retains its own normalization and validation.
+      properties:
+        horizonMonths: { type: integer, minimum: 1, maximum: 600 }
+
+    ResearchLifeScenarioPreparedInput:
+      type: object
+      additionalProperties: true
+      required: [horizonMonths, monthlyContribution, seed]
+      properties:
+        horizonMonths: { type: integer, minimum: 1, maximum: 600 }
+        monthlyContribution: { type: number, minimum: 0 }
+        targetValue: { type: number, exclusiveMinimum: 0 }
+        goalMonth: { type: integer, minimum: 1, maximum: 600 }
+        seed: { type: string }
+
+    ResearchLifeScenarioPrepareResult:
+      type: object
+      required:
+        [baselineInput, interruptedInput, reducedContribution, monthlyDeficit]
+      properties:
+        baselineInput:
+          { $ref: "#/components/schemas/ResearchLifeScenarioPreparedInput" }
+        interruptedInput:
+          allOf:
+            - $ref: "#/components/schemas/ResearchLifeScenarioPreparedInput"
+            - type: object
+              required: [monthlyContributionSchedule]
+              properties:
+                monthlyContributionSchedule:
+                  type: array
+                  minItems: 3
+                  maxItems: 3
+                  items: { type: number, minimum: 0 }
+        goalMonth: { type: integer, minimum: 1, maximum: 600 }
+        reducedContribution: { type: number, minimum: 0 }
+        monthlyDeficit: { type: number, minimum: 0 }
+
+    ResearchLifeScenarioCompareResult:
+      type: object
+      required: [comparable, available, medianGap, errorKey]
+      properties:
+        comparable: { type: boolean }
+        available: { type: boolean }
+        medianGap: { type: number, nullable: true }
+        errorKey:
+          {
+            type: string,
+            nullable: true,
+            enum: [research.lifeScenario.inputsChanged],
+          }
+
+    ResearchPresentationSnapshot:
+      type: object
+      required: [kind]
+      description: >-
+        Uploaded JSON discriminated by kind. compare requires series[{symbol,points}]
+        (max 6). chart requires series[{id,field,type,points}] (max 5),
+        indicators[{id,type,period,seriesId}] (max 20, period 1..500), rebase,
+        oscillator and nullable oscillatorSeriesId. watchlist requires nullable
+        targetPrice/currentPrice/addedPrice and optional points. watchlistBatch
+        requires entries[{id,targetPrice,currentPrice,addedPrice}] (max 5000).
+        providerQuote requires points and investment{name,currency,symbol?,priceProvider?},
+        with optional selectedSymbol. analyst requires nullable consensus with all five
+        numeric count fields. marketAdd accepts positive amount/units/price and optional
+        derive (default true). lifeScenarioPrepare requires scenario, forecastInput
+        and optional nullable goalMonth; contribution must not exceed surplus, and
+        a dated goal pairs a positive goalValue with goalMonth within horizon.
+        lifeScenarioCompare requires baseline/interrupted raw forecasts and checks
+        exactly five market-input fields with strict missing/null semantics.
+        Points require time, with optional nullable numeric
+        close/high/low/volume. There is no point-count truncation; transport is bounded.
+      properties:
+        kind:
+          {
+            type: string,
+            enum:
+              [
+                compare,
+                chart,
+                watchlist,
+                watchlistBatch,
+                providerQuote,
+                analyst,
+                marketAdd,
+                lifeScenarioPrepare,
+                lifeScenarioCompare,
+              ],
+          }
+        scenario: { $ref: "#/components/schemas/ResearchLifeScenario" }
+        forecastInput:
+          { $ref: "#/components/schemas/ResearchLifeScenarioForecastInput" }
+        goalMonth: { type: integer, minimum: 1, maximum: 600, nullable: true }
+        baseline: { $ref: "#/components/schemas/ResearchPortfolioForecastData" }
+        interrupted:
+          { $ref: "#/components/schemas/ResearchPortfolioForecastData" }
+        series:
+          type: array
+          items:
+            type: object
+            properties:
+              symbol: { type: string, minLength: 1, maxLength: 64 }
+              id: { type: string, minLength: 1, maxLength: 128 }
+              field: { type: string, enum: [price, volume] }
+              type: { type: string, enum: [line, area, candlestick, bar] }
+              points:
+                type: array
+                items: { $ref: "#/components/schemas/ResearchChartPoint" }
+        indicators:
+          type: array
+          maxItems: 20
+          items:
+            type: object
+            required: [id, type, period, seriesId]
+            properties:
+              id: { type: string, minLength: 1, maxLength: 128 }
+              type: { type: string, enum: [sma, ema, bollinger] }
+              period: { type: integer, minimum: 1, maximum: 500 }
+              seriesId: { type: string, minLength: 1, maxLength: 128 }
+        rebase: { type: boolean }
+        oscillator: { type: string, enum: [none, rsi, macd] }
+        oscillatorSeriesId: { type: string, nullable: true }
+        targetPrice: { type: number, nullable: true }
+        currentPrice: { type: number, nullable: true }
+        addedPrice: { type: number, nullable: true }
+        points:
+          type: array
+          items: { $ref: "#/components/schemas/ResearchChartPoint" }
+        entries:
+          type: array
+          maxItems: 5000
+          items:
+            type: object
+            required: [id, targetPrice, currentPrice, addedPrice]
+            properties:
+              id: { type: integer, minimum: 1 }
+              targetPrice: { type: number }
+              currentPrice: { type: number, nullable: true }
+              addedPrice: { type: number, nullable: true }
+        investment:
+          type: object
+          required: [name, currency]
+          properties:
+            symbol: { type: string, nullable: true }
+            name: { type: string }
+            currency: { type: string }
+            priceProvider: { type: string, nullable: true }
+        selectedSymbol: { type: string, nullable: true }
+        consensus:
+          {
+            $ref: "#/components/schemas/ResearchAnalystConsensus",
+            nullable: true,
+          }
+        amount: { type: number, exclusiveMinimum: 0 }
+        units: { type: number, exclusiveMinimum: 0 }
+        price: { type: number, exclusiveMinimum: 0 }
+        derive: { type: boolean, default: true }
+
+    ResearchPresentationData:
+      type: object
+      required: [kind, result]
+      description: result shape is determined by the echoed kind; unavailable analyst/providerQuote results are null.
+      properties:
+        kind:
+          {
+            type: string,
+            enum:
+              [
+                compare,
+                chart,
+                watchlist,
+                watchlistBatch,
+                providerQuote,
+                analyst,
+                marketAdd,
+                lifeScenarioPrepare,
+                lifeScenarioCompare,
+              ],
+          }
+        result:
+          nullable: true
+          anyOf:
+            - $ref: "#/components/schemas/ResearchPresentationCompareResult"
+            - $ref: "#/components/schemas/ResearchPresentationChartResult"
+            - $ref: "#/components/schemas/ResearchPresentationWatchlistResult"
+            - $ref: "#/components/schemas/ResearchPresentationWatchlistBatchResult"
+            - $ref: "#/components/schemas/ResearchPresentationProviderQuoteResult"
+            - $ref: "#/components/schemas/ResearchPresentationAnalystResult"
+            - $ref: "#/components/schemas/ResearchPresentationMarketAddResult"
+            - $ref: "#/components/schemas/ResearchLifeScenarioPrepareResult"
+            - $ref: "#/components/schemas/ResearchLifeScenarioCompareResult"
+
     ResearchMeta:
       type: object
       required: [provider, source]
@@ -1326,12 +3957,11 @@ components:
 
     ResearchSearchItem:
       type: object
-      required: [symbol]
       properties:
-        symbol: { type: string }
-        name: { type: string }
-        type: { type: string }
-        exchange: { type: string }
+        symbol: { type: string, nullable: true }
+        name: { type: string, nullable: true }
+        type: { type: string, nullable: true }
+        exchange: { type: string, nullable: true }
 
     ResearchSearchData:
       type: object
@@ -1343,41 +3973,41 @@ components:
 
     ResearchQuote:
       type: object
-      required: [symbol, price]
+      required: [symbol]
       properties:
         symbol: { type: string }
-        name: { type: string }
-        price: { type: number }
-        change: { type: number }
-        changePercent: { type: number }
-        currency: { type: string }
-        exchange: { type: string }
-        type: { type: string }
-        open: { type: number }
-        dayHigh: { type: number }
-        dayLow: { type: number }
-        prevClose: { type: number }
-        volume: { type: number }
-        avgVolume: { type: number }
-        high52w: { type: number }
-        low52w: { type: number }
+        name: { type: string, nullable: true }
+        price: { type: number, nullable: true }
+        change: { type: number, nullable: true }
+        changePercent: { type: number, nullable: true }
+        currency: { type: string, nullable: true }
+        exchange: { type: string, nullable: true }
+        type: { type: string, nullable: true }
+        open: { type: number, nullable: true }
+        dayHigh: { type: number, nullable: true }
+        dayLow: { type: number, nullable: true }
+        prevClose: { type: number, nullable: true }
+        volume: { type: number, nullable: true }
+        avgVolume: { type: number, nullable: true }
+        high52w: { type: number, nullable: true }
+        low52w: { type: number, nullable: true }
 
     ResearchChartPoint:
       type: object
-      required: [time, close]
+      required: [time]
       properties:
         time: { type: number }
-        close: { type: number }
-        high: { type: number }
-        low: { type: number }
-        volume: { type: number }
+        close: { type: number, nullable: true }
+        high: { type: number, nullable: true }
+        low: { type: number, nullable: true }
+        volume: { type: number, nullable: true }
 
     ResearchChartData:
       type: object
       required: [points]
       properties:
         symbol: { type: string }
-        currency: { type: string }
+        currency: { type: string, nullable: true }
         points:
           type: array
           items: { $ref: "#/components/schemas/ResearchChartPoint" }
@@ -1673,12 +4303,12 @@ components:
       properties:
         monthIndex: { type: integer }
         date: { type: string }
-        netInvested: { type: number }
-        p10: { type: number }
-        p25: { type: number }
-        p50: { type: number }
-        p75: { type: number }
-        p90: { type: number }
+        netInvested: { type: number, nullable: true }
+        p10: { type: number, nullable: true }
+        p25: { type: number, nullable: true }
+        p50: { type: number, nullable: true }
+        p75: { type: number, nullable: true }
+        p90: { type: number, nullable: true }
 
     ResearchForecastForwardHolding:
       type: object
@@ -1693,16 +4323,21 @@ components:
       type: object
       required: [mean, p10, p25, p50, p75, p90]
       properties:
-        mean: { type: number }
-        p10: { type: number }
-        p25: { type: number }
-        p50: { type: number }
-        p75: { type: number }
-        p90: { type: number }
+        mean: { type: number, nullable: true }
+        p10: { type: number, nullable: true }
+        p25: { type: number, nullable: true }
+        p50: { type: number, nullable: true }
+        p75: { type: number, nullable: true }
+        p90: { type: number, nullable: true }
 
     ResearchPortfolioForecastData:
       type: object
       required: [available]
+      description: >-
+        available=false contains a reason and optional historyDays. Computed monetary
+        fields can serialize null on numeric overflow. Such an available response is
+        rejected by the maintained PortfolioForecastSchema/native client validity guard;
+        nullable wire representation never authorizes invented zero values or a comparison.
       properties:
         available: { type: boolean }
         reason: { type: string, enum: [no_holdings, insufficient_history] }
@@ -1716,14 +4351,14 @@ components:
         lowConfidence: { type: boolean }
         startValue: { type: number }
         startInvested: { type: number }
-        monthlyContribution: { type: number }
+        monthlyContribution: { type: number, nullable: true }
         goalMonth:
           {
             type: integer,
             description: "Month at which target probability is evaluated",
           }
-        totalContributions: { type: number }
-        netInvested: { type: number }
+        totalContributions: { type: number, nullable: true }
+        netInvested: { type: number, nullable: true }
         expectedAnnualReturn: { type: number }
         historicalAnnualReturn: { type: number }
         annualVolatility: { type: number }
@@ -1928,7 +4563,7 @@ components:
 
     CategoryUpdate:
       type: object
-      description: "`null` for general, detail, or is_active leaves that field unchanged. Each field must have the stated JSON type; a string such as \"false\" for is_active returns 400."
+      description: '`null` for general, detail, or is_active leaves that field unchanged. Each field must have the stated JSON type; a string such as "false" for is_active returns 400.'
       properties:
         general:
           type: string
@@ -2095,7 +4730,7 @@ components:
 
     RecipientUpdate:
       type: object
-      description: "`null` name or is_active leaves that field unchanged. Each field must have the stated JSON type; a string such as \"false\" for is_active returns 400."
+      description: '`null` name or is_active leaves that field unchanged. Each field must have the stated JSON type; a string such as "false" for is_active returns 400.'
       properties:
         name:
           type: string
@@ -3158,47 +5793,66 @@ components:
         name:
           type: string
         symbol:
+          nullable: true
           type: string
         asset_class:
           $ref: "#/components/schemas/AssetClass"
         currency:
           type: string
         current_price:
+          nullable: true
           type: number
         interest_rate:
+          nullable: true
           type: number
         maturity_date:
+          nullable: true
           type: string
           format: date
         location:
+          nullable: true
           type: string
         municipality:
+          nullable: true
           type: string
         cadastral_income:
+          nullable: true
           type: number
         municipality_tax_rate:
+          nullable: true
           type: number
         notes:
+          nullable: true
           type: string
         price_provider:
+          nullable: true
           $ref: "#/components/schemas/PriceProvider"
         price_provider_id:
+          nullable: true
           type: string
         price_provider_url:
+          nullable: true
           type: string
         price_provider_latest_url:
+          nullable: true
           type: string
         price_provider_latest_path:
+          nullable: true
           type: string
         price_provider_history_url:
+          nullable: true
           type: string
         price_provider_history_path:
+          nullable: true
           type: string
         price_provider_history_ts_path:
+          nullable: true
           type: string
         price_provider_history_price_path:
+          nullable: true
           type: string
         price_updated_at:
+          nullable: true
           type: string
           format: date-time
         is_active:
@@ -3211,6 +5865,100 @@ components:
         updated_at:
           type: string
           format: date-time
+
+    InvestmentCreateRequest:
+      type: object
+      additionalProperties: true
+      required: [name, asset_class]
+      properties:
+        name: { type: string, maxLength: 200 }
+        symbol: { type: string, nullable: true, maxLength: 20 }
+        asset_class:
+          {
+            type: string,
+            description: Asset class is immutable on updates; the existing value may be resubmitted.,
+          }
+        currency:
+          {
+            type: string,
+            pattern: '^\s*[A-Za-z]{3}\s*$',
+            description: Trimmed and normalized uppercase. Omit on create for EUR; cannot be cleared.,
+          }
+        current_price:
+          { type: number, nullable: true, minimum: 0, maximum: 1000000000000 }
+        interest_rate:
+          { type: number, nullable: true, minimum: -100, maximum: 100 }
+        cadastral_income:
+          { type: number, nullable: true, minimum: 0, maximum: 1000000000000 }
+        municipality_tax_rate:
+          { type: number, nullable: true, minimum: 0, maximum: 100 }
+        maturity_date: { type: string, format: date, nullable: true }
+        location: { type: string, nullable: true, maxLength: 300 }
+        municipality: { type: string, nullable: true, maxLength: 200 }
+        notes: { type: string, nullable: true }
+        price_provider: { type: string, nullable: true }
+        price_provider_id: { type: string, nullable: true, maxLength: 200 }
+        price_provider_url: { type: string, nullable: true, maxLength: 500 }
+        price_provider_latest_url:
+          { type: string, nullable: true, maxLength: 500 }
+        price_provider_latest_path:
+          { type: string, nullable: true, maxLength: 300 }
+        price_provider_history_url:
+          { type: string, nullable: true, maxLength: 500 }
+        price_provider_history_path:
+          { type: string, nullable: true, maxLength: 300 }
+        price_provider_history_ts_path:
+          { type: string, nullable: true, maxLength: 300 }
+        price_provider_history_price_path:
+          { type: string, nullable: true, maxLength: 300 }
+
+    InvestmentUpdateRequest:
+      type: object
+      additionalProperties: true
+      properties:
+        name: { type: string, maxLength: 200 }
+        symbol: { type: string, nullable: true, maxLength: 20 }
+        asset_class:
+          {
+            $ref: "#/components/schemas/AssetClass",
+            description: Asset class is immutable on updates; the existing value may be resubmitted.,
+          }
+        currency:
+          {
+            type: string,
+            pattern: '^\s*[A-Za-z]{3}\s*$',
+            description: Trimmed and normalized uppercase. Omit on create for EUR; cannot be cleared.,
+          }
+        current_price:
+          { type: number, nullable: true, minimum: 0, maximum: 1000000000000 }
+        interest_rate:
+          { type: number, nullable: true, minimum: -100, maximum: 100 }
+        cadastral_income:
+          { type: number, nullable: true, minimum: 0, maximum: 1000000000000 }
+        municipality_tax_rate:
+          { type: number, nullable: true, minimum: 0, maximum: 100 }
+        maturity_date: { type: string, format: date, nullable: true }
+        location: { type: string, nullable: true, maxLength: 300 }
+        municipality: { type: string, nullable: true, maxLength: 200 }
+        notes: { type: string, nullable: true }
+        price_provider: { type: string, nullable: true }
+        price_provider_id: { type: string, nullable: true, maxLength: 200 }
+        price_provider_url: { type: string, nullable: true, maxLength: 500 }
+        price_provider_latest_url:
+          { type: string, nullable: true, maxLength: 500 }
+        price_provider_latest_path:
+          { type: string, nullable: true, maxLength: 300 }
+        price_provider_history_url:
+          { type: string, nullable: true, maxLength: 500 }
+        price_provider_history_path:
+          { type: string, nullable: true, maxLength: 300 }
+        price_provider_history_ts_path:
+          { type: string, nullable: true, maxLength: 300 }
+        price_provider_history_price_path:
+          { type: string, nullable: true, maxLength: 300 }
+        is_active: { type: boolean }
+        show_in_ticker: { type: boolean }
+        price_updated_at: { type: string, format: date-time, nullable: true }
 
     InvestmentList:
       allOf:
@@ -4233,12 +6981,63 @@ components:
           type: object
           additionalProperties: true
           nullable: true
+        toolPresentation:
+          $ref: "#/components/schemas/AiToolPresentation"
         status:
           type: string
           enum: [complete, streaming, aborted, error]
         createdAt:
           type: string
           format: date-time
+
+    AiToolPresentation:
+      type: object
+      description: Additive outgoing-message metadata inferred by shared TypeScript from the original JSON tool result; stored results and provider prompts remain unchanged. Nested array rows and first-row ordered keys retain the existing web behavior.
+      required:
+        [renderAs, rows, columns, xKey, yKeys, rowCount, pieRenderable, pieRows]
+      properties:
+        renderAs:
+          type: string
+        rows:
+          type: array
+          items: {}
+        columns:
+          type: array
+          items:
+            type: string
+        xKey:
+          type: string
+        yKeys:
+          type: array
+          items:
+            type: string
+        rowCount:
+          type: integer
+          minimum: 0
+        pieRenderable:
+          type: boolean
+        pieRows:
+          type: array
+          description: Empty when the first y key is unavailable or the source numeric sum is not positive; otherwise retains negative values and Recharts default sector composition.
+          items:
+            type: object
+            required: [name, value, percent, labelPercent, startAngle, endAngle]
+            properties:
+              name:
+                type: string
+              value:
+                type: number
+                x-swift-type: Decimal
+              percent:
+                type: number
+                x-swift-type: Decimal
+              labelPercent:
+                type: number
+                x-swift-type: Decimal
+              startAngle:
+                type: number
+              endAngle:
+                type: number
 
     # Usage counters forwarded from the Ollama response; null until the first
     # model reply lands, or when the provider omits the counter.
@@ -4366,7 +7165,14 @@ components:
       description: Present on proved record_income, duplicate or settled paired-income actions in full history or record_in_kind_income_only. Narrow scope requires unitTransactionId and forbids unitRowId. Full scope requires unitRowId binding the distinct selected Gift action in the same batch/investment/payment date. A paired Gift insert has no canonical unit ID until the same atomic commit creates it; a paired adoption or existing Gift requires unitTransactionId, as do repeated income actions. Repeats also identify the distinct existing income through existingTransactionId and may omit source/existing bodies. The server proves literal zero-basis income/units identity and immutable receipt images, binds proof into the fingerprint, and writes income only after its unit is proved. Each income and unit identity is unique; the proof cannot record income again or add another acquisition.
       properties:
         kind: { type: string, enum: [paired_kinesis_income] }
-        unitRowId: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991, description: Required only in full history; output-only staged Gift row ID selected in this review. }
+        unitRowId:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+            description: Required only in full history; output-only staged Gift row ID selected in this review.,
+          }
         unitTransactionId:
           {
             type: integer,
@@ -4378,13 +7184,28 @@ components:
     PortfolioImportReconciliationCashValues:
       type: object
       additionalProperties: false
-      required: [date, amount, currency, accountId, isTransfer, transferSource, transferPeerId]
+      required:
+        [
+          date,
+          amount,
+          currency,
+          accountId,
+          isTransfer,
+          transferSource,
+          transferPeerId,
+        ]
       description: Signed cash ledger values for a proved source event. Required for a new cash action, optional on proved duplicate/settled repeats. Trade quotes and confirmed own-account funding use isTransfer=true; card expenses use false. Every row has brokerage origin and no invented peer. A separately quoted own-account withdrawal fee is retained as a second negative expense component; the transfer component is net of that fee. Card spending already includes its quoted fee and creates no extra fee row.
       properties:
         date: { type: string, format: date }
         amount: { type: string, pattern: "^-?[0-9]+(\\.[0-9]+)?$" }
         currency: { type: string, pattern: "^[A-Z]{3}$" }
-        accountId: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        accountId:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
         isTransfer: { type: boolean }
         transferSource: { type: string, enum: [brokerage] }
         transferPeerId: { type: integer, nullable: true, enum: [null] }
@@ -4392,16 +7213,35 @@ components:
     PortfolioImportReconciliationCashProof:
       type: object
       additionalProperties: false
-      required: [kind, groupKey, eventKey, eventKind, fileHash, memberCount, componentCount]
+      required:
+        [
+          kind,
+          groupKey,
+          eventKey,
+          eventKind,
+          fileHash,
+          memberCount,
+          componentCount,
+        ]
       description: Present only in record_cash_only on every cash, duplicate or settled action. The complete original source and all cash balance chains are proved before selection; every group member selects together. memberCount includes new and repeated cash actions, and equals selected group action count. Event identities are unique, and fileHash is common within a source batch/group. Repeats identify a positive existingTransactionId and create no cash again. Proof is bound to the reviewed fingerprint and confirmed own-account funding policy; it does not authorize portfolio or custody actions.
       properties:
         kind: { type: string, enum: [closed_kinesis_cash] }
         groupKey: { type: string, pattern: "^[a-f0-9]{64}$" }
         eventKey: { type: string, pattern: "^[a-f0-9]{64}$" }
-        eventKind: { type: string, enum: [trade_quote, own_account_funding, card_expense] }
+        eventKind:
+          {
+            type: string,
+            enum: [trade_quote, own_account_funding, card_expense],
+          }
         fileHash: { type: string, pattern: "^[a-f0-9]{64}$" }
         memberCount: { type: integer, minimum: 1, maximum: 9007199254740991 }
-        componentCount: { type: integer, enum: [1, 2], description: One ledger component, or two for a separately quoted own-account withdrawal fee. }
+        componentCount:
+          {
+            type: integer,
+            enum: [1, 2],
+            description: One ledger component,
+            or two for a separately quoted own-account withdrawal fee.,
+          }
 
     PortfolioImportReconciliationCounts:
       type: object
@@ -5017,7 +7857,7 @@ components:
     # ─── Market ───────────────────────────────────────────────────────────────
     MarketSearchResult:
       type: object
-      required: [symbol, name, exchange, currency]
+      required: [symbol, name, exchange, type]
       properties:
         symbol:
           type: string
@@ -5193,6 +8033,88 @@ paths:
             description: "VALIDATION_ERROR for a mistyped plan; otherwise an invalid or duplication-unsafe visual plan",
           }
 
+  /api/analysis/interchange/import:
+    post:
+      operationId: importAnalysisInterchange
+      summary: Parse a CSV or Vision XLSX scenario attachment without persistence
+      tags: [Analysis]
+      description: Read-only shared TypeScript value inference. CSV allows 1,000,000 bytes, 1000 rows and 32 normalized unique columns. XLSX allows 10,000,000 bytes (the tighter existing parser cap), stored ZIP Results/Provenance sheets with CRC validation, then the attachment cap of 1000 rows/32 columns. Formula cells are ignored/null and counted; dates retain Excel 1900 behavior; provenance identifiers are restored while units are stripped. Caller retains its five-attachment cap and CSV replacement versus workbook append behavior. No formulas, Analysis execution, database or settings writes.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, format]
+              properties:
+                file: { type: string, format: binary }
+                format: { type: string, enum: [csv, xlsx] }
+      responses:
+        "200":
+          description: Inferred value-only attachment and raw ignored-formula count.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        {
+                          $ref: "#/components/schemas/AnalysisInterchangeImport",
+                        }
+        "400":
+          {
+            description: Invalid format,
+            file,
+            upload limit,
+            CSV structure or bounds,
+            ZIP/CRC/XML,
+            provenance or attachment bounds.,
+          }
+        "429": { description: API or existing Analysis rate limit exceeded. }
+        "500": { description: Upload source read failed. }
+
+  /api/analysis/interchange/export:
+    post:
+      operationId: exportAnalysisInterchange
+      summary: Export a supplied captured Analysis snapshot as CSV or value-only XLSX
+      tags: [Analysis]
+      description: Read-only shared TypeScript export of exactly the submitted result/context. The multipart file contains UTF-8 AnalysisInterchangeExportPayload JSON and has a route-scoped 64 MiB limit, allowing 100000-row XLSX snapshots beyond the global 1 MB JSON limit. XLSX retains its 100000-row limit; CSV adds no row cap. Neither format rereads or recomputes data. CSV retains formula-prefix escaping and captured metadata; XLSX emits five stored-ZIP sheets, exact long-decimal text, Excel 1900 dates and non-executable formula definitions. Client must retain original result/input signatures and unchanged-input/export eligibility checks.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, format]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: UTF-8 JSON matching AnalysisInterchangeExportPayload; maximum 67108864 bytes.
+                format: { type: string, enum: [csv, xlsx] }
+      responses:
+        "200":
+          description: Raw bytes with Content-Disposition attachment filename analysis.csv or analysis.xlsx. Native callers may select the captured analysis name as the save destination.
+          headers:
+            Content-Disposition: { schema: { type: string } }
+          content:
+            text/csv:
+              schema: { type: string, format: binary }
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+        "400":
+          {
+            description: Missing or invalid multipart snapshot/format,
+            over 64 MiB input,
+            invalid result/context JSON,
+            or XLSX row limit.,
+          }
+        "429": { description: API or existing Analysis rate limit exceeded. }
+        "500": { description: Upload source read or serialization failed. }
+
   /api/analysis/execute:
     post:
       summary: Execute a bounded visual or custom-SQL analysis
@@ -5211,10 +8133,12 @@ paths:
                   properties:
                     mode: { type: string, enum: [visual] }
                     plan: { $ref: "#/components/schemas/AnalysisVisualPlan" }
-                    requestId: { type: string, pattern: "^[A-Za-z0-9_-]{8,128}$" }
+                    requestId:
+                      { type: string, pattern: "^[A-Za-z0-9_-]{8,128}$" }
                     limit: { type: number }
                     offset: { type: number }
-                    workbench: { $ref: "#/components/schemas/AnalysisWorkbenchInput" }
+                    workbench:
+                      { $ref: "#/components/schemas/AnalysisWorkbenchInput" }
                     scenarioModel:
                       type: object
                       nullable: true
@@ -5263,10 +8187,12 @@ paths:
                           id: { type: string }
                           label: { type: string }
                           type: { type: string }
-                    requestId: { type: string, pattern: "^[A-Za-z0-9_-]{8,128}$" }
+                    requestId:
+                      { type: string, pattern: "^[A-Za-z0-9_-]{8,128}$" }
                     limit: { type: number }
                     offset: { type: number }
-                    workbench: { $ref: "#/components/schemas/AnalysisWorkbenchInput" }
+                    workbench:
+                      { $ref: "#/components/schemas/AnalysisWorkbenchInput" }
                     scenarioModel:
                       type: object
                       nullable: true
@@ -5304,7 +8230,10 @@ paths:
         "408": { description: Query cancelled or timed out }
         "500":
           {
-            description: Database connection, resource, or network failure (server fault, not a rejected query),
+            description: Database connection,
+            resource,
+            or network failure (server fault,
+            not a rejected query),
           }
 
   /api/analysis/pivot:
@@ -5337,7 +8266,8 @@ paths:
                       }
                     filters:
                       type: array
-                      items: { $ref: "#/components/schemas/AnalysisVisualFilter" }
+                      items:
+                        { $ref: "#/components/schemas/AnalysisVisualFilter" }
                 requestId: { type: string, minLength: 8, maxLength: 110 }
       responses:
         "200":
@@ -5346,7 +8276,8 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Envelope" }
         "400": { description: Invalid pivot or complete output exceeds limits }
-        "500": { description: Database connection, resource, or network failure }
+        "500":
+          { description: Database connection, resource, or network failure }
 
   /api/analysis/extensions/evaluate:
     post:
@@ -5380,7 +8311,8 @@ paths:
                 inputComplete: { type: boolean }
                 window: { type: object, additionalProperties: true }
                 coverage: { type: object, additionalProperties: true }
-                workbench: { $ref: "#/components/schemas/AnalysisWorkbenchInput" }
+                workbench:
+                  { $ref: "#/components/schemas/AnalysisWorkbenchInput" }
                 formulas:
                   {
                     type: array,
@@ -5452,7 +8384,8 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Envelope" }
         "400": { description: Invalid drill-through request }
-        "500": { description: Database connection, resource, or network failure }
+        "500":
+          { description: Database connection, resource, or network failure }
 
   /api/analysis/formulas/evaluate:
     post:
@@ -5641,7 +8574,8 @@ paths:
               schema: { $ref: "#/components/schemas/Envelope" }
         "400": { description: Refresh failed }
         "404": { description: Saved analysis not found }
-        "500": { description: Database connection, resource, or network failure }
+        "500":
+          { description: Database connection, resource, or network failure }
 
   /api/analysis/saved/{id}/versions:
     parameters:
@@ -5690,9 +8624,16 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Envelope" }
-        "400": { description: Invalid instruction, or the proposal fails the saved analysis preview }
+        "400":
+          {
+            description: Invalid instruction,
+            or the proposal fails the saved analysis preview,
+          }
         "404": { description: Saved analysis not found }
-        "502": { description: "BAD_GATEWAY: the local model failed, returned invalid JSON, or returned a proposal outside the edit contract" }
+        "502":
+          {
+            description: "BAD_GATEWAY: the local model failed, returned invalid JSON, or returned a proposal outside the edit contract",
+          }
 
   /api/analysis/saved/{id}/restore:
     parameters:
@@ -7889,6 +10830,34 @@ paths:
       summary: List investments
       operationId: getInvestments
       tags: [Portfolio]
+      parameters:
+        - {
+            in: query,
+            name: asset_class,
+            schema:
+              {
+                type: string,
+                enum: [stock, etf, crypto, metals, real_estate, savings, bond],
+              },
+            description: Filter one exact asset class.,
+          }
+        - {
+            in: query,
+            name: active,
+            schema: { type: boolean, default: true },
+            description: true restricts to active investments; false returns active and inactive investments.,
+          }
+        - {
+            in: query,
+            name: limit,
+            schema: { type: integer, default: 200, minimum: 1, maximum: 1000 },
+            description: Lenient pagination parser defaults invalid limits and clamps at 1000.,
+          }
+        - {
+            in: query,
+            name: offset,
+            schema: { type: integer, default: 0, minimum: 0 },
+          }
       responses:
         "200":
           description: Investment list
@@ -7910,40 +10879,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [name, asset_class]
-              properties:
-                name:
-                  type: string
-                symbol:
-                  type: string
-                asset_class:
-                  type: string
-                currency:
-                  type: string
-                  pattern: '^\s*[A-Za-z]{3}\s*$'
-                  description: Three-letter ISO currency code; trimmed and normalized to uppercase. Omit to default to EUR.
-                current_price:
-                  type: number
-                interest_rate:
-                  type: number
-                maturity_date:
-                  type: string
-                  format: date
-                location:
-                  type: string
-                municipality:
-                  type: string
-                cadastral_income:
-                  type: number
-                municipality_tax_rate:
-                  type: number
-                notes:
-                  type: string
-                price_provider:
-                  type: string
-                price_provider_id:
-                  type: string
+              $ref: "#/components/schemas/InvestmentCreateRequest"
       responses:
         "201":
           description: Created investment
@@ -9660,7 +12596,13 @@ paths:
                             type: array
                             items:
                               type: object
-                              required: [deductionType, total, categoryCount, categories]
+                              required:
+                                [
+                                  deductionType,
+                                  total,
+                                  categoryCount,
+                                  categories,
+                                ]
                               properties:
                                 deductionType: { type: string }
                                 total: { type: number }
@@ -9672,6 +12614,13 @@ paths:
                                     me: { type: number }
                                     partner: { type: number }
                                     joint: { type: number }
+                                partnerShares:
+                                  type: object
+                                  description: Server-side partner attribution assuming two partners; a single-person caller uses the complete total for A.
+                                  required: [A, B]
+                                  properties:
+                                    A: { type: number }
+                                    B: { type: number }
                                 categoryCount: { type: integer }
                                 categories:
                                   type: array
@@ -9888,6 +12837,10 @@ paths:
           description: Target currency (3-letter code; `target_currency` is an alias). A malformed code falls back to EUR. A repeated key returns 400.
           schema:
             type: string
+        - in: query
+          name: active
+          description: Optional scope. true (default) retains active-only summaries/totals and the existing cache. false includes all holdings canonically plus an inactive-only archivedPresentation matching the existing web archive. Only literal true/false accepted; repeated keys return 400. Scope and currency have separate cache entries.
+          schema: { type: boolean, default: true }
       responses:
         "400":
           description: "VALIDATION_ERROR: currency must be a single value"
@@ -10465,6 +13418,7 @@ paths:
       summary: List portfolio transactions across all investments
       operationId: getBulkPortfolioTransactions
       tags: [Portfolio]
+      description: Ordinary portfolio transaction rows across the requested investments, ranked newest first per investment and then globally by date/id descending. This operation excludes custody and asset-adjustment events, which have separate APIs. total counts matching ordinary rows before per-investment and global limits; response limit is the requested global cap or the returned item count when omitted.
       parameters:
         # Documented as `investment_id` (singular, optional) until 2026-08-11;
         # the route has only ever read `investment_ids`, and 400s without it.
@@ -10474,21 +13428,39 @@ paths:
           description: >-
             Comma-separated investment ids (`1,2,3`), the shape the frontend's
             `ids.join(',')` builder emits. Every element must be a positive
-            int32; one malformed element rejects the whole request.
+            int32; one malformed element rejects the whole request. Repeated
+            occurrences are also accepted by the route; generated clients use the
+            comma-joined string.
           schema:
             type: string
             pattern: "^[0-9]+(,[0-9]+)*$"
         - in: query
+          name: type
+          description: Optional exact ordinary transaction type filter.
+          schema: { type: string }
+        - in: query
+          name: per_investment_limit
+          description: Maximum newest rows per investment. Defaults invalid/non-positive values to 1000 and clamps values over 5000; native editing uses 1000, matching the web bulk loader.
+          schema: { type: integer, default: 1000, minimum: 1, maximum: 5000 }
+        - in: query
           name: limit
+          description: Optional global cap after per-investment ranking. Omit or leave empty for no global cap. Invalid/non-positive explicit values default to 1; positive values clamp at 200000.
           schema:
             type: integer
+            minimum: 1
+            maximum: 200000
         - in: query
           name: offset
+          description: Global offset after ranking and descending date/id order. Invalid/negative values fall back to zero.
           schema:
             type: integer
+            default: 0
+            minimum: 0
       responses:
+        "400":
+          description: Missing or malformed investment_ids, or repeated/non-scalar type filter.
         "200":
-          description: Bulk transaction list
+          description: Ordinary transaction items plus full matching total, numeric effective limit, numeric offset, and links. total can exceed items even without a global limit because of per-investment caps.
           content:
             application/json:
               schema:
@@ -10692,22 +13664,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                name:
-                  type: string
-                symbol:
-                  type: string
-                asset_class:
-                  $ref: "#/components/schemas/AssetClass"
-                currency:
-                  type: string
-                  pattern: '^\s*[A-Za-z]{3}\s*$'
-                  description: Three-letter ISO currency code; normalized to uppercase and cannot be cleared.
-                is_active:
-                  type: boolean
-                show_in_ticker:
-                  type: boolean
+              $ref: "#/components/schemas/InvestmentUpdateRequest"
       responses:
         "200":
           description: Updated investment
@@ -10746,21 +13703,44 @@ paths:
       parameters:
         - in: query
           name: start_date
+          deprecated: true
+          description: Accepted but ignored; use from_ms.
           schema:
             type: string
             format: date
         - in: query
           name: end_date
+          deprecated: true
+          description: Accepted but ignored; use to_ms.
           schema:
             type: string
             format: date
+        - in: query
+          name: from_ms
+          description: Inclusive epoch milliseconds. Missing or non-finite parsed values leave this bound absent.
+          schema: { type: number }
+        - in: query
+          name: to_ms
+          description: Inclusive epoch milliseconds. Missing or non-finite parsed values leave this bound absent.
+          schema: { type: number }
+        - in: query
+          name: db_only
+          description: Defaults true; false allows the existing provider fetch/cache behavior. Lenient boolean parsing is retained.
+          schema: { type: boolean, default: true }
       responses:
         "200":
           description: Price history
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        {
+                          $ref: "#/components/schemas/InvestmentPriceHistoryData",
+                        }
 
   /api/investments/{id}/transactions:
     parameters:
@@ -10924,10 +13904,7 @@ paths:
                   - $ref: "#/components/schemas/Envelope"
                   - type: object
                     properties:
-                      data:
-                        type: array
-                        items:
-                          $ref: "#/components/schemas/MarketSearchResult"
+                      data: { $ref: "#/components/schemas/MarketSearchData" }
 
   /api/market/quote:
     get:
@@ -10961,16 +13938,7 @@ paths:
                   - $ref: "#/components/schemas/Envelope"
                   - type: object
                     properties:
-                      data:
-                        type: object
-                        required: [items, total]
-                        properties:
-                          items:
-                            type: array
-                            items:
-                              type: object
-                          total:
-                            type: integer
+                      data: { $ref: "#/components/schemas/MarketQuoteData" }
 
   /api/market/chart:
     get:
@@ -11058,23 +14026,26 @@ paths:
                   - $ref: "#/components/schemas/Envelope"
                   - type: object
                     properties:
-                      data:
-                        type: object
-                        required: [items, total]
-                        properties:
-                          items:
-                            type: array
-                            items:
-                              type: object
-                          total:
-                            type: integer
+                      data: { $ref: "#/components/schemas/MarketNewsData" }
 
-  # ─── Watchlist ────────────────────────────────────────────────────────────────
   /api/watchlist:
     get:
       summary: List watchlist items
       operationId: getWatchlist
       tags: [Watchlist]
+      parameters:
+        - in: query
+          name: asset_class
+          description: Optional exact asset-class filter; repeated keys return 400.
+          schema: { type: string }
+        - in: query
+          name: limit
+          description: Lenient integer parsing; clamped to 1..5000; malformed values use 50.
+          schema: { type: integer, minimum: 1, maximum: 5000, default: 50 }
+        - in: query
+          name: offset
+          description: Lenient integer parsing; negative values clamp to zero.
+          schema: { type: integer, minimum: 0, default: 0 }
       responses:
         "200":
           description: Watchlist
@@ -11085,10 +14056,7 @@ paths:
                   - $ref: "#/components/schemas/Envelope"
                   - type: object
                     properties:
-                      data:
-                        type: array
-                        items:
-                          $ref: "#/components/schemas/WatchlistItem"
+                      data: { $ref: "#/components/schemas/WatchlistData" }
     post:
       summary: Add symbol to watchlist
       operationId: addToWatchlist
@@ -11717,6 +14685,193 @@ paths:
           description: No Content
 
   # ─── Reports ─────────────────────────────────────────────────────────────────
+  /api/belgian-tax/portfolio-dashboard:
+    get:
+      operationId: getBelgianPortfolioTaxDashboard
+      summary: Read authoritative Portfolio Tax costs, estimates, and editable setting baselines
+      tags: [Belgian Tax]
+      description: Read-only parity with usePortfolioTaxData. First 500 name-ordered investments, active canonical summaries plus archived ordinary/current-FX presentation, and newest 1000 ordinary transactions per investment. Recorded costs/dividends/manual adjustments use the selected year; gains/current values retain all-time/live holdings semantics. Uses shared TypeScript tax helpers and frozen-first PIT. Original adjustment/classification settings and CAS baselines are returned without writes. Native consumers decode numeric amounts directly as Decimal.
+      parameters:
+        - name: year
+          in: query
+          schema: { type: integer, minimum: 1900, maximum: 2200 }
+          description: Omit to use the live household year. Historical years use their snapshot or a year-pinned live estimate.
+        - name: currency
+          in: query
+          schema: { type: string, pattern: "^[A-Za-z]{3}$", default: EUR }
+          description: Response display currency, normalized uppercase. Ordinary recorded costs use latest stored/fallback rates and retain the existing original-amount fallback when a rate is unavailable.
+      responses:
+        "200":
+          description: Server-computed fiscal dashboard and original setting records.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    required: [data]
+                    properties:
+                      data:
+                        {
+                          $ref: "#/components/schemas/BelgianPortfolioTaxDashboard",
+                        }
+        "400": { description: Invalid or repeated year/currency. }
+        "429": { description: API or aggregation rate limit exceeded. }
+        "500":
+          {
+            description: Settings,
+            portfolio,
+            transaction,
+            FX read,
+            or frozen PIT contract failure; never an empty success.,
+          }
+
+  /api/belgian-tax/dashboard:
+    get:
+      operationId: getBelgianTaxDashboard
+      summary: Read server-computed tax charts, recorded income, and tax widget presentation
+      tags: [Belgian Tax]
+      description: Additive read-only operation using the shared TypeScript tax engine. Mirrors the overview web hook, including frozen PIT proportional scaling, selected category ancestry, partner/joint income attribution, latest stored FX for recorded portfolio taxes, and historical monthly reserve proration. Explicit exclusions and date bounds must be resolved by the caller; defaults are EUR and the trailing 24 calendar months through the application-timezone current date. No settings writes.
+      parameters:
+        - name: year
+          in: query
+          schema: { type: integer, minimum: 1900, maximum: 2200 }
+          description: Omit to use the live household year.
+        - name: currency
+          in: query
+          schema: { type: string, pattern: "^[A-Za-z]{3}$", default: EUR }
+        - name: start_date
+          in: query
+          schema: { type: string, format: date }
+          description: Defaults to the first day 23 calendar months before today.
+        - name: end_date
+          in: query
+          schema: { type: string, format: date }
+          description: Defaults to today in the application timezone.
+        - name: excluded_category_ids
+          in: query
+          style: form
+          explode: true
+          schema:
+            type: array
+            items: { type: integer, minimum: 1, maximum: 2147483647 }
+        - name: excluded_recipient_ids
+          in: query
+          style: form
+          explode: true
+          schema:
+            type: array
+            items: { type: integer, minimum: 1, maximum: 2147483647 }
+      responses:
+        "200":
+          description: Computed charts and widget data. Money is decoded directly as Decimal by the native client.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    required: [data]
+                    properties:
+                      data: { $ref: "#/components/schemas/BelgianTaxDashboard" }
+        "400":
+          {
+            description: Invalid year,
+            currency,
+            date bounds,
+            retired date aliases,
+            or exclusion IDs.,
+          }
+        "429": { description: API or aggregation rate limit exceeded. }
+        "500":
+          {
+            description: Settings,
+            aggregation,
+            portfolio,
+            or exchange-rate read failed; never an empty success.,
+          }
+
+  /api/belgian-tax/overview:
+    get:
+      operationId: getBelgianTaxOverview
+      summary: Read live or historical Belgian tax overview with frozen-result precedence
+      tags:
+        - Belgian Tax
+      description: Reads settings and baselines in one snapshot, runs the same v1/v2 hydration as the web provider, and selects the requested year. Frozen figures remain verbatim; fully frozen records do not invoke the engine. No settings or filing writes. Invalid stored v2 settings produce the existing fallback and warnings, without overwriting the stored values.
+      parameters:
+        - name: year
+          in: query
+          required: false
+          description: Four-digit income year, 0000 through 9999. Omit to select the live household year. A missing historical snapshot, including any year outside the storable 1900–2200 range, uses a year-pinned live estimate without creating a snapshot.
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 9999
+      responses:
+        "200":
+          description: Normalized overview, frozen/current sources, original CAS setting baselines, and safe migration warnings.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    required:
+                      - data
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/BelgianTaxOverview"
+        "400":
+          description: Malformed, repeated, or out-of-range year.
+        "429":
+          description: API or aggregation rate limit exceeded.
+        "500":
+          description: Settings read or internal computation failed; never an empty success.
+
+  /api/belgian-tax/compute:
+    post:
+      summary: Compute Belgian household tax without saving the profile
+      operationId: computeBelgianTax
+      tags:
+        - Belgian Tax
+      description: Runs the same TypeScript engine used by the web Tax screen. Takes a complete v2 household, including unsaved edits or historical inputs; returns the household result and legacy-compatible calculation. Does not read or write settings, transactions, snapshots, or filing records. Unknown tax years retain the engine approximation and warning behavior. Uses the aggregation rate limiter and standard API CSRF guard.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - household
+              properties:
+                household:
+                  $ref: "#/components/schemas/BelgianTaxHouseholdInput"
+      responses:
+        "200":
+          description: Household result and compatible PIT figures, with issue codes and approximation metadata. Monetary values are EUR, rates retain the existing engine units.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    required:
+                      - data
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/BelgianTaxComputation"
+        "400":
+          description: Invalid household, missing required input, invalid cross-field references, or unknown top-level fields.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "403":
+          description: Cross-site request rejected by the API CSRF guard.
+        "429":
+          description: API or aggregation rate limit exceeded.
+
   /api/reports/financial:
     post:
       summary: Generate financial report PDF
@@ -11727,48 +14882,40 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                start_date:
-                  type: string
-                  format: date
-                end_date:
-                  type: string
-                  format: date
-                currency:
-                  type: string
-                excludedCategoryIds:
-                  type: array
-                  items:
-                    type: integer
-                    format: int32
-                    minimum: 1
-                    maximum: 2147483647
-                excludedRecipientIds:
-                  type: array
-                  items:
-                    type: integer
-                    format: int32
-                    minimum: 1
-                    maximum: 2147483647
+              $ref: "#/components/schemas/ReportRequest"
       responses:
+        "200":
+          description: Raw financial PDF bytes; no JSON envelope.
+          headers:
+            Content-Disposition:
+              description: Attachment filename in the form vision-financial-YYYY-MM-DD.pdf.
+              schema: { type: string }
+            Content-Length:
+              description: PDF byte count.
+              schema: { type: integer, minimum: 0 }
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        "400":
+          description: Invalid JSON body or report field; report validation uses VALIDATION_ERROR.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "403":
+          description: Cross-site request rejected by the API CSRF guard.
+        "429":
+          description: Global API rate limit exceeded.
         "503":
           description: Report capacity is full (two active and eight queued); retry later.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Envelope"
-        "200":
-          description: Generated PDF download
-          content:
-            application/pdf:
-              schema:
-                type: string
-                format: binary
 
   /api/reports/portfolio:
     post:
-      summary: Generate portfolio report
+      summary: Generate portfolio report PDF
       operationId: generatePortfolioReport
       tags: [Reports]
       requestBody:
@@ -11776,42 +14923,40 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                currency:
-                  type: string
-                excludedCategoryIds:
-                  type: array
-                  items:
-                    type: integer
-                    format: int32
-                    minimum: 1
-                    maximum: 2147483647
-                excludedRecipientIds:
-                  type: array
-                  items:
-                    type: integer
-                    format: int32
-                    minimum: 1
-                    maximum: 2147483647
+              $ref: "#/components/schemas/ReportRequest"
       responses:
+        "200":
+          description: Raw portfolio PDF bytes; no JSON envelope.
+          headers:
+            Content-Disposition:
+              description: Attachment filename in the form vision-portfolio-YYYY-MM-DD.pdf.
+              schema: { type: string }
+            Content-Length:
+              description: PDF byte count.
+              schema: { type: integer, minimum: 0 }
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        "400":
+          description: Invalid JSON body or report field; report validation uses VALIDATION_ERROR.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "403":
+          description: Cross-site request rejected by the API CSRF guard.
+        "429":
+          description: Global API rate limit exceeded.
         "503":
           description: Report capacity is full (two active and eight queued); retry later.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Envelope"
-        "200":
-          description: Generated PDF download
-          content:
-            application/pdf:
-              schema:
-                type: string
-                format: binary
 
   /api/reports/tax:
     post:
-      summary: Generate Belgian tax report
+      summary: Generate tax report PDF
       operationId: generateTaxReport
       tags: [Reports]
       requestBody:
@@ -11819,100 +14964,36 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                year:
-                  type: integer
-                currency:
-                  type: string
-                taxProfile:
-                  type: object
-                  description: Belgian filing context echoed into the Belgian rules section.
-                  properties:
-                    filingStatus: { type: string }
-                    region: { type: string }
-                    taxYear: { type: integer }
-                precomputedPIT:
-                  type: object
-                  description: PIT figures from the frontend engine; bracket `rate` is in percent units.
-                  properties:
-                    taxableIncome: { type: number }
-                    totalTax: { type: number }
-                    brackets:
-                      type: array
-                      items:
-                        type: object
-                        properties:
-                          label: { type: string }
-                          rate: { type: number }
-                          taxableIncome: { type: number }
-                          taxAmount: { type: number }
-                household:
-                  type: object
-                  additionalProperties: true
-                  description: >-
-                    Additive (ADR-201). The year's Belgian tax household, validated like the
-                    `belgian_tax_household_v2` setting; only partner display names are rendered.
-                precomputedHousehold:
-                  type: object
-                  description: >-
-                    Additive (ADR-201). Per-partner result from the frontend household engine.
-                    With two partners the Belgian rules section adds a row per partner, the
-                    household total, the assessment mode and the marital quotient.
-                  required: [assessmentMode, partners]
-                  properties:
-                    assessmentMode: { type: string, enum: [single, separate, joint] }
-                    legalBasis: { type: string, maxLength: 200 }
-                    quotient:
-                      type: object
-                      required: [applied, transfer, benefit]
-                      properties:
-                        applied: { type: boolean }
-                        transfer: { type: number }
-                        fromPartnerId: { type: string, enum: [A, B] }
-                        toPartnerId: { type: string, enum: [A, B] }
-                        benefit: { type: number }
-                    partners:
-                      type: array
-                      description: One entry per partner; partner ids must be unique.
-                      minItems: 1
-                      maxItems: 2
-                      items:
-                        type: object
-                        required: [partnerId, grossIncome, taxableIncome, totalPIT]
-                        properties:
-                          partnerId: { type: string, enum: [A, B] }
-                          grossIncome: { type: number }
-                          taxableIncome: { type: number }
-                          totalPIT: { type: number }
-                excludedCategoryIds:
-                  type: array
-                  items:
-                    type: integer
-                    format: int32
-                    minimum: 1
-                    maximum: 2147483647
-                excludedRecipientIds:
-                  type: array
-                  items:
-                    type: integer
-                    format: int32
-                    minimum: 1
-                    maximum: 2147483647
+              $ref: "#/components/schemas/ReportRequest"
       responses:
+        "200":
+          description: Raw tax PDF bytes; no JSON envelope.
+          headers:
+            Content-Disposition:
+              description: Attachment filename in the form vision-tax-YYYY-MM-DD.pdf.
+              schema: { type: string }
+            Content-Length:
+              description: PDF byte count.
+              schema: { type: integer, minimum: 0 }
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        "400":
+          description: Invalid JSON body or report field; report validation uses VALIDATION_ERROR.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+        "403":
+          description: Cross-site request rejected by the API CSRF guard.
+        "429":
+          description: Global API rate limit exceeded.
         "503":
           description: Report capacity is full (two active and eight queued); retry later.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Envelope"
-        "200":
-          description: Generated PDF download
-          content:
-            application/pdf:
-              schema:
-                type: string
-                format: binary
 
   # ─── AI ──────────────────────────────────────────────────────────────────────
   /api/ai/status:
@@ -12804,10 +15885,119 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Envelope"
-
-  # ─── Portfolio Import ─────────────────────────────────────────────────────────
         "409":
           description: Batch is not in a committable state or another commit claimed it
+
+  # ─── Portfolio Import ─────────────────────────────────────────────────────────
+  /api/portfolio/import/probe:
+    post:
+      summary: Read-only maintained statement detection and CSV header preview
+      description: >-
+        Inspects an uploaded file without creating a batch or financial rows. Uses
+        the same maintained-format detection and 16384-byte, five-row CSV preview
+        rules as the web frontend. Full-file detection retains every source account
+        identity. Detection and preview errors are independent; a supported workbook
+        can be detected while CSV preview is unavailable. Temporary uploads are cleaned
+        up on every outcome. The existing 50 MB upload and workbook inflation limits apply.
+      operationId: probePortfolioImport
+      tags: [PortfolioImport]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                separator:
+                  type: string
+                  enum: [",", ";", "\t", "|"]
+                  description: Omit to sniff the first nonempty header line.
+                encoding:
+                  type: string
+                  enum: [utf-8, utf8, latin1, latin-1, iso-8859-1, windows-1252]
+                  description: Case-insensitive and trimmed; Latin-1 aliases normalize to latin1.
+                  default: utf-8
+                skipRows:
+                  type: string
+                  pattern: '^\d{1,6}$'
+                  default: "0"
+      responses:
+        "200":
+          description: Independent detection and CSV preview outcomes
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required:
+                          [
+                            detected,
+                            detectionError,
+                            preview,
+                            previewError,
+                            separator,
+                          ]
+                        properties:
+                          detected:
+                            type: object
+                            nullable: true
+                            required: [source, sourceAccountIdentities]
+                            properties:
+                              source:
+                                type: string
+                                enum:
+                                  [
+                                    ibkr,
+                                    kinesis,
+                                    nexo,
+                                    nexo_pro,
+                                    saxo,
+                                    native_receipts,
+                                  ]
+                              sourceAccountIdentities:
+                                type: array
+                                items:
+                                  type: string
+                              presetKey:
+                                type: string
+                                enum: [ibkr_funding_history]
+                          detectionError:
+                            type: string
+                            nullable: true
+                            enum: [parse_error]
+                          preview:
+                            type: object
+                            nullable: true
+                            required: [headers, rows]
+                            properties:
+                              headers:
+                                type: array
+                                items:
+                                  type: string
+                              rows:
+                                type: array
+                                maxItems: 5
+                                items:
+                                  type: array
+                                  items:
+                                    type: string
+                          previewError:
+                            type: string
+                            nullable: true
+                            enum: [parse_error]
+                          separator:
+                            type: string
+                            enum: [",", ";", "\t", "|"]
+        "400":
+          description: Missing or unsupported upload or invalid probe options
 
   /api/portfolio/import/csv/custom:
     post:
@@ -13354,7 +16544,7 @@ paths:
                       adopt_existing_only,
                       correct_existing_only,
                       record_in_kind_income_only,
-              record_cash_only,
+                      record_cash_only,
                     ]
                   default: full
                   description: >-
@@ -13509,7 +16699,7 @@ paths:
                       adopt_existing_only,
                       correct_existing_only,
                       record_in_kind_income_only,
-              record_cash_only,
+                      record_cash_only,
                     ]
                   default: full
                   description: Same scope as the reviewed preview. Bounded modes require complete unfiltered Kinesis sources and the matching explicit policy (preserve_existing for attachment/income, prefer_source for corrections). Income requires zero yield basis and already proved units; excluded events remain pending.
@@ -14406,6 +17596,53 @@ paths:
                             type: integer
 
   # ─── Research (ADR-079) ───────────────────────────────────────────────────────
+  /api/research/presentation:
+    post:
+      summary: Compute Research presentation from submitted data without fetching or persisting
+      operationId: computeResearchPresentation
+      tags: [Research]
+      description: >-
+        Stateless shared TypeScript transformations for Compare, Chart Builder,
+        watchlist list/chart/add previews, provider-history quotes, analyst consensus
+        market-add two-of-three previews and Life Scenario preparation/comparison. No provider, database, settings or FX
+        lookup. Original source ordering, warmups, thresholds and currency semantics
+        are retained. Submit one UTF-8 JSON snapshot file; the 64 MiB scoped multipart
+        limit bypasses the global JSON-body size limit without silently truncating history.
+        Numeric JSON is validated as finite numbers; non-finite calculation outputs
+        serialize as null as in the web client. Uses the existing Research market rate limiter.
+      requestBody:
+        required: true
+        description: Single file field only; its JSON shape is ResearchPresentationSnapshot. Extra multipart fields and repeated files are rejected.
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              additionalProperties: false
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: UTF-8 JSON ResearchPresentationSnapshot; maximum 67,108,864 bytes.
+      responses:
+        "200":
+          description: Computed kind-specific presentation, standard envelope; no read or write side effects.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        {
+                          $ref: "#/components/schemas/ResearchPresentationData",
+                        }
+        "400":
+          description: VALIDATION_ERROR for missing/repeated/oversize file, extra multipart fields, invalid JSON or invalid/bounded snapshot.
+        "429": { description: Existing Research market rate limit. }
+        "500": { description: File I/O or unexpected calculation failure. }
+
   /api/research/search:
     get:
       summary: Search tickers / securities across research providers

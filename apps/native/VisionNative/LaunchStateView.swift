@@ -6,7 +6,7 @@ import VisionNativeCore
 /// backend is unavailable.
 enum ShellState: Equatable, Sendable {
     case checking
-    case ready(URL)
+    case ready(URL, NativeShellBackendSource)
     case unavailable(String)
 }
 
@@ -26,7 +26,8 @@ enum ShellResolver {
             break
         }
         do {
-            return .ready(try await AppRuntime.supervisor.launch())
+            let url = try await AppRuntime.supervisor.launch()
+            return .ready(url, .supervised(runtimeIdentifier: AppRuntime.variant.runtimeId))
         } catch {
             let reason = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             return .unavailable(reason)
@@ -41,7 +42,7 @@ enum ShellResolver {
             guard status == 200 else {
                 return .unavailable("\(healthURL.absoluteString) answered HTTP \(status).")
             }
-            return .ready(baseURL)
+            return .ready(baseURL, .developerOverride)
         } catch {
             return .unavailable(
                 "The backend is not running at \(healthURL.absoluteString): \(error.localizedDescription)"

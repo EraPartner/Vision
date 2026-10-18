@@ -748,8 +748,20 @@ jobs:
           VISION_NATIVE_INTEROP_DIR: ${{ runner.temp }}/native-interop
         run: |
           mkdir -p "$VISION_NATIVE_INTEROP_DIR"
-          swift test --package-path apps/native
+          # Run AppKit layouts separately so they cannot starve Core watchdogs/polling on MainActor.
+          swift test --package-path apps/native --skip VisionNativeUITests
+          # AppKit activation, key windows and display transactions are process-global.
+          swift test --package-path apps/native --skip-build --no-parallel --filter VisionNativeUITests
           test -f "$VISION_NATIVE_INTEROP_DIR/expected.json"
+
+      - name: Upload synthetic print diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4
+        with:
+          name: native-print-diagnostics
+          path: ${{ runner.temp }}/native-interop/print-render
+          if-no-files-found: ignore
+          retention-days: 3
 
       - name: Upload the interop artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4

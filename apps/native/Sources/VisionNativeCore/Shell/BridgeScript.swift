@@ -64,6 +64,25 @@ public enum BridgeScript {
           const parse = JSON.parse;
           const invoke = (channel, args) =>
             post(stringify({ channel, args })).then((raw) => (typeof raw === "string" ? parse(raw) : null));
+          Object.defineProperty(window, "__VISION_NATIVE_SETTINGS__", { value: true });
+          Object.defineProperty(window, "__VISION_NATIVE_PALETTE__", { value: true });
+          Object.defineProperty(window, "__VISION_NATIVE_SHORTCUTS__", { value: true });
+          Object.defineProperty(window, "__VISION_NATIVE_SHELL_NOTIFICATIONS__", { value: true });
+          Object.defineProperty(window, "__VISION_NATIVE_ONBOARDING__", { value: true });
+          Object.defineProperty(window, "__VISION_NATIVE_REPORTS__", { value: true });
+          Object.defineProperty(window, "__VISION_NATIVE_ONBOARDING_STATE__", { value: { complete: null, presented: false } });
+          Object.defineProperty(window, "__visionNativeOpenOverlay", {
+            value: (kind) => invoke("shell:open-overlay", [kind]).then((reply) => {
+              if (!reply || reply.success !== true) throw new Error("Could not open native overlay");
+            }),
+          });
+          Object.defineProperty(window, "__VISION_NATIVE_SETTINGS_SNAPSHOT__", { value: Object.create(null) });
+          Object.defineProperty(window, "__VISION_NATIVE_SETTINGS_SESSION_TIER__", { value: { value: null } });
+          Object.defineProperty(window, "__visionNativeSettingsChange", {
+            value: (key, updates, removed) => invoke("shell:settings-change", [key, updates, removed]).then((reply) => {
+              if (!reply || reply.success !== true) throw new Error("Could not apply native settings");
+            }),
+          });
           const listeners = new Map();
           const subscribe = (channel) => (callback) => {
             if (typeof callback !== "function") return () => {};

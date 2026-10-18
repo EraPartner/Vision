@@ -15,6 +15,14 @@ adminListEndpoints
 
 # App settings (number and date formats, admin mode) for native screens
 getSetting
+# Native Settings reads the whole raw envelope with first-load CAS baselines.
+getSettings
+# Settings AI provider metadata and the existing AgentCloak desktop controls.
+researchListProviderKeys
+researchSetProviderKey
+researchClearProviderKey
+getAgentCloakDesktopStatus
+configureAgentCloakDesktop
 
 # Admin > Database maintenance and the table data editor (ADR-101)
 adminDatabaseVacuum
@@ -35,6 +43,8 @@ getRecipients
 getRecipient
 getAccounts
 getCategoryTree
+# Onboarding's legacy category presets use the existing flat-category operation.
+createCategory
 getTags
 createTag
 # Mark as paid candidates and the Payment history lookups (`transaction_id`)
@@ -60,6 +70,8 @@ exportTransactionsJson
 # The multipart and SSE uploads have no generated struct (the generator writes JSON bodies
 # only); hand-written operations in Screens/Imports/ImportRequests.swift call them:
 # importCsvCustom, importCsvStream, importRecipients, importCategories.
+# Onboarding also uses the existing non-stream importCsv multipart operation;
+# its hand-written request retains the same byte upload and response envelope.
 # Transactions (/transactions, phase 3e part A): the row mutations, delete with undo
 # (the undo recreates the row), the inspector's "Use for all" and the Attachments panel.
 # updateTransaction's explicit-null PATCH body, uploadAttachment's multipart body and
@@ -128,3 +140,166 @@ createRecipientPattern
 previewRecipientPattern
 updateRecipientPattern
 deleteRecipientPattern
+
+getMonthlySummary
+getAverageVsCurrent
+getBankBalances
+getNetWorth
+getCashflowForecastMethods
+getCashflowForecastRolling
+getCashflowForecastAccuracy
+getTransactionCount
+getCategories
+getCategoryPivot
+getRecipientInsights
+getRecipientByYear
+getSankey
+getInsightsDigest
+dismissInsight
+getSavedCharts
+createSavedChart
+updateSavedChart
+deleteSavedChart
+getRecipientPivot
+getTagPivot
+
+# Belgian tax engine prerequisite (ADR-204): Swift displays TypeScript results.
+computeBelgianTax
+getBelgianTaxOverview
+# Atomic tax snapshot / filing writes use the existing settings operation.
+saveSettings
+
+getBelgianTaxDashboard
+
+getDeductionCandidates
+
+getInvestments
+createInvestment
+updateInvestment
+deleteInvestment
+getInvestment
+getInvestmentTransactions
+createInvestmentTransaction
+updatePortfolioTransaction
+deletePortfolioTransaction
+getPortfolioPerformance
+getPortfolioPerformanceByBroker
+getPortfolioExposure
+upsertPortfolioExposureSources
+refreshInvestmentPrices
+listInvestmentProviders
+getInvestmentPriceHistory
+getInvestmentSummary
+marketQuote
+marketNews
+marketChart
+computeRebalance
+computeCommitmentAwareCash
+getBulkPortfolioTransactions
+
+# Portfolio Import (phase 3j). Multipart/SSE uploads use hand-written operations:
+# portfolioImportCsvCustom, portfolioImportCsvStream.
+getPortfolioParsers
+createPortfolioParser
+updatePortfolioParser
+deletePortfolioParser
+getPortfolioImportBatches
+getPortfolioImportBatch
+deletePortfolioImportBatch
+previewPortfolioImportBatch
+portfolioImportRowInvestmentOverride
+portfolioImportRowsInvestmentOverride
+previewPortfolioImportReconciliation
+commitReviewedPortfolioImports
+commitPortfolioImportBatch
+# Authoritative Portfolio Tax results (phase 3j), computed by the shared TS engine.
+getBelgianPortfolioTaxDashboard
+
+# Analysis workspace and Monitors (phase 3k). Financial evaluation stays in TypeScript.
+getAnalysisCatalog
+executeAnalysis
+cancelAnalysis
+drillAnalysis
+executeAnalysisPivot
+evaluateAnalysisExtension
+listSavedAnalyses
+createSavedAnalysis
+updateSavedAnalysis
+deleteSavedAnalysis
+runSavedAnalysis
+listSavedAnalysisVersions
+restoreSavedAnalysisVersion
+generateAnalysisProposal
+previewAnalysisProposal
+applyAnalysisProposal
+listAnalysisMonitors
+createAnalysisMonitor
+patchAnalysisMonitor
+deleteAnalysisMonitor
+checkAnalysisMonitor
+listAnalysisMonitorObservations
+listAnalysisMonitorNotifications
+readAnalysisMonitorNotification
+listResearchDossiers
+
+# Analysis CSV/XLSX import/export use handwritten multipart and binary operations:
+# importAnalysisInterchange, exportAnalysisInterchange.
+
+# Research home, Markets, Market lookup, Watchlist and Compare (phase 3l).
+researchSearch
+researchChart
+researchScorecard
+researchAnalyst
+researchNews
+marketSearch
+getWatchlist
+addToWatchlist
+updateWatchlistItem
+deleteWatchlistItem
+researchListMappings
+researchResolveMappings
+researchSaveMappings
+researchDeleteMapping
+researchAuditMappings
+# computeResearchPresentation uses a handwritten submitted-data multipart operation.
+
+# Research Forecast and Chart Builder (phase 3m). Calculations remain TypeScript-owned.
+researchPortfolioForecast
+researchMacroSearch
+researchMacroSeries
+
+# Phase 3n: Research Dossiers and AI chat/investigation.
+createResearchDossier
+getResearchDossier
+updateResearchDossier
+deleteResearchDossier
+listResearchDossierVersions
+restoreResearchDossier
+exportResearchDossiers
+exportResearchDossier
+listAiResearchDocuments
+getAiStatus
+getAiModels
+getAiConversations
+createAiConversation
+getAiConversation
+updateAiConversation
+deleteAiConversation
+getAiResearchStatus
+createAiInvestigation
+getAiInvestigation
+deleteAiInvestigation
+resumeAiInvestigation
+cancelAiInvestigation
+deleteAiResearchDocument
+previewAiDisclosure
+createAiDisclosureGrant
+listAiDisclosureGrants
+revokeAiDisclosureGrant
+listAiDisclosureRecords
+deleteAiDisclosureRecords
+
+# aiChatStream uses the JSON SSE adapter; createAiResearchDocument uses MultipartFormData.
+
+# Sidebar badges (NavItemBadge): persisted undismissed insight count
+getInsightsCount

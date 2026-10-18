@@ -10,12 +10,15 @@ public enum ShortcutOutcome: Equatable, Sendable {
     case openPalette
     /// `?`: ShortcutsOverlay.
     case openShortcuts
+    /// ⌘B / Ctrl+B: the shadcn sidebar's toggle shortcut.
+    case toggleSidebar
 }
 
 /// The page's keyboard shortcuts for native screens, which take key events away from the
 /// web view: CommandPalette's ⌘K, ShortcutsOverlay's `?`, AppLayout's `N`,
 /// `useGoToShortcuts` (`g` then a key within 900 ms) and `useSectionCycleShortcuts`
-/// (`[` and `]`). A native screen has no text fields, so none is ever inert for typing.
+/// (`[` and `]`). Like `isShortcutSafeTarget`, the single-key ones stay inert while a text
+/// field has focus; ⌘K and ⌘B work everywhere.
 public struct NativeShortcuts: Sendable {
     /// `SEQUENCE_WINDOW_MS`.
     public static let sequenceWindow: TimeInterval = 0.9
@@ -34,9 +37,10 @@ public struct NativeShortcuts: Sendable {
     /// - Parameters:
     ///   - key: the typed character (`KeyboardEvent.key` for printable keys).
     ///   - path: the current route's path, for `[` and `]`.
+    ///   - typing: a text-entry control has focus (`isTypingTarget`).
     public mutating func handle(
         key: String, command: Bool = false, control: Bool = false, option: Bool = false, shift: Bool = false,
-        path: String, now: Date
+        path: String, typing: Bool = false, now: Date
     ) -> ShortcutOutcome {
         if let armedAt, now.timeIntervalSince(armedAt) > Self.sequenceWindow { self.armedAt = nil }
         let lower = key.lowercased()
@@ -45,7 +49,11 @@ public struct NativeShortcuts: Sendable {
             armedAt = nil
             return .openPalette
         }
-        if command || control || option {
+        if lower == "b" && (command || control) && !option && !shift {
+            armedAt = nil
+            return .toggleSidebar
+        }
+        if command || control || option || typing {
             armedAt = nil
             return .ignored
         }

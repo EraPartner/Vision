@@ -6,6 +6,26 @@ skinparam linetype ortho
 skinparam nodesep 50
 skinparam ranksep 70
 
+package "Belgian Tax (ADR-204)" {
+  class TaxOverviewService {
+    +getTaxOverview(year?): live/historical overview
+  }
+  class TaxDashboardService {
+    +getTaxDashboard(options): chart and widget data
+  }
+  class SharedBelgianTaxEngine {
+    +computeHouseholdTax(household)
+    +recordedIncomeAttribution / portfolioTax
+  }
+  TaxOverviewService --> SettingsService : one settings/baseline read
+  TaxOverviewService --> SharedBelgianTaxEngine : frozen first
+  TaxDashboardService --> TaxOverviewService
+  TaxDashboardService --> SharedBelgianTaxEngine : server-owned fiscal derivation
+  TaxDashboardService --> PortfolioTransactionRepository : recorded costs, active + inactive
+  TaxDashboardService --> InfoRepository : through monthly/category aggregation services
+  TaxDashboardService --> CurrencyConversionService : latest stored rates + fallback
+}
+
 package "Import Pipeline" {
   class ImportPipeline {
     +createBatch(stream, adapter): Promise<Batch>

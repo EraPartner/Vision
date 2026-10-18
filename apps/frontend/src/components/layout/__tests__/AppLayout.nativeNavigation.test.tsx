@@ -19,6 +19,8 @@ import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { ok } from "@/test/msw/handlers";
 import { AppLayout } from "@/components/layout/AppLayout";
+import type { NativePaletteWindow } from "@/lib/nativePaletteAnswer";
+import { exchangeRateKeys, plannedKeys } from "@/lib/queryKeys";
 
 const API_BASE = "http://localhost:3002";
 
@@ -108,6 +110,13 @@ describe("AppLayout with Vision Native's sidebar", () => {
 
     afterEach(() => {
         Reflect.deleteProperty(window, "electronAPI");
+        Reflect.deleteProperty(window, "__VISION_NATIVE_SETTINGS__");
+        Reflect.deleteProperty(window, "__VISION_NATIVE_PALETTE__");
+        Reflect.deleteProperty(window, "__VISION_NATIVE_SHORTCUTS__");
+        Reflect.deleteProperty(window, "__VISION_NATIVE_SHELL_NOTIFICATIONS__");
+        Reflect.deleteProperty(window, "__VISION_NATIVE_ONBOARDING__");
+        Reflect.deleteProperty(window, "__VISION_NATIVE_ONBOARDING_STATE__");
+        Reflect.deleteProperty(window, "__visionNativeOpenOverlay");
         document.documentElement.className = "";
     });
 
@@ -124,13 +133,17 @@ describe("AppLayout with Vision Native's sidebar", () => {
         ).not.toBeInTheDocument();
         expect(document.documentElement).toHaveClass("native-navigation");
         await waitFor(() =>
-            expect(api.routeChanged).toHaveBeenLastCalledWith("/?keep=1"),
+            expect(api.routeChanged).toHaveBeenLastCalledWith(
+                "/?keep=1",
+                false,
+            ),
         );
 
         fireEvent.click(screen.getByRole("button", { name: "Go to rates" }));
         await waitFor(() =>
             expect(api.routeChanged).toHaveBeenLastCalledWith(
                 "/admin/exchange-rates?tab=fallback",
+                false,
             ),
         );
     });
@@ -140,7 +153,10 @@ describe("AppLayout with Vision Native's sidebar", () => {
         renderLayout();
         await screen.findByText("page content");
         await waitFor(() =>
-            expect(api.routeChanged).toHaveBeenLastCalledWith("/?keep=1"),
+            expect(api.routeChanged).toHaveBeenLastCalledWith(
+                "/?keep=1",
+                false,
+            ),
         );
         const before = vi.mocked(api.routeChanged!).mock.calls.length;
 
@@ -154,7 +170,7 @@ describe("AppLayout with Vision Native's sidebar", () => {
         await waitFor(() =>
             expect(api.routeChanged).toHaveBeenCalledTimes(before + 1),
         );
-        expect(api.routeChanged).toHaveBeenLastCalledWith("/?keep=1");
+        expect(api.routeChanged).toHaveBeenLastCalledWith("/?keep=1", false);
     });
 
     it("keeps the web sidebar in Electron, which has no route channel", async () => {
@@ -169,5 +185,195 @@ describe("AppLayout with Vision Native's sidebar", () => {
             screen.getByRole("button", { name: "Toggle Sidebar" }),
         ).toBeInTheDocument();
         expect(document.documentElement).not.toHaveClass("native-navigation");
+    });
+
+    it("retains the web Settings dialog in an earlier native-sidebar build", async () => {
+        installNativeBridge(true);
+        renderLayout();
+        await screen.findByText("page content");
+        act(() => menuAction?.({ action: "open-settings" }));
+        expect(
+            await screen.findByRole("dialog", { name: "Settings" }),
+        ).toBeInTheDocument();
+    });
+
+    it("native Settings owns its pane while the web router retains push, replace and back", async () => {
+        Object.defineProperty(window, "__VISION_NATIVE_SETTINGS__", {
+            value: true,
+            configurable: true,
+        });
+        const api = installNativeBridge(true);
+        renderLayout();
+        await screen.findByText("page content");
+        act(() => menuAction?.({ action: "open-settings" }));
+        await waitFor(() =>
+            expect(api.routeChanged).toHaveBeenLastCalledWith(
+                "/?keep=1&settings=general",
+                false,
+            ),
+        );
+        expect(
+            screen.queryByRole("dialog", { name: "Settings" }),
+        ).not.toBeInTheDocument();
+        act(() =>
+            menuAction?.({
+                action: "replace-route",
+                payload: "/?keep=1&settings=ai",
+            }),
+        );
+        await waitFor(() =>
+            expect(api.routeChanged).toHaveBeenLastCalledWith(
+                "/?keep=1&settings=ai",
+                false,
+            ),
+        );
+        expect(
+            screen.queryByRole("dialog", { name: "Settings" }),
+        ).not.toBeInTheDocument();
+        act(() => menuAction?.({ action: "close-settings" }));
+        await waitFor(() =>
+            expect(api.routeChanged).toHaveBeenLastCalledWith(
+                "/?keep=1",
+                false,
+            ),
+        );
+    });
+
+    it("closing a native Settings deep link replaces only its query parameter", async () => {
+        Object.defineProperty(window, "__VISION_NATIVE_SETTINGS__", {
+            value: true,
+            configurable: true,
+        });
+        const api = installNativeBridge(true);
+        renderWithApp(
+            <AppLayout>
+                <div>deep-linked page</div>
+            </AppLayout>,
+            { initialEntries: ["/?settings=ai&keep=2"] },
+        );
+        await screen.findByText("deep-linked page");
+        await waitFor(() =>
+            expect(api.routeChanged).toHaveBeenLastCalledWith(
+                "/?settings=ai&keep=2",
+                false,
+            ),
+        );
+        expect(
+            screen.queryByRole("dialog", { name: "Settings" }),
+        ).not.toBeInTheDocument();
+        act(() => menuAction?.({ action: "close-settings" }));
+        await waitFor(() =>
+            expect(api.routeChanged).toHaveBeenLastCalledWith(
+                "/?keep=2",
+                false,
+            ),
+        );
+    });
+
+    it("reports onboarding opening and closing on the same route without replacing the wizard", async () => {
+        server.use(
+            http.get(`${API_BASE}/api/settings/onboarding_complete`, () =>
+                ok({
+                    key: "onboarding_complete",
+                    value: false,
+                    expected: { exists: true, value: false },
+                }),
+            ),
+        );
+        Object.defineProperty(window, "__VISION_NATIVE_SETTINGS__", {
+            value: true,
+            configurable: true,
+        });
+        const api = installNativeBridge(true);
+        renderLayout();
+        await screen.findByRole("dialog");
+        await waitFor(() =>
+            expect(api.routeChanged).toHaveBeenLastCalledWith("/?keep=1", true),
+        );
+        fireEvent.keyDown(document.activeElement ?? document.body, {
+            key: "Escape",
+        });
+        await waitFor(() =>
+            expect(api.routeChanged).toHaveBeenLastCalledWith(
+                "/?keep=1",
+                false,
+            ),
+        );
+        expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
+    it("mounts the fixed palette answer callback and deactivates it with the layout", async () => {
+        Object.defineProperty(window, "__VISION_NATIVE_PALETTE__", {
+            value: true,
+            configurable: true,
+        });
+        installNativeBridge(true);
+        const view = renderLayout();
+        await screen.findByText("page content");
+        const host = window as NativePaletteWindow;
+        await waitFor(() => expect(host.__visionNativePaletteAnswer).toBeTypeOf("function"));
+        const answer = host.__visionNativePaletteAnswer!;
+        expect(await answer("1,5 + 2", "eu", "EUR", 2)).toEqual({
+            kind: "arithmetic",
+            text: "3,5",
+        });
+        expect(Object.getOwnPropertyDescriptor(window, "__visionNativePaletteAnswer"))
+            .toMatchObject({ writable: false, configurable: false });
+        view.unmount();
+        expect(await answer("1,5 + 2", "eu", "EUR", 2)).toBeNull();
+    });
+
+    it("opens native palette/help from menu callbacks and retained-web keys without invisible web overlays", async () => {
+        for (const name of ["__VISION_NATIVE_PALETTE__", "__VISION_NATIVE_SHORTCUTS__"]) {
+            Object.defineProperty(window, name, { value: true, configurable: true });
+        }
+        const open = vi.fn().mockResolvedValue(undefined);
+        Object.defineProperty(window, "__visionNativeOpenOverlay", { value: open, configurable: true });
+        const api = installNativeBridge(true);
+        renderLayout();
+        await screen.findByText("page content");
+        await waitFor(() => expect(api.routeChanged).toHaveBeenLastCalledWith("/?keep=1", false));
+        act(() => {
+            menuAction?.({ action: "open-palette" });
+            menuAction?.({ action: "open-shortcuts" });
+        });
+        expect(open.mock.calls).toEqual([["palette"], ["shortcuts"]]);
+        expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+        fireEvent.keyDown(document.body, { key: "k", metaKey: true });
+        fireEvent.keyDown(document.body, { key: "?", shiftKey: true });
+        expect(open.mock.calls).toEqual([["palette"], ["shortcuts"], ["palette"], ["shortcuts"]]);
+        fireEvent.click(screen.getByRole("button", { name: "Go to rates" }));
+        await waitFor(() => expect(api.routeChanged).toHaveBeenLastCalledWith("/admin/exchange-rates?tab=fallback", false));
+    });
+
+    it("removes native-owned banner queries only with the explicit notifications capability", async () => {
+        Object.defineProperty(window, "__VISION_NATIVE_SHELL_NOTIFICATIONS__", { value: true, configurable: true });
+        installNativeBridge(true);
+        const view = renderLayout();
+        await screen.findByText("page content");
+        expect(view.queryClient.getQueryCache().find({ queryKey: exchangeRateKeys.fxStatus })).toBeUndefined();
+        expect(view.queryClient.getQueryCache().findAll({ queryKey: plannedKeys.upcomingAll })).toHaveLength(0);
+    });
+
+    it("keeps banner queries in an earlier native-sidebar build", async () => {
+        installNativeBridge(true);
+        const view = renderLayout();
+        await screen.findByText("page content");
+        expect(view.queryClient.getQueryCache().find({ queryKey: exchangeRateKeys.fxStatus })).toBeDefined();
+        expect(view.queryClient.getQueryCache().findAll({ queryKey: plannedKeys.upcomingAll })).toHaveLength(1);
+    });
+
+    it("leaves native onboarding coverage to the host while continuing route reports", async () => {
+        Object.defineProperty(window, "__VISION_NATIVE_ONBOARDING__", { value: true, configurable: true });
+        Object.defineProperty(window, "__VISION_NATIVE_ONBOARDING_STATE__", {
+            value: { complete: false, presented: true }, configurable: true,
+        });
+        const api = installNativeBridge(true);
+        renderLayout();
+        await screen.findByText("page content");
+        expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+        await waitFor(() => expect(api.routeChanged).toHaveBeenLastCalledWith("/?keep=1", false));
+        fireEvent.click(screen.getByRole("button", { name: "Go to rates" }));
+        await waitFor(() => expect(api.routeChanged).toHaveBeenLastCalledWith("/admin/exchange-rates?tab=fallback", false));
     });
 });

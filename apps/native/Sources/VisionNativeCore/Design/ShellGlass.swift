@@ -36,9 +36,9 @@ public struct ShellGlass: Equatable, Sendable {
         borderOpacity = dark ? 0.6 : 0.5
         highlight = palette.glassHighlight
         highlightOpacity = dark ? 0.06 : 0.28
-        self.selection = palette.primary
+        self.selection = theme.primary
         selectionOpacity = dark ? 0.16 : 0.12
-        icon = palette.primary
+        icon = theme.primary
         foreground = palette.sidebarForeground
         detailTint = palette.background
         detailTintOpacity = dark ? 0.84 : 0.86

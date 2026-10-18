@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { useNavigate } from "react-router";
 import {
     Archive,
@@ -14,7 +14,6 @@ import {
     DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { RowMenu } from "@/components/shared/RowMenu";
-import { ExportDialog } from "@/features/reports/ExportDialog";
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
@@ -90,16 +89,17 @@ interface AssetPageActionsProps {
     allowedAssetClasses: AssetClass[];
     /** Offer the portfolio PDF export in the ••• menu. */
     showExport?: boolean;
+    onExport: () => void;
 }
 
 /** Header actions shared by the asset pages: primary Add, ••• with export and import. */
 export function AssetPageActions({
     allowedAssetClasses,
     showExport = true,
+    onExport,
 }: AssetPageActionsProps) {
     const { t } = useLanguage();
     const navigate = useNavigate();
-    const [exportOpen, setExportOpen] = useState(false);
     return (
         <>
             <AddInvestmentDialog
@@ -114,7 +114,7 @@ export function AssetPageActions({
             <RowMenu variant="outline" size="icon" label={t("portfolio.menu")}>
                 {showExport && (
                     <>
-                        <DropdownMenuItem onSelect={() => setExportOpen(true)}>
+                        <DropdownMenuItem onSelect={onExport}>
                             <FileDown className="mr-2 h-4 w-4 text-label-secondary" />
                             {t("portfolio.menu.exportPdf")}
                         </DropdownMenuItem>
@@ -128,14 +128,6 @@ export function AssetPageActions({
                     {t("nav.portfolioImport")}
                 </DropdownMenuItem>
             </RowMenu>
-            {showExport && (
-                <ExportDialog
-                    defaultType="portfolio"
-                    trigger={null}
-                    open={exportOpen}
-                    onOpenChange={setExportOpen}
-                />
-            )}
         </>
     );
 }

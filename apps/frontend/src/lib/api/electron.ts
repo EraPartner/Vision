@@ -48,10 +48,74 @@ export function isNativeNavigation(): boolean {
     return getElectronAPI()?.nativeNavigation === true;
 }
 
+export type NativeSettingsKey =
+    "app_settings" | "dashboard_settings" | "theme_settings";
+
+export interface NativeSettingsWindow extends Window {
+    readonly __VISION_NATIVE_SETTINGS__?: boolean;
+    readonly __VISION_NATIVE_SETTINGS_SNAPSHOT__?: Partial<
+        Record<NativeSettingsKey, unknown>
+    >;
+    readonly __VISION_NATIVE_SETTINGS_SESSION_TIER__?: {
+        value: "standard" | "enhanced" | null;
+    };
+    readonly __visionNativeSettingsChange?: (
+        key: NativeSettingsKey,
+        updates: Record<string, unknown>,
+        removed: string[],
+    ) => Promise<unknown>;
+}
+
+/** A separate capability: earlier native-sidebar builds still use web Settings. */
+export function isNativeSettings(): boolean {
+    return (
+        typeof window !== "undefined" &&
+        (window as NativeSettingsWindow).__VISION_NATIVE_SETTINGS__ === true
+    );
+}
+
+export function isNativeSettingsKey(
+    value: unknown,
+): value is NativeSettingsKey {
+    return (
+        value === "app_settings" ||
+        value === "dashboard_settings" ||
+        value === "theme_settings"
+    );
+}
+
+/** Forward a preference edit to the app-lifetime native writer, never another key. */
+export async function changeNativeSettings(
+    key: NativeSettingsKey,
+    updates: Record<string, unknown>,
+    removed: string[],
+): Promise<void> {
+    const change = (window as NativeSettingsWindow)
+        .__visionNativeSettingsChange;
+    if (!isNativeSettings() || !isNativeSettingsKey(key) || !change)
+        throw new Error("Native settings bridge is unavailable");
+    const result = await change(key, updates, removed);
+    if (
+        result &&
+        typeof result === "object" &&
+        "success" in result &&
+        result.success === false
+    ) {
+        throw new Error(
+            "error" in result && typeof result.error === "string"
+                ? result.error
+                : "Could not apply native settings",
+        );
+    }
+}
+
 /** Tell the native sidebar where the router is (`pathname + search`). */
-export function reportNativeRoute(route: string): void {
+export function reportNativeRoute(
+    route: string,
+    onboardingPresented = false,
+): void {
     getElectronAPI()
-        ?.routeChanged?.(route)
+        ?.routeChanged?.(route, onboardingPresented)
         .catch(() => {
             /* best-effort: the sidebar keeps its last route */
         });
@@ -176,7 +240,8 @@ export async function saveBackupSettings(settings: {
     const backup = getElectronBackup();
     if (backup) {
         const result = await backup.saveSettings(settings);
-        if (!result.success) throw new Error(result.error || "Could not save backup settings");
+        if (!result.success)
+            throw new Error(result.error || "Could not save backup settings");
     } else await saveSetting("backup_settings", settings);
 }
 
@@ -223,7 +288,8 @@ export async function saveServicesSettings(settings: {
     const services = getElectronServices();
     if (services) {
         const result = await services.saveSettings(settings);
-        if (!result.success) throw new Error(result.error || "Could not save services settings");
+        if (!result.success)
+            throw new Error(result.error || "Could not save services settings");
     } else await saveSetting("services_settings", settings);
 }
 

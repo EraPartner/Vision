@@ -63,10 +63,38 @@
             #expect(bool(context, "window.electronAPI.nativeNavigation === true"))
         }
 
+        @Test func nativeCapabilitiesAndOverlayEntryPointAreImmutable() throws {
+            let context = try makeContext()
+            for name in [
+                "__VISION_NATIVE_SETTINGS__", "__VISION_NATIVE_PALETTE__", "__VISION_NATIVE_SHORTCUTS__",
+                "__VISION_NATIVE_SHELL_NOTIFICATIONS__", "__VISION_NATIVE_ONBOARDING__", "__VISION_NATIVE_REPORTS__",
+            ] {
+                #expect(bool(context, "window.\(name) === true"))
+                #expect(bool(context, "Object.getOwnPropertyDescriptor(window, '\(name)').writable === false"))
+                #expect(bool(context, "Object.getOwnPropertyDescriptor(window, '\(name)').configurable === false"))
+            }
+            #expect(
+                bool(context, "Object.getOwnPropertyDescriptor(window, '__visionNativeOpenOverlay').writable === false")
+            )
+            #expect(
+                bool(
+                    context,
+                    "Object.getOwnPropertyDescriptor(window, '__visionNativeOpenOverlay').configurable === false"))
+            context.evaluateScript("window.__visionNativeOpenOverlay('palette');")
+            #expect(bool(context, "posted.length === 1"))
+            #expect(
+                context.evaluateScript("posted[0]")?.toString()
+                    == #"{"channel":"shell:open-overlay","args":["palette"]}"#)
+        }
+
         @Test func theDispatcherIsNotWritable() throws {
             let context = try makeContext()
-            #expect(bool(context, "Object.getOwnPropertyDescriptor(window, '__visionNativeDispatch').writable === false"))
-            #expect(bool(context, "Object.getOwnPropertyDescriptor(window, '__visionNativeDispatch').configurable === false"))
+            #expect(
+                bool(context, "Object.getOwnPropertyDescriptor(window, '__visionNativeDispatch').writable === false"))
+            #expect(
+                bool(
+                    context, "Object.getOwnPropertyDescriptor(window, '__visionNativeDispatch').configurable === false")
+            )
             context.evaluateScript("window.__visionNativeDispatch = function () {};")
             context.exception = nil
             #expect(bool(context, "window.__visionNativeDispatch.toString().indexOf('listeners') !== -1"))
@@ -79,10 +107,16 @@
                 var received = [];
                 var unsubscribe = window.electronAPI.onMenuAction(function (payload) { received.push(payload); });
                 """)
-            context.evaluateScript(BridgeDispatcher.eventScript(.menuAction, payload: BridgeDispatcher.menuActionPayload(.navigate("/import"))))
-            #expect(bool(context, "received.length === 1 && received[0].action === 'navigate' && received[0].payload === '/import'"))
+            context.evaluateScript(
+                BridgeDispatcher.eventScript(
+                    .menuAction, payload: BridgeDispatcher.menuActionPayload(.navigate("/import"))))
+            #expect(
+                bool(
+                    context,
+                    "received.length === 1 && received[0].action === 'navigate' && received[0].payload === '/import'"))
             context.evaluateScript("unsubscribe();")
-            context.evaluateScript(BridgeDispatcher.eventScript(.menuAction, payload: BridgeDispatcher.menuActionPayload(.openSettings)))
+            context.evaluateScript(
+                BridgeDispatcher.eventScript(.menuAction, payload: BridgeDispatcher.menuActionPayload(.openSettings)))
             #expect(bool(context, "received.length === 1"))
         }
 

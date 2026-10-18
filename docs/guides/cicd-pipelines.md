@@ -2,7 +2,8 @@
 title: CI/CD Pipelines
 type: guide
 status: active
-date: 2026-10-11
+date: 2026-10-13
+updated: 2026-10-15
 tags:
   [
     guide,
@@ -16,7 +17,7 @@ tags:
   ]
 description: Current GitHub Actions quality gates, native PostgreSQL verification, and macOS release flow.
 aliases: [CI, CD, GitHub Actions, release pipeline]
-related_code: [".github/workflows/ci.yml", ".github/workflows/release.yml"]
+related_code: [".github/workflows/ci.yml", ".github/workflows/native-branch.yml", ".github/workflows/release.yml"]
 ---
 
 # CI/CD Pipelines
@@ -43,12 +44,25 @@ scan, or publish a product container image. The required aggregate check remains
 stage and keeps a stable branch-protection name. A skipped path-filtered job is handled explicitly;
 an absent or failed required result is not treated as green.
 
-The frontend build is followed by `size:check`. Its measured gzip limits are 468 KB for the
-initial preload graph and 1340 KB for all route assets. The preload limit includes about five
-percent headroom over the 2026-09-24 build. The owner raised the total limit to 1180 KB on
-2026-10-06 for growth in lazy route and locale chunks, and to 1340 KB on 2026-10-08 after the
-lazily loaded `xlsx` chunk for the IBKR funding import brought the total to 1310.71 KB. The checker reads the generated `index.html` and assets to catch new eager
-imports and total bundle growth.
+Swift continuation branches also run `.github/workflows/native-branch.yml` on pushes to
+`codex/native-phase-*`. The branch and main CI jobs run Core tests and AppKit/SwiftUI layout tests
+in separate processes: the first excludes `VisionNativeUITests`, and the second selects that target
+with `--skip-build`. Both must pass, and the interop artifact check still runs afterward. This keeps
+synchronous AppKit layouts from blocking Core watchdog/polling tests on MainActor. The branch job
+builds the unsigned Debug app and runs the Swift package tests on
+`macos-26`, with the same pinned XcodeGen digest as the main CI job. Frequent safety saves do
+not cancel a running verification before its package tests finish; GitHub retains the newest
+pending snapshot. This branch workflow supplies development evidence and does not publish,
+install or replace the required `CI Complete` merge gate.
+
+The frontend build is followed by `size:check`. Its reviewed gzip limits are 475 KB for the
+initial preload graph and 1374 KB for all route assets. The 2026-10-13 native Settings and fixed
+shell bridge preparation, including the read-only extreme-year report context, measures
+474.69 KB and 1373.85 KB respectively. The extreme-year helper adds 0.55 KB to preload and
+1.56 KB overall over the preceding 474.14 KB / 1372.29 KB build. The household schema, migration,
+and engine remain lazy as required by [[docs/adr/200-belgian-tax-household-model|ADR-200]].
+The checker reads the generated `index.html` and assets to catch new eager imports and total
+bundle growth.
 
 Python is checked by `mypy --strict` from `config/mypy.ini` (Alembic env and migrations,
 `scripts/`, the packaged Alembic wrapper) in the `Type Check (Python)` job, which installs the

@@ -28,6 +28,7 @@ import { OnboardingWizard } from "@/features/onboarding/OnboardingWizard";
 import { useOnboarding } from "@/features/onboarding/useOnboarding";
 import { PageTransition } from "@/components/layout/PageTransition";
 import { CommandPalette } from "@/components/shared/CommandPalette";
+import { NativePaletteAnswerBridge } from "@/components/shared/NativePaletteAnswerBridge";
 import { PageTitleProvider, usePageTitle } from "@/contexts/PageTitleContext";
 import { ShortcutsOverlay } from "@/components/shared/ShortcutsOverlay";
 import { ShaderAurora } from "@/components/layout/ShaderAurora";
@@ -44,7 +45,13 @@ import { isShortcutSafeTarget, isTypingTarget } from "@/lib/keyboard";
 import { readSidebarCollapsed } from "@/hooks/useSidebarPreferences";
 import { cn } from "@/lib/utils";
 import { BackgroundQueryIndicator } from "@/components/shared/BackgroundQueryIndicator";
-import { isNativeNavigation, reportNativeRoute } from "@/lib/api/electron";
+import { hasNativeShellCapability, requestNativeOverlay } from "@/lib/nativeShell";
+import logger from "@/lib/logger";
+import {
+    isNativeNavigation,
+    isNativeSettings,
+    reportNativeRoute,
+} from "@/lib/api/electron";
 
 interface AppLayoutProps {
     children: React.ReactNode;
@@ -70,6 +77,11 @@ export function AppLayout({ children }: AppLayoutProps) {
     // Vision Native draws the sidebar itself (ADR-204 phase 2); the bridge flag
     // is fixed for the page's lifetime.
     const [nativeNavigation] = useState(isNativeNavigation);
+    const [nativeSettings] = useState(isNativeSettings);
+    const [nativePalette] = useState(() => hasNativeShellCapability("palette"));
+    const [nativeShortcuts] = useState(() => hasNativeShellCapability("shortcuts"));
+    const [nativeNotifications] = useState(() => hasNativeShellCapability("notifications"));
+    const [nativeOnboarding] = useState(() => hasNativeShellCapability("onboarding"));
 
     const writeSettingsSection = useCallback(
         (section: SettingsSectionId, replace: boolean) => {
@@ -125,8 +137,20 @@ export function AppLayout({ children }: AppLayoutProps) {
         writeSettingsSection,
         closeSettings,
     ]);
-    const openShortcuts = useCallback(() => setShortcutsOpen(true), []);
-    const openPalette = useCallback(() => setPaletteOpen(true), []);
+    const openShortcuts = useCallback(() => {
+        if (nativeShortcuts) {
+            void requestNativeOverlay("shortcuts").catch((error) =>
+                logger.warn("Native overlay request failed", error),
+            );
+        } else setShortcutsOpen(true);
+    }, [nativeShortcuts]);
+    const openPalette = useCallback(() => {
+        if (nativePalette) {
+            void requestNativeOverlay("palette").catch((error) =>
+                logger.warn("Native overlay request failed", error),
+            );
+        } else setPaletteOpen(true);
+    }, [nativePalette]);
     const openGeneralSettings = useCallback(
         () => openSettingsOnTab("general"),
         [openSettingsOnTab],
@@ -212,19 +236,30 @@ export function AppLayout({ children }: AppLayoutProps) {
     // Vision Native shows the page over a native screen while the palette or the
     // shortcuts overlay is open; reporting the same route again when it closes
     // tells the shell the page has nothing more to show.
-    const overlayOpen = paletteOpen || shortcutsOpen;
+    const overlayOpen = (!nativePalette && paletteOpen) || (!nativeShortcuts && shortcutsOpen);
+    const onboardingPresented = !nativeOnboarding && !onboardingLoading && !onboardingComplete;
     const lastNativeReportRef = useRef<
-        { route: string; overlayOpen: boolean } | undefined
+        | { route: string; overlayOpen: boolean; onboardingPresented: boolean }
+        | undefined
     >(undefined);
     useEffect(() => {
         if (!nativeNavigation) return;
         const route = `${pathname}${search}`;
         const last = lastNativeReportRef.current;
-        lastNativeReportRef.current = { route, overlayOpen };
+        lastNativeReportRef.current = {
+            route,
+            overlayOpen,
+            onboardingPresented,
+        };
         const overlayClosed = last?.overlayOpen === true && !overlayOpen;
-        if (last?.route === route && !overlayClosed) return;
-        reportNativeRoute(route);
-    }, [nativeNavigation, pathname, search, overlayOpen]);
+        if (
+            last?.route === route &&
+            !overlayClosed &&
+            last.onboardingPresented === onboardingPresented
+        )
+            return;
+        reportNativeRoute(route, onboardingPresented);
+    }, [nativeNavigation, pathname, search, overlayOpen, onboardingPresented]);
     const isPrintReport =
         pathname === "/tax" ||
         pathname === "/statistics" ||
@@ -251,10 +286,12 @@ export function AppLayout({ children }: AppLayoutProps) {
             <SidebarProvider defaultOpen={sidebarDefaultOpen}>
                 <ElectronBridge
                     onOpenSettings={openSettingsOnTab}
+                    onCloseSettings={closeSettings}
                     onOpenShortcuts={openShortcuts}
                     onOpenPalette={openPalette}
                 />
                 <VisualEffectsController />
+                <NativePaletteAnswerBridge />
                 <div
                     className="relative min-h-screen flex w-full overflow-x-clip"
                     data-print-report={isPrintReport || undefined}
@@ -327,24 +364,32 @@ export function AppLayout({ children }: AppLayoutProps) {
                             className="flex-1 p-4 md:p-6 min-h-[calc(100vh-3.5rem)] outline-none focus:outline-none focus-visible:outline-none"
                         >
                             <div data-print-chrome>
-                                <FxStatusBanner />
-                                <UpcomingPaymentsNotification />
+                                {!nativeNotifications && (
+                                    <>
+                                        <FxStatusBanner />
+                                        <UpcomingPaymentsNotification />
+                                    </>
+                                )}
                             </div>
                             <PageTransition>{children}</PageTransition>
                         </main>
                     </div>
                 </div>
-                <CommandPalette
-                    open={paletteOpen}
-                    onOpenChange={setPaletteOpen}
-                    onOpenSettings={openSettingsOnTab}
-                    onOpenShortcuts={() => setShortcutsOpen(true)}
-                />
-                <ShortcutsOverlay
-                    open={shortcutsOpen}
-                    onOpenChange={setShortcutsOpen}
-                />
-                {(settingsOpen || settingsMounted) && (
+                {!nativePalette && (
+                    <CommandPalette
+                        open={paletteOpen}
+                        onOpenChange={setPaletteOpen}
+                        onOpenSettings={openSettingsOnTab}
+                        onOpenShortcuts={openShortcuts}
+                    />
+                )}
+                {!nativeShortcuts && (
+                    <ShortcutsOverlay
+                        open={shortcutsOpen}
+                        onOpenChange={setShortcutsOpen}
+                    />
+                )}
+                {!nativeSettings && (settingsOpen || settingsMounted) && (
                     <Suspense fallback={<SectionLoader />}>
                         <DashboardSettingsDialog
                             open={settingsOpen}
@@ -358,7 +403,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                         />
                     </Suspense>
                 )}
-                {!onboardingLoading && (
+                {!nativeOnboarding && !onboardingLoading && (
                     <OnboardingWizard
                         open={!onboardingComplete}
                         onComplete={completeOnboarding}
