@@ -201,41 +201,59 @@ public struct NetWorthView: View {
             }
         }
     }
+    private func accountRow(_ row: NetWorthAccountRow) -> some View {
+        let threshold = Decimal(string: "0.005")!
+        var details: [String] = []
+        if row.accountId == nil {
+            details.append(strings.t("networth.byAccount.unassignedHint"))
+        } else if let type = row.type {
+            details.append(strings.t("accounts.type." + type))
+        }
+        if abs(row.cash) > threshold, abs(row.holdings) > threshold {
+            details.append(strings.t("networth.byAccount.cash") + " " + money(row.cash))
+            details.append(strings.t("networth.byAccount.holdings") + " " + money(row.holdings))
+        }
+        return HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(row.label ?? strings.t("networth.byAccount.unassigned"))
+                    .font(.callout.weight(.medium))
+                if !details.isEmpty {
+                    Text(details.joined(separator: " · "))
+                        .font(.footnote)
+                        .foregroundStyle(theme.secondaryLabel)
+                }
+            }
+            Spacer()
+            if row.accountId == nil {
+                Button(strings.t("networth.byAccount.assign")) { shell.navigate(to: "/portfolio") }
+                    .buttonStyle(.visionLink)
+                    .font(.footnote.weight(.medium))
+            }
+            MoneyText(amount: row.total, currency: currency, settings: settings, signed: false, colored: false)
+                .font(.callout.weight(.medium))
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+    }
     @ViewBuilder private func accounts(_ data: OpenAPI.NetWorthResponse) -> some View {
         AdminCard(padding: VisionPageLayout.padding) {
             Text(strings.t("networth.byAccount.title")).font(Font.visionTitle3)
             Text(strings.t("networth.byAccount.description")).foregroundStyle(theme.secondaryLabel)
             if let rows = model.accountRows {
                 if rows.isEmpty { Text(strings.t("networth.byAccount.none")) }
-                ForEach(rows) { row in
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(row.label ?? strings.t("networth.byAccount.unassigned"))
-                            if row.accountId == nil {
-                                Text(strings.t("networth.byAccount.unassignedHint")).font(.footnote).foregroundStyle(
-                                    theme.secondaryLabel)
-                            } else if let type = row.type {
-                                Text(strings.t("accounts.type." + type)).font(.footnote).foregroundStyle(
-                                    theme.secondaryLabel)
-                            }
-                            if abs(row.cash) > Decimal(string: "0.005")!, abs(row.holdings) > Decimal(string: "0.005")!
-                            {
-                                Text(
-                                    strings.t("networth.byAccount.cash") + " " + money(row.cash) + " · "
-                                        + strings.t("networth.byAccount.holdings") + " " + money(row.holdings)
-                                )
-                                .font(.footnote).foregroundStyle(theme.secondaryLabel)
-                            }
-                        }
-                        Spacer()
-                        if row.accountId == nil {
-                            Button(strings.t("networth.byAccount.assign")) { shell.navigate(to: "/portfolio") }
-                        }
-                        MoneyText(
-                            amount: row.total, currency: currency, settings: settings, signed: false, colored: false)
-                    }.padding(.vertical, 5)
-                    Divider()
+                // The web's inset list: one bordered surface, hairlines between compact rows.
+                VStack(spacing: 0) {
+                    ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                        if index > 0 { Divider() }
+                        accountRow(row)
+                    }
                 }
+                .background(
+                    RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
+                        .fill(theme.foreground.opacity(0.02)))
+                .overlay(
+                    RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
+                        .strokeBorder(theme.border.opacity(0.6), lineWidth: 1))
                 let total = rows.reduce(Decimal.zero) { $0 + $1.total }
                 let difference = NetWorthAccountRow.cents(total - data.current.netWorth)
                 HStack {
