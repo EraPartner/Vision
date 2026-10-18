@@ -59,9 +59,6 @@ data_dir=$work_root/postgres
 postgres_log=$work_root/postgres.log
 backend_log=$work_root/backend.log
 backend_pid=
-provider_pid=
-provider_url_file=$work_root/provider.url
-provider_log=$work_root/provider.log
 
 cleanup() {
   status=$?
@@ -70,20 +67,12 @@ cleanup() {
     kill -TERM "$backend_pid" 2>/dev/null || true
     wait "$backend_pid" 2>/dev/null || true
   fi
-  if [[ -n "$provider_pid" ]] && kill -0 "$provider_pid" 2>/dev/null; then
-    kill -TERM "$provider_pid" 2>/dev/null || true
-    wait "$provider_pid" 2>/dev/null || true
-  fi
   if [[ -f "$data_dir/postmaster.pid" ]]; then
     "$postgres_bin/pg_ctl" -D "$data_dir" -m fast -w -t 30 stop >/dev/null 2>&1 || true
   fi
   if [[ $status -ne 0 ]]; then
     echo "Native stack failed. Backend log:" >&2
     tail -200 "$backend_log" >&2 2>/dev/null || true
-    if [[ -f "$provider_log" ]]; then
-      echo "Synthetic provider log:" >&2
-      tail -100 "$provider_log" >&2 || true
-    fi
     echo "PostgreSQL log:" >&2
     tail -200 "$postgres_log" >&2 2>/dev/null || true
   fi
@@ -126,41 +115,8 @@ if [[ ${VISION_NATIVE_VERIFY_MIGRATIONS:-0} == 1 ]]; then
   bun run apps/node-backend/scripts/db-migrate.ts upgrade head
 fi
 
-# The fixture seam is exclusive to this disposable CI stack, never installed
-# native applications. An inherited fixture URL cannot select the destination.
-export VISION_DISPOSABLE_NATIVE_STACK=1
-unset VISION_BROWSER_PROVIDER_URL
-case "${VISION_BROWSER_PROVIDER_FIXTURES:-0}" in
-  0) ;;
-  1)
-    node "$repo_root/scripts/browser-tests/yahoo-provider-fixture.mjs" >"$provider_url_file" 2>"$provider_log" &
-    provider_pid=$!
-    for _ in $(seq 1 100); do
-      [[ -s "$provider_url_file" ]] && break
-      kill -0 "$provider_pid" 2>/dev/null || break
-      sleep 0.1
-    done
-    if [[ ! -s "$provider_url_file" ]] || ! kill -0 "$provider_pid" 2>/dev/null; then
-      echo "Synthetic Yahoo provider did not start." >&2
-      exit 1
-    fi
-    IFS= read -r VISION_BROWSER_PROVIDER_URL < "$provider_url_file"
-    if [[ ! "$VISION_BROWSER_PROVIDER_URL" =~ ^http://127\.0\.0\.1:[1-9][0-9]*$ ]]; then
-      echo "Synthetic Yahoo provider returned an invalid loopback URL." >&2
-      exit 1
-    fi
-    export VISION_BROWSER_PROVIDER_URL
-    ;;
-  *)
-    echo "VISION_BROWSER_PROVIDER_FIXTURES must be 0 or 1." >&2
-    exit 2
-    ;;
-esac
 (
   cd "$repo_root/apps/node-backend"
-  if [[ ${VISION_BROWSER_PROVIDER_FIXTURES:-0} == 1 ]]; then
-    exec bun run --preload "$repo_root/scripts/browser-tests/yahoo-provider-preload.mjs" src/main.ts
-  fi
   exec bun run src/main.ts
 ) >"$backend_log" 2>&1 &
 backend_pid=$!
@@ -181,6 +137,5 @@ if [[ $ready != 1 ]]; then
   exit 1
 fi
 
-export VISION_BROWSER_BASE="http://127.0.0.1:${port}"
 cd "$repo_root/$command_dir"
 "$@"

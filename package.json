@@ -35,7 +35,6 @@
     "backend": "bun run --filter 'financial-transaction-manager-node' start",
     "test": "bun run --filter 'financial-transaction-manager-node' test",
     "test:frontend": "bash scripts/run-frontend-tests.sh",
-    "test:browser": "node --test scripts/browser-tests/yahoo-provider-fixture.test.mjs && VISION_BROWSER_PROVIDER_FIXTURES=1 bash .github/scripts/with-native-stack.sh node --test scripts/browser-tests/vision.browser.test.mjs",
     "test:electron": "bun packaging/electron/build.ts && node --test 'packaging/electron/out/**/*.test.js'",
     "test:scripts": "bun test scripts/tests",
     "test:all": "concurrently --names \"backend,frontend\" -c \"blue,green\" \"bun run --filter 'financial-transaction-manager-node' test\" \"bun run test:frontend\"",

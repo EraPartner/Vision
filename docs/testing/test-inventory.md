@@ -2,7 +2,7 @@
 title: Test Inventory
 type: testing
 status: active
-date: 2026-10-13
+date: 2026-10-18
 last_modified: 2026-10-11
 updated: 2026-10-18
 last-updated: 2026-10-08
@@ -61,7 +61,7 @@ related_code:
 
 # Test Inventory
 
-## Reviewed cleanup and browser coverage (2026-10-13)
+## Reviewed cleanup and test boundaries (2026-10-13)
 
 `node scripts/browser-tests/inventory.mjs` regenerates the complete file inventory at
 `scripts/browser-tests/test-file-inventory.json`. The 2026-10-13 snapshot includes 941 nonignored
@@ -69,38 +69,29 @@ test/spec files across apps, packages, Electron, scripts and CI. Automated sourc
 255 simulated-DOM files, 82 database suites, 35 native/filesystem suites, 10 property suites,
 2 live HTTP contract files, 48 source/file contracts, 213 mocked unit/service files, 294 other
 unit/script/contracts needing review, one controlled external-provider protocol suite, and one
-authored browser file. These are file counts and
+authored browser file; the last two were removed on 2026-10-18. These are file counts and
 inferred boundaries, not test counts or passing evidence. No remaining byte-identical test files
 were found. Review flags identify source assertions, mock call order and expected-output fixtures;
 they never authorize automatic deletion.
 
 The scoped decision ledger in `scripts/browser-tests/coverage-ledger.json` records keep, replace
 and remove decisions with rationale and replacement links. It is not a claim that every test in
-the repository was reviewed. The responsive suite's exact CSS assertions were replaced with authored browser geometry scenarios under the user's
-explicit optional-execution waiver. Provider-backed forms use a runner-owned synthetic Yahoo HTTP fixture with real Vision API
-requests and the installed provider client transformations. Account-close SQL mock assertions remain until real PostgreSQL scenarios prove
+the repository was reviewed. The responsive suite's exact CSS assertions were removed; the browser
+geometry journeys that replaced them were removed with Playwright on 2026-10-18, because only the
+Swift native app is a supported UI. Account-close SQL mock assertions remain until real PostgreSQL scenarios prove
 currency conservation and rollback.
 Precision/property and native restore/journal fault tests remain required. The legacy-inventory checker fixtures run with the current test runtime and disable implicit Bun environment-file loading. Their acceptance and rejection assertions are unchanged; Node and Bun can execute the same fixtures without loading local financial configuration.
 
 The one removed duplicate
 is the service-level dedup golden copy; the canonical golden fixture is retained.
 
-The browser runner in `scripts/browser-tests/vision.browser.test.mjs` exercises real Chromium,
-HTTP and disposable PostgreSQL, with fixtures restricted to the native CI stack. Its implemented
-journeys and outstanding gaps are in the ledger and [[docs/testing/testing#Behavior-focused cleanup and real browser boundary]].
-The latest authored additions cover nonzero EUR/USD closing and Add account geometry at two
-widths, with deliberate overflow and equivalent-style oracle probes. Syntax validation passed;
-PostgreSQL initialization still prevents executing them. Existing native isolated smoke already
-covers backend restarts, encrypted attachment/database round trips and tampered restore rejection.
-The ledger now records these separately from browser tests and deterministic fault injection.
-The 2026-10-13 waiver permits scoped retirement of obsolete CSS assertions after observable
-replacements are authored. New journeys cover local and market-backed forms, all shared investment asset branches,
-lone-widget full-row geometry, and the Import reference column's normal scroll behavior. They
-assert rendered control bounds, form dismissal and persisted unchanged holding state. This is
-not permission to discard financial, SQL rollback, PostgreSQL or restore guarantees.
+There is no browser runner; see [[docs/testing/testing#Behavior-focused cleanup and test boundaries]].
+Native isolated smoke covers backend restarts, encrypted attachment/database round trips and
+tampered restore rejection, recorded separately from deterministic fault injection.
+Removing the browser journeys is not permission to discard financial, SQL rollback, PostgreSQL or
+restore guarantees.
 
-They are currently unexecuted locally because PostgreSQL initialization cannot create shared
-memory. Frontend page integrations remain simulated-DOM tests with mocked HTTP; live GET shape
+Frontend page integrations remain simulated-DOM tests with mocked HTTP; live GET shape
 checks remain API contracts, not end-to-end UI coverage. No static test counts imply complete
 journey or failure-mode coverage.
 

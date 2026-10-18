@@ -2,8 +2,8 @@
 title: Feature - CSV Import, Export, Attachments & Deduplication
 type: feature
 status: active
-date: 2026-10-11
-updated: 2026-10-11
+date: 2026-10-18
+updated: 2026-10-18
 last_modified: 2026-10-11
 tags:
   [
@@ -111,8 +111,8 @@ Groups containing different effective row categories display a mixed state rathe
 one row's category for the whole group.
 
 The frontend queue protects one review session; it is not a substitute for backend batch locks
-against another tab or concurrent commit. See [[docs/testing/testing]] for the browser journey
-boundary and its execution status.
+against another tab or concurrent commit. See [[docs/testing/testing]] for the test boundaries;
+there is no browser journey for the import review flow.
 
 
 > [!tip] Import and review
