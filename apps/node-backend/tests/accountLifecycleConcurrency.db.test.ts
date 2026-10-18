@@ -70,11 +70,23 @@ describe.skipIf(!hasTestDatabase())(
       );
       const accountId = result.rows[0].id as number;
       accounts.push(accountId);
+      const name = `lifecycle-recipient-${crypto.randomUUID()}`;
+      const recipientId = (
+        await pool.query(
+          "INSERT INTO recipients(name,normalized_name) VALUES ($1,$1) RETURNING id",
+          [name],
+        )
+      ).rows[0].id as number;
+      recipients.push(recipientId);
       const transaction = await pool.query(
-        "INSERT INTO transactions (date, amount, currency, account_id) VALUES ('2026-01-01', 100, 'EUR', $1) RETURNING id",
-        [accountId],
+        "INSERT INTO transactions (date, amount, currency, account_id, recipient_id) VALUES ('2026-01-01', 100, 'EUR', $1, $2) RETURNING id",
+        [accountId, recipientId],
       );
-      return { accountId, transactionId: transaction.rows[0].id as number };
+      return {
+        accountId,
+        recipientId,
+        transactionId: transaction.rows[0].id as number,
+      };
     }
     async function waitForBlockedLedgerWrite() {
       const deadline = Date.now() + 5000;
@@ -118,7 +130,7 @@ describe.skipIf(!hasTestDatabase())(
       expect(Number(rows[0].balance)).toBe(0);
     });
     it("holds a create eligibility lock until commit, so close includes the write", async () => {
-      const { accountId } = await fixture();
+      const { accountId, recipientId } = await fixture();
       const written = deferred();
       const release = deferred();
       const writing = withTransaction(async (client) => {
@@ -126,8 +138,8 @@ describe.skipIf(!hasTestDatabase())(
           await accountRepository.findActiveId(accountId, { client }),
         ).toBe(accountId);
         await client.query(
-          "INSERT INTO transactions (date, amount, currency, account_id) VALUES ('2026-01-02', 25, 'EUR', $1)",
-          [accountId],
+          "INSERT INTO transactions (date, amount, currency, account_id, recipient_id) VALUES ('2026-01-02', 25, 'EUR', $1, $2)",
+          [accountId, recipientId],
         );
         written.resolve();
         await release.promise;

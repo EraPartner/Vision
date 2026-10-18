@@ -118,10 +118,15 @@ describe.skipIf(!isolated)(
           ($1,4,'committed','unrecognized retained record',$4,'2026-01-01',30,'EUR')`,
           [batchId, known, ambiguous, unknown],
         );
+        const recipientId = (
+          await client.query(
+            "INSERT INTO recipients(name,normalized_name) VALUES('Synthetic chronology recipient','synthetic chronology recipient') RETURNING id",
+          )
+        ).rows[0].id;
         await client.query(
-          `INSERT INTO transactions(date,amount,currency,import_batch_id,source_record_hash,comment)
-          VALUES ('2026-01-01',10,'EUR',$1,$2,'Editable note'),('2026-01-01',20,'EUR',$1,$3,'Editable note'),('2026-01-01',30,'EUR',$1,$4,'Statement 9 transaction 9')`,
-          [batchId, known, ambiguous, unknown],
+          `INSERT INTO transactions(date,amount,currency,import_batch_id,source_record_hash,comment,recipient_id)
+          VALUES ('2026-01-01',10,'EUR',$1,$2,'Editable note',$5),('2026-01-01',20,'EUR',$1,$3,'Editable note',$5),('2026-01-01',30,'EUR',$1,$4,'Statement 9 transaction 9',$5)`,
+          [batchId, known, ambiguous, unknown, recipientId],
         );
         const before = (
           await client.query(
