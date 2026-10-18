@@ -32,7 +32,7 @@ public struct AggregationEnvelope<Value: Decodable & Sendable>: Decodable, Senda
 
 extension APIClient {
     /// Sends an aggregation operation and returns the payload inside its `{ data, meta }`.
-    func aggregation<Operation: APIOperation, Value: Decodable & Sendable>(
+    func sendAggregation<Operation: APIOperation, Value: Decodable & Sendable>(
         _ operation: Operation, query: [URLQueryItem]
     ) async throws -> Value {
         try await send(InsightRequest<Operation, AggregationEnvelope<Value>>(operation, query: query)).data
