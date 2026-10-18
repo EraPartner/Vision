@@ -121,7 +121,7 @@ public struct ResearchHomeView: View {
                             Image(systemName: "arrow.right").imageScale(.small).accessibilityHidden(true)
                         }
                         .font(.callout.weight(.medium))
-                    }.buttonStyle(.plain)
+                    }.buttonStyle(.visionLink)
                 }
             }
             if model.watchlist.isEmpty {
