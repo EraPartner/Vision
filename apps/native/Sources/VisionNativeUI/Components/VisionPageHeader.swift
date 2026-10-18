@@ -24,9 +24,11 @@ struct VisionPageHeader<Actions: View>: View {
                 Text(title)
                     .font(.largeTitle.weight(.semibold))
                     .accessibilityAddTraits(.isHeader)
-                Text(subtitle)
-                    .font(.body)
-                    .foregroundStyle(theme.secondaryLabel)
+                if !subtitle.isEmpty {
+                    Text(subtitle)
+                        .font(.body)
+                        .foregroundStyle(theme.secondaryLabel)
+                }
             }
             Spacer(minLength: 16)
             actions()
