@@ -68,7 +68,13 @@ opt trusted live session enabled
       Main -> Route: POST /checkpoint metadata
       Route -> DB: Insert metadata for existing local receipt
     else failed or unavailable
-      Main -> Main: End session and notify
+      Main -> Main: End and clear session establishment; notify
+      Main -> Route: Bounded exact-head recovery retry
+      alt exact trusted head verifies
+        Main -> Main: Establish session; close stale notification
+      else pre-existing unreceipted tail
+        Main -> Main: Keep continuity unverified
+      end
     end
   end
 end

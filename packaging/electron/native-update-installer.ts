@@ -95,6 +95,7 @@ export function installNativeUpdate({
   spawnProcess = spawnSync,
 }: NativeInstallerArgs & { spawnProcess?: SpawnSyncRunner }): {
   status: "installed";
+  cleanupWarning?: string;
 } {
   const sourceStat = fs.statSync(sourceApp);
   const destinationStat = fs.statSync(destinationApp);
@@ -132,8 +133,6 @@ export function installNativeUpdate({
         launched.error || new Error("Updated Vision application did not open")
       );
     }
-    fs.rmSync(backupApp, { recursive: true, force: true });
-    return { status: "installed" };
   } catch (error) {
     if (stagingActivated) {
       const failedApp = path.join(parent, `.Vision-update-failed-${nonce}.app`);
@@ -155,6 +154,18 @@ export function installNativeUpdate({
     }
     throw error;
   }
+  // Launch is the commit point. Cleanup can remove only part of the old app
+  // before failing, so it must never move that damaged copy back into service.
+  try {
+    fs.rmSync(backupApp, { recursive: true, force: true });
+    return { status: "installed" };
+  } catch {
+    return {
+      status: "installed",
+      cleanupWarning:
+        "Previous application cleanup failed; the updated application remains installed.",
+    };
+  }
 }
 
 function errorMessage(error: unknown): unknown {
@@ -165,7 +176,11 @@ function errorMessage(error: unknown): unknown {
 
 if (require.main === module) {
   try {
-    installNativeUpdate(parseInstallerArgs(process.argv.slice(2)));
+    const result = installNativeUpdate(
+      parseInstallerArgs(process.argv.slice(2)),
+    );
+    if (result.cleanupWarning)
+      process.stderr.write(`${result.cleanupWarning}\n`);
   } catch (error) {
     const message = errorMessage(error);
     process.stderr.write(`${message ? message : String(error)}\n`);

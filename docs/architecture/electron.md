@@ -281,7 +281,10 @@ startup sets the canonical identity but does not inspect, rename, archive, or im
 5. **Native initialization**:
    - choose and persist an available loopback backend port;
    - verify the packaged PostgreSQL 18.6, compiled backend, migration executable, Chrome Headless
-     Shell, and full checksum manifest;
+     Shell, and full checksum manifest. `runtime/runtime-manifest.ts` validates the complete
+     manifest in a worker thread and hashes files in 64 KiB chunks, keeping synchronous filesystem
+     and SHA-256 work off the Electron main event loop. Missing, extra, changed, and symlinked
+     entries still fail validation; this does not skip hashes or cache trust;
    - create restricted runtime directories and initialize or reuse the private PostgreSQL cluster;
    - require PostgreSQL `listen_addresses` to be loopback-only, disable Unix sockets, and verify its
      exact data directory;
@@ -295,6 +298,10 @@ startup sets the canonical identity but does not inspect, rename, archive, or im
      privileged bootstrap reapplies current table and view grants relation by relation, skipping
      those application-owned views so their ownership cannot invalidate the ordinary-table grant
      set;
+   - recover a persisted unfinished restore switch before ordinary database creation or migration;
+     attachment intent is journaled before filesystem renames. A pending database switch restores
+     the previous attachment tree first and then rolls back the database. An attachment journal
+     left after database finalization is cleanup-only. Invalid journal paths fail closed;
    - create the database from `template0`, enable required extensions, and run the repository
      migration path (`db-migrate.ts` in a source checkout; its underlying `runMigrations()`
      preflight from the packaged backend); and
@@ -366,7 +373,15 @@ An exact verified startup head enables a live session. While the backend remains
 healthy, a 30-second timer re-verifies the complete chain and signed migration
 cutover, persists a valid new head in the local receipt, and mirrors its metadata
 to PostgreSQL. A partial tail already present at startup is not promoted.
-Backend loss or update restart ends the live session. Restore pauses the timer
+Backend loss or update restart ends and clears live-session establishment. Recovery can establish
+a new session only at the exact externally trusted head. Transient closure failure uses the same
+bounded retry path; a pre-existing partial tail remains untrusted. Notifications distinguish
+enrollment, partial verification, unavailable protection and failure, and close after verification.
+A native backup pauses closure, stops the backend writer while retaining PostgreSQL, captures
+the database dump and attachment tree, and restarts the backend in `finally` before compression.
+A shared maintenance guard prevents conflicting restore/update shutdown; quit waits for maintenance.
+The health watchdog pauses for this interval. See [[docs/adr/200-coordinated-native-recovery|ADR-200]].
+Restore pauses the timer
 and checks the candidate database after detailed readiness but before final
 database-switch activation. A status other than `verified` first rolls the
 candidate database and attachments back. Electron then offers a second warning
@@ -838,7 +853,11 @@ IPC handlers, and frontend behavior.
 Native mode requires a sibling checksum, rejects path traversal, accepts only a `Vision.app`
 payload, and stops the native backend before launching the fixed installer helper. Helper-launch
 failure restarts the old backend. The helper snapshots the installed application before
-replacement; copy or relaunch failure restores the previous application. PostgreSQL and
+replacement; copy or relaunch failure restores the previous application. Successful launch
+commits the replacement. Removing the previous application is subsequent cleanup: a partial
+cleanup failure reports a warning and retains the successfully installed application and any
+remaining recovery files. It never starts rollback after the previous copy may have been damaged.
+PostgreSQL and
 attachments remain in application data and are not replaced by the application archive.
 
 #### Generated Installer (Source Mode)

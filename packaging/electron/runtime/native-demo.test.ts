@@ -109,6 +109,11 @@ function runtimeMock(userDataDir: string, initialState: MockState = {}) {
     async ensurePostgresReady() {
       calls.push("ensurePostgresReady");
     },
+    async recoverInterruptedRestore() {
+      calls.push("recoverInterruptedRestore");
+      state.pendingAttachmentSwitch = undefined;
+      state.pendingDatabaseSwitch = undefined;
+    },
     async rollbackDatabaseSwitch() {
       calls.push("rollbackDatabaseSwitch");
       state.pendingDatabaseSwitch = undefined;
@@ -166,6 +171,52 @@ test("skips an already-current native Demo seed", async (t) => {
   assert.equal(result.status, "current");
   assert.ok(!runtime.calls.some((call) => Array.isArray(call)));
   assert.equal(runtime.state().activeRuntime, "native");
+});
+
+test("recovers paired restore journals before trusting a current Demo seed", async (t) => {
+  const { manifest, seedRoot, userDataDir } = await fixture(t);
+  const runtime = runtimeMock(userDataDir, {
+    pendingDatabaseSwitch: { previousDatabase: "vision_demo_previous" },
+    pendingAttachmentSwitch: { previousDirectory: "attachments.previous" },
+    demoSeed: {
+      logicalSha256: manifest.logicalSha256,
+      schemaRevision: manifest.schemaRevision,
+    },
+  });
+  const readState = runtime.readState;
+  runtime.readState = async () => {
+    const state = await readState();
+    assert.equal(state.pendingDatabaseSwitch, undefined);
+    assert.equal(state.pendingAttachmentSwitch, undefined);
+    assert.ok(runtime.calls.includes("ensurePostgresReady"));
+    assert.ok(runtime.calls.includes("recoverInterruptedRestore"));
+    return state;
+  };
+
+  const prepared = await prepareNativeDemo(runtime, { seedRoot });
+  assert.equal(prepared.status, "current");
+  assert.ok(!runtime.calls.includes("rollbackDatabaseSwitch"));
+  assert.ok(!runtime.calls.some((call) => Array.isArray(call)));
+});
+
+test("stops Demo preparation when coordinated recovery fails", async (t) => {
+  const { seedRoot, userDataDir } = await fixture(t);
+  const journals = {
+    pendingDatabaseSwitch: { previousDatabase: "vision_demo_previous" },
+    pendingAttachmentSwitch: { previousDirectory: "attachments.previous" },
+  };
+  const runtime = runtimeMock(userDataDir, journals);
+  runtime.recoverInterruptedRestore = async () => {
+    throw new Error("Synthetic recovery failure");
+  };
+  await assert.rejects(
+    prepareNativeDemo(runtime, { seedRoot }),
+    /Synthetic recovery failure/,
+  );
+  assert.deepEqual(runtime.state(), journals);
+  assert.ok(!runtime.calls.includes("writeState"));
+  assert.ok(!runtime.calls.includes("rollbackDatabaseSwitch"));
+  assert.ok(!runtime.calls.some((call) => Array.isArray(call)));
 });
 
 test("activates, verifies, and finalizes a changed Demo seed", async (t) => {

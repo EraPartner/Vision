@@ -47,7 +47,11 @@ The updater:
 4. verifies the SHA-256 digest before extraction;
 5. creates a backup and stops the native runtime;
 6. stages and installs the replacement; and
-7. restarts Vision and retains recovery state until startup succeeds.
+7. launches the replacement Vision application. Successful launch is the installer commit point;
+   removal of the old application is best-effort cleanup. A cleanup failure is reported as a warning
+   and keeps the running replacement, rather than rolling back to a partly deleted old bundle.
+   A launch failure still rolls back before this commit point. This launch result is not a
+   database-backed readiness check.
 
 Paths are validated before extraction or replacement. A checksum mismatch, unsupported platform,
 or failed backup stops the operation without activating the staged application.

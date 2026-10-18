@@ -2,7 +2,7 @@
 title: Native macOS Runtime Guide
 type: guide
 status: active
-date: 2026-10-11
+date: 2026-10-13
 tags:
   [guide, native-runtime, macos, electron, postgresql-18, backup, restore, demo]
 description: Build, operate, diagnose, back up, and restore Vision's bundled native macOS runtime.
@@ -157,6 +157,12 @@ Headless Shell. Ollama remains an optional host integration and defaults to its 
 see [[docs/integrations/ollama|Ollama Integration]].
 
 ## Recovery boundary
+
+Normal startup and Demo seed preparation share `recoverInterruptedRestore` in
+`packaging/electron/runtime/native.ts`. They resolve interrupted database and attachment switches
+before ordinary bootstrap or checking whether the Demo seed is current. An unfinished database
+switch restores the previous attachment tree first; a committed database leaves an attachment-only
+journal for cleanup. Demo startup must not roll back only the database generation.
 
 Do not hand-edit generated credentials, change the runtime marker to select another database, or
 delete the previous database during a failed switch. Recovery must preserve one writer and verify a

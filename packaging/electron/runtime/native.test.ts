@@ -1662,6 +1662,7 @@ test("verified live session closes an honest write before same-device restore", 
   await anchor.initializeGenesis(cutover);
   let head = { sequence: 0, hash: "0".repeat(64) };
   const recorded = [];
+  let bridgeUnavailable = false;
   const runtime = createNativeRuntime({
     userDataDir,
     auditBridgeToken: "a".repeat(64),
@@ -1669,6 +1670,7 @@ test("verified live session closes an honest write before same-device restore", 
     auditWitness: fakeWitness(userDataDir),
     auditPlatform: "darwin",
     auditRequest: async (endpoint, payload) => {
+      if (bridgeUnavailable) throw new Error("temporary bridge failure");
       if (endpoint === "checkpoint") {
         recorded.push(payload);
         return { id: recorded.length };
@@ -1699,12 +1701,37 @@ test("verified live session closes an honest write before same-device restore", 
   assert.equal((await runtime.assertRestoredAuditHistory()).status, "verified");
   runtime.resumeAuditClosure();
   runtime.endAuditSession();
+  assert.equal(runtime.auditSessionPending(), true);
+  assert.equal(
+    (await runtime.verifyAuditHistory({ establishSession: true })).status,
+    "verified",
+  );
+  assert.equal(runtime.auditClosureEnabled(), true);
+  bridgeUnavailable = true;
+  await assert.rejects(
+    runtime.closeAuditCheckpoint(),
+    /temporary bridge failure/,
+  );
+  assert.equal(runtime.auditClosureEnabled(), false);
+  assert.equal(runtime.auditSessionPending(), true);
+  bridgeUnavailable = false;
+  assert.equal(
+    (await runtime.verifyAuditHistory({ establishSession: true })).status,
+    "verified",
+  );
+  assert.equal(runtime.auditClosureEnabled(), true);
+  runtime.endAuditSession();
   assert.equal(await runtime.auditRequiresAnchoredClosure(), true);
   head = { sequence: 2, hash: "c".repeat(64) };
   assert.equal(
     (await runtime.closeAuditCheckpoint()).reason,
     "live_closure_not_active",
   );
+  assert.equal(
+    (await runtime.verifyAuditHistory({ establishSession: true })).status,
+    "partially_verified",
+  );
+  assert.equal(runtime.auditClosureEnabled(), false);
   assert.equal((await anchor.readTrustedCheckpoint()).sequence, 1);
 });
 
@@ -2204,3 +2231,88 @@ test("native custom dump validation rejects corrupt or truncated input", async (
     await fs.promises.rm(temp, { recursive: true, force: true });
   }
 });
+
+for (const phase of ["before", "between", "after"] as const) {
+  test(`startup recovers interrupted restore at ${phase} database renames before bootstrap`, async (t) => {
+    const temp = await fs.promises.mkdtemp(
+      path.join(os.tmpdir(), "vision-restore-recovery-"),
+    );
+    t.after(() => fs.promises.rm(temp, { recursive: true, force: true }));
+    const fixture = await createBundledPostgresFixture(temp);
+    const databases = new Map<string, string>();
+    const calls: ProcessCall[] = [];
+    const fallback = postgresFixtureRunFile(calls);
+    const runtime = createNativeRuntime({
+      userDataDir: path.join(temp, "user"),
+      repoRoot,
+      runtimeRoot: repoRoot,
+      postgresRuntimeRoot: fixture.runtimeRoot,
+      runtimeId: "vision_recovery_test",
+      bunPath: "/bin/echo",
+      alembicPath: "/bin/echo",
+      chromePath: "/bin/echo",
+      runFile: async (file, args, options) => {
+        const sql = args[args.indexOf("--command") + 1] ?? "";
+        if (sql.includes("SHOW server_version_num"))
+          return {
+            stdout: `180006\nlocalhost\n${runtime.paths.postgresData}\n`,
+            stderr: "",
+          };
+        if (sql.includes("SHOW shared_preload_libraries"))
+          return { stdout: "pg_stat_statements\n", stderr: "" };
+        if (sql.startsWith("SELECT 1 FROM pg_database")) {
+          const name = /datname = '([^']+)'/.exec(sql)?.[1] ?? "";
+          return { stdout: databases.has(name) ? "1\n" : "", stderr: "" };
+        }
+        const rename = /^ALTER DATABASE "([^"]+)" RENAME TO "([^"]+)"/.exec(
+          sql,
+        );
+        if (rename?.[1] && rename[2]) {
+          assert.ok(databases.has(rename[1]));
+          assert.equal(databases.has(rename[2]), false);
+          databases.set(rename[2], databases.get(rename[1])!);
+          databases.delete(rename[1]);
+          return { stdout: "", stderr: "" };
+        }
+        if (sql.startsWith("CREATE DATABASE"))
+          throw new Error("must not bootstrap a replacement database");
+        return fallback(file, args, options);
+      },
+    });
+    const config = await runtime.ensureLayout();
+    await runtime.discover();
+    await runtime.ensureManagedPostgresCluster(config);
+    const live = config.database;
+    const previous = `${live}_previous_fixture`;
+    const activated = `${live}_restore_fixture`;
+    if (phase === "before") {
+      databases.set(live, "original");
+      databases.set(activated, "candidate");
+    }
+    if (phase === "between") {
+      databases.set(previous, "original");
+      databases.set(activated, "candidate");
+    }
+    if (phase === "after") {
+      databases.set(previous, "original");
+      databases.set(live, "candidate");
+    }
+    await fs.promises.writeFile(
+      runtime.paths.state,
+      JSON.stringify({
+        activeRuntime: "native",
+        pendingDatabaseSwitch: {
+          version: 1,
+          liveDatabase: live,
+          previousDatabase: previous,
+          activatedDatabase: activated,
+        },
+      }),
+    );
+    await runtime.bootstrapDatabase();
+    assert.equal(databases.get(live), "original");
+    assert.equal((await runtime.readState())?.pendingDatabaseSwitch, undefined);
+    await runtime.bootstrapDatabase();
+    assert.equal(databases.get(live), "original");
+  });
+}
