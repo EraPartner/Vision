@@ -214,7 +214,11 @@ export async function resolveCacheWithInflight<T>(
 
   const inflight: Promise<T> = loader()
     .then((data) => {
-      setCachedData(cache, key, data, ttlMs);
+      // Invalidation or a newer writer revokes this request's right to publish.
+      // Its original callers still receive their result, without poisoning the cache.
+      if (cache.get(key)?.inflight === inflight) {
+        setCachedData(cache, key, data, ttlMs);
+      }
       return data;
     })
     .catch((error: unknown) => {

@@ -2,10 +2,11 @@
  * Category breakdown aggregation.
  *
  * Thin calc-layer wrapper over infoRepository.getCategoryBreakdown. Backed
- * by mv_category_totals in the repository; when exclusions land in Phase 6
- * the wrapper will pass them through.
+ * by mv_category_totals for unfiltered requests and a live aggregate for
+ * exact date ranges, exclusions, or ancestor rollups.
  */
 
+import type { CategoryPivotOptions } from "../../../repositories/infoRepositoryStatistics.ts";
 import infoRepository from "../../../repositories/infoRepository.ts";
 import { buildEnvelope } from "./_envelope.ts";
 import { assertCategoryInvariants } from "./_invariants.ts";
@@ -13,12 +14,18 @@ import { assertCategoryInvariants } from "./_invariants.ts";
 export async function computeCategoryBreakdown({
   targetCurrency = "EUR",
   ancestorCategoryId = undefined,
-}: {
+  ...filters
+}: CategoryPivotOptions & {
   targetCurrency?: string | undefined;
   ancestorCategoryId?: number | undefined;
 } = {}) {
-  const categories =
-    ancestorCategoryId === undefined
+  const categories = Object.keys(filters).length
+    ? await infoRepository.getCategoryBreakdown(
+        targetCurrency,
+        ancestorCategoryId,
+        filters,
+      )
+    : ancestorCategoryId === undefined
       ? await infoRepository.getCategoryBreakdown(targetCurrency)
       : await infoRepository.getCategoryBreakdown(
           targetCurrency,
@@ -27,7 +34,12 @@ export async function computeCategoryBreakdown({
   assertCategoryInvariants(categories);
   return buildEnvelope(
     { categories },
-    { source: ancestorCategoryId === undefined ? "mv" : "live" },
+    {
+      source:
+        ancestorCategoryId === undefined && !Object.keys(filters).length
+          ? "mv"
+          : "live",
+    },
   );
 }
 

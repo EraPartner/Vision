@@ -2,10 +2,10 @@
 title: Service Layer Reference
 type: reference
 status: active
-date: 2026-10-09
-last_modified: 2026-10-08
+date: 2026-10-11
+last_modified: 2026-10-11
 tags: [backend, services, reference, business-logic, phase-1, phase-c, import-pipeline, graceful-shutdown, bug-hunt-2026-05-05, error-handling, robustness, route-service-boundary, repo-service-boundary, layering, thin-seams, adr-067]
-description: Complete reference for backend service modules. June 2026 — all 15 route files now go through thin `services/<domain>Service.js` seams; the lint rule `vision-local/no-repo-direct-from-route` is enforced as ERROR. 14 new thin seam modules added. August 2026 — the inverse edge is enforced too: `vision-local/no-service-import-from-repo` is an ERROR on `src/repositories/**`, with a closed allowlist for the seven sanctioned currency-conversion importers.
+description: Reference for backend service responsibilities and route/repository boundaries enforced by the local architecture lint rules.
 aliases: [services, service layer, business logic, backend services]
 related_code: ["apps/node-backend/src/services/"]
 ---
@@ -13,7 +13,7 @@ related_code: ["apps/node-backend/src/services/"]
 # Service Layer Reference
 
 > [!abstract] Purpose
-> This document is a complete reference for every service in the backend's business logic layer. Each service is documented with its purpose, exported functions, dependencies, and key algorithms. Designed for **developers** adding features, **AI agents** analyzing code, and **computer scientists** studying implementation patterns.
+> This document describes the backend service boundaries and selected domain responsibilities. The source tree is the authoritative module inventory; the listings below are navigation aids, not an exhaustive count. Designed for **developers** adding features, **AI agents** analyzing code, and **computer scientists** studying implementation patterns.
 
 ---
 

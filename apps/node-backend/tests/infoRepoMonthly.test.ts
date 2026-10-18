@@ -356,3 +356,34 @@ describe("getMonthlyFinancialSummary — materialized-view fast path", () => {
     });
   });
 });
+
+
+it('applies report custom dates through the real fetcher and aggregation into both monthly SQL queries', async () => {
+  const { fetchFinancialData } = await import('../src/services/reports/dataFetcher.ts');
+  query.mockReset().mockResolvedValue({ rows: [] });
+  convertRowsToEur.mockReset().mockResolvedValue([]);
+  const report = await fetchFinancialData('EUR', {
+    period: { kind: 'custom', from: '2025-01-15', to: '2025-01-20' },
+    sections: ['executiveSummary'], excludedCategoryIds: [30], excludedRecipientIds: [40],
+  });
+  expect(report.monthly?.months).toEqual([]);
+  const monthlyCalls = query.mock.calls.filter(([sql]) => sql.includes('WITH months AS'));
+  expect(monthlyCalls).toHaveLength(2);
+  for (const [sql, params] of monthlyCalls) {
+    expect(sql).toMatch(/t\.date >= \$\d+::date/);
+    expect(sql).toMatch(/t\.date <= \$\d+::date/);
+    expect(params?.slice(-2)).toEqual(['2025-01-15', '2025-01-20']);
+    expect(sql).not.toContain('SELECT MIN(date_trunc');
+  }
+  expect(monthlyCalls[1]?.[1]).toEqual([30, 40, '2025-01-15', '2025-01-20']);
+});
+
+it('keeps the no-period report fetcher on its all-time monthly path', async () => {
+  const { fetchFinancialData } = await import('../src/services/reports/dataFetcher.ts');
+  query.mockReset().mockResolvedValue({ rows: [] });
+  convertRowsToEur.mockReset().mockResolvedValue([]);
+  await fetchFinancialData('EUR', { sections: ['executiveSummary'] });
+  const monthly = query.mock.calls.find(([sql]) => sql.includes('WITH months AS'));
+  expect(monthly?.[0]).toContain('SELECT MIN(date_trunc');
+  expect(monthly?.[0]).not.toMatch(/t\.date >= \$\d+::date/);
+});

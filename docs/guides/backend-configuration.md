@@ -1,7 +1,7 @@
 ---
 title: Backend Configuration & Infrastructure
 type: guide
-date: 2026-10-08
+date: 2026-10-11
 tags:
   [guide, backend, configuration, logging, database, infrastructure, phase-1]
 status: active
@@ -25,12 +25,18 @@ Centralized configuration module that loads settings from environment variables 
 
 ### Environment Loading
 
-On import, the module:
+`config/loadDotenv.ts` loads `apps/node-backend/.env.local` first, then the repository-root
+`.env`. Paths are resolved from the loader module, independently of the working directory.
+Existing process variables win; the first file wins over the second because loading only fills
+absent keys. File contents are not logged.
 
-1. Checks for `.env.local` at the project root
-2. Parses key=value pairs (ignoring comments and blank lines)
-3. Only sets variables that aren't already defined in `process.env`
-4. Logs the loaded `LOG_LEVEL` and `ENABLE_LOGGING` values
+The loader skips both files when `VISION_SKIP_DOTENV=1`, `NODE_ENV=test`, or
+`VISION_NATIVE_ENV_FILE` is configured. The native launcher owns its explicit environment input.
+Tests of resolution and precedence use synthetic content. Bun's own automatic loading is separate;
+use `bun --no-env-file` when a verification command must avoid it.
+
+Startup checks connectivity before external warmup. Inflation still loads database/cache data
+offline, but receives `allowExternal: false`; the later online recovery pass permits refresh.
 
 ### Settings Structure
 
