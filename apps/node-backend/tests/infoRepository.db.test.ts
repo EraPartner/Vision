@@ -342,6 +342,7 @@ describe.skipIf(!hasTestDatabase())(
           liabilities: -70,
           investments: 0,
           netWorth: 180,
+          currency: "EUR",
         });
         expect(result.snapshots).toHaveLength(4);
         expect(result.snapshots[0]!.date).toBe(firstCashDate);
@@ -369,6 +370,7 @@ describe.skipIf(!hasTestDatabase())(
           liabilities: 0,
           investments: 0,
           netWorth: 25,
+          currency: "EUR",
         });
         expect(
           result.snapshots.map((point) => [point.date, point.liquid]),
@@ -389,13 +391,20 @@ describe.skipIf(!hasTestDatabase())(
           liabilities: 0,
           investments: 0,
           netWorth: 0,
+          currency: "EUR",
         });
         expect(result.snapshots).toEqual([]);
       });
 
       it("returns the empty shape when there is no source record at all", async () => {
         expect(await infoRepository.getNetWorthFromSnapshots()).toEqual({
-          current: { liquid: 0, liabilities: 0, investments: 0, netWorth: 0 },
+          current: {
+            liquid: 0,
+            liabilities: 0,
+            investments: 0,
+            netWorth: 0,
+            currency: "EUR",
+          },
           monthlyChange: 0,
           monthlyChangePercent: 0,
           snapshots: [],
@@ -451,6 +460,7 @@ describe.skipIf(!hasTestDatabase())(
           liabilities: -300,
           investments: 4470,
           netWorth: 9170,
+          currency: "EUR",
         });
       });
 
@@ -589,6 +599,7 @@ describe.skipIf(!hasTestDatabase())(
           liabilities: 0,
           investments: 0,
           netWorth: 0,
+          currency: "EUR",
         });
         // Not `[0, 0]`: the two tracking rows do not define the series span
         // either, so there is no series at all rather than a run of zero days
@@ -621,6 +632,7 @@ describe.skipIf(!hasTestDatabase())(
           liabilities: 0,
           investments: 0,
           netWorth: 0,
+          currency: "EUR",
         });
       });
 
@@ -649,6 +661,7 @@ describe.skipIf(!hasTestDatabase())(
           liabilities: 0,
           investments: 0,
           netWorth: 0,
+          currency: "EUR",
         });
         expect(r.snapshots).toEqual([]);
       });
@@ -939,6 +952,7 @@ describe.skipIf(!hasTestDatabase())(
           liabilities: -90000,
           investments: 3300,
           netWorth: -84420,
+          currency: "EUR",
         });
       });
 
@@ -1013,6 +1027,7 @@ describe.skipIf(!hasTestDatabase())(
           liabilities: 0,
           investments: 0,
           netWorth: -5000,
+          currency: "EUR",
         });
       });
 
@@ -1043,6 +1058,7 @@ describe.skipIf(!hasTestDatabase())(
           liabilities: -5000,
           investments: 0,
           netWorth: -5000,
+          currency: "EUR",
         });
       });
 
