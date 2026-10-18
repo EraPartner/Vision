@@ -4,14 +4,14 @@
  * "Progressive tax and exemptions" and "Household taxation".
  */
 
-import type { BelgianTaxYearTable } from "./constants";
+import type { BelgianTaxYearTable } from "./constants.ts";
 import type {
     AssessmentMode,
     ExemptionAllocation,
     HouseholdDependents,
     HouseholdTaxIssue,
     PartnerId,
-} from "./householdTypes";
+} from "./householdTypes.ts";
 
 export interface DependentSupplements {
     /** Effective child count on the art. 132 scale (disabled children count twice). */

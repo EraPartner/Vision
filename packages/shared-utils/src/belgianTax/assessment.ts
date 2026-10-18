@@ -19,14 +19,14 @@
  * Matrix rows: "Household taxation" in docs/reference/belgian-tax-rule-matrix.md.
  */
 
-import { getTaxTable } from "./constants";
+import { getTaxTable } from "./constants.ts";
 import type {
     AssessmentDecision,
     BelgianTaxHouseholdV2,
     HouseholdTaxIssue,
     PartnerId,
     RelationshipEvent,
-} from "./householdTypes";
+} from "./householdTypes.ts";
 
 const ART_126 = "WIB 92 art. 126";
 

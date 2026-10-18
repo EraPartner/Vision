@@ -19,8 +19,8 @@
  *  - spouse fields on a `single` profile, and unknown keys → migratedFrom.unmappedFields.
  */
 
-import { deriveAssessment } from "./assessment";
-import { forfaitCategoryOf } from "./household";
+import { deriveAssessment } from "./assessment.ts";
+import { forfaitCategoryOf } from "./household.ts";
 import type {
     ActivityKind,
     BelgianTaxHouseholdSnapshotsV2,
@@ -31,12 +31,12 @@ import type {
     IncomeActivity,
     PartnerReductionInputs,
     UnmappedField,
-} from "./householdTypes";
+} from "./householdTypes.ts";
 import type {
     BelgianTaxProfile,
     BelgianTaxProfileSnapshots,
     EmploymentType,
-} from "./types";
+} from "./types.ts";
 
 type ProfileKey = keyof BelgianTaxProfile;
 

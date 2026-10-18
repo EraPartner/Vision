@@ -9,12 +9,12 @@
  * Kept out of the `@/lib/belgianTax` barrel: import it by file path.
  */
 
-import { applyProfileV1PatchToHousehold } from "./householdMigration";
+import { applyProfileV1PatchToHousehold } from "./householdMigration.ts";
 import type {
   BelgianTaxHouseholdV2,
   HouseholdPartner,
   PartnerId,
-} from "./householdTypes";
+} from "./householdTypes.ts";
 
 /** `accounts.owner` values. */
 export type AccountOwner = "me" | "partner" | "joint";

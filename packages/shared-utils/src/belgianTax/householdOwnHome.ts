@@ -22,7 +22,7 @@
  *    assessment the children count only for the borrower who claims them.
  */
 
-import type { BelgianTaxYearTable } from "./constants";
+import type { BelgianTaxYearTable } from "./constants.ts";
 import {
     chequeHabitatParts,
     computeMarginalRate,
@@ -33,14 +33,14 @@ import {
     type ChequeHabitatParts,
     type OwnHomeCreditInputs,
     type OwnHomeCreditTaxpayer,
-} from "./personPit";
-import type { MortgageCreditRegime } from "./types";
+} from "./personPit.ts";
+import type { MortgageCreditRegime } from "./types.ts";
 import type {
     AssessmentMode,
     BelgianTaxHouseholdV2,
     HouseholdTaxIssue,
     PartnerId,
-} from "./householdTypes";
+} from "./householdTypes.ts";
 
 /** Figures of one assessed partner that the own-home credit reads. */
 export interface OwnHomePartner {

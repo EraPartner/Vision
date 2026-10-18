@@ -1,5 +1,5 @@
-import { LATEST_TAX_YEAR } from "./constants";
-import type { BelgianTaxProfile } from "./types";
+import { LATEST_TAX_YEAR } from "./constants.ts";
+import type { BelgianTaxProfile } from "./types.ts";
 
 export const DEFAULT_BELGIAN_TAX_PROFILE: BelgianTaxProfile = {
   profileConfigured: false,

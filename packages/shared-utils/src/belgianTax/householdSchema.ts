@@ -13,7 +13,7 @@ import {
     RELATIONSHIP_EVENT_KINDS,
     type BelgianTaxHouseholdSnapshotsV2,
     type BelgianTaxHouseholdV2,
-} from "./householdTypes";
+} from "./householdTypes.ts";
 
 const MONEY_MAX = 1e12;
 const money = z.number().min(0).max(MONEY_MAX);

@@ -35,14 +35,14 @@ import type {
     BelgianTaxProfile,
     BelgianTaxCalculation,
     BracketTax,
-} from "./types";
-import { getTaxTable, type BelgianTaxYearTable } from "./constants";
+} from "./types.ts";
+import { getTaxTable, type BelgianTaxYearTable } from "./constants.ts";
 import {
     computeEmployeeSocialSecurity,
     computeSpecialSocialSecurityContribution,
-} from "./socialSecurity";
-import { computePropertyTaxEstimate } from "./propertyTax";
-import { computeDependentSupplements } from "./exemptions";
+} from "./socialSecurity.ts";
+import { computePropertyTaxEstimate } from "./propertyTax.ts";
+import { computeDependentSupplements } from "./exemptions.ts";
 import {
     addBracketTax,
     buildCalculationBreakdown,
@@ -58,7 +58,7 @@ import {
     isChildcareDeducted,
     resolveMortgageRegime,
     type ForfaitCategory,
-} from "./personPit";
+} from "./personPit.ts";
 
 /** Art. 51 forfait category of the single-profile employment type. */
 function forfaitCategoryForProfile(profile: BelgianTaxProfile): ForfaitCategory {

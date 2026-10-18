@@ -2,8 +2,8 @@ import { escapeCsvValue } from "@vision/shared-utils/csv";
 import type {
   AnalysisInterchangeResult as AnalysisResult,
   AnalysisInterchangeValue as AnalysisValue,
-} from "./types";
-import type { ImportedAnalysisWorkbook } from "./workbook";
+} from "./types.ts";
+import type { ImportedAnalysisWorkbook } from "./workbook.ts";
 
 export type ScenarioColumnType =
   "string" | "integer" | "decimal" | "boolean" | "date";

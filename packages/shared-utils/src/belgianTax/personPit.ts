@@ -12,12 +12,12 @@ import type {
     BracketTax,
     MortgageCreditRegime,
     ProfessionalExpenseMethod,
-} from "./types";
+} from "./types.ts";
 import type {
     BelgianTaxYearTable,
     ExemptionBracket,
     PensionReductionParams,
-} from "./constants";
+} from "./constants.ts";
 
 /**
  * Professional-expense forfait category of WIB 92 art. 51 al. 2. The cap of art. 51 al. 3

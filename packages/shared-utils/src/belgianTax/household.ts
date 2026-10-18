@@ -25,18 +25,18 @@
  * 10. Property tax (household), investment side calculation (per partner), totals.
  */
 
-import { getTaxTable, type BelgianTaxYearTable } from "./constants";
-import { deriveAssessment } from "./assessment";
+import { getTaxTable, type BelgianTaxYearTable } from "./constants.ts";
+import { deriveAssessment } from "./assessment.ts";
 import {
     allocateExemptions,
     resolveDependentsClaimant,
     type ExemptionPartnerInput,
-} from "./exemptions";
+} from "./exemptions.ts";
 import {
     computeMaritalQuotient,
     resolveMaritalQuotientCap,
     type QuotientTransfer,
-} from "./maritalQuotient";
+} from "./maritalQuotient.ts";
 import {
     addBracketTax,
     buildCalculationBreakdown,
@@ -54,14 +54,14 @@ import {
     type TaxReductionBreakdown,
     isChildcareDeducted,
     type ForfaitCategory,
-} from "./personPit";
-import { allocateOwnHomeCredit } from "./householdOwnHome";
-import { computePropertyTaxEstimate } from "./propertyTax";
+} from "./personPit.ts";
+import { allocateOwnHomeCredit } from "./householdOwnHome.ts";
+import { computePropertyTaxEstimate } from "./propertyTax.ts";
 import {
     computeActivitySocialSecurity,
     evaluateCsssScale,
-} from "./socialSecurity";
-import type { BelgianTaxCalculation, BracketTax } from "./types";
+} from "./socialSecurity.ts";
+import type { BelgianTaxCalculation, BracketTax } from "./types.ts";
 import {
     FORFAIT_CATEGORIES,
     type ActivityKind,
@@ -75,7 +75,7 @@ import {
     type MaritalQuotientResult,
     type PartnerId,
     type PartnerTaxResult,
-} from "./householdTypes";
+} from "./householdTypes.ts";
 
 /** Art. 51 forfait category of an activity kind. */
 export function forfaitCategoryOf(kind: ActivityKind): ForfaitCategory {

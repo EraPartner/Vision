@@ -14,12 +14,12 @@
  * Matrix rows: "Marital quotient and joint assessment".
  */
 
-import type { BelgianTaxYearTable } from "./constants";
+import type { BelgianTaxYearTable } from "./constants.ts";
 import type {
     HouseholdTaxIssue,
     MaritalQuotientResult,
     PartnerId,
-} from "./householdTypes";
+} from "./householdTypes.ts";
 
 export interface QuotientPartnerInput {
     id: PartnerId;
