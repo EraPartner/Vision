@@ -60,10 +60,15 @@ struct NativeShellPresentationStructureTests {
         let fixture = ShellPresentationWindow(ShellRootView(model: shell) { _ in EmptyView() })
         fixture.host.sizingOptions = []
         defer { fixture.close() }
-        try fixture.settle(until: {
-            (sidebarSplitView(in: fixture.host)?.arrangedSubviews.first?.frame.width ?? 0)
-                >= SidebarWidthGuard.minimumWidth
-        })
+        do {
+            try fixture.settle(until: {
+                (sidebarSplitView(in: fixture.host)?.arrangedSubviews.first?.frame.width ?? 0)
+                    >= SidebarWidthGuard.minimumWidth
+            })
+        } catch {
+            Issue.record(Comment(rawValue: sidebarDiagnostics(fixture.host)))
+            throw error
+        }
     }
 
     @Test func sidebarWidthCorrectionOnlyWidensANarrowSidebarOnce() {
@@ -73,6 +78,12 @@ struct NativeShellPresentationStructureTests {
         #expect(SidebarWidthGuard.correctedWidth(sidebar: 300, splitView: 1100, minimum: minimum, ideal: ideal) == nil)
         #expect(SidebarWidthGuard.correctedWidth(sidebar: 0, splitView: 1100, minimum: minimum, ideal: ideal) == nil)
         #expect(SidebarWidthGuard.correctedWidth(sidebar: 140, splitView: 400, minimum: minimum, ideal: ideal) == nil)
+        #expect(
+            SidebarWidthGuard.correctedWidth(
+                sidebar: 150, splitView: 1100, minimum: minimum, ideal: ideal, firstLayout: false) == minimum)
+        #expect(
+            SidebarWidthGuard.correctedWidth(
+                sidebar: 220, splitView: 1100, minimum: minimum, ideal: ideal, firstLayout: false) == nil)
     }
 
     /// SwiftUI builds no accessibility tree inside the SwiftPM test process on the macOS runner:
@@ -182,6 +193,26 @@ private func sidebarSplitView(in view: NSView) -> NSSplitView? {
         if let split = sidebarSplitView(in: child) { return split }
     }
     return nil
+}
+
+/// Names every split view (and the hosting view's top levels) with its frame, so a failure on
+/// the runner says whether the split view was missing or simply never widened.
+@MainActor
+private func sidebarDiagnostics(_ host: NSView) -> String {
+    var lines = ["host \(host.frame.size)"]
+    func walk(_ view: NSView, depth: Int) {
+        let name = String(describing: type(of: view))
+        if let split = view as? NSSplitView {
+            let delegate = split.delegate.map { String(describing: type(of: $0)) } ?? "nil"
+            let widths = split.arrangedSubviews.map { "\($0.frame.width)" }.joined(separator: ",")
+            lines.append("\(depth) \(name) vertical=\(split.isVertical) width=\(split.bounds.width) arranged=[\(widths)] delegate=\(delegate)")
+        } else if depth <= 3 || name.contains("Split") {
+            lines.append("\(depth) \(name) \(view.frame.size)")
+        }
+        for child in view.subviews where depth < 40 { walk(child, depth: depth + 1) }
+    }
+    walk(host, depth: 0)
+    return lines.joined(separator: "\n")
 }
 
 @MainActor
