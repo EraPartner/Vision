@@ -44,13 +44,13 @@ public struct NativeSettingsWindow: View {
                             select(item)
                         } label: {
                             Label(strings.t(item.titleKey), systemImage: item.symbol).font(.body)
-                                .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 10).padding(
-                                    .vertical, 10
+                                .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 12).padding(
+                                    .vertical, 12
                                 )
                                 .contentShape(Rectangle())
                         }.buttonStyle(.plain)
                             .background(
-                                selected == item ? theme.primary.opacity(0.1) : Color.clear,
+                                selected == item ? theme.primary.opacity(0.14) : Color.clear,
                                 in: RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
                             )
                             .accessibilityAddTraits(selected == item ? [.isSelected] : [])
@@ -75,7 +75,7 @@ public struct NativeSettingsWindow: View {
                 Spacer()
                 Text(strings.t("settings.autosaveHint")).font(.caption).foregroundStyle(theme.tertiaryLabel)
                     .padding(18)
-            }.frame(width: 205).background(theme.foreground.opacity(0.025))
+            }.frame(width: 225).background(theme.foreground.opacity(0.025))
                 .accessibilityElement(children: .contain).accessibilityLabel(strings.t("settings.title"))
             Divider()
             VStack(spacing: 0) {
@@ -100,7 +100,8 @@ public struct NativeSettingsWindow: View {
                     }.padding(24).frame(maxWidth: .infinity, alignment: .leading)
                 }.accessibilityLabel(strings.t(selected.titleKey))
             }.frame(maxWidth: .infinity)
-        }.frame(minWidth: 760, idealWidth: 900, minHeight: 560, idealHeight: 680)
+        // The web settings dialog is `max-w-4xl` (896 px) and nearly full height.
+        }.frame(minWidth: 880, idealWidth: 900, minHeight: 640, idealHeight: 760)
             .background(theme.card).foregroundStyle(theme.foreground)
             .accessibilityElement(children: .contain).accessibilityLabel(strings.t("settings.title"))
             .onChange(of: section) { _, next in selected = NativeSettingsWindowSection(rawValue: next) ?? .general }
