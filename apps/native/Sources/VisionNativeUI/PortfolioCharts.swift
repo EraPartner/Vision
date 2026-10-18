@@ -62,7 +62,7 @@ struct PortfolioSeriesChart: View {
             )
             .chartLegend(.hidden)
             .chartXAxis {
-                AxisMarks(values: .automatic(desiredCount: 6)) { value in
+                AxisMarks(values: ChartAxisTicks.evenlySpaced(keys)) { value in
                     AxisGridLine()
                     AxisValueLabel { if let key = value.as(String.self) { Text(dateLabel(key)) } }
                 }
