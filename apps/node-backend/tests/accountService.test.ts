@@ -266,6 +266,25 @@ describe("accountService.update", () => {
     });
   });
 
+  it("drops the statistics cache when the owner changes (ADR-201)", async () => {
+    const cache = await import("../src/services/info/cache.ts");
+    cache.statisticsResponseCache.set("cat|probe", {
+      data: 1,
+      inflight: undefined,
+      expiresAt: Date.now() + 60_000,
+    });
+    accountRepository.update.mockResolvedValueOnce(
+      partial<AccountRow>({ id: 1 }),
+    );
+    await accountService.update(1, { display_name: "Main" });
+    expect(cache.statisticsResponseCache.has("cat|probe")).toBe(true);
+    accountRepository.update.mockResolvedValueOnce(
+      partial<AccountRow>({ id: 1 }),
+    );
+    await accountService.update(1, { owner: "partner" });
+    expect(cache.statisticsResponseCache.has("cat|probe")).toBe(false);
+  });
+
   it("rejects retired scalar statement fields on update", async () => {
     await expect(
       accountService.update(1, { statement_balance: 99 }),

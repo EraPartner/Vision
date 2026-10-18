@@ -445,6 +445,60 @@ describe("Settings Routes", () => {
       expect(settingsRepository.replace).not.toHaveBeenCalled();
     });
 
+    it("accepts a belgian_tax_household_v2 value and rejects a v1-shaped one", async () => {
+      const household = {
+        version: 2,
+        taxYear: 2025,
+        profileConfigured: true,
+        region: "flanders",
+        communalSurchargePercent: 7,
+        partners: [
+          {
+            id: "A",
+            isDisabled: false,
+            activities: [{ id: "act_A_1", kind: "employee", grossIncome: 1 }],
+            professionalExpenses: {},
+            unionDues: 0,
+            otherTaxableIncome: 0,
+            alimonyPaid: 0,
+            reductions: {
+              personalPensionContributions: 0,
+              lifeInsurancePremiums: 0,
+              charitableDonations: 0,
+              childcareCosts: 0,
+              medicalExpenses: 0,
+            },
+          },
+        ],
+        relationship: { events: [] },
+        dependents: { children: 0, otherPersons: 0 },
+        home: { cadastralIncome: 0, mortgageInterestPaid: 0 },
+      };
+      settingsRepository.replace.mockResolvedValue(
+        replaced({ key: "belgian_tax_household_v2", value: household }),
+      );
+      await api
+        .put(`${BASE}/belgian_tax_household_v2`)
+        .send(singleBody({ value: household }))
+        .expect(200);
+
+      settingsRepository.replace.mockClear();
+      const res = await api
+        .put(`${BASE}/belgian_tax_household_v2`)
+        .send(singleBody({ value: { taxYear: 2025, grossAnnualIncome: 1 } }))
+        .expect(400);
+      expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
+      expect(settingsRepository.replace).not.toHaveBeenCalled();
+    });
+
+    it("still rejects an unknown household-like key", async () => {
+      await api
+        .put(`${BASE}/belgian_tax_household_v3`)
+        .send(singleBody({ value: {} }))
+        .expect(400);
+      expect(settingsRepository.replace).not.toHaveBeenCalled();
+    });
+
     it("accepts dismissed_recurring_patterns as an array (RecurringDetectionPanel payload)", async () => {
       settingsRepository.replace.mockResolvedValue(
         replaced({

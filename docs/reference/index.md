@@ -2,8 +2,8 @@
 title: Reference Documentation Index
 type: reference-index
 status: active
-date: 2026-04-25
-updated: 2026-09-13
+date: 2026-10-12
+updated: 2026-10-12
 tags:
   [
     reference,
@@ -44,6 +44,7 @@ SORT title ASC
 | [[docs/reference/repository-layer\|Repository Layer Reference]]            | Complete reference for all 21 backend repository domains (+ infoRepository and portfolioTxRepo sub-modules) |
 | [[docs/reference/database-query-patterns\|Database Query Patterns]]        | PostgreSQL query patterns, index strategies, optimization techniques                                        |
 | [[docs/reference/frontend-routes\|Frontend Routes]]                        | Complete manifest-backed route table, including the manual analysis workspace                               |
+| [[docs/reference/native-parity/index\|Native Parity Inventory]]            | Every screen, dialog and action of the web UI, the checklist for the Swift rewrite (ADR-204)                |
 | [[docs/reference/react-query-keys\|React Query Keys]]                      | All frontend query keys for cache invalidation                                                              |
 | [[docs/reference/typescript-types\|TypeScript Types]]                      | All frontend type definitions                                                                               |
 | [[docs/reference/agent-navigation-map\|AI Agent Navigation Map]]           | File navigation map organized by feature, layer, and task                                                   |
@@ -56,6 +57,8 @@ SORT title ASC
 | Document                                                    | Description                                                                   |
 | ----------------------------------------------------------- | ----------------------------------------------------------------------------- |
 | [[docs/reference/algorithms\|Algorithms & Data Structures]] | LTTB, SHA-256 dedup, recurring detection, currency conversion, Modified Dietz |
+| [[docs/reference/belgian-tax-rule-matrix\|Belgian Tax Rule Coverage Matrix]] | Per-rule legal basis, primary source, code and test location for the Belgian PIT engine (IY 2024-2026) |
+| [[docs/reference/belgian-tax-scenario-matrix\|Belgian Tax Scenario Matrix]] | Law-derived household scenarios with hand-worked expected figures, per rule-matrix row, verified or needs_source |
 
 ## Database
 

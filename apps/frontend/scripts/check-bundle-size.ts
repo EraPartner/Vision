@@ -75,10 +75,34 @@ const DIST_DIR = process.env.VISION_DIST_DIR
  */
 const BUDGETS_KB = {
     // 445.33 * 1.05 = 467.60, rounded up after measured feature growth.
-    preload: 468,
+    // Raised from 468 for the Belgian-tax household store wiring (ADR-200,
+    // phase B2): 467.53 -> 469.33 measured. The household engine itself loads
+    // lazily (householdRuntime); only the store and provider glue are boot code.
+    // Raised from 470 for the reduction for pensions (arts 147-153) and the gift
+    // ceiling in the shared personPit chunk that computeBelgianPIT keeps in the
+    // boot graph: 470.52 measured.
+    preload: 471,
     // 1310.71 measured after the lazily loaded xlsx chunk arrived with the
     // IBKR funding import (2026-10-08); raised from 1180 (was 1100 before that).
-    total: 1340,
+    // Raised from 1340 for the lazily loaded Belgian-tax household engine, its
+    // settings schemas and the household issue locale strings (ADR-200, phase
+    // B2): 1334.97 -> 1348.31 measured. Raised from 1349 for the phase B2
+    // review fixes (household engine in the trend strip and yearly chart,
+    // upgrade validation, unreadable-household and engine-load-failure
+    // states with their EN/NL strings): 1348.16 -> 1349.02 measured.
+    // Raised from 1351 for the household editor steps, the per-partner breakdown card and
+    // their EN/NL strings (ADR-200, phase C1, tax route chunks): 1349.02 -> 1357.48 measured.
+    // Raised from 1359 for the partner attribution of recorded figures, the per-partner
+    // export rows and the readable household history with their EN/NL strings (ADR-201,
+    // phase C2, tax and export route chunks; boot preload unchanged): 1357.48 -> 1360.47
+    // measured.
+    // Raised from 1362 for the reduction for pensions, joint gifts, the per-borrower
+    // own-home baskets and their EN/NL strings: 1364.10 measured.
+    // Raised from 1365 for the pension type of box V, the art. 147 exclusion of activity
+    // income and their EN/NL strings (ADR-203): 1365.61 measured.
+    // Raised from 1366 for the pension-exclusion issues, the published al. 3 difference and
+    // the "Not entered" pension type (ADR-203 review): 1366.19 measured.
+    total: 1367,
 };
 
 /** Parses dist/index.html for the entry module script and its modulepreload set. */

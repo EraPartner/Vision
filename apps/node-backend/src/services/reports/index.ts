@@ -43,13 +43,15 @@ import investmentRepository from "../../repositories/investmentRepository.ts";
 import type { FinancialReportData, Period } from "./dataFetcher.ts";
 import type { PortfolioReportData } from "./dataFetcherPortfolio.ts";
 import type {
+  PrecomputedHousehold,
   PrecomputedPIT,
+  ReportHousehold,
   TaxProfile,
   TaxReportData,
 } from "./dataFetcherTax.ts";
 import type { SectionEntry } from "./sectionCatalog.ts";
 
-export type { Period, PrecomputedPIT, TaxProfile };
+export type { Period, PrecomputedHousehold, PrecomputedPIT, ReportHousehold, TaxProfile };
 
 export type PeriodKind = Period["kind"];
 
@@ -84,6 +86,8 @@ export type GenerateReportOpts = {
   excludedRecipientIds?: number[] | undefined;
   taxProfile?: TaxProfile | undefined;
   precomputedPIT?: PrecomputedPIT | undefined;
+  household?: ReportHousehold | undefined;
+  precomputedHousehold?: PrecomputedHousehold | undefined;
 };
 
 const REPORT_TITLES: Record<string, string> = {
@@ -658,12 +662,16 @@ function buildTaxBody({
   sections,
   taxProfile,
   precomputedPIT,
+  household,
+  precomputedHousehold,
 }: {
   currency: string;
   period: Period;
   sections: string[];
   taxProfile?: TaxProfile | undefined;
   precomputedPIT?: PrecomputedPIT | undefined;
+  household?: ReportHousehold | undefined;
+  precomputedHousehold?: PrecomputedHousehold | undefined;
 }): Promise<string> {
   return buildBody({
     currency,
@@ -672,7 +680,12 @@ function buildTaxBody({
     renderers: TAX_SECTION_RENDERERS,
     defaultSections: DEFAULT_TAX_SECTIONS,
     fetchData: () =>
-      fetchTaxData(currency, period, { taxProfile, precomputedPIT }),
+      fetchTaxData(currency, period, {
+        taxProfile,
+        precomputedPIT,
+        household,
+        precomputedHousehold,
+      }),
     separator: '\n<div class="page-break"></div>\n',
   });
 }
@@ -717,6 +730,8 @@ async function generateReportInner({
   excludedRecipientIds = [],
   taxProfile,
   precomputedPIT,
+  household,
+  precomputedHousehold,
 }: GenerateReportOpts): Promise<{ pdf: Buffer; filename: string }> {
   const generatedAt = new Date().toISOString();
   const mode = theme.mode ?? "light";
@@ -757,6 +772,8 @@ async function generateReportInner({
       sections,
       taxProfile,
       precomputedPIT,
+      household,
+      precomputedHousehold,
     });
   } else {
     bodyHtml = `

@@ -3,11 +3,15 @@
  *
  * A multi-step sheet for configuring the user's Belgian tax profile.
  * Steps:
- *   1. Employment type
- *   2. Income details
- *   3. Taxable income sources
- *   4. Exemptions & dependents
- *   5. Region & surcharge
+ *   1. Household (assessment, partner, relationship events, claims)
+ *   2. Income (activities per partner, expenses, other income)
+ *   3. Home & property
+ *   4. Taxable income sources
+ *   5. Exemptions, dependents and reductions per partner
+ *   6. Region & surcharge
+ *
+ * Household steps edit the v2 household (ADR-200) through `updateHousehold`; the others
+ * still edit the v1 projection through `updateProfile`, which keeps household-only data.
  *
  * Opens from its own trigger, or, with `open`/`onOpenChange`, from a menu item
  * elsewhere on the page.
@@ -34,13 +38,15 @@ import {
 } from "@/components/ui/segmented-control";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
     Settings,
     ChevronRight,
     ChevronLeft,
     Check,
-    User,
-    Landmark,
+    Briefcase,
+    Building2,
+    Receipt,
     MapPin,
     Users,
     ListChecks,
@@ -51,19 +57,24 @@ import { toast } from "sonner";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
 import type { BelgianTaxProfile } from "@/lib/belgianTax";
-import { taxProfileIncomeStepSchema } from "./taxProfileSchema";
+import type { PartnerId } from "@/lib/belgianTax/householdTypes";
+import type { HouseholdUpdate } from "@/stores/belgianTaxStore";
+import { householdIncomeStepSchema } from "./taxProfileSchema";
 import {
-    EmploymentStep,
+    HouseholdStep,
     IncomeStep,
+    HomeStep,
     IncomeSourcesStep,
     ExemptionsStep,
     RegionStep,
 } from "./profile-steps";
+import { resolvePartnerId } from "./profile-steps/householdEditing";
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const STEPS = [
-    "employment",
+    "household",
     "income",
+    "home",
     "incomeSources",
     "exemptions",
     "region",
@@ -71,10 +82,11 @@ export const STEPS = [
 export type Step = (typeof STEPS)[number];
 
 const STEP_ICONS: Record<Step, ElementType> = {
-    employment: User,
-    income: Landmark,
+    household: Users,
+    income: Briefcase,
+    home: Building2,
     incomeSources: ListChecks,
-    exemptions: Users,
+    exemptions: Receipt,
     region: MapPin,
 };
 
@@ -106,6 +118,10 @@ export function TaxProfileDialog({
         updateProfile: updateLiveProfile,
         snapshots,
         updateSnapshot,
+        liveHousehold,
+        householdSnapshots,
+        updateLiveHousehold,
+        updateHouseholdSnapshot,
         snapshotMetas,
         unmarkYearAsFiled,
     } = useBelgianTaxProfile((state) => ({
@@ -113,13 +129,20 @@ export function TaxProfileDialog({
         updateProfile: state.updateProfile,
         snapshots: state.snapshots,
         updateSnapshot: state.updateSnapshot,
+        liveHousehold: state.household,
+        householdSnapshots: state.householdSnapshots,
+        updateLiveHousehold: state.updateHousehold,
+        updateHouseholdSnapshot: state.updateHouseholdSnapshot,
         snapshotMetas: state.snapshotMetas,
         unmarkYearAsFiled: state.unmarkYearAsFiled,
     }));
     const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
     const isControlled = controlledOpen !== undefined;
     const open = isControlled ? controlledOpen : uncontrolledOpen;
-    const [step, setStep] = useState<Step>("employment");
+    const [step, setStep] = useState<Step>("household");
+    const [selectedPartner, setSelectedPartner] = useState<PartnerId>("A");
+    const [portalContainer, setPortalContainer] =
+        useState<HTMLDivElement | null>(null);
     const [filedOverride, setFiledOverride] = useState(false);
     // Remount key for the step picker: when a forward jump is refused and the
     // user stays on the same step, the control's pill must snap back.
@@ -136,6 +159,12 @@ export function TaxProfileDialog({
     const isFiled = Boolean(snapshotMetas[effectiveTargetYear]?.filing);
     const isLockedByFiling = isFiled && !filedOverride;
     const profile: BelgianTaxProfile = historicalSnapshot ?? liveProfile;
+    const household = editingHistorical
+        ? (householdSnapshots[effectiveTargetYear] ?? null)
+        : liveHousehold;
+    const partnerId = household
+        ? resolvePartnerId(household, selectedPartner)
+        : "A";
 
     const updateProfile = useCallback(
         (updates: Partial<BelgianTaxProfile>) => {
@@ -158,19 +187,37 @@ export function TaxProfileDialog({
         ],
     );
 
+    const updateHousehold = useCallback(
+        (update: HouseholdUpdate) => {
+            if (isLockedByFiling) return;
+            if (editingHistorical) {
+                updateHouseholdSnapshot(effectiveTargetYear, update);
+                return;
+            }
+            updateLiveHousehold(update);
+        },
+        [
+            isLockedByFiling,
+            editingHistorical,
+            effectiveTargetYear,
+            updateHouseholdSnapshot,
+            updateLiveHousehold,
+        ],
+    );
+
     const stepIdx = STEPS.indexOf(step);
     const isFirst = stepIdx === 0;
     const isLast = stepIdx === STEPS.length - 1;
 
     // Per-step required-field validation. Returns a user-facing error message when
     // the step's required fields are missing/invalid, or null when the step is OK.
-    // The rules live in taxProfileIncomeStepSchema (Zod) — only the income step
+    // The rules live in householdIncomeStepSchema (Zod) — only the income step
     // has hard requirements; the schema's issue messages are i18n keys,
     // translated here so the toast copy is unchanged.
     const stepError = useCallback(
         (s: Step): string | null => {
-            if (s === "income") {
-                const result = taxProfileIncomeStepSchema.safeParse(profile);
+            if (s === "income" && household) {
+                const result = householdIncomeStepSchema.safeParse(household);
                 const issue = result.success
                     ? undefined
                     : result.error.issues[0];
@@ -178,7 +225,7 @@ export function TaxProfileDialog({
             }
             return null;
         },
-        [profile, t],
+        [household, t],
     );
 
     // The earliest invalid step strictly before `targetIdx` with its error, or
@@ -251,7 +298,8 @@ export function TaxProfileDialog({
     function handleOpenChange(o: boolean) {
         setOpen(o);
         if (o) {
-            setStep(initialStep ?? "employment");
+            setStep(initialStep ?? "household");
+            setSelectedPartner("A");
             setFiledOverride(false);
         }
     }
@@ -385,16 +433,38 @@ export function TaxProfileDialog({
                         </Alert>
                     )}
 
-                    {step === "employment" && (
-                        <EmploymentStep
-                            profile={profile}
-                            updateProfile={updateProfile}
+                    {!household &&
+                        (step === "household" ||
+                            step === "income" ||
+                            step === "home" ||
+                            step === "exemptions") && (
+                            <div className="space-y-3" aria-busy="true">
+                                <Skeleton className="h-6 w-1/2" />
+                                <Skeleton className="h-24 w-full" />
+                            </div>
+                        )}
+                    {step === "household" && household && (
+                        <HouseholdStep
+                            household={household}
+                            updateHousehold={updateHousehold}
+                            portalContainer={portalContainer}
                         />
                     )}
-                    {step === "income" && (
+                    {step === "income" && household && (
                         <IncomeStep
+                            household={household}
+                            updateHousehold={updateHousehold}
+                            partnerId={partnerId}
+                            onPartnerChange={setSelectedPartner}
+                            portalContainer={portalContainer}
+                        />
+                    )}
+                    {step === "home" && household && (
+                        <HomeStep
                             profile={profile}
                             updateProfile={updateProfile}
+                            household={household}
+                            updateHousehold={updateHousehold}
                         />
                     )}
                     {step === "incomeSources" && (
@@ -403,10 +473,14 @@ export function TaxProfileDialog({
                             updateProfile={updateProfile}
                         />
                     )}
-                    {step === "exemptions" && (
+                    {step === "exemptions" && household && (
                         <ExemptionsStep
                             profile={profile}
                             updateProfile={updateProfile}
+                            household={household}
+                            updateHousehold={updateHousehold}
+                            partnerId={partnerId}
+                            onPartnerChange={setSelectedPartner}
                         />
                     )}
                     {step === "region" && (
@@ -433,6 +507,7 @@ export function TaxProfileDialog({
                         )}
                     </Button>
                 </div>
+                <div ref={setPortalContainer} />
             </SheetContent>
         </Sheet>
     );

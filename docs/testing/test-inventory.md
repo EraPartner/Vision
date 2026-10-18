@@ -4,7 +4,7 @@ type: testing
 status: active
 date: 2026-10-13
 last_modified: 2026-10-11
-updated: 2026-10-13
+updated: 2026-10-18
 last-updated: 2026-10-08
 last_updated_timestamp: 2026-10-06T00:00:00Z
 added_portfolio_tax_pure_module_tests: 2026-05-29
@@ -1216,6 +1216,30 @@ Loop artifacts:
 
 Related docs: [[docs/adr/026-unified-api-response-envelope|ADR-026]], [[docs/testing/testing#Phase D: Coverage Threshold Ratchet & Contract Tests|Phase D Details]]
 
+
+## Merge reconciliation: tax filing on the household store (2026-10-18)
+
+The local filing workflow was merged with the household (v2) tax store. Two remote tests and
+one local assertion set conflicted on behaviour, not only on storage. The chosen rule and the
+tests that encode it:
+
+- **Rolling-period tax export.** `ExportDialog.test.tsx` previously expected annual PIT figures
+  for a rolling 12-month export. Audit 26 omits annual calculations for any period that is not a
+  full calendar year, and the backend drops them for such periods. The test now asserts that
+  profile, PIT and household figures are absent. No financial value changed; the case moved from
+  "exported" to "omitted".
+- **Filing eligibility.** A year can be filed when it is the live year, has its own household
+  snapshot, or has an explicitly frozen calculation. The remote test that auto-pinned the live
+  household for a past year without a snapshot was not kept, because that would file a live
+  estimate. Its frozen-year counterpart (no pin, frozen figures kept) was ported to
+  `MarkAsFiledDialog.test.tsx`, and `ExportDialog.test.tsx` checks that such a frozen-only year
+  exports its frozen totals. The local tests now assert the household keys
+  (`belgian_tax_household_v2`, `belgian_tax_household_snapshots_v2`) in the atomic save.
+- **Persistence tests.** `taxPersistence.test.ts` and `BelgianTaxProfileContext.test.tsx` hydrate
+  through the household runtime and assert the v2 keys; v1 keys are never written.
+
+These are simulated-DOM and mocked-HTTP tests. No browser, Electron or PostgreSQL run covers the
+merged filing flow yet.
 
 ## Related
 

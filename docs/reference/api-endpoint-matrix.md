@@ -2,13 +2,13 @@
 title: API Endpoint Matrix
 type: reference
 status: active
-date: 2026-10-11
-updated: 2026-10-11
-last_modified: 2026-10-11
+date: 2026-10-13
+updated: 2026-10-13
+last_modified: 2026-10-13
 adr-reference: 026
 # Authoritative HTTP-operation count from openapi.yaml. The CI checker also
 # compares every method/path pair; update concrete resource rows when routes change.
-api_operation_count: 300
+api_operation_count: 301
 tags:
   [
     reference,
@@ -72,7 +72,7 @@ tags:
     auto-link,
     planned-match,
   ]
-description: Complete matrix of all 300 HTTP API operations (authoritative count from openapi.yaml), health endpoints, and Electron IPC channels. The shared Electron contract defines invoke and renderer event channels.
+description: Complete matrix of all 301 HTTP API operations (authoritative count from openapi.yaml), health endpoints, and Electron IPC channels. The shared Electron contract defines invoke and renderer event channels.
 aliases:
   [api matrix, endpoint matrix, all endpoints, api overview, endpoint list]
 ---
@@ -80,11 +80,13 @@ aliases:
 # API Endpoint Matrix
 
 > [!abstract] Overview
-> **300 HTTP API operations** (the count and concrete method/path pairs in `openapi.yaml` are checked by `scripts/check-endpoint-matrix.ts` in CI), unversioned `/health` endpoints, and Electron invoke channels. `openapi.yaml` owns HTTP operations; `packaging/electron/electron-api.d.ts` owns Electron invoke and event channels.
+> **301 HTTP API operations** (the count and concrete method/path pairs in `openapi.yaml` are checked by `scripts/check-endpoint-matrix.ts` in CI), unversioned `/health` endpoints, and Electron invoke channels. `openapi.yaml` owns HTTP operations; `packaging/electron/electron-api.d.ts` owns Electron invoke and event channels.
 >
 > **Note:** As of Phase 2.4, `openapi.yaml` is the authoritative API specification. This matrix provides a quick lookup; see the OpenAPI spec for formal schemas and examples.
 >
 > **2026-10-09 — two status changes (operation count unchanged):** `GET /api/info/portfolio-performance` rejects a `period` outside `1m`, `3m`, `6m`, `1y`, `3y`, `all` with `400 VALIDATION_ERROR` (absent or empty still means `all`; an unknown value used to be served unfiltered). `POST /api/analysis/saved/:id/ai-proposal` answers `502 BAD_GATEWAY` instead of `400` when the local model fails, returns invalid JSON, or returns a proposal outside the edit contract. Breaking only for clients that sent an unknown period or branched on the old `400`.
+>
+> **2026-10-11 — Belgian tax partner attribution (ADR-201, non-breaking, count 300 → 301):** `GET /api/info/deduction-candidates` was served but missing from `openapi.yaml` and this matrix; it is now declared, and each `byDeductionType` group gains an additive `byOwner` (`me` / `partner` / `joint`) split of its total. `GET /api/aggregations/category-pivot` cells gain an optional `incomeByOwner` (`partner` / `joint`). `POST /api/reports/tax` accepts optional `household` (validated like the household setting) and `precomputedHousehold` and renders per-partner rows for two partners. No field is removed or renamed.
 >
 > **2026-10-11 — import rejection and Unicode payee search:** Bank CSV uploads reject malformed data before staging with `400 VALIDATION_ERROR` (or an SSE `error` event). Intentional non-settled exclusions remain supported. This breaks prior partial acceptance of malformed files but changes no paths or response schemas. Recipient `name` and `search` use Unicode case-insensitive matching on PostgreSQL 18 without a schema change. See [[docs/api/imports]] and [[docs/api/recipients]].
 
@@ -371,7 +373,7 @@ opening anchors without changing request fields, response shape or operation cou
 | GET    | `/api/recipients/clusters`                | Identify merge-candidate clusters                                                             | —          | [[docs/api/recipients\|Recipients]] |
 | GET    | `/api/recipients/:id/patterns`            | List matching patterns for recipient                                                          | —          | [[docs/api/recipients\|Recipients]] |
 | POST   | `/api/recipients/:id/patterns`            | Create matching pattern                                                                       | —          | [[docs/api/recipients\|Recipients]] |
-| POST   | `/api/recipients/:id/patterns/preview`    | Preview transactions matched by a pattern                                                     | —          | [[docs/api/recipients\|Recipients]] |
+| POST   | `/api/recipients/:id/patterns/preview`    | Preview payees matched by a pattern                                                           | —          | [[docs/api/recipients\|Recipients]] |
 | PATCH  | `/api/recipients/:id/patterns/:patternId` | Update pattern                                                                                | —          | [[docs/api/recipients\|Recipients]] |
 | DELETE | `/api/recipients/:id/patterns/:patternId` | Delete pattern                                                                                | —          | [[docs/api/recipients\|Recipients]] |
 
@@ -615,7 +617,7 @@ Server-side PDF generation via Puppeteer headless Chrome (Phase 3). Modular sect
 | ------ | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------ |
 | POST   | `/api/reports/financial` | Generate financial PDF (7 sections: executive summary, cashflow, categories, recipients, bank balances, rolling averages, planned outlook); supports `excludedCategoryIds` and `excludedRecipientIds` for filter impact comparison | —          | [[docs/features/pdf-report-export\|PDF Report Export]] |
 | POST   | `/api/reports/portfolio` | Generate portfolio PDF (6 sections: executive summary, allocation, top holdings, performance trend, asset class detail, dividend income); Phase 8 complete                                                                         | —          | [[docs/features/pdf-report-export\|PDF Report Export]] |
-| POST   | `/api/reports/tax`       | Generate tax PDF (7 sections: executive summary, type breakdown, by asset class, monthly trend, top investments, fee breakdown, Belgian rules); accepts optional `taxProfile` and `precomputedPIT`; Phase 8 complete               | —          | [[docs/features/pdf-report-export\|PDF Report Export]] |
+| POST   | `/api/reports/tax`       | Generate tax PDF (7 sections: executive summary, type breakdown, by asset class, monthly trend, top investments, fee breakdown, Belgian rules); accepts optional `taxProfile`, `precomputedPIT`, `household`, `precomputedHousehold` (ADR-201) | —          | [[docs/features/pdf-report-export\|PDF Report Export]] |
 
 ## Aggregations — Phase 2 / Phase 6 / Phase 7 / Phase 10 / Phase D / Phase E / Phase 9 / Phase C / Phase G
 
@@ -636,7 +638,7 @@ Server-computed aggregations with materialized-view/live/cache distinction. Prod
 | GET    | `/api/aggregations/cashflow-forecast-accuracy` | Persisted monthly backtest accuracy per method, with trend history (Phase D)                                                                                                                                                                                                                                                                                                                                                                                                                                                   | —          | [[docs/api/aggregations\|Aggregations]] |
 | GET    | `/api/aggregations/recipient-pivot`            | Per-recipient spending keyed by period (monthly/yearly), supports date-range filter; powers custom saved-chart recipient series                                                                                                                                                                                                                                                                                                                                                                                                | —          | [[docs/api/aggregations\|Aggregations]] |
 | GET    | `/api/aggregations/tag-pivot`                  | Per-tag spending keyed by period (monthly/yearly), requires explicit `tag_ids` or `all=true` (dynamic all-tags mode, 2026-06-26); supports date-range filter; powers custom saved-chart tag series (ADR-052, ADR-106)                                                                                                                                                                                                                                                                                                          | —          | [[docs/api/aggregations\|Aggregations]] |
-| GET    | `/api/aggregations/category-pivot`             | Spending by category with exclusion filter support                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | —          | [[docs/api/aggregations\|Aggregations]] |
+| GET    | `/api/aggregations/category-pivot`             | Spending by category with exclusion filter support; cells carry optional `incomeByOwner` (ADR-201)                                                                                                                                                                                                                                                                                                                                                                                                                             | —          | [[docs/api/aggregations\|Aggregations]] |
 | GET    | `/api/aggregations/recipient-by-year`          | Per-recipient spending broken out by calendar year with exclusion filter support                                                                                                                                                                                                                                                                                                                                                                                                                                               | —          | [[docs/api/aggregations\|Aggregations]] |
 
 ## Info/Statistics
@@ -652,6 +654,7 @@ Aggregation routes removed in Phase 9 as migration to `/api/aggregations/*` is c
 | GET    | `/api/info/recurring-patterns`              | Recurring detection                                                                                                                                                                                                                                                                                   | —          | [[docs/api/info\|Info]]                           |
 | GET    | `/api/info/insights-digest`                 | Deterministic Smart Insights digest; cash finding is zero-based month-end net cash flow, not an account balance                                                                                                                                                                                       | —          | [[docs/api/info\|Info]]                           |
 | GET    | `/api/info/insights-count`                  | Cheap versioned projection of the undismissed finding count; dirty or expired state returns pending without inline detection                                                                                                                                                                          | —          | [[docs/api/info\|Info]]                           |
+| GET    | `/api/info/deduction-candidates`            | Transaction-derived Belgian deduction candidates for one year; each type carries an additive `byOwner` split by account owner (ADR-201)                                                                                                                                                               | —          | [[docs/api/info\|Info]]|
 | PUT    | `/api/info/insight-dismissals`              | Strict idempotent server-side subscription or category-outlier dismissal; outlier deviation is derived by the server                                                                                                                                                                                  | —          | [[docs/api/info\|Info]]                           |
 | GET    | `/api/info/net-worth`                       | Net worth; excludes holdings-only wallet/exchange ledger cash (optional `limit`/`offset` paginate snapshots newest-first; omit both for full history)                                                                                                                                                 | 30 req/min | [[docs/api/info\|Info]]                           |
 | GET    | `/api/info/exchange-rates`                  | Exchange rates                                                                                                                                                                                                                                                                                        | 30 req/min | [[docs/api/info\|Info]]                           |

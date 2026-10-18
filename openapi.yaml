@@ -216,6 +216,239 @@ components:
         status:
           type: integer
 
+    # GET /api/info/exchange-rates (routes/info/rates.ts)
+    ExchangeRate:
+      type: object
+      required: [currency, rate_to_eur, rate_date, fetched_at]
+      properties:
+        currency: { type: string, description: ISO 4217 currency code }
+        rate_to_eur: { type: number, description: The value of one unit in EUR }
+        rate_date: { type: string, format: date }
+        fetched_at: { type: string, format: date-time }
+    ExchangeRates:
+      type: object
+      required:
+        [total_rates, rates, fallback_rates, source, is_stale, last_fetched_at]
+      properties:
+        total_rates: { type: integer, minimum: 0 }
+        rates:
+          type: array
+          items: { $ref: "#/components/schemas/ExchangeRate" }
+        fallback_rates:
+          type: object
+          description: Built-in rates to EUR by currency code, used when no stored rate exists
+          additionalProperties: { type: number }
+        source: { type: string, enum: [database, fallback] }
+        is_stale:
+          { type: boolean, description: The stored rate date is before today }
+        last_fetched_at: { type: string, format: date-time, nullable: true }
+    InfoMessage:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string }
+
+    # GET /api/admin/database/stats (routes/admin.ts, DbStatsSchema)
+    DbTableStat:
+      type: object
+      required:
+        [
+          schemaname,
+          table_name,
+          live_rows,
+          dead_rows,
+          last_autovacuum,
+          last_autoanalyze,
+          size,
+          size_bytes,
+        ]
+      properties:
+        schemaname: { type: string }
+        table_name: { type: string }
+        live_rows:
+          { type: string, description: "BIGINT estimate from pg_stat_user_tables, as decimal text" }
+        dead_rows:
+          { type: string, description: "BIGINT estimate from pg_stat_user_tables, as decimal text" }
+        last_autovacuum: { type: string, nullable: true }
+        last_autoanalyze: { type: string, nullable: true }
+        size: { type: string, description: pg_size_pretty of the total relation size }
+        size_bytes: { type: string, description: "BIGINT byte count, as decimal text" }
+    DbStats:
+      type: object
+      required: [tables, db_size]
+      properties:
+        tables:
+          type: array
+          items: { $ref: "#/components/schemas/DbTableStat" }
+        db_size:
+          { type: string, nullable: true, description: pg_size_pretty of the database size }
+    # POST /api/admin/database/vacuum (routes/admin.ts)
+    DbVacuumResult:
+      type: object
+      required: [vacuumed]
+      properties:
+        vacuumed: { type: string, description: "The vacuumed table, or `all` for every table" }
+    # /api/admin/database/tables/* (services/dbEditor.ts, packages/types/src/contracts/admin.ts, ADR-101)
+    DbEditorColumn:
+      type: object
+      required: [name, dataType, udtName, nullable, hasDefault, generated, writable]
+      properties:
+        name: { type: string }
+        dataType: { type: string, description: information_schema data_type }
+        udtName: { type: string, description: information_schema udt_name }
+        nullable: { type: boolean }
+        hasDefault: { type: boolean }
+        generated: { type: boolean }
+        writable:
+          { type: boolean, description: "False for generated and identity-always columns" }
+    DbEditorTableSchema:
+      type: object
+      required: [table, columns, primaryKey]
+      properties:
+        table: { type: string }
+        columns:
+          type: array
+          items: { $ref: "#/components/schemas/DbEditorColumn" }
+        primaryKey:
+          type: array
+          items: { type: string }
+    DbEditorRows:
+      allOf:
+        - $ref: "#/components/schemas/DbEditorTableSchema"
+        - type: object
+          required: [rows, limit, hasMore, nextCursor]
+          properties:
+            rows:
+              type: array
+              description: The page's rows by column name; each row also carries its `__xmin` row version as text.
+              items: { type: object, additionalProperties: {} }
+            total:
+              type: integer
+              description: Exact total only when the first page is shorter than the requested limit.
+            limit: { type: integer }
+            hasMore: { type: boolean }
+            nextCursor:
+              { type: string, nullable: true, description: "Opaque cursor of the next page, null on the last page" }
+    DbEditorStatement:
+      type: object
+      required: [op, preview]
+      properties:
+        op: { type: string }
+        preview: { type: string, description: The SQL statement with its parameters rendered as literals }
+    DbEditorMutationResult:
+      type: object
+      description: "A dry run returns `count` and `statements`; a commit returns `applied`, `results` and `refreshScheduled`."
+      required: [dryRun]
+      properties:
+        dryRun: { type: boolean }
+        count: { type: integer, description: Dry run only }
+        statements:
+          type: array
+          description: Dry run only
+          items: { $ref: "#/components/schemas/DbEditorStatement" }
+        applied: { type: integer, description: Commit only }
+        results:
+          type: array
+          description: Commit only
+          items:
+            type: object
+            required: [op]
+            properties:
+              op: { type: string }
+              after:
+                type: object
+                additionalProperties: {}
+                description: The written row; absent for a delete
+        refreshScheduled:
+          { type: boolean, description: "Commit only; true when the dashboard materialized views refresh" }
+    # /api/admin/providers/* (services/providerHealthService.ts, ProviderHealthSchema)
+    ProviderHealth:
+      type: object
+      required:
+        [
+          provider,
+          kind,
+          label,
+          last_success_at,
+          last_error_at,
+          last_error,
+          consecutive_failures,
+          updated_at,
+        ]
+      properties:
+        provider: { type: string }
+        kind:
+          { type: string, description: "The provider kind: price, fx, inflation or research" }
+        label: { type: string }
+        last_success_at: { type: string, format: date-time, nullable: true }
+        last_error_at: { type: string, format: date-time, nullable: true }
+        last_error: { type: string, nullable: true }
+        consecutive_failures: { type: integer, minimum: 0 }
+        updated_at: { type: string, format: date-time, nullable: true }
+    ProviderHealthList:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ProviderHealth" }
+        total: { type: integer, minimum: 0 }
+    ProbeResult:
+      type: object
+      required: [ok, provider]
+      properties:
+        ok: { type: boolean }
+        provider: { $ref: "#/components/schemas/ProviderHealth" }
+        error: { type: string, description: "The probe error, only when ok is false" }
+    # GET /api/admin/metrics/requests (middleware/requestMetrics.ts, RouteMetricSchema)
+    RouteMetric:
+      type: object
+      required:
+        [
+          route,
+          method,
+          path,
+          count,
+          errors,
+          error_rate,
+          p50_ms,
+          p95_ms,
+          window_minutes,
+        ]
+      properties:
+        route: { type: string, description: "METHOD:path" }
+        method: { type: string }
+        path: { type: string }
+        count: { type: integer, minimum: 0 }
+        errors: { type: integer, minimum: 0 }
+        error_rate: { type: number, description: "errors / count, from 0 to 1" }
+        p50_ms: { type: number, nullable: true }
+        p95_ms: { type: number, nullable: true }
+        window_minutes: { type: number }
+    RouteMetricList:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/RouteMetric" }
+        total: { type: integer, minimum: 0 }
+    # GET /api/admin/endpoints (getRouteManifest)
+    EndpointEntry:
+      type: object
+      required: [method, path]
+      properties:
+        method: { type: string }
+        path: { type: string }
+    EndpointList:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/EndpointEntry" }
+        total: { type: integer, minimum: 0 }
+
     ResearchDossierSource:
       type: object
       additionalProperties: false
@@ -1915,6 +2148,21 @@ components:
           type: string
           format: date-time
 
+    TransactionTagRef:
+      type: object
+      description: A tag as transaction and planned-transaction reads embed it (no timestamps).
+      required: [id, slug, color, is_active]
+      properties:
+        id:
+          type: integer
+        slug:
+          type: string
+        color:
+          type: string
+          nullable: true
+        is_active:
+          type: boolean
+
     TagList:
       allOf:
         - $ref: "#/components/schemas/OptionalPaginationFields"
@@ -2319,6 +2567,13 @@ components:
           description: Must be an array of integers, not a comma string.
           items:
             type: integer
+        uncategorised:
+          type: boolean
+          description: >-
+            Defaults to false. When true, selects the uncategorised queue the
+            list endpoint's `uncategorised=true` returns: active rows whose
+            effective category is empty. `active`, `category_id` and
+            `category_ids` are then ignored.
         recipient_id:
           type: integer
         recipient_group_id:
@@ -2351,6 +2606,37 @@ components:
                 type: string
             - type: string
 
+    # The transaction parser setup a saved custom parser stores (`parserConfigSchema`
+    # in lib/parserConfigSchema.ts, camelCase keys plus `number_format`). The server
+    # fills absent keys with their defaults on save; older rows may lack some.
+    TransactionParserConfig:
+      type: object
+      additionalProperties: true
+      properties:
+        dateColumn:
+          type: string
+        recipientColumn:
+          type: string
+        amountColumn:
+          type: string
+        memoColumn:
+          type: string
+        dateFormat:
+          type: string
+          description: strptime-style date format, default `%Y-%m-%d`.
+        separator:
+          type: string
+          description: CSV delimiter, default ','
+        encoding:
+          type: string
+          description: UTF-8, Latin-1 (latin1, latin-1, iso-8859-1), or windows-1252.
+        skipRows:
+          type: integer
+          minimum: 0
+          description: Physical leading lines before the CSV header.
+        number_format:
+          $ref: "#/components/schemas/CsvNumberFormat"
+
     CustomParserConfig:
       type: object
       required: [id, name, config]
@@ -2360,11 +2646,7 @@ components:
         name:
           type: string
         config:
-          type: object
-          additionalProperties: true
-          properties:
-            number_format:
-              $ref: "#/components/schemas/CsvNumberFormat"
+          $ref: "#/components/schemas/TransactionParserConfig"
         created_at:
           type: string
           format: date-time
@@ -2425,7 +2707,8 @@ components:
           description: Origin of transfer classification, including automatic, manual, system or brokerage.
         bank_account:
           type: string
-          description: Canonical display name projected from the linked account; use account_id as the stable identity
+          nullable: true
+          description: Canonical display name projected from the linked account (null when account_id is); use account_id as the stable identity
         recipient_id:
           type: integer
         recipient_name:
@@ -2454,14 +2737,18 @@ components:
           description: "Format: GENERAL:DETAIL"
         comment:
           type: string
+        is_active:
+          type: boolean
+          description: False when the transaction is excluded from totals and statistics.
         tags:
           type: array
           items:
-            $ref: "#/components/schemas/Tag"
+            $ref: "#/components/schemas/TransactionTagRef"
           description: Tags attached to this transaction
         created_at:
           type: string
           format: date-time
+          nullable: true
         updated_at:
           type: string
           format: date-time
@@ -2608,7 +2895,7 @@ components:
 
     PlannedTransactionExecution:
       type: object
-      required: [id, executed_transaction_id, execution_date, created_at]
+      required: [id, executed_transaction_id, execution_date]
       properties:
         id:
           type: integer
@@ -2620,6 +2907,7 @@ components:
         created_at:
           type: string
           format: date-time
+          nullable: true
 
     PlannedTransaction:
       type: object
@@ -2627,13 +2915,11 @@ components:
         [
           id,
           planned_date,
-          bank_account,
           amount,
           is_recurring,
           is_executed,
           execution_count,
           is_active,
-          created_at,
           links,
         ]
       properties:
@@ -2644,6 +2930,8 @@ components:
           format: date
         bank_account:
           type: string
+          nullable: true
+          description: Display name of the linked account; null or absent when account_id is null
         account_id:
           type: integer
           nullable: true
@@ -2727,16 +3015,18 @@ components:
         tags:
           type: array
           items:
-            $ref: "#/components/schemas/Tag"
+            $ref: "#/components/schemas/TransactionTagRef"
           description: Tags attached to this planned transaction
         is_active:
           type: boolean
         created_at:
           type: string
           format: date-time
+          nullable: true
         updated_at:
           type: string
           format: date-time
+          nullable: true
         links:
           type: array
           items:
@@ -2744,7 +3034,7 @@ components:
 
     PlannedTransactionCreate:
       type: object
-      required: [planned_date, account_id, recipient_id, amount]
+      required: [planned_date, account_id, amount]
       properties:
         planned_date:
           type: string
@@ -3479,6 +3769,15 @@ components:
                 income: { type: number }
                 expense: { type: number }
                 transactionCount: { type: integer }
+                incomeByOwner:
+                  type: object
+                  description: >-
+                    Additive (ADR-201). Part of `income` booked on accounts whose owner is
+                    `partner` or `joint`; present only when one of them is non-zero. The rest of
+                    `income` is on `me` accounts or on transactions without an account.
+                  properties:
+                    partner: { type: number }
+                    joint: { type: number }
 
     # ─── Net Worth ───────────────────────────────────────────────────────────
     NetWorthSnapshot:
@@ -3826,7 +4125,9 @@ components:
         ]
       properties:
         id:
-          type: integer
+          type: string
+          pattern: "^\\d+$"
+          description: BIGSERIAL identity, serialized as a decimal string.
         transaction_id:
           type: integer
         filename:
@@ -4646,15 +4947,43 @@ components:
     # ─── Recipient sub-resources ──────────────────────────────────────────────
     RecipientPattern:
       type: object
-      required: [id, pattern, created_at]
+      description: A `recipient_match_patterns` row as `listPatternsForRecipient` selects it.
+      required:
+        [
+          id,
+          pattern,
+          pattern_kind,
+          case_sensitive,
+          priority,
+          is_active,
+          source,
+          created_at,
+        ]
       properties:
         id:
           type: integer
         pattern:
           type: string
-        is_regex:
+        pattern_kind:
+          type: string
+          enum: [literal_prefix, glob, regex]
+        case_sensitive:
           type: boolean
+        priority:
+          type: integer
+          format: int32
+        is_active:
+          type: boolean
+        source:
+          type: string
+          enum: [user, suggested, system]
+        notes:
+          type: string
+          nullable: true
         created_at:
+          type: string
+          format: date-time
+        updated_at:
           type: string
           format: date-time
 
@@ -8122,6 +8451,21 @@ paths:
           schema:
             type: string
         - in: query
+          name: bank_accounts
+          description: >-
+            Comma-separated account labels (legacy escape hatch next to account_ids); blank
+            entries are dropped and the list is capped at 50 entries.
+          schema:
+            type: string
+        - in: query
+          name: category_ids
+          description: >-
+            Comma-separated category ids. Every element must be a plain base-10 integer in
+            1..2147483647; a malformed element returns 400 VALIDATION_ERROR.
+          schema:
+            type: string
+            pattern: "^([0-9]+(,[0-9]+)*)?$"
+        - in: query
           name: include_balance
           schema:
             type: boolean
@@ -8130,6 +8474,48 @@ paths:
           schema:
             type: string
           description: Comma-separated tag slugs — OR filter
+        - in: query
+          name: transaction_id
+          description: Restrict the export to one transaction id (the list filter of the same name).
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+        - in: query
+          name: recipient_id
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+        - in: query
+          name: category_id
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+        - in: query
+          name: search
+          description: Free-text search, as on the list endpoint (truncated to 200 characters).
+          schema:
+            type: string
+        - in: query
+          name: transaction_type
+          description: income or expense; any other value is ignored.
+          schema:
+            type: string
+        - in: query
+          name: amount_min
+          schema:
+            type: number
+        - in: query
+          name: amount_max
+          schema:
+            type: number
+        - in: query
+          name: amount_signed
+          description: Compare amount_min/amount_max against the signed amount instead of its absolute value.
+          schema:
+            type: boolean
       responses:
         "200":
           description: CSV stream
@@ -8176,10 +8562,67 @@ paths:
           schema:
             type: string
         - in: query
+          name: bank_accounts
+          description: >-
+            Comma-separated account labels (legacy escape hatch next to account_ids); blank
+            entries are dropped and the list is capped at 50 entries.
+          schema:
+            type: string
+        - in: query
+          name: category_ids
+          description: >-
+            Comma-separated category ids. Every element must be a plain base-10 integer in
+            1..2147483647; a malformed element returns 400 VALIDATION_ERROR.
+          schema:
+            type: string
+            pattern: "^([0-9]+(,[0-9]+)*)?$"
+        - in: query
           name: tags
           schema:
             type: string
           description: Comma-separated tag slugs — OR filter
+        - in: query
+          name: transaction_id
+          description: Restrict the export to one transaction id (the list filter of the same name).
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+        - in: query
+          name: recipient_id
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+        - in: query
+          name: category_id
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+        - in: query
+          name: search
+          description: Free-text search, as on the list endpoint (truncated to 200 characters).
+          schema:
+            type: string
+        - in: query
+          name: transaction_type
+          description: income or expense; any other value is ignored.
+          schema:
+            type: string
+        - in: query
+          name: amount_min
+          schema:
+            type: number
+        - in: query
+          name: amount_max
+          schema:
+            type: number
+        - in: query
+          name: amount_signed
+          description: Compare amount_min/amount_max against the signed amount instead of its absolute value.
+          schema:
+            type: boolean
       responses:
         "200":
           description: Newline-delimited JSON stream
@@ -8371,9 +8814,15 @@ paths:
                   - type: object
                     properties:
                       data:
-                        type: array
-                        items:
-                          $ref: "#/components/schemas/RecipientPattern"
+                        type: object
+                        required: [items, total]
+                        properties:
+                          items:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/RecipientPattern"
+                          total:
+                            type: integer
     post:
       summary: Create auto-assign pattern
       operationId: createRecipientPattern
@@ -8408,7 +8857,7 @@ paths:
         "400":
           description: "VALIDATION_ERROR: missing pattern, or a field of the wrong type"
         "201":
-          description: Created pattern
+          description: Created pattern (its id)
           content:
             application/json:
               schema:
@@ -8417,7 +8866,11 @@ paths:
                   - type: object
                     properties:
                       data:
-                        $ref: "#/components/schemas/RecipientPattern"
+                        type: object
+                        required: [id]
+                        properties:
+                          id:
+                            type: integer
 
   /api/recipients/{id}/patterns/preview:
     parameters:
@@ -8459,7 +8912,23 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [matchCount, recipientIds]
+                        properties:
+                          matchCount:
+                            type: integer
+                          recipientIds:
+                            type: array
+                            items:
+                              type: integer
+                          truncated:
+                            type: boolean
+                            description: Only on a `regex` preview.
 
   /api/recipients/{id}/patterns/{patternId}:
     parameters:
@@ -8734,6 +9203,12 @@ paths:
           name: is_executed
           schema:
             type: boolean
+        - in: query
+          name: active
+          description: "true (the default) lists active payments only; false includes paused ones."
+          schema:
+            type: boolean
+            default: true
       responses:
         "200":
           description: Planned transaction list
@@ -8893,8 +9368,11 @@ paths:
                 planned_date:
                   type: string
                   format: date
-                bank_account:
-                  type: string
+                account_id:
+                  type: integer
+                  minimum: 1
+                  nullable: true
+                  description: Canonical account identity (the retired bank_account string is rejected)
                 recipient_id:
                   type: integer
                 memo:
@@ -8922,6 +9400,26 @@ paths:
                   nullable: true
                 is_active:
                   type: boolean
+                is_loan:
+                  type: boolean
+                loan_type:
+                  $ref: "#/components/schemas/PlannedLoanType"
+                loan_principal:
+                  type: number
+                loan_annual_interest_rate:
+                  type: number
+                loan_term_months:
+                  type: integer
+                loan_start_date:
+                  type: string
+                  format: date
+                loan_payment_day:
+                  type: integer
+                tags:
+                  type: array
+                  items:
+                    type: string
+                  description: Tag slugs; replaces the attached set
       responses:
         "200":
           description: Updated
@@ -9122,6 +9620,75 @@ paths:
               schema:
                 $ref: "#/components/schemas/InsightsDigestEnvelope"
 
+  /api/info/deduction-candidates:
+    get:
+      summary: Transaction-derived Belgian deduction candidates for one year
+      operationId: getDeductionCandidates
+      tags: [Info]
+      parameters:
+        - in: query
+          name: year
+          required: false
+          description: Calendar year (1970-3000); defaults to the current year.
+          schema:
+            type: integer
+            minimum: 1970
+            maximum: 3000
+      responses:
+        "200":
+          description: >-
+            Outflows of the year classified per Belgian deduction type, with the contributing
+            categories and, per type, the total split by account owner (`byOwner`, additive,
+            ADR-201; a transaction without an account counts as `me`). An internal failure
+            answers an empty `byDeductionType` instead of a 500.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [year, from, to, currency, byDeductionType]
+                        properties:
+                          year: { type: integer }
+                          from: { type: string, format: date }
+                          to: { type: string, format: date }
+                          currency: { type: string }
+                          byDeductionType:
+                            type: array
+                            items:
+                              type: object
+                              required: [deductionType, total, categoryCount, categories]
+                              properties:
+                                deductionType: { type: string }
+                                total: { type: number }
+                                byOwner:
+                                  type: object
+                                  required: [me, partner, joint]
+                                  description: The total split by account owner; the three values add up to `total`.
+                                  properties:
+                                    me: { type: number }
+                                    partner: { type: number }
+                                    joint: { type: number }
+                                categoryCount: { type: integer }
+                                categories:
+                                  type: array
+                                  items:
+                                    type: object
+                                    required: [category, total, count]
+                                    properties:
+                                      category: { type: string }
+                                      total: { type: number }
+                                      count: { type: integer }
+        "400":
+          description: Malformed `year`
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
   /api/info/insights-count:
     get:
       summary: Read the persisted undismissed insight count
@@ -9173,21 +9740,25 @@ paths:
       tags: [Info]
       parameters:
         - in: query
-          name: base
+          name: db_only
+          description: >-
+            Serve the stored rates without starting a background refresh when they are stale
+            (default false). Accepts true/false/1/0.
           schema:
-            type: string
-        - in: query
-          name: month
-          schema:
-            type: string
-            description: "YYYY-MM"
+            type: boolean
+            default: false
       responses:
         "200":
-          description: Exchange rate map
+          description: The latest stored rate per currency and the built-in fallback rates
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/ExchangeRates"
 
   /api/info/exchange-rates/refresh:
     post:
@@ -9200,7 +9771,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/InfoMessage"
 
   /api/info/inflation-rates:
     get:
@@ -11249,6 +11825,66 @@ paths:
                   type: integer
                 currency:
                   type: string
+                taxProfile:
+                  type: object
+                  description: Belgian filing context echoed into the Belgian rules section.
+                  properties:
+                    filingStatus: { type: string }
+                    region: { type: string }
+                    taxYear: { type: integer }
+                precomputedPIT:
+                  type: object
+                  description: PIT figures from the frontend engine; bracket `rate` is in percent units.
+                  properties:
+                    taxableIncome: { type: number }
+                    totalTax: { type: number }
+                    brackets:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          label: { type: string }
+                          rate: { type: number }
+                          taxableIncome: { type: number }
+                          taxAmount: { type: number }
+                household:
+                  type: object
+                  additionalProperties: true
+                  description: >-
+                    Additive (ADR-201). The year's Belgian tax household, validated like the
+                    `belgian_tax_household_v2` setting; only partner display names are rendered.
+                precomputedHousehold:
+                  type: object
+                  description: >-
+                    Additive (ADR-201). Per-partner result from the frontend household engine.
+                    With two partners the Belgian rules section adds a row per partner, the
+                    household total, the assessment mode and the marital quotient.
+                  required: [assessmentMode, partners]
+                  properties:
+                    assessmentMode: { type: string, enum: [single, separate, joint] }
+                    legalBasis: { type: string, maxLength: 200 }
+                    quotient:
+                      type: object
+                      required: [applied, transfer, benefit]
+                      properties:
+                        applied: { type: boolean }
+                        transfer: { type: number }
+                        fromPartnerId: { type: string, enum: [A, B] }
+                        toPartnerId: { type: string, enum: [A, B] }
+                        benefit: { type: number }
+                    partners:
+                      type: array
+                      description: One entry per partner; partner ids must be unique.
+                      minItems: 1
+                      maxItems: 2
+                      items:
+                        type: object
+                        required: [partnerId, grossIncome, taxableIncome, totalPIT]
+                        properties:
+                          partnerId: { type: string, enum: [A, B] }
+                          grossIncome: { type: number }
+                          taxableIncome: { type: number }
+                          totalPIT: { type: number }
                 excludedCategoryIds:
                   type: array
                   items:
@@ -11851,11 +12487,7 @@ paths:
                 name:
                   type: string
                 config:
-                  type: object
-                  additionalProperties: true
-                  properties:
-                    number_format:
-                      $ref: "#/components/schemas/CsvNumberFormat"
+                  $ref: "#/components/schemas/TransactionParserConfig"
       responses:
         "201":
           description: Created parser config
@@ -11894,11 +12526,7 @@ paths:
                 name:
                   type: string
                 config:
-                  type: object
-                  additionalProperties: true
-                  properties:
-                    number_format:
-                      $ref: "#/components/schemas/CsvNumberFormat"
+                  $ref: "#/components/schemas/TransactionParserConfig"
       responses:
         "200":
           description: Updated parser config
@@ -11997,7 +12625,20 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [deleted, recipientsRemoved]
+                        properties:
+                          deleted:
+                            type: integer
+                            description: Committed transactions removed.
+                          recipientsRemoved:
+                            type: integer
+                            description: Payees the batch created that no longer have transactions.
         "400":
           description: Reopen closed accounts before rolling back their ledger rows
         "409":
@@ -13411,11 +14052,16 @@ paths:
       tags: [Admin]
       responses:
         "200":
-          description: DB stats
+          description: Table statistics and the database size
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/DbStats"
 
   /api/admin/database/vacuum:
     post:
@@ -13440,7 +14086,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/DbVacuumResult"
         "400":
           description: VALIDATION_ERROR — `table` is not a non-empty string, or names an unknown table
         "403":
@@ -13470,26 +14121,7 @@ paths:
                   - type: object
                     properties:
                       data:
-                        type: object
-                        properties:
-                          table:
-                            type: string
-                          primaryKey:
-                            type: array
-                            items:
-                              type: string
-                          columns:
-                            type: array
-                            items:
-                              type: object
-                              properties:
-                                name: { type: string }
-                                dataType: { type: string }
-                                udtName: { type: string }
-                                nullable: { type: boolean }
-                                hasDefault: { type: boolean }
-                                generated: { type: boolean }
-                                writable: { type: boolean }
+                        $ref: "#/components/schemas/DbEditorTableSchema"
         "403":
           description: Protected audit table cannot be opened in the generic data editor
         "404":
@@ -13538,19 +14170,7 @@ paths:
                   - type: object
                     properties:
                       data:
-                        type: object
-                        properties:
-                          table: { type: string }
-                          columns: { type: array, items: { type: object } }
-                          primaryKey: { type: array, items: { type: string } }
-                          rows: { type: array, items: { type: object } }
-                          total:
-                            type: integer
-                            description: Exact total only when the first page is shorter than the requested limit.
-                          limit: { type: integer }
-                          hasMore: { type: boolean }
-                          nextCursor:
-                            type: [string, "null"]
+                        $ref: "#/components/schemas/DbEditorRows"
         "400":
           description: Invalid filters or query parameter
         "403":
@@ -13610,7 +14230,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/DbEditorMutationResult"
         "400":
           description: Malformed change set or non-boolean dryRun
         "403":
@@ -13679,7 +14304,7 @@ paths:
       tags: [Admin]
       responses:
         "200":
-          description: Provider health rows
+          description: Provider health rows (canonical `{items, total}` body)
           content:
             application/json:
               schema:
@@ -13688,15 +14313,7 @@ paths:
                   - type: object
                     properties:
                       data:
-                        type: object
-                        required: [items, total]
-                        properties:
-                          items:
-                            type: array
-                            items:
-                              type: object
-                          total:
-                            type: integer
+                        $ref: "#/components/schemas/ProviderHealthList"
 
   /api/admin/providers/{provider}/probe:
     parameters:
@@ -13711,11 +14328,16 @@ paths:
       tags: [Admin]
       responses:
         "200":
-          description: Probe result
+          description: Probe result; a failed probe is `ok false` with `error`, not an HTTP error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Envelope"
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/ProbeResult"
 
   /api/admin/metrics/requests:
     get:
@@ -13733,15 +14355,7 @@ paths:
                   - type: object
                     properties:
                       data:
-                        type: object
-                        required: [items, total]
-                        properties:
-                          items:
-                            type: array
-                            items:
-                              type: object
-                          total:
-                            type: integer
+                        $ref: "#/components/schemas/RouteMetricList"
 
   /api/admin/endpoints:
     get:
@@ -13750,7 +14364,7 @@ paths:
       tags: [Admin]
       responses:
         "200":
-          description: Endpoint list
+          description: Endpoint list (canonical `{items, total}` body)
           content:
             application/json:
               schema:
@@ -13759,18 +14373,7 @@ paths:
                   - type: object
                     properties:
                       data:
-                        type: object
-                        required: [items, total]
-                        properties:
-                          items:
-                            type: array
-                            items:
-                              type: object
-                              properties:
-                                method: { type: string }
-                                path: { type: string }
-                          total:
-                            type: integer
+                        $ref: "#/components/schemas/EndpointList"
 
   /api/admin/endpoint-liveness:
     get:

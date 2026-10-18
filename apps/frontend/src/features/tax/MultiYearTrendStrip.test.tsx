@@ -37,8 +37,9 @@ const testState = vi.hoisted(() => ({
 }));
 const spies = vi.hoisted(() => ({ compute: vi.fn() }));
 
-vi.mock("@/lib/belgianTax", async (importOriginal) => {
-    const actual = await importOriginal<typeof import("@/lib/belgianTax")>();
+// Before hydration (no household in the state) the strip falls back to the v1 engine.
+vi.mock("@/lib/belgianTax/pit", async (importOriginal) => {
+    const actual = await importOriginal<typeof import("@/lib/belgianTax/pit")>();
     return {
         ...actual,
         computeBelgianPIT: (profile: BelgianTaxProfile) => {

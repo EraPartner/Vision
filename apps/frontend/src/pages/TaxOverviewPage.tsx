@@ -4,6 +4,8 @@ import { PAGE_ICONS } from "@/lib/pageIcons";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useTaxOverviewData } from "@/hooks/useTaxOverviewData";
 import { useTaxYearParam } from "@/hooks/useTaxYearParam";
+import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
+import type { HouseholdTaxIssue } from "@/lib/belgianTax";
 import { TaxFilingMasthead } from "@/features/tax/TaxFilingMasthead";
 import { MultiYearTrendStrip } from "@/features/tax/MultiYearTrendStrip";
 import { YearComparisonCard } from "@/features/tax/YearComparisonCard";
@@ -22,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { TaxProfileDialog } from "@/features/tax/TaxProfileDialog";
+import { HouseholdBreakdownCard } from "@/features/tax/HouseholdBreakdownCard";
 import SuggestedDeductionsCard from "@/features/tax/SuggestedDeductionsCard";
 import DeductionCandidatesCard from "@/features/tax/DeductionCandidatesCard";
 import { WidgetVisibilityDialog } from "@/components/shared/WidgetVisibilityDialog";
@@ -63,6 +66,11 @@ function getBudgetTaxWidgets(t: (key: string) => string): WidgetDefinition[] {
             defaultVisible: true,
         },
         {
+            id: "householdBreakdown",
+            label: t("tax.widget.householdBreakdown"),
+            defaultVisible: true,
+        },
+        {
             id: "taxRules",
             label: t("tax.widget.belgianRulesTitle"),
             defaultVisible: true,
@@ -74,6 +82,8 @@ function getBudgetTaxWidgets(t: (key: string) => string): WidgetDefinition[] {
         },
     ];
 }
+
+const NO_HOUSEHOLD_ISSUES: readonly HouseholdTaxIssue[] = [];
 
 export default function TaxOverviewPage() {
     const { t } = useLanguage();
@@ -93,9 +103,36 @@ export default function TaxOverviewPage() {
         totalTaxIncludingPropertyEstimate,
         yearlyIncome,
         monthlyIncomeTax,
+        recordedIncomeByPartner,
         hasProfile,
         isEmpty,
     } = useTaxOverviewData();
+    // Household engine notes for the live year (ADR-200); one line per issue code.
+    const householdIssues = useBelgianTaxProfile((state) =>
+        state.isViewingHistorical
+            ? NO_HOUSEHOLD_ISSUES
+            : (state.householdResult?.issues ?? NO_HOUSEHOLD_ISSUES),
+    );
+    const storedHouseholdUnreadable = useBelgianTaxProfile(
+        (state) => state.storedHouseholdUnreadable,
+    );
+    const householdLoadFailed = useBelgianTaxProfile(
+        (state) => state.householdLoadFailed,
+    );
+    // An unreadable stored household is shown first: the next edit overwrites it.
+    const householdNotes = [
+        ...(storedHouseholdUnreadable
+            ? [t("tax.household.storedUnreadable")]
+            : []),
+        ...[
+            ...new Map(
+                householdIssues.map((issue) => [issue.code, issue]),
+            ).values(),
+        ].map(
+            (issue) =>
+                `${t(`tax.household.issue.severity.${issue.severity}`)}: ${t(`tax.household.issue.${issue.code}`)}`,
+        ),
+    ];
     const WIDGETS = getBudgetTaxWidgets(t);
     const {
         isVisible,
@@ -207,9 +244,12 @@ export default function TaxOverviewPage() {
                 <TaxDisclaimerBanner
                     title={t("tax.belgianRulesDesc")}
                     description={`${t("tax.disclaimerTitle")}: ${t("tax.disclaimerText")}`}
+                    notes={householdNotes}
                 />
 
-                {isProfileLoading ? (
+                {householdLoadFailed ? (
+                    <PageError message={t("tax.household.loadFailed")} />
+                ) : isProfileLoading ? (
                     <SectionLoader />
                 ) : isEmpty ? (
                     <TaxNoProfileCard />
@@ -248,6 +288,13 @@ export default function TaxOverviewPage() {
 
                             {isVisible("taxRules") && <TaxRulesCard />}
                         </div>
+
+                        {isVisible("householdBreakdown") && (
+                            <HouseholdBreakdownCard
+                                viewedYear={viewedYear}
+                                recordedIncome={recordedIncomeByPartner}
+                            />
+                        )}
 
                         <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
                             {isVisible("incomeBreakdown") && (

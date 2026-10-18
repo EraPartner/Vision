@@ -97,6 +97,9 @@ export const categoryPivotRowSchema = z
     /** SUM ... FILTER: NULL when the group has no row of that sign. */
     income: pgNumeric.nullable(),
     expense: pgNumeric.nullable(),
+    /** Income from `partner` / `joint` accounts (ADR-201); NULL when there is none. */
+    income_partner: pgNumeric.nullable().optional(),
+    income_joint: pgNumeric.nullable().optional(),
     cnt: pgBigint,
   })
   .describe("category pivot row");

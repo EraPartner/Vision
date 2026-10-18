@@ -869,6 +869,33 @@ describe("Planned Transaction Routes", () => {
       expect(bodyAt(res, "data", "id")).toBe(1);
     });
 
+    it("returns account_id so an edit form can prefill the bank account", async () => {
+      plannedTransactionRepository.getById.mockResolvedValue(
+        loose({
+          id: 1,
+          planned_date: "2026-03-15",
+          amount: "50.00",
+          account_id: 7,
+          bank_account: "Checking",
+        }),
+      );
+
+      const res = await api.get(`${BASE}/1`).expect(200);
+
+      expect(bodyAt(res, "data", "account_id")).toBe(7);
+      expect(bodyAt(res, "data", "bank_account")).toBe("Checking");
+    });
+
+    it("returns account_id null when the row has no account", async () => {
+      plannedTransactionRepository.getById.mockResolvedValue(
+        loose({ id: 2, planned_date: "2026-03-15", amount: "50.00" }),
+      );
+
+      const res = await api.get(`${BASE}/2`).expect(200);
+
+      expect(bodyAt(res, "data", "account_id")).toBeNull();
+    });
+
     it("should return a 404 envelope for non-existent", async () => {
       plannedTransactionRepository.getById.mockResolvedValue(null);
 

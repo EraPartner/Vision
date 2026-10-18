@@ -288,7 +288,7 @@ describe("renderBelgianRulesSummary", () => {
     for (const p of pctCells) expect(Math.abs(p)).toBeLessThanOrEqual(100);
 
     // Surrounding currency figures still render, so the section isn't an empty state.
-    expect(html).toContain(eur("859.00")); // 2025 dividend exemption
+    expect(html).toContain(eur("833.00")); // 2025 dividend exemption (frozen)
     expect(html).toContain(eur("1,600.00")); // shares & other TOB cap
     expect(html).toContain(eur("12,345.67")); // estimated total PIT
   });
@@ -323,6 +323,72 @@ describe("renderBelgianRulesSummary", () => {
 
     expect(html).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
     expect(html).not.toContain("<script>alert(1)</script>");
+  });
+
+  const twoPartners = {
+    assessmentMode: "joint" as const,
+    legalBasis: "WIB 92 art. 126 §1",
+    quotient: {
+      applied: true,
+      transfer: 4_500,
+      fromPartnerId: "A" as const,
+      toPartnerId: "B" as const,
+      benefit: 980.4,
+    },
+    partners: [
+      { partnerId: "A" as const, grossIncome: 60_000, taxableIncome: 38_000, totalPIT: 10_000 },
+      { partnerId: "B" as const, grossIncome: 10_000, taxableIncome: 11_500, totalPIT: 2_345.67 },
+    ],
+  };
+
+  it("renders a row per partner, the household total, the assessment and the quotient", () => {
+    const html = renderBelgianRulesSummary(
+      {
+        ...rulesData,
+        household: { partners: [{ id: "A" }, { id: "B", displayName: "<b>Sam</b>" }] },
+        precomputedHousehold: twoPartners,
+      },
+      ctx,
+    );
+    expect(html).toContain("Per Partner");
+    expect(html).toContain("<td>You</td>");
+    expect(html).toContain("<td>Partner (&lt;b&gt;Sam&lt;/b&gt;)</td>");
+    expect(html).toContain(eur("70,000.00")); // household gross
+    expect(html).toContain(eur("49,500.00")); // household taxable
+    expect(html).toContain(eur("12,345.67")); // household tax
+    expect(html).toContain("Assessment: Joint (WIB 92 art. 126 §1)");
+    expect(html).toContain(
+      `Marital quotient: ${eur("4,500.00")} from You to Partner (&lt;b&gt;Sam&lt;/b&gt;) · saving ${eur("980.40")}`,
+    );
+  });
+
+  it("omits the quotient line outside a joint assessment", () => {
+    const html = renderBelgianRulesSummary(
+      {
+        ...rulesData,
+        precomputedHousehold: { ...twoPartners, assessmentMode: "separate", quotient: undefined },
+      },
+      ctx,
+    );
+    expect(html).toContain("Assessment: Separate");
+    expect(html).not.toContain("Marital quotient");
+  });
+
+  it("renders exactly today's section for a one-partner household", () => {
+    const today = renderBelgianRulesSummary(rulesData, ctx);
+    const onePartner = renderBelgianRulesSummary(
+      {
+        ...rulesData,
+        household: { partners: [{ id: "A" }] },
+        precomputedHousehold: {
+          assessmentMode: "single",
+          partners: [twoPartners.partners[0]!],
+        },
+      },
+      ctx,
+    );
+    expect(onePartner).toBe(today);
+    expect(today).not.toContain("Per Partner");
   });
 });
 

@@ -1,17 +1,25 @@
 import { apiClient } from "@/lib/api";
 import logger from "@/lib/logger";
-import { buildFiledTaxState, type BelgianTaxSlice } from "./belgianTaxStore";
+import {
+    buildFiledTaxState,
+    publishFiledYear,
+    type BelgianTaxSlice,
+} from "./belgianTaxStore";
 import { useSettingsStore } from "./settingsStore";
 
 let timer: ReturnType<typeof setTimeout> | undefined;
 let pending: Record<string, unknown> | undefined;
 let filingInFlight = false;
+// The household (v2) keys are the stored source of truth (ADR-200); v1 keys are read only.
 function payload(
-    state: Pick<BelgianTaxSlice, "profile" | "snapshots" | "snapshotMetas">,
+    state: Pick<
+        BelgianTaxSlice,
+        "household" | "householdSnapshots" | "snapshotMetas"
+    >,
 ) {
     return {
-        belgian_tax_profile: state.profile,
-        belgian_tax_profile_snapshots_v1: state.snapshots,
+        belgian_tax_household_v2: state.household,
+        belgian_tax_household_snapshots_v2: state.householdSnapshots,
         belgian_tax_profile_snapshot_meta_v1: state.snapshotMetas,
     };
 }
@@ -20,6 +28,9 @@ function reportFailure(error: unknown) {
     useSettingsStore.getState()._markSaveError();
 }
 export function scheduleTaxPersistence(state: BelgianTaxSlice) {
+    // After a failed engine load nothing was hydrated, so nothing may be written back.
+    if (state.isLoading || state.householdLoadFailed || !state.household)
+        return;
     const values = payload(state);
     pending = values;
     clearTimeout(timer);
@@ -32,32 +43,27 @@ export function scheduleTaxPersistence(state: BelgianTaxSlice) {
     }, 500);
 }
 
-/** Only expose Filed after the profile, snapshot and frozen metadata commit together. */
+/** Only expose Filed after the household, snapshot and frozen metadata commit together. */
 export async function persistTaxFiling(year: number, reference?: string) {
     if (filingInFlight) throw new Error("A filing save is already in progress");
     const state = useSettingsStore.getState();
     if (state.isLoading) throw new Error("Tax settings are still loading");
     const update = buildFiledTaxState(state, year, reference);
     if (update === state) throw new Error("This tax year is not ready to file");
-    const filedSnapshot = update.snapshots?.[year];
     const filedMeta = update.snapshotMetas?.[year];
-    if (!filedSnapshot || !filedMeta)
-        throw new Error("The filing snapshot is missing");
+    if (!filedMeta) throw new Error("The filing record is missing");
+    const filedHousehold = update.householdSnapshots?.[year];
     const values = payload({ ...state, ...update });
     clearTimeout(timer);
     pending = undefined;
     filingInFlight = true;
     try {
         await apiClient.saveSettings(values);
-        // Apply only the confirmed filing. Other years and the live profile
+        // Apply only the confirmed filing. Other years and the live household
         // may have been edited while this request waited for acknowledgment.
-        useSettingsStore.setState((current) => ({
-            snapshots: { ...current.snapshots, [year]: filedSnapshot },
-            snapshotMetas: {
-                ...current.snapshotMetas,
-                [year]: filedMeta,
-            },
-        }));
+        useSettingsStore.setState((current) =>
+            publishFiledYear(current, year, filedHousehold, filedMeta),
+        );
     } catch (error) {
         reportFailure(error);
         throw error;

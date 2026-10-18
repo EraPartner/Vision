@@ -10,6 +10,11 @@
  * categories nested under each type, which the review UI needs to show where a
  * candidate total comes from.
  *
+ * Each group also carries `byOwner`: the same total split by the owner of the
+ * transaction's account (`me` | `partner` | `joint`; a transaction without an
+ * account counts as `me`, the column default). The frontend maps owners to tax
+ * partners (ADR-201).
+ *
  * Pure with respect to time: `year` is always provided by the caller (routes
  * default it to the current calendar year; the AI tool requires it), so this
  * module never reads the clock.
@@ -17,6 +22,7 @@
 
 import { parseCategoryName } from "@vision/shared-utils";
 import { transactionRepository } from "../../repositories/transactionRepository.ts";
+import accountRepository from "../../repositories/accountRepository.ts";
 import { listCategoryNodes } from "../categoryService.ts";
 import { toDecimal, roundToCents } from "../../lib/money.ts";
 import { classifyDeduction } from "./deductionClassifier.ts";
@@ -31,10 +37,17 @@ export interface DeductionCandidateCategory {
   count: number;
 }
 
+/** Account owner a candidate amount is attributed to (`accounts.owner`). */
+export type AccountOwner = "me" | "partner" | "joint";
+
+/** A candidate total split by account owner; the three values add up to the total. */
+export type OwnerTotals = Record<AccountOwner, number>;
+
 /** A per-deduction-type candidate total with its contributing categories. */
 export interface DeductionCandidateGroup {
   deductionType: string;
   total: number;
+  byOwner: OwnerTotals;
   categoryCount: number;
   categories: DeductionCandidateCategory[];
 }
@@ -78,11 +91,26 @@ export async function computeDeductionCandidates({
   const pathsById: Map<number, string[]> = hasCategoryIds
     ? new Map((await listCategoryNodes()).map((node) => [node.id, node.path]))
     : new Map();
+  const hasAccountIds = rows.some((row) => row.account_id != null);
+  const ownerById: Map<number, AccountOwner> = hasAccountIds
+    ? new Map(
+        (await accountRepository.listOwners()).map((account) => [
+          account.id,
+          toOwner(account.owner),
+        ]),
+      )
+    : new Map();
 
   // Pass 1: group outflows by raw category name, classifying each category.
   const byCategory = new Map<
     string,
-    { category: string; deductionType: string; total: Money; count: number }
+    {
+      category: string;
+      deductionType: string;
+      total: Money;
+      count: number;
+      byOwner: Record<AccountOwner, Money>;
+    }
   >();
   for (const row of rows) {
     const amount = toDecimal(row.amount ?? 0);
@@ -104,8 +132,14 @@ export async function computeDeductionCandidates({
       deductionType,
       total: toDecimal(0),
       count: 0,
+      byOwner: zeroOwnerMoney(),
     };
+    const owner =
+      row.account_id == null
+        ? "me"
+        : (ownerById.get(Number(row.account_id)) ?? "me");
     entry.total = entry.total.plus(amount.abs());
+    entry.byOwner[owner] = entry.byOwner[owner].plus(amount.abs());
     entry.count += 1;
     byCategory.set(key, entry);
   }
@@ -114,14 +148,22 @@ export async function computeDeductionCandidates({
   // nested (totals stay Decimal until the final rounding).
   const typeAgg = new Map<
     string,
-    { total: Money; categories: DeductionCandidateCategory[] }
+    {
+      total: Money;
+      byOwner: Record<AccountOwner, Money>;
+      categories: DeductionCandidateCategory[];
+    }
   >();
   for (const entry of byCategory.values()) {
     const agg = typeAgg.get(entry.deductionType) || {
       total: toDecimal(0),
+      byOwner: zeroOwnerMoney(),
       categories: [],
     };
     agg.total = agg.total.plus(entry.total);
+    for (const owner of OWNERS) {
+      agg.byOwner[owner] = agg.byOwner[owner].plus(entry.byOwner[owner]);
+    }
     agg.categories.push({
       category: entry.category,
       total: roundToCents(entry.total).toNumber(),
@@ -134,10 +176,38 @@ export async function computeDeductionCandidates({
     .map(([deductionType, agg]) => ({
       deductionType,
       total: roundToCents(agg.total).toNumber(),
+      byOwner: roundOwnerTotals(agg.total, agg.byOwner),
       categoryCount: agg.categories.length,
       categories: agg.categories.sort((a, b) => b.total - a.total),
     }))
     .sort((a, b) => b.total - a.total);
 
   return { year, from, to, currency: "EUR", byDeductionType };
+}
+
+const OWNERS: readonly AccountOwner[] = ["me", "partner", "joint"];
+
+function toOwner(value: string): AccountOwner {
+  return value === "partner" || value === "joint" ? value : "me";
+}
+
+function zeroOwnerMoney(): Record<AccountOwner, Money> {
+  return { me: toDecimal(0), partner: toDecimal(0), joint: toDecimal(0) };
+}
+
+/**
+ * Round each owner share to cents; `me` takes the rounding remainder so the
+ * three shares add up to the rounded total exactly.
+ */
+function roundOwnerTotals(
+  total: Money,
+  byOwner: Record<AccountOwner, Money>,
+): OwnerTotals {
+  const partner = roundToCents(byOwner.partner);
+  const joint = roundToCents(byOwner.joint);
+  return {
+    me: roundToCents(total).minus(partner).minus(joint).toNumber(),
+    partner: partner.toNumber(),
+    joint: joint.toNumber(),
+  };
 }

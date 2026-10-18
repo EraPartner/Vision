@@ -8,6 +8,8 @@
  * All `taxYear` fields in this module refer to the **income year**.
  */
 
+import type { BelgianTaxHouseholdV2, HouseholdTaxResult } from "./householdTypes";
+
 export type EmploymentType =
     | "employee"
     | "self_employed"
@@ -15,6 +17,17 @@ export type EmploymentType =
     | "civil_servant"
     | "retired"
     | "other";
+
+/**
+ * Kind of self-employed professional income (WIB 92 art. 23 §1 and art. 51).
+ *  - `profits` ("winsten" / "bénéfices"): trading, craft and farming income. The lump-sum
+ *    professional-expense forfait is the employee one (30%, same cap) per art. 51 al. 2, 1°
+ *    and al. 3 ("rémunérations des travailleurs et bénéfices").
+ *  - `fees` ("baten" / "profits" in French): liberal professions. The forfait is the
+ *    degressive 28.7% / 10% / 5% / 3% scale of art. 51 al. 2, 4° with its own cap.
+ * Source: FPS Finance indexation notice per assessment year, table I, art. 51.
+ */
+export type SelfEmployedIncomeKind = "profits" | "fees";
 
 export type BelgianRegion = "flanders" | "wallonia" | "brussels";
 export type ProfessionalExpenseMethod = "lump_sum" | "actual";
@@ -31,10 +44,11 @@ export type FilingStatus = "single" | "married_joint";
 
 /**
  * Regional own-home credit regime. Determined by the mortgage's region and origination year.
- *  - `flemish_woonbonus`: Flemish "geïntegreerde woonbonus", available for primary-residence
- *    mortgages signed before 2020-01-01 in the Flemish Region.
+ *  - `flemish_woonbonus`: Flemish woonbonus (before 2015, 2015, and the 2016-2019
+ *    "geïntegreerde woonbonus"), available for primary-residence mortgages signed before
+ *    2020-01-01 in the Flemish Region.
  *  - `walloon_cheque_habitat`: Walloon "chèque habitat", available for primary-residence
- *    mortgages signed on/after 2016-01-01 in the Walloon Region. Simplified flat estimate.
+ *    mortgages signed from 2016-01-01 to 2024-12-31 in the Walloon Region.
  *  - `none`: No annual credit modeled (Brussels post-2017 has only one-time stamp-duty rebate;
  *    pre-existing Brussels and post-2020 Flemish regimes are not modeled).
  */
@@ -44,6 +58,11 @@ export type MortgageCreditRegime =
 export interface BelgianTaxProfile {
     profileConfigured: boolean;
     employmentType: EmploymentType;
+    /**
+     * Only read when `employmentType === "self_employed"` and the lump-sum expense method is
+     * used. Defaults to `profits` when omitted (see `SelfEmployedIncomeKind`).
+     */
+    selfEmployedIncomeKind?: SelfEmployedIncomeKind;
     grossAnnualIncome: number;
     professionalExpenseMethod: ProfessionalExpenseMethod;
     actualProfessionalExpenses: number;
@@ -97,7 +116,15 @@ export interface BelgianTaxProfile {
     mortgageCapitalRepaid?: number;
     /** Year the mortgage contract was signed. Determines applicable regime. */
     mortgageStartYear?: number | undefined;
-    /** Region where the mortgage was signed. Defaults to profile region when not set. */
+    /**
+     * Region where the mortgaged home lies.
+     *
+     * @deprecated Not used since 2026-10-11 (ADR-202). The own-home credit regime follows the
+     * taxpayer's region (`region`, the fiscal domicile on 1 January of the assessment year),
+     * because the special finance law of 16 January 1989 art. 5/1 §2 localises the personal
+     * income tax at that domicile and art. 5/5 §4 gives the own-home reductions to the regions
+     * without reference to the home's location. Stored values are kept and migrated unchanged.
+     */
     mortgageRegion?: BelgianRegion | undefined;
     /** True if the financed property is the taxpayer's primary residence. */
     mortgageIsPrimaryResidence?: boolean;
@@ -113,12 +140,19 @@ export interface BelgianTaxProfile {
     domesticHelpCosts?: number;
     domesticHelpEligible?: boolean;
     /**
-     * Service vouchers (dienstencheques / titres-services) purchased in the year. Regional schemes:
-     *  - Flanders: tax reduction abolished from 1 Jan 2025 (rate = 0).
-     *  - Wallonia: fixed €0.90 per voucher on the first 150 vouchers.
-     *  - Brussels: 15% reduction per voucher on the first 172 vouchers — still in force.
+     * Service vouchers (dienstencheques / titres-services) bought in the year. Kept for
+     * compatibility: when `serviceVoucherSpend` is not set, the engine converts the count into an
+     * expense amount with the year table's `voucherPrice`.
      */
     serviceVoucherCount?: number;
+    /**
+     * Amount paid for service vouchers in the year (EUR). Takes precedence over
+     * `serviceVoucherCount`. The regional reduction (WIB 92 art. 145/21) is rate × min(spend, cap):
+     *  - Flanders: 20% up to €1,790 (IY 2024); abolished from IY 2025.
+     *  - Wallonia: 30% up to €1,790 / €1,850 / €1,890 (IY 2024 / 2025 / 2026).
+     *  - Brussels: 15% up to €1,790 / €1,850 (IY 2024 / 2025); abolished from IY 2026.
+     */
+    serviceVoucherSpend?: number;
     serviceVoucherEligible?: boolean;
     /** Filing status — determines whether marital quotient modeling activates. */
     filingStatus?: FilingStatus;
@@ -183,6 +217,11 @@ export interface SnapshotAuditEntry {
      * Stored as the partial diff rather than full state so the log stays compact.
      */
     changes?: Partial<BelgianTaxProfile>;
+    /**
+     * Patch applied to the v2 household (ADR-200), for `'created'` and `'patched'` entries
+     * written after the household upgrade. Same compact partial-diff convention as `changes`.
+     */
+    householdChanges?: Partial<BelgianTaxHouseholdV2>;
     /** Optional free-text reference — currently used for `'filed'` entries. */
     reference?: string;
 }
@@ -203,6 +242,11 @@ export interface BelgianTaxProfileSnapshotMeta {
      * retroactively change "as-filed" numbers.
      */
     frozenCalculation?: BelgianTaxCalculation;
+    /**
+     * Household result (engine version 2, ADR-200) captured at freeze / file time, next to the
+     * v1-shaped `frozenCalculation`.
+     */
+    frozenHouseholdResult?: HouseholdTaxResult;
     /** Filing record. Year is considered filed iff this is set. */
     filing?: FilingRecord;
     /** Append-only audit log of amendments to the snapshot or meta. */
@@ -224,7 +268,16 @@ export interface BracketTax {
 }
 
 export interface BelgianTaxCalculation {
+    /** The taxpayer's own gross income (salary + other taxable income). */
     grossIncome: number;
+    /**
+     * Spouse's professional income counted under a joint assessment (0 otherwise).
+     * `totalPIT` and the special social security contribution cover both spouses, so
+     * `householdGrossIncome`, `netTakeHome` and `effectiveRate` include it.
+     */
+    spouseProfessionalIncome: number;
+    /** `grossIncome + spouseProfessionalIncome`; the base of `netTakeHome` and `effectiveRate`. */
+    householdGrossIncome: number;
     employeeSocialSecurity: number;
     specialSocialSecurityContribution: number;
     personalExemptionAmount: number;
@@ -247,6 +300,11 @@ export interface BelgianTaxCalculation {
     ownHomeCredit: number;
     /** Sum of reductions actually applied to PIT (clamped — never exceeds gross PIT). */
     taxReductions: number;
+    /**
+     * Reduction for pensions (WIB 92 arts 147-153), part of `federalTaxCredits`. Absent on
+     * calculations frozen before 2026-10-11.
+     */
+    pensionReduction?: number;
     federalPITAfterReductions: number;
     communalSurcharge: number;
     /** Federal PIT after reductions + communal surcharge (income tax only). */

@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { apiClient } from "@/lib/api";
 import { DEFAULT_BELGIAN_TAX_PROFILE } from "../belgianTaxStore";
+import * as runtime from "@/lib/belgianTax/householdRuntime";
 import { useSettingsStore } from "../settingsStore";
 import { persistTaxFiling, scheduleTaxPersistence } from "../taxPersistence";
 
@@ -9,7 +10,7 @@ afterEach(() => {
     vi.restoreAllMocks();
 });
 
-it("preserves other-year and live-profile edits made during filing, including their next persisted payload", async () => {
+it("preserves other-year and live-household edits made during filing, including their next persisted payload", async () => {
     vi.useFakeTimers();
     let acknowledge!: () => void;
     const save = vi
@@ -25,11 +26,12 @@ it("preserves other-year and live-profile edits made during filing, including th
     useSettingsStore
         .getState()
         ._hydrate(
-            {
+            runtime,
+            runtime.upgradeProfileV1ToHousehold({
                 ...DEFAULT_BELGIAN_TAX_PROFILE,
                 profileConfigured: true,
                 grossAnnualIncome: 40000,
-            },
+            }),
             {},
             {},
         );
@@ -54,8 +56,8 @@ it("preserves other-year and live-profile edits made during filing, including th
     await vi.advanceTimersByTimeAsync(500);
     expect(save).toHaveBeenCalledTimes(2);
     expect(save.mock.calls[1]?.[0]).toEqual({
-        belgian_tax_profile: state.profile,
-        belgian_tax_profile_snapshots_v1: state.snapshots,
+        belgian_tax_household_v2: state.household,
+        belgian_tax_household_snapshots_v2: state.householdSnapshots,
         belgian_tax_profile_snapshot_meta_v1: state.snapshotMetas,
     });
 });

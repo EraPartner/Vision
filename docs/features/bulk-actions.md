@@ -3,7 +3,7 @@ title: Bulk Transaction Actions
 type: feature
 status: active
 date: 2026-10-08
-updated: 2026-10-08
+updated: 2026-10-13
 tags: [feature, transactions, bulk, productivity]
 description: Multi-row checkbox selection drives delete, recategorize, recipient reassignment, activate/deactivate, export, tag, and split operations across many transactions in one atomic call.
 aliases: [bulk-actions, bulk-delete, bulk-update, bulk-export]
@@ -106,7 +106,7 @@ All five are rate-limited to 30 req/min per client, mirroring the existing bulk-
 { "format": "csv", "include_balance": false }
 ```
 
-Filter shape mirrors a subset of the existing `GET /api/transactions` query fields. The accepted set is exactly: `transaction_id`, `start_date`, `end_date`, `account_id`, `bank_account`, `bank_accounts`, `category_id`, `category_ids`, `recipient_id`, `recipient_group_id`, `recipient_name`, `search`, `active`, `transaction_type`, `amount_min`, `amount_max`, `amount_signed`, `tags` — each also accepted in camelCase, but not in both spellings at once.
+Filter shape mirrors a subset of the existing `GET /api/transactions` query fields. The accepted set is exactly: `transaction_id`, `start_date`, `end_date`, `account_id`, `bank_account`, `bank_accounts`, `category_id`, `category_ids`, `recipient_id`, `recipient_group_id`, `recipient_name`, `search`, `active`, `transaction_type`, `amount_min`, `amount_max`, `amount_signed`, `tags`, `uncategorised` (the uncategorised queue; then `active` and the category filters are ignored) — each also accepted in camelCase, but not in both spellings at once.
 
 > [!warning] The filter is validated, not best-effort
 > An unknown key, a wrong type or a malformed value **rejects the whole request** with a 400. This is stricter than the list endpoint on purpose. `normalizeBulkFilter` used to skip any field that failed its type guard, and skipping a filter on a bulk action does not narrow it — it _widens_ it. `{"category_ids": "5"}` (a string where the array is expected) emitted no category clause at all, so `bulk-delete` swept every transaction the rest of the filter matched, up to the 5000 cap, and answered 200 with a plausible count. The same shape was live on `bank_accounts`, `tags`, `transaction_type`, `amount_min`/`amount_max`, and on any unrecognised key — `{"account_ids": [7]}` reached the SQL builder as an empty filter, i.e. "every active transaction".

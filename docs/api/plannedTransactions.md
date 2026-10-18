@@ -5,7 +5,7 @@ method: GET, POST, PATCH, DELETE
 path: /api/planned-transactions
 description: Scheduled and recurring payment management
 date: 2026-10-11
-updated: 2026-10-11
+updated: 2026-10-12
 tags: [api, planned, recurring, schedule, phase-3, idempotency, phase-9, decimal, money, auto-link, planned-match, june-2026]
 status: active
 aliases: [planned-transactions-api, planned-payments, scheduled-payments, recurring-payments, bills, subscriptions, loans]
@@ -60,6 +60,7 @@ Retrieve planned transactions.
     {
       "id": 1,
       "planned_date": "2026-02-01",
+      "account_id": 1,
       "bank_account": "BE12 3456...",
       "recipient_id": 1,
       "recipient_name": "Electric Company",
@@ -145,7 +146,8 @@ Create a planned transaction.
 - amount (non-loan)
 
 `bank_account` is a response and list-filter field. POST and PATCH bodies use the canonical
-`account_id`; the write routes reject `bank_account`.
+`account_id`; the write routes reject `bank_account`. Every planned-transaction response also
+returns `account_id` (null when no account is linked), so an edit form can prefill the account.
 
 `memo` must be a string or `null` on POST, and `tags` must be an array of tag-slug strings on POST
 and PATCH; anything else returns `400 VALIDATION_ERROR`.

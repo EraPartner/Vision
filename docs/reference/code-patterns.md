@@ -4327,8 +4327,8 @@ const canEditFreely = !isYearFiled(viewedYear);
 ### How it Works
 
 1. **Frozen calculation preference** — If a year has a frozen calculation (captured when marked filed or explicitly frozen), `displayCalculationForYear` returns it verbatim (no recompute).
-2. **Live fallback** — If no frozen calculation exists, `displayCalculationForYear` computes fresh via `computeBelgianPIT(profileForYear(year))`.
-3. **Freezing** — Call `freezeCalculation(year)` to capture the current calculation and prevent engine drift for that year.
+2. **Live fallback** — If no frozen calculation exists, `displayCalculationForYear` computes fresh through the household engine on that year's household (`toBelgianTaxCalculation(computeHouseholdTax(h), h)`, ADR-200). Before the provider has loaded the engine it falls back to `computeBelgianPIT(profileForYear(year))`.
+3. **Freezing** — Call `freezeCalculation(year)` to capture the current calculation (and the `frozenHouseholdResult` beside it) and prevent engine drift for that year.
 4. **Filing** — Call `markYearAsFiled(year, reference?)` to freeze + record filing metadata. Unfiling preserves the frozen calc.
 
 ### Behavioral rules

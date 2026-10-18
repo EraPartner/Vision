@@ -97,6 +97,10 @@ jobs:
   #
   # Fails safe: if the base cannot be resolved for any reason, `code` is 'true'
   # and the full pipeline runs.
+  #
+  # `native` is 'true' when a PR touches apps/native/, install-native.sh or this
+  # workflow, on every push, and whenever classification fails; it gates the
+  # macOS Vision Native job (ADR-204).
   # ─────────────────────────────────────────────────────────────────────────────
   changes:
     name: Detect Changes
@@ -106,6 +110,7 @@ jobs:
       contents: read
     outputs:
       code: ${{ steps.classify.outputs.code }}
+      native: ${{ steps.classify.outputs.native }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
         with:
@@ -412,6 +417,21 @@ jobs:
       - name: Verify endpoint matrix count matches openapi.yaml
         run: bun run check-endpoint-matrix
 
+      # Vision Native (ADR-204 phase 2): the OpenAPI client, design tokens, String Catalog and
+      # sidebar registry are generated from openapi.yaml, the frontend tokens, i18n/source and
+      # navigation.ts. `git status` also catches a generated file that was never committed.
+      - name: Regenerate Vision Native sources and check for drift
+        run: |
+          bun run native:generate
+          if [ -n "$(git status --porcelain -- apps/native)" ]; then
+            git status --short -- apps/native
+            git diff -- apps/native
+            echo "ERROR: the generated Vision Native sources are out of sync with their inputs."
+            echo "Run 'bun run native:generate' locally and commit the regenerated files."
+            exit 1
+          fi
+          echo "Vision Native generated sources in sync."
+
       - name: Test repository scripts
         run: bun run test:scripts
 
@@ -667,6 +687,121 @@ jobs:
         run: python3 scripts/check-destructive-migrations.py
 
   # ─────────────────────────────────────────────────────────────────────────────
+  # Vision Native — the Swift app under apps/native/ (ADR-204). Linux cannot
+  # build macOS apps, so this is the only job on a GitHub-hosted macOS runner and
+  # the only compiler the Swift code has. It runs only when `changes` says the
+  # native tree (or this workflow) changed, and feeds Quality Gate, which
+  # tolerates 'skipped' for unrelated diffs and fails on a failed build or test.
+  # ─────────────────────────────────────────────────────────────────────────────
+  native-macos:
+    name: Native (macOS)
+    needs: [changes]
+    if: needs.changes.outputs.native == 'true'
+    runs-on: macos-26
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+        with:
+          persist-credentials: false
+
+      # Pin the Xcode this job expects on the macos-26 image when it is present (not
+      # verified against the image manifest); printing the version keeps drift visible.
+      - name: Select Xcode
+        run: |
+          if [ -d /Applications/Xcode_26.6.app ]; then
+            sudo xcode-select -s /Applications/Xcode_26.6.app
+          else
+            echo "::warning title=Xcode pin::/Applications/Xcode_26.6.app is not on this image; using the default Xcode"
+            ls /Applications | grep -i '^Xcode' || true
+          fi
+          xcodebuild -version
+
+      # Pinned XcodeGen release, verified by SHA-256 before use (no Homebrew drift).
+      # The hash is of the 2.46.0 release zip as downloaded from GitHub on 2026-10-12;
+      # the project publishes no digest to compare against.
+      - name: Install XcodeGen
+        env:
+          XCODEGEN_VERSION: "2.46.0"
+          XCODEGEN_SHA256: "4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806"
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/xcodegen.zip" \
+            "https://github.com/yonaskolb/XcodeGen/releases/download/${XCODEGEN_VERSION}/xcodegen.zip"
+          echo "${XCODEGEN_SHA256}  $RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/xcodegen/bin" >> "$GITHUB_PATH"
+
+      - name: Generate the Xcode project
+        run: |
+          xcodegen --version
+          xcodegen generate --spec apps/native/project.yml
+
+      - name: Build the app (Debug, unsigned)
+        run: xcodebuild -project apps/native/VisionNative.xcodeproj -scheme "Vision Native" -configuration Debug CODE_SIGNING_ALLOWED=NO build
+
+      # NativeInteropExportTests writes Swift-made backup bundles (plain and v2-encrypted,
+      # synthetic data, a fixed test passphrase) and an audit transfer into this folder;
+      # the native-interop job opens them with the Electron readers.
+      - name: Test the Swift package
+        env:
+          VISION_NATIVE_INTEROP_DIR: ${{ runner.temp }}/native-interop
+        run: |
+          mkdir -p "$VISION_NATIVE_INTEROP_DIR"
+          swift test --package-path apps/native
+          test -f "$VISION_NATIVE_INTEROP_DIR/expected.json"
+
+      - name: Upload the interop artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4
+        with:
+          name: native-interop
+          path: ${{ runner.temp }}/native-interop
+          if-no-files-found: error
+          retention-days: 7
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Native interop — the Electron readers open what Vision Native's Swift code
+  # wrote on macOS (ADR-204 phase-1 gate). Skipped, not failed, with native-macos.
+  # ─────────────────────────────────────────────────────────────────────────────
+  native-interop:
+    name: Native Interop (Electron reader)
+    needs: [changes, native-macos]
+    if: needs.changes.outputs.native == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
+        with:
+          persist-credentials: false
+
+      - name: Setup toolchain
+        uses: ./.github/actions/setup
+
+      - name: Install electron workspace dependencies
+        run: bun install --frozen-lockfile --ignore-scripts --cwd packaging/electron
+
+      - name: Download the interop artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v4
+        with:
+          name: native-interop
+          path: ${{ runner.temp }}/native-interop
+
+      - name: Open them with the Electron readers
+        env:
+          VISION_NATIVE_INTEROP_DIR: ${{ runner.temp }}/native-interop
+        run: |
+          set -euo pipefail
+          bun packaging/electron/build.ts
+          node --test --test-reporter=spec packaging/electron/out/backup/native-interop.test.js | tee "$RUNNER_TEMP/interop.log"
+          # The tests skip without the folder; here a skip would hide a broken gate.
+          if grep -Eq '^ℹ skipped [1-9]' "$RUNNER_TEMP/interop.log"; then
+            echo "The interop tests were skipped."
+            exit 1
+          fi
+
+  # ─────────────────────────────────────────────────────────────────────────────
   # Quality Gate — all static and unit-level quality checks must pass before the
   # native production-process checks run.
   # ─────────────────────────────────────────────────────────────────────────────
@@ -694,6 +829,8 @@ jobs:
       - test-frontend
       - test-backend
       - verify-destructive-migrations
+      - native-macos
+      - native-interop
     if: always()
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4

@@ -5,6 +5,13 @@
  * marks a year as filed. Filing also freezes the calculation — see ADR-059 §filing.
  *
  * Reference is free-text and stored verbatim. Empty reference is permitted.
+ *
+ * A year can be filed when it is the live year, has its own household snapshot, or has an
+ * explicitly frozen calculation. A past year that would only use a live estimate is not eligible.
+ * Filing the live year pins its household as that year's snapshot, so later edits no longer
+ * change the filed inputs. A frozen year is filed as it is: pinning today's live household there
+ * would record inputs that disagree with the frozen figures. The filing is shown only after the
+ * household, snapshot and frozen metadata are saved together.
  */
 import { persistTaxFiling } from "@/stores/taxPersistence";
 import { useState, type ReactNode } from "react";
@@ -34,8 +41,11 @@ export function MarkAsFiledDialog({ trigger, year }: MarkAsFiledDialogProps) {
     const ready = useBelgianTaxProfile(
         (state) =>
             !state.isLoading &&
-            (year === state.profile.taxYear ||
-                Boolean(state.snapshots[year])) &&
+            !state.householdLoadFailed &&
+            state.household != null &&
+            (year === state.household.taxYear ||
+                Object.hasOwn(state.householdSnapshots, year) ||
+                Boolean(state.snapshotMetas[year]?.frozenCalculation)) &&
             hasMeaningfulBelgianTaxData(state.profileForYear(year)),
     );
     const [open, setOpen] = useState(false);

@@ -7,8 +7,10 @@ import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import {
     accountKeys,
+    aggregationKeys,
     invalidateAccountDerived,
     invalidateAccountRepoint,
+    taxKeys,
 } from "@/lib/queryKeys";
 import { useBackgroundQueryCue } from "@/components/shared/BackgroundQueryIndicator";
 
@@ -58,8 +60,16 @@ export function useUpdateAccount() {
     return useMutation({
         mutationFn: ({ id, data }: { id: number; data: AccountUpdate }) =>
             apiClient.updateAccount(id, data),
-        onSuccess: () => {
+        onSuccess: (_result, { data }) => {
             invalidateAccountDerived(queryClient);
+            if (data.owner !== undefined) {
+                // The owner splits statistics and deduction candidates per partner (ADR-201);
+                // the backend clears its statistics cache on an owner change.
+                queryClient.invalidateQueries({ queryKey: aggregationKeys.all });
+                queryClient.invalidateQueries({
+                    queryKey: taxKeys.deductionCandidatesAll,
+                });
+            }
             toast.success(t("accounts.updated"));
         },
         onError: (error: Error) => {

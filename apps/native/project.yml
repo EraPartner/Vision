@@ -1,0 +1,121 @@
+# XcodeGen spec for Vision Native (ADR-204). Generate the project with:
+#   xcodegen generate --spec apps/native/project.yml
+# The generated VisionNative.xcodeproj and VisionNative/Info.plist are gitignored.
+#
+# One target builds both variants (phase 1e). The build setting VISION_NATIVE_VARIANT
+# (standard | demo) picks the product name and bundle id and is copied into Info.plist as
+# VisionNativeVariant, which the app reads at launch (NativeVariant):
+#   standard -> "Vision Native.app",      com.vaultvoyager.vision-native,      vision_native, 54331
+#   demo     -> "Vision Native Demo.app", com.vaultvoyager.vision-native-demo, vision_native_demo, 54332
+# install-native.sh builds the demo variant unless VISION_NATIVE_VARIANT=standard; a
+# plain Xcode or CI build is the standard variant. Override it on the command line:
+#   xcodebuild ... VISION_NATIVE_VARIANT=demo
+name: VisionNative
+options:
+  bundleIdPrefix: com.vaultvoyager
+  deploymentTarget:
+    macOS: "26.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    MACOSX_DEPLOYMENT_TARGET: "26.0"
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    ARCHS: arm64
+packages:
+  VisionNativeCore:
+    path: .
+targets:
+  Vision Native:
+    type: application
+    platform: macOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: VisionNative
+    dependencies:
+      - package: VisionNativeCore
+        product: VisionNativeCore
+      # The SwiftUI screens and the generated String Catalog (Sources/VisionNativeUI/Resources/
+      # Localizable.xcstrings), which Xcode compiles into the package's resource bundle.
+      - package: VisionNativeCore
+        product: VisionNativeUI
+    configFiles:
+      Debug: Config/Signing.xcconfig
+      Release: Config/Signing.xcconfig
+    scheme: {}
+    # Both scripts copy into Contents/Resources before Xcode signs the app.
+    # install-native.sh passes VISION_NATIVE_PAYLOAD_DIR (containing native-runtime/ and
+    # demo-seed/); without it (CI, quick UI builds) the app is built without a payload.
+    postBuildScripts:
+      # The shell's menu, dock and launch-screen labels come from the same i18n/source
+      # files as the Electron menus (ADR-204: one source for EN/NL copy).
+      - name: Stage shell locales
+        basedOnDependencyAnalysis: false
+        script: |
+          set -eo pipefail
+          locales="$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/i18n"
+          mkdir -p "$locales"
+          for language in en nl; do
+            cp "$SRCROOT/../../i18n/source/$language.json" "$locales/$language.json"
+          done
+      - name: Stage runtime payload
+        basedOnDependencyAnalysis: false
+        # Plain $VAR references only: XcodeGen expands ${VAR} when it generates the project.
+        script: |
+          set -eo pipefail
+          if [ -z "$VISION_NATIVE_PAYLOAD_DIR" ]; then
+            echo "note: VISION_NATIVE_PAYLOAD_DIR is not set; building without a runtime payload."
+            exit 0
+          fi
+          resources="$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH"
+          for source_name in native-runtime demo-seed; do
+            if [ ! -f "$VISION_NATIVE_PAYLOAD_DIR/$source_name/manifest.json" ]; then
+              echo "error: $VISION_NATIVE_PAYLOAD_DIR/$source_name/manifest.json is missing."
+              exit 1
+            fi
+          done
+          rm -rf "$resources/runtime" "$resources/demo-seed"
+          ditto "$VISION_NATIVE_PAYLOAD_DIR/native-runtime" "$resources/runtime"
+          ditto "$VISION_NATIVE_PAYLOAD_DIR/demo-seed" "$resources/demo-seed"
+    settings:
+      base:
+        VISION_NATIVE_VARIANT: standard
+        VISION_NATIVE_PRODUCT_NAME_standard: Vision Native
+        VISION_NATIVE_PRODUCT_NAME_demo: Vision Native Demo
+        VISION_NATIVE_BUNDLE_ID_standard: com.vaultvoyager.vision-native
+        VISION_NATIVE_BUNDLE_ID_demo: com.vaultvoyager.vision-native-demo
+        PRODUCT_NAME: $(VISION_NATIVE_PRODUCT_NAME_$(VISION_NATIVE_VARIANT))
+        PRODUCT_MODULE_NAME: VisionNative
+        PRODUCT_BUNDLE_IDENTIFIER: $(VISION_NATIVE_BUNDLE_ID_$(VISION_NATIVE_VARIANT))
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        CODE_SIGN_STYLE: Automatic
+        ENABLE_HARDENED_RUNTIME: "NO"
+        # No App Sandbox: the app supervises the bundled PostgreSQL runtime and backend.
+        ENABLE_APP_SANDBOX: "NO"
+        GENERATE_INFOPLIST_FILE: "NO"
+        # The payload staging script reads VISION_NATIVE_PAYLOAD_DIR outside the project.
+        ENABLE_USER_SCRIPT_SANDBOXING: "NO"
+      configs:
+        Debug:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
+    info:
+      path: VisionNative/Info.plist
+      properties:
+        CFBundleName: $(PRODUCT_NAME)
+        CFBundleDisplayName: $(PRODUCT_NAME)
+        # NativeVariant.infoPlistKey: "standard" or "demo".
+        VisionNativeVariant: $(VISION_NATIVE_VARIANT)
+        CFBundleIdentifier: $(PRODUCT_BUNDLE_IDENTIFIER)
+        CFBundleExecutable: $(EXECUTABLE_NAME)
+        # The languages of the String Catalog and the shell locales.
+        CFBundleLocalizations: [en, nl]
+        CFBundlePackageType: APPL
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+        LSApplicationCategoryType: public.app-category.finance
+        NSHumanReadableCopyright: AGPL-3.0-only
+        NSPrincipalClass: NSApplication
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true

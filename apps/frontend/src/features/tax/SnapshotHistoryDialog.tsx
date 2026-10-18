@@ -3,7 +3,9 @@
  *
  * Lists every audit log entry recorded against a snapshot — creation, patches, freezes,
  * filings, and their reversals — newest first. For `'patched'` entries the diff is shown
- * inline so the user can see *what* changed, not just *that* something changed.
+ * inline so the user can see *what* changed, not just *that* something changed. A household
+ * diff (ADR-200 `householdChanges`) is shown as one readable line per changed section, with
+ * each partner's activities and gross income.
  *
  * Read-only. Surfaces the append-only `meta.history` produced by the provider's mutators
  * (ADR-059).
@@ -23,6 +25,8 @@ import { List } from "@/components/ui/list";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
+import { summarizeHouseholdChanges, summarizePatch } from "./historySummary";
 import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
 import type {
     SnapshotAuditEntry,
@@ -59,33 +63,13 @@ function formatTimestamp(iso: string, locale: string): string {
     }
 }
 
-/**
- * Compact one-line summary of a patch. Numbers are formatted, strings are quoted, booleans
- * pass through. Long arrays and objects collapse to `[N items]` / `{N keys}` to keep the
- * timeline scannable.
- */
-function summarizePatch(changes: SnapshotAuditEntry["changes"]): string {
-    if (!changes) return "";
-    const parts: string[] = [];
-    for (const [k, v] of Object.entries(changes)) {
-        if (Array.isArray(v)) {
-            parts.push(`${k}: [${v.length} items]`);
-        } else if (v !== null && typeof v === "object") {
-            parts.push(`${k}: {${Object.keys(v).length} keys}`);
-        } else if (typeof v === "string") {
-            parts.push(`${k}: "${v}"`);
-        } else {
-            parts.push(`${k}: ${String(v)}`);
-        }
-    }
-    return parts.join(", ");
-}
 
 export function SnapshotHistoryDialog({
     trigger,
     year,
 }: SnapshotHistoryDialogProps) {
     const { t, language } = useLanguage();
+    const fmt = useCurrencyFormatter();
     const history = useBelgianTaxProfile(
         (state) => state.snapshotMetas[year]?.history ?? EMPTY_HISTORY,
     );
@@ -117,9 +101,17 @@ export function SnapshotHistoryDialog({
                         <List>
                             {ordered.map((entry, idx) => {
                                 const badge = KIND_BADGE[entry.kind];
-                                const summary = entry.changes
-                                    ? summarizePatch(entry.changes)
-                                    : "";
+                                // A household diff reads per section; an older entry
+                                // without one keeps its v1 field summary.
+                                const lines = entry.householdChanges
+                                    ? summarizeHouseholdChanges(
+                                          entry.householdChanges,
+                                          t,
+                                          (value) => fmt(value),
+                                      )
+                                    : [summarizePatch(entry.changes)].filter(
+                                          Boolean,
+                                      );
                                 return (
                                     <li
                                         key={`${entry.at}-${idx}`}
@@ -147,11 +139,16 @@ export function SnapshotHistoryDialog({
                                                 </span>
                                             )}
                                         </div>
-                                        {summary && (
-                                            <p className="break-words type-footnote text-label-secondary">
-                                                {summary}
+                                        {lines.map((line, lineIdx) => (
+                                            <p
+                                                // Lines are fixed per entry and their text can
+                                                // repeat, so the position keeps the key unique.
+                                                key={`${lineIdx}-${line}`}
+                                                className="break-words type-footnote text-label-secondary"
+                                            >
+                                                {line}
                                             </p>
-                                        )}
+                                        ))}
                                     </li>
                                 );
                             })}

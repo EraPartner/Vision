@@ -11,8 +11,11 @@ import {
   fmtPct,
   sectionPage,
 } from "../sectionHelpers.ts";
+import { addAll, toNumber } from "../../../lib/money.ts";
 import type {
+  PrecomputedHousehold,
   PrecomputedPIT,
+  ReportHousehold,
   TaxProfile,
   TaxReportData,
 } from "../dataFetcherTax.ts";
@@ -59,6 +62,11 @@ export function renderBelgianRulesSummary(
   const pitHtml = precomputedPIT
     ? renderPITBlock(precomputedPIT, taxProfile, "EUR")
     : "<p>Annual personal income tax is not included. It requires a full calendar year with its own configured profile or saved snapshot.</p>";
+  const householdHtml = renderHouseholdBlock(
+    data?.precomputedHousehold,
+    data?.household,
+    "EUR",
+  );
 
   return sectionPage({
     title: `Belgian Tax Rules — ${taxYear}`,
@@ -82,8 +90,61 @@ export function renderBelgianRulesSummary(
           </table>
         </div>
       </div>
-      ${pitHtml}`,
+      ${pitHtml}${householdHtml}`,
   });
+}
+
+const PARTNER_LABELS: Record<'A' | 'B', string> = { A: 'You', B: 'Partner' };
+const ASSESSMENT_LABELS: Record<PrecomputedHousehold['assessmentMode'], string> = {
+  single: 'Single',
+  separate: 'Separate',
+  joint: 'Joint',
+};
+
+/** "You" / "Partner", with the partner's display name when the household has one. */
+function partnerName(id: 'A' | 'B', household: ReportHousehold | undefined): string {
+  const name = household?.partners.find((p) => p.id === id)?.displayName?.trim();
+  return name ? `${PARTNER_LABELS[id]} (${name})` : PARTNER_LABELS[id];
+}
+
+/**
+ * Per-partner rows (ADR-200/201) plus the household total, the assessment mode and, under a
+ * joint assessment, the marital quotient line. Renders nothing unless two partners are
+ * assessed, so a one-partner household keeps exactly the rows it had before.
+ */
+export function renderHouseholdBlock(
+  result: PrecomputedHousehold | undefined,
+  household: ReportHousehold | undefined,
+  currency: string,
+): string {
+  if (!result || result.partners.length < 2) return '';
+  const total = (pick: (p: PrecomputedHousehold['partners'][number]) => number) =>
+    toNumber(addAll(result.partners.map(pick)));
+  const rows = result.partners.map((p) => `<tr>
+      <td>${escapeHtml(partnerName(p.partnerId, household))}</td>
+      <td class="num">${fmtCurrency(p.grossIncome, currency)}</td>
+      <td class="num">${fmtCurrency(p.taxableIncome, currency)}</td>
+      <td class="num neg">${fmtCurrency(p.totalPIT, currency)}</td>
+    </tr>`).join('');
+  const basis = result.legalBasis ? ` (${escapeHtml(result.legalBasis)})` : '';
+  const quotient = result.quotient;
+  const quotientLine =
+    result.assessmentMode !== 'joint'
+      ? ''
+      : quotient?.applied && quotient.fromPartnerId && quotient.toPartnerId
+        ? `<p style="color:hsl(var(--muted));font-size:11px;margin:4px 0 0;">Marital quotient: ${fmtCurrency(quotient.transfer, currency)} from ${escapeHtml(partnerName(quotient.fromPartnerId, household))} to ${escapeHtml(partnerName(quotient.toPartnerId, household))} · saving ${fmtCurrency(quotient.benefit, currency)}</p>`
+        : '<p style="color:hsl(var(--muted));font-size:11px;margin:4px 0 0;">Marital quotient: not applied</p>';
+  return `
+    <div style="margin-top:16px;">
+      <div style="font-size:11px;font-weight:600;color:hsl(var(--muted));text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Per Partner</div>
+      <p style="color:hsl(var(--muted));font-size:11px;margin:0 0 8px;">Assessment: ${ASSESSMENT_LABELS[result.assessmentMode]}${basis}</p>
+      <table class="data-table">
+        <thead><tr><th>Partner</th><th class="num">Gross income</th><th class="num">Taxable</th><th class="num">Tax</th></tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot><tr style="font-weight:600;"><td>Household</td><td class="num">${fmtCurrency(total((p) => p.grossIncome), currency)}</td><td class="num">${fmtCurrency(total((p) => p.taxableIncome), currency)}</td><td class="num neg">${fmtCurrency(total((p) => p.totalPIT), currency)}</td></tr></tfoot>
+      </table>
+      ${quotientLine}
+    </div>`;
 }
 
 function renderPITBlock(

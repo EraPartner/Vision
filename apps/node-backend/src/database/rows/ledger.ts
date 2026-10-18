@@ -169,6 +169,11 @@ export const accountNameRowSchema = accountRowSchema
   .pick({ id: true, name: true })
   .describe("account name row");
 
+/** `listOwners` row: the owner that attributes transactions to a tax partner. */
+export const accountOwnerRowSchema = accountRowSchema
+  .pick({ id: true, owner: true })
+  .describe("account owner row");
+
 /** `previewMerge`'s account probe. */
 export const accountCurrencyRowSchema = accountRowSchema
   .pick({ id: true, currency: true })

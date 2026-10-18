@@ -2,8 +2,8 @@
 title: Admin API
 type: endpoint
 status: active
-date: 2026-10-08
-updated: 2026-10-08
+date: 2026-10-12
+updated: 2026-10-12
 tags:
   - api
   - admin
@@ -212,13 +212,8 @@ Run persisted Kinesis history sanitization for all investments where `price_prov
 
 ### GET /api/admin/database/stats (Phase 7)
 
-Retrieve current database table statistics.
-
-**Query Parameters:**
-
-| Parameter | Type   | Description                                        |
-| --------- | ------ | -------------------------------------------------- |
-| `table`   | string | Optional: specific table name; omit for all tables |
+Retrieve current database table statistics from `pg_stat_user_tables`, largest table first
+(schema `DbStats` in `openapi.yaml`).
 
 **Response:** `200 OK`
 
@@ -226,27 +221,24 @@ Retrieve current database table statistics.
 {
   "tables": [
     {
+      "schemaname": "public",
       "table_name": "transactions",
-      "live_rows": 2453,
-      "dead_rows": 127,
-      "size_mb": 3.2,
-      "last_vacuum": "2026-04-24T10:15:32Z",
-      "last_analyze": "2026-04-24T10:15:32Z",
-      "autovacuum_enabled": true
-    },
-    {
-      "table_name": "categories",
-      "live_rows": 45,
-      "dead_rows": 2,
-      "size_mb": 0.1,
-      "last_vacuum": "2026-04-23T03:21:15Z",
-      "last_analyze": "2026-04-23T03:21:15Z",
-      "autovacuum_enabled": true
+      "live_rows": "2453",
+      "dead_rows": "127",
+      "last_autovacuum": "2026-04-24 10:15:32.123456+00",
+      "last_autoanalyze": null,
+      "size": "3200 kB",
+      "size_bytes": "3276800"
     }
   ],
-  "timestamp": "2026-04-24T12:34:56Z"
+  "db_size": "12 MB"
 }
 ```
+
+- `live_rows`, `dead_rows` and `size_bytes` are BIGINT values, so they arrive as decimal strings.
+- `last_autovacuum` and `last_autoanalyze` are `::text` casts, `null` for a table never vacuumed or analyzed.
+- `size` and `db_size` are `pg_size_pretty` text.
+- Contract change (October 2026, non-breaking): `openapi.yaml` now types the responses of `GET /api/admin/database/stats` (`DbStats`), `GET /api/admin/providers/health` (`ProviderHealthList`), `POST /api/admin/providers/{provider}/probe` (`ProbeResult`), `GET /api/admin/metrics/requests` (`RouteMetricList`) and `GET /api/admin/endpoints` (`EndpointList`) with the shapes the routes already returned and `packages/types/src/contracts/admin.ts` already checked. This page previously described a `table` query parameter and a different stats body that the route never had.
 
 **Important Note on Row Counts:**
 
@@ -277,8 +269,8 @@ Run `VACUUM ANALYZE` on one or all tables.
 
 **Request Body (JSON, optional):**
 
-| Field   | Type           | Required | Description                                                  |
-| ------- | -------------- | -------- | ------------------------------------------------------------ |
+| Field   | Type           | Required | Description                                                |
+| ------- | -------------- | -------- | ---------------------------------------------------------- |
 | `table` | string \| null | No       | Table to vacuum; omit or send `null` to vacuum every table |
 
 `table` must be a non-empty string naming a table in `pg_stat_user_tables`. A non-string or empty
@@ -437,6 +429,14 @@ The service fetches `limit + 1` rows to derive `hasMore`. It does not run `COUNT
 
 The raw `where` parameter was removed. Use only the structured, parameterized `filters` array. A malformed cursor or one reused with different sort or filter state returns `400 Bad Request`.
 
+- Contract change (October 2026, non-breaking): `openapi.yaml` now types the responses of
+  `POST /api/admin/database/vacuum` (`DbVacuumResult`),
+  `GET /api/admin/database/tables/{table}/schema` (`DbEditorTableSchema`),
+  `GET /api/admin/database/tables/{table}/rows` (`DbEditorRows`) and
+  `POST /api/admin/database/tables/{table}/mutate` (`DbEditorMutationResult`) with the shapes the
+  routes already returned. `columns` in the rows response carries the same column objects as the
+  schema response; the example above abbreviates them as names.
+
 `filters` must be valid JSON for an array of objects. Each object needs a string `column`; `op`, if
 present, must be a string. Invalid JSON, a non-array, or an entry such as `null` returns
 `400 VALIDATION_ERROR` with an `Invalid filters parameter:` message. Any query parameter sent more
@@ -541,12 +541,12 @@ objects whose `op` is `insert`, `update`, or `delete`; `values`, `set`, and `pk`
 
 **Error responses:**
 
-| Status | Scenario                                                                                          |
-| ------ | ------------------------------------------------------------------------------------------------- |
+| Status | Scenario                                                                                                                                     |
+| ------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | `400`  | Malformed body (`changes`/`dryRun` shape), unknown table, missing PK for update/delete, constraint violation (NOT NULL, CHECK, invalid type) |
-| `403`  | Protected audit table is inaccessible through the generic data editor                             |
-| `409`  | `xmin` mismatch (optimistic concurrency conflict) or UNIQUE constraint violation                  |
-| `500`  | Unexpected database error (rolled back)                                                           |
+| `403`  | Protected audit table is inaccessible through the generic data editor                                                                        |
+| `409`  | `xmin` mismatch (optimistic concurrency conflict) or UNIQUE constraint violation                                                             |
+| `500`  | Unexpected database error (rolled back)                                                                                                      |
 
 Constraint SQLSTATEs (`23502` NOT NULL, `23503` FK violation, `23505` UNIQUE, `23514` CHECK, `22P02` invalid type) are mapped to human-readable messages before the `400`/`409` response is sent.
 

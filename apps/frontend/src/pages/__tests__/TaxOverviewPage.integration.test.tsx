@@ -42,17 +42,16 @@ describe("TaxOverviewPage (integration)", () => {
         ).toBeInTheDocument();
     });
 
-    it("shows Employment step radio options when the wizard opens", async () => {
+    it("opens the wizard on the household step", async () => {
         const user = userEvent.setup();
         renderWithApp(<TaxOverviewPage />);
 
         const [setupBtn] = await screen.findAllByRole("button", { name: /set up tax profile/i });
         await user.click(setupBtn!);
 
-        // The first step is Employment; it renders radio items for each employment type.
-        // Use role-based selectors anchored to start — civil_servant desc also contains "employee".
-        expect(await screen.findByRole("radio", { name: /^employee/i })).toBeInTheDocument();
-        expect(screen.getByRole("radio", { name: /^self-employed/i })).toBeInTheDocument();
+        // The first step is the household: the derived assessment and the partner switch.
+        expect(await screen.findByText("Your household")).toBeInTheDocument();
+        expect(screen.getByRole("switch", { name: /i have a partner/i })).toBeInTheDocument();
     });
 
     it("closes tax profile sheet when Escape is pressed", async () => {
@@ -65,8 +64,8 @@ describe("TaxOverviewPage (integration)", () => {
         await screen.findByText(/^tax profile$/i);
         await user.keyboard("{Escape}");
 
-        // Sheet dismisses — employment radios no longer in DOM
-        expect(screen.queryByRole("radio", { name: /^employee/i })).not.toBeInTheDocument();
+        // Sheet dismisses — the household step is no longer in the DOM
+        expect(screen.queryByText("Your household")).not.toBeInTheDocument();
     });
 
     it("offers Customize… from the ••• menu in the page header", async () => {
@@ -287,6 +286,64 @@ describe("TaxOverviewPage (integration)", () => {
         expect(
             await screen.findByText(/viewing saved profile for 2024/i),
         ).toBeInTheDocument();
+    });
+
+    it("lists household engine issues of the live year in the disclaimer banner", async () => {
+        server.use(
+            http.get(`${API_BASE}/api/settings`, () =>
+                ok(
+                    settingsWithBaselines({
+                        belgian_tax_profile: {
+                            taxYear: 2026,
+                            grossAnnualIncome: 50000,
+                            profileConfigured: true,
+                            filingStatus: "married_joint",
+                            spouseProfessionalIncome: 20000,
+                        },
+                    }),
+                ),
+            ),
+        );
+        renderWithApp(<TaxOverviewPage />);
+        expect(
+            await screen.findByText(
+                /add the date of your marriage or legal cohabitation/i,
+            ),
+        ).toBeInTheDocument();
+    });
+
+    it("notes an unreadable stored household in the disclaimer banner", async () => {
+        const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+        server.use(
+            http.get(`${API_BASE}/api/settings`, () =>
+                ok(
+                    settingsWithBaselines({
+                        belgian_tax_profile: {
+                            taxYear: 2026,
+                            grossAnnualIncome: 50000,
+                            profileConfigured: true,
+                        },
+                        belgian_tax_household_v2: { version: 2, taxYear: "x" },
+                    }),
+                ),
+            ),
+        );
+        renderWithApp(<TaxOverviewPage />);
+        expect(
+            await screen.findByText(
+                /saved household tax data could not be read/i,
+            ),
+        ).toBeInTheDocument();
+        warnSpy.mockRestore();
+    });
+
+    it("does not show the unreadable-household note for a readable household", async () => {
+        renderWithApp(<TaxOverviewPage />);
+        await screen.findByText(/tax year \d{4}/i);
+        await screen.findByText(/no tax profile yet/i);
+        expect(
+            screen.queryByText(/saved household tax data could not be read/i),
+        ).not.toBeInTheDocument();
     });
 
     // ─── Edge cases ────────────────────────────────────────────────────────

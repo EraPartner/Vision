@@ -11,7 +11,10 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
-import type { StepProps } from "./types";
+import type { PartnerReductionInputs } from "@/lib/belgianTax/householdTypes";
+import type { PartnerStepProps, StepProps } from "./types";
+import { PartnerSwitcher } from "./PartnerSwitcher";
+import { findPartner, updatePartner } from "./householdEditing";
 import { ProfileNumberInput } from "./ProfileNumberInput";
 import { BoundedCountSelect } from "./ProfileSelectFields";
 import { FieldHint, StepIntro, ToggleGroup, ToggleRow } from "./ProfileRows";
@@ -49,8 +52,30 @@ function OptionalBadge() {
     );
 }
 
-export function ExemptionsStep({ profile, updateProfile }: StepProps) {
+/**
+ * Exemptions step: dependants (household level, through the v1 projection) and the tax
+ * reductions and isolated-parent request of each partner (ADR-200).
+ */
+export function ExemptionsStep({
+    profile,
+    updateProfile,
+    household,
+    updateHousehold,
+    partnerId,
+    onPartnerChange,
+}: StepProps & PartnerStepProps) {
     const { t } = useLanguage();
+    const partner = findPartner(household, partnerId);
+    if (!partner) return null;
+    const pid = partner.id;
+    const r = partner.reductions;
+    const setReductions = (patch: Partial<PartnerReductionInputs>) =>
+        updateHousehold((h) =>
+            updatePartner(h, pid, (p) => ({
+                ...p,
+                reductions: { ...p.reductions, ...patch },
+            })),
+        );
     return (
         <div className="space-y-5">
             <StepIntro
@@ -173,35 +198,24 @@ export function ExemptionsStep({ profile, updateProfile }: StepProps) {
                 title={t("tax.profile.section.otherDeductions.title")}
                 description={t("tax.profile.section.otherDeductions.desc")}
             />
+            <PartnerSwitcher
+                household={household}
+                value={pid}
+                onValueChange={onPartnerChange}
+            />
 
             <div className="grid grid-cols-1 gap-4">
                 <div className="space-y-2">
-                    <Label htmlFor="alimony">
-                        {t("tax.profile.field.alimonyPaid")}
-                    </Label>
-                    <ProfileNumberInput
-                        id="alimony"
-                        min={0}
-                        step={10}
-                        value={profile.alimonyPaid}
-                        onValueChange={(value) =>
-                            updateProfile({ alimonyPaid: value ?? 0 })
-                        }
-                        placeholder={t("tax.profile.placeholder.alimonyPaid")}
-                    />
-                </div>
-
-                <div className="space-y-2">
-                    <Label htmlFor="pension">
+                    <Label htmlFor={`pension-${pid}`}>
                         {t("tax.profile.field.personalPensionContributions")}
                     </Label>
                     <ProfileNumberInput
-                        id="pension"
+                        id={`pension-${pid}`}
                         min={0}
                         step={10}
-                        value={profile.personalPensionContributions}
+                        value={r.personalPensionContributions}
                         onValueChange={(value) =>
-                            updateProfile({
+                            setReductions({
                                 personalPensionContributions: value ?? 0,
                             })
                         }
@@ -211,16 +225,16 @@ export function ExemptionsStep({ profile, updateProfile }: StepProps) {
                     />
                     <div className="flex flex-wrap items-center gap-3">
                         <Select
-                            {...(profile.pensionScheme === undefined
+                            {...(r.pensionScheme === undefined
                                 ? {}
-                                : { value: profile.pensionScheme })}
+                                : { value: r.pensionScheme })}
                             onValueChange={(v) =>
-                                updateProfile({
+                                setReductions({
                                     pensionScheme: v as "1050" | "1350",
                                 })
                             }
                         >
-                            <SelectTrigger id="pension-scheme" className="w-56">
+                            <SelectTrigger id={`pension-scheme-${pid}`} className="w-56">
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -233,10 +247,10 @@ export function ExemptionsStep({ profile, updateProfile }: StepProps) {
                             </SelectContent>
                         </Select>
                         <EligibilitySwitch
-                            id="pension-eligible"
-                            checked={!!profile.pensionEligible}
+                            id={`pension-eligible-${pid}`}
+                            checked={!!r.pensionEligible}
                             onCheckedChange={(v) =>
-                                updateProfile({ pensionEligible: v })
+                                setReductions({ pensionEligible: v })
                             }
                             label={t("tax.profile.flag.pensionEligible")}
                         />
@@ -244,18 +258,18 @@ export function ExemptionsStep({ profile, updateProfile }: StepProps) {
                 </div>
 
                 <div className="space-y-2">
-                    <Label htmlFor="group-insurance">
+                    <Label htmlFor={`group-insurance-${pid}`}>
                         {t(
                             "tax.profile.field.employeeGroupInsuranceContributions",
                         )}
                     </Label>
                     <ProfileNumberInput
-                        id="group-insurance"
+                        id={`group-insurance-${pid}`}
                         min={0}
                         step={10}
-                        value={profile.employeeGroupInsuranceContributions}
+                        value={r.employeeGroupInsuranceContributions}
                         onValueChange={(value) =>
-                            updateProfile({
+                            setReductions({
                                 employeeGroupInsuranceContributions: value ?? 0,
                             })
                         }
@@ -264,10 +278,10 @@ export function ExemptionsStep({ profile, updateProfile }: StepProps) {
                         )}
                     />
                     <EligibilitySwitch
-                        id="group-insurance-eligible"
-                        checked={!!profile.employeeGroupInsuranceEligible}
+                        id={`group-insurance-eligible-${pid}`}
+                        checked={!!r.employeeGroupInsuranceEligible}
                         onCheckedChange={(v) =>
-                            updateProfile({
+                            setReductions({
                                 employeeGroupInsuranceEligible: v,
                             })
                         }
@@ -278,52 +292,52 @@ export function ExemptionsStep({ profile, updateProfile }: StepProps) {
                 </div>
 
                 <div className="space-y-2">
-                    <Label htmlFor="life">
+                    <Label htmlFor={`life-${pid}`}>
                         {t("tax.profile.field.lifeInsurancePremiums")}
                     </Label>
                     <ProfileNumberInput
-                        id="life"
+                        id={`life-${pid}`}
                         min={0}
                         step={10}
-                        value={profile.lifeInsurancePremiums}
+                        value={r.lifeInsurancePremiums}
                         onValueChange={(value) =>
-                            updateProfile({ lifeInsurancePremiums: value ?? 0 })
+                            setReductions({ lifeInsurancePremiums: value ?? 0 })
                         }
                         placeholder={t(
                             "tax.profile.placeholder.lifeInsurancePremiums",
                         )}
                     />
                     <EligibilitySwitch
-                        id="life-eligible"
-                        checked={!!profile.lifeInsuranceEligible}
+                        id={`life-eligible-${pid}`}
+                        checked={!!r.lifeInsuranceEligible}
                         onCheckedChange={(v) =>
-                            updateProfile({ lifeInsuranceEligible: v })
+                            setReductions({ lifeInsuranceEligible: v })
                         }
                         label={t("tax.profile.flag.lifeInsuranceEligible")}
                     />
                 </div>
 
                 <div className="space-y-2">
-                    <Label htmlFor="donations">
+                    <Label htmlFor={`donations-${pid}`}>
                         {t("tax.profile.field.charitableDonations")}
                     </Label>
                     <ProfileNumberInput
-                        id="donations"
+                        id={`donations-${pid}`}
                         min={0}
                         step={10}
-                        value={profile.charitableDonations}
+                        value={r.charitableDonations}
                         onValueChange={(value) =>
-                            updateProfile({ charitableDonations: value ?? 0 })
+                            setReductions({ charitableDonations: value ?? 0 })
                         }
                         placeholder={t(
                             "tax.profile.placeholder.charitableDonations",
                         )}
                     />
                     <EligibilitySwitch
-                        id="donations-eligible"
-                        checked={!!profile.charitableDonationsEligible}
+                        id={`donations-eligible-${pid}`}
+                        checked={!!r.charitableDonationsEligible}
                         onCheckedChange={(v) =>
-                            updateProfile({
+                            setReductions({
                                 charitableDonationsEligible: v,
                             })
                         }
@@ -334,32 +348,32 @@ export function ExemptionsStep({ profile, updateProfile }: StepProps) {
                 </div>
 
                 <div className="space-y-2">
-                    <Label htmlFor="childcare">
+                    <Label htmlFor={`childcare-${pid}`}>
                         {t("tax.profile.field.childcareCosts")}
                     </Label>
                     <ProfileNumberInput
-                        id="childcare"
+                        id={`childcare-${pid}`}
                         min={0}
                         step={10}
-                        value={profile.childcareCosts}
+                        value={r.childcareCosts}
                         onValueChange={(value) =>
-                            updateProfile({ childcareCosts: value ?? 0 })
+                            setReductions({ childcareCosts: value ?? 0 })
                         }
                         placeholder={t(
                             "tax.profile.placeholder.childcareCosts",
                         )}
                     />
-                    <Label htmlFor="childcare-days">
+                    <Label htmlFor={`childcare-days-${pid}`}>
                         {t("tax.profile.field.childcareEligibleDays")}
                     </Label>
                     <ProfileNumberInput
-                        id="childcare-days"
+                        id={`childcare-days-${pid}`}
                         min={0}
                         step={1}
                         integer
-                        value={profile.childcareEligibleDays}
+                        value={r.childcareEligibleDays}
                         onValueChange={(value) =>
-                            updateProfile({
+                            setReductions({
                                 childcareEligibleDays: value ?? 0,
                             })
                         }
@@ -368,89 +382,106 @@ export function ExemptionsStep({ profile, updateProfile }: StepProps) {
                         )}
                     />
                     <EligibilitySwitch
-                        id="childcare-eligible"
-                        checked={!!profile.childcareEligible}
+                        id={`childcare-eligible-${pid}`}
+                        checked={!!r.childcareEligible}
                         onCheckedChange={(v) =>
-                            updateProfile({ childcareEligible: v })
+                            setReductions({ childcareEligible: v })
                         }
                         label={t("tax.profile.flag.childcareEligible")}
                     />
                 </div>
 
                 <div className="space-y-2">
-                    <Label htmlFor="domestic-help">
+                    <Label htmlFor={`domestic-help-${pid}`}>
                         {t("tax.profile.field.domesticHelpCosts")}
                     </Label>
                     <ProfileNumberInput
-                        id="domestic-help"
+                        id={`domestic-help-${pid}`}
                         min={0}
                         step={10}
-                        value={profile.domesticHelpCosts}
+                        value={r.domesticHelpCosts}
                         onValueChange={(value) =>
-                            updateProfile({ domesticHelpCosts: value ?? 0 })
+                            setReductions({ domesticHelpCosts: value ?? 0 })
                         }
                         placeholder={t(
                             "tax.profile.placeholder.domesticHelpCosts",
                         )}
                     />
                     <EligibilitySwitch
-                        id="domestic-help-eligible"
-                        checked={!!profile.domesticHelpEligible}
+                        id={`domestic-help-eligible-${pid}`}
+                        checked={!!r.domesticHelpEligible}
                         onCheckedChange={(v) =>
-                            updateProfile({ domesticHelpEligible: v })
+                            setReductions({ domesticHelpEligible: v })
                         }
                         label={t("tax.profile.flag.domesticHelpEligible")}
                     />
                 </div>
 
                 <div className="space-y-2">
-                    <Label htmlFor="union">
-                        {t("tax.profile.field.unionDues")}
+                    <Label htmlFor={`service-vouchers-${pid}`}>
+                        {t("tax.profile.field.serviceVoucherSpend")}
                     </Label>
+                    <FieldHint>
+                        {t("tax.profile.field.serviceVoucherSpend.desc")}
+                    </FieldHint>
                     <ProfileNumberInput
-                        id="union"
+                        id={`service-vouchers-${pid}`}
                         min={0}
                         step={10}
-                        value={profile.unionDues}
+                        allowEmpty
+                        value={r.serviceVoucherSpend}
                         onValueChange={(value) =>
-                            updateProfile({ unionDues: value ?? 0 })
+                            updateHousehold((h) =>
+                                updatePartner(h, pid, (p) => {
+                                    const {
+                                        serviceVoucherSpend: _old,
+                                        ...reductions
+                                    } = p.reductions;
+                                    return {
+                                        ...p,
+                                        reductions:
+                                            value === undefined
+                                                ? reductions
+                                                : {
+                                                      ...reductions,
+                                                      serviceVoucherSpend:
+                                                          Math.max(value, 0),
+                                                  },
+                                    };
+                                }),
+                            )
                         }
-                        placeholder={t("tax.profile.placeholder.unionDues")}
+                        placeholder={t(
+                            "tax.profile.placeholder.serviceVoucherSpend",
+                        )}
                     />
-                    <FieldHint>{t("tax.profile.field.unionDues.desc")}</FieldHint>
+                    <EligibilitySwitch
+                        id={`service-vouchers-eligible-${pid}`}
+                        checked={!!r.serviceVoucherEligible}
+                        onCheckedChange={(v) =>
+                            setReductions({ serviceVoucherEligible: v })
+                        }
+                        label={t("tax.profile.flag.serviceVoucherEligible")}
+                    />
                 </div>
+
             </div>
 
             <Separator />
 
             <ToggleGroup>
                 <ToggleRow
-                    id="disabled"
-                    label={t("tax.profile.field.disabilityExemption.self")}
-                    description={t(
-                        "tax.profile.field.disabilityExemption.desc",
-                    )}
-                    checked={profile.isDisabled}
-                    onCheckedChange={(v) => updateProfile({ isDisabled: v })}
-                />
-                <ToggleRow
-                    id="spouse-disabled"
-                    label={t("tax.profile.field.disabilityExemption.spouse")}
-                    description={t(
-                        "tax.profile.field.disabilityExemption.desc",
-                    )}
-                    checked={profile.isSpouseDisabled}
-                    onCheckedChange={(v) =>
-                        updateProfile({ isSpouseDisabled: v })
-                    }
-                />
-                <ToggleRow
-                    id="isolated-parent"
+                    id={`isolated-parent-${pid}`}
                     label={t("tax.profile.field.isolatedParent.label")}
                     description={t("tax.profile.field.isolatedParent.desc")}
-                    checked={profile.isIsolatedParent ?? false}
+                    checked={partner.isIsolatedParent ?? false}
                     onCheckedChange={(v) =>
-                        updateProfile({ isIsolatedParent: v })
+                        updateHousehold((h) =>
+                            updatePartner(h, pid, (p) => ({
+                                ...p,
+                                isIsolatedParent: v,
+                            })),
+                        )
                     }
                 />
             </ToggleGroup>

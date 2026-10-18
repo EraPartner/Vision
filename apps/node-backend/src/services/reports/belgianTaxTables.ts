@@ -57,7 +57,9 @@ const TABLES: Partial<Record<number, TaxYearTable>> = {
   },
   2025: {
     year: 2025,
-    dividendExemption: 859,
+    // WIB 92 art. 21, 14°: 833, frozen by the law of 18 Dec 2025 (FPS indexation
+    // notice AY 2026; fin.belgium.be "Vrijstellingen dividenden").
+    dividendExemption: 833,
     dividendWHTRate: 0.30,
     capitalGainsTaxRate: 0,
     capitalGainsTaxExemptionSingle: 0,
@@ -69,9 +71,10 @@ const TABLES: Partial<Record<number, TaxYearTable>> = {
   2026: {
     year: 2026,
     // Dividend exemption/WHT and TOB unchanged from 2025 (mirrors TABLE_2026 in
-    // constants.ts, which spreads TABLE_2025). The 2026 reform adds the flat 10%
-    // capital-gains tax with €10k single / €20k married exemptions.
-    dividendExemption: 859,
+    // constants.ts; the exemption stays frozen at 833 per the FPS indexation notice
+    // AY 2027). The 2026 reform adds the flat 10% capital-gains tax with €10k single /
+    // €20k married exemptions.
+    dividendExemption: 833,
     dividendWHTRate: 0.30,
     capitalGainsTaxRate: 0.10,
     capitalGainsTaxExemptionSingle: 10_000,

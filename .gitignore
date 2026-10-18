@@ -47,6 +47,13 @@ Thumbs.db
 
 # Build
 build/
+
+# Vision Native (XcodeGen output, SwiftPM state, local signing team)
+apps/native/*.xcodeproj
+apps/native/VisionNative/Info.plist
+apps/native/.build/
+apps/native/.swiftpm/
+apps/native/Config/Local.xcconfig
 !packaging/electron/build/
 *.log
 coverage/

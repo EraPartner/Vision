@@ -197,6 +197,59 @@ describe("statisticsRepository.getCategoryPivot", () => {
     expect(query.mock.calls[0]![0]).toContain("LEFT JOIN category_paths path");
   });
 
+  it("splits income booked on partner and joint accounts into incomeByOwner", async () => {
+    query.mockResolvedValueOnce({
+      rows: [
+        {
+          period: "2025-04",
+          category_id: 7,
+          category_name: "Income:Salary",
+          category_path_ids: [6, 7],
+          category_path_segments: ["Income", "Salary"],
+          date: new Date(2025, 3, 25),
+          currency: "EUR",
+          income: "3000",
+          expense: null,
+          income_partner: "1200.004",
+          income_joint: "300",
+          cnt: "3",
+        },
+        {
+          period: "2025-04",
+          category_id: 8,
+          category_name: "Income:Other",
+          category_path_ids: [6, 8],
+          category_path_segments: ["Income", "Other"],
+          date: new Date(2025, 3, 26),
+          currency: "EUR",
+          income: "50",
+          expense: null,
+          income_partner: null,
+          income_joint: null,
+          cnt: "1",
+        },
+      ],
+    });
+    convertRowsToEur.mockImplementationOnce(async (rows) =>
+      rows.map((row) => ({ ...row, amount_eur: Number(row.amount) })),
+    );
+    const pivot = await statisticsRepository.getCategoryPivot();
+    const cells = pivot.categoryPivot["2025-04"]!;
+    const salary = cells.find((c) => c.categoryId === 7);
+    const other = cells.find((c) => c.categoryId === 8);
+    // Owner legs never change the totals; `me` is the remainder of `income`.
+    expect(salary).toMatchObject({
+      total: 3000,
+      income: 3000,
+      transactionCount: 3,
+      incomeByOwner: { partner: 1200, joint: 300 },
+    });
+    expect(other).not.toHaveProperty("incomeByOwner");
+    expect(query.mock.calls[0]![0]).toContain(
+      "LEFT JOIN accounts acct ON acct.id = t.account_id",
+    );
+  });
+
   it("groups by period and category, sorts ascending by total", async () => {
     query.mockResolvedValueOnce({ rows: [] });
     // The repo now converts two legs (income/expense) per grouped row; cnt is the

@@ -7,6 +7,11 @@ import { server } from "@/test/msw/server";
 import { ok, settingsWithBaselines } from "@/test/msw/handlers";
 import { apiClient } from "@/lib/api";
 import { useSettingsStore } from "@/stores/settingsStore";
+import { DEFAULT_BELGIAN_TAX_PROFILE } from "@/stores/belgianTaxStore";
+import {
+    parseHouseholdSnapshotsV2,
+    parseHouseholdV2,
+} from "@/lib/belgianTax/householdSchema";
 import { SettingsPreloadProvider } from "@/contexts/SettingsPreloadContext";
 import {
     BelgianTaxProfileProvider,
@@ -35,6 +40,9 @@ describe("BelgianTaxProfileContext", () => {
             ),
         );
         vi.spyOn(apiClient, "saveSettings").mockResolvedValue(
+            undefined as never,
+        );
+        vi.spyOn(apiClient, "saveSetting").mockResolvedValue(
             undefined as never,
         );
     });
@@ -141,14 +149,166 @@ describe("BelgianTaxProfileContext", () => {
         await waitFor(() =>
             expect(apiClient.saveSettings).toHaveBeenCalledWith(
                 expect.objectContaining({
-                    belgian_tax_profile: expect.objectContaining({
-                        grossAnnualIncome: 42_000,
+                    belgian_tax_household_v2: expect.objectContaining({
+                        version: 2,
+                        partners: [
+                            expect.objectContaining({
+                                id: "A",
+                                activities: [
+                                    expect.objectContaining({
+                                        grossIncome: 42_000,
+                                    }),
+                                ],
+                            }),
+                        ],
                     }),
-                    belgian_tax_profile_snapshots_v1: {},
+                    belgian_tax_household_snapshots_v2: {},
                     belgian_tax_profile_snapshot_meta_v1: {},
                 }),
             ),
         );
+        // No backend consumer reads the v1 keys any more, so they are not written.
+        const keys = [
+            ...vi.mocked(apiClient.saveSetting).mock.calls.map(([key]) => key),
+            ...vi
+                .mocked(apiClient.saveSettings)
+                .mock.calls.flatMap(([values]) => Object.keys(values)),
+        ];
+        expect(keys).not.toContain("belgian_tax_profile");
+        expect(keys).not.toContain("belgian_tax_profile_snapshots_v1");
+    });
+
+    describe("household v2 upgrade on load", () => {
+        const v1Settings = {
+            belgian_tax_profile: {
+                taxYear: 2026,
+                grossAnnualIncome: 52_000,
+                filingStatus: "married_joint",
+                spouseProfessionalIncome: 18_000,
+            },
+            belgian_tax_profile_snapshots_v1: {
+                2024: { taxYear: 2024, grossAnnualIncome: 47_000 },
+            },
+        };
+
+        function serve(settings: Record<string, unknown>) {
+            server.use(
+                http.get(`${API_BASE}/api/settings`, () =>
+                    ok(settingsWithBaselines(settings)),
+                ),
+            );
+        }
+
+        it("writes schema-valid v2 keys for v1 values with null fields and a snapshot without region", async () => {
+            serve({
+                belgian_tax_profile: {
+                    taxYear: 2026,
+                    grossAnnualIncome: 52_000,
+                    mortgageStartYear: null,
+                    annualDividendIncome: null,
+                    dependentChildrenUnder3: null,
+                },
+                belgian_tax_profile_snapshots_v1: {
+                    2024: { taxYear: 2024, grossAnnualIncome: 47_000 },
+                },
+            });
+            const { result } = renderHook(() => useBelgianTaxProfile(), {
+                wrapper: makeWrapper(),
+            });
+            await waitFor(() => expect(result.current.isLoading).toBe(false));
+            await waitFor(() =>
+                expect(apiClient.saveSetting).toHaveBeenCalledTimes(2),
+            );
+            const calls = Object.fromEntries(
+                vi.mocked(apiClient.saveSetting).mock.calls,
+            ) as Record<string, unknown>;
+            expect(parseHouseholdV2(calls.belgian_tax_household_v2).ok).toBe(
+                true,
+            );
+            expect(
+                parseHouseholdSnapshotsV2(
+                    calls.belgian_tax_household_snapshots_v2,
+                ).ok,
+            ).toBe(true);
+        });
+
+        it("upgrades v1 keys and writes the v2 keys immediately", async () => {
+            serve(v1Settings);
+            const { result } = renderHook(() => useBelgianTaxProfile(), {
+                wrapper: makeWrapper(),
+            });
+            await waitFor(() => expect(result.current.isLoading).toBe(false));
+            await waitFor(() =>
+                expect(apiClient.saveSetting).toHaveBeenCalledTimes(2),
+            );
+            const calls = Object.fromEntries(
+                vi.mocked(apiClient.saveSetting).mock.calls,
+            ) as Record<string, unknown>;
+            expect(calls.belgian_tax_household_v2).toEqual(
+                result.current.household,
+            );
+            expect(calls.belgian_tax_household_snapshots_v2).toEqual(
+                result.current.householdSnapshots,
+            );
+            expect(result.current.household?.partners).toHaveLength(2);
+            expect(result.current.household?.migratedFrom?.fromVersion).toBe(1);
+            expect(result.current.profile.grossAnnualIncome).toBe(52_000);
+            expect(result.current.profile.spouseProfessionalIncome).toBe(
+                18_000,
+            );
+            expect(result.current.profileForYear(2024).grossAnnualIncome).toBe(
+                47_000,
+            );
+            expect(result.current.householdResult?.assessment.mode).toBe(
+                "joint",
+            );
+            expect(Object.keys(calls)).not.toContain("belgian_tax_profile");
+        });
+
+        it("does not rewrite v2 keys that are already present", async () => {
+            const { upgradeProfileV1ToHousehold, upgradeSnapshotsV1ToV2 } =
+                await import("@/lib/belgianTax/householdRuntime");
+            const household = upgradeProfileV1ToHousehold({
+                ...DEFAULT_BELGIAN_TAX_PROFILE,
+                grossAnnualIncome: 70_000,
+            });
+            serve({
+                ...v1Settings,
+                belgian_tax_household_v2: household,
+                belgian_tax_household_snapshots_v2: upgradeSnapshotsV1ToV2({}),
+            });
+            const { result } = renderHook(() => useBelgianTaxProfile(), {
+                wrapper: makeWrapper(),
+            });
+            await waitFor(() => expect(result.current.isLoading).toBe(false));
+            await act(async () => {
+                await new Promise((resolve) => setTimeout(resolve, 550));
+            });
+            expect(apiClient.saveSetting).not.toHaveBeenCalled();
+            expect(result.current.profile.grossAnnualIncome).toBe(70_000);
+            expect(result.current.snapshotExistsForYear(2024)).toBe(false);
+        });
+
+        it("falls back to the v1 upgrade with a warning when the stored household is invalid", async () => {
+            const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+            serve({
+                ...v1Settings,
+                belgian_tax_household_v2: { version: 2, partners: "nope" },
+            });
+            const { result } = renderHook(() => useBelgianTaxProfile(), {
+                wrapper: makeWrapper(),
+            });
+            await waitFor(() => expect(result.current.isLoading).toBe(false));
+            expect(result.current.profile.grossAnnualIncome).toBe(52_000);
+            expect(warn).toHaveBeenCalled();
+            await waitFor(() =>
+                expect(apiClient.saveSetting).toHaveBeenCalledTimes(1),
+            );
+            // Only the absent snapshots key is upgraded; the invalid value is not overwritten.
+            expect(vi.mocked(apiClient.saveSetting).mock.calls[0]?.[0]).toBe(
+                "belgian_tax_household_snapshots_v2",
+            );
+        });
     });
 
     it("persists the latest grouped edit after the provider unmounts", async () => {
@@ -167,12 +327,29 @@ describe("BelgianTaxProfileContext", () => {
         );
         expect(apiClient.saveSettings).toHaveBeenCalledWith(
             expect.objectContaining({
-                belgian_tax_profile: expect.objectContaining({
-                    grossAnnualIncome: 43_000,
+                belgian_tax_household_v2: expect.objectContaining({
+                    partners: [
+                        expect.objectContaining({
+                            activities: [
+                                expect.objectContaining({
+                                    grossIncome: 43_000,
+                                }),
+                            ],
+                        }),
+                    ],
                 }),
-                belgian_tax_profile_snapshots_v1: expect.objectContaining({
+                belgian_tax_household_snapshots_v2: expect.objectContaining({
                     2020: expect.objectContaining({
-                        grossAnnualIncome: 42_000,
+                        taxYear: 2020,
+                        partners: [
+                            expect.objectContaining({
+                                activities: [
+                                    expect.objectContaining({
+                                        grossIncome: 42_000,
+                                    }),
+                                ],
+                            }),
+                        ],
                     }),
                 }),
                 belgian_tax_profile_snapshot_meta_v1: expect.objectContaining({

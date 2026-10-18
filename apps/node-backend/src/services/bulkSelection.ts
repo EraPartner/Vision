@@ -32,6 +32,24 @@ import { EXPORT_JOINS_SQL } from "./transactionExport.ts";
 import type { TransactionWhereOptions } from "../lib/filterBuilder.ts";
 
 const DEFAULT_ID_CAP = 500;
+
+/**
+ * The bulk filter: the list builder's options plus the uncategorised queue flag
+ * the list endpoint (`GET /api/transactions?uncategorised=true`) and the
+ * frontend's `BulkTransactionFilter` send. The builder has no such option, so
+ * `resolveBulkSelection` adds the queue predicate itself.
+ */
+export type BulkWhereOptions = TransactionWhereOptions & {
+  uncategorised?: boolean | undefined;
+};
+
+/**
+ * The uncategorised queue predicate (`getUncategorisedWithCount`): the full
+ * 3-level effective category is NULL. Needs the `r` and `pr` joins of
+ * EXPORT_JOINS_SQL.
+ */
+const UNCATEGORISED_SQL =
+  "COALESCE(t.category_id, r.default_category_id, pr.default_category_id) IS NULL";
 const DEFAULT_FILTER_CAP = 5000;
 
 /**
@@ -83,6 +101,7 @@ const FILTER_ALIASES = [
   ["amountMax", "amount_max"],
   ["amountSigned", "amount_signed"],
   ["tagSlugs", "tags"],
+  ["uncategorised", "uncategorised"],
 ];
 
 const KNOWN_FILTER_KEYS = new Set(FILTER_ALIASES.flat());
@@ -222,7 +241,7 @@ function optionalTagSlugs(value: unknown, field: string): string[] | null {
  */
 function normalizeBulkFilter(
   filter: BulkFilterInput | null | undefined,
-): TransactionWhereOptions {
+): BulkWhereOptions {
   if (!filter || typeof filter !== "object") return {};
   if (Array.isArray(filter))
     throw new ValidationError("`filter` must be an object");
@@ -257,8 +276,13 @@ function normalizeBulkFilter(
     "amount_signed",
     false,
   );
+  const uncategorised = optionalBoolean(
+    pick("uncategorised", "uncategorised"),
+    "uncategorised",
+    false,
+  );
 
-  return {
+  const normalized: BulkWhereOptions = {
     transactionId: assertOptionalId(
       pick("transactionId", "transaction_id"),
       "transaction_id",
@@ -316,6 +340,16 @@ function normalizeBulkFilter(
     amountSigned,
     tagSlugs: optionalTagSlugs(pick("tagSlugs", "tags"), "tags"),
   };
+  if (!uncategorised) return normalized;
+  // Same semantics as the list endpoint's uncategorised view: an active-rows
+  // queue, and category filters are ignored because the queue has no category.
+  return {
+    ...normalized,
+    categoryId: null,
+    categoryIds: null,
+    active: true,
+    uncategorised: true,
+  };
 }
 
 function parseTransactionType(value: unknown): "income" | "expense" | null {
@@ -338,7 +372,7 @@ export function validateBulkSelection(
   opts: { idCap?: number } = {},
 ):
   | { mode: "ids"; ids: number[] }
-  | { mode: "filter"; filter: TransactionWhereOptions } {
+  | { mode: "filter"; filter: BulkWhereOptions } {
   const { ids, filter } = selector;
   const idCap = opts.idCap ?? DEFAULT_ID_CAP;
 
@@ -392,8 +426,11 @@ export async function resolveBulkSelection(
   const selection = validateBulkSelection(selector, { idCap });
   if (selection.mode === "ids") return selection.ids;
 
-  const normalized = selection.filter;
-  const { sql: whereSql, params } = buildTransactionWhere(normalized);
+  const { uncategorised, ...normalized } = selection.filter;
+  const { sql: builtSql, params } = buildTransactionWhere(normalized);
+  const whereSql = uncategorised
+    ? `${builtSql} AND ${UNCATEGORISED_SQL}`
+    : builtSql;
 
   const countResult = await query(
     `SELECT COUNT(*)::int AS n ${EXPORT_JOINS_SQL} WHERE ${whereSql}`,

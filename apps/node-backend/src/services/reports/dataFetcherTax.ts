@@ -59,6 +59,38 @@ export type PrecomputedPIT = {
 };
 
 /**
+ * Household result the frontend may attach to a tax-report request
+ * (routes/reports.ts `precomputedHouseholdSchema`, ADR-200/201).
+ */
+export type PrecomputedHousehold = {
+  assessmentMode: "single" | "separate" | "joint";
+  legalBasis?: string | undefined;
+  quotient?:
+    | {
+        applied: boolean;
+        transfer: number;
+        fromPartnerId?: "A" | "B" | undefined;
+        toPartnerId?: "A" | "B" | undefined;
+        benefit: number;
+      }
+    | undefined;
+  partners: Array<{
+    partnerId: "A" | "B";
+    grossIncome: number;
+    taxableIncome: number;
+    totalPIT: number;
+  }>;
+};
+
+/**
+ * The year's household as sent by the frontend, validated by
+ * `belgianTaxHouseholdV2Schema`. Only partner display names are read here.
+ */
+export type ReportHousehold = {
+  partners: Array<{ id: string; displayName?: string | undefined }>;
+};
+
+/**
  * `portfolio_transactions` JOINed to `investments`, as selected by
  * `fetchTaxTransactions` below. `amount`/`taxes`/`fees` are NUMERIC columns
  * COALESCE-defaulted to 0 — pg still emits NUMERIC as a string even through
@@ -144,6 +176,8 @@ export type TaxReportData = {
   taxTables: ResolvedTaxYearTable;
   taxProfile: TaxProfile | undefined;
   precomputedPIT: PrecomputedPIT | undefined;
+  household: ReportHousehold | undefined;
+  precomputedHousehold: PrecomputedHousehold | undefined;
   tobTotal: number;
   dividendWHTTotal: number;
   sellTaxTotal: number;
@@ -522,9 +556,13 @@ export async function fetchTaxData(
   {
     taxProfile,
     precomputedPIT,
+    household,
+    precomputedHousehold,
   }: {
     taxProfile?: TaxProfile | undefined;
     precomputedPIT?: PrecomputedPIT | undefined;
+    household?: ReportHousehold | undefined;
+    precomputedHousehold?: PrecomputedHousehold | undefined;
   } = {},
 ): Promise<TaxReportData> {
   const { taxYear, startDate, endDate, periodNote } =
@@ -536,6 +574,10 @@ export async function fetchTaxData(
   ]);
 
   const txns = unwrap(txnsResult, "fetchTaxTransactions");
+  // Annual PIT and household figures belong to one full calendar year whose
+  // profile was configured for that same year.
+  const annualTaxApplies =
+    period.kind === "year" && taxProfile?.taxYear === taxYear;
 
   return {
     taxYear,
@@ -545,14 +587,10 @@ export async function fetchTaxData(
     period,
     periodNote,
     taxTables,
-    taxProfile:
-      period.kind === "year" && taxProfile?.taxYear === taxYear
-        ? taxProfile
-        : undefined,
-    precomputedPIT:
-      period.kind === "year" && taxProfile?.taxYear === taxYear
-        ? precomputedPIT
-        : undefined,
+    taxProfile: annualTaxApplies ? taxProfile : undefined,
+    precomputedPIT: annualTaxApplies ? precomputedPIT : undefined,
+    household: annualTaxApplies ? household : undefined,
+    precomputedHousehold: annualTaxApplies ? precomputedHousehold : undefined,
     tobTotal: txns?.tobTotal ?? 0,
     dividendWHTTotal: txns?.dividendWHTTotal ?? 0,
     sellTaxTotal: txns?.sellTaxTotal ?? 0,

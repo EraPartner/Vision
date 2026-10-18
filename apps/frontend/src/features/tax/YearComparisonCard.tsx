@@ -67,13 +67,21 @@ interface MetricRow {
 
 export function YearComparisonCard({ className }: YearComparisonCardProps) {
     const { t } = useLanguage();
-    const { viewedYear, profile, snapshots, snapshotMetas } =
-        useBelgianTaxProfile((state) => ({
-            viewedYear: state.viewedYear,
-            profile: state.profile,
-            snapshots: state.snapshots,
-            snapshotMetas: state.snapshotMetas,
-        }));
+    const {
+        viewedYear,
+        profile,
+        snapshots,
+        household,
+        householdSnapshots,
+        snapshotMetas,
+    } = useBelgianTaxProfile((state) => ({
+        viewedYear: state.viewedYear,
+        profile: state.profile,
+        snapshots: state.snapshots,
+        household: state.household,
+        householdSnapshots: state.householdSnapshots,
+        snapshotMetas: state.snapshotMetas,
+    }));
     const years = useAvailableTaxYears();
 
     const defaultCompareYear = useMemo(() => {
@@ -112,7 +120,13 @@ export function YearComparisonCard({ className }: YearComparisonCardProps) {
 
     const rows: MetricRow[] | null = useMemo(() => {
         if (compareYear == null) return null;
-        const taxState = { profile, snapshots, snapshotMetas };
+        const taxState = {
+            profile,
+            snapshots,
+            household,
+            householdSnapshots,
+            snapshotMetas,
+        };
         const calcA = resolveBelgianTaxCalculation(taxState, viewedYear);
         const calcB = resolveBelgianTaxCalculation(taxState, compareYear);
         return [
@@ -160,6 +174,8 @@ export function YearComparisonCard({ className }: YearComparisonCardProps) {
         viewedYear,
         profile,
         snapshots,
+        household,
+        householdSnapshots,
         snapshotMetas,
         t,
         fmtBase,

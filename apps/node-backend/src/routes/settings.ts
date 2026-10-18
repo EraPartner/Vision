@@ -14,6 +14,10 @@ import settingsService from "../services/settingsService.ts";
 import { validateIntArray } from "../middleware/validation.ts";
 import { NotFoundError, ValidationError } from "../middleware/errorHandler.ts";
 import { bareMessages, guardField, parseInput } from "../lib/zodInput.ts";
+import {
+  belgianTaxHouseholdSnapshotsV2Schema,
+  belgianTaxHouseholdV2Schema,
+} from "./belgianTaxSettingsSchemas.ts";
 
 const router = Router();
 
@@ -51,6 +55,7 @@ const TAX_PROFILE_MONEY_FIELDS = [
   "spouseProfessionalIncome",
   "annualDividendIncome",
   "annualSavingsInterest",
+  "serviceVoucherSpend",
 ];
 const TAX_PROFILE_COUNT_FIELDS = [
   "dependentChildren",
@@ -84,6 +89,7 @@ const belgianTaxProfileSchema = z.looseObject({
   taxYear: yearNum,
   mortgageStartYear: yearNum,
   cadastralCentimesOverride: centimes,
+  selfEmployedIncomeKind: z.enum(["profits", "fees"]).nullish(),
   additionalResidences: z
     .array(
       z.looseObject({
@@ -236,6 +242,8 @@ const jsonObjectSchema = z.looseObject({});
 const belgianTaxSnapshotMetaEntrySchema = z
   .looseObject({
     frozenCalculation: z.looseObject({}).optional(),
+    // Household result (engine version 2, ADR-200) frozen next to the v1 calculation.
+    frozenHouseholdResult: z.looseObject({}).optional(),
   })
   .superRefine((entry, ctx) => {
     if (
@@ -279,6 +287,9 @@ const SETTING_SCHEMAS: Record<string, z.ZodType> = {
     z.string(),
     belgianTaxSnapshotMetaEntrySchema,
   ),
+  // Belgian tax household model (ADR-200): live household and year-keyed snapshots.
+  belgian_tax_household_v2: belgianTaxHouseholdV2Schema,
+  belgian_tax_household_snapshots_v2: belgianTaxHouseholdSnapshotsV2Schema,
   // Remaining first-party keys, same conservative top-level-shape guards.
   // RecurringDetectionPanel stores an array of dismissed recipient ids (top-
   // level shape only — entries stay unvalidated, matching the blob guards).

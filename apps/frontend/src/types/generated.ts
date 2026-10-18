@@ -1900,6 +1900,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/info/deduction-candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Transaction-derived Belgian deduction candidates for one year */
+        get: operations["getDeductionCandidates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/info/insights-count": {
         parameters: {
             query?: never;
@@ -4475,6 +4492,159 @@ export interface components {
             code?: string;
             status?: number;
         };
+        ExchangeRate: {
+            /** @description ISO 4217 currency code */
+            currency: string;
+            /** @description The value of one unit in EUR */
+            rate_to_eur: number;
+            /** Format: date */
+            rate_date: string;
+            /** Format: date-time */
+            fetched_at: string;
+        };
+        ExchangeRates: {
+            total_rates: number;
+            rates: components["schemas"]["ExchangeRate"][];
+            /** @description Built-in rates to EUR by currency code, used when no stored rate exists */
+            fallback_rates: {
+                [key: string]: number;
+            };
+            /** @enum {string} */
+            source: "database" | "fallback";
+            /** @description The stored rate date is before today */
+            is_stale: boolean;
+            /** Format: date-time */
+            last_fetched_at: string | null;
+        };
+        InfoMessage: {
+            message: string;
+        };
+        DbTableStat: {
+            schemaname: string;
+            table_name: string;
+            /** @description BIGINT estimate from pg_stat_user_tables, as decimal text */
+            live_rows: string;
+            /** @description BIGINT estimate from pg_stat_user_tables, as decimal text */
+            dead_rows: string;
+            last_autovacuum: string | null;
+            last_autoanalyze: string | null;
+            /** @description pg_size_pretty of the total relation size */
+            size: string;
+            /** @description BIGINT byte count, as decimal text */
+            size_bytes: string;
+        };
+        DbStats: {
+            tables: components["schemas"]["DbTableStat"][];
+            /** @description pg_size_pretty of the database size */
+            db_size: string | null;
+        };
+        DbVacuumResult: {
+            /** @description The vacuumed table, or `all` for every table */
+            vacuumed: string;
+        };
+        DbEditorColumn: {
+            name: string;
+            /** @description information_schema data_type */
+            dataType: string;
+            /** @description information_schema udt_name */
+            udtName: string;
+            nullable: boolean;
+            hasDefault: boolean;
+            generated: boolean;
+            /** @description False for generated and identity-always columns */
+            writable: boolean;
+        };
+        DbEditorTableSchema: {
+            table: string;
+            columns: components["schemas"]["DbEditorColumn"][];
+            primaryKey: string[];
+        };
+        DbEditorRows: components["schemas"]["DbEditorTableSchema"] & {
+            /** @description The page's rows by column name; each row also carries its `__xmin` row version as text. */
+            rows: {
+                [key: string]: unknown;
+            }[];
+            /** @description Exact total only when the first page is shorter than the requested limit. */
+            total?: number;
+            limit: number;
+            hasMore: boolean;
+            /** @description Opaque cursor of the next page, null on the last page */
+            nextCursor: string | null;
+        };
+        DbEditorStatement: {
+            op: string;
+            /** @description The SQL statement with its parameters rendered as literals */
+            preview: string;
+        };
+        /** @description A dry run returns `count` and `statements`; a commit returns `applied`, `results` and `refreshScheduled`. */
+        DbEditorMutationResult: {
+            dryRun: boolean;
+            /** @description Dry run only */
+            count?: number;
+            /** @description Dry run only */
+            statements?: components["schemas"]["DbEditorStatement"][];
+            /** @description Commit only */
+            applied?: number;
+            /** @description Commit only */
+            results?: {
+                op: string;
+                /** @description The written row; absent for a delete */
+                after?: {
+                    [key: string]: unknown;
+                };
+            }[];
+            /** @description Commit only; true when the dashboard materialized views refresh */
+            refreshScheduled?: boolean;
+        };
+        ProviderHealth: {
+            provider: string;
+            /** @description The provider kind: price, fx, inflation or research */
+            kind: string;
+            label: string;
+            /** Format: date-time */
+            last_success_at: string | null;
+            /** Format: date-time */
+            last_error_at: string | null;
+            last_error: string | null;
+            consecutive_failures: number;
+            /** Format: date-time */
+            updated_at: string | null;
+        };
+        ProviderHealthList: {
+            items: components["schemas"]["ProviderHealth"][];
+            total: number;
+        };
+        ProbeResult: {
+            ok: boolean;
+            provider: components["schemas"]["ProviderHealth"];
+            /** @description The probe error, only when ok is false */
+            error?: string;
+        };
+        RouteMetric: {
+            /** @description METHOD:path */
+            route: string;
+            method: string;
+            path: string;
+            count: number;
+            errors: number;
+            /** @description errors / count, from 0 to 1 */
+            error_rate: number;
+            p50_ms: number | null;
+            p95_ms: number | null;
+            window_minutes: number;
+        };
+        RouteMetricList: {
+            items: components["schemas"]["RouteMetric"][];
+            total: number;
+        };
+        EndpointEntry: {
+            method: string;
+            path: string;
+        };
+        EndpointList: {
+            items: components["schemas"]["EndpointEntry"][];
+            total: number;
+        };
         /** @description Citation snapshot. Document metadata is optional, but requires documentId when present; the server pins document version and digest on save. The snapshot remains after source deletion. */
         ResearchDossierSource: {
             title: string;
@@ -5479,6 +5649,13 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
         };
+        /** @description A tag as transaction and planned-transaction reads embed it (no timestamps). */
+        TransactionTagRef: {
+            id: number;
+            slug: string;
+            color: string | null;
+            is_active: boolean;
+        };
         TagList: components["schemas"]["OptionalPaginationFields"] & {
             items: components["schemas"]["Tag"][];
         };
@@ -5632,6 +5809,8 @@ export interface components {
             category_id?: number;
             /** @description Must be an array of integers, not a comma string. */
             category_ids?: number[];
+            /** @description Defaults to false. When true, selects the uncategorised queue the list endpoint's `uncategorised=true` returns: active rows whose effective category is empty. `active`, `category_id` and `category_ids` are then ignored. */
+            uncategorised?: boolean;
             recipient_id?: number;
             recipient_group_id?: number;
             recipient_name?: string;
@@ -5647,14 +5826,27 @@ export interface components {
             /** @description Tag slugs, as an array or a comma-separated string. */
             tags?: string[] | string;
         };
+        TransactionParserConfig: {
+            dateColumn?: string;
+            recipientColumn?: string;
+            amountColumn?: string;
+            memoColumn?: string;
+            /** @description strptime-style date format, default `%Y-%m-%d`. */
+            dateFormat?: string;
+            /** @description CSV delimiter, default ',' */
+            separator?: string;
+            /** @description UTF-8, Latin-1 (latin1, latin-1, iso-8859-1), or windows-1252. */
+            encoding?: string;
+            /** @description Physical leading lines before the CSV header. */
+            skipRows?: number;
+            number_format?: components["schemas"]["CsvNumberFormat"];
+        } & {
+            [key: string]: unknown;
+        };
         CustomParserConfig: {
             id: number;
             name: string;
-            config: {
-                number_format?: components["schemas"]["CsvNumberFormat"];
-            } & {
-                [key: string]: unknown;
-            };
+            config: components["schemas"]["TransactionParserConfig"];
             /** Format: date-time */
             created_at?: string;
             /** Format: date-time */
@@ -5692,8 +5884,8 @@ export interface components {
             transfer_peer_id?: number | null;
             /** @description Origin of transfer classification, including automatic, manual, system or brokerage. */
             transfer_source?: string | null;
-            /** @description Canonical display name projected from the linked account; use account_id as the stable identity */
-            bank_account: string;
+            /** @description Canonical display name projected from the linked account (null when account_id is); use account_id as the stable identity */
+            bank_account: string | null;
             recipient_id?: number;
             recipient_name?: string;
             memo?: string;
@@ -5713,10 +5905,12 @@ export interface components {
             /** @description Format: GENERAL:DETAIL */
             category_name?: string;
             comment?: string;
+            /** @description False when the transaction is excluded from totals and statistics. */
+            is_active?: boolean;
             /** @description Tags attached to this transaction */
-            tags?: components["schemas"]["Tag"][];
+            tags?: components["schemas"]["TransactionTagRef"][];
             /** Format: date-time */
-            created_at: string;
+            created_at: string | null;
             /** Format: date-time */
             updated_at?: string;
             links: components["schemas"]["Link"][];
@@ -5783,13 +5977,14 @@ export interface components {
             /** Format: date */
             execution_date: string;
             /** Format: date-time */
-            created_at: string;
+            created_at?: string | null;
         };
         PlannedTransaction: {
             id: number;
             /** Format: date */
             planned_date: string;
-            bank_account: string;
+            /** @description Display name of the linked account; null or absent when account_id is null */
+            bank_account?: string | null;
             /** @description Stable linked account identity */
             account_id?: number | null;
             recipient_id?: number;
@@ -5829,12 +6024,12 @@ export interface components {
             execution_count: number;
             executions?: components["schemas"]["PlannedTransactionExecution"][];
             /** @description Tags attached to this planned transaction */
-            tags?: components["schemas"]["Tag"][];
+            tags?: components["schemas"]["TransactionTagRef"][];
             is_active: boolean;
             /** Format: date-time */
-            created_at: string;
+            created_at?: string | null;
             /** Format: date-time */
-            updated_at?: string;
+            updated_at?: string | null;
             links: components["schemas"]["Link"][];
         };
         PlannedTransactionCreate: {
@@ -5842,7 +6037,7 @@ export interface components {
             planned_date: string;
             /** @description Canonical account identity */
             account_id: number;
-            recipient_id: number;
+            recipient_id?: number;
             memo?: string;
             amount: number;
             currency?: string;
@@ -6166,6 +6361,11 @@ export interface components {
                     income: number;
                     expense: number;
                     transactionCount: number;
+                    /** @description Additive (ADR-201). Part of `income` booked on accounts whose owner is `partner` or `joint`; present only when one of them is non-zero. The rest of `income` is on `me` accounts or on transactions without an account. */
+                    incomeByOwner?: {
+                        partner?: number;
+                        joint?: number;
+                    };
                 }[];
             };
         };
@@ -6297,7 +6497,8 @@ export interface components {
             remaining: number;
         };
         Attachment: {
-            id: number;
+            /** @description BIGSERIAL identity, serialized as a decimal string. */
+            id: string;
             transaction_id: number;
             filename: string;
             stored_path: string;
@@ -6677,12 +6878,23 @@ export interface components {
                 [key: string]: number;
             };
         };
+        /** @description A `recipient_match_patterns` row as `listPatternsForRecipient` selects it. */
         RecipientPattern: {
             id: number;
             pattern: string;
-            is_regex?: boolean;
+            /** @enum {string} */
+            pattern_kind: "literal_prefix" | "glob" | "regex";
+            case_sensitive: boolean;
+            /** Format: int32 */
+            priority: number;
+            is_active: boolean;
+            /** @enum {string} */
+            source: "user" | "suggested" | "system";
+            notes?: string | null;
             /** Format: date-time */
             created_at: string;
+            /** Format: date-time */
+            updated_at?: string;
         };
         RecipientBankAccount: {
             id: number;
@@ -10948,9 +11160,25 @@ export interface operations {
                 /** @description Comma-separated account ids (exact FK match, ADR-088); preferred over bank_accounts. Every element must be a plain base-10 integer in 1..2147483647; a malformed element returns 400 VALIDATION_ERROR rather than being dropped, which used to widen the export to every account. Capped at 50 entries after validation. */
                 account_ids?: string;
                 bank_account?: string;
+                /** @description Comma-separated account labels (legacy escape hatch next to account_ids); blank entries are dropped and the list is capped at 50 entries. */
+                bank_accounts?: string;
+                /** @description Comma-separated category ids. Every element must be a plain base-10 integer in 1..2147483647; a malformed element returns 400 VALIDATION_ERROR. */
+                category_ids?: string;
                 include_balance?: boolean;
                 /** @description Comma-separated tag slugs — OR filter */
                 tags?: string;
+                /** @description Restrict the export to one transaction id (the list filter of the same name). */
+                transaction_id?: number;
+                recipient_id?: number;
+                category_id?: number;
+                /** @description Free-text search, as on the list endpoint (truncated to 200 characters). */
+                search?: string;
+                /** @description income or expense; any other value is ignored. */
+                transaction_type?: string;
+                amount_min?: number;
+                amount_max?: number;
+                /** @description Compare amount_min/amount_max against the signed amount instead of its absolute value. */
+                amount_signed?: boolean;
             };
             header?: never;
             path?: never;
@@ -10979,8 +11207,24 @@ export interface operations {
                 /** @description Comma-separated account ids (exact FK match, ADR-088); preferred over bank_accounts. Every element must be a plain base-10 integer in 1..2147483647; a malformed element returns 400 VALIDATION_ERROR rather than being dropped, which used to widen the export to every account. Capped at 50 entries after validation. */
                 account_ids?: string;
                 bank_account?: string;
+                /** @description Comma-separated account labels (legacy escape hatch next to account_ids); blank entries are dropped and the list is capped at 50 entries. */
+                bank_accounts?: string;
+                /** @description Comma-separated category ids. Every element must be a plain base-10 integer in 1..2147483647; a malformed element returns 400 VALIDATION_ERROR. */
+                category_ids?: string;
                 /** @description Comma-separated tag slugs — OR filter */
                 tags?: string;
+                /** @description Restrict the export to one transaction id (the list filter of the same name). */
+                transaction_id?: number;
+                recipient_id?: number;
+                category_id?: number;
+                /** @description Free-text search, as on the list endpoint (truncated to 200 characters). */
+                search?: string;
+                /** @description income or expense; any other value is ignored. */
+                transaction_type?: string;
+                amount_min?: number;
+                amount_max?: number;
+                /** @description Compare amount_min/amount_max against the signed amount instead of its absolute value. */
+                amount_signed?: boolean;
             };
             header?: never;
             path?: never;
@@ -11175,7 +11419,10 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: components["schemas"]["RecipientPattern"][];
+                        data?: {
+                            items: components["schemas"]["RecipientPattern"][];
+                            total: number;
+                        };
                     };
                 };
             };
@@ -11207,14 +11454,16 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Created pattern */
+            /** @description Created pattern (its id) */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: components["schemas"]["RecipientPattern"];
+                        data?: {
+                            id: number;
+                        };
                     };
                 };
             };
@@ -11256,7 +11505,14 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: {
+                            matchCount: number;
+                            recipientIds: number[];
+                            /** @description Only on a `regex` preview. */
+                            truncated?: boolean;
+                        };
+                    };
                 };
             };
             /** @description VALIDATION_ERROR: missing pattern, or a field of the wrong type */
@@ -11508,6 +11764,8 @@ export interface operations {
                 account_id?: number;
                 is_recurring?: boolean;
                 is_executed?: boolean;
+                /** @description true (the default) lists active payments only; false includes paused ones. */
+                active?: boolean;
             };
             header?: never;
             path?: never;
@@ -11681,7 +11939,8 @@ export interface operations {
                 "application/json": {
                     /** Format: date */
                     planned_date?: string;
-                    bank_account?: string;
+                    /** @description Canonical account identity (the retired bank_account string is rejected) */
+                    account_id?: number | null;
                     recipient_id?: number;
                     memo?: string;
                     amount?: number;
@@ -11695,6 +11954,16 @@ export interface operations {
                     recurrence_end_date?: string | null;
                     max_occurrences?: number | null;
                     is_active?: boolean;
+                    is_loan?: boolean;
+                    loan_type?: components["schemas"]["PlannedLoanType"];
+                    loan_principal?: number;
+                    loan_annual_interest_rate?: number;
+                    loan_term_months?: number;
+                    /** Format: date */
+                    loan_start_date?: string;
+                    loan_payment_day?: number;
+                    /** @description Tag slugs; replaces the attached set */
+                    tags?: string[];
                 };
             };
         };
@@ -11915,6 +12184,63 @@ export interface operations {
             };
         };
     };
+    getDeductionCandidates: {
+        parameters: {
+            query?: {
+                /** @description Calendar year (1970-3000); defaults to the current year. */
+                year?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Outflows of the year classified per Belgian deduction type, with the contributing categories and, per type, the total split by account owner (`byOwner`, additive, ADR-201; a transaction without an account counts as `me`). An internal failure answers an empty `byDeductionType` instead of a 500. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: {
+                            year: number;
+                            /** Format: date */
+                            from: string;
+                            /** Format: date */
+                            to: string;
+                            currency: string;
+                            byDeductionType: {
+                                deductionType: string;
+                                total: number;
+                                /** @description The total split by account owner; the three values add up to `total`. */
+                                byOwner?: {
+                                    me: number;
+                                    partner: number;
+                                    joint: number;
+                                };
+                                categoryCount: number;
+                                categories: {
+                                    category: string;
+                                    total: number;
+                                    count: number;
+                                }[];
+                            }[];
+                        };
+                    };
+                };
+            };
+            /** @description Malformed `year` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+        };
+    };
     getInsightsCount: {
         parameters: {
             query?: never;
@@ -11980,8 +12306,8 @@ export interface operations {
     getExchangeRates: {
         parameters: {
             query?: {
-                base?: string;
-                month?: string;
+                /** @description Serve the stored rates without starting a background refresh when they are stale (default false). Accepts true/false/1/0. */
+                db_only?: boolean;
             };
             header?: never;
             path?: never;
@@ -11989,13 +12315,15 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Exchange rate map */
+            /** @description The latest stored rate per currency and the built-in fallback rates */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["ExchangeRates"];
+                    };
                 };
             };
         };
@@ -12015,7 +12343,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["InfoMessage"];
+                    };
                 };
             };
         };
@@ -13930,6 +14260,50 @@ export interface operations {
                 "application/json": {
                     year?: number;
                     currency?: string;
+                    /** @description Belgian filing context echoed into the Belgian rules section. */
+                    taxProfile?: {
+                        filingStatus?: string;
+                        region?: string;
+                        taxYear?: number;
+                    };
+                    /** @description PIT figures from the frontend engine; bracket `rate` is in percent units. */
+                    precomputedPIT?: {
+                        taxableIncome?: number;
+                        totalTax?: number;
+                        brackets?: {
+                            label?: string;
+                            rate?: number;
+                            taxableIncome?: number;
+                            taxAmount?: number;
+                        }[];
+                    };
+                    /** @description Additive (ADR-201). The year's Belgian tax household, validated like the `belgian_tax_household_v2` setting; only partner display names are rendered. */
+                    household?: {
+                        [key: string]: unknown;
+                    };
+                    /** @description Additive (ADR-201). Per-partner result from the frontend household engine. With two partners the Belgian rules section adds a row per partner, the household total, the assessment mode and the marital quotient. */
+                    precomputedHousehold?: {
+                        /** @enum {string} */
+                        assessmentMode: "single" | "separate" | "joint";
+                        legalBasis?: string;
+                        quotient?: {
+                            applied: boolean;
+                            transfer: number;
+                            /** @enum {string} */
+                            fromPartnerId?: "A" | "B";
+                            /** @enum {string} */
+                            toPartnerId?: "A" | "B";
+                            benefit: number;
+                        };
+                        /** @description One entry per partner; partner ids must be unique. */
+                        partners: {
+                            /** @enum {string} */
+                            partnerId: "A" | "B";
+                            grossIncome: number;
+                            taxableIncome: number;
+                            totalPIT: number;
+                        }[];
+                    };
                     excludedCategoryIds?: number[];
                     excludedRecipientIds?: number[];
                 };
@@ -14465,11 +14839,7 @@ export interface operations {
             content: {
                 "application/json": {
                     name: string;
-                    config: {
-                        number_format?: components["schemas"]["CsvNumberFormat"];
-                    } & {
-                        [key: string]: unknown;
-                    };
+                    config: components["schemas"]["TransactionParserConfig"];
                 };
             };
         };
@@ -14534,11 +14904,7 @@ export interface operations {
             content: {
                 "application/json": {
                     name?: string;
-                    config?: {
-                        number_format?: components["schemas"]["CsvNumberFormat"];
-                    } & {
-                        [key: string]: unknown;
-                    };
+                    config?: components["schemas"]["TransactionParserConfig"];
                 };
             };
         };
@@ -14639,7 +15005,14 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: {
+                            /** @description Committed transactions removed. */
+                            deleted: number;
+                            /** @description Payees the batch created that no longer have transactions. */
+                            recipientsRemoved: number;
+                        };
+                    };
                 };
             };
             /** @description Reopen closed accounts before rolling back their ledger rows */
@@ -16001,13 +16374,15 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description DB stats */
+            /** @description Table statistics and the database size */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["DbStats"];
+                    };
                 };
             };
         };
@@ -16034,7 +16409,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["DbVacuumResult"];
+                    };
                 };
             };
             /** @description VALIDATION_ERROR — `table` is not a non-empty string, or names an unknown table */
@@ -16072,19 +16449,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: {
-                            table?: string;
-                            primaryKey?: string[];
-                            columns?: {
-                                name?: string;
-                                dataType?: string;
-                                udtName?: string;
-                                nullable?: boolean;
-                                hasDefault?: boolean;
-                                generated?: boolean;
-                                writable?: boolean;
-                            }[];
-                        };
+                        data?: components["schemas"]["DbEditorTableSchema"];
                     };
                 };
             };
@@ -16130,17 +16495,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: {
-                            table?: string;
-                            columns?: Record<string, never>[];
-                            primaryKey?: string[];
-                            rows?: Record<string, never>[];
-                            /** @description Exact total only when the first page is shorter than the requested limit. */
-                            total?: number;
-                            limit?: number;
-                            hasMore?: boolean;
-                            nextCursor?: string | null;
-                        };
+                        data?: components["schemas"]["DbEditorRows"];
                     };
                 };
             };
@@ -16203,7 +16558,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["DbEditorMutationResult"];
+                    };
                 };
             };
             /** @description Malformed change set or non-boolean dryRun */
@@ -16325,17 +16682,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Provider health rows */
+            /** @description Provider health rows (canonical `{items, total}` body) */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: {
-                            items: Record<string, never>[];
-                            total: number;
-                        };
+                        data?: components["schemas"]["ProviderHealthList"];
                     };
                 };
             };
@@ -16352,13 +16706,15 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Probe result */
+            /** @description Probe result; a failed probe is `ok false` with `error`, not an HTTP error */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Envelope"];
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["ProbeResult"];
+                    };
                 };
             };
         };
@@ -16379,10 +16735,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: {
-                            items: Record<string, never>[];
-                            total: number;
-                        };
+                        data?: components["schemas"]["RouteMetricList"];
                     };
                 };
             };
@@ -16397,20 +16750,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Endpoint list */
+            /** @description Endpoint list (canonical `{items, total}` body) */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["Envelope"] & {
-                        data?: {
-                            items: {
-                                method?: string;
-                                path?: string;
-                            }[];
-                            total: number;
-                        };
+                        data?: components["schemas"]["EndpointList"];
                     };
                 };
             };

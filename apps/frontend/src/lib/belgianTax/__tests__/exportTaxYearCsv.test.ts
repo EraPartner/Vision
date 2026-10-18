@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { computeBelgianPIT } from "../pit";
 import { buildTaxYearCsv } from "../exportTaxYearCsv";
 import { makeTaxProfile } from "./testProfile";
+import { computeHouseholdTax } from "../household";
+import { activity, household, married, partner } from "./testHousehold";
 
 function buildCsv(
     overrides: Partial<Parameters<typeof buildTaxYearCsv>[0]> = {},
@@ -50,5 +52,33 @@ describe("buildTaxYearCsv", () => {
         expect(buildCsv({ generatedAt: "2026-05-12,08:00:00" })).toContain(
             'Generated at,"2026-05-12,08:00:00"',
         );
+    });
+
+    it("adds per-partner inputs, results and the quotient for two partners", () => {
+        const h = married([activity("employee", 60_000)], [activity("employee", 10_000)]);
+        h.partners[1]!.reductions.charitableDonations = 250;
+        const result = computeHouseholdTax(h);
+        const csv = buildCsv({ household: h, householdResult: result });
+        const [a, b] = result.partners;
+        expect(csv).toContain("# Per-partner inputs\nField,You,Partner,Household");
+        expect(csv).toContain("Gross activity income,60000,10000,70000");
+        expect(csv).toContain("Charitable donations,0,250,250");
+        expect(csv).toContain("Component,You (EUR),Partner (EUR),Household (EUR)");
+        expect(csv).toContain(
+            `Total PIT,${a!.totalPIT.toFixed(2).replace(/\.?0+$/, "")},${b!.totalPIT
+                .toFixed(2)
+                .replace(/\.?0+$/, "")},`,
+        );
+        expect(csv).toContain("Assessment mode,joint");
+        expect(csv).toContain("Marital quotient applied,true");
+        expect(csv).toMatch(/Marital quotient transfer,[\d.]+,You,Partner/);
+    });
+
+    it("keeps a one-partner export unchanged", () => {
+        const single = household([partner("A", [activity("employee", 60_000)])]);
+        expect(
+            buildCsv({ household: single, householdResult: computeHouseholdTax(single) }),
+        ).toBe(buildCsv());
+        expect(buildCsv({ household: null, householdResult: null })).toBe(buildCsv());
     });
 });

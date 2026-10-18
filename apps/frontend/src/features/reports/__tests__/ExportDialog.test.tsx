@@ -10,6 +10,17 @@ import { ok, settingsWithBaselines } from "@/test/msw/handlers";
 import { DEFAULT_BELGIAN_TAX_PROFILE } from "@/stores/belgianTaxStore";
 import { computeBelgianPIT } from "@/lib/belgianTax";
 import * as reportsApi from "@/lib/api/reports";
+import { useSettingsStore } from "@/stores/settingsStore";
+import { LATEST_TAX_YEAR } from "@/lib/belgianTax/constants";
+import {
+    computeHouseholdTax,
+    toBelgianTaxCalculation,
+} from "@/lib/belgianTax/household";
+import {
+    activity,
+    household,
+    partner,
+} from "@/lib/belgianTax/__tests__/testHousehold";
 
 // jsdom does not implement these blob URL APIs
 beforeEach(() => {
@@ -288,6 +299,133 @@ describe("ExportDialog", () => {
             );
         },
     );
+
+    describe("tax report household (ADR-200/201)", () => {
+        const married = (gross: number) =>
+            household(
+                [
+                    partner("A", [{ ...activity("employee", 60_000), id: "act_A_1" }]),
+                    partner("B", [{ ...activity("employee", gross), id: "act_B_1" }]),
+                ],
+                {
+                    taxYear: LATEST_TAX_YEAR,
+                    relationship: {
+                        events: [{ id: "evt_1", kind: "marriage", date: "2015-06-01" }],
+                    },
+                },
+            );
+
+        async function downloadTax(
+            settings: Record<string, unknown>,
+            { year = LATEST_TAX_YEAR, partners = 2 }: { year?: number | "rolling"; partners?: number } = {},
+        ) {
+            server.use(
+                http.get("http://localhost:3002/api/settings", () =>
+                    ok(settingsWithBaselines(settings)),
+                ),
+            );
+            const user = userEvent.setup();
+            renderWithApp(<ExportDialog defaultType="tax" />);
+            await waitFor(() =>
+                expect(useSettingsStore.getState().household?.partners).toHaveLength(partners),
+            );
+            await user.click(await screen.findByRole("button", { name: /export pdf/i }));
+            if (year !== "rolling") {
+                await user.click(
+                    screen.getByRole("radio", { name: /full year|specific year/i }),
+                );
+                fireEvent.change(screen.getByLabelText(/^year$/i), {
+                    target: { value: String(year) },
+                });
+            }
+            await user.click(await screen.findByRole("button", { name: /download pdf/i }));
+            await waitFor(() => expect(reportsApi.downloadTaxReport).toHaveBeenCalled());
+            return vi.mocked(reportsApi.downloadTaxReport).mock.calls[0]![0]!;
+        }
+
+        it("sends the household and a row per partner", async () => {
+            const live = married(20_000);
+            const options = await downloadTax({ belgian_tax_household_v2: live });
+            const expected = computeHouseholdTax(live);
+            expect(options.household).toEqual(live);
+            expect(options.precomputedHousehold?.assessmentMode).toBe("joint");
+            expect(options.precomputedHousehold?.partners).toEqual(
+                expected.partners.map((p) => ({
+                    partnerId: p.partnerId,
+                    grossIncome: p.grossIncome,
+                    taxableIncome: p.taxableIncome,
+                    totalPIT: p.totalPIT,
+                })),
+            );
+            expect(options.precomputedPIT?.totalTax).toBeCloseTo(expected.totals.totalPIT, 6);
+        });
+
+        it("sends no household for a one-partner household", async () => {
+            const single = household(
+                [partner("A", [{ ...activity("employee", 60_000), id: "act_A_1" }])],
+                { taxYear: LATEST_TAX_YEAR },
+            );
+            const options = await downloadTax(
+                { belgian_tax_household_v2: single },
+                { partners: 1 },
+            );
+            expect(options).not.toHaveProperty("household");
+            expect(options).not.toHaveProperty("precomputedHousehold");
+            expect(options.precomputedPIT?.totalTax).toBeGreaterThan(0);
+        });
+
+        it("exports the year the period covers, not the live tax year", async () => {
+            const live = married(20_000);
+            const previous = { ...married(35_000), taxYear: LATEST_TAX_YEAR - 1 };
+            const options = await downloadTax(
+                {
+                    belgian_tax_household_v2: live,
+                    belgian_tax_household_snapshots_v2: {
+                        [LATEST_TAX_YEAR - 1]: previous,
+                    },
+                },
+                { year: LATEST_TAX_YEAR - 1 },
+            );
+            expect(options.period).toEqual({ kind: "year", year: LATEST_TAX_YEAR - 1 });
+            expect(options.taxProfile?.taxYear).toBe(LATEST_TAX_YEAR - 1);
+            expect(options.household).toEqual(previous);
+            expect(options.precomputedHousehold?.partners[1]?.grossIncome).toBe(35_000);
+            expect(options.precomputedPIT?.totalTax).toBeCloseTo(
+                computeHouseholdTax(previous).totals.totalPIT,
+                6,
+            );
+        });
+
+        it("omits annual tax and household figures for a rolling period", async () => {
+            const live = married(20_000);
+            const options = await downloadTax(
+                { belgian_tax_household_v2: live },
+                { year: "rolling" },
+            );
+            expect(options.period).toEqual({ kind: "rolling", months: 12 });
+            expect(options.taxProfile).toBeUndefined();
+            expect(options.precomputedPIT).toBeUndefined();
+            expect(options.household).toBeUndefined();
+        });
+
+        it("exports a frozen year's frozen figures, not a live recompute", async () => {
+            const live = married(20_000);
+            const frozenHousehold = married(35_000);
+            const frozen = computeHouseholdTax(frozenHousehold);
+            const options = await downloadTax({
+                belgian_tax_household_v2: live,
+                belgian_tax_profile_snapshot_meta_v1: {
+                    [LATEST_TAX_YEAR]: {
+                        frozenCalculation: toBelgianTaxCalculation(frozen, frozenHousehold),
+                        frozenHouseholdResult: frozen,
+                        history: [],
+                    },
+                },
+            });
+            expect(options.precomputedPIT?.totalTax).toBe(frozen.totals.totalPIT);
+            expect(options.precomputedHousehold?.partners[1]?.grossIncome).toBe(35_000);
+        });
+    });
 });
 
 
@@ -314,4 +452,22 @@ it.each([false, true])('exports historical PIT only from an existing year profil
         expect(options?.taxProfile).toBeUndefined();
         expect(options?.precomputedPIT).toBeUndefined();
     }
+});
+
+it('exports a historical year that has only a frozen calculation, using its frozen totals', async () => {
+    const live = { ...DEFAULT_BELGIAN_TAX_PROFILE, taxYear: 2026, profileConfigured: true };
+    const frozen = { ...computeBelgianPIT({ ...live, taxYear: 2024 }), totalPIT: 12345 };
+    server.use(http.get('http://localhost:3002/api/settings', () => ok(settingsWithBaselines({
+        belgian_tax_profile: live,
+        belgian_tax_profile_snapshot_meta_v1: { 2024: { frozenCalculation: frozen } },
+    }))));
+    const user = await openDialog();
+    await user.click(screen.getByRole('radio', { name: /^tax$/i }));
+    await user.click(screen.getByRole('radio', { name: /full year|specific year/i }));
+    fireEvent.change(screen.getByLabelText(/^year$/i), { target: { value: '2024' } });
+    await user.click(screen.getByRole('button', { name: /download pdf/i }));
+    await waitFor(() => expect(reportsApi.downloadTaxReport).toHaveBeenCalled());
+    const options = vi.mocked(reportsApi.downloadTaxReport).mock.calls[0]?.[0];
+    expect(options?.taxProfile?.taxYear).toBe(2024);
+    expect(options?.precomputedPIT?.totalTax).toBe(12345);
 });
