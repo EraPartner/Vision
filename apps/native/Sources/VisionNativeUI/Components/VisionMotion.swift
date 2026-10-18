@@ -76,9 +76,10 @@ struct RollingNumber: View {
         switch role {
         case .plain: glyph
         case .currency:
-            // `text-[0.85em] self-start`: smaller and raised to the cap line.
-            glyph.fontWeight(.medium).scaleEffect(0.85, anchor: .topLeading).opacity(0.85).padding(.trailing, 1)
-        case .minor: glyph.scaleEffect(0.88, anchor: .bottomLeading).opacity(0.75)
+            // `text-[0.85em]`: a smaller glyph. Text scale resizes the layout too; a scale
+            // effect left each glyph's full-size slot, which spread the figures apart.
+            glyph.fontWeight(.medium).textScale(.secondary).opacity(0.85).padding(.trailing, 1)
+        case .minor: glyph.textScale(.secondary).opacity(0.75)
         }
     }
 
