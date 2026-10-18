@@ -9,12 +9,16 @@ private struct VisionButtonMetrics {
     let font: Font
 
     init(_ size: ControlSize) {
-        switch size {
-        case .mini: (height, padding, font) = (20, 8, .caption.weight(.medium))
-        case .small: (height, padding, font) = (24, 10, .footnote.weight(.medium))
-        case .large, .extraLarge: (height, padding, font) = (36, 18, .body.weight(.medium))
-        default: (height, padding, font) = (30, 14, .callout.weight(.medium))
-        }
+        let values: (CGFloat, CGFloat, Font) =
+            switch size {
+            case .mini: (20, 8, .caption.weight(.medium))
+            case .small: (24, 10, .footnote.weight(.medium))
+            case .large, .extraLarge: (36, 18, .body.weight(.medium))
+            default: (30, 14, .callout.weight(.medium))
+            }
+        height = values.0
+        padding = values.1
+        font = values.2
     }
 }
 
@@ -31,7 +35,7 @@ struct VisionOutlineButtonStyle: ButtonStyle {
     }
 
     private struct OutlineBody: View {
-        let configuration: Configuration
+        let configuration: ButtonStyleConfiguration
         let metrics: VisionButtonMetrics
         let theme: VisionTheme
         @State private var hovering = false
