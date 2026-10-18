@@ -116,8 +116,12 @@ public struct ResearchHomeView: View {
                     Button {
                         shell.navigate(to: "/research/watchlist")
                     } label: {
-                        Label(shell.strings.t("research.viewAll"), systemImage: "arrow.right")
-                    }.buttonStyle(.borderless)
+                        HStack(spacing: 4) {
+                            Text(shell.strings.t("research.viewAll"))
+                            Image(systemName: "arrow.right").imageScale(.small).accessibilityHidden(true)
+                        }
+                        .font(.callout.weight(.medium))
+                    }.buttonStyle(.plain)
                 }
             }
             if model.watchlist.isEmpty {
@@ -127,8 +131,10 @@ public struct ResearchHomeView: View {
                     }.buttonStyle(.visionOutline)
                 }.padding(.vertical, 28)
             } else {
+                // The web inset list: one bordered surface, hairlines between rows.
                 VStack(spacing: 0) {
-                    ForEach(Array(model.watchlist.prefix(9).enumerated()), id: \.element.id) { _, item in
+                    ForEach(Array(model.watchlist.prefix(9).enumerated()), id: \.element.id) { index, item in
+                        if index > 0 { Divider() }
                         if let symbol = item.symbol, !symbol.isEmpty {
                             Button {
                                 shell.navigate(to: ResearchURLs.market(symbol))
@@ -139,9 +145,14 @@ public struct ResearchHomeView: View {
                         } else {
                             watchlistRow(item).opacity(0.6)
                         }
-                        Divider()
                     }
                 }
+                .background(
+                    RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
+                        .fill(theme.foreground.opacity(0.02)))
+                .overlay(
+                    RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
+                        .strokeBorder(theme.border.opacity(0.6), lineWidth: 1))
             }
         }
     }
@@ -149,7 +160,7 @@ public struct ResearchHomeView: View {
         let quote = item.symbol.flatMap { symbol in model.watchlistQuotes.first { $0.symbol == symbol } }
         return HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(item.symbol ?? item.name).font(.callout.monospaced().weight(.medium))
+                Text(item.symbol ?? item.name).font(.callout.weight(.semibold))
                 if item.symbol != nil { Text(item.name).font(.caption).foregroundStyle(theme.secondaryLabel) }
             }
             Spacer()
@@ -166,7 +177,8 @@ public struct ResearchHomeView: View {
                 Image(systemName: "chevron.right").font(.caption).foregroundStyle(theme.tertiaryLabel)
                     .accessibilityHidden(true)
             }
-        }.padding(.vertical, 12).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+        }.padding(.vertical, 9).padding(.horizontal, 12).frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
     }
     private func delta(_ value: Decimal) -> some View {
         DeltaPill(value, label: (value > 0 ? "+" : "") + VisionFormat.percent(value, digits: 2, locale: locale))
