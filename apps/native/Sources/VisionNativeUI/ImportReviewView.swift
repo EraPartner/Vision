@@ -103,7 +103,7 @@ public struct ImportReviewView: View {
             Button(strings.t("common.retry")) {
                 Task { await model.retry() }
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.visionOutline)
             .controlSize(.small)
         }
         .frame(maxWidth: .infinity)
@@ -244,7 +244,7 @@ public struct ImportReviewView: View {
                         Button(strings.t("importReview.reviewSavedEdits")) {
                             Task { await model.reviewSavedEdits() }
                         }
-                        .buttonStyle(.bordered).controlSize(.small).disabled(model.isBusy)
+                        .buttonStyle(.visionOutline).controlSize(.small).disabled(model.isBusy)
                     }
                 }
             }
@@ -252,7 +252,7 @@ public struct ImportReviewView: View {
             Button(strings.t(model.isDiscarding ? "importReview.discarding" : "importReview.discard")) {
                 model.requestDiscard()
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.visionOutline)
             .disabled(model.isBusy)
             Button {
                 Task { await model.commit(strings: strings) }
@@ -266,7 +266,7 @@ public struct ImportReviewView: View {
                     Text(strings.t("importReview.approve", ["n": String(preview.totalRows)]))
                 }
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.visionPrimary)
             .disabled(model.isBusy || model.hasEditErrors)
         }
         .padding(.bottom, 32)

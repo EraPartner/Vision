@@ -121,13 +121,13 @@ public struct NativeOnboardingView: View {
                     strings.t(model.draft.reviewBatch == nil ? "onboarding.goToDashboard" : "onboarding.finishImport")
                 ) {
                     Task { await model.finishFinalStep() }
-                }.buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
+                }.buttonStyle(.visionPrimary).keyboardShortcut(.defaultAction)
             } else {
                 Button(
                     strings.t(model.draft.step == .welcome ? "onboarding.getStarted" : "onboarding.nextStep"),
                     action: model.next
                 )
-                .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
+                .buttonStyle(.visionPrimary).keyboardShortcut(.defaultAction)
             }
         }.padding(20)
     }
@@ -175,7 +175,7 @@ public struct NativeOnboardingView: View {
                     Task { await model.finish(path: feature.path) }
                 } label: {
                     featureLabel(feature).frame(maxWidth: .infinity, minHeight: 65, alignment: .leading).padding(10)
-                }.buttonStyle(.bordered)
+                }.buttonStyle(.visionOutline)
             }
         }
     }
@@ -198,7 +198,7 @@ public struct NativeOnboardingView: View {
             Button(strings.t("onboarding.backup.openSettings")) {
                 Task { await model.finish(settingsSection: "backup") }
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.visionPrimary)
             Divider()
             Text(strings.t("onboarding.restore.orTitle")).font(.caption).foregroundStyle(theme.secondaryLabel)
             NativeOnboardingRestoreView(onboarding: model, shell: shell)

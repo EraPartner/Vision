@@ -55,7 +55,7 @@ struct NativeSettingsBackupPassphraseSheet: View {
                         if model.restoreSubmitting { ProgressView().controlSize(.small) }
                         Text(strings.t("settings.restore.passphraseSubmit"))
                     }
-                }.buttonStyle(.borderedProminent).disabled(model.restorePassphrase.isEmpty || model.restoreSubmitting)
+                }.buttonStyle(.visionPrimary).disabled(model.restorePassphrase.isEmpty || model.restoreSubmitting)
             }
         }.padding(24).frame(width: 460).interactiveDismissDisabled(model.restoreSubmitting).onAppear { focused = true }
             .overlay(alignment: .bottom) {

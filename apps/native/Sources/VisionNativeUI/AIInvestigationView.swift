@@ -63,7 +63,7 @@ struct AIInvestigationView: View {
             Button(strings.t("aiResearch.starter." + topic + ".label")) {
                 model.question = strings.t("aiResearch.starter." + topic + ".question")
                 questionFocused = true
-            }.buttonStyle(.bordered)
+            }.buttonStyle(.visionOutline)
         }
     }
     private var settings: some View {
@@ -230,7 +230,7 @@ struct AIInvestigationView: View {
                         model.route == "local"
                             ? "aiResearch.run" : model.preview == nil ? "aiResearch.preview" : "aiResearch.consentRun"))
             }
-        }.buttonStyle(.borderedProminent).disabled(model.runDisabled)
+        }.buttonStyle(.visionPrimary).disabled(model.runDisabled)
         if model.grantId != nil {
             Button(strings.t("aiResearch.revoke")) { Task { await model.revokeActiveGrant() } }
         }

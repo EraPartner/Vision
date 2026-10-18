@@ -35,7 +35,7 @@ public struct CategoriesView: View {
                     } label: {
                         Label(strings.t("form.addCategory.title"), systemImage: "plus")
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.visionPrimary)
                 }
             }
             content
@@ -363,7 +363,7 @@ struct CategoryNodeSheet: View {
                         Text(strings.t(form.submitKey))
                     }
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.visionPrimary)
                 .keyboardShortcut(.defaultAction)
                 .disabled(model.isSavingForm)
             }
@@ -433,7 +433,7 @@ struct CategoryMergeSheet: View {
                         Text(strings.t("categoriesPage.mergeConfirm"))
                     }
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.visionPrimary)
                 .keyboardShortcut(.defaultAction)
                 .disabled(!draft.canMerge)
             }

@@ -286,7 +286,7 @@ struct PlannedPaymentFormSheet: View {
                     Text(strings.t(form.submitKey))
                 }
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.visionPrimary)
             .keyboardShortcut(.defaultAction)
             .disabled(saving)
         }

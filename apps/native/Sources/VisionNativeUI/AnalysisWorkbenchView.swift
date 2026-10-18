@@ -40,7 +40,7 @@ public struct AnalysisWorkbenchView: View {
                             }
                             if !model.draft.steps.isEmpty {
                                 Button(t("applySteps")) { Task { await model.run(apply: true) } }
-                                    .buttonStyle(.borderedProminent).disabled(!model.canApplySteps)
+                                    .buttonStyle(.visionPrimary).disabled(!model.canApplySteps)
                             }
                         }.padding(.top, 12)
                     }

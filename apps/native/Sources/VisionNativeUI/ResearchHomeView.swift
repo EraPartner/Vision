@@ -124,7 +124,7 @@ public struct ResearchHomeView: View {
                 VisionEmptyState(symbol: "star", title: shell.strings.t("research.watchlistEmpty")) {
                     Button(shell.strings.t("research.watchlistEmptyCta"), systemImage: "plus") {
                         shell.navigate(to: "/research/watchlist")
-                    }.buttonStyle(.bordered)
+                    }.buttonStyle(.visionOutline)
                 }.padding(.vertical, 28)
             } else {
                 VStack(spacing: 0) {

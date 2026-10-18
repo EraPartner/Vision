@@ -39,7 +39,7 @@ struct ResearchDossierEditorView: View {
                     }.accessibilityLabel(strings.t("dossiers.editorMenu"))
                 }
                 Button(strings.t("dossiers.save"), systemImage: "square.and.arrow.down") { Task { await model.save() } }
-                    .buttonStyle(.borderedProminent).disabled(model.busy)
+                    .buttonStyle(.visionPrimary).disabled(model.busy)
             }
             HStack(alignment: .top, spacing: 16) {
                 ResearchDossierField(label: strings.t("dossiers.field.title")) {

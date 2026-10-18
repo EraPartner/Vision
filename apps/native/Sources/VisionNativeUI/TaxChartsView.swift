@@ -391,7 +391,7 @@ private struct TaxIncomeSourcesEmptyView: View {
             Text(strings.t("tax.incomeBreakdown.emptyTitle")).font(.headline)
             Text(strings.t("tax.incomeBreakdown.emptyDesc")).foregroundStyle(.secondary)
             if let openIncomeSources {
-                Button(strings.t("tax.incomeBreakdown.emptyCta"), action: openIncomeSources).buttonStyle(.bordered)
+                Button(strings.t("tax.incomeBreakdown.emptyCta"), action: openIncomeSources).buttonStyle(.visionOutline)
             }
         }.frame(maxWidth: .infinity).padding(.vertical, 30).multilineTextAlignment(.center)
     }

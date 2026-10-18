@@ -134,7 +134,7 @@ public struct PortfolioTaxView: View {
             // PortfolioTaxPage always shows the button; the sheet needs loaded data, so it waits for it.
             Button(strings.t("tax.manualAdjustments"), systemImage: "slider.horizontal.3") {
                 model.beginAdjustments(numberFormat: shell.settings.numberFormat)
-            }.buttonStyle(.borderedProminent)
+            }.buttonStyle(.visionPrimary)
                 .disabled(
                     !model.settingsLoaded || model.isSavingAdjustments || tax.actions.isSaving || data == nil
                         || model.error != nil)
@@ -183,7 +183,7 @@ public struct PortfolioTaxView: View {
                 VisionEmptyState(
                     symbol: "percent", title: strings.t("tax.noData"), description: strings.t("tax.noDataDesc")
                 ) {
-                    Button(strings.t("tax.noDataCta")) { shell.navigate(to: "/portfolio") }.buttonStyle(.bordered)
+                    Button(strings.t("tax.noDataCta")) { shell.navigate(to: "/portfolio") }.buttonStyle(.visionOutline)
                 }
             }
         } else {
@@ -214,7 +214,7 @@ public struct PortfolioTaxView: View {
                     systemImage: "slider.horizontal.3"
                 ) {
                     tax.profile.begin(overview: overview)
-                }.buttonStyle(.bordered).disabled(tax.actions.isSaving || model.isSavingAdjustments)
+                }.buttonStyle(.visionOutline).disabled(tax.actions.isSaving || model.isSavingAdjustments)
             }
             PortfolioTaxBudgetView(data: data, shell: shell)
             if model.widgets.isVisible("profileInputs"), let taxData {

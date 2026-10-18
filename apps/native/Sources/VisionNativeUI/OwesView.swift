@@ -152,7 +152,7 @@ struct OwesErrorCard: View {
                 Text(strings.t("common.loadFailedRetry"))
                 Spacer()
                 Button(strings.t("common.retry"), action: retry)
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.visionOutline)
                     .controlSize(.small)
             }
         }
@@ -199,7 +199,7 @@ struct OwesPersonDetail: View {
                     Button(strings.t(model.isSettlingAll ? "owesPage.settleAll.loading" : "owesPage.settleAll.button")) {
                         model.requestSettleAll()
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.visionPrimary)
                     .disabled(items.isEmpty || model.isSettlingAll)
                 }
             }
@@ -310,7 +310,7 @@ struct OwesPersonDetail: View {
             } label: {
                 Label(strings.t("owesPage.recordPayment"), systemImage: "banknote")
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.visionOutline)
             .controlSize(.small)
             .accessibilityLabel("\(strings.t("owesPage.recordPayment")): \(context)")
             Menu {
@@ -480,7 +480,7 @@ struct OwesPaymentSheet: View {
                         strings.t(
                             model.isRecording ? "owesPage.recordDialog.recording" : "owesPage.recordDialog.submit"))
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.visionPrimary)
                 .keyboardShortcut(.defaultAction)
                 .disabled(model.isRecording)
             }

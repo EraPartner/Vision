@@ -50,7 +50,7 @@ struct AIChatComposer: View {
                 } label: {
                     Image(systemName: streaming ? "stop.fill" : "paperplane.fill").frame(width: 24, height: 24)
                 }
-                .buttonStyle(.borderedProminent).disabled(!streaming && !model.canSend)
+                .buttonStyle(.visionPrimary).disabled(!streaming && !model.canSend)
                 .accessibilityLabel(strings.t(streaming ? "aiChat.stop" : "aiChat.send"))
             }
             HStack {

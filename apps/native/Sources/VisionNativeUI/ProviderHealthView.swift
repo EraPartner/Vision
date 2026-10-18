@@ -144,7 +144,7 @@ public struct ProviderHealthView: View {
                             .rotate, options: .repeat(.continuous), isActive: model.isProbing(row.provider))
                 }
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.visionOutline)
             .controlSize(.small)
             .disabled(model.isProbing(row.provider))
             .gridColumnAlignment(.trailing)

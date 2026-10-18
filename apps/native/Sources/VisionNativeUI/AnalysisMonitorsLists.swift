@@ -166,7 +166,7 @@ struct AnalysisMonitorsNotificationsView: View {
                 .font(.caption).foregroundStyle(theme.secondaryLabel).monospacedDigit().textSelection(.enabled)
             }
             if item.readAt == nil {
-                Button(strings.t("monitors.markRead")) { Task { await model.markRead(item) } }.buttonStyle(.bordered)
+                Button(strings.t("monitors.markRead")) { Task { await model.markRead(item) } }.buttonStyle(.visionOutline)
                     .controlSize(.small).disabled(model.isBusy)
             }
         }.padding(.vertical, 8).frame(maxWidth: .infinity, alignment: .leading)

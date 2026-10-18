@@ -19,7 +19,7 @@ struct TransactionBulkBar: View {
                 Button(strings.t("txPage.bulk.selectAllMatching", ["n": String(model.total)])) {
                     model.selectAllMatching()
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.visionOutline)
                 .controlSize(.small)
                 .disabled(model.bulkBusy)
             }
@@ -132,7 +132,7 @@ struct TransactionBulkBar: View {
             }
         }
         .menuStyle(.button)
-        .buttonStyle(.borderedProminent)
+        .buttonStyle(.visionPrimary)
         .controlSize(.small)
         .fixedSize()
         .disabled(model.bulkBusy)
@@ -173,7 +173,7 @@ struct TransactionBulkDialogView: View {
                 Button(action: submit) {
                     Text(model.bulkBusy ? busyLabel : strings.t(confirmKey))
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.visionPrimary)
                 .keyboardShortcut(.defaultAction)
                 .disabled(!canSubmit)
             }

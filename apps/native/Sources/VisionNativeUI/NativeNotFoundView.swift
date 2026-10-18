@@ -21,7 +21,7 @@ public struct NativeNotFoundView: View {
                 shell.navigate(to: "/")
             } label: {
                 Label(shell.strings.t("notFound.backHome"), systemImage: "arrow.left")
-            }.buttonStyle(.borderedProminent)
+            }.buttonStyle(.visionPrimary)
             HStack(spacing: 12) {
                 Button(shell.strings.t("nav.transactions")) { shell.navigate(to: "/transactions") }
                 Text("·").accessibilityHidden(true)

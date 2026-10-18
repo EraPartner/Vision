@@ -46,7 +46,7 @@ struct PortfolioWidgetsSheet: View {
                 if isSaving { ProgressView().controlSize(.small) }
                 Button(strings.t("common.close")) { dismiss() }.keyboardShortcut(.cancelAction)
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.visionOutline)
         }.padding(24).frame(width: 580, height: 540)
     }
 }

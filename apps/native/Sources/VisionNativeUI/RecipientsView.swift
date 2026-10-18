@@ -37,7 +37,7 @@ public struct RecipientsView: View {
                     } label: {
                         Label(strings.t("recipients.createButton"), systemImage: "plus")
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.visionPrimary)
                 }
             }
             content
@@ -527,7 +527,7 @@ struct PayeeAddSheet: View {
                         Text(strings.t("recipients.createButton"))
                     }
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.visionPrimary)
                 .keyboardShortcut(.defaultAction)
                 .disabled(draft.isSaving)
             }
@@ -588,7 +588,7 @@ struct PayeeMergeSheet: View {
                     Text(merge.confirmTitle(strings))
                 }
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.visionPrimary)
             .keyboardShortcut(.defaultAction)
             .disabled(!merge.canMerge)
         }
@@ -790,7 +790,7 @@ struct MatchRulesSheet: View {
                             Label(strings.t("recipientPatterns.addBtn"), systemImage: "plus")
                                 .frame(maxWidth: .infinity)
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.visionOutline)
                     }
                 } else {
                     ProgressView()
@@ -983,7 +983,7 @@ struct MatchRuleFormCard: View {
                             Text(strings.t("recipientPatterns.saveBtn"))
                         }
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.visionPrimary)
                     .disabled(!form.canSave || !form.priorityIsValid || state.isSaving)
                 }
             }

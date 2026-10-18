@@ -400,7 +400,7 @@ struct TransactionAttachmentsPanel: View {
                         Text(strings.t("txPage.uploadAttachment"))
                     }
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.visionOutline)
                 .controlSize(.small)
                 .disabled(attachments.isUploading)
             }

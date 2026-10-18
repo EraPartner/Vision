@@ -53,7 +53,7 @@ public struct PortfolioOverviewView: View {
                             Image(systemName: "ellipsis")
                         }.accessibilityLabel(strings.t("portfolio.menu"))
                         Button(strings.t("addInv.title"), systemImage: "plus") { editing.beginAddInvestment() }
-                            .buttonStyle(.borderedProminent)
+                            .buttonStyle(.visionPrimary)
                     }
                 }
                 if model.isLoading {
@@ -69,8 +69,7 @@ public struct PortfolioOverviewView: View {
                                 symbol: "chart.pie", title: strings.t("portfolio.noInvestments"),
                                 description: strings.t("portfolio.noInvestmentsDesc")
                             ) {
-                                Button(strings.t("addInv.title")) { editing.beginAddInvestment() }.buttonStyle(
-                                    .borderedProminent)
+                                Button(strings.t("addInv.title")) { editing.beginAddInvestment() }.buttonStyle(.visionPrimary)
                             }
                         }
                     } else if let summary {
@@ -389,8 +388,7 @@ public struct PortfolioOverviewView: View {
                             ).monospacedDigit()
                         }.font(.callout)
                     }
-                    Button(strings.t("nav.rebalance")) { shell.navigate(to: "/portfolio/rebalance") }.buttonStyle(
-                        .bordered)
+                    Button(strings.t("nav.rebalance")) { shell.navigate(to: "/portfolio/rebalance") }.buttonStyle(.visionOutline)
                 }
             }
         }
@@ -459,10 +457,10 @@ public struct PortfolioOverviewView: View {
                             VisionBadge(text: strings.t("portfolio.archived"), tone: .outline, small: true)
                             Spacer()
                             Button(strings.t("invDetail.trigger")) { Task { await model.openDetail(id: holding.id) } }
-                                .buttonStyle(.bordered)
+                                .buttonStyle(.visionOutline)
                             Button(strings.t("portfolio.restoreInvestment"), systemImage: "arrow.counterclockwise") {
                                 Task { await editing.restoreInvestment(id: holding.id) }
-                            }.buttonStyle(.bordered).disabled(editing.isMutating)
+                            }.buttonStyle(.visionOutline).disabled(editing.isMutating)
                         }.padding(.vertical, 10)
                     }
                 } label: {

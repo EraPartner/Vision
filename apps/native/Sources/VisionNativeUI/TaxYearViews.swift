@@ -181,7 +181,7 @@ struct TaxMarkFiledSheet: View {
                 Spacer()
                 Button(shell.strings.t("common.cancel")) { dismiss() }.keyboardShortcut(.cancelAction)
                 Button(shell.strings.t("tax.markFiled.confirm")) { confirm() }
-                    .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
+                    .buttonStyle(.visionPrimary).keyboardShortcut(.defaultAction)
                     .disabled(!TaxYearMutation.canFile(overview))
             }
         }.padding(24).frame(width: 480).disabled(actions.isSaving)

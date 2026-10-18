@@ -144,7 +144,7 @@ struct TransactionSearchSuggestionsView: View {
                 Button(strings.t("search.suggest.apply")) {
                     if let parameters { apply(parameters) }
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.visionPrimary)
                 .controlSize(.small)
                 .disabled(parameters == nil)
             }
@@ -169,7 +169,7 @@ struct TransactionSearchSuggestionsView: View {
                     .accessibilityLabel(strings.t("search.suggest.year.title"))
                     .onSubmit { applyYear() }
                 Button(strings.t("search.suggest.apply"), action: applyYear)
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.visionPrimary)
                     .controlSize(.small)
                     .disabled(state.yearValue == nil)
             }
@@ -209,7 +209,7 @@ struct TransactionSearchSuggestionsView: View {
                 Button(strings.t("search.suggest.apply")) {
                     if let parameters = state.dateParameters { apply(parameters) }
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.visionPrimary)
                 .controlSize(.small)
                 .disabled(state.dateParameters == nil)
             }

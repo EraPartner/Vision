@@ -38,7 +38,7 @@ public struct HomeView: View {
                     } label: {
                         Label(strings.t("form.addTransaction.title"), systemImage: "plus")
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.visionPrimary)
                 }
                 if model.isLoading {
                     ProgressView().frame(maxWidth: .infinity).padding(40)

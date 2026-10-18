@@ -101,7 +101,7 @@ struct AdminErrorBanner: View {
                     Text(strings.t("admin.authError.title")).font(.headline)
                     Text(strings.t("admin.authError.description"))
                     Button(strings.t("admin.authError.action"), action: goToToken)
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.visionOutline)
                         .controlSize(.small)
                         .padding(.top, 4)
                 case .message(let title, let message):

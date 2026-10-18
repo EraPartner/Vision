@@ -255,7 +255,7 @@ struct TransactionAddSheet: View {
             Button(strings.t("addTxn.addAnyway")) {
                 Task { await model.submitAdd(allowDuplicate: true) }
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.visionOutline)
             .controlSize(.small)
             .disabled(form.isPending)
         }
@@ -304,7 +304,7 @@ struct TransactionAddSheet: View {
                     Text(strings.t(draft.kind.submitKey))
                 }
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.visionPrimary)
             .keyboardShortcut(.defaultAction)
             .disabled(form.isPending)
             // ⌘Return adds from any field, the comment included.

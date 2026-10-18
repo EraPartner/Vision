@@ -79,7 +79,7 @@ public struct PortfolioHoldingsView: View {
                         Button(strings.t("addInv.title"), systemImage: "plus") {
                             editing.beginAddInvestment(allowedAssetClasses: classes)
                         }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.visionPrimary)
                         Menu {
                             if assetClass != "crypto" {
                                 Button(strings.t("portfolio.menu.exportPdf")) { shell.openPortfolioReport() }
@@ -115,7 +115,7 @@ public struct PortfolioHoldingsView: View {
                             Button(strings.t("addInv.title")) {
                                 editing.beginAddInvestment(allowedAssetClasses: classes)
                             }
-                            .buttonStyle(.borderedProminent)
+                            .buttonStyle(.visionPrimary)
                         }
                     }
                 } else {

@@ -119,7 +119,7 @@ struct AnalysisScenariosView: View {
                     RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous)
                         .strokeBorder(theme.border.opacity(0.6)))
             }
-            Button(t("compare")) { Task { await model.compare() } }.buttonStyle(.borderedProminent).disabled(
+            Button(t("compare")) { Task { await model.compare() } }.buttonStyle(.visionPrimary).disabled(
                 !model.canCompare)
         }
     }
@@ -153,13 +153,13 @@ struct AnalysisScenariosView: View {
                 if !model.variable2Id.isEmpty {
                     AnalysisWorkbenchTextField(key: "grid", value: $model.grid2, shell: shell)
                 }
-                Button(t("sensitivity")) { Task { await model.explore() } }.buttonStyle(.borderedProminent).disabled(
+                Button(t("sensitivity")) { Task { await model.explore() } }.buttonStyle(.visionPrimary).disabled(
                     !model.canExplore)
             } else {
                 AnalysisWorkbenchTextField(key: "target", value: $model.target, shell: shell)
                 AnalysisWorkbenchTextField(key: "lower", value: $model.lower, shell: shell)
                 AnalysisWorkbenchTextField(key: "upper", value: $model.upper, shell: shell)
-                Button(t("goal")) { Task { await model.seek() } }.buttonStyle(.borderedProminent).disabled(
+                Button(t("goal")) { Task { await model.seek() } }.buttonStyle(.visionPrimary).disabled(
                     !model.canExplore)
             }
         }

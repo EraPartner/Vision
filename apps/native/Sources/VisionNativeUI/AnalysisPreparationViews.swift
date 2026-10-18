@@ -121,7 +121,7 @@ struct AnalysisCalendarView: View {
                             model.updateTime("rollingWindow", value: .null)
                         }
                     }), shell: shell)
-            Button(t("compareTime")) { Task { await model.run(apply: true) } }.buttonStyle(.borderedProminent).disabled(
+            Button(t("compareTime")) { Task { await model.run(apply: true) } }.buttonStyle(.visionPrimary).disabled(
                 !model.canApplyTime)
         }
     }

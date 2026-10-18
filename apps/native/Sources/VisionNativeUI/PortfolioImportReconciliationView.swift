@@ -89,7 +89,7 @@ public struct PortfolioImportReconciliationView: View {
             Text(strings.t("portfolioImport.session.\(modeKey("Atomic"))")).font(.caption).foregroundStyle(
                 theme.secondaryLabel)
             Button(strings.t("portfolioImport.session.\(commitKey)")) { Task { await model.commit() } }
-                .buttonStyle(.borderedProminent).disabled(!model.canCommit || model.operation != "idle")
+                .buttonStyle(.visionPrimary).disabled(!model.canCommit || model.operation != "idle")
         }.padding(16).background(
             theme.foreground.opacity(0.03), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.card)
         )

@@ -144,13 +144,13 @@ public struct TransactionsView: View {
                 } label: {
                     Label(strings.t("txPage.importLink"), systemImage: "square.and.arrow.down")
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.visionOutline)
                 Button {
                     model.requestAdd()
                 } label: {
                     Label(strings.t("form.addTransaction.title"), systemImage: "plus")
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.visionPrimary)
             }
         }
     }
@@ -191,7 +191,7 @@ public struct TransactionsView: View {
             Button(strings.t("common.retry")) {
                 Task { await model.reload() }
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.visionOutline)
             .controlSize(.small)
         }
         .frame(maxWidth: .infinity)
@@ -301,8 +301,8 @@ struct TransactionsToolbar: View {
                 .foregroundStyle(theme.tertiaryLabel)
                 .accessibilityHidden(true)
         }
-        .font(.callout)
         .foregroundStyle(active ? theme.primary : theme.foreground)
+        .visionChipChrome(active: active)
     }
 
     private func accountChip(_ filters: TransactionFilters) -> some View {
@@ -311,7 +311,7 @@ struct TransactionsToolbar: View {
         } label: {
             chipLabel(model.accountChipLabel(), symbol: "building.columns", active: filters.accountId != nil)
         }
-        .buttonStyle(.bordered)
+        .buttonStyle(.plain)
         .accessibilityLabel(strings.t("txPage.filter.accountAria"))
         .accessibilityValue(model.accountChipLabel())
         .popover(isPresented: $accountsOpen, arrowEdge: .bottom) {
@@ -361,7 +361,7 @@ struct TransactionsToolbar: View {
         } label: {
             chipLabel(model.categoryChipLabel(), symbol: "tag", active: filters.categoryId != nil)
         }
-        .buttonStyle(.bordered)
+        .buttonStyle(.plain)
         .accessibilityLabel(strings.t("txPage.filter.categoryAria"))
         .accessibilityValue(model.categoryChipLabel())
         .popover(isPresented: $categoriesOpen, arrowEdge: .bottom) {
@@ -415,6 +415,8 @@ struct TransactionsToolbar: View {
         } label: {
             chipLabel(model.dateChipLabel(), symbol: "calendar", active: preset != TransactionDatePreset.any)
         }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
         .menuIndicator(.hidden)
         .fixedSize()
         .accessibilityLabel(strings.t("txPage.filter.dateAria"))
@@ -434,6 +436,8 @@ struct TransactionsToolbar: View {
         } label: {
             chipLabel(model.typeChipLabel(), symbol: "arrow.up.arrow.down", active: filters.transactionType != nil)
         }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
         .menuIndicator(.hidden)
         .fixedSize()
         .accessibilityLabel(strings.t("txPage.filter.typeAria"))
@@ -444,13 +448,15 @@ struct TransactionsToolbar: View {
         Toggle(isOn: Binding(get: { filters.uncategorised }, set: { model.setNeedsCategory($0) })) {
             HStack(spacing: 6) {
                 Text(strings.t("txPage.filter.needsCategory"))
+                    .foregroundStyle(filters.uncategorised ? theme.primary : theme.foreground)
                 if let count = model.needsCategoryCount, count > 0 {
                     VisionBadge(text: String(count), tone: filters.uncategorised ? .primary : .muted, small: true)
                 }
             }
+            .visionChipChrome(active: filters.uncategorised)
         }
         .toggleStyle(.button)
-        .buttonStyle(.bordered)
+        .buttonStyle(.plain)
     }
 
     /// `txPage.view.menu`: Show excluded, the optional columns and Reset columns.
@@ -473,6 +479,8 @@ struct TransactionsToolbar: View {
         } label: {
             chipLabel(strings.t("txPage.view.menu"), symbol: "slider.horizontal.3", active: model.showAll)
         }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
         .menuIndicator(.hidden)
         .fixedSize()
         .accessibilityLabel(strings.t("txPage.view.menu"))
@@ -558,7 +566,7 @@ struct TransactionFilterBanner: View {
                 Text(running ? strings.t("txPage.export.downloading") : strings.t(key))
             }
         }
-        .buttonStyle(.bordered)
+        .buttonStyle(.visionOutline)
         .controlSize(.small)
         .disabled(model.exportingFormat != nil)
     }

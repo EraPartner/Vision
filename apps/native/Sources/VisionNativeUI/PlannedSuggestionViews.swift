@@ -30,7 +30,7 @@ struct PlannedMatchSuggestionsBanner: View {
                     Button(strings.t("plannedPage.suggestions.review")) {
                         model.reviewSuggestion()
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.visionOutline)
                     .controlSize(.small)
                 }
             }
@@ -231,7 +231,7 @@ struct PlannedRecurringPanel: View {
                     } label: {
                         Label(strings.t("recurring.track"), systemImage: "plus")
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.visionPrimary)
                     .controlSize(.small)
                     Button(strings.t("recurring.dismissBtn")) {
                         recurring.dismiss(pattern.recipientId)

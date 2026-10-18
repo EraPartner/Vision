@@ -32,7 +32,7 @@ struct PortfolioImportSessionView: View {
                 scopeSettings
                 HStack(spacing: 12) {
                     Button(strings.t("portfolioImport.session.stage")) { Task { await model.stage() } }
-                        .buttonStyle(.borderedProminent).disabled(
+                        .buttonStyle(.visionPrimary).disabled(
                             !model.canStage || model.operation != "idle" || isLocked)
                     if model.operation == "staging" {
                         Button(strings.t("portfolioImport.session.stop")) { model.stop() }

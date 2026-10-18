@@ -58,7 +58,7 @@ struct PortfolioTransactionForm: View {
                 Spacer()
                 Button(strings.t("addPortTxn.cancel")) { model.cancelEditor() }
                 Button(strings.t(isEditing ? "common.save" : "addPortTxn.record")) { save() }
-                    .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
+                    .buttonStyle(.visionPrimary).keyboardShortcut(.defaultAction)
                 if model.isSaving { ProgressView().controlSize(.small) }
             }.padding(20)
         }.frame(width: 530, height: 720).disabled(model.isSaving).interactiveDismissDisabled(model.isSaving)

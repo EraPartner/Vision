@@ -47,7 +47,7 @@ struct NativeSettingsAboutView: View {
                         Link(destination: NativeSettingsAboutModel.documentationURL) {
                             Label(strings.t("settings.app.documentation"), systemImage: "arrow.up.right")
                         }
-                    }.buttonStyle(.bordered)
+                    }.buttonStyle(.visionOutline)
                 }.padding(24)
             }
             // ADR-204 §5 cuts the updater, including check/install/release controls.

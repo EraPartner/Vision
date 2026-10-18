@@ -53,9 +53,9 @@ struct PortfolioTaxAdjustmentsSheet: View {
             Divider()
             HStack {
                 Spacer()
-                Button(strings.t("common.cancel")) { model.closeAdjustments() }.buttonStyle(.bordered)
+                Button(strings.t("common.cancel")) { model.closeAdjustments() }.buttonStyle(.visionOutline)
                 Button(strings.t("tax.manualAdjustmentsSave")) { save() }
-                    .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
+                    .buttonStyle(.visionPrimary).keyboardShortcut(.defaultAction)
                 if model.isSavingAdjustments { ProgressView().controlSize(.small) }
             }.padding(20)
         }

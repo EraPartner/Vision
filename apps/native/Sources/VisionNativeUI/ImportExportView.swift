@@ -158,7 +158,7 @@ struct ImportCommitReceiptCard: View {
                         Label(strings.tc("importPage.showImported", receipt.imported), systemImage: "arrow.right")
                             .labelStyle(TrailingIconLabelStyle())
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.visionOutline)
                     .controlSize(.small)
                     .padding(.top, 8)
                 }
@@ -382,7 +382,7 @@ struct ImportBankCard: View {
                         Label(strings.t("importPage.importBtn"), systemImage: "square.and.arrow.up")
                     }
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.visionPrimary)
                 .disabled(!model.canImport)
             }
         }

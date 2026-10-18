@@ -27,7 +27,7 @@ public struct DatabaseMaintenanceView: View {
                             model.isVacuumingAll ? strings.t("dbMaintenance.vacuuming") : strings.t("dbMaintenance.vacuumAll"),
                             systemImage: "bolt")
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.visionPrimary)
                     .disabled(model.isVacuuming)
                 }
             }
@@ -170,7 +170,7 @@ public struct DatabaseMaintenanceView: View {
                 Button(strings.t("dbMaintenance.refresh")) {
                     Task { await model.refresh() }
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.visionOutline)
             }
             .padding(.vertical, 24)
         }

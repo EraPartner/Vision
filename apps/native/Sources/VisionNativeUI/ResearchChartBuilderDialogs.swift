@@ -32,8 +32,7 @@ struct ResearchChartBuilderSaveSheet: View {
             HStack {
                 Button(strings.t("common.cancel")) { model.isSaveDialogPresented = false }
                 Spacer()
-                Button(strings.t("research.builder.saveLayout")) { Task { await model.saveAs() } }.buttonStyle(
-                    .borderedProminent
+                Button(strings.t("research.builder.saveLayout")) { Task { await model.saveAs() } }.buttonStyle(.visionPrimary
                 ).disabled(
                     model.layoutName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.isStorageAction
                         || !model.isStorageLoaded)

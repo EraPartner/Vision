@@ -46,7 +46,7 @@ public struct AccountDetailView: View {
                         description: strings.t("accounts.detail.notFoundDescription")
                     ) {
                         Button(strings.t("accounts.detail.back")) { model.backToHub() }
-                            .buttonStyle(.bordered)
+                            .buttonStyle(.visionOutline)
                     }
                 }
             case .loaded(let account):
@@ -224,7 +224,7 @@ struct AccountDetailContent: View {
                             } label: {
                                 Label(strings.t("accounts.reconcile.open"), systemImage: "scalemass")
                             }
-                            .buttonStyle(.bordered)
+                            .buttonStyle(.visionOutline)
                             .controlSize(.small)
                         }
                     }
@@ -264,7 +264,7 @@ struct AccountDetailContent: View {
                             .foregroundStyle(theme.destructive)
                         Spacer()
                         Button(strings.t("common.retry")) { Task { await model.retryPortfolio() } }
-                            .buttonStyle(.bordered)
+                            .buttonStyle(.visionOutline)
                             .controlSize(.small)
                     }
                 } else if model.isPortfolioLoading {
@@ -324,7 +324,7 @@ struct AccountDetailContent: View {
                             .foregroundStyle(theme.destructive)
                         Spacer()
                         Button(strings.t("common.retry")) { Task { await model.retryPlanned() } }
-                            .buttonStyle(.bordered)
+                            .buttonStyle(.visionOutline)
                             .controlSize(.small)
                     }
                 } else if model.isPlannedLoading {
@@ -469,7 +469,7 @@ struct AccountLedgerCard: View {
                     Button(strings.t("accounts.detail.loadMore")) {
                         Task { await model.loadMoreLedger() }
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.visionOutline)
                     .disabled(model.isFetchingMoreLedger)
                     Spacer()
                 }

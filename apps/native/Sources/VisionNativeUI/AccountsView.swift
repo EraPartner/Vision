@@ -31,7 +31,7 @@ public struct AccountsView: View {
                 } label: {
                     Label(strings.t("accounts.addTitle"), systemImage: "plus")
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.visionPrimary)
             }
             content
         }
@@ -74,7 +74,7 @@ public struct AccountsView: View {
                     } label: {
                         Label(strings.t("accounts.addTitle"), systemImage: "plus")
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.visionPrimary)
                 }
             }
         } else {
@@ -428,7 +428,7 @@ struct AccountsErrorCard: View {
                 Spacer()
                 if let retry {
                     Button(strings.t("common.retry"), action: retry)
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.visionOutline)
                         .controlSize(.small)
                 }
             }

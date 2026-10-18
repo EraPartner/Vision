@@ -171,7 +171,7 @@ public struct PlannedPaymentsView: View {
         } label: {
             Label(strings.t("plannedPage.newPayment"), systemImage: "plus")
         }
-        .buttonStyle(.borderedProminent)
+        .buttonStyle(.visionPrimary)
     }
 
     /// `setShowAll`: written with replace, deleted when false.
@@ -241,7 +241,7 @@ public struct PlannedPaymentsView: View {
             Button(strings.t("common.retry")) {
                 Task { await model.retry() }
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.visionOutline)
             .controlSize(.small)
         }
         .frame(maxWidth: .infinity)
@@ -474,7 +474,7 @@ public struct PlannedPaymentsView: View {
                 description: strings.t("plannedPage.emptyFilteredDesc")
             ) {
                 Button(strings.t("plannedPage.includePaused")) { setShowAll(true) }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.visionOutline)
             }
         }
     }
@@ -604,7 +604,7 @@ public struct PlannedPaymentsView: View {
             Button(strings.t("plannedPage.execute.button")) {
                 model.openLinkDialog(for: payment)
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.visionOutline)
             .controlSize(.small)
             .disabled(!model.canMarkAsPaid(payment))
             .accessibilityLabel("\(strings.t("plannedPage.execute.button")): \(payment.name)")
@@ -679,7 +679,7 @@ struct PlannedHistorySheet: View {
                     Button(strings.t("common.retry")) {
                         Task { await history.load(payments: model.payments) }
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.visionOutline)
                     .controlSize(.small)
                 }
                 .padding(12)

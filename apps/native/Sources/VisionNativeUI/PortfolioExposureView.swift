@@ -156,7 +156,7 @@ struct PortfolioExposureView: View {
                     Button(shell.strings.t("portfolio.exposure.importSources"), systemImage: "square.and.arrow.up") {
                         importing = true
                     }
-                    .buttonStyle(.bordered).disabled(editing.isMutating)
+                    .buttonStyle(.visionOutline).disabled(editing.isMutating)
                     Text(shell.strings.t("portfolio.exposure.importHint")).font(.caption).foregroundStyle(
                         theme.secondaryLabel)
                 }.padding(.top, 12)

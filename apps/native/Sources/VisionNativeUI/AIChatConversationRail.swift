@@ -139,7 +139,7 @@ private struct AIChatRenameSheet: View {
             HStack {
                 Spacer()
                 Button(strings.t("common.cancel")) { dismiss() }.keyboardShortcut(.cancelAction)
-                Button(strings.t("common.save"), action: save).buttonStyle(.borderedProminent)
+                Button(strings.t("common.save"), action: save).buttonStyle(.visionPrimary)
                     .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.isRenaming)
             }
         }.padding(24).frame(width: 400).onAppear { focused = true }

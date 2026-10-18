@@ -96,8 +96,7 @@ public struct StatisticsView: View {
                 } else if !model.hasData {
                     Text(strings.t("statsPage.noDataTitle")).font(.title2)
                     Text(strings.t("statsPage.noDataDesc")).foregroundStyle(theme.secondaryLabel)
-                    Button(strings.t("statsPage.importBtn")) { shell.navigate(to: "/import") }.buttonStyle(
-                        .borderedProminent)
+                    Button(strings.t("statsPage.importBtn")) { shell.navigate(to: "/import") }.buttonStyle(.visionPrimary)
                 } else {
                     Picker(
                         strings.t("statsPage.title"),

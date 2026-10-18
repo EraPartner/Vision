@@ -347,7 +347,7 @@ struct HomeCategoryChart: View {
                     }
                 }
                 if let selected {
-                    Button(selected.name) { navigate(selected.route.string) }.buttonStyle(.bordered)
+                    Button(selected.name) { navigate(selected.route.string) }.buttonStyle(.visionOutline)
                 }
             }
         }

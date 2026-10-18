@@ -104,7 +104,7 @@ public struct TaxOverviewView: View {
                     systemImage: "slider.horizontal.3"
                 ) {
                     openProfile(overview)
-                }.buttonStyle(.borderedProminent).disabled(screens.actions.isSaving)
+                }.buttonStyle(.visionPrimary).disabled(screens.actions.isSaving)
             }
         }
     }
@@ -152,8 +152,7 @@ public struct TaxOverviewView: View {
                         symbol: "person.crop.circle.badge.plus", title: strings.t("tax.noProfile.title"),
                         description: strings.t("tax.noProfile.desc")
                     ) {
-                        Button(strings.t("tax.profile.setup")) { openLiveProfile(overview) }.buttonStyle(
-                            .borderedProminent)
+                        Button(strings.t("tax.profile.setup")) { openLiveProfile(overview) }.buttonStyle(.visionPrimary)
                     }
                 }
             } else {

@@ -394,7 +394,7 @@ struct NativeSidebar: View {
     private var skipLink: some View {
         if let skipToContent {
             Button(model.strings.t("layout.skipToContent"), action: skipToContent)
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.visionPrimary)
                 .focused($skipFocused)
                 .opacity(skipFocused ? 1 : 0)
                 // Invisible, it must not take clicks meant for the search field below.

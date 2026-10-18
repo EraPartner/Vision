@@ -42,7 +42,7 @@ struct PortfolioDetailSheet: View {
                                 editing.bindTransactions(model.transactions)
                             }
                             editing.beginAddTransaction(investment: investment, bookingCurrency: holding.currency)
-                        }.buttonStyle(.borderedProminent)
+                        }.buttonStyle(.visionPrimary)
                     }
                 }
             } else {

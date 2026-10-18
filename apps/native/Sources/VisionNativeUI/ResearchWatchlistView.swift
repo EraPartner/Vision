@@ -89,7 +89,7 @@ public struct ResearchWatchlistView: View {
     private var addButton: some View {
         Button(strings.t("watchlist.addButton"), systemImage: "plus") {
             model.add.begin(numberFormat: shell.settings.numberFormat)
-        }.buttonStyle(.borderedProminent)
+        }.buttonStyle(.visionPrimary)
     }
 }
 

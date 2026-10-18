@@ -274,7 +274,7 @@ struct PlannedLinkSheet: View {
                     Text(strings.t("plannedPage.link.linkAndExecute"))
                 }
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.visionPrimary)
             .keyboardShortcut(.defaultAction)
             .disabled(!link.canExecute || model.actionLoading)
         }

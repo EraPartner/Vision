@@ -151,7 +151,7 @@ struct ImportCustomSetup: View {
                 Spacer()
                 if model.showsSavedSummary {
                     Button(strings.t("importPage.customParser.edit")) { model.startEditing() }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.visionOutline)
                         .controlSize(.small)
                     Button(strings.t("importPage.customParser.delete"), role: .destructive) {
                         model.requestParserDelete()
@@ -274,7 +274,7 @@ struct ImportCustomSetup: View {
                 Button(strings.t(model.isSaved ? "importPage.customParser.saveChanges" : "importPage.customParser.save")) {
                     Task { await model.saveParser(strings: strings) }
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.visionPrimary)
                 .controlSize(.small)
                 .disabled(!model.canSaveParser)
                 if model.isSaved {
@@ -537,7 +537,7 @@ struct ImportHistoryCard: View {
                     }
                     .disabled(!model.canShowNextPage)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.visionOutline)
                 .controlSize(.small)
                 .padding(.top, 8)
             }
