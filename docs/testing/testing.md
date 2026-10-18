@@ -2,8 +2,8 @@
 title: Testing Documentation
 type: testing
 status: active
-date: 2026-10-11
-updated: 2026-10-11
+date: 2026-10-13
+updated: 2026-10-13
 last-updated: 2026-10-10
 last_updated_timestamp: 2026-10-06T00:00:00Z
 added_portfolio_math_tests: 2026-05-05
@@ -39,6 +39,77 @@ related_code:
 ---
 
 # Testing Documentation
+
+## Behavior-focused cleanup and real browser boundary
+
+Tests are evidence, not an immutable specification of internal design. Preserve independently
+justified financial outcomes, public contracts, persistence and recovery through a redesign.
+Replace private helper, exact CSS string and SQL call-order assertions only after equivalent
+observable coverage passes. Do not update expected money values simply because new code returns
+a different value. Keep precision, conservation, parser, recurrence, property, real PostgreSQL
+and restore fault-injection suites.
+
+The reviewed keep/replace/remove ledger is `scripts/browser-tests/coverage-ledger.json`. The
+identical `tests/services/dedup.golden.test.ts` copy was removed; the persisted hash compatibility
+fixture remains in `tests/golden/dedupHash.golden.test.ts`. The source-string responsive suite was retired after meaningful browser replacements were
+authored, under the user's explicit 2026-10-13 execution waiver. Provider-backed forms now have deterministic external-provider fixtures and real-API browser
+journeys. This waiver is not passing browser evidence.
+No coverage thresholds were lowered.
+
+`bun run test:browser` uses `.github/scripts/with-native-stack.sh` to create disposable PostgreSQL,
+migrate it, launch the production backend/frontend, run
+`scripts/browser-tests/vision.browser.test.mjs`, and tear it down. Set `VISION_PLAYWRIGHT_MODULE`
+to an installed `playwright/index.mjs`; CI installs pinned Playwright 1.62.1 under `RUNNER_TEMP`.
+The suite requires the runner's disposable-stack marker and loopback URL and must never target a
+real Vision database. Fixtures use API calls for setup; journey actions use real Chromium and
+persist through the real API and database. No HTTP mocks are installed. The existing live-contract
+CI job now runs these browser journeys too, so its existing aggregate gate includes their result.
+
+Authored journeys cover empty and nonzero EUR/USD account closure, widget navigation/debounce
+and fresh-browser persistence, unprepared and prepared tax filing, custom CSV upload/review/commit,
+and Settings keyboard navigation and overflow at 390px and 1280px. Add account dialog checks at
+both widths inspect real geometry and Escape dismissal. A controlled overflow mutation must fail
+the geometry oracle; an equivalent inline box-sizing representation must pass it. This is an
+oracle probe, not evidence of an executed production-code refactor.
+
+A fresh browser context is not a backend process restart. The existing `native:isolated-smoke`
+runner does stop/start real backend processes and checks API readiness and persistence. Its
+synthetic bundle journey replaces changed database records and attachment bytes; a second
+synthetic runtime verifies transferred audit trust, and a tampered restore must preserve the
+original audit state. Reuse this native harness for recovery rather than exposing test controls
+through production HTTP APIs. Deterministic restore, journal and quiescent-backup fault suites
+remain required; they do not prove process interruption at every journal phase.
+
+Local execution on 2026-10-11 failed during `initdb` with `shmget: Operation not permitted`.
+No browser/database journey or native smoke is claimed as passed. New browser cases passed Node
+syntax validation only; optional local execution was explicitly waived on 2026-10-13. Additional
+journeys inspect visible control bounds and Escape dismissal for transaction, planned payment,
+Tax Income, custom JSON price-provider, chart builder, Appearance and reconciliation forms.
+Portfolio fixtures open transaction, edit and export forms and confirm the holding price and
+absence of accidental purchases. All seven shared investment asset branches have separate cases.
+Import checks the reference panel's bounds and normal document-scroll movement. Real persisted
+widget preferences select one widget and assert that it occupies the full rendered desktop grid
+on Dashboard, Statistics and both Portfolio rows. No Tailwind spelling or grid count is required.
+
+The selected-asset Watchlist and market-based Add investment journeys use a controlled external
+Yahoo provider. The disposable runner starts `scripts/browser-tests/yahoo-provider-fixture.mjs`
+on a random loopback port only with `VISION_BROWSER_PROVIDER_FIXTURES=1`, then preloads
+`yahoo-provider-preload.mjs` into its backend. The preload captures fetch, redirects only approved
+Yahoo endpoints and synthetic symbols, rejects unsupported Yahoo destinations and delegates
+unrelated requests unchanged. It requires the disposable-stack marker and an explicit literal
+loopback URL; it is never loaded by the installed app. Dummy cookie/crumb and raw provider
+responses pass through the installed Yahoo client, Vision service transformations, public API
+validation and actual database. These are controlled external-provider journeys, not evidence
+of live Yahoo availability or compatibility. Vision HTTP requests are not mocked.
+
+All original responsive source-contract surfaces now have authored observable browser replacements.
+Remaining execution gaps include those journeys, browser Electron backup IPC, actual process
+interruption across journal phases and an executed production refactor demonstration. Financial,
+database and recovery assertions and coverage gates remain.
+
+See [[docs/testing/test-inventory]] for the boundaries and [[docs/features/import]] and
+[[docs/features/belgian-tax]] for the workflows.
+
 
 Vision uses comprehensive testing to ensure code quality and prevent regressions.
 

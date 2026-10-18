@@ -73,8 +73,15 @@ function fixture(overrides: FixtureOverrides = {}): Fixture {
 
 function check({ root, inventoryPath }: Fixture): SpawnSyncReturns<string> {
   return spawnSync(
-    "bun",
-    [checker, "--root", root, "--inventory", inventoryPath],
+    process.execPath,
+    [
+      ...(process.versions.bun ? ["--no-env-file"] : []),
+      checker,
+      "--root",
+      root,
+      "--inventory",
+      inventoryPath,
+    ],
     { encoding: "utf8" },
   );
 }

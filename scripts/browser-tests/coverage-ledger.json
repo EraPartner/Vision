@@ -1,0 +1,163 @@
+{
+  "reviewedOn": "2026-10-13",
+  "policy": "Preserve independently justified behavior. User explicitly waived optional execution on 2026-10-13; authored geometry replacements permit scoped retirement of obsolete source assertions. Protected financial, database and recovery tests and coverage thresholds remain unchanged.",
+  "reviewedTests": [
+    {
+      "path": "apps/frontend/src/pages/__tests__/responsiveLayout.contract.test.ts",
+      "decision": "remove; observable replacements authored under user execution waiver",
+      "boundary": "source text",
+      "reason": "All 14 original dialog/form source surfaces, all seven investment asset branches, lone widgets and Import layout have actual browser geometry replacements. Counts and exact CSS spellings prevent valid refactors and cannot prove fit. Latest user explicitly waived optional execution; no browser pass is claimed.",
+      "replacement": "scripts/browser-tests/vision.browser.test.mjs: real rendered form/control bounds, Escape dismissal, single-widget full-width grids, Import normal scroll, and seeded holding unchanged-price/no-purchase readback. Market and selected Watchlist use runner-owned Yahoo HTTP fixture through installed client, real Vision API and disposable PostgreSQL."
+    },
+    {
+      "path": "apps/node-backend/tests/accountCloseService.test.ts",
+      "decision": "retain pending PostgreSQL replacements",
+      "boundary": "mocked SQL service",
+      "reason": "Preserve currency-partition conservation, retry safety and no partial close; SQL call indices are implementation-bound. Nonzero EUR/USD browser close is now authored but unexecuted, and does not yet prove rollback/retry guarantees."
+    },
+    {
+      "path": "apps/node-backend/tests/moneyPrecisionAlignment.db.test.ts",
+      "decision": "keep",
+      "boundary": "real PostgreSQL",
+      "reason": "Database money precision is a domain contract independent of implementation."
+    },
+    {
+      "path": "apps/node-backend/tests/property/splits.property.test.ts",
+      "decision": "keep",
+      "boundary": "property tests",
+      "reason": "Payment sum and remaining amount conservation protects financial outcomes."
+    },
+    {
+      "path": "apps/frontend/src/hooks/portfolio/__tests__/portfolioCalculations.property.test.ts",
+      "decision": "keep; independently review golden fixtures",
+      "boundary": "pure calculation/property tests",
+      "reason": "Units and cost-basis conservation remain required after redesign. Expected values must follow requirements, not implementation output."
+    },
+    {
+      "path": "apps/node-backend/tests/golden/dedupHash.golden.test.ts",
+      "decision": "keep",
+      "boundary": "golden serialization",
+      "reason": "Historical dedup hash compatibility is persisted identity; replacing the algorithm must deliberately preserve or migrate it."
+    },
+    {
+      "path": "apps/node-backend/tests/services/dedup.golden.test.ts",
+      "decision": "remove duplicate (parent change)",
+      "boundary": "duplicate golden serialization",
+      "reason": "Identical coverage retained by tests/golden/dedupHash.golden.test.ts."
+    },
+    {
+      "path": "packaging/electron/backup/restore.test.ts",
+      "decision": "keep",
+      "boundary": "synthetic filesystem and restore failure injection",
+      "reason": "Safety ordering, rollback and recoverability need deterministic fault coverage beyond successful browser journeys."
+    },
+    {
+      "path": "packaging/electron/runtime/restore-journal.test.ts",
+      "decision": "keep",
+      "boundary": "synthetic journal failure injection",
+      "reason": "Restart recovery must survive interruption at intermediate phases."
+    },
+    {
+      "path": "apps/frontend/src/test/live-contracts/live-contracts.test.ts",
+      "decision": "keep",
+      "boundary": "live HTTP/PostgreSQL response shape",
+      "reason": "Useful contract validation; explicitly not a UI journey."
+    },
+    {
+      "path": "apps/frontend/src/features/settings/__tests__/VirtualRecipientExclusions.test.tsx",
+      "decision": "keep",
+      "boundary": "simulated DOM with real virtualizer",
+      "reason": "1000-recipient bounded rendering plus End-key focus/toggle; not a class-name or private-helper assertion."
+    },
+    {
+      "path": "apps/frontend/src/pages/__tests__/DashboardVisibility.integration.test.tsx",
+      "decision": "keep",
+      "boundary": "simulated DOM/real providers/mocked HTTP",
+      "reason": "Observable zero hidden requests and fetching after user enables widgets; supports internal query refactoring."
+    },
+    {
+      "path": "apps/frontend/src/components/shared/__tests__/MoneyTypographyContract.test.ts",
+      "decision": "retain pending semantic/static-rule replacement",
+      "boundary": "TypeScript source AST",
+      "reason": "Money sign and typography consistency matters; component-name and CSS adoption lists couple it to implementation. A suitable lint rule or rendered money semantics must replace coverage before removal."
+    },
+    {
+      "path": "apps/frontend/src/lib/__tests__/categoriesPreload.test.ts",
+      "decision": "keep request/failure/pagination behaviors; review source assertion separately",
+      "boundary": "mocked HTTP plus source inspection",
+      "reason": "Deduplicated boot requests and complete category pages are observable performance/data contracts. A file-read assertion does not make the entire mixed suite disposable."
+    },
+    {
+      "path": "scripts/tests/legacy-inventory.test.ts",
+      "decision": "keep; make subprocess execution hermetic",
+      "boundary": "real checker subprocess with synthetic inventory",
+      "reason": "Accept/reject fixtures protect inventory policy; use current runtime and disable Bun environment-file loading instead of forcing another runtime or local configuration. All four unchanged behavior assertions pass under Node."
+    },
+    {
+      "path": "apps/frontend/src/pages/__tests__/portfolio/PortfolioPages.integration.test.tsx",
+      "decision": "replace Crypto create request-count proxy with observable creation and validation",
+      "boundary": "simulated DOM with real providers and mocked HTTP",
+      "reason": "Default initial purchase requires amount and units. The journey now proves invalid submission creates nothing, explicitly opts out for a bare holding, and checks one creation, dialog closure and the server-refetched Bitcoin holding. Inventory and canonical summary represent the same created holding; zero units/investment/value follow from no purchase, not regenerated production values."
+    },
+    {
+      "path": "apps/node-backend/tests/services/mergeAtomicity.test.ts",
+      "decision": "keep rollback guarantee; update coherent locked graph fixture",
+      "boundary": "mocked database transaction with injected second-leg failure",
+      "reason": "Discovery, sorted locking and fresh discovery now see coherent existing10/30 auto pair plus unpaired20. Retains injected serialization failure, same connection, BEGIN/ROLLBACK, no COMMIT and release checks; asserts peer-release IDs belong to the locked graph. Real PostgreSQL replacements remain required before retiring structural transaction checks."
+    }
+  ],
+  "browserJourneys": {
+    "runner": "scripts/browser-tests/vision.browser.test.mjs",
+    "execution": "Previous disposable PostgreSQL initialization was blocked. Latest user waived optional execution on 2026-10-13; additions are authored and Node syntax checked, not browser-passed.",
+    "implemented": [
+      "empty-account close through UI, API persistence, fresh-browser reopen action",
+      "widget navigation during save debounce and fresh-browser persistence",
+      "unprepared tax filing cannot submit",
+      "390px and 1280px Settings overflow and keyboard section navigation",
+      "prepared filing reference/as-filed snapshot/frozen calculation survive fresh browser context",
+      "custom CSV upload, review, commit, duplicate-commit rejection and transaction readback",
+      "nonzero EUR/USD close through UI, fresh-browser archived state, per-currency zero balance and original/adjustment conservation",
+      "390px and 1280px Add account dialog geometry, Escape dismissal, deliberate overflow rejection and equivalent inline box-sizing acceptance",
+      "390px/1280px local transaction, planned, Tax Income, custom JSON provider, chart builder, Appearance and reconcile visible-control bounds and dismissal",
+      "390px/1280px seeded manual-price holding transaction/edit/export forms plus unchanged price and absence of accidental transactions",
+      "390px/1280px Import reference panel bounds and nonsticky document-scroll behavior",
+      "390px/1280px all seven shared investment asset-class branches",
+      "real-settings single-widget full-row geometry for Dashboard, Statistics and both Portfolio grids",
+      "390px/1280px selected Watchlist search and market-based investment currency form through controlled Yahoo HTTP fixture, installed client, real Vision API and disposable database"
+    ],
+    "remaining": [
+      "live execution explicitly waived locally; CI journeys remain a gate",
+      "executed production-internals refactor demonstration (inline style probe only exercises the oracle)"
+    ]
+  },
+  "fileInventory": "scripts/browser-tests/test-file-inventory.json",
+  "inventoryMethod": "node scripts/browser-tests/inventory.mjs: all nonignored test/spec files in declared roots, conservative source/path boundary cues, exact-byte duplicate scan. Not semantic review or execution.",
+  "nativeJourneys": {
+    "runner": "bun run native:isolated-smoke",
+    "source": "packaging/electron/scripts/native-smoke.ts",
+    "isolation": "Native wrapper creates disposable synthetic userData/runtime IDs with offline fixture data; never targets installed user data.",
+    "authoredExisting": [
+      "actual backend stop/start around snapshot and mutation, with API readiness/readback",
+      "encrypted bundle restore replaces mutated transaction/account/settings and attachment bytes",
+      "restore to a second synthetic runtime verifies transferred audit checkpoint",
+      "tampered audit restore is rejected and original runtime audit remains verified"
+    ],
+    "execution": "Not executed in this session: disposable PostgreSQL initialization is blocked. Native fault-injection tests are separately executed evidence, not live smoke coverage.",
+    "faultSuites": [
+      "packaging/electron/backup/restore.test.ts",
+      "packaging/electron/runtime/restore-journal.test.ts",
+      "packaging/electron/backup/quiescent-snapshot.test.ts"
+    ],
+    "remaining": [
+      "execute isolated native smoke and real process interruption at restore journal phases",
+      "browser Electron IPC backup/restore interaction remains uncovered"
+    ]
+  },
+  "externalProviderFixture": {
+    "runner": "scripts/browser-tests/yahoo-provider-fixture.mjs",
+    "preload": "scripts/browser-tests/yahoo-provider-preload.mjs",
+    "gate": "VISION_BROWSER_PROVIDER_FIXTURES=1 and VISION_DISPOSABLE_NATIVE_STACK=1; URL literal http://127.0.0.1:nonzero-port only",
+    "boundary": "Controlled external Yahoo HTTP responses; installed provider client, real public API and PostgreSQL are preserved. Vision API HTTP is not mocked. Does not prove live Yahoo behavior.",
+    "execution": "Protocol and URL-gate checks only; actual browser execution waived."
+  }
+}

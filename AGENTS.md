@@ -135,6 +135,15 @@ Scale checks to risk:
 
 Finish with changed files, checks run, skipped checks, residual risk, and follow-ups.
 
+Tests are evidence, not an unquestionable specification of the internals. During redesign,
+preserve independently justified financial outcomes, persistence, recovery and public contracts.
+Replace obsolete private-helper, CSS/source-text or SQL call-order assertions only after suitable
+observable replacement checks pass. Explain the replacement in the test inventory. Never change
+expected financial values solely because the implementation returns different values, delete a
+domain failure to make a redesign pass, or lower coverage gates to obtain a green result.
+Distinguish simulated-DOM/mocked HTTP tests, live API contracts, real PostgreSQL tests and actual
+browser/Electron journeys in verification reports.
+
 ## Key paths
 
 | Path                            | Purpose                         |

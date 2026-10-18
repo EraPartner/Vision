@@ -23,7 +23,7 @@ function write(root: string, relativePath: string, contents: string): void {
 }
 
 function check(root: string): SpawnSyncReturns<string> {
-  return spawnSync("bun", [checker, "--backend-root", root], {
+  return spawnSync("bun", ["--no-env-file", checker, "--backend-root", root], {
     encoding: "utf8",
   });
 }
