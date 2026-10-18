@@ -1,14 +1,17 @@
-import { parseHouseholdSnapshotsV2, parseHouseholdV2 } from "./householdSchema";
+import {
+  parseHouseholdSnapshotsV2,
+  parseHouseholdV2,
+} from "./householdSchema.ts";
 import {
   upgradeProfileV1ToHousehold,
   upgradeSnapshotsV1ToV2,
   withoutNullFields,
-} from "./householdMigration";
+} from "./householdMigration.ts";
 import type {
   BelgianTaxHouseholdV2,
   BelgianTaxHouseholdSnapshotsV2,
-} from "./householdTypes";
-import type { BelgianTaxProfile, BelgianTaxProfileSnapshots } from "./types";
+} from "./householdTypes.ts";
+import type { BelgianTaxProfile, BelgianTaxProfileSnapshots } from "./types.ts";
 
 /** Raw setting values as preloaded from the settings API (`null` when a key is absent). */
 export interface StoredBelgianTaxSettings {

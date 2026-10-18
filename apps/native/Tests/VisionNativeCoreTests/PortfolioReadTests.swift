@@ -224,7 +224,7 @@ struct PortfolioReadTests {
         #expect(!widgets.isVisible("news"))
         #expect(widgets.error == nil)
         #expect(await transport.widgetValue["budgetTax"]?["summaryCards"] == .bool(false))
-        #expect(await transport.widgetValue["unknownPage"]?["unknownWidget"] == .string("preserve"))
+        #expect(await transport.widgetValue["unknownPage"]?["unknownWidget"] == .bool(true))
         let write = try #require(
             await transport.requests.first { $0.url.path == "/api/settings/widget_visibility" && $0.method == .put })
         let body = try JSONDecoder().decode(TaxValue.self, from: #require(write.body))
@@ -242,7 +242,7 @@ struct PortfolioReadTests {
         await model.setVisible("news", false)
         #expect(model.error == nil)
         #expect(!model.isVisible("news"))
-        #expect(await transport.widgetValue["unknownPage"]?["unknownWidget"] == .string("preserve"))
+        #expect(await transport.widgetValue["unknownPage"]?["unknownWidget"] == .bool(true))
     }
 
     @Test func lostWidgetAcknowledgementReadsTheCommittedValueAndCanSaveAgain() async {
@@ -409,7 +409,7 @@ private actor PortfolioReadTransport: APITransport {
     var requests: [APIRequest] = []
     var widgetValue: TaxValue = .object([
         "portfolio": .object([:]), "budgetTax": .object(["summaryCards": .bool(false)]),
-        "unknownPage": .object(["unknownWidget": .string("preserve")]),
+        "unknownPage": .object(["unknownWidget": .bool(true)]),
     ])
     private let transactionCount: Int
     private var historyMode = "normal"

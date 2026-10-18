@@ -1,6 +1,6 @@
-import type { BelgianTaxProfile } from './types';
-import type { BelgianTaxYearTable, CSSSTier } from './constants';
-import type { ActivityKind } from './householdTypes';
+import type { BelgianTaxProfile } from './types.ts';
+import type { BelgianTaxYearTable, CSSSTier } from './constants.ts';
+import type { ActivityKind } from './householdTypes.ts';
 
 /**
  * Employee social security contribution (RSZ / ONSS).

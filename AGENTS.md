@@ -142,7 +142,7 @@ observable replacement checks pass. Explain the replacement in the test inventor
 expected financial values solely because the implementation returns different values, delete a
 domain failure to make a redesign pass, or lower coverage gates to obtain a green result.
 Distinguish simulated-DOM/mocked HTTP tests, live API contracts, real PostgreSQL tests and actual
-browser/Electron journeys in verification reports.
+native/Electron journeys in verification reports.
 
 ## Key paths
 

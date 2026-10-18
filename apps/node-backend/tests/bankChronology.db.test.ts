@@ -15,8 +15,15 @@ import {
 
 describe.skipIf(!hasTestDatabase())("bank chronology (real PostgreSQL)", () => {
   let accountId: number;
+  let recipientId: number;
   beforeAll(async () => {
     await acquireDbSuiteLock();
+    recipientId = (
+      await getTestPool()!.query(
+        "INSERT INTO recipients (name, normalized_name) VALUES ($1, $1) RETURNING id",
+        [`chronology-recipient-${crypto.randomUUID()}`],
+      )
+    ).rows[0].id;
   });
   afterEach(async () => {
     await getTestPool()!.query(
@@ -28,6 +35,9 @@ describe.skipIf(!hasTestDatabase())("bank chronology (real PostgreSQL)", () => {
     ]);
   });
   afterAll(async () => {
+    await getTestPool()!.query("DELETE FROM recipients WHERE id = $1", [
+      recipientId,
+    ]);
     await releaseDbSuiteLock();
     await closeTestPool();
     await closePool();
@@ -40,7 +50,7 @@ describe.skipIf(!hasTestDatabase())("bank chronology (real PostgreSQL)", () => {
     return transactionRepository.insertImportedRow({
       date: "2026-07-01",
       accountId,
-      recipientId: null,
+      recipientId,
       categoryId: null,
       amount,
       balance,

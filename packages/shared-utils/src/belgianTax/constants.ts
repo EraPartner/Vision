@@ -21,7 +21,7 @@
  * centimes additionnels.
  */
 
-import type { BelgianRegion } from './types';
+import type { BelgianRegion } from './types.ts';
 
 export interface CSSSTier {
     /** Annual net taxable income (single filer) lower bound */

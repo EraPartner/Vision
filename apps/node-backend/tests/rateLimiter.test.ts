@@ -1,3 +1,6 @@
+import { readdirSync, readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../src/config/config.ts", () => ({
@@ -277,5 +280,30 @@ describe("rateLimiter middleware", () => {
 
     expect(next).toHaveBeenCalledTimes(1);
     expect(res.status).not.toHaveBeenCalled();
+  });
+});
+
+describe("route rate limiter keys", () => {
+  // Without its own keyPrefix a limiter shares the "global" bucket that
+  // globalRateLimiter increments on every request, so it 429s after N requests
+  // to ANY route instead of N to its own (portfolio-summary did, at 60).
+  it("gives every rateLimiter({...}) call its own keyPrefix", () => {
+    const src = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      "../src",
+    );
+    const files = readdirSync(src, { recursive: true, encoding: "utf8" })
+      .filter((file) => file.endsWith(".ts"))
+      .map((file) => path.join(src, file));
+    const missing: string[] = [];
+    for (const file of files) {
+      const text = readFileSync(file, "utf8");
+      for (const call of text.matchAll(/rateLimiter\(\{[^}]*\}\)/g)) {
+        if (!call[0].includes("keyPrefix")) {
+          missing.push(`${path.relative(src, file)}: ${call[0]}`);
+        }
+      }
+    }
+    expect(missing).toEqual([]);
   });
 });

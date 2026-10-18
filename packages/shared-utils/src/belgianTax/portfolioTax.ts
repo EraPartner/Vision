@@ -15,7 +15,7 @@
  * lives in a React context; everything else is a pure function of its inputs.
  */
 import Decimal from "decimal.js";
-import type { BelgianTaxYearTable } from "./constants";
+import type { BelgianTaxYearTable } from "./constants.ts";
 import type { PortfolioIncomeRecognitionRole } from "@vision/types/portfolioTxnTypes";
 
 export type PortfolioTaxTxn = {

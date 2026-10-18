@@ -1,5 +1,5 @@
-import { getTaxTable } from "./constants";
-import { buildPortfolioCostBreakdowns } from "./costBreakdown";
+import { getTaxTable } from "./constants.ts";
+import { buildPortfolioCostBreakdowns } from "./costBreakdown.ts";
 import {
   yearOf,
   enrichInvestmentCosts,
@@ -12,7 +12,7 @@ import {
   computeDividendWht,
   type PortfolioTaxInvestment,
   type ConvertFn,
-} from "./portfolioTax";
+} from "./portfolioTax.ts";
 
 export interface PortfolioDashboardInvestment extends PortfolioTaxInvestment {
   name: string;

@@ -1,7 +1,7 @@
 import type {
   AnalysisInterchangeResult as AnalysisResult,
   AnalysisInterchangeValue as AnalysisValue,
-} from "./types";
+} from "./types.ts";
 
 export interface WorkbookXmlElement {
   readonly textContent: string | null;

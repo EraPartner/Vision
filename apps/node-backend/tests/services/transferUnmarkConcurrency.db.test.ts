@@ -19,9 +19,17 @@ describe.skipIf(!hasTestDatabase())(
   "opposite-end transfer unmark concurrency",
   () => {
     const accounts: number[] = [];
+    let recipientId: number;
     beforeAll(async () => {
       expect(process.env.DATABASE_URL).toBe(process.env.TEST_DATABASE_URL);
       await acquireDbSuiteLock();
+      const name = `unmark-recipient-${crypto.randomUUID()}`;
+      recipientId = (
+        await getTestPool()!.query(
+          "INSERT INTO recipients(name,normalized_name) VALUES ($1,$1) RETURNING id",
+          [name],
+        )
+      ).rows[0].id as number;
     }, 180_000);
     afterEach(async () => {
       await getTestPool()!.query(
@@ -34,6 +42,9 @@ describe.skipIf(!hasTestDatabase())(
       );
     });
     afterAll(async () => {
+      await getTestPool()!.query("DELETE FROM recipients WHERE id = $1", [
+        recipientId,
+      ]);
       await releaseDbSuiteLock();
       await closeTestPool();
       await closePool();
@@ -48,9 +59,9 @@ describe.skipIf(!hasTestDatabase())(
         accounts.push(result.rows[0].id as number);
       }
       const { rows } = await pool.query(
-        `INSERT INTO transactions (date, amount, currency, account_id)
-      VALUES ('2026-01-01', -50, 'EUR', $1), ('2026-01-01', 50, 'EUR', $2) RETURNING id`,
-        accounts,
+        `INSERT INTO transactions (date, amount, currency, account_id, recipient_id)
+      VALUES ('2026-01-01', -50, 'EUR', $1, $3), ('2026-01-01', 50, 'EUR', $2, $3) RETURNING id`,
+        [...accounts, recipientId],
       );
       const a = rows[0].id as number;
       const b = rows[1].id as number;
@@ -107,8 +118,8 @@ describe.skipIf(!hasTestDatabase())(
         const result = await pool.query("INSERT INTO accounts (name) VALUES ($1) RETURNING id", [`cleanup-${crypto.randomUUID()}`]);
         accounts.push(result.rows[0].id as number);
       }
-      const { rows } = await pool.query(`INSERT INTO transactions (date, amount, currency, account_id)
-        VALUES ('2026-01-01', -50, 'EUR', $1), ('2026-01-01', 60, 'EUR', $2) RETURNING id`, accounts);
+      const { rows } = await pool.query(`INSERT INTO transactions (date, amount, currency, account_id, recipient_id)
+        VALUES ('2026-01-01', -50, 'EUR', $1, $3), ('2026-01-01', 60, 'EUR', $2, $3) RETURNING id`, [...accounts, recipientId]);
       const a = rows[0].id as number;
       const b = rows[1].id as number;
       await pool.query(`UPDATE transactions SET is_transfer=true, transfer_source='auto',
@@ -156,10 +167,10 @@ describe.skipIf(!hasTestDatabase())(
         accounts.push(result.rows[0].id as number);
       }
       const inserted = await pool.query(
-        `INSERT INTO transactions (date, amount, currency, account_id)
-      VALUES ('2026-01-01', -50, 'EUR', $1), ('2026-01-01', 50, 'EUR', $2),
-             ('2026-01-01', 50, 'EUR', $3), ('2026-01-01', -50, 'EUR', $4) RETURNING id`,
-        accounts,
+        `INSERT INTO transactions (date, amount, currency, account_id, recipient_id)
+      VALUES ('2026-01-01', -50, 'EUR', $1, $5), ('2026-01-01', 50, 'EUR', $2, $5),
+             ('2026-01-01', 50, 'EUR', $3, $5), ('2026-01-01', -50, 'EUR', $4, $5) RETURNING id`,
+        [...accounts, recipientId],
       );
       const [a, x, b, y] = inserted.rows.map((row) => row.id as number) as [
         number,

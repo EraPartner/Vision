@@ -47,6 +47,21 @@ const describeDb = hasTestDatabase() ? describe : describe.skip;
 const originalTable = "manual_transaction_dedup_claims";
 const hiddenTable = "manual_transaction_dedup_claims_savepoint_test";
 
+/** The synthetic recipient every persisted fixture row needs (NOT NULL). */
+async function fixtureRecipientId(): Promise<number> {
+  const pool = getTestPool()!;
+  const existing = await pool.query(
+    "SELECT id FROM recipients WHERE normalized_name = 'mixed representation recipient'",
+  );
+  if (existing.rows[0]) return existing.rows[0].id as number;
+  const { rows } = await pool.query(
+    `INSERT INTO recipients (name, normalized_name)
+     VALUES ('Mixed Representation Recipient', 'mixed representation recipient')
+     RETURNING id`,
+  );
+  return rows[0].id as number;
+}
+
 describeDb("manual dedup rolling-deployment savepoints (real DB)", () => {
   beforeAll(async () => {
     expect(
@@ -178,6 +193,7 @@ describeDb("manual dedup rolling-deployment savepoints (real DB)", () => {
     const input = {
       transaction_date: "1901-01-02",
       account_id: accountId,
+      recipient_id: await fixtureRecipientId(),
       amount: -50,
       memo: "mixed representation lock probe",
       currency: "EUR",
@@ -206,6 +222,7 @@ describeDb("manual dedup rolling-deployment savepoints (real DB)", () => {
     const input = {
       transaction_date: "1901-01-02",
       account_id: accountId,
+      recipient_id: await fixtureRecipientId(),
       amount: -50,
       memo: "mixed representation lock probe",
       currency: "USD",
@@ -213,7 +230,8 @@ describeDb("manual dedup rolling-deployment savepoints (real DB)", () => {
     const first = await transactionService.createManualTransaction(input);
     await getTestPool()!.query(
       "UPDATE manual_transaction_dedup_claims SET deduplication_hash = $1 WHERE transaction_id = $2",
-      ["legacy-v2-claim", first.transaction.id],
+      // A well-formed hash from an older identity version, not the current one.
+      ["0".repeat(64), first.transaction.id],
     );
     await expect(
       transactionService.createManualTransaction(input),
@@ -223,13 +241,14 @@ describeDb("manual dedup rolling-deployment savepoints (real DB)", () => {
     ).resolves.toHaveProperty("transaction.currency", "EUR");
   });
 
-  it("serializes equivalent amount/memo encodings, including absent recipients", async () => {
+  it("serializes equivalent amount/memo encodings", async () => {
     const accountId = await accountRepository.resolveOrCreateByName(
       "Mixed Representation Account",
     );
     const input = {
       transaction_date: "1901-01-02",
       account_id: accountId,
+      recipient_id: await fixtureRecipientId(),
       amount: -50,
       memo: "mixed representation lock probe",
       currency: "EUR",
@@ -259,6 +278,7 @@ describeDb("manual dedup rolling-deployment savepoints (real DB)", () => {
       const input = {
         transaction_date: "1901-01-02",
         account_id: accountId,
+        recipient_id: await fixtureRecipientId(),
         amount: -50,
         memo: `${padding}mixed representation lock probe${padding}`,
         currency: "EUR",
@@ -297,6 +317,7 @@ describeDb("manual dedup rolling-deployment savepoints (real DB)", () => {
       const input = {
         transaction_date: "1901-01-02",
         account_id: accountId,
+        recipient_id: await fixtureRecipientId(),
         memo: "mixed representation lock probe",
         currency: "EUR",
       };

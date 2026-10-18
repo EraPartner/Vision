@@ -8,7 +8,7 @@
  * All `taxYear` fields in this module refer to the **income year**.
  */
 
-import type { BelgianTaxHouseholdV2, HouseholdTaxResult } from "./householdTypes";
+import type { BelgianTaxHouseholdV2, HouseholdTaxResult } from "./householdTypes.ts";
 
 export type EmploymentType =
     | "employee"

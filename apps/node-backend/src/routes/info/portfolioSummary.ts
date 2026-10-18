@@ -21,7 +21,11 @@ const router = Router();
 
 router.get(
   "/portfolio-summary",
-  rateLimiter({ windowMs: 60_000, maxRequests: 60 }),
+  rateLimiter({
+    windowMs: 60_000,
+    maxRequests: 60,
+    keyPrefix: "portfolio-summary",
+  }),
   async (req, res) => {
     const { targetCurrency } = parseInput(targetCurrencyQuerySchema, req.query);
     const { active } = parseInput(

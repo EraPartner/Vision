@@ -1,5 +1,5 @@
-import type { BelgianRegion, BelgianTaxProfile } from './types';
-import type { BelgianTaxYearTable } from './constants';
+import type { BelgianRegion, BelgianTaxProfile } from './types.ts';
+import type { BelgianTaxYearTable } from './constants.ts';
 
 /**
  * Estimate annual Belgian property tax (précompte immobilier / onroerende voorheffing).

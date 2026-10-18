@@ -2,7 +2,7 @@
 title: Codebase audit implementation delivery
 type: testing
 status: active
-date: 2026-10-13
+date: 2026-10-18
 tags: [audit, implementation, verification, recovery, performance]
 description: Implementation ledger for the October 2026 audit and the user-authorized waiver of further optional live acceptance checks.
 ---
@@ -83,11 +83,9 @@ acceptance or confirmed reproduction of the original native warning.
   property, PostgreSQL and restore fault coverage. Duplicate tests and obsolete implementation
   assertions are replaced selectively. See [[docs/testing/test-inventory]] and
   `scripts/browser-tests/coverage-ledger.json` for the exact retained/replaced/removed decisions.
-  All original responsive source-check surfaces now have authored geometry replacements, including
-  market-backed forms using the installed Yahoo client against a controlled external-provider
-  fixture. The exact CSS source-count suite was retired under the explicit execution waiver.
-  The provider protocol and safety-gate checks run before browser journeys locally and in CI;
-  actual browser/database execution is not claimed.
+  The exact CSS source-count suite was retired. Its authored browser geometry replacements and the
+  controlled Yahoo provider fixture were removed with Playwright on 2026-10-18, because only the
+  Swift native app is a supported UI; React web layout has no browser coverage.
 
 ## Checks already performed
 
@@ -115,7 +113,7 @@ These checks are waived for implementation closure, not recorded as successful:
   planned-execution and import/rollback interleavings against a disposable database.
 - Exercise real process interruption during coordinated database/attachment recovery and verify
   quiescent backup during concurrent attachment writes.
-- Run authored browser journeys and isolated native smoke against their disposable synthetic stack.
+- Run isolated native smoke against its disposable synthetic stack.
 - Compare native startup, manifest memory/event-loop behavior, dense transfer/import work,
   execution lock duration, exclusions interaction latency, GPU behavior and real PDF throughput.
 - Check PDF content and cancellation with a launched Chromium process.

@@ -16,10 +16,10 @@ import type {
     BracketTax,
     MortgageCreditRegime,
     ProfessionalExpenseMethod,
-} from "./types";
-import type { ForfaitCategory, ReductionInputs, TaxReductionBreakdown } from "./personPit";
+} from "./types.ts";
+import type { ForfaitCategory, ReductionInputs, TaxReductionBreakdown } from "./personPit.ts";
 
-export type { ForfaitCategory } from "./personPit";
+export type { ForfaitCategory } from "./personPit.ts";
 
 /** Stable partner identifier. Partner A is always present; B is the spouse or partner. */
 export type PartnerId = "A" | "B";
