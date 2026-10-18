@@ -146,7 +146,13 @@ struct TaxTrendStripView: View {
                 title: shell.strings.t("tax.trendStrip.title"),
                 description: shell.strings.t("tax.trendStrip.description"), small: true
             ) {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), alignment: .leading)], spacing: 8) {
+                // The web strip: one equal column per year (up to four per row), filling the card.
+                LazyVGrid(
+                    columns: Array(
+                        repeating: GridItem(.flexible(minimum: 120), spacing: 8, alignment: .leading),
+                        count: min(years.count, 4)),
+                    spacing: 8
+                ) {
                     ForEach(years, id: \.year) { year in
                         Button {
                             shell.replaceQuery("year", with: String(year.year))
