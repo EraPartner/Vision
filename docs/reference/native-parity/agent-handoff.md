@@ -3,7 +3,7 @@ title: "Vision Native agent handoff"
 type: reference
 status: active
 date: 2026-10-15
-updated: 2026-10-17
+updated: 2026-10-18
 tags: [reference, swift-rewrite, native-parity, handoff]
 description: "Resumable checkpoint for the Swift port: published branch, current phase, ownership, remaining work, verification evidence and subsequent-phase gates."
 ---
@@ -52,7 +52,7 @@ Run 40 (`eb59813`): app build passed; Core **1,687 tests / 231 suites passed**; 
 | `a5960a6` | `native-mac-build.sh` builds the helper into the staged frontend (`--out-dir`)                                                            | local build + 25 tests  |
 | `bca9993` | helper-mode `StartupRedirect` (`vision.startupSection`, `vision.lastRoute` allowlisted)                                                   | built (run 40)          |
 
-Opt-in: `VISION_NATIVE_HELPER_DOCUMENT=1` with a Debug build of the Demo variant and a
+Historical (the helper was retired by ADR-209, see below). Opt-in was `VISION_NATIVE_HELPER_DOCUMENT=1` with a Debug build of the Demo variant and a
 supervised backend; anything else keeps the retained web document. **No opted-in Demo run has
 happened**; none of the helper flows has run on a Mac.
 
@@ -164,17 +164,32 @@ behind in the same job, so it is not attributable per mode; the process tree and
 Native-only has the smallest tree and process count; the app's own RSS (~390–470 MB, about 2.5×
 Electron's main process) is the next thing to profile.
 
+**Helper retired (ADR-209, 2026-10-18)**
+
+[[docs/adr/209-vision-native-retire-helper-document|ADR-209]] retires the ADR-207 helper document
+now that native-only is the Debug Demo default. Removed: `native-helper.html`, `src/native-helper.ts`,
+`lib/nativeHelperDocument.ts` and its tests, `build-native-helper.ts` and the `build:native-helper`
+script, the backend `nativeHelperArtifacts` middleware (no reserved `/native-helper.html` or
+`/native-helper-assets`), and the Swift `NativeHelperDocumentBridge`, `Session` and `Selection`.
+`NativeDocumentSelection` (`Shell/NativeDocumentSelection.swift`) now yields `retainedWeb` or
+`nativeOnly`; `VISION_NATIVE_WEB_FREE=0` opts out to the retained web document and
+`VISION_NATIVE_HELPER_DOCUMENT` has no effect. `NativeHelperDocumentState` became
+`NativeDocumentState`; `WebShell` has no helper handler or navigation tracking.
+`lib/nativeHelperRuntime.ts` stays for the retained page's keyboard overlay bridge. The e2e smoke
+has `retained`, `native` and `electron` modes and now stores `footprint` and `vmmap --summary`
+output per mode. The helper-specific evidence above is history; the "known divergence" note about
+helper runs no longer applies.
+
 **Next**
 
-1. Read the latest `Native Branch Verification` and `Native End-to-End Smoke` runs; fix any
-   compile or test failure. Native-only is the Debug Demo default (suites run 39067544787); the
-   helper-default flip is superseded. Confirm the helper smoke passes with its capability flags,
-   then retire the helper and retained modes for the Demo with the owner (ADR-208 end state).
-2. Manual Mac checks owed: VoiceOver on the startup/failure screens, the text context menu,
+1. Run the manual Mac checks: VoiceOver on the startup/failure screens, the text context menu,
    window drag on native screens, notification permission prompt, topbar title on scroll.
-3. Remaining phase-4 gates from ADR-206/207: storage takeover, retiring the retained renderer
-   by default, bundle size and memory against the phase-0 baseline (ADR-204 exit). Real-data
-   switch-over stays under ADR-205.
+2. Profile the app's own memory (RSS ~390-470 MB) from the new per-mode `footprint-<mode>.txt` and
+   `vmmap-<mode>.txt` output of the e2e smoke.
+3. Later, with the owner, decide whether to retire the retained web document (the `retained`
+   mode and the non-eligible launch path).
+4. Remaining phase-4 gates from ADR-206/208: storage takeover, bundle size and memory against the
+   phase-0 baseline (ADR-204 exit). Real-data switch-over stays under ADR-205.
 
 ## Resume here (2026-10-15, historical)
 

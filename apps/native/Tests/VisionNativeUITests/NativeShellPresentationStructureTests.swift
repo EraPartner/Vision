@@ -11,8 +11,8 @@ import VisionNativeCore
 struct NativeShellPresentationStructureTests {
     init() throws { try NativeAppKitTestApplication.prepare() }
 
-    @Test func helperRemainsMountedButHiddenAndInaccessibleAcrossNativePresentationStates() async throws {
-        let shell = makeHelperShell()
+    @Test func nativeOnlyNeverBuildsADocumentAcrossNativePresentationStates() async throws {
+        let shell = makeNativeOnlyShell()
         let probe = ShellDocumentProbe(frame: NSRect(x: 0, y: 0, width: 240, height: 80))
         let requests = ShellDocumentRequests()
         let fixture = ShellPresentationWindow(
@@ -23,19 +23,15 @@ struct NativeShellPresentationStructureTests {
         defer { fixture.close() }
         shell.reloadSettings()
         await shell.settingsSettled()
-        let states: [(NativeHelperDocumentState, NativeShellDetail)] = [
+        let states: [(NativeDocumentState, NativeShellDetail)] = [
             (.loading, .loading), (.ready, .notFound), (.failed, .unavailable), (.loading, .loading),
         ]
         for (state, expected) in states {
-            shell.setHelperDocumentState(state)
+            shell.setNativeDocumentState(state)
             #expect(shell.detail == expected)
-            try fixture.settle(until: { probe.window === fixture.window })
-            #expect(probe.isHiddenOrHasHiddenAncestor)
-            let enclosure = try #require(hiddenAncestor(of: probe))
-            #expect(enclosure.hitTest(NSPoint(x: 1, y: 1)) == nil)
-            #expect(enclosure.accessibilityChildren()?.isEmpty == true)
-            #expect(!requests.hidden.isEmpty && requests.hidden.allSatisfy { $0 })
-            #expect(!accessibilityStrings(fixture.host).contains("synthetic helper document"))
+            try fixture.settle(until: { true })
+            #expect(probe.window == nil && requests.hidden.isEmpty)
+            #expect(!accessibilityStrings(fixture.host).contains("synthetic web document"))
             #expect(shell.detail != .web && shell.printDisposition == .unavailable)
         }
     }
@@ -52,7 +48,7 @@ struct NativeShellPresentationStructureTests {
         try fixture.settle(until: { probe.window === fixture.window })
         #expect(!probe.isHiddenOrHasHiddenAncestor)
         #expect(probe.isAccessibilityElement())
-        #expect(probe.accessibilityLabel() == "synthetic helper document")
+        #expect(probe.accessibilityLabel() == "synthetic web document")
         #expect(probe.hitTest(NSPoint(x: 1, y: 1)) === probe)
         #expect(!requests.hidden.isEmpty && requests.hidden.allSatisfy { !$0 })
     }
@@ -87,7 +83,7 @@ struct NativeShellPresentationStructureTests {
         #expect(text.contains(expected), "Rendered: \(text)")
     }
 
-    private func makeHelperShell() -> NativeShellModel {
+    private func makeNativeOnlyShell() -> NativeShellModel {
         let rates = ExchangeRatesModel(service: StaticRatesService(NativeScreenStructureTests.rates))
         let planned = StaticPlannedService()
         return NativeShellModel(
@@ -106,18 +102,9 @@ struct NativeShellPresentationStructureTests {
                 bulk: StaticSplitsService(), splits: StaticSplitsService()),
             accounts: AccountsModel(service: StaticAccountsService(), rates: rates),
             categories: CategoriesModel(service: StaticCategoriesService()),
-            recipients: RecipientsModel(service: StaticRecipientsService()), presentationMode: .helperDocument,
+            recipients: RecipientsModel(service: StaticRecipientsService()), presentationMode: .nativeOnly,
             nativeNavigation: NativeNavigationHistory(initial: NativeNavigationLocation("/no-such-route")!),
             loadSettings: { .defaults }, onNavigate: { _ in })
-    }
-
-    private func hiddenAncestor(of view: NSView) -> NSView? {
-        var candidate = view.superview
-        while let current = candidate {
-            if current.isHidden { return current }
-            candidate = current.superview
-        }
-        return nil
     }
 
     /// Reads both the NSAccessibility protocol and the attribute API, which some SwiftUI
@@ -154,7 +141,7 @@ private final class ShellDocumentProbe: NSView {
         super.init(frame: frameRect)
         setAccessibilityElement(true)
         setAccessibilityRole(.staticText)
-        setAccessibilityLabel("synthetic helper document")
+        setAccessibilityLabel("synthetic web document")
     }
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }

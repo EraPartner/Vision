@@ -1,7 +1,7 @@
 ---
 title: "ADR-207: Isolate a helper document for native Demo presentation"
 type: adr
-status: accepted
+status: superseded
 date: 2026-10-17
 tags: [adr, architecture, swift, native-app, phase-4, demo, webkit, typescript]
 description: "Accepted on 2026-10-17 with the phase-4 go. A default-off Debug Demo experiment with native presentation and routing plus a same-origin helper document for unchanged TypeScript calculations and scoped storage, without React UI, live authority handover or real-data migration."
@@ -11,6 +11,10 @@ aliases: [adr-207, native helper document]
 # ADR-207: Isolate a helper document for native Demo presentation
 
 ## Status
+
+> [!note] Superseded on 2026-10-18 by
+> [[docs/adr/209-vision-native-retire-helper-document|ADR-209]]: the helper document is removed;
+> its eligibility rules still gate ADR-208's native-only mode.
 
 Accepted on 2026-10-17 (proposed 2026-10-15) with Tor's phase-4 go, default-off. The SDK
 implements the mode behind an explicit `VISION_NATIVE_HELPER_DOCUMENT=1` opt-in that only a

@@ -1,9 +1,8 @@
-/// Document presentation is fixed before the session creates its web document.
-/// `helperDocument` keeps a hidden same-origin document (ADR-207); `nativeOnly` has no web
-/// document at all (ADR-208). Both give native history every route.
+/// Document presentation is fixed before the session creates its first document.
+/// `nativeOnly` has no web document at all and gives native history every route (ADR-208);
+/// `retainedWeb` shows the React page (ADR-209 retired the helper document).
 public enum NativeShellPresentationMode: Equatable, Sendable {
     case retainedWeb
-    case helperDocument
     case nativeOnly
 
     /// Native presentation and route authority: no React page is ever shown.
@@ -11,7 +10,7 @@ public enum NativeShellPresentationMode: Equatable, Sendable {
 }
 
 /// Display readiness supplied by the native document owner, separate from renderer readiness.
-public enum NativeHelperDocumentState: Equatable, Sendable {
+public enum NativeDocumentState: Equatable, Sendable {
     case loading
     case ready
     case failed

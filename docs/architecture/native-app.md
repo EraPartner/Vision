@@ -2,8 +2,8 @@
 title: Vision Native App Architecture
 type: architecture-doc
 status: active
-date: 2026-10-17
-updated: 2026-10-17
+date: 2026-10-18
+updated: 2026-10-18
 tags:
   [
     architecture,
@@ -1569,7 +1569,7 @@ calls `__visionNativePaletteAnswer`. `NativeShellNotificationsModel`
 owns the global FX state, Home upcoming-payment reminders and backup reminder. Their dismissal state
 uses the app-lifetime local-state queue, which drains accepted writes before restore.
 
-`lib/nativeHelperRuntime.ts` installs and retires the fixed source callbacks and
+`lib/nativeHelperRuntime.ts` (kept after [[docs/adr/209-vision-native-retire-helper-document|ADR-209]]) installs and retires the fixed source callbacks and
 overlay keyboard bridge. The palette answer and the two tax-report callbacks
 (`__visionNativePaletteAnswer`, `__visionNativeTaxReportProfile`, `__visionNativeTaxReportContext`)
 are no longer called by the shell; their native replacements are described here and in ADR-208. `NativePaletteAnswerBridge.tsx` still owns its React lifetime, QueryClient
@@ -1679,74 +1679,37 @@ The detached `lib/nativeRouteAdapter.ts` delegates explicit requests to the actu
 after a native preflight lease, then observes source acceptance before reporting a commit. It adds
 no blocker, global history override or App wiring. Existing web leave guards remain authoritative;
 resolved-target admission, unified interception and host projection atomicity are still gates.
-[[docs/adr/207-vision-native-helper-document|ADR-207]] (accepted 2026-10-17) records a separate
-default-off Debug Demo helper-document strategy that avoids mounting React UI/router in a fresh
-session. The SDK now implements it behind an explicit `VISION_NATIVE_HELPER_DOCUMENT=1` opt-in,
-honoured only by a Debug build of the Demo variant with a supervised backend (see the
-implementation notes below). Default launches keep the retained web document. No opted-in Demo run
-has happened yet.
+[[docs/adr/207-vision-native-helper-document|ADR-207]] (accepted 2026-10-17) had recorded a separate
+default-off Debug Demo helper document. [[docs/adr/209-vision-native-retire-helper-document|ADR-209]]
+(2026-10-18) retired it: ADR-208's native-only mode replaced its purpose, and every helper
+artifact (HTML entry, `lib/nativeHelperDocument.ts`, `build:native-helper`, the backend
+`/native-helper.html` and `/native-helper-assets` namespace, the Swift session, bridge and
+selection types, and the `VISION_NATIVE_HELPER_DOCUMENT` opt-in) was deleted. The ADR-207 account
+below survives only as history in the ADR and in
+[[docs/reference/native-parity/agent-handoff|the agent handoff]].
 
-Production artifact serving now reserves `/native-helper.html` and `/native-helper-assets`
-before generic static/SPA fallback. Missing helper files and noncanonical namespace requests
-terminate with 4xx instead of mounting the React app. Seven synthetic real-Express cases,
-backend typecheck/lint and a compile-only backend build pass. This serving boundary is active
-independently of the opt-in helper SDK mode; normal routes and assets are unchanged.
-See [[docs/architecture/backend-architecture|backend artifact ownership]].
+`lib/nativeHelperRuntime.ts` is the one survivor of the helper work: the retained React page still
+uses it through `NativePaletteAnswerBridge` for the overlay keyboard bridge (see the shell
+overlays section above).
 
-The default runtime's fixed TypeScript palette and fiscal helpers retain their React owner.
-The dormant `lib/nativeHelperDocument.ts` can instead own their unchanged callbacks, a QueryClient
-with the App's defaults and directly loaded English/Dutch resources. It requires explicit immutable
-document/generation provenance, a current-owner check and a host readiness acknowledgment after
-locale and callback installation. Typed locale updates preserve cache/callback identity; retirement
-rejects pending work and disposes the cache. It subscribes to no unproven settings event and does
-not mount itself, load HTML, authorize a host acknowledgment or activate an SDK mode. Nineteen
-source helper/bootstrap tests pass with synthetic hosts and no provider requests, alongside
-frontend typecheck. These staged APIs do not retire the default React owner or the web view,
-and do not migrate real data. A focused exact-source proof passes 12 raw-store/readiness tests;
-native routing integration and macOS rendering remain separate gates.
-
-The separate optional `build:native-helper` frontend command runs after the ordinary build
-without its Vite config, HTML preloads or public directory. It emits one helper HTML and nine
-JavaScript chunks in the reserved namespace; all 196 normal index/assets hashes remain unchanged.
-The immutable ABI-1 entry stays inert until a fixed native bootstrap invocation. It captures
-document-start ready/failure wrappers, validates provenance for locale/dispose operations and
-never calls generic renderer readiness. Six tests build and execute the actual emitted modules
-with a synthetic DOM/host transport, unchanged source callbacks and no storage/provider access.
-The combined frontend regression passes 80 tests in seven files, plus typecheck, lint and unchanged
-ordinary bundle budgets. This verifies the artifact, not WebKit host authorization or activation.
-See [[docs/reference/scripts|build commands]].
-
-`NativeShellPresentationMode` is fixed at model construction and defaults to `retainedWeb`.
-The optional helper presentation requires native history, maps startup to native loading and
+`NativeShellPresentationMode` is fixed at model construction and defaults to `retainedWeb`; it has
+two cases, `retainedWeb` and `nativeOnly`. Native-only maps startup to native loading and
 failure/missing native owners to native unavailable, and returns native Not Found for unknown
 routes. Its infrastructure is enclosed by a hidden AppKit parent that rejects hit testing and
-accessibility children. `printDisposition` blocks helper/loading/error snapshots; the SDK checks
-it both before capture and after asynchronous print preparation. Five Core tests and four UI
-cases are authored; actual macOS validation remains required. The SDK selects helper mode only
-through the explicit opt-in described below.
+accessibility children. `printDisposition` blocks loading/error snapshots.
 
-The dormant `NativeHelperDocumentSession` and `NativeHelperDocumentBridge` separate host authority
-from display state. Session construction requires exact Debug/Demo eligibility, an explicitly
-supervisor-sourced Demo receipt and expected origin/store identity. Its navigation state machine
-requires matching native commit/finish observations, a current ABI-1 ready callback and the
-physical bootstrap receipt. Fixed scripts and strict callback/receipt decoding cannot authorize
-an arbitrary page or replace the existing reload/restore drains. A healthy Debug backend override
-does not prove supervisor-owned Demo provenance. The SDK still needs actual WKNavigation identity,
-bounded callback/locale ownership and current-document reconciliation before selecting this mode.
-
-The SDK now wires this behind `VISION_NATIVE_HELPER_DOCUMENT=1`. `ShellState.ready` carries
-`NativeShellBackendSource`, and `NativeHelperDocumentSelection` (`VisionNativeCore/Shell`) selects
-the helper source once, only for a Debug Demo build with a supervised backend. `WebShell` then
-installs only the helper document-start script (the ready/failed callbacks and the palette and
-reports capability flags the helper entry requires) and the `visionNativeHelper` reply handler (no
-generic bridge) and tracks `WKNavigation` objects; `ShellController` owns the helper session
-lifecycle (bootstrap receipt plus ready callback), native history with one
+Document selection and shell startup are shared by native-only mode. `ShellState.ready` carries
+`NativeShellBackendSource`; `NativeDocumentSelection` (`VisionNativeCore/Shell/NativeDocumentSelection.swift`)
+chooses `retainedWeb` or `nativeOnly` once, and `NativeDocumentSource` holds the eligible supervised
+origin and website data store. `ShellController` owns native history with one
 `NativeShellIntentCoordinator`, native menu admission, the locale command, vibrancy from the
 effective `enhanced` tier and `StartupRedirect` ownership (`vision.startupSection` and
-`vision.lastRoute` joined `NativeSettingsStorageBridge.LocalKey`). `scripts/lib/native-mac-build.sh`
-runs `build-native-helper.ts --out-dir` into the staged frontend so the packaged runtime serves the
-helper. macOS evidence so far: the app build and 1,687 Core tests passed at `a5960a6`; UI
-print/accessibility tests are still being fixed and the opted-in Demo is unverified.
+`vision.lastRoute` joined `NativeSettingsStorageBridge.LocalKey`) through the shared
+`applyNativeStartup`, `persistNativeNavigation` and `trackNativeNavigation` functions. `WebShell`
+has no helper script handler or `WKNavigation` tracking. `NativeDocumentState`
+(`setNativeDocumentState` / `nativeDocumentState`, renamed from `NativeHelperDocumentState` by
+ADR-209) carries the document state. `scripts/lib/native-mac-build.sh` stages only the ordinary
+frontend build.
 
 Optional `NativeShellIntentCoordinator` ownership keeps cold CSV/new-transaction actions and
 native menu commands outside renderer queues. A graph lease rejects retired consumers; readiness
@@ -1762,16 +1725,16 @@ tests await macOS. No existing renderer event owner is retired by this preparato
 
 ### Native-only mode (ADR-208)
 
-[[docs/adr/208-vision-native-without-web-content|ADR-208]] adds a third presentation,
-`NativeShellPresentationMode.nativeOnly`, that runs the shell with no web view at all.
-`isNative` is true for both `helperDocument` and `nativeOnly`, so the native route, loading and
-unavailable handling apply to either. `NativeHelperDocumentSelection` selects it by default under
-the same gate as the helper (Debug build, Demo variant, supervised backend): an exact
-`VISION_NATIVE_WEB_FREE=0` opts out, `VISION_NATIVE_HELPER_DOCUMENT=1` selects the helper instead,
-and `VISION_NATIVE_WEB_FREE=1` takes precedence over both. Ineligible launches, and opted-out ones
-without the helper opt-in, stay on the retained web document.
+[[docs/adr/208-vision-native-without-web-content|ADR-208]] adds the `nativeOnly` presentation, which
+runs the shell with no web view at all; [[docs/adr/209-vision-native-retire-helper-document|ADR-209]]
+removed the intermediate helper presentation, leaving `NativeShellPresentationMode` with
+`retainedWeb` and `nativeOnly`. `NativeDocumentSelection.select` makes native-only the default for
+an eligible launch (Debug build, Demo variant, supervised `vision_native_demo` backend at a
+loopback origin). An exact `VISION_NATIVE_WEB_FREE=0` opts out to the retained web document.
+`VISION_NATIVE_HELPER_DOCUMENT` no longer has any effect. Ineligible launches stay on the retained
+web document.
 
-- **Storage.** `NativeShellStorage` answers the helper's fixed storage scripts (typed local keys,
+- **Storage.** `NativeShellStorage` answers the fixed storage scripts (typed local keys,
   backup export/restore) from `NativeRawStateStore`, which persists to
   `native/<runtimeId>/raw-state.json` (`RuntimeLayout.rawState`, exposed as
   `RuntimeSupervisor.rawStatePath`).
@@ -1800,7 +1763,7 @@ search button while the sidebar is hidden, and the page title once the page scro
 (`PageScrollObserver`, reset on route change). It takes no clicks outside its buttons, so the strip
 still drags the window. `DeltaPill` (`Components/DeltaPill.swift`) is the shared change chip (tinted
 capsule with a direction arrow, `invert` for spending); the Portfolio holdings, Research and
-Statistics/Tax chart views use it in place of ad hoc chips. In helper mode, `ShellController.restoreBackup`
+Statistics/Tax chart views use it in place of ad hoc chips. In native-only mode, `ShellController.restoreBackup`
 (the bridge entry) refuses with "Restore is not available here" because native Settings owns restore.
 
 The Native End-to-End Smoke workflow (`.github/workflows/native-e2e.yml`) is described in

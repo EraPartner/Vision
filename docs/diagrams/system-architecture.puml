@@ -40,7 +40,6 @@ cloud "Load Balancer / Reverse Proxy\n(production hosts only)" as Proxy
 package "Server" {
   rectangle "Node.js Backend (Bun runtime)" {
     node "Express.js" as Express
-    node "Optional helper artifacts\nnative-helper.html + native-helper-assets\nreserved before generic static / SPA fallback" as NativeHelperArtifacts
     node "Middleware Stack\nrequestId · Host guard · metrics\nCORS · CSRF · adminAuth · rate limit\nenvelope · errors" as Middleware
     node "Routes\ntransactions · planning · portfolio · imports\nreports · AI · settings · admin · private audit" as Routes
     node "Services\nimports + XML evidence + reconciliation + custody/adjustments · prices · FX · tax · snapshots\nbackup · AI orchestration + references + Desktop setup · reports · attachments" as Services
@@ -134,11 +133,6 @@ package "Experimental Codex Boundary" {
 
 package "Server Components" {
   Express --> Middleware
-  Express --> NativeHelperArtifacts : production static namespace
-  note right of NativeHelperArtifacts
-    Missing or noncanonical requests terminate with 4xx.
-    Helper SDK mode remains disabled; React still owns the default document.
-  end note
   Middleware --> Routes
   Routes --> ResearchPresentation
   ResearchPresentation --> SharedNativeHelpers : same pure web algorithms

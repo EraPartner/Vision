@@ -2,8 +2,8 @@
 title: Views & Pages
 type: feature
 status: active
-date: 2026-10-15
-updated: 2026-10-15
+date: 2026-10-18
+updated: 2026-10-18
 tags:
   [
     feature,
@@ -811,7 +811,7 @@ Observability hub shown as the sidebar's Admin section (gated by Settings → Ap
 - [[docs/features/index]] - Feature documentation
 - [[docs/api/index]] - API documentation
 - [[docs/components/index]] - UI Components
-- [Interactive flow visualizer](../flow-visualizer.html#api-request) — 106 components / 80 flows, with Journey and Architecture views and five learning paths
+- [Interactive flow visualizer](../flow-visualizer.html#api-request) — 106 components / 79 flows, with Journey and Architecture views and five learning paths
 - [[docs/guides/visual-learning|Understand Vision Visually]] — conceptual diagrams and a suggested reading order
 
 

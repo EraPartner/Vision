@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # Launches a built Debug "Vision Native Demo.app" (with its staged runtime payload) and checks
 # that the supervised runtime starts and the app keeps running: in the retained mode the
-# backend must answer /health; in the ADR-207 helper mode the helper document must also report
-# ready. Synthetic Demo data only. Every run leaves the unified log stream and the tails of the
+# backend must answer /health; in the ADR-208 native-only mode (the Debug Demo default) the
+# native document must also report ready. Synthetic Demo data only. Every run leaves the unified log stream and the tails of the
 # app's own logs in "$out" and in the job log.
 set -euo pipefail
 
 app="$1"
 out="$2"
-mode="${3:-helper}"
+mode="${3:-native}"
 mkdir -p "$out"
 # `electron` measures the Electron Vision Demo with the same readiness and metrics, as the
 # phase-0 baseline that ADR-204's phase-4 exit compares with.
@@ -24,9 +24,7 @@ log stream --style compact --level debug \
 stream_pid=$!
 sleep 2
 
-if [ "$mode" = "helper" ]; then
-  VISION_NATIVE_HELPER_DOCUMENT=1 "$binary" >"$out/app-$mode.log" 2>&1 &
-elif [ "$mode" = "native" ]; then
+if [ "$mode" = "native" ]; then
   # ADR-208: the Debug Demo default has no web document; the first run captures the origin's
   # storage once. No variable is set, so this also proves the default.
   "$binary" >"$out/app-$mode.log" 2>&1 &
@@ -55,18 +53,12 @@ for _ in $(seq 1 100); do
     break
   fi
   current="$(app_logs)"
-  if [ "$mode" = "helper" ] && grep -q "helper document .* failed" <<<"$current"; then
-    echo "::error::the helper document failed"
-    break
-  fi
   if [ "$mode" = "native" ] && grep -q "native-only storage unavailable" <<<"$current"; then
     echo "::error::the native-only storage failed"
     break
   fi
   backend_healthy || continue
-  if [ "$mode" = "helper" ]; then
-    grep -q "helper document ready" <<<"$current" && { status=0; break; }
-  elif [ "$mode" = "native" ]; then
+  if [ "$mode" = "native" ]; then
     grep -q "native-only document ready" <<<"$current" && { status=0; break; }
   else
     status=0
@@ -136,6 +128,6 @@ for file in "$data/logs/main.log" "$data"/native/*/logs/backend.log "$data"/nati
   echo "::endgroup::"
 done
 echo "::group::$mode unified log (shell/runtime lines)"
-grep -E "\[shell\]|\[runtime\]|\[renderer\]|\[backup\]|\[notify\]|helper|[Ss]hutdown|error" "$stream" | tail -120 || true
+grep -E "\[shell\]|\[runtime\]|\[renderer\]|\[backup\]|\[notify\]|native-only|[Ss]hutdown|error" "$stream" | tail -120 || true
 echo "::endgroup::"
 exit "$status"

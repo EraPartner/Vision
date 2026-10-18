@@ -1,7 +1,7 @@
 import Foundation
 
-/// The native-only shell's storage (ADR-208): every fixed page-storage script the helper
-/// document runs, with the same semantics, over `NativeRawStateStore`. The shell keeps its
+/// The native-only shell's storage (ADR-208): every fixed page-storage script the shell
+/// runs against a page, with the same semantics, over `NativeRawStateStore`. The shell keeps its
 /// admission, generation and restore fences around these calls.
 public struct NativeShellStorage: Sendable {
     public let store: NativeRawStateStore
@@ -169,7 +169,7 @@ public struct NativeShellStorage: Sendable {
 
     /// The reply the native-only shell gives in place of `callAsyncJavaScript` for one of the
     /// shell's fixed storage scripts, in the same JSON shape the page returns. Event scripts
-    /// for React or helper listeners have no listener and answer `true`; any other script is
+    /// for React listeners have no listener and answer `true`; any other script is
     /// refused rather than guessed.
     public func answer(script: String, arguments: [String: JSONValue]) async throws -> JSONValue {
         switch script {

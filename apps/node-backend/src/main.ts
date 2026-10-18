@@ -30,7 +30,6 @@ import {
 } from "./middleware/adminAuth.ts";
 import { createCsrfGuard } from "./middleware/csrfGuard.ts";
 import { createHostGuard } from "./middleware/hostGuard.ts";
-import { createNativeHelperArtifactRouter } from "./middleware/nativeHelperArtifacts.ts";
 import { createCorsMiddleware } from "./middleware/cors.ts";
 import { compression } from "./middleware/compression.ts";
 import { closeBrowser as closePuppeteerBrowser } from "./services/reports/puppeteerRenderer.ts";
@@ -357,8 +356,6 @@ if (settings.isProduction()) {
         "..",
         "dist",
       );
-  // Optional native helper artifacts must never fall through to the React SPA.
-  app.use(createNativeHelperArtifactRouter(distPath));
   // Only Vite's content-hashed bundles live under dist/assets/ — those are
   // safe to cache for a year. Everything else in dist/ has a stable name
   // (index.html, favicon.svg, robots.txt, …) and must revalidate, or an

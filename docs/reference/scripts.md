@@ -1,7 +1,7 @@
 ---
 title: Scripts Reference
 type: reference
-date: 2026-10-17
+date: 2026-10-18
 tags:
   [
     reference,
@@ -82,13 +82,13 @@ The separate `Native End-to-End Smoke` workflow (`.github/workflows/native-e2e.y
 `.github/scripts/native-e2e-smoke.sh <app> <out> <mode>`) runs on pushes to `codex/native-phase-*`
 branches and on manual dispatch, on `macos-26`. It builds PostgreSQL 18.6 with OpenSSL, the Demo
 runtime payload and the Debug `Vision Native Demo.app`, then smokes the app in `retained` (control,
-`VISION_NATIVE_WEB_FREE=0`), `helper` (`VISION_NATIVE_HELPER_DOCUMENT=1`) and `native` (no
-variable: the Debug Demo default) modes. A mode
+`VISION_NATIVE_WEB_FREE=0`) and `native` (no variable: the Debug Demo default) modes; the helper
+mode was removed by [[docs/adr/209-vision-native-retire-helper-document|ADR-209]]. A mode
 passes when the app stays alive, the backend port from `settings.json` answers `/health` and, in
-helper mode, the log reports `helper document ready` (`native-only document ready` in native mode;
-`native-only storage unavailable` fails it). `native-e2e.yml` and `native-branch.yml` skip
-documentation-only pushes (`paths-ignore: docs/**`). Each run keeps the unified log, a screenshot, the app process's `footprint` and `vmmap --summary`
-(printed in a log group), and a `metrics-<mode>.txt` (bundle
+native mode, the log reports `native-only document ready` (`native-only storage unavailable`
+fails it). `native-e2e.yml` and `native-branch.yml` skip
+documentation-only pushes (`paths-ignore: docs/**`). Each run keeps the unified log, a screenshot, the app process's `footprint-<mode>.txt` and
+`vmmap-<mode>.txt` (`vmmap --summary`; the breakdown is printed in a log group), and a `metrics-<mode>.txt` (bundle
 size and resident memory of the app tree and WebKit services, also written to the step summary) as the
 `native-e2e` artifact. A non-blocking last step builds the Electron Demo (`--demo --dir`, with `VISION_FRONTEND_DIST`
 and `VISION_CHROMIUM_SOURCE` exported from the payload step) and runs the
@@ -105,17 +105,9 @@ and `VISION_CHROMIUM_SOURCE` exported from the payload step) and runs the
 | `version:bump`   | Update versioned manifests atomically                                     |
 | `native:prepare` | Prepare the pinned PostgreSQL, migration, Bun, and report-browser payload |
 
-The frontend workspace also provides the optional
-`bun run --filter vision-frontend build:native-helper` command. Run it **after** the ordinary
-frontend build. Its isolated Vite configuration adds `dist/native-helper.html` and confines
-all bootstrap/lazy chunks to `dist/native-helper-assets/`, preserving ordinary index/assets
-and their budgets. It loads no normal preload plugin or public files. The entry stays inert
-until a trusted native host explicitly bootstraps it; building does not enable the SDK mode, which
-requires `VISION_NATIVE_HELPER_DOCUMENT=1` in a Debug Demo build (the Debug Demo otherwise defaults to the native-only mode, which loads no helper). The command accepts
-`--out-dir <dir>`; `scripts/lib/native-mac-build.sh` runs it after the ordinary Vite build against
-the staged frontend directory so native runtime payloads include the helper.
-See [[docs/adr/207-vision-native-helper-document|ADR-207]] and
-[[docs/architecture/native-app|native integration gates]].
+The frontend `build:native-helper` script and `scripts/build-native-helper.ts` no longer exist;
+[[docs/adr/209-vision-native-retire-helper-document|ADR-209]] retired the ADR-207 helper document,
+and `scripts/lib/native-mac-build.sh` stages only the ordinary frontend build.
 
 ## Static and generated checks
 

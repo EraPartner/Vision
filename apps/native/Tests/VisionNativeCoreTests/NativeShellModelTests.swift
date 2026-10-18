@@ -140,55 +140,55 @@ final class ShellRecorder {
             settingsReloadDelay: .milliseconds(1))
     }
 
-    @Test func helperPresentationFailsClosedWithoutNativeRouteAuthority() async {
-        let model = makeModel(recorder: ShellRecorder(), presentationMode: .helperDocument)
-        model.setHelperDocumentState(.ready)
+    @Test func nativePresentationFailsClosedWithoutNativeRouteAuthority() async {
+        let model = makeModel(recorder: ShellRecorder(), presentationMode: .nativeOnly)
+        model.setNativeDocumentState(.ready)
         model.reloadSettings()
         await model.settingsSettled()
         #expect(model.detail == .unavailable)
         #expect(model.isWebContentHidden && model.printDisposition == .unavailable)
     }
 
-    @Test func helperStartupAndFailureCannotRevealOrPrintCachedNativePage() async throws {
+    @Test func nativeStartupAndFailureCannotRevealOrPrintCachedNativePage() async throws {
         let history = NativeNavigationHistory(initial: try #require(NativeNavigationLocation("/planned")))
         let model = makeModel(
-            recorder: ShellRecorder(), presentationMode: .helperDocument, nativeNavigation: history)
+            recorder: ShellRecorder(), presentationMode: .nativeOnly, nativeNavigation: history)
         #expect(model.detail == .loading && model.printDisposition == .unavailable)
         model.reloadSettings()
         await model.settingsSettled()
         #expect(model.detail == .loading)
-        model.setHelperDocumentState(.ready)
+        model.setNativeDocumentState(.ready)
         #expect(model.detail == .native(.plannedPayments) && model.printDisposition == .nativePage)
         model.isReloadingGraph = true
         #expect(model.detail == .loading && model.printDisposition == .unavailable)
         model.isReloadingGraph = false
-        model.setHelperDocumentState(.failed)
+        model.setNativeDocumentState(.failed)
         #expect(model.detail == .unavailable && model.printDisposition == .unavailable)
-        model.setHelperDocumentState(.loading)
+        model.setNativeDocumentState(.loading)
         #expect(model.detail == .loading && model.isWebContentHidden)
-        model.setHelperDocumentState(.ready)
+        model.setNativeDocumentState(.ready)
         #expect(model.detail == .native(.plannedPayments))
     }
 
-    @Test func nativeOnlyPresentationFollowsTheHelperReadinessRulesWithoutAWebDocument() async throws {
+    @Test func nativeOnlyPresentationHasNoWebDocument() async throws {
         let history = NativeNavigationHistory(initial: try #require(NativeNavigationLocation("/planned")))
         let model = makeModel(recorder: ShellRecorder(), presentationMode: .nativeOnly, nativeNavigation: history)
         #expect(model.presentationMode.isNative && model.isWebContentHidden)
         #expect(model.detail == .loading && model.printDisposition == .unavailable)
         model.reloadSettings()
         await model.settingsSettled()
-        model.setHelperDocumentState(.ready)
+        model.setNativeDocumentState(.ready)
         #expect(model.detail == .native(.plannedPayments) && model.printDisposition == .nativePage)
-        model.setHelperDocumentState(.failed)
+        model.setNativeDocumentState(.failed)
         #expect(model.detail == .unavailable && model.printDisposition == .unavailable)
     }
 
-    @Test func helperMissingNativeOwnersAndUnknownRoutesNeverFallBackToWeb() async throws {
+    @Test func nativeMissingOwnersAndUnknownRoutesNeverFallBackToWeb() async throws {
         let model = makeModel(
-            recorder: ShellRecorder(), presentationMode: .helperDocument, nativeNavigation: NativeNavigationHistory())
+            recorder: ShellRecorder(), presentationMode: .nativeOnly, nativeNavigation: NativeNavigationHistory())
         model.reloadSettings()
         await model.settingsSettled()
-        model.setHelperDocumentState(.ready)
+        model.setNativeDocumentState(.ready)
         // The fixture deliberately has no Home, Tax, Settings, or report owner.
         #expect(model.detail == .unavailable)
         for route in ["/tax", "/planned?settings=general", "/planned?export=pdf", "/tax?export=pdf"] {
@@ -200,13 +200,13 @@ final class ShellRecorder {
         #expect(model.isWebContentHidden)
     }
 
-    @Test func helperInitialSettingsFailureIsNativeAndRetryCanRecover() async throws {
+    @Test func nativeInitialSettingsFailureIsNativeAndRetryCanRecover() async throws {
         let script = ShellInitialSettingsFailure()
         let history = NativeNavigationHistory(initial: try #require(NativeNavigationLocation("/planned")))
         let model = makeModel(
-            recorder: ShellRecorder(), presentationMode: .helperDocument, nativeNavigation: history,
+            recorder: ShellRecorder(), presentationMode: .nativeOnly, nativeNavigation: history,
             loadSettings: { try await script.read() })
-        model.setHelperDocumentState(.ready)
+        model.setNativeDocumentState(.ready)
         model.reloadSettings()
         await model.settingsSettled()
         #expect(model.detail == .unavailable && model.canRetryInitialSettings)
@@ -217,12 +217,12 @@ final class ShellRecorder {
         #expect(model.detail == .native(.plannedPayments) && !model.canRetryInitialSettings)
     }
 
-    @Test func retainedWebRemainsDefaultAndIgnoresHelperDisplaySignals() async {
+    @Test func retainedWebIgnoresNativeDocumentSignals() async {
         let model = makeModel(recorder: ShellRecorder())
         #expect(model.presentationMode == .retainedWeb && model.detail == .web)
         #expect(!model.isWebContentHidden && model.printDisposition == .webDocument)
-        model.setHelperDocumentState(.failed)
-        #expect(model.helperDocumentState == .loading && model.detail == .web)
+        model.setNativeDocumentState(.failed)
+        #expect(model.nativeDocumentState == .loading && model.detail == .web)
         model.reloadSettings()
         await model.settingsSettled()
         #expect(model.detail == .web)

@@ -66,24 +66,19 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     private var shellHost: NSView?
     /// The backend base URL the web view may show; `nil` until the runtime is ready.
     private(set) var appURL: URL?
-    /// Fixed once, before the first document and shell graph are created (ADR-207).
-    private(set) var documentSelection = NativeHelperDocumentSelection.retainedWeb
-    /// The helper document authority of the current graph generation, in helper mode only.
-    private var helperSession: NativeHelperDocumentSession?
-    private var helperBootstrapTask: Task<Void, Never>?
-    /// The language the current helper document was last told, by bootstrap or locale command.
-    private var helperLanguage: NativeHelperDocumentBridge.Language?
+    /// Fixed once, before the first document and shell graph are created (ADR-208).
+    private(set) var documentSelection = NativeDocumentSelection.retainedWeb
     private var hasMadeShellModel = false
     private var healthWatchdogTask: Task<Void, Never>?
     /// One request log for the app's lifetime, across graph rebuilds, as the web's module store.
     private let apiInspector = NativeAPIInspectorModel()
     private let backendNoticeSource = UUID()
     private var backendNoticeID: UUID?
-    /// Helper mode only: cold CSV, new-transaction and menu intents, retained across graph
-    /// rebuilds so committed history and unconsumed intents survive (ADR-207).
+    /// Native-only mode: cold CSV, new-transaction and menu intents, retained across graph
+    /// rebuilds so committed history and unconsumed intents survive (ADR-207, ADR-208).
     private let nativeIntents = NativeShellIntentCoordinator()
-    /// The first helper startup seeds a new session; later documents are reloads.
-    private var helperStartupResolved = false
+    /// The first native startup seeds a new session; later documents are reloads.
+    private var nativeStartupResolved = false
     private var queue = RendererMessageQueue()
     private var rendererReadiness = NativeRendererReadiness()
     private var launchTask: Task<Void, Never>?
@@ -481,7 +476,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             nativeFallback: true,
             presentationMode: documentSelection.presentationMode,
             initialRoute: initialRoute,
-            // The helper document has no router: native history owns every route (ADR-206).
+            // The native-only document has no router: native history owns every route (ADR-206).
             nativeNavigation: documentSelection == .retainedWeb
                 ? nil : NativeNavigationHistory(initial: NativeNavigationLocation(initialRoute.string) ?? .home),
             nativeIntents: documentSelection == .retainedWeb ? nil : nativeIntents,
@@ -1523,37 +1518,24 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         case .ready(let url, let backendSource):
             appURL = url
             if webShell == nil {
-                let selection = NativeHelperDocumentSelection.select(
+                let selection = NativeDocumentSelection.select(
                     environment: ProcessInfo.processInfo.environment, isDebugBuild: AppRuntime.isDebugBuild,
                     rawVariant: AppRuntime.variant.rawValue, backendSource: backendSource, backendURL: url,
                     websiteDataStoreIdentifier: "default")
                 // A cold menu or Finder action may already have built a renderer-mode graph;
                 // presentation never changes under an existing graph.
                 if selection != .retainedWeb, hasMadeShellModel {
-                    logger.warning("[shell] helper document ineligible: the shell graph already exists")
+                    logger.warning("[shell] native-only mode ineligible: the shell graph already exists")
                 } else {
                     documentSelection = selection
                 }
                 if case .nativeOnly = documentSelection {
                     logger.log("[shell] Debug Demo native-only mode selected (ADR-208)")
-                } else if documentSelection != .retainedWeb {
-                    logger.log("[shell] Debug Demo helper document selected (ADR-207)")
                 }
             }
             if case .nativeOnly(let source) = documentSelection {
                 startNativeOnly(url: url, source: source)
                 return
-            }
-            let documentURL: URL
-            if case .helperDocument(let source) = documentSelection {
-                // The helper is bound to its supervised origin; a changed origin fails closed.
-                guard WebShell.origin(of: url) == source.backendOrigin else {
-                    apply(.unavailable(strings.t("app.errorPageMessage")))
-                    return
-                }
-                documentURL = source.helperURL
-            } else {
-                documentURL = url
             }
             let shell = webShell ?? makeWebShell()
             shellHost?.isHidden = true
@@ -1565,7 +1547,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
             pageLoadTask = Task { [weak self] in
                 await self?.auditChannels.applicationWillLoad()
                 guard !Task.isCancelled, let self, self.appURL == url else { return }
-                shell.load(documentURL)
+                shell.load(url)
                 self.startHealthWatchdog(url)
             }
         }
@@ -1710,7 +1692,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     /// Opens the raw-state store (capturing the origin's browser storage once), builds a host
     /// without a web view and marks the graph's document ready. Any store or capture failure
     /// shows the unavailable state; the mode never starts from an assumed empty store.
-    private func startNativeOnly(url: URL, source: NativeHelperDocumentSession.Source) {
+    private func startNativeOnly(url: URL, source: NativeDocumentSource) {
         pageLoadTask?.cancel()
         pageLoadTask = Task { [weak self] in
             guard let self else { return }
@@ -1735,7 +1717,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         }
     }
 
-    private func openNativeStorage(source: NativeHelperDocumentSession.Source) async throws -> NativeShellStorage {
+    private func openNativeStorage(source: NativeDocumentSource) async throws -> NativeShellStorage {
         let fileURL = URL(fileURLWithPath: supervisor.rawStatePath)
         let current = try NativeRawStateStore.Source(
             webOrigin: source.backendOrigin, storeIdentifier: source.websiteDataStoreIdentifier)
@@ -1770,16 +1752,14 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     /// the display state, then the shared startup (settings, onboarding, StartupRedirect).
     private func nativeOnlyDocumentReady() {
         rendererDocumentChanged(expectingCommit: false)
-        shellModel.setHelperDocumentState(.ready)
+        shellModel.setNativeDocumentState(.ready)
         rendererDidBecomeReady()
     }
 
     /// The web view inside the native navigation shell; the launch view covers both until
     /// the page is ready.
     private func makeWebShell() -> WebShell {
-        var helperSource: NativeHelperDocumentSession.Source?
-        if case .helperDocument(let source) = documentSelection { helperSource = source }
-        let shell = WebShell(controller: self, helperSource: helperSource)
+        let shell = WebShell(controller: self)
         let webView = shell.webView
         webView.pageZoom = PageZoom.persisted(initialSettings[PageZoom.settingsKey])
         webView.underPageBackgroundColor = .hsl(palette.base)
@@ -1894,138 +1874,9 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         apply(.unavailable(strings.t("app.errorPageMessage")))
     }
 
-    // MARK: - Helper document (ADR-207)
+    // MARK: - Native navigation startup (ADR-208)
 
-    /// A load or reload of the helper starts a new navigation authority. Graph replacement
-    /// retires the old session; a reload within one generation keeps its session.
-    func helperDocumentWillNavigate(_ navigationID: UUID) {
-        guard case .helperDocument(let source) = documentSelection else { return }
-        helperBootstrapTask?.cancel()
-        helperBootstrapTask = nil
-        helperLanguage = nil
-        if helperSession?.generationID != nativeSettingsGeneration {
-            helperSession?.retire()
-            helperSession = NativeHelperDocumentSession(source: source, generationID: nativeSettingsGeneration)
-        }
-        do { try helperSession?.beginNavigation(navigationID) } catch {
-            failHelperDocument("navigation")
-            return
-        }
-        shellModel.setHelperDocumentState(.loading)
-    }
-
-    func helperDocumentDidCommit(_ observation: NativeHelperDocumentSession.Observation?) {
-        // A commit of a superseded navigation has no observation and changes nothing.
-        guard helperSession != nil, let observation else { return }
-        do { try helperSession?.didCommit(observation) } catch { failHelperDocument("commit") }
-    }
-
-    /// Only the matching finish issues bootstrap authority; the fixed bootstrap call and the
-    /// page's ready callback are then checked independently before startup proceeds.
-    func helperDocumentDidFinish(_ observation: NativeHelperDocumentSession.Observation?) {
-        guard helperSession != nil, let observation, let webView = webShell?.webView else { return }
-        let provenance: NativeHelperDocumentSession.Provenance
-        let source: NativeHelperDocumentSession.Source
-        do {
-            guard let issued = try helperSession?.didFinish(observation), let current = helperSession?.source
-            else { return }
-            provenance = issued
-            source = current
-        } catch {
-            failHelperDocument("finish")
-            return
-        }
-        let language: NativeHelperDocumentBridge.Language = strings.language == .nl ? .nl : .en
-        let command = NativeHelperDocumentBridge.Command.bootstrap(language)
-        helperLanguage = language
-        let arguments = NativeHelperDocumentBridge.arguments(for: command, provenance: provenance, source: source)
-        helperBootstrapTask?.cancel()
-        helperBootstrapTask = Task { [weak self] in
-            let reply: Any?
-            do {
-                let bound =
-                    try JSONSerialization.jsonObject(with: JSONValue.object(arguments).serialized())
-                    as? [String: Any] ?? [:]
-                reply = try await webView.callAsyncJavaScript(
-                    NativeHelperDocumentBridge.script(for: command), arguments: bound, in: nil, contentWorld: .page)
-            } catch {
-                guard !Task.isCancelled else { return }
-                self?.failHelperDocument("bootstrap", error: error)
-                return
-            }
-            guard let self, !Task.isCancelled else { return }
-            guard let text = reply as? String,
-                let receipt = try? NativeHelperDocumentBridge.decodeReceipt(
-                    .string(text), for: command, provenance: provenance),
-                let current = self.webShell?.helperObservation(for: nil),
-                current.navigationID == observation.navigationID
-            else {
-                self.failHelperDocument("bootstrap receipt")
-                return
-            }
-            do { try self.helperSession?.acceptBootstrapReceipt(receipt, observation: current) } catch {
-                self.failHelperDocument("bootstrap receipt", error: error)
-                return
-            }
-            self.helperDocumentAdvanced()
-        }
-    }
-
-    /// The page's fixed ready/failed callback; `false` rejects the acknowledgement.
-    func helperDocumentCallback(
-        _ callback: NativeHelperDocumentBridge.Callback, observation: NativeHelperDocumentSession.Observation
-    ) -> Bool {
-        guard helperSession != nil else { return false }
-        do { try helperSession?.acceptCallback(callback, observation: observation) } catch { return false }
-        if case .failed = callback {
-            failHelperDocument("bootstrap reported")
-            return true
-        }
-        helperDocumentAdvanced()
-        return true
-    }
-
-    /// Both receipts accepted: the helper stands in for the renderer's `ready()` call.
-    private func helperDocumentAdvanced() {
-        guard helperSession?.phase == .ready, !rendererReadiness.isReady else { return }
-        logger.log("[shell] helper document ready")
-        shellModel.setHelperDocumentState(.ready)
-        rendererDidBecomeReady()
-        // A language change during bootstrap reached neither command.
-        updateHelperDocumentLocale()
-    }
-
-    /// The helper's fixed locale command for its unchanged source calculations' formatting.
-    private func updateHelperDocumentLocale() {
-        let language: NativeHelperDocumentBridge.Language = strings.language == .nl ? .nl : .en
-        guard let session = helperSession, session.phase == .ready, let provenance = session.provenance,
-            helperLanguage != language, let webView = webShell?.webView
-        else { return }
-        let command = NativeHelperDocumentBridge.Command.locale(language)
-        let arguments = NativeHelperDocumentBridge.arguments(
-            for: command, provenance: provenance, source: session.source)
-        helperLanguage = language
-        Task { [weak self] in
-            var accepted = false
-            if let bound = try? JSONSerialization.jsonObject(with: JSONValue.object(arguments).serialized())
-                as? [String: Any],
-                let reply = try? await webView.callAsyncJavaScript(
-                    NativeHelperDocumentBridge.script(for: command), arguments: bound, in: nil, contentWorld: .page),
-                let text = reply as? String
-            {
-                accepted =
-                    (try? NativeHelperDocumentBridge.decodeReceipt(.string(text), for: command, provenance: provenance))
-                    != nil
-            }
-            guard let self, self.helperSession?.provenance == provenance else { return }
-            if !accepted {
-                self.helperLanguage = nil
-                self.logger.warning("[shell] helper document locale update was not acknowledged")
-            }
-        }
-    }
-
-    private func applyHelperStartup(_ startup: inout NativeNavigationStartup, model: NativeShellModel) {
+    private func applyNativeStartup(_ startup: inout NativeNavigationStartup, model: NativeShellModel) {
         guard !startup.hasResolved, let current = model.nativeNavigationLocation?.raw else { return }
         let settings: NativeNavigationStartup.Settings =
             model.settingsLoaded ? .loaded(startupSection: model.settings.startupSection) : .loading
@@ -2040,7 +1891,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     }
 
     /// StartupRedirect's mirror of the hydrated startup section and the current page.
-    private func persistHelperNavigation(model: NativeShellModel, generation: UUID) {
+    private func persistNativeNavigation(model: NativeShellModel, generation: UUID) {
         let route = model.nativeNavigationLocation?.raw
         let section = model.settingsLoaded ? model.settings.startupSection : nil
         Task { [weak self] in
@@ -2051,25 +1902,17 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         }
     }
 
-    private func trackHelperNavigation(model: NativeShellModel, generation: UUID) {
+    private func trackNativeNavigation(model: NativeShellModel, generation: UUID) {
         withObservationTracking {
             _ = model.nativeNavigationLocation?.raw
             _ = model.settings.startupSection
         } onChange: { [weak self, weak model] in
             Task { @MainActor in
                 guard let self, let model, generation == self.nativeSettingsGeneration else { return }
-                self.persistHelperNavigation(model: model, generation: generation)
-                self.trackHelperNavigation(model: model, generation: generation)
+                self.persistNativeNavigation(model: model, generation: generation)
+                self.trackNativeNavigation(model: model, generation: generation)
             }
         }
-    }
-
-    /// The error is WebKit's or the bridge's (the Debug Demo only): no user data, so it is public.
-    private func failHelperDocument(_ stage: String, error: (any Error)? = nil) {
-        helperSession?.fail()
-        let reason = error.map { ": " + String(describing: $0) } ?? ""
-        logger.error("[shell] helper document \(stage, privacy: .public) failed\(reason, privacy: .public)")
-        shellModel.setHelperDocumentState(.failed)
     }
 
     // MARK: - Renderer messages
@@ -2292,7 +2135,7 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     func run(_ command: MenuCommand) {
         guard !shellModel.isReloadingGraph else { return }
         if case .renderer(let action) = command, documentSelection != .retainedWeb {
-            // The helper document has no renderer: native owners take every menu action.
+            // The native-only document has no renderer: native owners take every menu action.
             if !shellModel.acceptNativeMenuAction(action) {
                 logger.warning("[shell] menu action \(action.action, privacy: .public) has no native owner")
             }
@@ -2495,25 +2338,25 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
                 model.reloadSettings()
                 return
             }
-            // Helper mode owns StartupRedirect: capture its two raw values before tracking
+            // Native mode owns StartupRedirect: capture its two raw values before tracking
             // overwrites them, then resolve once from the mirror or the loaded settings.
             let mirror = try? await self.nativeLocalValue(.startupSection, generation: generation)
             let lastRoute = try? await self.nativeLocalValue(.lastRoute, generation: generation)
             guard isCurrentStartup() else { return }
             var startup = NativeNavigationStartup(
-                context: self.helperStartupResolved ? .documentReload : .newSession,
+                context: self.nativeStartupResolved ? .documentReload : .newSession,
                 mirroredStartupSection: mirror ?? nil, lastRoute: lastRoute ?? nil)
-            self.helperStartupResolved = true
-            self.applyHelperStartup(&startup, model: model)
+            self.nativeStartupResolved = true
+            self.applyNativeStartup(&startup, model: model)
             model.reloadSettings()
             // Queued cold and menu intents wait for document, settings and onboarding.
             model.nativeIntentReadinessDidChange()
             await model.settingsSettled()
             guard isCurrentStartup() else { return }
-            self.applyHelperStartup(&startup, model: model)
+            self.applyNativeStartup(&startup, model: model)
             model.nativeIntentReadinessDidChange()
-            self.persistHelperNavigation(model: model, generation: generation)
-            self.trackHelperNavigation(model: model, generation: generation)
+            self.persistNativeNavigation(model: model, generation: generation)
+            self.trackNativeNavigation(model: model, generation: generation)
         }
         revealWebView()
     }
@@ -2542,7 +2385,6 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
         }
         guard request == languageRequest else { return .superseded }
         installMenus()
-        updateHelperDocumentLocale()
         return .applied
     }
 
@@ -2694,12 +2536,11 @@ final class ShellController: NSObject, NSWindowDelegate, BridgeHost, AuditShell 
     /// `backup:restore`: the localized confirmation, then the restore, which stops and
     /// restarts the backend itself.
     /// The legacy `electronBackup.restore` bridge call. ADR-207's mode policy: only the retained
-    /// web document owns it (its page applies the frontend state and reloads); the helper
-    /// document never installs the bridge, and a call that still arrives fails closed so native
-    /// Settings stays the only restore owner.
+    /// web document owns it (its page applies the frontend state and reloads); in native mode a
+    /// call that still arrives fails closed so native Settings stays the only restore owner.
     func restoreBackup(_ path: String, passphrase: String?) async -> JSONValue {
         guard documentSelection == .retainedWeb else {
-            logger.warning("[shell] bridge restore refused: native Settings owns restore in helper mode")
+            logger.warning("[shell] bridge restore refused: native Settings owns restore in native mode")
             return .object(["success": .bool(false), "error": .string("Restore is not available here")])
         }
         return await restoreNativeBackup(

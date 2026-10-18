@@ -50,7 +50,7 @@ public final class NativeShellModel {
     public private(set) var settingsLoaded = false
     /// Chosen before document construction; never switches authority during a session.
     public let presentationMode: NativeShellPresentationMode
-    public private(set) var helperDocumentState: NativeHelperDocumentState = .loading
+    public private(set) var nativeDocumentState: NativeDocumentState = .loading
     private var initialSettingsLoadFailed = false
     public var isRendererReady = false
     public var isReloadingGraph = false
@@ -73,8 +73,7 @@ public final class NativeShellModel {
     public var isPresentingOnboarding = false
     /// The route a sidebar click or shortcut asked the page for, until the page reports one.
     public private(set) var pendingRoute: NativeRoute?
-    /// Phase-4 routing preparation only. The SDK does not opt in until the remaining
-    /// renderer storage/helper/lifecycle dependencies have independent replacements.
+    /// Native history: the route authority whenever the presentation is native (ADR-208).
     public private(set) var nativeNavigation: NativeNavigationHistory?
     public var nativeNavigationLocation: NativeNavigationLocation? { nativeNavigation?.location }
     public var canGoBack: Bool { nativeNavigation?.canGoBack ?? false }
@@ -346,10 +345,10 @@ public final class NativeShellModel {
     /// `RequireAdmin` redirects, which the page then reports.
     public var detail: NativeShellDetail {
         guard presentationMode.isNative else { return retainedWebDetail }
-        // A hidden helper cannot supply route authority or a visible fallback.
+        // Without native history there is no route authority and no web fallback.
         guard nativeNavigation != nil else { return .unavailable }
-        guard helperDocumentState != .failed, !initialSettingsLoadFailed else { return .unavailable }
-        guard helperDocumentState == .ready, settingsLoaded, !isReloadingGraph else { return .loading }
+        guard nativeDocumentState != .failed, !initialSettingsLoadFailed else { return .unavailable }
+        guard nativeDocumentState == .ready, settingsLoaded, !isReloadingGraph else { return .loading }
         guard !isPresentingWeb, onboarding != nil || !isPresentingOnboarding,
             route.value("settings") == nil || nativeSettings != nil,
             route.value("export") != "pdf" || reports != nil
@@ -359,11 +358,11 @@ public final class NativeShellModel {
         return resolved == .web ? .unavailable : resolved
     }
 
-    /// Infrastructure is permanently hidden in helper mode, independently of route state.
+    /// Infrastructure is permanently hidden in native mode, independently of route state.
     public var isWebContentHidden: Bool { presentationMode.isNative || detail != .web }
 
     /// The SDK must also apply its existing overlay, restore and operation fences.
-    /// In particular a cached native snapshot must not print while helper startup is pending.
+    /// In particular a cached native snapshot must not print while native startup is pending.
     public var printDisposition: NativeShellPrintDisposition {
         switch detail {
         case .web: return presentationMode == .retainedWeb ? .webDocument : .unavailable
@@ -374,14 +373,14 @@ public final class NativeShellModel {
 
     /// Called only by the native document owner after its independent document/generation
     /// checks. This display state neither authenticates a document nor releases SDK gates.
-    public func setHelperDocumentState(_ state: NativeHelperDocumentState) {
+    public func setNativeDocumentState(_ state: NativeDocumentState) {
         guard presentationMode.isNative else { return }
-        helperDocumentState = state
+        nativeDocumentState = state
     }
 
     public var canRetryInitialSettings: Bool {
         presentationMode.isNative && initialSettingsLoadFailed
-            && helperDocumentState == .ready
+            && nativeDocumentState == .ready
     }
 
     private var retainedWebDetail: NativeShellDetail {
@@ -693,7 +692,7 @@ public final class NativeShellModel {
     private var nativeIntentReadiness: NativeShellIntentCoordinator.Readiness {
         .init(
             document: presentationMode.isNative
-                ? helperDocumentState == .ready : isRendererReady,
+                ? nativeDocumentState == .ready : isRendererReady,
             settings: settingsLoaded && (nativeSettings?.isLoaded ?? true),
             onboarding: (onboarding?.isLoaded ?? true) && onboarding?.isPresented != true
                 && !isPresentingOnboarding,

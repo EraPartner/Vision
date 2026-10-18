@@ -1,8 +1,8 @@
 name: Native End-to-End Smoke
 
-# ADR-207 gate before the helper document becomes the default: build the real Demo
-# runtime payload, launch the Debug Demo app with and without helper mode and check that
-# the supervised runtime starts and the native shell stays up. Synthetic data only.
+# ADR-208 gate for the native-only Debug Demo default: build the real Demo runtime payload,
+# launch the Debug Demo app natively and with the retained web document, and check that the
+# supervised runtime starts and the shell stays up. Synthetic data only.
 on:
   push:
     branches: ["codex/native-phase-*"]
@@ -121,10 +121,6 @@ jobs:
 
       - name: Smoke the retained web document (control)
         run: bash .github/scripts/native-e2e-smoke.sh "$VISION_E2E_APP" "$RUNNER_TEMP/e2e" retained
-
-      - name: Smoke the helper document mode
-        if: ${{ !cancelled() }}
-        run: bash .github/scripts/native-e2e-smoke.sh "$VISION_E2E_APP" "$RUNNER_TEMP/e2e" helper
 
       - name: Smoke the native-only mode (no web view)
         if: ${{ !cancelled() }}

@@ -30,8 +30,7 @@ struct NativeShellUnavailableView: View {
     }
 }
 
-/// The retained presentation keeps its previous hierarchy. A helper is instead mounted
-/// inside an AppKit-hidden enclosure: visibility does not depend on the SDK honoring hidden.
+/// The retained presentation keeps its previous hierarchy; native-only has no document view.
 struct NativeShellWebPresentation<Content: View>: View {
     let mode: NativeShellPresentationMode
     let hidden: Bool
@@ -40,45 +39,8 @@ struct NativeShellWebPresentation<Content: View>: View {
     var body: some View {
         if mode == .nativeOnly {
             EmptyView()
-        } else if mode == .helperDocument {
-            NativeHiddenHelperDocument(content: content(true))
-                .frame(width: 0, height: 0)
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
         } else {
             content(hidden)
         }
     }
-}
-
-private struct NativeHiddenHelperDocument<Content: View>: NSViewRepresentable {
-    let content: Content
-
-    func makeNSView(context: Context) -> NativeHiddenHelperContainer<Content> {
-        NativeHiddenHelperContainer(content: content)
-    }
-
-    func updateNSView(_ view: NativeHiddenHelperContainer<Content>, context: Context) {
-        view.host.rootView = content
-        view.isHidden = true
-    }
-}
-
-private final class NativeHiddenHelperContainer<Content: View>: NSView {
-    let host: NSHostingView<Content>
-
-    init(content: Content) {
-        host = NSHostingView(rootView: content)
-        super.init(frame: .zero)
-        isHidden = true
-        setAccessibilityElement(false)
-        host.frame = NSRect(x: 0, y: 0, width: 1, height: 1)
-        addSubview(host)
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-
-    override func hitTest(_ point: NSPoint) -> NSView? { nil }
-    override func accessibilityChildren() -> [Any]? { [] }
 }

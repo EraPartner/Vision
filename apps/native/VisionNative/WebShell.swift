@@ -33,33 +33,19 @@ final class WebShell: NSObject {
     private var crashPolicy = CrashReloadPolicy()
     /// Downloads that replace an existing file, by download, until they finish or fail.
     private var replacements: [ObjectIdentifier: (temporary: URL, destination: URL)] = [:]
-    /// ADR-207: set only for a selected helper document, which gets the fixed helper
-    /// handler instead of the generic `electronAPI` bridge.
-    let helperSource: NativeHelperDocumentSession.Source?
-    /// The WKNavigation object of the current helper load and its opaque native identity.
-    private var helperNavigation: (navigation: WKNavigation, id: UUID)?
-
-    init(controller: ShellController, helperSource: NativeHelperDocumentSession.Source? = nil) {
-        self.helperSource = helperSource
+    init(controller: ShellController) {
         let contentController = WKUserContentController()
         contentController.addUserScript(
             WKUserScript(
-                source: helperSource == nil ? BridgeScript.source : NativeHelperDocumentBridge.documentStartScript,
-                injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .page))
+                source: BridgeScript.source, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .page))
         let configuration = WKWebViewConfiguration()
         configuration.userContentController = contentController
         configuration.websiteDataStore = .default()
         webView = ShellWebView(frame: .zero, configuration: configuration)
         self.controller = controller
         super.init()
-        if helperSource == nil {
-            contentController.addScriptMessageHandler(
-                BridgeMessageHandler(shell: self), contentWorld: .page, name: BridgeContract.messageHandlerName)
-        } else {
-            contentController.addScriptMessageHandler(
-                HelperDocumentMessageHandler(shell: self), contentWorld: .page,
-                name: NativeHelperDocumentBridge.messageHandlerName)
-        }
+        contentController.addScriptMessageHandler(
+            BridgeMessageHandler(shell: self), contentWorld: .page, name: BridgeContract.messageHandlerName)
         webView.navigationDelegate = self
         webView.uiDelegate = self
         webView.allowsBackForwardNavigationGestures = false
@@ -91,41 +77,11 @@ final class WebShell: NSObject {
 
     func load(_ url: URL) {
         crashPolicy.reset()
-        track(webView.load(URLRequest(url: url)))
+        _ = webView.load(URLRequest(url: url))
     }
 
-    /// Reloads the current document; a helper reload is a new navigation authority.
     func reload() {
-        track(webView.reload())
-    }
-
-    private func track(_ navigation: WKNavigation?) {
-        guard helperSource != nil else { return }
-        let id = UUID()
-        helperNavigation = navigation.map { ($0, id) }
-        controller?.helperDocumentWillNavigate(id)
-    }
-
-    /// Built only from this web view, its main frame and the tracked WKNavigation object;
-    /// nothing in it is decoded from the page.
-    func helperObservation(
-        for navigation: WKNavigation?, isMainFrame: Bool = true, securityOrigin: URL? = nil
-    ) -> NativeHelperDocumentSession.Observation? {
-        guard helperSource != nil, let current = helperNavigation, let url = webView.url else { return nil }
-        if let navigation, navigation !== current.navigation { return nil }
-        guard let origin = securityOrigin ?? Self.origin(of: url) else { return nil }
-        return .init(
-            navigationID: current.id, documentURL: url, websiteDataStoreIdentifier: "default",
-            isMainFrame: isMainFrame, securityOrigin: origin)
-    }
-
-    static func origin(of url: URL) -> URL? {
-        guard let scheme = url.scheme, let host = url.host(percentEncoded: false) else { return nil }
-        var parts = URLComponents()
-        parts.scheme = scheme
-        parts.host = host
-        parts.port = url.port
-        return parts.url
+        _ = webView.reload()
     }
 
     private func describe(_ url: URL?) -> String {
@@ -203,12 +159,10 @@ extension WebShell: WKNavigationDelegate {
     /// commits, so the page that is still showing keeps its readiness and queued events.
     func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
         controller?.documentDidCommit()
-        if helperSource != nil { controller?.helperDocumentDidCommit(helperObservation(for: navigation)) }
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         controller?.documentDidFinish()
-        if helperSource != nil { controller?.helperDocumentDidFinish(helperObservation(for: navigation)) }
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: any Error) {
@@ -330,38 +284,6 @@ final class BridgeMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
             to: message.body as? String, sender: sender, appURL: controller.appURL, host: controller)
         let encoded = reply.scriptReply
         return (encoded.result, encoded.error)
-    }
-}
-
-/// Answers the helper document's two fixed callbacks (ADR-207). The reply only
-/// acknowledges receipt; readiness is decided by the controller's session authority.
-@MainActor
-final class HelperDocumentMessageHandler: NSObject, WKScriptMessageHandlerWithReply {
-    private weak var shell: WebShell?
-
-    init(shell: WebShell) {
-        self.shell = shell
-        super.init()
-    }
-
-    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage)
-        async -> (Any?, String?)
-    {
-        let rejected: (Any?, String?) = (nil, "Helper acknowledgement rejected")
-        guard let shell, let controller = shell.controller, message.webView === shell.webView,
-            let callback = try? NativeHelperDocumentBridge.decodeCallback(message.body as? String)
-        else { return rejected }
-        let origin = message.frameInfo.securityOrigin
-        var parts = URLComponents()
-        parts.scheme = origin.`protocol`
-        parts.host = origin.host
-        parts.port = origin.port == 0 ? nil : origin.port
-        guard let securityOrigin = parts.url,
-            let observation = shell.helperObservation(
-                for: nil, isMainFrame: message.frameInfo.isMainFrame, securityOrigin: securityOrigin),
-            controller.helperDocumentCallback(callback, observation: observation)
-        else { return rejected }
-        return ("{\"success\":true}", nil)
     }
 }
 
