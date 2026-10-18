@@ -4,7 +4,7 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/transactions
 description: CRUD operations for financial transactions, including CSV and NDJSON export, bulk operations
-date: 2026-10-08
+date: 2026-10-11
 updated: 2026-10-08
 last_modified: 2026-10-08
 tags: [api, transactions, finance, phase-5a, phase-9, phase-13, phase-q, decimal, money, export, drillthrough, filters, recipient-groups, bulk-actions, amount-filter, date-search, tag-search]
@@ -305,11 +305,12 @@ response and filter field, but POST and PATCH reject it as a write field.
 - `category_id` had **no guard at all** on this operation — the create schema validated `recipient_id` and `amount` and forwarded the rest raw. `12abc`, `1e3`, `true`, `[7]` and `''` reached Postgres as a 22P02 cast error and `0`/negatives as an FK violation, so the create path for the app's core entity answered **500** rather than 400; `0x10` was worse, landing on category 16 wherever that row exists (Postgres reads hex integer literals). It now uses the same validator as the PATCH body.
 - **`null` and an absent `category_id` both mean "uncategorized" and still answer 201** — unchanged, and pinned.
 
-**Duplicate Detection:** By default, the service checks active transactions with the same date,
-amount, recipient, memo, and bank account and returns 409 when it finds one. The fallback lookup uses
-the same five fields as the hash, including a case-insensitive bank-account comparison. Deleted
-transactions do not block a later re-add because stale manual-import hash rows are joined back to an
-active transaction.
+**Duplicate Detection:** The default create path rejects an active transaction with the same
+calendar date, decimal-normalized amount, recipient, normalized memo, canonical account and
+currency. Version-three manual claims use an unambiguous tuple encoding. Both new and legacy
+claims are checked against the current live row, so editing a transaction does not reserve its
+former identity. Deleted or inactive rows do not block a re-add. Import fingerprints are unchanged.
+See [[docs/reference/provider-neutral-transaction-provenance]].
 
 Clients may resubmit an intentional duplicate with `"allow_duplicate": true`. This is an explicit
 per-request override: the normal create path remains guarded, the duplicate is still recorded in
@@ -678,3 +679,28 @@ and `transfer_source`. These additive fields let the transaction page confirm tw
 records through the existing transfer endpoint without creating cash or detaching old peers.
 Ordinary income and spending exclude both linked records; separately recorded fees remain
 expenses. See [[docs/features/transactions]].
+
+## Integrity guards
+
+Deletion and bulk deletion return `409 CONFLICT` when any selected row is linked to a planned
+execution. Bank and portfolio import rollback use the same guard. The request rolls back rather
+than silently changing recurrence/history. Removing the related planned record is a separate,
+explicit user action; the deletion request never performs that action automatically.
+
+Changes to a ledger balance lock and revalidate active accounts through commit. Editing,
+deleting or rolling back rows on a closed account requires reopening it (`400 VALIDATION_ERROR`).
+Concurrent ownership changes return `409 CONFLICT` for a reload and retry. Metadata-only edits
+remain available. These are stricter write contracts for previously accepted unsafe operations.
+
+Manual transfer marking and unmarking reject `opening`, `adjustment` and `brokerage` origins with
+`400 VALIDATION_ERROR`; use the owning workflow to correct those rows. Reconciliation releases
+manual pairs when either leg becomes inactive, loses reciprocity, changes to the same account,
+or loses opposite signs. Unequal amounts and different currencies remain valid for manual pairs.
+Marking locks and rechecks the discovered peer graph; unmarking locks and rechecks both known
+legs. Concurrent peer changes return `409 CONFLICT` rather than detaching an unlocked replacement.
+
+`GET /api/transactions/transfer-suggestions` returns an edge page with `items`, `nextCursor` and
+`hasMore`. Its `limit` defaults to 200 and cannot exceed 200; pass the returned cursor for the next
+page. Several edges for the same transaction can span pages. The existing `data.items` envelope
+is preserved; clients must now follow pagination to obtain all suggestions. Automatic matching separately checks
+directional uniqueness and locks/revalidates candidates before marking.

@@ -19,6 +19,10 @@ import {
 import { mockLogger } from "../helpers/mockLogger.ts";
 import { routeAgent } from "../helpers/routeApp.ts";
 
+vi.mock("../../src/repositories/plannedExecutionGuard.ts", () => ({
+  protectPlannedExecutions: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("../../src/repositories/transactionRepository.ts", () =>
   mockTransactionRepository(),
 );

@@ -1,3 +1,6 @@
+import { openTransferRow, transferCandidate, candidateCount } from "./transferCandidatesSql.ts";
+import { bankChronologySql } from "./bankChronologySql.ts";
+import { protectPlannedExecutions } from "./plannedExecutionGuard.ts";
 /**
  * Transaction Repository - data access for transactions table.
  *
@@ -46,7 +49,8 @@ import { sanitizeUpdateFields } from "../lib/validation.ts";
 import { buildTransactionWhere } from "../lib/filterBuilder.ts";
 import { buildSetClauses } from "../lib/sqlClauses.ts";
 import { accountRepository } from "./accountRepository.ts";
-import { ValidationError } from "../middleware/errorHandler.ts";
+import { lockAccountsForLedgerMutation } from "./accountLifecycleLock.ts";
+import { ConflictError, ValidationError } from "../middleware/errorHandler.ts";
 import type {
   EnrichedTransactionRow,
   QueryRunner,
@@ -116,6 +120,7 @@ export interface ImportedTransactionInput {
   currency: string | null;
   /** Bank-stamped running balance (anchors ADR-094). */
   balance: number | string | null;
+  bankSequence?: string | null;
   comment: string | null;
   importBatchId: number | string | null;
   matchedPatternId: number | null;
@@ -295,9 +300,9 @@ function runningBalanceCtes(where: string, joins: string): string {
   // row resets the balance, and later unstamped rows advance it normally.
   return `
     ledger_amounts AS (
-      SELECT t.id, t.date, t.account_id,
+      SELECT t.id, t.date, t.account_id, ${bankChronologySql("t")} AS chronology,
              COALESCE(t.currency, 'EUR') AS currency, t.balance,
-             SUM(t.amount) OVER (PARTITION BY t.account_id, COALESCE(t.currency, 'EUR') ORDER BY t.date ASC, t.id ASC) AS cumulative
+             SUM(t.amount) OVER (PARTITION BY t.account_id, COALESCE(t.currency, 'EUR') ORDER BY t.date ASC, ${bankChronologySql("t")} ASC, t.id ASC) AS cumulative
       FROM transactions t
       ${joins}
       WHERE ${where}
@@ -305,12 +310,12 @@ function runningBalanceCtes(where: string, joins: string): string {
     ledger_carry AS (
       SELECT id, cumulative,
              MAX(CASE WHEN balance IS NOT NULL
-                      THEN ARRAY[(date - DATE '2000-01-01')::numeric, id::numeric, balance - cumulative]
-                 END) OVER (PARTITION BY account_id, currency ORDER BY date ASC, id ASC) AS stamp
+                      THEN ARRAY[(date - DATE '2000-01-01')::numeric, chronology, id::numeric, balance - cumulative]
+                 END) OVER (PARTITION BY account_id, currency ORDER BY date ASC, chronology ASC, id ASC) AS stamp
       FROM ledger_amounts
     ),
     ledger_balances AS (
-      SELECT id, cumulative + COALESCE(stamp[3], 0) AS running_balance
+      SELECT id, cumulative + COALESCE(stamp[4], 0) AS running_balance
       FROM ledger_carry
     )`;
 }
@@ -340,7 +345,7 @@ const OPENING_ANCHORS_SQL = `
 // variant is unconditional (the caller has already released prior peers).
 const MARK_AUTO_LEG_SQL = `UPDATE transactions SET is_transfer = true, transfer_peer_id = $2, transfer_source = 'auto'
             WHERE id = $1 AND is_transfer = false AND transfer_source IS NULL`;
-const MARK_MANUAL_LEG_SQL = `UPDATE transactions SET is_transfer = true, transfer_peer_id = $2, transfer_source = 'manual' WHERE id = $1`;
+const MARK_MANUAL_LEG_SQL = `UPDATE transactions SET is_transfer = true, transfer_peer_id = $2, transfer_source = 'manual' WHERE id = $1 AND (transfer_source IS NULL OR transfer_source IN ('auto', 'manual'))`;
 // Undo a leg WE just auto-marked (guarded on the peer we set + source='auto') so
 // a half-applied pair is never committed when the sibling leg's guarded UPDATE misses.
 const REVERT_AUTO_LEG_SQL = `UPDATE transactions SET is_transfer = false, transfer_peer_id = NULL, transfer_source = NULL
@@ -395,6 +400,7 @@ async function attachTagsToRows(
       source_record_hash: _sourceRecordHash,
       dedup_fingerprint: _dedupFingerprint,
       dedup_fingerprint_version: _dedupFingerprintVersion,
+      bank_sequence: _bankSequence,
       ...r
     }) => ({ ...r, tags: tagMap.get(r.id) ?? [] }),
   );
@@ -975,6 +981,18 @@ export const transactionRepository = {
     const { tags, ...txFields } = fields;
     // Sanitize field names to prevent SQL injection via column names
     const sanitized = sanitizeUpdateFields("transactions", txFields);
+    if (sanitized.account_id != null) {
+      const rawAccountId = sanitized.account_id;
+      const accountId = Number(rawAccountId);
+      if ((typeof rawAccountId !== "number" &&
+          !(typeof rawAccountId === "string" && /^[0-9]+$/.test(rawAccountId))) ||
+          !Number.isSafeInteger(accountId) || accountId <= 0 || accountId > 2147483647) {
+        throw new ValidationError("account_id must be a positive integer");
+      }
+      // Repository callers also participate in sorted account locking; do not
+      // defer a string target's lock until after transaction rows are locked.
+      sanitized.account_id = accountId;
+    }
 
     // Same 3-level enrichment as getById/getAll/create (shared fragments): the
     // update response must not disagree with an immediately-following GET on
@@ -994,6 +1012,10 @@ export const transactionRepository = {
       async (client) => {
         // Resolve the compatibility label on this connection. A missing target
         // row or failed update then rolls back any account minted for the label.
+        if (["amount", "date", "transaction_date", "currency", "account_id", "is_active"].some((key) => Object.hasOwn(sanitized, key))) {
+          await lockAccountsForLedgerMutation(client, [id],
+            typeof sanitized.account_id === "number" ? sanitized.account_id : undefined);
+        }
         await stampAccountIdForUpdate(sanitized, client);
         const {
           clauses: setClauses,
@@ -1047,12 +1069,12 @@ export const transactionRepository = {
    * @returns true when a row was removed
    */
   async hardDelete(id: number): Promise<boolean> {
-    const result = await queryPrepared(
-      "tx_hard_delete",
-      "DELETE FROM transactions WHERE id = $1",
-      [id],
-    );
-    const deleted = (result.rowCount ?? 0) > 0;
+    const deleted = await withTransaction(async (client) => {
+      await lockAccountsForLedgerMutation(client, [id]);
+      await protectPlannedExecutions([id]);
+      const result = await client.query("DELETE FROM transactions WHERE id = $1", [id]);
+      return (result.rowCount ?? 0) > 0;
+    });
     if (deleted) clearTransactionCountCache();
     return deleted;
   },
@@ -1159,38 +1181,30 @@ export const transactionRepository = {
   // Internal-transfer reconciliation (ADR-083)
   // ---------------------------------------------------------------------------
 
-  /**
-   * Candidate (outflow, inflow) pairs among open rows: equal-and-opposite
-   * amount, same currency, two different own accounts, within ±windowDays.
-   * Fixing the outflow side (amount < 0) yields each pair exactly once. Uses the
-   * (amount, date) index added in migration 0044. Pairs the user explicitly
-   * rejected (transfer_dismissals, migration 0070) are excluded — the PAIR, not
-   * the rows: each leg stays matchable with every other candidate.
-   */
-  async listTransferCandidatePairs(
-    windowDays: number,
-  ): Promise<TransferCandidatePairRow[]> {
-    return queryRows(
-      transferCandidatePairRowSchema,
-      `SELECT a.id AS "outId", b.id AS "inId"
-       FROM transactions a
-       JOIN transactions b
-         ON b.amount = -a.amount
-        AND COALESCE(b.currency, 'EUR') = COALESCE(a.currency, 'EUR')
-        AND b.account_id IS DISTINCT FROM a.account_id
-        AND a.account_id IS NOT NULL AND b.account_id IS NOT NULL
-        AND b.date BETWEEN a.date - $1::int AND a.date + $1::int
-      WHERE a.is_active AND b.is_active
-        AND a.is_transfer = false AND b.is_transfer = false
-        AND a.transfer_source IS NULL AND b.transfer_source IS NULL
-        AND a.amount < 0
-        AND NOT EXISTS (
-          SELECT 1 FROM transfer_dismissals d
-           WHERE d.txn_a_id = LEAST(a.id, b.id)
-             AND d.txn_b_id = GREATEST(a.id, b.id)
-        )`,
-      [windowDays],
-    );
+  /** Return only mutually unique pairs; directional probes stop at two matches. */
+  async listUniqueTransferPairs(windowDays: number): Promise<TransferCandidatePairRow[]> {
+    return queryRows(transferCandidatePairRowSchema, `
+      SELECT a.id AS "outId", first_match.id AS "inId"
+      FROM transactions a
+      CROSS JOIN LATERAL (
+        SELECT min(candidate.id) AS id, count(*) AS n
+        FROM (SELECT b.id FROM transactions b WHERE ${transferCandidate("a", "b")} LIMIT 2) candidate
+      ) first_match
+      JOIN transactions b ON b.id = first_match.id
+      WHERE ${openTransferRow("a")} AND a.amount < 0
+        AND first_match.n = 1 AND ${candidateCount("b", "reverse_out")} = 1`, [windowDays]);
+  },
+
+  /** Candidate edges are paged independently of the full-corpus uniqueness probes. */
+  async listTransferSuggestionPairs(windowDays: number, after: [number, number], limit: number): Promise<TransferCandidatePairRow[]> {
+    return queryRows(transferCandidatePairRowSchema, `
+      SELECT a.id AS "outId", b.id AS "inId"
+      FROM transactions a JOIN transactions b ON ${transferCandidate("a", "b")}
+      WHERE ${openTransferRow("a")} AND a.amount < 0
+        AND (a.id, b.id) > ($2::int, $3::int)
+        AND (${candidateCount("a", "other_in")} = 2
+          OR ${candidateCount("b", "other_out")} = 2)
+      ORDER BY a.id, b.id LIMIT $4::int`, [windowDays, ...after, limit]);
   },
 
   /**
@@ -1214,10 +1228,8 @@ export const transactionRepository = {
    * now-invalid pair qualify and are released together.
    */
   async releaseInvalidAutoTransferPairs(windowDays: number): Promise<void> {
-    await query(
-      `UPDATE transactions t
-        SET is_transfer = false, transfer_peer_id = NULL, transfer_source = NULL
-      WHERE t.transfer_source = 'auto' AND t.transfer_peer_id IS NOT NULL
+    await withTransaction(async () => {
+      const invalid = `t.transfer_source IN ('auto', 'manual') AND t.transfer_peer_id IS NOT NULL
         AND NOT EXISTS (
           SELECT 1 FROM transactions p
            WHERE p.id = t.transfer_peer_id
@@ -1226,15 +1238,42 @@ export const transactionRepository = {
              -- leg stayed is_transfer=true forever (a phantom one-way transfer,
              -- excluded from cash-flow aggregates).
              AND p.transfer_peer_id = t.id
-             AND p.amount = -t.amount
-             AND COALESCE(p.currency, 'EUR') = COALESCE(t.currency, 'EUR')
+             AND p.transfer_source = t.transfer_source
+             AND p.amount * t.amount < 0
+             AND (t.transfer_source = 'manual' OR (
+               p.amount = -t.amount
+               AND COALESCE(p.currency, 'EUR') = COALESCE(t.currency, 'EUR')
+               AND p.date BETWEEN t.date - $1::int AND t.date + $1::int
+             ))
              AND p.account_id IS DISTINCT FROM t.account_id
              AND p.account_id IS NOT NULL AND t.account_id IS NOT NULL
-             AND p.date BETWEEN t.date - $1::int AND t.date + $1::int
              AND p.is_active AND t.is_active
-        )`,
-      [windowDays],
-    );
+        )`;
+      // Discovery is unlocked. Never evaluate peer validity in the same statement
+      // that waits on a writer: READ COMMITTED would retain a stale peer snapshot.
+      const discovered = await queryRows(
+        transferPeerPointerRowSchema.extend(idRowSchema.shape),
+        `SELECT t.id, t.transfer_peer_id, t.transfer_source FROM transactions t
+         WHERE ${invalid} ORDER BY t.id LIMIT 250`,
+        [windowDays],
+      );
+      if (discovered.length === 0) return;
+      const ids = [...new Set(discovered.flatMap((row) =>
+        row.transfer_peer_id === null ? [row.id] : [row.id, row.transfer_peer_id],
+      ))].sort((a, b) => a - b);
+      const locked = await queryRows(idRowSchema,
+        `SELECT id FROM transactions WHERE id = ANY($1::int[]) ORDER BY id FOR UPDATE`,
+        [ids]);
+      // A separate statement gets a fresh snapshot after all waits. Repaired
+      // pairs now pass validity; changed peers outside the locked set are deferred.
+      await query(
+        `UPDATE transactions t
+         SET is_transfer = false, transfer_peer_id = NULL, transfer_source = NULL
+         WHERE t.id = ANY($2::int[]) AND t.transfer_peer_id = ANY($2::int[])
+           AND ${invalid}`,
+        [windowDays, locked.map((row) => row.id)],
+      );
+    });
   },
 
   /**
@@ -1295,13 +1334,34 @@ export const transactionRepository = {
   async lockTransferLegs(
     ids: number[],
   ): Promise<
-    Pick<TransactionRow, "id" | "amount" | "account_id" | "is_active">[]
+    Pick<TransactionRow, "id" | "amount" | "account_id" | "is_active" | "transfer_source">[]
   > {
     return queryRows(
       transferLegRowSchema,
-      `SELECT id, amount, account_id, is_active FROM transactions WHERE id = ANY($1) FOR UPDATE`,
+      `SELECT id, amount, account_id, is_active, transfer_source FROM transactions WHERE id = ANY($1) ORDER BY id FOR UPDATE`,
       [ids],
     );
+  },
+
+  /** Lock every endpoint the manual re-pair can read or release, in one order. */
+  async lockTransferGraphForMark(ids: number[]) {
+    const schema = transferLegRowSchema.extend(transferPeerPointerRowSchema.shape);
+    const discoverSql = `SELECT id, amount, account_id, is_active, transfer_source, transfer_peer_id
+      FROM transactions WHERE id = ANY($1::int[]) OR transfer_peer_id = ANY($1::int[])
+        OR id IN (SELECT transfer_peer_id FROM transactions WHERE id = ANY($1::int[]))
+      ORDER BY id LIMIT 501`;
+    const before = await queryRows(schema, discoverSql, [ids]);
+    if (before.length > 500) throw new ConflictError("Transfer graph is too large; review its links before retrying");
+    const locked = await queryRows(schema,
+      `SELECT id, amount, account_id, is_active, transfer_source, transfer_peer_id
+       FROM transactions WHERE id = ANY($1::int[]) ORDER BY id FOR UPDATE`,
+      [before.map((row) => row.id)]);
+    const after = await queryRows(schema, discoverSql, [ids]);
+    const signature = (rows: typeof before) => JSON.stringify(rows.map((row) => [row.id, row.transfer_peer_id, row.transfer_source]));
+    if (signature(before) !== signature(locked) || signature(before) !== signature(after)) {
+      throw new ConflictError("Transfer pairing changed; reload and retry");
+    }
+    return locked;
   },
 
   /**
@@ -1311,27 +1371,41 @@ export const transactionRepository = {
    *
    * @returns rows released
    */
-  async releaseTransferPeersOf(ids: number[]): Promise<number> {
+  async releaseTransferPeersOf(ids: number[], lockedIds: number[]): Promise<number> {
     const result = await query(
       `UPDATE transactions SET is_transfer = false, transfer_peer_id = NULL, transfer_source = NULL
-        WHERE transfer_peer_id = ANY($1) AND id <> ALL($1)`,
-      [ids],
+        WHERE transfer_peer_id = ANY($1) AND id <> ALL($1)
+          AND transfer_source IN ('auto', 'manual') AND id = ANY($2::int[])`,
+      [ids, lockedIds],
     );
     return result.rowCount ?? 0;
   },
 
   /**
-   * Lock a row and read its peer pointer (unmarkTransfer's reciprocity check).
-   *
-   * @returns the peer id; `undefined` when the row is gone OR unpaired (the `?? undefined` collapses both)
+   * Lock the discovered pair in ID order and recheck reciprocity before unmarking.
+   * A changed target pointer is a retry conflict; never acquire a new peer out of order.
    */
-  async lockTransferPeerPointer(id: number): Promise<number | undefined> {
-    const rows = await queryRows(
-      transferPeerPointerRowSchema,
-      "SELECT transfer_peer_id FROM transactions WHERE id = $1 FOR UPDATE",
-      [id],
-    );
-    return rows[0]?.transfer_peer_id ?? undefined;
+  async lockTransferPairForUnmark(id: number): Promise<{ peer: number | undefined; peerPointsBack: boolean }> {
+    // Discover without a lock, then acquire the complete known pair in one order.
+    // If discovery became stale, reject instead of locking a newly found peer.
+    const discovered = await queryRows(transferPeerPointerRowSchema,
+      "SELECT transfer_peer_id, transfer_source FROM transactions WHERE id = $1", [id]);
+    const expectedPeer = discovered[0]?.transfer_peer_id ?? undefined;
+    const ids = expectedPeer === undefined ? [id] : [id, expectedPeer];
+    const locked = await queryRows(transferPeerPointerRowSchema.extend(idRowSchema.shape),
+      "SELECT id, transfer_peer_id, transfer_source FROM transactions WHERE id = ANY($1::int[]) ORDER BY id FOR UPDATE", [ids]);
+    const target = locked.find((row) => row.id === id);
+    if ((target?.transfer_peer_id ?? undefined) !== expectedPeer) {
+      throw new ConflictError("Transfer pairing changed; reload and retry");
+    }
+    const peerRow = locked.find((row) => row.id === expectedPeer);
+    const peerPointsBack = peerRow?.transfer_peer_id === id;
+    for (const row of [target, ...(peerPointsBack ? [peerRow] : [])]) {
+      if (row?.transfer_source && !["auto", "manual"].includes(row.transfer_source)) {
+        throw new ValidationError("System-owned transactions must be corrected through their original workflow");
+      }
+    }
+    return { peer: expectedPeer, peerPointsBack };
   },
 
   /**
@@ -1353,7 +1427,8 @@ export const transactionRepository = {
    */
   async clearTransferMark(id: number): Promise<number> {
     const result = await query(
-      `UPDATE transactions SET is_transfer = false, transfer_peer_id = NULL, transfer_source = NULL WHERE id = $1`,
+      `UPDATE transactions SET is_transfer = false, transfer_peer_id = NULL, transfer_source = NULL WHERE id = $1
+        AND (transfer_source IS NULL OR transfer_source IN ('auto', 'manual'))`,
       [id],
     );
     return result.rowCount ?? 0;
@@ -1437,6 +1512,7 @@ export const transactionRepository = {
     memo,
     currency,
     balance,
+    bankSequence,
     comment,
     importBatchId,
     matchedPatternId,
@@ -1449,8 +1525,8 @@ export const transactionRepository = {
       `INSERT INTO transactions
                 (date, account_id, recipient_id, category_id, amount, memo, currency, balance, comment,
                  import_batch_id, matched_pattern_id, source_record_hash,
-                 dedup_fingerprint, dedup_fingerprint_version, is_active)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, true)
+                 dedup_fingerprint, dedup_fingerprint_version, bank_sequence, is_active)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, true)
              ON CONFLICT DO NOTHING
              RETURNING id`,
       [
@@ -1468,6 +1544,7 @@ export const transactionRepository = {
         sourceRecordHash ?? null,
         dedupFingerprint ?? null,
         fingerprintVersion ?? null,
+        bankSequence ?? null,
       ],
     );
     return rows[0]?.id ?? undefined;

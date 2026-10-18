@@ -409,6 +409,77 @@ describe.skipIf(!hasTestDatabase())(
     // ───────────────────────────────────────────────────────────────────────────
     // Suggestions
     // ───────────────────────────────────────────────────────────────────────────
+    it.each(["amount", "currency", "date", "account", "ambiguity"])(
+      "rechecks %s after waiting for candidate locks",
+      async (change) => {
+        await seedFixtures();
+        const { outId, inId } = await seedMatchablePair();
+        const gate = await getTestPool()!.connect();
+        let work: Promise<unknown> | undefined;
+        try {
+          await gate.query("BEGIN");
+          await gate.query(
+            "SELECT id FROM transactions WHERE id=ANY($1::int[]) ORDER BY id FOR UPDATE",
+            [[outId, inId]],
+          );
+          work = reconcileTransfers();
+          const observed = Promise.allSettled([work]);
+          const deadline = Date.now() + 5000;
+          let waiting = false;
+          while (Date.now() < deadline) {
+            waiting = (
+              await getTestPool()!.query(
+                "SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE '%FROM transactions%FOR UPDATE%') AS waiting",
+              )
+            ).rows[0].waiting;
+            if (waiting) break;
+            await new Promise((resolve) => setTimeout(resolve, 20));
+          }
+          expect(waiting).toBe(true);
+          if (change === "amount")
+            await gate.query(
+              "UPDATE transactions SET amount=amount+1 WHERE id=$1",
+              [inId],
+            );
+          if (change === "currency")
+            await gate.query(
+              "UPDATE transactions SET currency='USD' WHERE id=$1",
+              [inId],
+            );
+          if (change === "date")
+            await gate.query(
+              "UPDATE transactions SET date=date+10 WHERE id=$1",
+              [inId],
+            );
+          if (change === "account")
+            await gate.query(
+              "UPDATE transactions SET account_id=$1 WHERE id=$2",
+              [accountIds.Checking, inId],
+            );
+          if (change === "ambiguity")
+            await gate.query(
+              "INSERT INTO transactions(date,amount,currency,account_id,recipient_id) SELECT date,amount,currency,account_id,recipient_id FROM transactions WHERE id=$1",
+              [inId],
+            );
+          await gate.query("COMMIT");
+          await observed;
+          await expect(work).resolves.toEqual({ pairsCreated: 0 });
+          expect(await readTxn(outId)).toMatchObject({
+            is_transfer: false,
+            transfer_peer_id: null,
+          });
+          expect(await readTxn(inId)).toMatchObject({
+            is_transfer: false,
+            transfer_peer_id: null,
+          });
+        } finally {
+          await gate.query("ROLLBACK");
+          gate.release();
+          if (work) await Promise.allSettled([work]);
+        }
+      },
+    );
+
     describe("getTransferSuggestions", () => {
       it("returns the contended outflow with all of its candidate inflows", async () => {
         await seedFixtures();
@@ -424,7 +495,7 @@ describe.skipIf(!hasTestDatabase())(
           date: daysAfter(1),
         });
 
-        const suggestions = await getTransferSuggestions();
+        const { items: suggestions } = await getTransferSuggestions();
 
         expect(suggestions).toHaveLength(1);
         expect(suggestions[0]!.outflow!.id).toBe(outId);
@@ -433,10 +504,45 @@ describe.skipIf(!hasTestDatabase())(
         ).toEqual([inA, inB].sort((a, b) => a - b));
       });
 
+      it("paginates a dense ambiguous graph without inventing unique pairs", async () => {
+        await seedFixtures();
+        const outs: number[] = [];
+        const ins: number[] = [];
+        for (let n = 0; n < 12; n++) {
+          outs.push(await insertTxn({ account: "Checking", amount: -200 }));
+          ins.push(await insertTxn({ account: "Savings", amount: 200 }));
+        }
+        const unique = await seedMatchablePair(-333);
+        expect((await reconcileTransfers()).pairsCreated).toBe(1);
+        const edges: string[] = [];
+        let cursor: string | undefined;
+        do {
+          const page = await getTransferSuggestions({ limit: 7, cursor });
+          expect(
+            page.items.reduce((n, item) => n + item.candidates.length, 0),
+          ).toBeLessThanOrEqual(7);
+          for (const item of page.items)
+            for (const candidate of item.candidates) {
+              edges.push(`${item.outflow!.id}:${candidate!.id}`);
+            }
+          cursor = page.nextCursor ?? undefined;
+        } while (cursor);
+        expect(new Set(edges).size).toBe(144);
+        expect(edges).toEqual(
+          outs.flatMap((outId) => ins.map((inId) => `${outId}:${inId}`)),
+        );
+        expect(unique).toBeDefined();
+        expect((await reconcileTransfers()).pairsCreated).toBe(0);
+      });
+
       it("returns nothing when every match is unambiguous", async () => {
         await seedFixtures();
         await seedMatchablePair();
-        await expect(getTransferSuggestions()).resolves.toEqual([]);
+        await expect(getTransferSuggestions()).resolves.toEqual({
+          items: [],
+          hasMore: false,
+          nextCursor: null,
+        });
       });
     });
 
@@ -444,6 +550,56 @@ describe.skipIf(!hasTestDatabase())(
     // Manual marking
     // ───────────────────────────────────────────────────────────────────────────
     describe("markTransfer", () => {
+      it.each(["opening", "adjustment", "brokerage"])(
+        "preserves %s ownership for mark and unmark",
+        async (source) => {
+          await seedFixtures();
+          const aId = await insertTxn({
+            account: "Checking",
+            amount: -100,
+            isTransfer: true,
+            source,
+          });
+          const bId = await insertTxn({ account: "Savings", amount: 100 });
+          const before = await readTxn(aId);
+          await expect(markTransfer(aId, bId)).rejects.toThrow(
+            /original workflow/i,
+          );
+          await expect(unmarkTransfer(aId)).rejects.toThrow(
+            /original workflow/i,
+          );
+          expect(await readTxn(aId)).toEqual(before);
+          expect((await readTxn(bId)).is_transfer).toBe(false);
+        },
+      );
+
+      it.each(["inactive", "same-account", "same-sign", "zero"])(
+        "releases both manual legs after %s edit",
+        async (kind) => {
+          await seedFixtures();
+          const { outId, inId } = await seedMatchablePair();
+          await markTransfer(outId, inId);
+          const update = {
+            inactive: "is_active = false",
+            "same-account": `account_id = ${accountIds.Checking}`,
+            "same-sign": "amount = -50",
+            zero: "amount = 0",
+          }[kind]!;
+          await getTestPool()!.query(
+            `UPDATE transactions SET ${update} WHERE id = $1`,
+            [inId],
+          );
+          await reconcileTransfers();
+          for (const id of [outId, inId]) {
+            expect(await readTxn(id)).toMatchObject({
+              is_transfer: false,
+              transfer_peer_id: null,
+              transfer_source: null,
+            });
+          }
+        },
+      );
+
       it("marks a cross-currency pair that auto-detection would reject", async () => {
         await seedFixtures();
         const aId = await insertTxn({
@@ -458,6 +614,7 @@ describe.skipIf(!hasTestDatabase())(
         });
 
         await expect(markTransfer(aId, bId)).resolves.toEqual({ ok: true });
+        await reconcileTransfers();
 
         expect(await readTxn(aId)).toMatchObject({
           is_transfer: true,

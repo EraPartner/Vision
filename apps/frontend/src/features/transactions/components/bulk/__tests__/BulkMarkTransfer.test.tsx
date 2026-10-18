@@ -143,6 +143,9 @@ describe("pairing existing transfer records", () => {
         "inactive",
         "zero",
         "paired",
+        "opening",
+        "adjustment",
+        "brokerage",
     ] as const)("does not offer linking for %s selection", async (defect) => {
         const out = { ...outflow };
         const into = { ...inflow };
@@ -157,6 +160,7 @@ describe("pairing existing transfer records", () => {
         if (defect === "inactive") into.is_active = false;
         if (defect === "zero") into.amount = 0;
         if (defect === "paired") into.transferPeerId = 99;
+        if (["opening", "adjustment", "brokerage"].includes(defect)) into.transferSource = defect;
         const ids = rows.map((row) => row.id);
         if (defect === "missing") rows.pop();
         const user = userEvent.setup();

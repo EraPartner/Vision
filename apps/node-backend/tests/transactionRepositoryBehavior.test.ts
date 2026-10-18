@@ -399,7 +399,14 @@ describe("getUncategorisedWithCount", () => {
   it("parses total and strips total_count from rows", async () => {
     query
       .mockResolvedValueOnce({
-        rows: [{ ...txRow({ id: 1 }), total_count: 7, _row_order: "1" }],
+        rows: [
+          {
+            ...txRow({ id: 1 }),
+            total_count: 7,
+            _row_order: "1",
+            bank_sequence: "1000000001",
+          },
+        ],
       }) // main CTE
       .mockResolvedValueOnce({ rows: [] }); // tag lookup
     const res = await transactionRepository.getUncategorisedWithCount({
@@ -408,6 +415,7 @@ describe("getUncategorisedWithCount", () => {
     expect(res.total).toBe(7);
     expect(res.rows[0]).not.toHaveProperty("total_count");
     expect(res.rows[0]).not.toHaveProperty("_row_order");
+    expect(res.rows[0]).not.toHaveProperty("bank_sequence");
   });
 });
 
@@ -449,7 +457,9 @@ describe("create", () => {
     });
 
     expect(client.query.mock.calls[0]).toEqual([
-      "SELECT id FROM accounts WHERE id = $1 AND is_active = true",
+      expect.stringContaining(
+        "SELECT id FROM accounts WHERE id = $1 AND is_active = true",
+      ),
       [7],
     ]);
     expect(client.query.mock.calls[1]![1][1]).toBe(7);
@@ -482,7 +492,9 @@ describe("create", () => {
     } as TransactionCreateInput);
     expect(row!.id).toBe(3);
     expect(client.query.mock.calls[0]).toEqual([
-      "SELECT id FROM accounts WHERE id = $1 AND is_active = true",
+      expect.stringContaining(
+        "SELECT id FROM accounts WHERE id = $1 AND is_active = true",
+      ),
       [7],
     ]);
     const [sql, params] = client.query.mock.calls[1]!;
@@ -583,16 +595,26 @@ describe("update", () => {
   });
 
   it("maps transaction_date to date and returns enriched row", async () => {
-    query
-      .mockResolvedValueOnce({ rows: [{ id: 2 }] }) // update
-      .mockResolvedValueOnce({ rows: [txRow({ id: 2, recipient_name: "r" })] }) // fetch
-      .mockResolvedValueOnce({ rows: [] }); // tag lookup
+    query.mockImplementation(async (sql) => {
+      if (sql.startsWith("SELECT id, account_id FROM transactions")) {
+        return { rows: [{ id: 2, account_id: 7 }] };
+      }
+      if (sql.startsWith("SELECT id, is_active FROM accounts")) {
+        return { rows: [{ id: 7, is_active: true }] };
+      }
+      if (sql.includes("UPDATE transactions SET")) return { rows: [{ id: 2 }] };
+      if (sql.includes("SELECT t.*"))
+        return { rows: [txRow({ id: 2, recipient_name: "r" })] };
+      return { rows: [] };
+    });
     const row = await transactionRepository.update(2, {
       transaction_date: "2024-06-01",
       amount: 9,
     });
     expect(row!.id).toBe(2);
-    const sql = query.mock.calls[0]![0];
+    const sql = query.mock.calls.find(([statement]) =>
+      statement.includes("UPDATE transactions SET"),
+    )![0];
     expect(sql).toContain('"date" = $1');
     expect(sql).toContain("updated_at = NOW()");
   });
@@ -654,10 +676,28 @@ describe("update", () => {
 });
 
 describe("hardDelete", () => {
+  it("does not delete a transaction with a planned execution", async () => {
+    const client = { query: vi.fn().mockResolvedValue({ rows: [] }) };
+    withTransaction.mockImplementation(async (fn) => fn(client));
+    query.mockResolvedValueOnce({ rows: [{ id: 1 }], rowCount: 1 });
+    query.mockResolvedValueOnce({ rows: [{}], rowCount: 1 });
+    await expect(transactionRepository.hardDelete(1)).rejects.toMatchObject({
+      status: 409,
+    });
+    expect(
+      client.query.mock.calls.some(([sql]) => String(sql).startsWith("DELETE")),
+    ).toBe(false);
+  });
   it("reflects rowCount", async () => {
-    queryPrepared.mockResolvedValueOnce({ rowCount: 1 });
+    let remaining = 1;
+    const client = {
+      query: vi.fn(async (sql: string) => ({
+        rows: [],
+        rowCount: sql.startsWith("DELETE") ? remaining-- : 0,
+      })),
+    };
+    withTransaction.mockImplementation(async (fn) => fn(client));
     expect(await transactionRepository.hardDelete(1)).toBe(true);
-    queryPrepared.mockResolvedValueOnce({ rowCount: 0 });
     expect(await transactionRepository.hardDelete(1)).toBe(false);
   });
 });

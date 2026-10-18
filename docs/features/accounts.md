@@ -2,7 +2,7 @@
 title: Accounts
 type: feature
 status: active
-date: 2026-10-10
+date: 2026-10-11
 updated: 2026-10-10
 tags:
   [
@@ -64,6 +64,19 @@ related_code:
 > `alembic/manual/contract_drop_bank_account/README.md`.
 
 The budgeting accounts surface: every bank/cash/liability entity ([[docs/adr/088-accounts-entity|ADR-088]]), its computed balance, and the workflows for keeping those balances trustworthy. Rebuilt under [[docs/adr/107-accounts-budgeting-ux-remake|ADR-107]] around three questions — _what do I have_ (hub), _is it right_ (ledger + provenance), _how do I fix it_ (reconcile).
+
+## Ledger ordering and lifecycle
+
+Same-day imported anchors use retained bank sequence where available, independently of import
+arrival order. Unsequenced rows follow sequenced rows and use ID order; unknown historical
+chronology is not guessed. See [[docs/adr/199-bank-chronology]].
+
+Ledger creation/import holds a shared lock on active accounts through commit. Ledger edits,
+deletions and import rollback lock affected accounts in ID order before locking transaction rows.
+Closing takes an exclusive account lock before computing adjustments. A writer that loses the
+race must revalidate the closed state and asks the user to reopen the account; it cannot add a
+new balance after closing. Metadata-only edits do not require reopening. Concurrency scenarios
+are authored but remain unexecuted pending disposable PostgreSQL availability.
 
 ## Architecture: Glance → Overview → Ledger
 

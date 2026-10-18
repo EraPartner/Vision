@@ -928,12 +928,14 @@ export default function TransactionsPage() {
                                                 selectedIds.has(row.id),
                                             )
                                             .map((row) => {
-                                                const peer = allItems.find(
+                                                const source = allItems.find(
                                                     (item) =>
                                                         item.id === row.id,
-                                                )?.transfer_peer_id;
+                                                );
+                                                const peer = source?.transfer_peer_id;
                                                 return {
                                                     ...row,
+                                                    transferSource: source?.transfer_source,
                                                     transferPeerId:
                                                         peer == null
                                                             ? undefined

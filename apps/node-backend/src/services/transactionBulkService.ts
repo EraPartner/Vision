@@ -1,3 +1,5 @@
+import { protectPlannedExecutions } from "../repositories/plannedExecutionGuard.ts";
+import { lockAccountsForLedgerMutation } from "../repositories/accountLifecycleLock.ts";
 /**
  * Transaction bulk-action service — business logic for the
  * POST /api/transactions/bulk-{tag,update,delete} endpoints.
@@ -200,6 +202,7 @@ export async function bulkUpdateTransactions({
   setClauses.push("updated_at = NOW()");
 
   const updated = await withTransaction(async (client) => {
+    if ("is_active" in fields) await lockAccountsForLedgerMutation(client, txIds);
     const r = await client.query(
       `UPDATE transactions SET ${setClauses.join(", ")} WHERE id = ANY($1::int[]) RETURNING id`,
       params,
@@ -242,6 +245,8 @@ export async function bulkDeleteTransactions({
   const attachmentPaths =
     await attachmentRepository.listPathsByTransactionIds(txIds);
   const deleted = await withTransaction(async (client) => {
+    await lockAccountsForLedgerMutation(client, txIds);
+    await protectPlannedExecutions(txIds);
     const r = await client.query(
       `DELETE FROM transactions WHERE id = ANY($1::int[]) RETURNING id`,
       [txIds],

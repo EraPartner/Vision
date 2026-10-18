@@ -41,9 +41,10 @@ interface UseTransactionsParams {
     search?: string;
 }
 
-export function useTransactions(params?: UseTransactionsParams) {
+export function useTransactions(params?: UseTransactionsParams, enabled = true) {
     const query = useQuery({
         queryKey: transactionKeys.list(params),
+        enabled,
         queryFn: () => apiClient.getTransactions(params),
         staleTime: QUERY_STALE_TIME_MS.FREQUENT,
         placeholderData: (prev) => prev, // keep previous data while fetching (smooth pagination)
