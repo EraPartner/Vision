@@ -61,7 +61,7 @@
     "d3-sankey": "^0.12.3",
     "date-fns": "^4.3.0",
     "decimal.js": "^10.6.0",
-    "framer-motion": "^14.1.0",
+    "framer-motion": "^12.42.2",
     "lucide-react": "^1.55.0",
     "react": "^19.3.0",
     "react-day-picker": "^10.0.2",
