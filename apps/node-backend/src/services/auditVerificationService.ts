@@ -474,5 +474,3 @@ export async function verifyAuditHistory({
     legacyUnverified,
   };
 }
-
-export default { verifyAuditHistory };

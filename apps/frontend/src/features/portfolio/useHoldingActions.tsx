@@ -7,9 +7,6 @@ import { AddPortfolioTxnDialog } from "./AddPortfolioTxnDialog";
 import { HoldingActionsMenu } from "./assetPageParts";
 import { InvestmentDetailDialog } from "./InvestmentDetailDialog";
 
-export const toneClass = (value: number) =>
-    value > 0 ? "text-gain" : value < 0 ? "text-loss" : "text-foreground";
-
 interface UseHoldingActionsOptions {
     deleteTitleKey: string;
     /** Receives {name}. */

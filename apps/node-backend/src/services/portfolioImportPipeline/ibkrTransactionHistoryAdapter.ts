@@ -282,8 +282,3 @@ export async function parseIbkrTransactionHistory(
   );
   return rows;
 }
-
-export default {
-  name: "ibkr_transaction_history",
-  parseWithConfig: parseIbkrTransactionHistory,
-};

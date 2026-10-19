@@ -28,7 +28,6 @@ import { logger } from "../config/logger.ts";
 import type { PlannedMatchCandidateRow } from "../types/rows.ts";
 
 import { matchesTolerance, DATE_WINDOW_DAYS } from "../lib/plannedMatching.ts";
-export type { PlannedLike, TxLike } from "../lib/plannedMatching.ts";
 const SUGGESTION_LOOKBACK_DAYS = 45;
 
 function calendarDayOrdinal(value: unknown): number | undefined {
@@ -244,5 +243,3 @@ export async function getMatchSuggestions(): Promise<PlannedMatchSuggestion[]> {
   }
   return suggestions;
 }
-
-export default { matchesTolerance, autoLinkTransactions, getMatchSuggestions };

@@ -54,9 +54,6 @@ export const savedAnalysisTableRowSchema = z
     updated_at: pgTimestamptz,
   })
   .describe("saved_analyses row");
-export type SavedAnalysisTableRow = z.output<
-  typeof savedAnalysisTableRowSchema
->;
 
 /**
  * `listSavedAnalyses` / `getSavedAnalysis`: the row joined to its current

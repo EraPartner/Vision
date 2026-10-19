@@ -1,5 +1,4 @@
 import { useMemo } from "react";
-import { CATEGORY_FETCH_LIMIT } from "@/lib/categoriesPreload";
 import { useAllCategories, useCategoryTree } from "@/hooks/useCategories";
 import { useSettings } from "@/stores/hydration/SettingsHydration";
 
@@ -15,13 +14,6 @@ import { useSettings } from "@/stores/hydration/SettingsHydration";
  * different income/spending/net totals across screens. Centralizing the fetch
  * (one key, one limit) makes the exclusion set identical everywhere.
  */
-
-// One limit for the whole app. Categories rarely number in the hundreds; if a
-// deployment ever exceeds this, the fetch is uniform across screens (no per-screen
-// divergence) and the cap is logged rather than silently truncating. Defined in
-// lib/categoriesPreload (which owns the request, so boot and hook issue exactly
-// the same one); re-exported here, where it has always lived for consumers.
-export { CATEGORY_FETCH_LIMIT };
 
 export type ExclusionScopeName = "dashboard" | "statistics";
 

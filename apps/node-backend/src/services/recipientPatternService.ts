@@ -27,9 +27,7 @@ import type {
 import { buildSetClauses } from '../lib/sqlClauses.ts';
 import { logger } from '../config/logger.ts';
 import { ValidationError, NotFoundError } from '../middleware/errorHandler.ts';
-import type { RecipientMatchPatternRow } from '../types/rows.ts';
-
-export type { ActivePatternRow, RecipientMatchPatternRow };
+export type { ActivePatternRow };
 
 const MIN_LCP_LENGTH = 8;
 

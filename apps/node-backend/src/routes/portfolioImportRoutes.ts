@@ -31,8 +31,8 @@ import { cleanup } from "../lib/csvUpload.ts";
 import {
   portfolioUpload,
   portfolioUploadErrorTranslator,
-  assertPortfolioUploadSupported,
 } from "../lib/portfolioUpload.ts";
+import { assertPortfolioUploadSupported } from "../services/portfolioImportPipeline/uploadSupport.ts";
 import { streamImport } from "../lib/importProgress.ts";
 import { registerPortfolioImportProbeRoute } from "./portfolioImportProbeRoutes.ts";
 import { runPortfolioImportPipeline } from "../services/portfolioImportPipeline/index.ts";

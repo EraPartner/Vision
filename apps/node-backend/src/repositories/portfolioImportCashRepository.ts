@@ -237,7 +237,6 @@ export async function readCashImagesForUpdate(
 // Categories and ordinary bank pairing can change after adoption. They do not
 // weaken the immutable financial/provenance after-image used for restoration.
 const IBKR_CASH_SNAPSHOT_SQL = `(${CASH_SNAPSHOT_SQL}) - ARRAY['category_id','is_transfer','transfer_source','transfer_peer_id']::text[]`;
-export const __IBKR_CASH_SNAPSHOT_SQL = IBKR_CASH_SNAPSHOT_SQL;
 
 /** The compared financial/provenance subset of an IBKR cash image. */
 export type IbkrCashFinancialImage = {

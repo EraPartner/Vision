@@ -17,4 +17,3 @@ export async function computeAverageVsCurrent({
   return buildEnvelope(data, { source: 'live' });
 }
 
-export default { computeAverageVsCurrent };

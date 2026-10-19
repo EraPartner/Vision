@@ -1,16 +1,12 @@
 import { QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-    apiClient,
-    type SavedParserConfig,
-    type CustomParserConfigPayload,
-} from "@/lib/api";
+import { apiClient, type CustomParserConfigPayload } from "@/lib/api";
 import { toast } from "sonner";
 import { importKeys } from "@/lib/queryKeys";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 
-export type { SavedParserConfig, CustomParserConfigPayload };
+export type { CustomParserConfigPayload };
 
 export function useCustomParserConfigs() {
     return useQuery({

@@ -4,12 +4,7 @@
  * Buckets history by (day-of-week, day-of-month) with hierarchical fallback
  * for sparse cells: (dow, dom) → (dow) → (overall). Returns per-cell mean
  * and standard deviation used by parametric-MC and Holt-Winters init.
- *
- * Holiday flagging is optional and orthogonal; callers decide whether to
- * overlay a dummy adjustment.
  */
-
-import { isBelgianHoliday } from "./holidays/be.ts";
 
 const MIN_BUCKET_SAMPLES = 3;
 
@@ -100,13 +95,3 @@ export function lookupBucket(
   if (byDow && byDow.n >= MIN_BUCKET_SAMPLES) return byDow;
   return buckets.overall;
 }
-
-export { isBelgianHoliday };
-
-export default {
-  buildSeasonalityBuckets,
-  lookupBucket,
-  dayOfWeek,
-  dayOfMonth,
-  isBelgianHoliday,
-};

@@ -41,7 +41,7 @@ import { getYahooClient } from "./prices/yahooClient.ts";
 import type { InvestmentRow, PricePoint } from "../types/rows.ts";
 import type { LivePriceQuote } from "./prices/priceProviderRegistry.ts";
 
-export type { InvestmentRow, PricePoint, LivePriceQuote };
+export type { InvestmentRow, PricePoint };
 
 /**
  * The provider configuration `fetchHistoricalPrices` reads: an investment row

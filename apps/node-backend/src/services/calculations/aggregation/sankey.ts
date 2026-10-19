@@ -231,5 +231,3 @@ function toCents(n: number) {
 function fromCents(cents: number) {
   return cents / 100;
 }
-
-export default { computeSankeyFlow };

@@ -215,14 +215,6 @@ function _resetForTests() {
   inMemoryFallback.clear();
 }
 
-export default {
-  recordAccuracy,
-  getAccuracyHistory,
-  getLatestAccuracyByMethod,
-  getAllAccuracyHistory,
-  isAccuracyTableHealthy,
-};
-
 export {
   _resetForTests as __resetForTests,
   getAccuracyHistory as __getAccuracyHistory,

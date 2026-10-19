@@ -189,5 +189,3 @@ export async function executePlanned({
     return { current, duplicate };
   });
 }
-
-export default { executePlanned };

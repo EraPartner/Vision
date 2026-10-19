@@ -397,8 +397,3 @@ export async function parseNexoProSpotHistory(
   );
   return rows;
 }
-
-export default {
-  name: "nexo_pro_spot_history",
-  parseWithConfig: parseNexoProSpotHistory,
-};

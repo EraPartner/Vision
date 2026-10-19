@@ -254,14 +254,3 @@ export function computeOwedSummary(rows: SplitOutstandingRow[]): OwedSummaryRow[
     .sort((a, b) => b.remaining - a.remaining);
 }
 
-export default {
-  roundToCents,
-  computeBulkSplitAmount,
-  roundToMoneyPrecision,
-  normalizeMoneyAmount,
-  validateSplitAllocation,
-  validateBatchSplitAllocation,
-  validatePaymentAmount,
-  computeSplitRemaining,
-  computeOwedSummary,
-};

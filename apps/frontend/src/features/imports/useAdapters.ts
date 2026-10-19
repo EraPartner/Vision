@@ -5,12 +5,6 @@ import { importKeys } from "@/lib/queryKeys";
 import { toast } from "sonner";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 
-export interface BankAdapter {
-    key: string;
-    name: string;
-    adapter_class?: string;
-}
-
 export function useAdapters(enabled = true) {
     const { t } = useLanguage();
 

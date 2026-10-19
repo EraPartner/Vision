@@ -11,17 +11,9 @@
  * 0029) guarantees that an exact-normalized match returns at most one row.
  */
 import { query } from '../../database/connection.ts';
-import {
-  cleanRecipientName,
-  cleanKbcRecipientName,
-  normalizeToUppercase,
-  normalizeForMatching,
-} from '../../lib/textNormalization.ts';
+import { normalizeForMatching } from '../../lib/textNormalization.ts';
 
 export {
-  cleanRecipientName,
-  cleanKbcRecipientName,
-  normalizeToUppercase,
   normalizeForMatching,
 };
 

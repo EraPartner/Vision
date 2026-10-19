@@ -4,14 +4,9 @@ export {
     partnerBShare,
     attributeToPartners,
     householdWithRecordedIncome,
-    hasPartnerOrJointAmounts,
     householdForRecordedIncome,
 } from "@vision/shared-utils/belgian-tax/recordedIncomeAttribution";
-export type {
-    AccountOwner,
-    OwnerAmounts,
-    PartnerAmounts,
-} from "@vision/shared-utils/belgian-tax/recordedIncomeAttribution";
+export type { PartnerAmounts } from "@vision/shared-utils/belgian-tax/recordedIncomeAttribution";
 import type { PartnerAmounts } from "@vision/shared-utils/belgian-tax/recordedIncomeAttribution";
 import type { DeductionFieldMapping } from "./deductionCandidateFields";
 import type {

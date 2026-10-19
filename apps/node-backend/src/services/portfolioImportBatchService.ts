@@ -74,7 +74,6 @@ export {
   listBatches,
   getBatch,
   overrideInvestment,
-  setBatchAccount,
 } from "../repositories/portfolioImportBatchRepository.ts";
 
 /** One review group: a holding (or raw symbol) and its staged rows. */

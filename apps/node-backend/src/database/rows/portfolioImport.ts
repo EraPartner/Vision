@@ -215,10 +215,6 @@ export const portfolioImportBatchRowSchema = z
     is_brokerage: z.boolean(),
   })
   .describe("portfolio_import_batches row");
-export type PortfolioImportBatchRow = z.output<
-  typeof portfolioImportBatchRowSchema
->;
-
 /** `BATCH_COLUMNS` of the review/history list and detail reads. */
 export const portfolioImportBatchSummaryRowSchema =
   portfolioImportBatchRowSchema

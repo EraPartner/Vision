@@ -66,7 +66,6 @@ import type {
   unlinkedTransactionRowSchema,
 } from "../database/rowSchemas.ts";
 import type {
-  assetPriceHistoryRowSchema,
   instrumentProviderMapRowSchema,
   portfolioMathTxRowSchema,
   portfolioPerformanceSnapshotRowSchema,
@@ -183,7 +182,6 @@ export type PlannedForecastRow = z.output<typeof plannedForecastRowSchema>;
 export type {
   EnrichedRecipientRow,
   RecipientBankAccountRow,
-  RecipientMatchPatternRow,
   RecipientRow,
 } from "../database/rows/catalog.ts";
 
@@ -273,20 +271,6 @@ export type FormattedSplit = {
   is_settled: boolean;
   created_at: Date;
   updated_at: Date;
-};
-
-/**
- * `FormattedSplit` plus the parent-transaction columns `getOwedByRecipient`
- * projects and the derived `remaining`.
- */
-export type OwedSplitDetailRow = FormattedSplit & {
-  transaction_date: Date;
-  transaction_memo: string | null;
-  transaction_amount: number;
-  transaction_currency: string | null;
-  bank_account: string | null;
-  transaction_recipient_name: string | null;
-  remaining: number;
 };
 
 /** A raw row of `split_payments` (`SELECT *` / `RETURNING *`). */
@@ -590,22 +574,7 @@ export type { ImportStagingRow } from "../database/rows/imports.ts";
  * from their row-contract schemas (ADR-193) so the type and the runtime check
  * cannot drift.
  */
-export type {
-  PortfolioImportBatchRow,
-  PortfolioImportStagingRow,
-} from "../database/rows/portfolioImport.ts";
-
-// ---------------------------------------------------------------------------
-// Asset price history
-// ---------------------------------------------------------------------------
-
-/**
- * A row of `asset_price_history`. `close_price` is NUMERIC so pg emits it as a
- * string, and `price_date` is a DATE so pg emits a local-midnight `Date` —
- * `dateOnlyToTimestampMs` exists precisely to unpick that. Derived from
- * `assetPriceHistoryRowSchema` (src/database/rows/portfolio.ts).
- */
-export type AssetPriceHistoryRow = z.output<typeof assetPriceHistoryRowSchema>;
+export type { PortfolioImportStagingRow } from "../database/rows/portfolioImport.ts";
 
 /**
  * One point of a price series as the price layer passes it around: an
@@ -694,8 +663,6 @@ export type RateTable = Record<string, number>;
 // ---------------------------------------------------------------------------
 
 /** A row of `belgian_inflation_rates`, derived from its checked row schema. */
-export type { BelgianInflationRateRow } from "../database/rows/info.ts";
-
 /**
  * The service's normalized shape for one month's inflation rate — used both
  * for DB-loaded rows (after `monthKeyFromDatabaseValue`/`Number()`) and rates

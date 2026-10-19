@@ -992,8 +992,3 @@ export async function parseSaxoTransactionHistory(
   );
   return rows;
 }
-
-export default {
-  name: "saxo_transaction_history",
-  parseWithConfig: parseSaxoTransactionHistory,
-};

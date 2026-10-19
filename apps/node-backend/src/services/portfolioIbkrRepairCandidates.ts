@@ -3,7 +3,7 @@ import { toDecimal } from "../lib/money.ts";
 import type { Decimal, DecimalInput } from "../lib/money.ts";
 import type { ReconciliationSourceRow } from "../repositories/portfolioImportReconciliationRepository.ts";
 
-export type { Decimal, DecimalInput };
+export type { DecimalInput };
 /** A portfolio transaction image: a legacy candidate or the imported copy. */
 export interface RepairCandidate {
   id: number | string;

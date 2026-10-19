@@ -33,4 +33,3 @@ export async function computeBankBalances({
   });
 }
 
-export default { computeBankBalances };

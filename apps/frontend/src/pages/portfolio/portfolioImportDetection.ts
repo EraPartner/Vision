@@ -11,10 +11,7 @@ import type {
     PortfolioImportSource,
 } from "@vision/shared-utils/portfolio-import-detection";
 export { detectPortfolioImportRecords } from "@vision/shared-utils/portfolio-import-detection";
-export type {
-    PortfolioImportSource,
-    DetectedPortfolioImport,
-} from "@vision/shared-utils/portfolio-import-detection";
+export type { DetectedPortfolioImport } from "@vision/shared-utils/portfolio-import-detection";
 const MAX_STATEMENT_BYTES = 50 * 1024 * 1024;
 const IBKR_FUNDING_SHEETS = new Set(["Deposit", "Withdrawal"]);
 

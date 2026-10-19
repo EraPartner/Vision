@@ -37,8 +37,6 @@ import type { QueryRunner } from "../types/rows.ts";
 import { checkRows } from "../database/rowContracts.ts";
 import { dbEditorAuditRowSchema } from "../database/rows/admin.ts";
 
-export type { QueryRunner };
-
 /**
  * Column metadata for one table column, as introspected from
  * `information_schema.columns` + the primary-key query. Genuinely dynamic —
@@ -1054,5 +1052,3 @@ function mapDbError(error: unknown): unknown {
       return err;
   }
 }
-
-export default { getTableMeta, readRows, applyMutations };

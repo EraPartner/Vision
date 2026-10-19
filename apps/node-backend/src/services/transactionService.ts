@@ -233,7 +233,7 @@ async function unmarkTransfer(id: number) {
   scheduleReconcile();
 }
 
-export const transactionService = {
+const transactionService = {
   ...transactionRepository,
   createManualTransaction,
   update,

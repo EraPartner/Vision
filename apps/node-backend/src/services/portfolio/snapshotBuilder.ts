@@ -21,10 +21,6 @@ import {
 import type {
   FxRateDbRow,
   SnapshotFxHistoryDbRow,
-  SnapshotInflationDbRow,
-  SnapshotNonUnitInvestmentDbRow,
-  SnapshotPriceHistoryDbRow,
-  SnapshotUnitInvestmentDbRow,
 } from "../../database/rows/portfolio.ts";
 import { logger } from "../../config/logger.ts";
 import { portfolioTransactionRepository } from "../../repositories/portfolioTransactionRepository.ts";
@@ -45,22 +41,6 @@ import type { DecimalInput } from "../../lib/money.ts";
 import { asPartitionedTxns } from "./portfolioTransactionRules.ts";
 
 export type Decimal = import("decimal.js").default;
-
-/**
- * Unit-priced (stock/etf/crypto/metals) `investments` row, as narrowed by the
- * day walk's seed query. Derived from the checked row schema.
- */
-export type UnitInvestmentRow = SnapshotUnitInvestmentDbRow;
-
-/**
- * Non-unit (savings/bond/real_estate) `investments` row, as narrowed by the
- * day walk's seed query.
- */
-export type NonUnitInvestmentRow = SnapshotNonUnitInvestmentDbRow;
-
-export type PriceHistoryRow = SnapshotPriceHistoryDbRow;
-
-export type InflationRateRow = SnapshotInflationDbRow;
 
 export type FxLatestRow = FxRateDbRow;
 

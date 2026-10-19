@@ -717,8 +717,4 @@ export function getOllamaClient() {
   return defaultClient;
 }
 
-export function __resetOllamaClientForTests() {
-  defaultClient = null;
-}
-
 export { createOllamaClient as __createOllamaClient };

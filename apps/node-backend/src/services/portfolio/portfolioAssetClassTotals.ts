@@ -111,9 +111,6 @@ export function buildHoldingTotals(rows: readonly TotalsInput[]) {
     usedFallbackRate: rows.some((row) => row.usedFallbackRate === true),
   };
 }
-
-export type HoldingTotals = ReturnType<typeof buildHoldingTotals>;
-
 /** One entry per asset class present in `summaries`, in canonical class order. */
 export function buildAssetClassTotals(summaries: readonly TotalsInput[]) {
   const byClass = new Map<string, TotalsInput[]>();

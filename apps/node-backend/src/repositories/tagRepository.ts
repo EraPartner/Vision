@@ -18,7 +18,7 @@ import type { TagRow } from '../types/rows.ts';
 
 export type { TagRow };
 
-export const tagRepository = {
+const tagRepository = {
   /**
    * List tags, optionally filtered by active status.
    *

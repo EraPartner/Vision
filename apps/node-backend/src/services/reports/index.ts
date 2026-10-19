@@ -52,9 +52,6 @@ import type {
 import type { SectionEntry } from "./sectionCatalog.ts";
 
 export type { Period, PrecomputedHousehold, PrecomputedPIT, ReportHousehold, TaxProfile };
-
-export type PeriodKind = Period["kind"];
-
 export type ThemeTokens = {
   primary?: string | undefined;
   accent?: string | undefined;

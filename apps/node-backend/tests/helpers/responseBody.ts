@@ -47,11 +47,3 @@ export function bodyAt(res: { body: unknown }, ...keys: BodyKey[]): unknown {
 export function listAt(value: unknown, ...keys: BodyKey[]): unknown[] {
   return asList(read(value, keys), keys);
 }
-
-/** `res.body.<keys>`, which must be an array (as calling an array method requires). */
-export function bodyList(
-  res: { body: unknown },
-  ...keys: BodyKey[]
-): unknown[] {
-  return asList(read(res.body, keys), keys);
-}

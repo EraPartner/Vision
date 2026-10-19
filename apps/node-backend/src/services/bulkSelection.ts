@@ -28,7 +28,7 @@ import {
   validateIntArray,
   validateNumber,
 } from "../lib/validation.ts";
-import { EXPORT_JOINS_SQL } from "./transactionExport.ts";
+import { EXPORT_JOINS_SQL } from "./transactionJoins.ts";
 import type { TransactionWhereOptions } from "../lib/filterBuilder.ts";
 
 const DEFAULT_ID_CAP = 500;

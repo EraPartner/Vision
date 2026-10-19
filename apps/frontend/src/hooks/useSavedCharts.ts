@@ -1,12 +1,10 @@
 import { QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiClient, type SavedChart, type SavedChartCreate } from "@/lib/api";
+import { apiClient, type SavedChartCreate } from "@/lib/api";
 import { toast } from "sonner";
 import { savedChartKeys } from "@/lib/queryKeys";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
-
-export type { SavedChart };
 
 export function useSavedCharts() {
     return useQuery({

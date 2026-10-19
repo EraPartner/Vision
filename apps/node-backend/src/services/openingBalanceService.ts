@@ -205,5 +205,3 @@ export async function setOpeningBalance(
     return { transaction: upserted ?? null, warning };
   });
 }
-
-export default { setOpeningBalance, normalizeOpeningBalance };

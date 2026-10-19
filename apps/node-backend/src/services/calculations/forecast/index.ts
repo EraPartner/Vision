@@ -1003,6 +1003,5 @@ async function augmentPayloadWithBreakdown(
   return { ...payload, category_breakdown: categoryBreakdown };
 }
 
-export default { computeCashflowForecast, computeCashflowForecastRolling };
 
 export { filterHash as __filterHash };

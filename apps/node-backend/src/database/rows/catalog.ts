@@ -10,7 +10,6 @@
  */
 import { z } from "zod";
 import {
-  idRowSchema,
   pgBigint,
   pgDate,
   pgInt,
@@ -25,8 +24,6 @@ import {
 // Re-exported so catalog callers keep one import site; defined once elsewhere.
 export { idRowSchema } from "../rowSchemas.ts";
 export { requireRow } from "../rowContracts.ts";
-export type IdRow = z.output<typeof idRowSchema>;
-
 // ---------------------------------------------------------------------------
 // Categories
 // ---------------------------------------------------------------------------
@@ -211,9 +208,6 @@ export const recipientMatchPatternRowSchema = z
     updated_at: pgTimestamptz,
   })
   .describe("recipient_match_patterns row");
-export type RecipientMatchPatternRow = z.output<
-  typeof recipientMatchPatternRowSchema
->;
 
 /**
  * `loadActivePatterns`: `updated_at` is cast to text in SQL (it is used

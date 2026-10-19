@@ -338,40 +338,6 @@ export async function applyPlannedFieldUpdate(
   );
   return (r.rowCount ?? 0) > 0;
 }
-
-/**
- * Apply a parameterized field update and hydrate the resulting row.
- */
-export async function updatePlannedFields(
-  id: number,
-  sanitized: Record<string, unknown>,
-): Promise<HydratedPlannedTransactionRow | null> {
-  const {
-    clauses: setClauses,
-    params,
-    nextIdx: paramIdx,
-  } = buildSetClauses(sanitized, { quote: true });
-  if (setClauses.length === 0) return plannedTransactionRepository.getById(id);
-  setClauses.push("updated_at = NOW()");
-  params.push(id);
-  const rows = await queryRows(
-    plannedTransactionListRowSchema,
-    `WITH updated AS (
-       UPDATE planned_transactions
-       SET ${setClauses.join(", ")}
-       WHERE id = $${paramIdx}
-       RETURNING *
-     )
-     SELECT ${PLANNED_SELECT_FIELDS}
-     FROM updated pt
-     ${PLANNED_JOINS}`,
-    params,
-  );
-  const [row] = rows;
-  if (!row) return null;
-  return hydratePlannedRow(row, id);
-}
-
 /**
  * Replace one planned transaction's amortization rows using the caller's
  * transaction client.

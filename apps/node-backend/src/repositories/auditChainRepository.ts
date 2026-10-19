@@ -294,10 +294,3 @@ export async function recordAuditCheckpoint(
     return { id: row.id, createdAt: row.created_at };
   });
 }
-
-export default {
-  appendAuditEvent,
-  readAuditSegment,
-  readAuditHead,
-  recordAuditCheckpoint,
-};

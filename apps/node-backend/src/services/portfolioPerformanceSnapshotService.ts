@@ -26,10 +26,6 @@ import {
 } from "./portfolio/portfolioSummaryService.ts";
 import { addAll, toDecimal } from "../lib/money.ts";
 import type { Decimal } from "../lib/money.ts";
-import type { PortfolioPerformanceSnapshotRow } from "../types/rows.ts";
-
-export type { PortfolioPerformanceSnapshotRow };
-
 /** One `getSnapshots` row, as served to the performance chart. */
 export type PortfolioPerformanceSnapshot = {
   snapshot_date: Date;
@@ -281,14 +277,3 @@ async function getLatestSnapshot(currency = "EUR") {
 }
 
 export { getLatestSnapshot as __getLatestSnapshot };
-
-export default {
-  computeAndStoreSnapshots,
-  getSnapshots,
-  getBrokerSnapshots,
-  getLatestSnapshot,
-  computeMetrics,
-  computeHeatmap,
-  getBreakdownSummary,
-  getPortfolioSummary,
-};

@@ -7,7 +7,6 @@
 
 import { queryRows } from "../../database/rowContracts.ts";
 import { taxTxnRowSchema } from "../../database/rows/info.ts";
-import type { TaxTxnRow } from "../../database/rows/info.ts";
 import {
   convertWithRates,
   loadCurrentRates,
@@ -97,8 +96,6 @@ export type ReportHousehold = {
  * COALESCE with a numeric literal, so they stay strings here (parsed via
  * `Number()`/`convert()` below), matching `PortfolioMathTxRow` in types/rows.ts.
  */
-export type { TaxTxnRow };
-
 /**
  * One month's tax/fee totals, keyed 'YYYY-MM' in `byMonth`. Carries the four
  * split tax components (no combined `taxes` field — renderers sum

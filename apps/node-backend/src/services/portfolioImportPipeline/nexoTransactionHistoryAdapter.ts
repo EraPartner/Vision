@@ -557,8 +557,3 @@ export async function parseNexoTransactionHistory(
   );
   return rows;
 }
-
-export default {
-  name: "nexo_transaction_history",
-  parseWithConfig: parseNexoTransactionHistory,
-};

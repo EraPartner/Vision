@@ -32,20 +32,13 @@ import type { z } from "zod";
 import type {
   FormattedSplit,
   FormattedSplitPayment,
-  OwedSplitDetailRow,
   QueryRunner,
   SplitPaymentRow,
   SplitTotals,
   TransactionSplitRow,
 } from "../types/rows.ts";
 
-export type {
-  QueryRunner,
-  FormattedSplit,
-  FormattedSplitPayment,
-  OwedSplitDetailRow,
-  SplitTotals,
-};
+export type { QueryRunner, FormattedSplit, FormattedSplitPayment, SplitTotals };
 
 /**
  * A raw `getOwedByRecipientRows` row: the split columns plus its parent

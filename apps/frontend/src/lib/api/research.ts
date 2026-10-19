@@ -33,7 +33,6 @@ import {
     ResearchSearchSchema,
 } from '@vision/types/contracts';
 import type {
-    InstrumentProviderMapping,
     MappingAuditResponse,
     MappingKeyType,
     MappingResolveResponse,
@@ -314,4 +313,3 @@ export async function clearResearchProviderKey(provider: string): Promise<void> 
     });
 }
 
-export type { InstrumentProviderMapping };

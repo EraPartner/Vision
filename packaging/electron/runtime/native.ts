@@ -1,7 +1,6 @@
 import { verifyRuntimeManifest } from "./runtime-manifest";
 export {
   verifyRuntimeManifest,
-  type RuntimeManifestVerification,
 } from "./runtime-manifest";
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -1369,7 +1368,7 @@ interface BackendCommand {
   cwd: string | undefined;
 }
 
-export type NativeRuntime = ReturnType<typeof createNativeRuntime>;
+type NativeRuntime = ReturnType<typeof createNativeRuntime>;
 
 export function createNativeRuntime(options: NativeRuntimeOptions) {
   const userDataDir = path.resolve(options.userDataDir);

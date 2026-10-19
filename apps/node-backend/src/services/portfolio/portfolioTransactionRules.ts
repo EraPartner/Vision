@@ -33,10 +33,6 @@ import { PORTFOLIO_RECURRENCE_INTERVALS } from "@vision/types/recurrence";
 import type { PartitionedTxnLike } from "@vision/shared-utils/portfolio";
 import type { DecimalInput } from "../../lib/money.ts";
 import type { PortfolioUnitEventRow } from "../../repositories/portfolioTxRepo.reads.ts";
-
-export type PortfolioTransactionRow =
-  import("../../types/rows.ts").PortfolioTransactionRow;
-
 /**
  * The caller-facing portfolio-transaction payload, before/after
  * {@link normalizeTransactionPayload} fills in the derived unit math.

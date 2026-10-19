@@ -467,8 +467,3 @@ export function getIbkrFundingPrimaryEvidence(
     return undefined;
   }
 }
-
-export default {
-  name: "ibkr_funding_history",
-  parseWithConfig: parseIbkrFundingHistory,
-};

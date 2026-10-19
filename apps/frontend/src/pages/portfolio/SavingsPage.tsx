@@ -18,10 +18,8 @@ import {
     FactRow,
     Figure,
 } from "@/features/portfolio/assetPageParts";
-import {
-    toneClass,
-    useHoldingActions,
-} from "@/features/portfolio/useHoldingActions";
+import { toneClass } from "@/features/portfolio/holdingTone";
+import { useHoldingActions } from "@/features/portfolio/useHoldingActions";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";

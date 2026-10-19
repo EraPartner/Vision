@@ -10,8 +10,6 @@ import { buildSetClauses, buildLimitOffset } from "../lib/sqlClauses.ts";
 
 import type { SavedChartRow } from "../types/rows.ts";
 
-export type { SavedChartRow };
-
 /**
  * The camelCase field bag the routes pass for create/update. All fields are
  * optional on update; create requires the NOT NULL ones.

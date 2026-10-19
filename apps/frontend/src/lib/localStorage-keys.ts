@@ -69,12 +69,12 @@ export const LOCAL_STORAGE_KEYS = Object.freeze({
     SIDEBAR_HIDDEN_SECTIONS: "vision.sidebar.hiddenSections",
 } as const);
 
-export type LocalStorageKey =
-    (typeof LOCAL_STORAGE_KEYS)[keyof typeof LOCAL_STORAGE_KEYS];
-
 /**
  * Keys that are intentionally excluded from backup snapshots.
  * Transient state that should not carry over to a restored instance.
+ * Read as source text by apps/node-backend/tests/backup-coverage.test.ts.
+ *
+ * @public
  */
 export const LOCAL_STORAGE_EXCLUDED_KEYS: ReadonlyArray<string> = Object.freeze(
     [

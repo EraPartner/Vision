@@ -36,7 +36,7 @@ interface SuggestedDeductionsCardProps {
     suggestions: BelgianTaxDashboardSuggestion[] | undefined;
 }
 
-export function SuggestedDeductionsCard({
+function SuggestedDeductionsCard({
     suggestions: serverSuggestions,
 }: SuggestedDeductionsCardProps) {
     const { t } = useLanguage();

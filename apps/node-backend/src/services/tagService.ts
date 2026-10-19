@@ -9,7 +9,7 @@ import tagRepository from "../repositories/tagRepository.ts";
 import { slugify } from "../lib/slugify.ts";
 import { NotFoundError, ValidationError } from "../middleware/errorHandler.ts";
 
-export const tagService = {
+const tagService = {
   /**
    * List tags (active=true|false|null for all) as `{items, total}`.
    *

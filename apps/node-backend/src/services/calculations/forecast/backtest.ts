@@ -340,4 +340,3 @@ export function walkForwardBacktestRolling({
   return Array.from(perMethod.values());
 }
 
-export default { walkForwardBacktest, walkForwardBacktestRolling };

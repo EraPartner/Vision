@@ -808,9 +808,3 @@ export function clearInflationMemoryCache() {
   backgroundRefreshPromise = null;
   statbelFailureLogState = { lastWarnAt: 0, suppressed: 0 };
 }
-
-export default {
-  getInflationRates,
-  warmInflationCache,
-  clearInflationMemoryCache,
-};

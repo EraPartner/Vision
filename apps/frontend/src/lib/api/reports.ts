@@ -11,8 +11,6 @@ import { downloadBlob } from '@/lib/downloadBlob';
 import { todayYmd } from '@/lib/timezone';
 import type { BelgianTaxHouseholdV2, PartnerId } from '@/lib/belgianTax/householdTypes';
 
-export type PeriodKind = 'ytd' | 'rolling' | 'custom' | 'year';
-
 export type ReportPeriod =
   | { kind: 'ytd' }
   | { kind: 'rolling'; months: number }

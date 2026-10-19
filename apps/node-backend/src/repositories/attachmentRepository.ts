@@ -18,7 +18,7 @@ import { buildLimitOffset } from '../lib/sqlClauses.ts';
 
 import type { AttachmentRow, FormattedAttachment } from '../types/rows.ts';
 
-export type { AttachmentRow, FormattedAttachment };
+export type { FormattedAttachment };
 
 function formatRow(row: AttachmentRow): FormattedAttachment {
   return {

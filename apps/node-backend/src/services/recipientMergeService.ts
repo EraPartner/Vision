@@ -134,5 +134,3 @@ export async function mergeRecipients(
     };
   });
 }
-
-export default { mergeRecipients };

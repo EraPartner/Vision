@@ -42,5 +42,3 @@ export async function computeCategoryBreakdown({
     },
   );
 }
-
-export default { computeCategoryBreakdown };

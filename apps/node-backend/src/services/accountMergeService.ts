@@ -470,10 +470,3 @@ export async function previewMerge(
     openingAnchorCollision: collidingAnchorCurrencies(anchors).length > 0,
   };
 }
-
-export default {
-  mergeAccounts,
-  previewMerge,
-  stampRangesOverlap,
-  collidingAnchorCurrencies,
-};

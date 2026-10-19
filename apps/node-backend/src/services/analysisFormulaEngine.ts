@@ -1083,41 +1083,6 @@ function inferFormulaUnit(
   return unit;
 }
 
-export function previewAnalysisFormula({
-  expression,
-  scope = "row",
-  id = "preview",
-  rows = [],
-  ...input
-}: Omit<EvaluateAnalysisFormulasInput, "rows" | "formulas"> & {
-  expression: string;
-  scope?: string;
-  id?: string;
-  rows?: FormulaRow[];
-}): AnalysisFormulaEvaluation {
-  return evaluateAnalysisFormulas({
-    ...input,
-    rows,
-    formulas: [{ id, scope, expression }],
-  });
-}
-export function getAnalysisFormulaFunctions() {
-  return [...FUNCTIONS].map((name) => ({
-    name,
-    aggregate: AGGREGATES.has(name),
-    semantics: ["STDEV", "VARIANCE"].includes(name)
-      ? "sample (n-1)"
-      : ["NPV", "PV", "FV", "PMT"].includes(name)
-        ? "periodic rates; payments use cash-flow signs; timing 0=end, 1=start"
-        : "Decimal arithmetic",
-  }));
-}
-export function validateAnalysisFormula(expression: string) {
-  const ast = parseExpression(expression);
-  assertBoundedAggregateTree(ast);
-  return { valid: true, dependencies: [...dependencies(ast)] };
-}
-
 function assertAggregateUnits(
   ast: FormulaAst,
   entries: FormulaEntry[],

@@ -37,5 +37,3 @@ export function densifyDailyHistory(
   }
   return out;
 }
-
-export default { densifyDailyHistory };

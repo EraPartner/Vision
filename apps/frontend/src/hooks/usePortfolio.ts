@@ -19,13 +19,6 @@ import {
 } from "./portfolio/usePortfolioSummary";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 
-export {
-    useInvestmentsQuery,
-    usePortfolioTransactionsQuery,
-    useInvestmentMutations,
-} from "./portfolio/useInvestments";
-export { usePortfolioSummaries } from "./portfolio/usePortfolioSummaries";
-
 const EMPTY_INVESTMENTS: never[] = [];
 const EMPTY_TRANSACTIONS: never[] = [];
 

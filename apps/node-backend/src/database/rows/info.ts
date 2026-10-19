@@ -514,9 +514,6 @@ export const belgianInflationRateRowSchema = z
     updated_at: pgTimestamptz,
   })
   .describe("belgian_inflation_rates row");
-export type BelgianInflationRateRow = z.output<
-  typeof belgianInflationRateRowSchema
->;
 
 /** `loadFromDatabase`' projection. */
 export const belgianInflationMonthRowSchema = belgianInflationRateRowSchema
@@ -568,7 +565,6 @@ export const taxTxnRowSchema = z
     month: pgInt,
   })
   .describe("report tax transaction row");
-export type TaxTxnRow = z.output<typeof taxTxnRowSchema>;
 
 /** `fetchDividends` (reports/dataFetcherPortfolio). */
 export const dividendTxRowSchema = z
@@ -585,4 +581,3 @@ export const dividendTxRowSchema = z
     rate_date: pgDayString,
   })
   .describe("report dividend row");
-export type DividendTxRow = z.output<typeof dividendTxRowSchema>;

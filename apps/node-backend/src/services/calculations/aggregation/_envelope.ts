@@ -32,4 +32,3 @@ export function buildEnvelope<T>(
   };
 }
 
-export default { buildEnvelope };

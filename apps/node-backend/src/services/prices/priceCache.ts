@@ -18,12 +18,9 @@ import {
 } from "../../lib/dateFormat.ts";
 import { ymdToEpochDay } from "../../lib/timezone.ts";
 import { validateInt4Ids } from "../../lib/filterBuilder.ts";
-import type {
-  AssetPriceHistoryRow,
-  PricePoint,
-} from "../../types/rows.ts";
+import type { PricePoint } from "../../types/rows.ts";
 
-export type { AssetPriceHistoryRow, PricePoint };
+export type { PricePoint };
 
 /**
  * A raw, unvalidated price point as it arrives from a provider adapter or a DB

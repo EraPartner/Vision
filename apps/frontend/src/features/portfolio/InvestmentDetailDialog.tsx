@@ -56,7 +56,7 @@ import { useControlledOpen } from "@/hooks/useDialogFormState";
 import { TextLink } from "@/components/shared/TextLink";
 import { PortfolioOversoldBadge } from "./PortfolioOversoldBadge";
 import { FactRow } from "./assetPageParts";
-import { toneClass } from "./useHoldingActions";
+import { toneClass } from "./holdingTone";
 
 type TxnRow = InvestmentSummary["transactions"][number];
 

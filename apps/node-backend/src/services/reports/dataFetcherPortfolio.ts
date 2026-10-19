@@ -1,5 +1,4 @@
 import { periodToDateRange } from "./reportPeriod.ts";
-export { periodToDateRange } from "./reportPeriod.ts";
 /**
  * Portfolio data fetcher for PDF report generation.
  *

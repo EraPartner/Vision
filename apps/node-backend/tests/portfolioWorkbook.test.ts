@@ -10,11 +10,11 @@ import {
 import type { SyntheticSheet } from "./helpers/saxoWorkbook.ts";
 vi.mock("../src/config/logger.ts", () => ({ logger: mockLogger() }));
 import {
-  assertPortfolioUploadSupported,
   detectPortfolioFileFormat,
   readPortfolioWorkbook,
   __isLikelyPortfolioFile as isLikelyPortfolioFile,
 } from "../src/lib/portfolioUpload.ts";
+import { assertPortfolioUploadSupported } from "../src/services/portfolioImportPipeline/uploadSupport.ts";
 import { parseSaxoTransactionHistory } from "../src/services/portfolioImportPipeline/saxoTransactionHistoryAdapter.ts";
 import { parseWithConfig } from "../src/services/portfolioImportPipeline/portfolioGenericAdapter.ts";
 

@@ -148,5 +148,3 @@ export async function assembleRebalanceInputs({
     cashCurrencies: [...cashCurrencies],
   };
 }
-
-export default { assembleRebalanceInputs };

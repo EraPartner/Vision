@@ -24,10 +24,8 @@ import { findHoldingTotals } from "@/hooks/portfolio/assetGroupTotals";
 import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
 import { AddInvestmentDialog } from "@/features/portfolio/AddInvestmentDialog";
 import { AssetPageActions, Figure } from "@/features/portfolio/assetPageParts";
-import {
-    toneClass,
-    useHoldingActions,
-} from "@/features/portfolio/useHoldingActions";
+import { toneClass } from "@/features/portfolio/holdingTone";
+import { useHoldingActions } from "@/features/portfolio/useHoldingActions";
 import { StalePriceIndicator } from "@/features/portfolio/StalePriceIndicator";
 import { StalePricesBanner } from "@/features/portfolio/StalePricesBanner";
 import {

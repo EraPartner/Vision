@@ -86,15 +86,6 @@ export interface TokenUsage {
     totalDurationMs: number | null;
 }
 
-export interface ChatTurnResponse {
-    conversation: Conversation;
-    userMessage: ChatMessage;
-    toolMessages: ChatMessage[];
-    assistantMessage: ChatMessage;
-    usage: TokenUsage;
-    iterations: number;
-}
-
 export type ChatCompleteEvent = AiChatCompletePayload<
     ChatMessage,
     Conversation,

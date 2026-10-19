@@ -36,4 +36,3 @@ export function gaussian(rng: () => number) {
   return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
 }
 
-export default { fnv1aHash, makeRng, gaussian };

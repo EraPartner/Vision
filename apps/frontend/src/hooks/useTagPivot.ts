@@ -5,8 +5,6 @@ import {
 import type { SavedChart } from "@/types/apiClient";
 import { usePivotQuery, type PivotConfig } from "./usePivotQuery";
 
-export type { TagPivotItem };
-
 export interface TagPeriodData {
     tagId: number;
     slug: string;

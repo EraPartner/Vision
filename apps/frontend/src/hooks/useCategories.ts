@@ -19,25 +19,6 @@ import type {
 import { toast } from "sonner";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
-import { useBackgroundQueryCue } from "@/components/shared/BackgroundQueryIndicator";
-
-export function useCategories(params?: {
-    limit?: number;
-    offset?: number;
-    general?: string;
-    detail?: string;
-    active?: boolean;
-    search?: string;
-}) {
-    const query = useQuery({
-        queryKey: categoryKeys.list(params),
-        queryFn: () => apiClient.getCategories(params),
-        staleTime: 2 * 60_000, // categories rarely change - 2min stale
-        placeholderData: (prev) => prev,
-    });
-    useBackgroundQueryCue(query.isFetching && query.isPlaceholderData);
-    return query;
-}
 
 /**
  * The whole category list, as one cache entry shared by every consumer that
@@ -191,23 +172,6 @@ export function useUpdateCategory() {
         },
         onError: (error: Error) => {
             toast.error(t("categories.updateFailedTitle"), {
-                description: apiErrorToMessage(error, t),
-            });
-        },
-    });
-}
-
-export function useDeleteCategory() {
-    const queryClient = useQueryClient();
-    const { t } = useLanguage();
-
-    return useMutation({
-        mutationFn: (id: number) => apiClient.deleteCategory(id),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: categoryKeys.all });
-        },
-        onError: (error: Error) => {
-            toast.error(t("categories.deleteFailedTitle"), {
                 description: apiErrorToMessage(error, t),
             });
         },

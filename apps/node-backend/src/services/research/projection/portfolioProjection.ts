@@ -355,4 +355,3 @@ export async function runPortfolioForecast(
   };
 }
 
-export default { runPortfolioForecast };

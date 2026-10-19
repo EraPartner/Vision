@@ -95,4 +95,3 @@ export const env: Readonly<FrontendEnv> = Object.freeze(parseEnv());
  */
 export const isSkinV2Default = env.VITE_SKIN_V2 as boolean;
 
-export default env;

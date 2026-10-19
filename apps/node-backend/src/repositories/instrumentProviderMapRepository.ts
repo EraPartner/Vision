@@ -83,6 +83,7 @@ export async function upsert(m: {
 /**
  * Delete a mapping by id.
  * @returns true if a row was removed
+ * @public Reached through the injectable repository in researchMappingService.
  */
 export async function deleteById(id: number): Promise<boolean> {
   const result = await query(
@@ -95,6 +96,7 @@ export async function deleteById(id: number): Promise<boolean> {
 /**
  * Stamp verified_at = NOW() on all mappings for an instrument (after a self-audit).
  * @returns rows stamped
+ * @public Reached through the injectable repository in researchMappingService.
  */
 export async function markVerified(
   instrumentKey: string,

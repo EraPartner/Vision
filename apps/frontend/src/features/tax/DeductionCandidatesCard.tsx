@@ -50,7 +50,7 @@ import { todayYmd } from "@/lib/timezone";
  * partner's share to that partner's field; a home field (mortgage interest)
  * keeps the whole total. A one-partner household behaves exactly as before.
  */
-export function DeductionCandidatesCard() {
+function DeductionCandidatesCard() {
     const { profile, household, updateProfile, updateHousehold, canApply } =
         useBelgianTaxProfile((state) => ({
             profile: state.profile,

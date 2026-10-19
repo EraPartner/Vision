@@ -600,8 +600,3 @@ export async function parseKinesisTransactionHistory(
   );
   return rows;
 }
-
-export default {
-  name: "kinesis_transaction_history",
-  parseWithConfig: parseKinesisTransactionHistory,
-};

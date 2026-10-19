@@ -7,7 +7,6 @@ import {
 export { analysisResultCsv } from "@vision/shared-utils/analysis/interchange";
 export type {
     ScenarioAttachment,
-    ScenarioColumnType,
     AnalysisScenarioModel,
 } from "@vision/shared-utils/analysis/interchange";
 export async function parseScenarioCsv(file: File) {

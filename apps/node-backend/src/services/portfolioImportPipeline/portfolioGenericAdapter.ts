@@ -403,5 +403,3 @@ async function parseFormat(
   logger.info(`Portfolio CSV parsed: ${rows.length} rows, ${skipped} skipped`);
   return rows;
 }
-
-export default { name: "portfolio_generic", parseWithConfig };

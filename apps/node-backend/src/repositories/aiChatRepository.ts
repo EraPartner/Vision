@@ -20,8 +20,6 @@ import {
 } from "../database/rows/ai.ts";
 import type { AiConversationRow, AiMessageRow } from "../types/rows.ts";
 
-export type { AiConversationRow, AiMessageRow };
-
 const CONVERSATION_COLUMNS =
   'id, title, model, created_at AS "createdAt", updated_at AS "updatedAt"';
 const MESSAGE_COLUMNS =

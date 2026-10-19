@@ -11,8 +11,6 @@ import type {
   EnrichedTransactionRow,
   PlannedExecutionRow,
   PlannedTransactionListRow,
-  SplitPaymentRow,
-  TransactionSplitRow,
 } from "../../src/types/rows.ts";
 
 const CREATED = new Date("2026-01-01T00:00:00.000Z");
@@ -124,38 +122,6 @@ export function plannedExecutionRow(
     planned_transaction_id: 1,
     executed_transaction_id: 1,
     execution_date: new Date(2026, 0, 15),
-    created_at: CREATED,
-    ...overrides,
-  };
-}
-
-/** A `transaction_splits` row as the joined read paths project it. */
-export function splitRow(
-  overrides: Partial<TransactionSplitRow> = {},
-): TransactionSplitRow {
-  return {
-    id: 1,
-    transaction_id: 1,
-    recipient_id: 1,
-    amount: "10.0000",
-    note: null,
-    is_settled: false,
-    created_at: CREATED,
-    updated_at: CREATED,
-    ...overrides,
-  };
-}
-
-/** A `split_payments` row. */
-export function splitPaymentRow(
-  overrides: Partial<SplitPaymentRow> = {},
-): SplitPaymentRow {
-  return {
-    id: 1,
-    split_id: 1,
-    amount: "5.0000",
-    paid_at: new Date(2026, 0, 15),
-    note: null,
     created_at: CREATED,
     ...overrides,
   };

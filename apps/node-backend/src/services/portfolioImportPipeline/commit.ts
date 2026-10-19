@@ -50,8 +50,6 @@ import { commitPortfolioAssetAdjustment } from "../portfolio/portfolioAssetAdjus
  * resolved_investment_id)`, and the two `inv.*` columns come from the LEFT JOIN
  * on `investments` (null for cash rows and unresolved instruments).
  */
-export type { MatchedPortfolioStagingRow };
-
 /** Repository-normalized trade values compared for occurrence dedup. */
 type CanonicalTradeValues = {
   amount: number | undefined;

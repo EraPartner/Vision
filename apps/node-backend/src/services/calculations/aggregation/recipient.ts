@@ -28,5 +28,3 @@ export async function computeRecipientInsights({
   assertNoNaN(data, "computeRecipientInsights");
   return buildEnvelope(data, { source: "live" });
 }
-
-export default { computeRecipientInsights };

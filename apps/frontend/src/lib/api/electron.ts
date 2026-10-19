@@ -9,7 +9,6 @@ import type {
     UpdateCheckStatus,
 } from "@vision/types/electron";
 export type {
-    ElectronCsvFile,
     ElectronMenuAction,
     SplashThemeColors,
     UpdateCheckStatus,
