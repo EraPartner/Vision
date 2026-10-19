@@ -4858,7 +4858,7 @@ const nl: Record<string, string> = {
   'update.downloading': 'Vision update downloaden…',
   'update.installing': 'Installeren…',
   'update.later': 'Later',
-  'update.manualDownload': 'Deze release heeft geen ingebouwde installatie. De downloadpagina wordt in je browser geopend.',
+  'update.manualDownload': 'Vision kan deze update niet zelf installeren. De downloadpagina wordt in je browser geopend.',
   'update.readyTitle': '{app} klaar om te updaten',
   'update.releaseNotes': 'Releasenotes',
   'update.restartNow': 'Nu herstarten',

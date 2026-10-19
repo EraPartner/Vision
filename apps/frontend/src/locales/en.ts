@@ -4858,7 +4858,7 @@ const en: Record<string, string> = {
   'update.downloading': 'Downloading Vision update…',
   'update.installing': 'Installing…',
   'update.later': 'Later',
-  'update.manualDownload': 'This release has no in-app installer. Opening the download page in your browser.',
+  'update.manualDownload': 'Vision cannot install this update itself. Opening the download page in your browser.',
   'update.readyTitle': '{app} ready to update',
   'update.releaseNotes': 'Release notes',
   'update.restartNow': 'Restart now',

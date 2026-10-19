@@ -828,25 +828,25 @@ See [[docs/adr/049-phase-6-7-bug-hunt-recovery-hardening|ADR-049]] for detailed 
 
 ### Application Updates (April–August 2026)
 
-Vision supports packaged native, source, and development update modes. See
+Only the packaged app installs updates in-app; the source-launcher channel was retired by
+[[docs/adr/216-retire-source-launcher-update-channel|ADR-216]]. See
 [[docs/features/application-updates|Application Updates Feature]] for the current architecture,
 IPC handlers, and frontend behavior.
 
 #### Deployment Modes
 
-| Mode       | Condition                         | Update Method                          | Artifacts                                            |
-| ---------- | --------------------------------- | -------------------------------------- | ---------------------------------------------------- |
-| **native** | Packaged app with native provider | Verified app replacement with rollback | `Vision-x.y.z-arm64-mac.zip` + `.sha256`             |
-| **dev**    | `app.isPackaged === false`        | Source restart/relaunch                | Checkout files                                       |
-| **source** | Packaged app in repository mode   | Shell script installer from GitHub     | `vision-source-launcher-x.y.z-arm64.zip` + `.sha256` |
+| `update_mode` | Condition                  | Update Method                                        | Artifacts                                |
+| ------------- | -------------------------- | ---------------------------------------------------- | ---------------------------------------- |
+| **native**    | `app.isPackaged === true`  | Verified app replacement with rollback               | `Vision-x.y.z-arm64-mac.zip` + `.sha256` |
+| **source**    | `app.isPackaged === false` | None in-app; *Install update* opens the release page | Checkout files                           |
 
 #### IPC Handlers
 
-| Handler                    | Purpose                                                       | Modes          |
-| -------------------------- | ------------------------------------------------------------- | -------------- |
-| `update:pre-update-backup` | Create a `.visionbak` through the native runtime transport    | native, source |
-| `update:install-shell`     | Download, verify, and install the native app or source update | native, source |
-| `update:check-github`      | Check GitHub and return the current update mode               | All            |
+| Handler                    | Purpose                                                               | Modes  |
+| -------------------------- | --------------------------------------------------------------------- | ------ |
+| `update:pre-update-backup` | Create a `.visionbak` through the native runtime transport            | All    |
+| `update:install-shell`     | Download, verify, and install the native app (release page in source) | All    |
+| `update:check-github`      | Check GitHub and return the current update mode                       | All    |
 
 #### Native Installer
 
@@ -860,20 +860,9 @@ remaining recovery files. It never starts rollback after the previous copy may h
 PostgreSQL and
 attachments remain in application data and are not replaced by the application archive.
 
-#### Generated Installer (Source Mode)
-
-The updater generates a fixed shell helper after it has downloaded and verified
-the source-launcher ZIP:
-
-- **Rollback strategy:** BAK_DIR snapshot created before rsync, restored on failure
-- **Native payload preservation:** the generated PostgreSQL, Alembic, and Chromium
-  payload is excluded from source-tree replacement
-- **Quarantine removal:** `xattr -rd com.apple.quarantine` applied to entire DEST_ROOT and launcher scripts
-- **Separation:** this helper is not the repository's `install.sh` source-build command
-
 #### Checksum Verification (ADR-023, ADR-168)
 
-When updating via shell installer:
+When installing a native update:
 
 1. Download sibling `.sha256` file from GitHub release
 2. Compute SHA256 of downloaded ZIP
@@ -898,7 +887,7 @@ All installable updates follow this sequence:
    ↓
 3. Download phase: Fetch installer
    ↓
-4. Verify phase (native and source): Check SHA256
+4. Verify phase: Check SHA256
    ↓
 5. Install phase: Extract and deploy to the install directory
    ↓
@@ -918,7 +907,7 @@ The topbar update badge and dialog (`UpdateNotification`) were removed ([[docs/a
 **AboutSection (Settings → About):**
 
 - Phases: idle → backing-up → downloading → restarting → done
-- Mode-aware routing distinguishes packaged native and source installation
+- A `manual_download` result (release without a packaged app ZIP, or a development run) opens the release page instead of failing
 - Localized labels include `update.backingUp` and `update.downloading`
 - Manual "Check for Updates" button, which refreshes the shared status query
 - Displays latest available version if newer; the install button appears in Electron only
@@ -927,8 +916,7 @@ The topbar update badge and dialog (`UpdateNotification`) were removed ([[docs/a
 
 > [!history]
 > The following paragraphs describe the former image-based pipeline. ADR-133 retired it. Current CI
-> uses native PostgreSQL and filesystem scanning; current releases publish macOS and source artifacts
-> only. See [[docs/guides/cicd-pipelines|CI/CD Pipelines]].
+> uses native PostgreSQL and filesystem scanning; current releases publish macOS artifacts only. See [[docs/guides/cicd-pipelines|CI/CD Pipelines]].
 
 **release.yml** (May 2026):
 

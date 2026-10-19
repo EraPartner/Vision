@@ -3,7 +3,7 @@ title: ADR-023 Update Installer Checksum Verification
 type: adr
 status: Accepted
 date: 2026-04-19
-updated: 2026-04-29
+updated: 2026-10-19
 tags: [adr, electron, updates, security, supply-chain, checksums, phase-9, install-script, interactive-confirmation]
 description: Verify SHA256 of downloaded update installers against sibling .sha256 artifacts on GitHub releases before extraction. (2026-04-29: install.sh now adds interactive checksum confirmation gate via VISION_BREW_INSTALL_AUTO_CONFIRM env var)
 aliases: [adr-023, installer checksum, update verification, supply-chain security]
@@ -12,6 +12,12 @@ aliases: [adr-023, installer checksum, update verification, supply-chain securit
 # ADR-023: Update Installer Checksum Verification
 
 ## Status
+> [!warning] Partially superseded
+> [[docs/adr/216-retire-source-launcher-update-channel|ADR-216]] retired the source-launcher
+> update channel on 2026-10-19. The shell-installer path
+> (`prepareShellUpdateInstaller()`) no longer exists; checksum verification of the packaged app
+> ZIP below remains active.
+
 Accepted
 
 ## Date

@@ -271,6 +271,14 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 > ADR-213 after merging `main`, which already uses ADR-206 to ADR-208 (bank chronology,
 > coordinated native recovery, bounded report pipeline).
 
+### 2026-10-19: Retire the source-launcher update channel (accepted)
+
+[[docs/adr/216-retire-source-launcher-update-channel|ADR-216]] removes `launch.command`, the
+`vision-source-launcher-*.zip` release asset with its source SBOM and attestation, and the
+generated shell installer. The packaged app updater is the only in-app install path; development
+runs report `update_mode: "source"` and open the release page. It supersedes the source-launcher
+parts of ADR-023, ADR-116 and ADR-196.
+
 ### 2026-10-19: Test behaviour at stable boundaries (accepted)
 
 [[docs/adr/215-behaviour-boundary-tests|ADR-215]] lets agents restructure code freely: tests that
@@ -544,7 +552,7 @@ audited mutable tables that lacked them.
 [[docs/adr/116-gated-release-candidate-promotion|ADR-116]] (Accepted) publishes Docker candidates
 without tags, scans and migration-tests the exact digest, and promotes only a passing index. The
 release scan shares CI's accepted-risk file, while the DMG, native ZIP, and source-launcher ZIP gain
-GitHub attestations before the release is created.
+GitHub attestations before the release is created. (Source-launcher ZIP retired by ADR-216.)
 
 ### 2026-08-31: Asynchronous import materialized-view refresh
 

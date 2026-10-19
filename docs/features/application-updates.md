@@ -2,9 +2,9 @@
 title: Application Updates
 type: feature
 status: active
-date: 2026-10-11
+date: 2026-10-19
 tags: [feature, updates, electron, native-runtime, backup, checksum, release]
-description: Native packaged and source-launcher update paths with backup, checksum verification, and rollback boundaries.
+description: Native packaged-app update path with backup, checksum verification, and rollback boundaries; source checkouts update outside the app.
 aliases: [update system, application updater]
 related_code:
   [
@@ -17,16 +17,16 @@ related_code:
 
 # Application Updates
 
-Vision exposes update information from `/api/admin/update/check`. Electron selects one of two
-install paths:
+Vision exposes update information from `/api/admin/update/check`. The packaged app is the only
+in-app install path ([[docs/adr/216-retire-source-launcher-update-channel|ADR-216]]):
 
-| Mode             | Use                        | Installer                                                    |
-| ---------------- | -------------------------- | ------------------------------------------------------------ |
-| `native`         | Packaged macOS application | Verified release ZIP/app replacement                         |
-| `source` / `dev` | Source checkout            | Generated source-launcher bundle or operator-managed restart |
+| `update_mode` | Use                                                     | Installer                            |
+| ------------- | ------------------------------------------------------- | ------------------------------------ |
+| `native`      | Packaged macOS application                              | Verified release ZIP/app replacement |
+| `source`      | Browser deployment or unpackaged (development) Electron | None; update the checkout by hand    |
 
-Browser deployments receive release information but no in-app installer. The operator updates the
-source deployment and database in its own maintenance window.
+Browser deployments and development runs receive release information but no in-app installer. The
+operator updates the source deployment and database in its own maintenance window.
 
 ## Backup before update
 
@@ -56,22 +56,14 @@ The updater:
 Paths are validated before extraction or replacement. A checksum mismatch, unsupported platform,
 or failed backup stops the operation without activating the staged application.
 
-## Source update
+## Development runs
 
-Source mode downloads the generated source-launcher bundle and checksum from the release. The
-launcher validates the target checkout and performs the repository-specific update outside the
-running Electron process. Development mode reports update availability without treating a working
-tree as a packaged application.
-
-The source installer looks for Bun 1.4.2 on `PATH` or in `~/.bun/bin` before changing the
-checkout. It keeps a source and dependency backup until the frozen, script-disabled root and
-Electron dependency installs succeed and the pinned Electron binary is present. It restores the
-source and dependencies if a copy or install fails. The launcher also requires Bun 1.4.2,
-installs from committed lockfiles with general lifecycle scripts disabled, and runs the known
-Electron binary installer explicitly when needed. It does not run a fetched shell installer.
-The launcher runs `bun run native:prepare` when the native services are missing and then starts
-Vision with `bun run electron:prod`. Both scripts compile the TypeScript shell into
-`packaging/electron/out/` first ([[docs/adr/196-electron-shell-typescript|ADR-196]]).
+An unpackaged Electron run (`bun run electron:dev` or `bun run electron:prod` from a checkout)
+reports update availability with `update_mode: "source"` but never downloads or installs a
+release. It skips the delayed background prompt, and *Install update* in Settings › About opens the
+GitHub release page instead (`manual_download`). Update the checkout itself and restart. The
+former source-launcher bundle (`vision-source-launcher-*.zip`, `launch.command`) and its generated
+shell installer were removed by [[docs/adr/216-retire-source-launcher-update-channel|ADR-216]].
 
 ## Renderer behavior
 
@@ -85,14 +77,14 @@ status: it shows the latest version, publish date, release notes and release-pag
 button that runs the backup, download, install and restart phases through the updater bridge.
 Web clients see the status and release link but no install control.
 
-The Electron inter-process communication surface includes mode lookup, update check, native/source
+The Electron inter-process communication surface includes mode lookup, update check, native
 installation, progress, and restart events. It does not expose an image-pull operation.
 
 ## Release pipeline
 
 `.github/workflows/release.yml` verifies code and generated artifacts, runs native runtime checks,
-builds the macOS app and disk image plus source-launcher bundle, computes checksums, attests the
-artifacts, generates separate app and source CycloneDX SBOMs, and creates the GitHub release. The
+builds the macOS app and disk image, computes checksums, attests the artifacts, generates the
+packaged-app CycloneDX SBOM, and creates the GitHub release. The
 release job verifies build provenance before publishing. No application image is built or published.
 
 ## Rollback boundaries
@@ -124,3 +116,4 @@ keeps the previous database until validation succeeds.
 - [[docs/adr/180-sidebar-sections-replace-workspaces|ADR-180]] — update controls move to the sidebar dot and Settings › About
 - [[docs/components/layout|Layout components]]
 - [[docs/adr/168-github-release-trust-boundary|ADR-168]]
+- [[docs/adr/216-retire-source-launcher-update-channel|ADR-216]] — source-launcher channel retired

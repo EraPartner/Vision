@@ -595,7 +595,6 @@ updater.init({
       throw error;
     }
   },
-  workDir: () => workDir,
   stopRuntime: async () => {
     if (nativeMaintenance) throw new Error("Native maintenance is in progress");
     if (activeRuntime?.mode === "native") {

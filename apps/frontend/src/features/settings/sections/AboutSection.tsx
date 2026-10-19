@@ -116,8 +116,9 @@ export const AboutSection = memo(function AboutSection({
                 setApplyPhase("idle");
                 return;
             }
-            // No installable source-launcher asset on this release — the main
-            // process opened the release page. A redirect, not a failure.
+            // No in-app install (release without a packaged app ZIP, or a
+            // development run): the main process opened the release page. A
+            // redirect, not a failure.
             if (result.manual_download) {
                 toast.info(t("update.manualDownload"));
                 setApplyPhase("idle");

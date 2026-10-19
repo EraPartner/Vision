@@ -1,4 +1,4 @@
-export type ElectronUpdateMode = "native" | "dev";
+export type ElectronUpdateMode = "native" | "source";
 
 export interface ElectronSuccessResult {
   success: boolean;
@@ -14,7 +14,6 @@ export interface UpdateCheckStatus {
   html_url?: string;
   error?: string;
   update_mode: ElectronUpdateMode;
-  source_launcher_available?: boolean;
 }
 
 export interface InstallUpdateResult extends ElectronSuccessResult {

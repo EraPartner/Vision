@@ -40,7 +40,7 @@ When the GitHub CLI is available, also verify the downloaded archive's repositor
 gh attestation verify Vision-__VERSION__-arm64.dmg --repo EraPartner/Vision
 ```
 
-The release workflow attests the DMG, native application ZIP, and source-launcher ZIP. The checksum
+The release workflow attests the DMG and native application ZIP. The checksum
 is the offline integrity check; the attestation binds an artifact to Vision's release workflow.
 
 ### 2. Install the app
