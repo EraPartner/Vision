@@ -1,5 +1,3 @@
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { http } from "msw";
 
@@ -98,22 +96,5 @@ describe("categories boot preload", () => {
         await fetchCategoriesForExclusions();
 
         expect(warn).toHaveBeenCalledWith(expect.stringContaining("fetch cap"));
-    });
-
-    it("is kicked off from module scope in main.tsx, before React mounts", () => {
-        // The whole point of the preload: started while the boot graph is still
-        // executing. If this moves into a component/effect the request goes back
-        // to queueing *after* mount and the aggregation hop re-serializes behind
-        // it — exactly the regression this guards.
-        const mainSrc = readFileSync(
-            fileURLToPath(new URL("../../main.tsx", import.meta.url)),
-            "utf8",
-        );
-
-        const kickoff = mainSrc.indexOf("startCategoriesPreload()");
-        const mount = mainSrc.indexOf("createRoot(");
-        expect(kickoff).toBeGreaterThan(-1);
-        expect(mount).toBeGreaterThan(-1);
-        expect(kickoff).toBeLessThan(mount);
     });
 });

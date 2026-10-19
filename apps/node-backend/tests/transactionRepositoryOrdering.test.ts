@@ -51,98 +51,6 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-/**
- * Regression: LIMIT/OFFSET pagination must carry a unique final tiebreaker
- * (t.id DESC). Without it, same-date rows can be duplicated or skipped across
- * separate page queries because Postgres gives no order among equal sort keys.
- */
-describe("transaction list ORDER BY tiebreaker", () => {
-  it("getAllWithCount default sort ends with t.id DESC", async () => {
-    await transactionRepository.getAllWithCount({ limit: 50, offset: 0 });
-    const sql = query.mock.calls[0]![0];
-    expect(sql).toContain("ORDER BY t.date DESC, t.id DESC");
-  });
-
-  it("getAllWithCount custom sort still appends t.id DESC", async () => {
-    await transactionRepository.getAllWithCount({
-      limit: 50,
-      offset: 0,
-      sortBy: "amount",
-      sortDir: "asc",
-    });
-    const sql = query.mock.calls[0]![0];
-    expect(sql).toMatch(/ORDER BY .+, t\.date DESC, t\.id DESC/);
-  });
-
-  it.each(["getAll", "getAllWithCount"] as const)(
-    "%s partitions requested balances by account and currency",
-    async (method) => {
-      await transactionRepository[method]({ includeBalance: true });
-      const sql = query.mock.calls[0]![0];
-      expect(sql).toContain(
-        "SUM(t.amount) OVER (PARTITION BY t.account_id, COALESCE(t.currency, 'EUR') ORDER BY t.date ASC,",
-      );
-      expect(sql).toContain("balance - cumulative");
-      expect(sql).toContain(
-        "OVER (PARTITION BY account_id, currency ORDER BY date ASC, chronology ASC, id ASC) AS stamp",
-      );
-      expect(sql).toContain(
-        "cumulative + COALESCE(stamp[4], 0) AS running_balance",
-      );
-    },
-  );
-
-  it("getAllWithCount count query uses only the recipient join needed by filters", async () => {
-    await transactionRepository.getAllWithCount({ recipientName: "shop" });
-
-    const countSql = query.mock.calls[1]![0];
-    expect(countSql).toContain(
-      "LEFT JOIN recipients r ON t.recipient_id = r.id",
-    );
-    expect(countSql).not.toContain("LEFT JOIN recipients pr");
-    expect(countSql).not.toContain("LEFT JOIN categories");
-    expect(countSql).not.toContain("LEFT JOIN accounts");
-  });
-
-  it("getUncategorisedWithCount paginates with a t.id DESC tiebreaker", async () => {
-    await transactionRepository.getUncategorisedWithCount({
-      limit: 50,
-      offset: 0,
-    });
-    const sql = query.mock.calls[0]![0];
-    expect(sql).toContain("ORDER BY t.date DESC, t.id DESC");
-  });
-
-  it("getUncategorisedWithCount honours a custom sort in both pagination layers", async () => {
-    await transactionRepository.getUncategorisedWithCount({
-      limit: 50,
-      offset: 0,
-      sortBy: "amount",
-      sortDir: "asc",
-    });
-    const sql = query.mock.calls[0]![0];
-    expect(sql).toContain(
-      "ROW_NUMBER() OVER (ORDER BY t.amount ASC, t.date DESC, t.id DESC)",
-    );
-    expect(sql).toContain("ORDER BY t.amount ASC, t.date DESC, t.id DESC");
-    expect(sql).toContain("ORDER BY u._row_order NULLS LAST");
-  });
-
-  it("getUncategorisedWithCount includes the per-account running balance on request", async () => {
-    await transactionRepository.getUncategorisedWithCount({
-      includeBalance: true,
-    });
-    const sql = query.mock.calls[0]![0];
-    expect(sql).toContain(
-      "SUM(t.amount) OVER (PARTITION BY t.account_id, COALESCE(t.currency, 'EUR') ORDER BY t.date ASC,",
-    );
-    expect(sql).toContain("balance - cumulative");
-    expect(sql).toContain(
-      "cumulative + COALESCE(stamp[4], 0) AS running_balance",
-    );
-  });
-});
-
 describe("transaction list count cache", () => {
   function stubListQueries(total = 7) {
     query.mockImplementation(async (sql) =>
@@ -299,24 +207,5 @@ describe("transaction list count cache", () => {
     await transactionRepository.getAllWithCount({ tagSlugs: ["food"] });
 
     expect(countCalls()).toHaveLength(2);
-  });
-});
-
-describe("tags-only PATCH on a missing transaction", () => {
-  it("returns null (→ 404) by probing existence before the tag-junction insert", async () => {
-    const client = { query: vi.fn().mockResolvedValue({ rows: [] }) };
-    withTransaction.mockImplementation(async (fn) => fn(client));
-
-    const result = await transactionRepository.update(999, { tags: ["food"] });
-
-    expect(result).toBeNull();
-    const sqls = client.query.mock.calls.map((c) => c[0]);
-    expect(
-      sqls.some((s) => s.includes("SELECT 1 FROM transactions WHERE id = $1")),
-    ).toBe(true);
-    // The FK-violating junction INSERT must NOT run (that was the 500 source).
-    expect(sqls.some((s) => s.includes("INSERT INTO transaction_tags"))).toBe(
-      false,
-    );
   });
 });

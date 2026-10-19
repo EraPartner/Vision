@@ -191,35 +191,6 @@ describe("BACKUP_COVERED_TABLES registry", () => {
 });
 
 describe("localStorage keys registry", () => {
-  it("LOCAL_STORAGE_KEYS can be imported and is non-empty", async () => {
-    // Dynamic import resolves from the frontend src tree.
-    // We verify the file exists and exports the expected shape.
-    const keysPath = join(
-      REPO_ROOT,
-      "apps/frontend/src/lib/localStorage-keys.ts",
-    );
-    const content = readFileSync(keysPath, "utf8");
-
-    // Assert all expected semantic keys are present in the file
-    const requiredKeys = [
-      "vision_theme",
-      "vision_theme_variant",
-      "vision.backup.passphrase.reminder.dismissed",
-      "dismissed_upcoming_planned_payments",
-      "dismissed_recurring_patterns",
-      "vision.onboarding.draft.v1",
-      "vision.research.chartBuilder.layouts.v2",
-      "vision.analysis.sqlHistory",
-    ];
-
-    for (const key of requiredKeys) {
-      expect(
-        content,
-        `localStorage key "${key}" missing from localStorage-keys.ts`,
-      ).toContain(key);
-    }
-  });
-
   it("every localStorage.setItem/getItem call in frontend uses a registered key", () => {
     const frontendSrc = join(REPO_ROOT, "apps/frontend/src");
     const keysContent = readFileSync(

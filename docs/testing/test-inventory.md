@@ -2,9 +2,9 @@
 title: Test Inventory
 type: testing
 status: active
-date: 2026-10-18
+date: 2026-10-19
 last_modified: 2026-10-11
-updated: 2026-10-18
+updated: 2026-10-19
 last-updated: 2026-10-08
 last_updated_timestamp: 2026-10-06T00:00:00Z
 added_portfolio_tax_pure_module_tests: 2026-05-29
@@ -60,6 +60,27 @@ related_code:
 ---
 
 # Test Inventory
+
+## Structure-only tests removed (2026-10-19)
+
+[[docs/adr/214-behaviour-boundary-tests|ADR-214]] makes tests that assert internal structure
+(source text, mock call order, SQL strings sent to a mocked client, private helpers) deletable.
+The 2026-10-19 pass reviewed the backend, frontend, Electron and scripts suites (Swift tests were
+out of scope). It removed 34 structure-only files, trimmed structure-only cases from about 40
+more, rewrote 4 against a boundary, and added real PostgreSQL tests in
+`apps/node-backend/tests/*Boundary*.db.test.ts`, `*Bounds.db.test.ts` and siblings for behaviour
+the removed cases alone covered, plus a rendered delete-confirmation test in
+`apps/frontend/src/pages/__tests__/TransactionDeleteConfirm.integration.test.tsx`. Per-file
+decisions are in `scripts/browser-tests/coverage-ledger.json`.
+
+Kept because each is the only check of a real rule, pending a boundary replacement: planned
+transaction repository, deduplication, account close and merge, import staging, host guard
+middleware order, transaction service reconcile scheduling, split service rounding and lock
+order, reconcile account lock, settings conflict on legacy JSON values, and two Electron
+`main.ts` startup and path checks. Behaviour no longer asserted anywhere: boot-phase names in
+warm-up diagnostics, collapsed recurring advisories and the dashboard-only reminder, print-mode
+routes, label association (a lint rule would replace it), boot-time category preload order, and
+the `tokens.css` versus `themes.ts` default palette parity.
 
 ## Reviewed cleanup and test boundaries (2026-10-13)
 

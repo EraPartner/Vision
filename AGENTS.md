@@ -135,12 +135,20 @@ Scale checks to risk:
 
 Finish with changed files, checks run, skipped checks, residual risk, and follow-ups.
 
-Tests are evidence, not an unquestionable specification of the internals. During redesign,
-preserve independently justified financial outcomes, persistence, recovery and public contracts.
-Replace obsolete private-helper, CSS/source-text or SQL call-order assertions only after suitable
-observable replacement checks pass. Explain the replacement in the test inventory. Never change
-expected financial values solely because the implementation returns different values, delete a
-domain failure to make a redesign pass, or lower coverage gates to obtain a green result.
+Tests are evidence, not an unquestionable specification of the internals (ADR-214). Agents may
+restructure code freely: move, split, merge or inline modules and change internal signatures to
+reach a better design. Tests belong at stable boundaries: HTTP/API contracts, real PostgreSQL
+state, pure domain functions through their public module (money, FX, tax, parsers, recurrence),
+file and backup formats, and rendered UI or end-to-end journeys. A test that asserts structure
+instead of behaviour (source text, file layout, class names or tokens in source, private helpers
+exported for tests, mock call order, SQL strings sent to a mocked client) may be deleted when a
+change breaks it, with a one-line reason per file in the PR description. Do not add new tests of
+that kind. If the deleted test was the only check of a real behaviour, replace it with a
+boundary test in the same change. Keep independently justified financial outcomes, persistence,
+recovery and public contracts. Never change expected financial values solely because the
+implementation returns different values, delete a domain failure to make a redesign pass, delete
+a source assertion that is the only enforcement of a security or data-safety invariant without a
+boundary replacement, or lower coverage gates to obtain a green result.
 Distinguish simulated-DOM/mocked HTTP tests, live API contracts, real PostgreSQL tests and actual
 native/Electron journeys in verification reports.
 

@@ -15,30 +15,7 @@ interface ExtraResource {
   to: string;
 }
 
-test("desktop boot and recovery shells inherit the Vision palette", () => {
-  assert.match(main, /const DEFAULT_BRAND_PRIMARY = ["']158 64% 52%["']/);
-  assert.match(
-    main,
-    /deriveSplashPalette\(\s*theme\?\.background \|\| DEFAULT_BRAND_PRIMARY,\s*theme,?\s*\)/,
-  );
-  assert.match(main, /theme\?\.mode === "light"/);
-  assert.match(main, /base: theme\.surface/);
-  assert.match(main, /paletteBase: palette\.base/);
-  assert.match(main, /paletteGlow: palette\.glow/);
-  assert.match(main, /paletteForeground: palette\.foreground/);
-  assert.match(main, /<svg class="mark"/);
-
-  const css = read("assets/error.css");
-  const html = read("assets/error.html");
-  const script = read("assets/error.js");
-  assert.doesNotMatch(css, /#5b8cff|#2c5cff|#0f172a|#94a3b8|#e2e8f0|#f8fafc/i);
-  assert.match(css, /--champagne: 43 71% 66%/);
-  assert.match(html, /<svg class="mark"/);
-  assert.match(script, /hslComponents/);
-  assert.match(script, /--theme-(?:base|glow|foreground)/);
-});
-
-test("package versions and native identity links remain aligned", () => {
+test("package versions align and external links open only trusted URLs", () => {
   const versions: unknown[] = [
     JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"))
       .version,
@@ -48,9 +25,6 @@ test("package versions and native identity links remain aligned", () => {
     JSON.parse(read("package.json")).version,
   ];
   assert.equal(new Set(versions).size, 1);
-  assert.match(main, /app\.setAboutPanelOptions\(/);
-  assert.match(main, /label: t\(["']menu\.sourceCode["']\)/);
-  assert.match(main, /label: t\(["']menu\.documentation["']\)/);
   assert.match(
     main,
     /const TRUSTED_EXTERNAL_URLS = new Set\(\[REPOSITORY_URL, DOCUMENTATION_URL\]\)/,

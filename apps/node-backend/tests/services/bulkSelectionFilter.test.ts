@@ -328,33 +328,4 @@ describe("the uncategorised queue filter", () => {
     );
   });
 
-  it("narrows the count and the id selection to the effective-category NULL rows", async () => {
-    dbQuery
-      .mockResolvedValueOnce({ rows: [{ n: 1 }] })
-      .mockResolvedValueOnce({ rows: [{ id: 21 }] });
-    expect(
-      await resolveBulkSelection({
-        filter: { uncategorised: true, active: true },
-      }),
-    ).toEqual([21]);
-    expect(dbQuery).toHaveBeenCalledTimes(2);
-    for (const [sql] of dbQuery.mock.calls) {
-      expect(sql).toContain(
-        "COALESCE(t.category_id, r.default_category_id, pr.default_category_id) IS NULL",
-      );
-      expect(sql).toContain("LEFT JOIN recipients pr");
-    }
-  });
-
-  it("adds no queue predicate when the flag is off", async () => {
-    dbQuery
-      .mockResolvedValueOnce({ rows: [{ n: 1 }] })
-      .mockResolvedValueOnce({ rows: [{ id: 21 }] });
-    await resolveBulkSelection({
-      filter: { uncategorised: false, active: true },
-    });
-    for (const [sql] of dbQuery.mock.calls) {
-      expect(sql).not.toContain("default_category_id) IS NULL");
-    }
-  });
 });

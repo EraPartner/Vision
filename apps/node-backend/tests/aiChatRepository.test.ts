@@ -19,7 +19,7 @@ const query = rawQuery as unknown as Mock<
 describe("aiChatRepository.listConversations", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("uses a bounded page and a separate full count", async () => {
+  it("returns the requested page with the full total", async () => {
     const conversation = conversationRow({ id: "c" });
     query
       .mockResolvedValueOnce({ rows: [conversation] })
@@ -29,9 +29,6 @@ describe("aiChatRepository.listConversations", () => {
       aiChatRepository.listConversations({ limit: 50, offset: 100 }),
     ).resolves.toEqual({ items: [conversation], total: 101 });
 
-    expect(query.mock.calls[0]![0]).toContain("LIMIT $1 OFFSET $2");
-    expect(query.mock.calls[0]![1]).toEqual([50, 100]);
-    expect(query.mock.calls[1]![0]).toContain("COUNT(*)::int AS total");
   });
 
   it("keeps the total when an offset-past-end page has no rows", async () => {

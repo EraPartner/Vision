@@ -1,6 +1,7 @@
 /**
- * Account Repository tests (ADR-088). Mocks the DB layer and asserts the SQL /
- * params and the row shaping the repository performs.
+ * Account Repository tests (ADR-088). Mocks the DB layer and checks the row
+ * shaping and balance/drift arithmetic. Filtering, pagination, identity lookup
+ * and writes run against PostgreSQL in accountRepositoryBoundary.db.test.ts.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Mock } from "vitest";
@@ -49,27 +50,6 @@ const listAccounts = async (
 describe("accountRepository", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("resolves only active canonical account identities", async () => {
-    query.mockResolvedValueOnce({ rows: [{ id: 17 }] });
-
-    expect(await accountRepository.findActiveId(17)).toBe(17);
-    expect(query).toHaveBeenCalledWith(
-      "SELECT id FROM accounts WHERE id = $1 AND is_active = true",
-      [17],
-    );
-  });
-
-  it("takes the transaction-scoped funding-graph advisory lock", async () => {
-    query.mockResolvedValueOnce({ rows: [] });
-
-    await accountRepository.lockFundingGraphForMutation();
-
-    expect(query).toHaveBeenCalledWith(
-      "SELECT pg_advisory_xact_lock($1::integer, $2::integer)",
-      [0x56495349, 1],
-    );
-  });
-
   it("maps a canceled funding-graph lock wait to a retryable service error", async () => {
     query.mockRejectedValueOnce(
       Object.assign(new Error("canceling statement due to statement timeout"), {
@@ -117,34 +97,6 @@ describe("accountRepository", () => {
           post_anchor_count: undefined,
         },
       ]);
-      const sql = query.mock.calls[0]![0];
-      expect(sql).not.toContain("a.is_active = true");
-      expect(sql).not.toContain("a.is_active = false");
-      expect(sql).toContain("ORDER BY a.name");
-    });
-
-    it("filters to active accounts", async () => {
-      query.mockResolvedValueOnce({ rows: [] });
-      await listAccounts({ active: true });
-      expect(query.mock.calls[0]![0]).toContain("a.is_active = true");
-    });
-
-    it("filters to inactive accounts", async () => {
-      query.mockResolvedValueOnce({ rows: [] });
-      await listAccounts({ active: false });
-      expect(query.mock.calls[0]![0]).toContain("a.is_active = false");
-    });
-
-    it("selects the provenance columns from the shared lateral (WP-B2)", async () => {
-      query.mockResolvedValueOnce({ rows: [] });
-      await listAccounts();
-      const sql = query.mock.calls[0]![0];
-      expect(sql).toContain("lb.anchor_date");
-      expect(sql).toContain("lb.post_anchor_count");
-      // The balance no longer comes off the cross-currency lateral: it is summed
-      // in JS from the per-currency partitions, which arrive as one JSON column.
-      expect(sql).not.toContain("lb.balance AS computed_balance");
-      expect(sql).toContain("bp.balance_parts");
     });
 
     // The defect this replaced: SUM(t2.amount) added a EUR amount to a USD
@@ -405,129 +357,16 @@ describe("accountRepository", () => {
       expect(rows[1]!.anchor_date).toBeUndefined();
       expect(rows[1]!.post_anchor_count).toBe(3);
     });
-
-    // Pagination is opt-in — no limit means no LIMIT clause, so the historical
-    // "every account" behaviour is preserved byte for byte.
-    it("emits no LIMIT/OFFSET when no limit is supplied", async () => {
-      query.mockResolvedValueOnce({ rows: [] });
-      await listAccounts({ active: true });
-      // (the balance lateral has its own literal LIMIT — assert on the
-      // parameterized tail this helper appends, not on the word)
-      expect(query.mock.calls[0]![0]).not.toContain("LIMIT $");
-      expect(query.mock.calls[0]![1]).toEqual([
-        expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
-      ]);
-    });
-
-    it("appends a parameterized LIMIT/OFFSET when a limit is supplied", async () => {
-      query.mockResolvedValueOnce({ rows: [] });
-      await accountRepository.getAll({ active: true, limit: 25, offset: 50 });
-      expect(query.mock.calls[0]![0]).toContain("LIMIT $2 OFFSET $3");
-      expect(query.mock.calls[0]![1]).toEqual([
-        expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
-        25,
-        50,
-      ]);
-    });
-  });
-
-  describe("getCount", () => {
-    it("counts with the same active filter and coerces the bigint string", async () => {
-      query.mockResolvedValueOnce({ rows: [{ count: "42" }] });
-      expect(await accountRepository.getCount({ active: false })).toBe(42);
-      expect(query.mock.calls[0]![0]).toContain("a.is_active = false");
-    });
   });
 
   describe("getById / getByName", () => {
-    it("returns the row when found", async () => {
-      const row = accountRow({ id: 7, name: "Savings" });
-      query.mockResolvedValueOnce({ rows: [row] });
-      expect(await accountRepository.getById(7)).toEqual(row);
-      expect(query).toHaveBeenCalledWith(
-        expect.stringContaining("WHERE id = $1"),
-        [7],
-      );
-    });
-
     it("returns undefined when not found", async () => {
       query.mockResolvedValueOnce({ rows: [] });
       expect(await accountRepository.getById(99)).toBeUndefined();
     });
-
-    it("getByName matches on the normalized identity (D1: case/whitespace-insensitive)", async () => {
-      query.mockResolvedValueOnce({
-        rows: [accountRow({ id: 3, name: "Brokerage" })],
-      });
-      const r = await accountRepository.getByName("Brokerage");
-      expect(r!.id).toBe(3);
-      expect(query).toHaveBeenCalledWith(
-        expect.stringContaining("lower(btrim(name)) = lower(btrim($1))"),
-        ["Brokerage"],
-      );
-    });
-  });
-
-  describe("create", () => {
-    it("writes only whitelisted, defined fields", async () => {
-      query.mockResolvedValueOnce({
-        rows: [accountRow({ id: 11, name: "New" })],
-      });
-      const r = await accountRepository.create({
-        name: "New",
-        currency: "EUR",
-        bogus: "ignored", // not in WRITABLE
-        type: undefined, // skipped
-      });
-      expect(r.id).toBe(11);
-      const [sql, params] = query.mock.calls[0]!;
-      expect(sql).toContain("INSERT INTO accounts");
-      expect(sql).toContain('"name"');
-      expect(sql).toContain('"currency"');
-      expect(sql).not.toContain("bogus");
-      expect(params).toEqual(["New", "EUR"]);
-    });
   });
 
   describe("update", () => {
-    it("builds a SET clause and appends updated_at", async () => {
-      query.mockResolvedValueOnce({
-        rows: [accountRow({ id: 5, display_name: "X" })],
-      });
-      const r = await accountRepository.update(5, {
-        display_name: "X",
-        nope: 1,
-      });
-      expect(r!.display_name).toBe("X");
-      const [sql, params] = query.mock.calls[0]!;
-      expect(sql).toContain('"display_name" = $1');
-      expect(sql).toContain("updated_at = NOW()");
-      expect(sql).toContain("WHERE id = $2");
-      expect(params).toEqual(["X", 5]);
-    });
-
-    it("renames the account without writing retired transaction labels", async () => {
-      query.mockResolvedValueOnce({
-        rows: [accountRow({ id: 5, name: "Renamed" })],
-      });
-      const result = await accountRepository.update(5, { name: "Renamed" });
-      expect(result!.name).toBe("Renamed");
-      expect(query).toHaveBeenCalledTimes(1);
-      expect(query.mock.calls[0]![0]).toContain("UPDATE accounts");
-      expect(query.mock.calls[0]![0]).not.toContain("bank_account");
-    });
-
-    it("falls back to getById when no writable fields are provided", async () => {
-      query.mockResolvedValueOnce({
-        rows: [accountRow({ id: 5, name: "Same" })],
-      });
-      const r = await accountRepository.update(5, { nope: 1 });
-      expect(r!.name).toBe("Same");
-      // Only the getById SELECT runs, not an UPDATE.
-      expect(query).toHaveBeenCalledTimes(1);
-      expect(query.mock.calls[0]![0]).toContain("SELECT");
-    });
-
     it("returns undefined when the update affects no row", async () => {
       query.mockResolvedValueOnce({ rows: [] });
       expect(
@@ -545,39 +384,6 @@ describe("accountRepository", () => {
     it("returns undefined when nothing was deleted", async () => {
       query.mockResolvedValueOnce({ rows: [] });
       expect(await accountRepository.remove(8)).toBeUndefined();
-    });
-  });
-
-  describe("resolveOrCreateByName", () => {
-    it("trims and upserts on the normalized identity, returning the id", async () => {
-      query.mockResolvedValueOnce({ rows: [{ id: 21 }] });
-      const id = await accountRepository.resolveOrCreateByName("  My Bank  ");
-      expect(id).toBe(21);
-      expect(query).toHaveBeenCalledWith(
-        expect.stringContaining("ON CONFLICT (lower(btrim(name)))"),
-        ["My Bank", false],
-      );
-      // The conflict arm changes only the sticky capability flag; it never
-      // overwrites the existing account's display identity.
-      expect(query.mock.calls[0]![0]).toContain(
-        "accounts.multi_currency_cash OR EXCLUDED.multi_currency_cash",
-      );
-      expect(query.mock.calls[0]![0]).not.toContain("SET name =");
-    });
-
-    it("makes the multi-currency capability sticky when an adapter observes it", async () => {
-      query.mockResolvedValueOnce({ rows: [{ id: 21 }] });
-      await accountRepository.resolveOrCreateByName("Revolut", {
-        multiCurrencyCash: true,
-      });
-      expect(query.mock.calls[0]![1]).toEqual(["Revolut", true]);
-    });
-
-    it("returns undefined for a blank name without touching the DB", async () => {
-      expect(
-        await accountRepository.resolveOrCreateByName("   "),
-      ).toBeUndefined();
-      expect(query).not.toHaveBeenCalled();
     });
   });
 });

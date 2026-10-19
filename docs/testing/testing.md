@@ -2,8 +2,8 @@
 title: Testing Documentation
 type: testing
 status: active
-date: 2026-10-18
-updated: 2026-10-18
+date: 2026-10-19
+updated: 2026-10-19
 last-updated: 2026-10-10
 last_updated_timestamp: 2026-10-06T00:00:00Z
 added_portfolio_math_tests: 2026-05-05
@@ -42,10 +42,12 @@ related_code:
 
 ## Behavior-focused cleanup and test boundaries
 
-Tests are evidence, not an immutable specification of internal design. Preserve independently
-justified financial outcomes, public contracts, persistence and recovery through a redesign.
-Replace private helper, exact CSS string and SQL call-order assertions only after equivalent
-observable coverage passes. Do not update expected money values simply because new code returns
+Tests are evidence, not an immutable specification of internal design
+([[docs/adr/214-behaviour-boundary-tests|ADR-214]]). Agents may restructure code freely. Tests
+that assert structure (source text, private helpers, mock call order, SQL strings sent to a
+mocked client) may be deleted when a change breaks them, with a one-line reason per file in the
+PR; if one was the only check of a behaviour, add a boundary test in the same change. Preserve
+independently justified financial outcomes, public contracts, persistence and recovery. Do not update expected money values simply because new code returns
 a different value. Keep precision, conservation, parser, recurrence, property, real PostgreSQL
 and restore fault-injection suites.
 

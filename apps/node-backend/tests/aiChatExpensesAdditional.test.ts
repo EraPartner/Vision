@@ -289,20 +289,6 @@ describe('getYearOverYearComparison', () => {
     const r = await getYearOverYearComparison.run({ year: 2025 });
     expect(r.data.map((d) => d.category)).toEqual(['B', 'A']);
   });
-
-  it('runs both year fetches in parallel', async () => {
-    let resolveCurrent!: () => void;
-    let resolvePrev!: () => void;
-    transactionRepository.getAll
-      .mockImplementationOnce(() => new Promise((r) => { resolveCurrent = () => r([]); }))
-      .mockImplementationOnce(() => new Promise((r) => { resolvePrev = () => r([]); }));
-
-    const p = getYearOverYearComparison.run({ year: 2025 });
-    expect(transactionRepository.getAll).toHaveBeenCalledTimes(2);
-    resolveCurrent();
-    resolvePrev();
-    await p;
-  });
 });
 
 describe('getUncategorisedTransactions', () => {
