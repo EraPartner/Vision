@@ -1,8 +1,8 @@
 // ── Backup crypto / passphrase / retention ───────────────────────────────────
 // Extracted verbatim from main.js (TODO.md Wave W6). Owns the backup
-// passphrase lifecycle (safeStorage), key derivation (legacy v1 static-salt
-// scrypt + v2 per-file salt), the v1 (CBC) / v2 (GCM) encrypted-backup file
-// format, and backup retention/cleanup. main.js state (APP_NAME) and its
+// passphrase lifecycle (safeStorage), the v2 (GCM, per-file salt) encrypted
+// backup file format (the retired v1 CBC format is refused by name), and backup
+// retention/cleanup. main.js state (APP_NAME) and its
 // settings accessors are threaded in via init() so the module observes the
 // exact same values the code saw in-file.
 
@@ -11,7 +11,11 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { isEncryptedFile, decryptFile } from "./encrypted-file";
+import {
+  RETIRED_V1_MESSAGE,
+  isEncryptedFile,
+  decryptFile,
+} from "./encrypted-file";
 
 /** The persisted settings fields this module reads and writes. */
 export interface BackupCryptoSettings {
@@ -284,13 +288,13 @@ export async function decryptBackupFileToTemp(
     encryptedPath: encryptedFilePath,
     destinationPath: tempSqlPath,
     keyOrPassphrase,
-    v1Magic: BACKUP_ENC_MAGIC,
+    retiredV1Magic: BACKUP_ENC_MAGIC,
     v2Magic: BACKUP_ENC_MAGIC_V2,
-    v1Salt: context().APP_NAME.toLowerCase() + "-backup-v1",
     requiredError: ERR_PASSPHRASE_REQUIRED,
     invalidError: ERR_INVALID_PASSPHRASE,
     invalidHeaderMessage: "Invalid encrypted backup header.",
     unsupportedFormatMessage: "Backup is not in a supported encrypted format.",
+    retiredFormatMessage: RETIRED_V1_MESSAGE,
   });
   return tempSqlPath;
 }
