@@ -23,21 +23,12 @@ struct PortfolioTransactionForm: View {
     }
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                Text(
-                    strings.t(
-                        isEditing ? "txnEdit.title" : "addPortTxn.title",
-                        ["symbol": investmentLabel])
-                )
-                .font(.title2).accessibilityAddTraits(.isHeader)
-                Spacer()
-                Button {
-                    model.dismissEditor()
-                } label: {
-                    Image(systemName: "xmark")
-                }
-                .buttonStyle(.borderless).accessibilityLabel(strings.t("common.close")).keyboardShortcut(.cancelAction)
-            }.padding(24)
+            VisionDialogHeader(
+                title: strings.t(isEditing ? "txnEdit.title" : "addPortTxn.title", ["symbol": investmentLabel]),
+                closeLabel: strings.t("common.close"), onClose: { model.dismissEditor() }
+            )
+            .keyboardShortcut(.cancelAction)
+            .padding(.horizontal, 24).padding(.top, 24).padding(.bottom, 20)
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
@@ -45,7 +36,7 @@ struct PortfolioTransactionForm: View {
                         if let error = model.error {
                             Text(error).foregroundStyle(theme.destructive).textSelection(.enabled)
                         }
-                    }.padding(.horizontal, 24).padding(.bottom, 20)
+                    }.padding(.horizontal, 24).padding(.bottom, 24)
                 }.onChange(of: model.issue) {
                     if let issue = model.issue {
                         withAnimation { proxy.scrollTo(issue.field, anchor: .center) }
@@ -54,22 +45,29 @@ struct PortfolioTransactionForm: View {
                 }
             }
             Divider()
-            HStack {
-                Spacer()
-                Button(strings.t("addPortTxn.cancel")) { model.cancelEditor() }
+            VisionDialogFooter {
+                if model.isSaving { ProgressView().controlSize(.small) }
+                Button(strings.t("addPortTxn.cancel")) { model.cancelEditor() }.buttonStyle(.visionOutline)
                 Button(strings.t(isEditing ? "common.save" : "addPortTxn.record")) { save() }
                     .buttonStyle(.visionPrimary).keyboardShortcut(.defaultAction)
-                if model.isSaving { ProgressView().controlSize(.small) }
-            }.padding(20)
-        }.frame(width: 530, height: 720).disabled(model.isSaving).interactiveDismissDisabled(model.isSaving)
+            }
+            .padding(.horizontal, 24).padding(.vertical, 16)
+        }.frame(width: 480, height: 720).disabled(model.isSaving).interactiveDismissDisabled(model.isSaving)
             .task { await model.loadOptions() }
     }
     @ViewBuilder private var fields: some View {
-        if !isEditing {
-            Picker(strings.t("addPortTxn.type"), selection: text(\.type)) {
-                ForEach(PortfolioAssetKinds.tradeTypes(draft?.investment.assetClass ?? ""), id: \.self) {
-                    Text(strings.t("portfolio.txnType." + $0)).tag($0)
-                }
+        VStack(alignment: .leading, spacing: 6) {
+            fieldLabel("addPortTxn.type")
+            if isEditing {
+                // EditPortfolioTxnDialog shows the type as a disabled input.
+                TextField("", text: .constant(typeLabel(draft?.type ?? ""))).textFieldStyle(.vision).disabled(true)
+                    .accessibilityLabel(strings.t("addPortTxn.type"))
+            } else {
+                Picker(strings.t("addPortTxn.type"), selection: text(\.type)) {
+                    ForEach(PortfolioAssetKinds.tradeTypes(draft?.investment.assetClass ?? ""), id: \.self) {
+                        Text(strings.t("portfolio.txnType." + $0)).tag($0)
+                    }
+                }.labelsHidden().frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         dateField("addPortTxn.date", \.date, "date", allowClear: false)
@@ -95,12 +93,16 @@ struct PortfolioTransactionForm: View {
             field("addPortTxn.taxes", \.taxes, "taxes")
         }
         if draft?.type == "dividend" {
-            Picker(strings.t("addPortTxn.dividendAmountConvention"), selection: text(\.dividendAmountConvention)) {
-                ForEach(["gross", "net", "unknown"], id: \.self) {
-                    Text(strings.t("addPortTxn.dividendConvention." + $0)).tag($0)
-                }
+            VStack(alignment: .leading, spacing: 6) {
+                fieldLabel("addPortTxn.dividendAmountConvention")
+                Picker(strings.t("addPortTxn.dividendAmountConvention"), selection: text(\.dividendAmountConvention)) {
+                    ForEach(["gross", "net", "unknown"], id: \.self) {
+                        Text(strings.t("addPortTxn.dividendConvention." + $0)).tag($0)
+                    }
+                }.labelsHidden().frame(maxWidth: .infinity, alignment: .leading)
+                Text(strings.t("addPortTxn.dividendConvention.help")).font(.footnote).foregroundStyle(
+                    theme.secondaryLabel)
             }
-            Text(strings.t("addPortTxn.dividendConvention.help")).font(.footnote).foregroundStyle(theme.secondaryLabel)
         }
         field("addPortTxn.fxRate", \.fxRateToEur, "fxRateToEur")
         PortfolioBrokerField(
@@ -112,19 +114,30 @@ struct PortfolioTransactionForm: View {
         if draft?.showRecurring == true {
             Toggle(
                 strings.t("addPortTxn.recurring"),
-                isOn: Binding(get: { draft?.isRecurring ?? false }, set: { model.tradeDraft?.isRecurring = $0 }))
+                isOn: Binding(get: { draft?.isRecurring ?? false }, set: { model.tradeDraft?.isRecurring = $0 })
+            ).toggleStyle(.switch)
             if draft?.isRecurring == true {
-                Picker(strings.t("addPortTxn.interval"), selection: text(\.recurrenceInterval)) {
-                    ForEach(["daily", "weekly", "biweekly", "monthly", "quarterly", "yearly"], id: \.self) {
-                        Text(strings.t("addPortTxn.recurrence." + $0)).tag($0)
-                    }
+                VStack(alignment: .leading, spacing: 6) {
+                    fieldLabel("addPortTxn.interval")
+                    Picker(strings.t("addPortTxn.interval"), selection: text(\.recurrenceInterval)) {
+                        ForEach(["daily", "weekly", "biweekly", "monthly", "quarterly", "yearly"], id: \.self) {
+                            Text(strings.t("addPortTxn.recurrence." + $0)).tag($0)
+                        }
+                    }.labelsHidden().frame(maxWidth: .infinity, alignment: .leading)
                 }
                 dateField("addPortTxn.endDate", \.recurrenceEndDate, "recurrenceEndDate", allowClear: true)
             }
         }
-        VStack(alignment: .leading, spacing: 5) {
-            Text(strings.t("addPortTxn.note")).font(.callout)
+        VStack(alignment: .leading, spacing: 6) {
+            fieldLabel("addPortTxn.note")
             TextEditor(text: text(\.note)).frame(minHeight: 64).focused($focused, equals: "note")
+                .scrollContentBackground(.hidden).padding(6)
+                .background(
+                    RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
+                        .fill(Color(token: theme.palette.background, opacity: 0.8)))
+                .overlay(
+                    RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
+                        .strokeBorder(Color(token: theme.palette.input, opacity: 0.7), lineWidth: 1))
                 .accessibilityLabel(strings.t("addPortTxn.note"))
         }.id("note")
     }
@@ -132,9 +145,9 @@ struct PortfolioTransactionForm: View {
         _ key: String, _ path: WritableKeyPath<PortfolioTradeDraft, String>, _ id: String,
         variables: [String: String] = [:], lockGift: Bool = false
     ) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(strings.t(key, variables)).font(.callout)
-            TextField("", text: lockGift ? .constant("0") : text(path)).textFieldStyle(.roundedBorder)
+        VStack(alignment: .leading, spacing: 6) {
+            Text(strings.t(key, variables)).font(.subheadline.weight(.medium)).foregroundStyle(theme.foreground)
+            TextField("", text: lockGift ? .constant("0") : text(path)).textFieldStyle(.vision)
                 .disabled(lockGift).focused($focused, equals: id).onSubmit(save).accessibilityLabel(
                     strings.t(key, variables))
             if model.issue?.field == id {
@@ -145,8 +158,8 @@ struct PortfolioTransactionForm: View {
     private func dateField(
         _ key: String, _ path: WritableKeyPath<PortfolioTradeDraft, String>, _ id: String, allowClear: Bool
     ) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(strings.t(key)).font(.callout)
+        VStack(alignment: .leading, spacing: 6) {
+            fieldLabel(key)
             VisionDateField(
                 day: PlannedDay(ymd: draft?[keyPath: path], calendar: .current), placeholder: strings.t(key),
                 allowClear: allowClear,
@@ -159,6 +172,16 @@ struct PortfolioTransactionForm: View {
                 Text(strings.t(model.issue!.key)).font(.footnote).foregroundStyle(theme.destructive)
             }
         }.id(id)
+    }
+    /// The web `Label` above an input: subheadline, medium weight, foreground.
+    private func fieldLabel(_ key: String) -> some View {
+        Text(strings.t(key)).font(.subheadline.weight(.medium)).foregroundStyle(theme.foreground)
+    }
+    /// `getTxnTypeLabel`: the raw type when no `portfolio.txnType.*` label exists.
+    private func typeLabel(_ type: String) -> String {
+        let key = "portfolio.txnType." + type
+        let text = strings.t(key)
+        return text == key ? type : text
     }
     private func save() { Task { await model.saveEditor(strings: strings) } }
 }
@@ -219,7 +242,7 @@ private struct PortfolioEditingPresenter: ViewModifier {
         case .archive(let investment): strings.t("portfolio.archiveInvestmentDesc", ["name": investment.name])
         case .deleteInvestment(let investment, _, let key): strings.t(key, ["name": investment.name])
         case .deleteTransaction(let transaction):
-            strings.t("invDetail.delete.desc", ["txType": strings.t("portfolio.txnType." + transaction.type)])
+            strings.t("invDetail.delete.desc", ["txType": txnTypeLabel(transaction.type)])
         case nil: ""
         }
     }
@@ -229,6 +252,11 @@ private struct PortfolioEditingPresenter: ViewModifier {
         case .deleteInvestment: strings.t("common.delete")
         case .deleteTransaction, nil: strings.t("invDetail.delete.confirm")
         }
+    }
+    private func txnTypeLabel(_ type: String) -> String {
+        let key = "portfolio.txnType." + type
+        let text = strings.t(key)
+        return text == key ? type : text
     }
     private var destructive: Bool {
         if case .archive = model.confirmation { return false }

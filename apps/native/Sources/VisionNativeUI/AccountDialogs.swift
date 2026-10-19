@@ -89,43 +89,40 @@ struct AccountDialogs: ViewModifier {
     }
 }
 
-/// The title, description and footer frame the account dialogs share.
+/// The `DialogContent` frame the account, category and recipient dialogs share: the web
+/// header (title, description, close X), a scrolling body and a right-aligned footer, with
+/// `p-6` padding and the `gap-5` rhythm. Footer buttons default to the outline style; the
+/// primary action sets `.visionPrimary` itself.
 struct AccountDialogFrame<Content: View, Footer: View>: View {
     let title: String
     var description: String?
-    var width: CGFloat = 460
+    let closeLabel: String
+    /// `sm:max-w-md`.
+    var width: CGFloat = 448
     @ViewBuilder var content: () -> Content
     @ViewBuilder var footer: () -> Footer
     @Environment(\.visionTheme) private var theme
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.visionCardTitle)
-                    .accessibilityAddTraits(.isHeader)
-                if let description {
-                    Text(description)
-                        .font(.callout)
-                        .foregroundStyle(theme.secondaryLabel)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            .padding([.horizontal, .top], 24)
-            .padding(.bottom, 12)
+            VisionDialogHeader(title: title, description: description, closeLabel: closeLabel)
+                .padding([.horizontal, .top], 24)
+                .padding(.bottom, 20)
             ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 16) {
                     content()
                 }
                 .padding(.horizontal, 24)
-                .padding(.vertical, 4)
+                .padding(.vertical, 2)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            Divider()
-            HStack(spacing: 12) {
+            HStack(spacing: 8) {
                 footer()
             }
-            .padding(16)
+            .buttonStyle(.visionOutline)
+            .controlSize(.large)
+            .padding([.horizontal, .bottom], 24)
+            .padding(.top, 20)
         }
         .frame(minWidth: width, idealWidth: width, minHeight: 240)
         .foregroundStyle(theme.foreground)
@@ -140,9 +137,10 @@ struct AccountField<Control: View>: View {
     @Environment(\.visionTheme) private var theme
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: .leading, spacing: 6) {
             Text(label)
                 .font(.callout.weight(.medium))
+                .foregroundStyle(theme.foreground)
             control()
             if let hint {
                 Text(hint)
@@ -202,7 +200,7 @@ struct AccountFormSheet: View {
 
     var body: some View {
         if let form = model.form {
-            AccountDialogFrame(title: strings.t(form.titleKey), width: 470) {
+            AccountDialogFrame(title: strings.t(form.titleKey), closeLabel: strings.t("common.close"), width: 470) {
                 fields(form)
             } footer: {
                 Spacer()
@@ -241,7 +239,7 @@ struct AccountFormSheet: View {
                 strings.t("accounts.field.namePlaceholder"),
                 text: Binding(get: { model.form?.name ?? "" }, set: { model.form?.setName($0) })
             )
-            .textFieldStyle(.roundedBorder)
+            .textFieldStyle(.vision)
             .focused($focus, equals: .name)
             .onSubmit(submit)
             .accessibilityLabel(strings.t("accounts.field.name"))
@@ -251,7 +249,7 @@ struct AccountFormSheet: View {
                 strings.t("accounts.field.displayNamePlaceholder"),
                 text: Binding(get: { model.form?.displayName ?? "" }, set: { model.form?.setDisplayName($0) })
             )
-            .textFieldStyle(.roundedBorder)
+            .textFieldStyle(.vision)
             .onSubmit(submit)
             .accessibilityLabel(strings.t("accounts.field.displayName"))
         }
@@ -261,7 +259,7 @@ struct AccountFormSheet: View {
                     "",
                     text: Binding(get: { model.form?.institution ?? "" }, set: { model.form?.setInstitution($0) })
                 )
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(.vision)
                 .onSubmit(submit)
                 .accessibilityLabel(strings.t("accounts.field.institution"))
             }
@@ -311,7 +309,7 @@ struct AccountFormSheet: View {
                     strings.t("accounts.openingBalance.createPlaceholder"),
                     text: Binding(get: { model.form?.openingBalance ?? "" }, set: { model.form?.setOpeningBalance($0) })
                 )
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(.vision)
                 .focused($focus, equals: .openingBalance)
                 .onSubmit(submit)
                 .accessibilityLabel(strings.t(form.openingLabelKey))
@@ -410,7 +408,8 @@ struct ReconcileSheet: View {
             AccountDialogFrame(
                 title: strings.t("accounts.reconcile.title"),
                 description: strings.t("accounts.reconcile.description", ["name": AccountKinds.label(draft.account)]),
-                width: 480
+                closeLabel: strings.t("common.close"),
+                width: 448
             ) {
                 figures(draft, busy: busy)
                 if backdated, let readingDate = draft.readingDate {
@@ -489,7 +488,7 @@ struct ReconcileSheet: View {
                             money(draft.statement, draft.selectedCurrency),
                             text: Binding(get: { model.reconcile?.reading ?? "" }, set: { model.reconcile?.setReading($0) })
                         )
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(.vision)
                         .disabled(busy)
                         .accessibilityLabel(strings.t("accounts.reconcile.readingLabel"))
                     }
@@ -669,14 +668,15 @@ struct OpeningBalanceSheet: View {
         if let draft = model.opening {
             AccountDialogFrame(
                 title: strings.t("accounts.openingBalance.title"),
-                description: strings.t("accounts.openingBalance.description", ["name": draft.accountName])
+                description: strings.t("accounts.openingBalance.description", ["name": draft.accountName]),
+                closeLabel: strings.t("common.close")
             ) {
                 AccountField(label: "\(strings.t("accounts.openingBalance.balanceLabel")) (\(draft.currency))") {
                     TextField(
                         LocaleNumber.placeholder(format: settings.numberFormat),
                         text: Binding(get: { model.opening?.balance ?? "" }, set: { model.opening?.balance = $0 })
                     )
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.vision)
                     .focused($amountFocused)
                     .onSubmit(submit)
                     .accessibilityLabel(strings.t("accounts.openingBalance.balanceLabel"))
@@ -730,7 +730,8 @@ struct MergeAccountSheet: View {
             let target = candidates.first { $0.id == draft.targetId }
             AccountDialogFrame(
                 title: strings.t("accounts.mergeTitle"),
-                description: strings.t("accounts.mergeDescription", ["source": AccountKinds.label(draft.source)])
+                description: strings.t("accounts.mergeDescription", ["source": AccountKinds.label(draft.source)]),
+                closeLabel: strings.t("common.close")
             ) {
                 AccountField(label: strings.t("accounts.mergeTargetLabel")) {
                     Picker(
@@ -918,7 +919,8 @@ struct CloseAccountSheet: View {
         if let draft = model.close {
             AccountDialogFrame(
                 title: strings.t("accounts.close.title", ["name": AccountKinds.label(draft.account)]),
-                description: strings.t("accounts.close.description")
+                description: strings.t("accounts.close.description"),
+                closeLabel: strings.t("common.close")
             ) {
                 if draft.isPortfolio {
                     lots(draft)
@@ -1013,7 +1015,8 @@ struct BrokerTransferSheet: View {
         if let draft = model.transfer {
             AccountDialogFrame(
                 title: strings.t("portfolio.brokerTransfer.title", ["name": AccountKinds.label(draft.account)]),
-                description: strings.t("portfolio.brokerTransfer.description")
+                description: strings.t("portfolio.brokerTransfer.description"),
+                closeLabel: strings.t("common.close")
             ) {
                 content(draft)
             } footer: {

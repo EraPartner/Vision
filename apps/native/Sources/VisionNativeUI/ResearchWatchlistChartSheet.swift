@@ -11,17 +11,15 @@ struct ResearchWatchlistChartSheet: View {
     var body: some View {
         if let item = model.selectedItem {
             VStack(alignment: .leading, spacing: 20) {
-                HStack {
-                    Text(item.name).font(.title2.weight(.semibold)).accessibilityAddTraits(.isHeader)
-                    if let symbol = item.symbol { Text(symbol).font(.caption.monospaced()) }
-                    Spacer()
-                    Button {
-                        model.closeChart()
-                    } label: {
-                        Image(systemName: "xmark")
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(item.name).font(.visionCardTitle).foregroundStyle(theme.foreground)
+                        .accessibilityAddTraits(.isHeader)
+                    if let symbol = item.symbol {
+                        Text(symbol).font(.caption.monospaced()).foregroundStyle(theme.secondaryLabel)
                     }
-                    .buttonStyle(.borderless).keyboardShortcut(.cancelAction).accessibilityLabel(
-                        strings.t("common.close"))
+                    Spacer()
+                    VisionDialogCloseButton(label: strings.t("common.close")) { model.closeChart() }
+                        .keyboardShortcut(.cancelAction)
                 }
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
@@ -34,7 +32,9 @@ struct ResearchWatchlistChartSheet: View {
                                 theme.gain
                             )
                             .padding(12).frame(maxWidth: .infinity)
-                            .background(theme.gain.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+                            .background(
+                theme.gain.opacity(0.08),
+                in: RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous))
                         }
                         Picker(
                             "",
@@ -101,15 +101,16 @@ struct ResearchWatchlistChartSheet: View {
                 } else {
                     Image(systemName: "checkmark")
                 }
-            }.accessibilityLabel(strings.t("common.save")).disabled(model.isMutating)
-            Button(strings.t("watchlistChart.cancelEdit")) { model.cancelTargetEdit() }.disabled(model.isMutating)
+            }.buttonStyle(.visionPrimary).accessibilityLabel(strings.t("common.save")).disabled(model.isMutating)
+            Button(strings.t("watchlistChart.cancelEdit")) { model.cancelTargetEdit() }.buttonStyle(.visionOutline)
+                .disabled(model.isMutating)
         }
     }
     private func targetField(_ item: ResearchWatchlistItem) -> some View {
         let label = strings.t("watchlistChart.targetPrice")
         let identity: String = "\(item.name) (\(item.symbol ?? ""))"
         return TextField("0", text: Binding<String>(get: { model.targetDraft }, set: { model.targetDraft = $0 }))
-            .textFieldStyle(.roundedBorder).focused($targetFocused)
+            .textFieldStyle(.vision).focused($targetFocused)
             .accessibilityLabel("\(label): \(identity)")
             .onSubmit { save() }.disabled(model.isMutating)
     }

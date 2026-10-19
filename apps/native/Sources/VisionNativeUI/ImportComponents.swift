@@ -199,7 +199,7 @@ struct ImportCustomSetup: View {
                     strings.t("importPage.customBankName"),
                     text: Binding(get: { model.parserName }, set: { model.parserName = $0 })
                 )
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(.vision)
             }
             LazyVGrid(columns: Self.columns, alignment: .leading, spacing: 16) {
                 ImportField(label: strings.t("importPage.separator")) {
@@ -255,7 +255,7 @@ struct ImportCustomSetup: View {
                                 get: { String(model.config.skipRows) },
                                 set: { model.config.skipRows = CSVParserConfig.skipRows(from: $0) })
                         )
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(.vision)
                         .frame(maxWidth: 120)
                         Stepper(
                             strings.t("importPage.skipRows"),
@@ -295,7 +295,7 @@ struct ImportCustomSetup: View {
                 ImportField(label: strings.t(field.labelKey), required: field.isRequired) {
                     if headers.isEmpty {
                         TextField(strings.t(field.placeholderKey), text: binding(field.keyPath))
-                            .textFieldStyle(.roundedBorder)
+                            .textFieldStyle(.vision)
                     } else {
                         Picker(strings.t(field.labelKey), selection: binding(field.keyPath)) {
                             Text(strings.t("importPage.noMapping"))

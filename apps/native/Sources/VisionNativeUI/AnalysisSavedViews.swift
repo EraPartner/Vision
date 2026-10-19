@@ -21,7 +21,7 @@ struct AnalysisReusableView: View {
         AnalysisPanel(title: strings.t("analysis.saveTitle"), description: strings.t("analysis.saveHelp")) {
             VStack(alignment: .leading, spacing: 6) {
                 Text(strings.t("analysis.namePlaceholder")).font(.callout)
-                TextField(strings.t("analysis.namePlaceholder"), text: text(\.name)).textFieldStyle(.roundedBorder)
+                TextField(strings.t("analysis.namePlaceholder"), text: text(\.name)).textFieldStyle(.vision)
                 if nameMissing {
                     Text(strings.t("analysis.nameRequired")).font(.footnote).foregroundStyle(theme.destructive)
                 }
@@ -73,7 +73,7 @@ struct AnalysisReusableView: View {
             VStack(alignment: .leading, spacing: 5) {
                 Text(strings.t("analysis.reportingCurrency")).font(.callout)
                 TextField(model.effectivePreferences.currency, text: normalized(\.runCurrency, limit: 3))
-                    .textFieldStyle(.roundedBorder).accessibilityLabel(strings.t("analysis.reportingCurrency"))
+                    .textFieldStyle(.vision).accessibilityLabel(strings.t("analysis.reportingCurrency"))
             }
             VStack(alignment: .leading, spacing: 5) {
                 Text(strings.t("analysis.benchmark")).font(.callout)
@@ -81,7 +81,7 @@ struct AnalysisReusableView: View {
                     model.effectivePreferences.benchmark ?? strings.t("analysis.none"),
                     text: normalized(\.runBenchmark, limit: 32)
                 )
-                .textFieldStyle(.roundedBorder).disabled(model.runWithoutBenchmark)
+                .textFieldStyle(.vision).disabled(model.runWithoutBenchmark)
                 .accessibilityLabel(strings.t("analysis.benchmark"))
                 Toggle(
                     strings.t("analysis.noBenchmarkForRun"),
@@ -197,7 +197,7 @@ struct AnalysisSavedLibraryView: View {
                         } label: {
                             VStack(alignment: .leading, spacing: 5) {
                                 Text(saved.name).fontWeight(.medium).foregroundStyle(theme.foreground)
-                                Text("v\(saved.version) · \(saved.refreshStatus)").font(.footnote).foregroundStyle(
+                                Text("v\(saved.version) · \(refreshStatusLabel(saved.refreshStatus))").font(.footnote).foregroundStyle(
                                     theme.secondaryLabel)
                                 if let error = saved.lastError?["message"]?.stringValue {
                                     Text(error).font(.footnote).foregroundStyle(theme.destructive)
@@ -242,5 +242,11 @@ struct AnalysisSavedLibraryView: View {
         } message: {
             Text(strings.t("analysis.deleteConfirm", ["name": deletion?.name ?? ""]))
         }
+    }
+    /// The saved analysis `refreshStatus` wire value through its locale key, or as-is.
+    private func refreshStatusLabel(_ status: String) -> String {
+        let key = "analysis.refreshStatus." + status
+        let text = strings.t(key)
+        return text == key ? status : text
     }
 }

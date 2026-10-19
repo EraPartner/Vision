@@ -135,7 +135,7 @@ struct AnalysisWorkbenchTextField: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(shell.strings.t("analysis.ext.workbench." + key)).font(.callout)
-            TextField(shell.strings.t("analysis.ext.workbench." + key), text: $value).textFieldStyle(.roundedBorder)
+            TextField(shell.strings.t("analysis.ext.workbench." + key), text: $value).textFieldStyle(.vision)
         }
     }
 }

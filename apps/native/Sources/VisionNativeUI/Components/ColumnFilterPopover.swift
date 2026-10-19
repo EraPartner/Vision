@@ -38,7 +38,7 @@ struct ColumnFilterPopover: View {
                 .font(.footnote.weight(.medium))
                 .foregroundStyle(theme.secondaryLabel)
             TextField(strings.t("table.filterInputPlaceholder", ["header": header.lowercased()]), text: $value)
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(.vision)
                 .focused($inputFocused)
                 .onSubmit(close)
                 // The field editor takes Escape as `cancelOperation:` before `.onKeyPress` sees it.
@@ -49,7 +49,7 @@ struct ColumnFilterPopover: View {
             if !uniqueValues.isEmpty && uniqueValues.count <= Self.listLimit {
                 if uniqueValues.count > Self.searchThreshold {
                     TextField(strings.t("table.searchValues"), text: $valueSearch)
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(.vision)
                         .font(.footnote)
                 }
                 valueList(LocalTableQuery.matchingValues(uniqueValues, search: valueSearch))

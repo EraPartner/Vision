@@ -93,7 +93,7 @@ struct AnalysisFormulaEditorView: View {
             segmented: true)
         VStack(alignment: .leading, spacing: 4) {
             Text(t("expression")).font(.callout)
-            TextField(t("expression"), text: text(index, "expression")).textFieldStyle(.roundedBorder)
+            TextField(t("expression"), text: text(index, "expression")).textFieldStyle(.vision)
                 .font(.body.monospaced()).focused($focusedExpression, equals: index)
             Menu(t("insertField")) {
                 ForEach(model.columns, id: \.id) { column in
@@ -127,7 +127,7 @@ struct AnalysisFormulaEditorView: View {
     private var fieldInsertion: some View {
         DisclosureGroup(t("insertField")) {
             VStack(alignment: .leading, spacing: 8) {
-                TextField(t("searchFields"), text: $fieldSearch).textFieldStyle(.roundedBorder)
+                TextField(t("searchFields"), text: $fieldSearch).textFieldStyle(.vision)
                 let query = fieldSearch.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
                 let matching = model.columns.filter {
                     (model.fieldLabel($0.id, strings: shell.strings) + " " + $0.id).lowercased().contains(query)

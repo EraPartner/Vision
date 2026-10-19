@@ -154,20 +154,14 @@ struct TransactionBulkDialogView: View {
     private var drafts: TransactionBulkDrafts { model.bulkDrafts }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.visionCardTitle)
-                    .accessibilityAddTraits(.isHeader)
-                Text(description)
-                    .font(.callout)
-                    .foregroundStyle(theme.secondaryLabel)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+        VStack(alignment: .leading, spacing: 20) {
+            VisionDialogHeader(
+                title: title, description: description, closeLabel: strings.t("common.close"),
+                onClose: { if !model.bulkBusy { cancel() } })
             form
-            HStack(spacing: 12) {
-                Spacer()
+            VisionDialogFooter {
                 Button(strings.t("common.cancel")) { cancel() }
+                    .buttonStyle(.visionOutline)
                     .keyboardShortcut(.cancelAction)
                     .disabled(model.bulkBusy)
                 Button(action: submit) {
@@ -178,8 +172,8 @@ struct TransactionBulkDialogView: View {
                 .disabled(!canSubmit)
             }
         }
-        .padding(24)
-        .frame(minWidth: 420, idealWidth: 460)
+        .visionDialogPadding()
+        .frame(minWidth: 448, idealWidth: 512)
         .foregroundStyle(theme.foreground)
         .task { await model.pickers.load() }
     }
@@ -253,6 +247,7 @@ struct TransactionBulkDialogView: View {
                 Text(strings.t("txPage.bulk.exportFormatJson")).tag(ExportFormat.json)
             }
             .pickerStyle(.segmented)
+            .labelsHidden()
         case .tag:
             labeled("txPage.bulk.tagAdd") {
                 TagMultiSelect(pickers: model.pickers, selected: drafts.tagsToAdd, strings: strings) { slugs in
@@ -270,7 +265,7 @@ struct TransactionBulkDialogView: View {
                     model.setBulkSplitRecipient(id)
                 }
             }
-            VStack(alignment: .leading, spacing: 5) {
+            VStack(alignment: .leading, spacing: 6) {
                 Picker(
                     strings.t("splitDialog.splitType"),
                     selection: Binding(get: { drafts.splitMode }, set: { model.setBulkSplitMode($0) })
@@ -280,6 +275,7 @@ struct TransactionBulkDialogView: View {
                     }
                 }
                 .pickerStyle(.segmented)
+                .labelsHidden()
                 Text(strings.t(drafts.splitMode.hintKey))
                     .font(.footnote)
                     .foregroundStyle(theme.secondaryLabel)
@@ -288,9 +284,10 @@ struct TransactionBulkDialogView: View {
     }
 
     private func labeled<Content: View>(_ key: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: .leading, spacing: 6) {
             Text(strings.t(key))
                 .font(.callout.weight(.medium))
+                .foregroundStyle(theme.foreground)
             content()
         }
     }

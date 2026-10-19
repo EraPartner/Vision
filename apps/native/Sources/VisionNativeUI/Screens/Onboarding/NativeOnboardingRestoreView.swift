@@ -46,20 +46,26 @@ struct NativeOnboardingRestoreView: View {
             }
             .padding(16)
             .visionCardBackground()
-            .confirmationDialog(
-                strings.t("settings.restore.confirmTitle"), isPresented: $confirming, titleVisibility: .visible
-            ) {
-                Button(strings.t("settings.restore.confirmButton")) {
-                    Task {
-                        if let file = confirmedFile { await model.startRestore(file: file) }
+            // The web `useConfirmDialog` AlertDialog (default, non-destructive variant).
+            .sheet(isPresented: $confirming) {
+                NativeSettingsConfirmSheet(
+                    title: strings.t("settings.restore.confirmTitle"),
+                    message: strings.t("settings.restore.confirmDesc"),
+                    detail: confirmedFile.map { URL(fileURLWithPath: $0).lastPathComponent },
+                    confirmLabel: strings.t("settings.restore.confirmButton"),
+                    cancelLabel: strings.t("settings.restore.cancelButton"),
+                    destructive: false,
+                    onConfirm: {
+                        confirming = false
+                        Task {
+                            if let file = confirmedFile { await model.startRestore(file: file) }
+                            confirmedFile = nil
+                        }
+                    },
+                    onCancel: {
+                        confirming = false
                         confirmedFile = nil
-                    }
-                }
-                Button(strings.t("settings.restore.cancelButton"), role: .cancel) { confirmedFile = nil }
-            } message: {
-                Text(
-                    strings.t("settings.restore.confirmDesc") + "\n"
-                        + (confirmedFile.map { URL(fileURLWithPath: $0).lastPathComponent } ?? ""))
+                    })
             }
             .sheet(
                 isPresented: Binding(

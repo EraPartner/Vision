@@ -63,32 +63,58 @@ struct TaxWidgetsSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.visionTheme) private var theme
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(strings.t("widgets.title")).font(.title2).accessibilityAddTraits(.isHeader)
-            Text(strings.t("widgets.description")).foregroundStyle(theme.secondaryLabel)
-            ForEach(TaxWidgetsModel.definitions) { widget in
-                Toggle(
-                    strings.t(widget.labelKey),
-                    isOn: Binding(
-                        get: { model.isVisible(widget.id) },
-                        set: { value in Task { await model.setVisible(widget.id, value) } })
-                )
-                .disabled(model.isSaving || !model.isLoaded)
+        VStack(alignment: .leading, spacing: 20) {
+            VisionDialogHeader(
+                title: strings.t("widgets.title"), description: strings.t("widgets.description"),
+                closeLabel: strings.t("common.close"), onClose: { dismiss() }
+            )
+            .keyboardShortcut(.cancelAction)
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(TaxWidgetsModel.definitions) { widget in
+                    HStack(spacing: 12) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(strings.t(widget.labelKey)).foregroundStyle(theme.foreground)
+                            if let key = widget.descriptionKey {
+                                Text(strings.t(key)).font(.footnote).foregroundStyle(theme.secondaryLabel)
+                            }
+                        }
+                        Spacer(minLength: 8)
+                        Toggle(
+                            strings.t(widget.labelKey),
+                            isOn: Binding(
+                                get: { model.isVisible(widget.id) },
+                                set: { value in Task { await model.setVisible(widget.id, value) } })
+                        )
+                        .labelsHidden().toggleStyle(.switch).controlSize(.small)
+                        .disabled(model.isSaving || !model.isLoaded)
+                    }
+                    .padding(.horizontal, 16).padding(.vertical, 10)
+                    if widget.id != TaxWidgetsModel.definitions.last?.id { Divider().padding(.leading, 16) }
+                }
             }
+            .background(
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous).fill(theme.card))
+            .overlay(
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous)
+                    .strokeBorder(theme.border.opacity(0.6), lineWidth: 1))
             if let error = model.error {
                 Text(error).foregroundStyle(theme.destructive)
-                if !model.isLoaded { Button(strings.t("common.retry")) { Task { await model.load() } } }
+                if !model.isLoaded {
+                    Button(strings.t("common.retry")) { Task { await model.load() } }.buttonStyle(.visionOutline)
+                }
             }
-            HStack {
+            HStack(spacing: 8) {
                 Group {
                     Button(strings.t("widgets.showAll")) { Task { await model.setAll(true) } }
                     Button(strings.t("widgets.hideAll")) { Task { await model.setAll(false) } }
-                    Button(strings.t("widgets.reset")) { Task { await model.reset() } }
                 }.disabled(model.isSaving || !model.isLoaded)
-                Spacer()
-                Button(strings.t("common.close")) { dismiss() }.keyboardShortcut(.cancelAction)
+                Spacer(minLength: 0)
+                Button(strings.t("widgets.reset"), systemImage: "arrow.counterclockwise") {
+                    Task { await model.reset() }
+                }.disabled(model.isSaving || !model.isLoaded)
             }
-        }.padding(24).frame(width: 540)
+            .buttonStyle(.visionOutline)
+        }.visionDialogPadding().frame(width: 448)
     }
 }
 

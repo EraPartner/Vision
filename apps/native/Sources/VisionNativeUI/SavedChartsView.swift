@@ -151,64 +151,89 @@ private struct CustomChartBuilderSheet: View {
             })
     }
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(
-                strings.t(model.editingId == nil ? "customChart.builder.createTitle" : "customChart.builder.editTitle")
-            ).font(.visionCardTitle)
-            Text(strings.t("customChart.builder.desc")).foregroundStyle(theme.secondaryLabel)
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    TextField(strings.t("customChart.builder.name"), text: binding(\.name)).textFieldStyle(
-                        .roundedBorder)
-                    HStack {
-                        Picker(strings.t("customChart.chartType"), selection: binding(\.kind)) {
-                            ForEach(CustomChartKind.allCases, id: \.self) { Text(strings.t($0.labelKey)).tag($0) }
+        VStack(alignment: .leading, spacing: 20) {
+            VisionDialogHeader(
+                title: strings.t(
+                    model.editingId == nil ? "customChart.builder.createTitle" : "customChart.builder.editTitle"),
+                description: strings.t("customChart.builder.desc"), closeLabel: strings.t("common.close"),
+                onClose: { model.close() }
+            ).disabled(model.isSaving)
+            // `grid lg:grid-cols-2 gap-6`: the form on the left, the live preview on the right.
+            HStack(alignment: .top, spacing: 24) {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            fieldLabel("customChart.builder.name")
+                            TextField(strings.t("customChart.builder.name"), text: binding(\.name)).textFieldStyle(
+                                .vision)
                         }
-                        Picker(strings.t("customChart.timeBucket"), selection: binding(\.timeBucket)) {
-                            Text(strings.t("customChart.monthly")).tag("monthly")
-                            Text(strings.t("customChart.yearly")).tag("yearly")
-                        }.pickerStyle(.segmented)
-                    }
-                    HStack {
-                        dateField(\.dateRangeStart, key: "customChart.dateFrom")
-                        dateField(\.dateRangeEnd, key: "customChart.dateTo")
-                    }
-                    entitySection(
-                        title: "customChart.categoriesLabel", allKey: "customChart.allCategories",
-                        addKey: "customChart.addCategory",
-                        all: binding(\.allCategories), selected: binding(\.categoryIds), options: categoryOptions)
-                    entitySection(
-                        title: "customChart.recipientsLabel", allKey: "customChart.allRecipients",
-                        addKey: "customChart.addRecipient",
-                        all: binding(\.allRecipients), selected: binding(\.recipientIds),
-                        options: model.recipients.map { ChartPickerOption(id: $0.id, name: $0.name) })
-                    entitySection(
-                        title: "customChart.tagsLabel", allKey: "customChart.allTags", addKey: "customChart.addTag",
-                        all: binding(\.allTags), selected: binding(\.tagIds),
-                        options: model.tags.map { ChartPickerOption(id: $0.id, name: "#" + $0.slug) })
-                    Text(strings.t("customChart.builder.preview")).font(.headline)
+                        VStack(alignment: .leading, spacing: 6) {
+                            fieldLabel("customChart.chartType")
+                            Picker(strings.t("customChart.chartType"), selection: binding(\.kind)) {
+                                ForEach(CustomChartKind.allCases, id: \.self) { Text(strings.t($0.labelKey)).tag($0) }
+                            }.labelsHidden().frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        VStack(alignment: .leading, spacing: 6) {
+                            fieldLabel("customChart.timeBucket")
+                            Picker(strings.t("customChart.timeBucket"), selection: binding(\.timeBucket)) {
+                                Text(strings.t("customChart.monthly")).tag("monthly")
+                                Text(strings.t("customChart.yearly")).tag("yearly")
+                            }.pickerStyle(.segmented).labelsHidden()
+                        }
+                        HStack(alignment: .top, spacing: 8) {
+                            VStack(alignment: .leading, spacing: 6) {
+                                fieldLabel("customChart.dateFrom")
+                                dateField(\.dateRangeStart, key: "customChart.dateFrom")
+                            }.frame(maxWidth: .infinity, alignment: .leading)
+                            VStack(alignment: .leading, spacing: 6) {
+                                fieldLabel("customChart.dateTo")
+                                dateField(\.dateRangeEnd, key: "customChart.dateTo")
+                            }.frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        entitySection(
+                            title: "customChart.categoriesLabel", allKey: "customChart.allCategories",
+                            addKey: "customChart.addCategory",
+                            all: binding(\.allCategories), selected: binding(\.categoryIds), options: categoryOptions)
+                        entitySection(
+                            title: "customChart.recipientsLabel", allKey: "customChart.allRecipients",
+                            addKey: "customChart.addRecipient",
+                            all: binding(\.allRecipients), selected: binding(\.recipientIds),
+                            options: model.recipients.map { ChartPickerOption(id: $0.id, name: $0.name) })
+                        entitySection(
+                            title: "customChart.tagsLabel", allKey: "customChart.allTags", addKey: "customChart.addTag",
+                            all: binding(\.allTags), selected: binding(\.tagIds),
+                            options: model.tags.map { ChartPickerOption(id: $0.id, name: "#" + $0.slug) })
+                    }.padding(.horizontal, 1).padding(.trailing, 8)
+                }.frame(maxWidth: .infinity)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(strings.t("customChart.builder.preview")).font(.headline).foregroundStyle(theme.foreground)
+                        .accessibilityAddTraits(.isHeader)
                     if model.isPreviewLoading {
-                        ProgressView().frame(height: 240)
+                        ProgressView().frame(maxWidth: .infinity).frame(height: 240)
                     } else if let preview = model.preview {
                         CustomChartPlot(dataset: preview, kind: draft.kind, settings: settings, strings: strings)
                     } else if let error = model.previewError {
                         Text(error).foregroundStyle(theme.destructive)
                     }
-                    if let error = model.saveError { Text(error).foregroundStyle(theme.destructive) }
-                }.padding(.trailing, 8)
+                    Spacer(minLength: 0)
+                }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
-            HStack {
-                Spacer()
-                Button(strings.t("common.cancel")) { model.close() }.keyboardShortcut(.cancelAction).disabled(
-                    model.isSaving)
+            if let error = model.saveError { Text(error).foregroundStyle(theme.destructive) }
+            VisionDialogFooter {
+                Button(strings.t("common.cancel")) { model.close() }.keyboardShortcut(.cancelAction)
+                    .buttonStyle(.visionOutline).disabled(model.isSaving)
                 Button(strings.t(model.isSaving ? "customChart.saving" : "customChart.builder.save")) {
                     Task { await model.save() }
                 }
                 .buttonStyle(.visionPrimary).keyboardShortcut(.defaultAction).disabled(
                     !draft.canSave || model.isSaving)
             }
-        }.padding(24).frame(width: 740, height: 740).interactiveDismissDisabled(model.isSaving)
+        }.visionDialogPadding().frame(width: 896, height: 680).interactiveDismissDisabled(model.isSaving)
             .task(id: model.draft) { await model.refreshPreview() }
+    }
+    /// The web `Label`: `type-body font-medium text-label-primary` above its control.
+    private func fieldLabel(_ key: String) -> some View {
+        Text(strings.t(key)).font(.body.weight(.medium)).foregroundStyle(theme.foreground)
     }
     private var categoryOptions: [ChartPickerOption] {
         snapshot.categories(metric: .absolute).compactMap { row in
@@ -232,14 +257,18 @@ private struct CustomChartBuilderSheet: View {
         title: String, allKey: String, addKey: String, all: Binding<Bool>, selected: Binding<[Int]>,
         options: [ChartPickerOption]
     ) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text(strings.t(title)).font(.headline)
+                Text(strings.t(title)).font(.body.weight(.medium)).foregroundStyle(theme.foreground)
                 Spacer()
-                Toggle(strings.t(allKey), isOn: all)
+                HStack(spacing: 8) {
+                    Toggle(strings.t(allKey), isOn: all).toggleStyle(.switch).controlSize(.mini).labelsHidden()
+                    Text(strings.t(allKey)).font(.footnote).foregroundStyle(theme.secondaryLabel)
+                        .accessibilityHidden(true)
+                }
             }
             if all.wrappedValue {
-                Text(strings.t("customChart.allHint")).font(.caption).foregroundStyle(theme.secondaryLabel)
+                Text(strings.t("customChart.allHint")).font(.footnote).foregroundStyle(theme.secondaryLabel)
             } else {
                 ChartEntityPicker(title: strings.t(addKey), options: options, selection: selected, strings: strings)
                 ScrollView(.horizontal) {
@@ -272,11 +301,22 @@ private struct ChartEntityPicker: View {
     let strings: any Localizing
     @State private var isOpen = false
     @State private var search = ""
+    @Environment(\.visionTheme) private var theme
     var body: some View {
-        Button(title) { isOpen.toggle() }.buttonStyle(.visionOutline)
+        // `Button variant="outline" role="combobox" className="w-full justify-between"`.
+        Button {
+            isOpen.toggle()
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "plus").font(.caption)
+                Text(title)
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.up.chevron.down").font(.caption).opacity(0.5)
+            }.font(.body).foregroundStyle(theme.secondaryLabel).frame(maxWidth: .infinity)
+        }.buttonStyle(.visionOutline).accessibilityLabel(title)
             .popover(isPresented: $isOpen) {
                 VStack(alignment: .leading, spacing: 8) {
-                    TextField(strings.t("table.searchAllColumns"), text: $search).textFieldStyle(.roundedBorder)
+                    TextField(strings.t("table.searchAllColumns"), text: $search).textFieldStyle(.vision)
                     ScrollView {
                         VStack(alignment: .leading, spacing: 4) {
                             ForEach(options.filter { search.isEmpty || $0.name.localizedStandardContains(search) }) {

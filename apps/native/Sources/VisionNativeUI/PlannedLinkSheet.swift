@@ -27,7 +27,7 @@ struct PlannedLinkSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     TextField(strings.t("plannedPage.link.searchPlaceholder"), text: $link.search)
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(.vision)
                         .accessibilityLabel(strings.t("plannedPage.link.searchPlaceholder"))
                     filters
                     candidates
@@ -39,12 +39,12 @@ struct PlannedLinkSheet: View {
                     }
                 }
                 .padding(.horizontal, 24)
-                .padding(.vertical, 16)
+                .padding(.vertical, 20)
             }
             Divider()
             footer
         }
-        .frame(minWidth: 560, idealWidth: 640, minHeight: 520, idealHeight: 680)
+        .frame(minWidth: 600, idealWidth: 672, minHeight: 520, idealHeight: 680)
         .foregroundStyle(theme.foreground)
         .task { await link.resolveCluster() }
         .task(id: link.filters.requestKey) {
@@ -57,28 +57,11 @@ struct PlannedLinkSheet: View {
     // MARK: Header
 
     private var header: some View {
-        HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(strings.t("plannedPage.link.title", ["name": link.payment.name]))
-                    .font(.visionCardTitle)
-                    .accessibilityAddTraits(.isHeader)
-                Text(description)
-                    .font(.callout)
-                    .foregroundStyle(theme.secondaryLabel)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer()
-            Button {
-                model.dismissLinkDialog()
-            } label: {
-                Image(systemName: "xmark")
-            }
-            .buttonStyle(.borderless)
-            .accessibilityLabel(strings.t("common.close"))
-            .help(strings.t("common.close"))
-        }
+        VisionDialogHeader(
+            title: strings.t("plannedPage.link.title", ["name": link.payment.name]), description: description,
+            closeLabel: strings.t("common.close"), onClose: { model.dismissLinkDialog() })
         .padding(.horizontal, 24)
-        .padding(.top, 20)
+        .padding(.top, 24)
         .padding(.bottom, 4)
     }
 
@@ -122,14 +105,14 @@ struct PlannedLinkSheet: View {
                         strings.t("importPage.bankAccount"),
                         text: Binding(get: { link.filters.bankAccount }, set: { link.setBankAccount($0) })
                     )
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.vision)
                 }
                 labeled("recipientsPage.col.recipient") {
                     TextField(
                         strings.t("recipientsPage.search"),
                         text: Binding(get: { link.filters.recipientName }, set: { link.setRecipientName($0) })
                     )
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.vision)
                     if link.includesLinked {
                         Text(strings.t("plannedPage.link.includesLinked"))
                             .font(.footnote)
@@ -152,7 +135,7 @@ struct PlannedLinkSheet: View {
                     TextField(
                         "", text: Binding(get: { link.toleranceInput }, set: { link.setToleranceInput($0) })
                     )
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.vision)
                     .frame(width: 52)
                     .multilineTextAlignment(.trailing)
                     .focused($toleranceFocused)
@@ -258,11 +241,11 @@ struct PlannedLinkSheet: View {
     // MARK: Footer
 
     private var footer: some View {
-        HStack(spacing: 12) {
-            Spacer()
+        VisionDialogFooter {
             Button(strings.t("common.cancel")) {
                 model.dismissLinkDialog()
             }
+            .buttonStyle(.visionOutline)
             .keyboardShortcut(.cancelAction)
             Button {
                 Task { await model.executeLink(strings: strings) }
@@ -279,15 +262,16 @@ struct PlannedLinkSheet: View {
             .disabled(!link.canExecute || model.actionLoading)
         }
         .padding(.horizontal, 24)
-        .padding(.vertical, 14)
+        .padding(.vertical, 16)
     }
 
     // MARK: Pieces
 
     private func labeled<Content: View>(_ key: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: .leading, spacing: 6) {
             Text(strings.t(key))
                 .font(.callout.weight(.medium))
+                .foregroundStyle(theme.foreground)
             content()
         }
         .frame(maxWidth: .infinity, alignment: .leading)

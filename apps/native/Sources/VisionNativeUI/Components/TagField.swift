@@ -159,7 +159,7 @@ struct TagPopover: View {
         let canCreate = state.canCreate(existing: pickers.tags)
         VStack(alignment: .leading, spacing: 6) {
             TextField(strings.t("tags.searchPlaceholder"), text: typedBinding)
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(.vision)
                 .focused($searchFocused)
                 .onSubmit(commit)
                 .onKeyPress(.delete) {

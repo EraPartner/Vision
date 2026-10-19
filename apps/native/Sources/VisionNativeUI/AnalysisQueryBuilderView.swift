@@ -68,7 +68,7 @@ struct AnalysisQueryBuilderView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     Text(strings.t("analysis.fields")).font(.callout.weight(.medium))
                     Text(strings.t("analysis.fieldsHelp")).font(.footnote).foregroundStyle(theme.secondaryLabel)
-                    TextField(strings.t("analysis.searchFields"), text: $fieldSearch).textFieldStyle(.roundedBorder)
+                    TextField(strings.t("analysis.searchFields"), text: $fieldSearch).textFieldStyle(.vision)
                     Toggle(strings.t("analysis.technicalFields"), isOn: $technicalFields).font(.footnote)
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: 8) {
@@ -152,7 +152,7 @@ struct AnalysisQueryBuilderView: View {
                     }.labelsHidden()
                 } else {
                     TextField(strings.t("analysis.filterValue", context), text: valueText(index)).textFieldStyle(
-                        .roundedBorder)
+                        .vision)
                 }
             }.disabled(["is-null", "is-not-null"].contains(filter.operator))
                 .accessibilityLabel(strings.t("analysis.filterValue", context))
@@ -239,7 +239,7 @@ struct AnalysisSQLEditorView: View {
                 TextField(
                     "[\"2026-01-01\", 100]", text: Binding(get: { model.sqlValues }, set: { model.sqlValues = $0 })
                 )
-                .font(.body.monospaced()).textFieldStyle(.roundedBorder)
+                .font(.body.monospaced()).textFieldStyle(.vision)
                 .accessibilityLabel(strings.t("analysis.sqlParameters"))
                 Text(strings.t("analysis.sqlParametersHint")).font(.footnote).foregroundStyle(theme.secondaryLabel)
                 Text(strings.t("analysis.sqlHint")).font(.footnote).foregroundStyle(theme.secondaryLabel)

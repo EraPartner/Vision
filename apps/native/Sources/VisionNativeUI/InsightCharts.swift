@@ -36,58 +36,122 @@ struct InsightTimelineChart: View {
         ]
     }
 
+    /// Each key's position on a quantitative x axis. A String-keyed (categorical) axis
+    /// labels every category whatever tick values it is given, so 24 months or a daily
+    /// forecast drew overlapping dates.
+    private var keyIndex: [String: Int] {
+        Dictionary(uniqueKeysWithValues: keys.enumerated().map { ($1, $0) })
+    }
+    private var barSeries: [InsightChartSeries] { bars ? series.filter { !$0.dashed } : [] }
+
+    /// One bar: drawn as a rectangle so grouped and stacked bars keep a band layout on the
+    /// quantitative axis (0.8 of each index step, like the categorical band they replace).
+    private struct BarRect: Identifiable {
+        let id: String
+        let label: String
+        let x0: Double
+        let x1: Double
+        let y0: Double
+        let y1: Double
+    }
+
+    private var barRects: [BarRect] {
+        let index = keyIndex
+        let lines = barSeries
+        guard !lines.isEmpty else { return [] }
+        var rects: [BarRect] = []
+        if stackedBars {
+            var positive: [Int: Double] = [:]
+            var negative: [Int: Double] = [:]
+            for line in lines {
+                for point in line.points {
+                    guard let i = index[point.key] else { continue }
+                    let value = coordinate(point.value)
+                    let base = value < 0 ? negative[i, default: 0] : positive[i, default: 0]
+                    let top = base + value
+                    if value < 0 { negative[i] = top } else { positive[i] = top }
+                    rects.append(
+                        BarRect(
+                            id: line.id + "|" + point.key, label: line.label, x0: Double(i) - 0.36,
+                            x1: Double(i) + 0.36, y0: base, y1: top))
+                }
+            }
+        } else {
+            let width = 0.72 / Double(lines.count)
+            for (offset, line) in lines.enumerated() {
+                for point in line.points {
+                    guard let i = index[point.key] else { continue }
+                    let x0 = Double(i) - 0.36 + Double(offset) * width
+                    rects.append(
+                        BarRect(
+                            id: line.id + "|" + point.key, label: line.label, x0: x0 + width * 0.06,
+                            x1: x0 + width * 0.94, y0: 0, y1: coordinate(point.value)))
+                }
+            }
+        }
+        return rects
+    }
+
+    private var xDomain: ClosedRange<Double> {
+        bars ? -0.5...(Double(max(keys.count, 1)) - 0.5) : 0...Double(max(keys.count - 1, 1))
+    }
+
     var body: some View {
+        let keys = self.keys
+        let index = keyIndex
         VStack(alignment: .leading, spacing: 8) {
             Chart {
+                ForEach(barRects) { bar in
+                    RectangleMark(
+                        xStart: .value(title, bar.x0), xEnd: .value(title, bar.x1),
+                        yStart: .value(bar.label, bar.y0), yEnd: .value(bar.label, bar.y1)
+                    )
+                    .foregroundStyle(by: .value(title, bar.label))
+                    .cornerRadius(3)
+                }
                 ForEach(series) { line in
                     ForEach(line.points) { point in
-                        if bars && !line.dashed {
-                            if stackedBars {
-                                BarMark(x: .value(title, point.key), y: .value(line.label, coordinate(point.value)))
+                        // Bars are drawn above as BarRects.
+                        if !(bars && !line.dashed), let x = index[point.key].map(Double.init) {
+                            if areas && (areaSeries?.contains(line.id) ?? true)
+                                && (!stackedAreas || !series.contains(where: { $0.points.contains { $0.value < 0 } }))
+                            {
+                                AreaMark(
+                                    x: .value(title, x), y: .value(line.label, coordinate(point.value)),
+                                    stacking: stackedAreas ? .standard : .unstacked
+                                )
+                                .foregroundStyle(by: .value(title, line.label))
+                                .opacity(areaSeries == nil ? 1 : 0.12)
+                                if areaSeries != nil {
+                                    LineMark(
+                                        x: .value(title, x), y: .value(line.label, coordinate(point.value)),
+                                        series: .value(title, line.id)
+                                    )
                                     .foregroundStyle(by: .value(title, line.label))
+                                    .lineStyle(StrokeStyle(lineWidth: 2.5))
+                                }
                             } else {
-                                BarMark(x: .value(title, point.key), y: .value(line.label, coordinate(point.value)))
-                                    .foregroundStyle(by: .value(title, line.label))
-                                    .position(by: .value(title, line.label))
-                            }
-                        } else if areas && (areaSeries?.contains(line.id) ?? true)
-                            && (!stackedAreas || !series.contains(where: { $0.points.contains { $0.value < 0 } }))
-                        {
-                            AreaMark(
-                                x: .value(title, point.key), y: .value(line.label, coordinate(point.value)),
-                                stacking: stackedAreas ? .standard : .unstacked
-                            )
-                            .foregroundStyle(by: .value(title, line.label))
-                            .opacity(areaSeries == nil ? 1 : 0.12)
-                            if areaSeries != nil {
                                 LineMark(
-                                    x: .value(title, point.key), y: .value(line.label, coordinate(point.value)),
+                                    x: .value(title, x), y: .value(line.label, coordinate(point.value)),
                                     series: .value(title, line.id)
                                 )
                                 .foregroundStyle(by: .value(title, line.label))
-                                .lineStyle(StrokeStyle(lineWidth: 2.5))
+                                .lineStyle(
+                                    StrokeStyle(
+                                        lineWidth: line.id == "actual" ? 2.5 : 1.5,
+                                        dash: line.dashed ? [5, 4] : []))
                             }
-                        } else {
-                            LineMark(
-                                x: .value(title, point.key), y: .value(line.label, coordinate(point.value)),
-                                series: .value(title, line.id)
-                            )
-                            .foregroundStyle(by: .value(title, line.label))
-                            .lineStyle(
-                                StrokeStyle(
-                                    lineWidth: line.id == "actual" ? 2.5 : 1.5,
-                                    dash: line.dashed ? [5, 4] : []))
                         }
                     }
                 }
-                if let selection, keys.contains(selection) {
-                    RuleMark(x: .value(title, selection)).foregroundStyle(
+                if let selection, let x = index[selection] {
+                    RuleMark(x: .value(title, Double(x))).foregroundStyle(
                         theme.secondaryLabel.opacity(0.5))
                 }
-                if let rangeStart, let selection, keys.contains(rangeStart), keys.contains(selection) {
+                if let rangeStart, let selection, let a = index[rangeStart], let b = index[selection] {
                     RectangleMark(
-                        xStart: .value(title, min(rangeStart, selection)),
-                        xEnd: .value(title, max(rangeStart, selection))
+                        xStart: .value(title, Double(min(a, b))),
+                        xEnd: .value(title, Double(max(a, b)))
                     )
                     .foregroundStyle(theme.primary.opacity(0.08))
                 }
@@ -95,12 +159,15 @@ struct InsightTimelineChart: View {
             .chartForegroundStyleScale(
                 domain: series.map(\.label), range: series.indices.map { seriesColor(at: $0) }
             )
-            .chartXScale(domain: keys)
+            .chartXScale(domain: xDomain)
             .chartXAxis {
-                AxisMarks(values: ChartAxisTicks.evenlySpaced(keys)) { value in
+                AxisMarks(values: ChartAxisTicks.evenlySpaced(keys.indices.map(Double.init), count: 6)) { value in
                     AxisGridLine()
                     AxisValueLabel {
-                        if let key = value.as(String.self) { Text(formatTick?(key) ?? periodLabel(key)) }
+                        if let position = value.as(Double.self), keys.indices.contains(Int(position.rounded())) {
+                            let key = keys[Int(position.rounded())]
+                            Text(formatTick?(key) ?? periodLabel(key))
+                        }
                     }
                 }
             }
@@ -227,7 +294,12 @@ struct InsightTimelineChart: View {
     private func key(at x: CGFloat, proxy: ChartProxy, geometry: GeometryProxy) -> String? {
         guard let plot = proxy.plotFrame else { return nil }
         let frame = geometry[plot]
-        return proxy.value(atX: min(max(0, x - frame.minX), frame.width), as: String.self)
+        guard let position = proxy.value(atX: min(max(0, x - frame.minX), frame.width), as: Double.self) else {
+            return nil
+        }
+        let keys = self.keys
+        guard !keys.isEmpty else { return nil }
+        return keys[min(max(Int(position.rounded()), 0), keys.count - 1)]
     }
     private func handleKey(_ press: KeyPress) -> KeyPress.Result {
         guard !keys.isEmpty else { return .ignored }

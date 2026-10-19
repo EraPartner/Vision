@@ -124,7 +124,7 @@ public struct AdminOverviewView: View {
                 }
                 HStack(spacing: 8) {
                     SecureField(strings.t("admin.token.placeholder"), text: tokenDraft)
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(.vision)
                         .frame(maxWidth: 320)
                         .accessibilityLabel(strings.t("admin.token.title"))
                         .onSubmit { Task { await model.saveToken() } }

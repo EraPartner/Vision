@@ -83,8 +83,9 @@ public struct NativeSettingsWindow: View {
                     Text(strings.t(selected.titleKey)).font(Font.visionTitle3)
                         .lineLimit(1).accessibilityAddTraits(.isHeader)
                     Spacer()
-                    Button(action: onClose) { Image(systemName: "xmark") }.buttonStyle(.plain)
-                        .accessibilityLabel(strings.t("common.close")).keyboardShortcut(.cancelAction)
+                    // The web DialogContent close control, shared with every native dialog.
+                    VisionDialogCloseButton(label: strings.t("common.close"), action: onClose)
+                        .keyboardShortcut(.cancelAction)
                 }.padding(.horizontal, 24).frame(height: 48)
                 Divider()
                 ScrollView {

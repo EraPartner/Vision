@@ -47,7 +47,9 @@ public struct ShellRootView<WebContent: View>: View {
     @ViewBuilder
     private func detailColumn(_ theme: VisionTheme) -> some View {
         VStack(spacing: 0) {
-            shellBanners
+            // Over web pages the banners stack above the web view; native pages take them as a
+            // top inset so the page canvas runs behind them and under the titlebar strip.
+            if !isNativeDetail { shellBanners }
             ZStack {
                 NativeShellWebPresentation(mode: model.presentationMode, hidden: model.isWebContentHidden) {
                     webContent($0)
@@ -55,6 +57,7 @@ public struct ShellRootView<WebContent: View>: View {
                 if case .native(let screen) = model.detail {
                     NativePageZoomView(factor: model.pageZoom) {
                         NativeScreenContainer(screen: screen, model: model)
+                            .safeAreaInset(edge: .top, spacing: 0) { shellBanners }
                             .overlay(alignment: .topLeading) { contentLanding }
                             .background { PageScrollObserver { pageScroll = $0 } }
                             .environment(\.colorScheme, theme.colorScheme)
@@ -217,15 +220,18 @@ public struct ShellRootView<WebContent: View>: View {
         .disabled(model.isReloadingGraph)
         .allowsHitTesting(!model.isReloadingGraph)
     }
-    @ViewBuilder private var shellBanners: some View {
+    private var shellBanners: some View {
+        VStack(spacing: 0) { shellBannerStack }
+    }
+    @ViewBuilder private var shellBannerStack: some View {
         if let notifications = model.shellNotifications {
             if notifications.fx.shouldShow {
                 ShellFXStatusBanner(model: notifications.fx, shell: model)
-                    .padding(.horizontal, 20).padding(.top, 12)
+                    .padding(.horizontal, VisionPageLayout.padding).padding(.top, 12)
             }
             if case .native(.home) = model.detail, notifications.upcoming.shouldShow {
                 ShellUpcomingPaymentsBanner(model: notifications.upcoming, shell: model)
-                    .padding(.horizontal, 20).padding(.top, 12)
+                    .padding(.horizontal, VisionPageLayout.padding).padding(.top, 12)
             }
         }
     }

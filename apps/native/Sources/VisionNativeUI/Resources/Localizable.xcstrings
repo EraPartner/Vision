@@ -5527,6 +5527,60 @@
         }
       }
     },
+    "addTxn.date.other": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Other date…"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Andere datum…"
+          }
+        }
+      }
+    },
+    "addTxn.date.today": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Today"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vandaag"
+          }
+        }
+      }
+    },
+    "addTxn.date.yesterday": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yesterday"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gisteren"
+          }
+        }
+      }
+    },
     "addTxn.descMemo": {
       "comment": "Generated from i18n/source by scripts/native-strings.ts.",
       "extractionState": "manual",
@@ -5757,6 +5811,60 @@
           "stringUnit": {
             "state": "translated",
             "value": "Soort transactie"
+          }
+        }
+      }
+    },
+    "addTxn.kind.expense": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Expense"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uitgave"
+          }
+        }
+      }
+    },
+    "addTxn.kind.income": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Income"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inkomst"
+          }
+        }
+      }
+    },
+    "addTxn.kind.transfer": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transfer"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Overschrijving"
           }
         }
       }
@@ -6355,6 +6463,24 @@
         }
       }
     },
+    "admin.audit.enrollConfirm": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start protection"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bescherming starten"
+          }
+        }
+      }
+    },
     "admin.audit.enrollExplanation": {
       "comment": "Generated from i18n/source by scripts/native-strings.ts.",
       "extractionState": "manual",
@@ -6387,6 +6513,42 @@
           "stringUnit": {
             "state": "translated",
             "value": "De auditbescherming kon niet worden gestart. Geen geschiedenis is als geverifieerd gemarkeerd."
+          }
+        }
+      }
+    },
+    "admin.audit.enrollTitle": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start audit protection"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auditbescherming starten"
+          }
+        }
+      }
+    },
+    "admin.audit.enrollWarning": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The current history will be checked for internal consistency and saved as a starting point. This cannot prove that older entries were unchanged before enrollment."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "De huidige geschiedenis wordt intern gecontroleerd en als startpunt opgeslagen. Dit bewijst niet dat oudere vermeldingen vóór de aanmelding ongewijzigd waren."
           }
         }
       }
@@ -6715,6 +6877,24 @@
         }
       }
     },
+    "admin.audit.rotateConfirm": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rotate key"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sleutel vernieuwen"
+          }
+        }
+      }
+    },
     "admin.audit.rotateExplanation": {
       "comment": "Generated from i18n/source by scripts/native-strings.ts.",
       "extractionState": "manual",
@@ -6765,6 +6945,24 @@
           "stringUnit": {
             "state": "translated",
             "value": "Auditsleutel vernieuwd en geschiedenis geverifieerd."
+          }
+        }
+      }
+    },
+    "admin.audit.rotateWarning": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vision will replace this device's protected audit key after checking the full history. An interrupted rotation can make audit verification unavailable."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vision vervangt de beschermde auditsleutel van dit apparaat na controle van de volledige geschiedenis. Een onderbroken vernieuwing kan auditverificatie onmogelijk maken."
           }
         }
       }
@@ -6855,6 +7053,42 @@
           "stringUnit": {
             "state": "translated",
             "value": "Beveiligde overdracht importeren"
+          }
+        }
+      }
+    },
+    "admin.audit.transferImportConfirm": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import transfer"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Overdracht importeren"
+          }
+        }
+      }
+    },
+    "admin.audit.transferImportWarning": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import only on a new Mac before restoring the matching backup. The fresh audit checkpoint will be replaced."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importeer alleen op een nieuwe Mac voordat je de bijbehorende back-up herstelt. Het nieuwe auditcontrolepunt wordt vervangen."
           }
         }
       }
@@ -16651,6 +16885,96 @@
         }
       }
     },
+    "analysis.refreshStatus.cancelled": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancelled"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geannuleerd"
+          }
+        }
+      }
+    },
+    "analysis.refreshStatus.failed": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Failed"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mislukt"
+          }
+        }
+      }
+    },
+    "analysis.refreshStatus.never-run": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Never run"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nog niet uitgevoerd"
+          }
+        }
+      }
+    },
+    "analysis.refreshStatus.running": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Running"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bezig"
+          }
+        }
+      }
+    },
+    "analysis.refreshStatus.succeeded": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Up to date"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bijgewerkt"
+          }
+        }
+      }
+    },
     "analysis.removeFilterContext": {
       "comment": "Generated from i18n/source by scripts/native-strings.ts.",
       "extractionState": "manual",
@@ -17943,6 +18267,78 @@
           "stringUnit": {
             "state": "translated",
             "value": "Sommige gegevens werden niet geaccepteerd. Controleer je invoer en probeer opnieuw."
+          }
+        }
+      }
+    },
+    "app.auditEnrollmentRequired": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Audit protection has not been started. Open Admin > Audit to review the history and explicitly start protection."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auditbescherming is nog niet gestart. Open Beheer > Audit om de geschiedenis te controleren en de bescherming expliciet te starten."
+          }
+        }
+      }
+    },
+    "app.auditFailed": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Audit integrity check failed. Open Admin > Audit before trusting recent changes. Preserve your backup and audit checkpoint."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "De controle van de auditintegriteit is mislukt. Open Beheer > Audit voordat je recente wijzigingen vertrouwt. Bewaar je back-up en auditcontrolepunt."
+          }
+        }
+      }
+    },
+    "app.auditPartial": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recent changes are not independently verified. Open Admin > Audit to review the checkpoint before trusting them."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recente wijzigingen zijn niet onafhankelijk geverifieerd. Open Beheer > Audit om het controlepunt te bekijken voordat je ze vertrouwt."
+          }
+        }
+      }
+    },
+    "app.auditUnavailable": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Audit integrity protection is unavailable. Open Admin > Audit to check its status. Your data remains accessible; no checkpoint has been reset."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "De bescherming van de auditintegriteit is niet beschikbaar. Open Beheer > Audit om de status te controleren. Je gegevens blijven toegankelijk; er is geen controlepunt gereset."
           }
         }
       }
@@ -19621,6 +20017,42 @@
         }
       }
     },
+    "categoryPie.noData": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No category data available"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geen categoriedata beschikbaar"
+          }
+        }
+      }
+    },
+    "categoryPie.title": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recent activity by category"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recente activiteit per categorie"
+          }
+        }
+      }
+    },
     "charts.deleteFailed": {
       "comment": "Generated from i18n/source by scripts/native-strings.ts.",
       "extractionState": "manual",
@@ -20193,6 +20625,24 @@
           "stringUnit": {
             "state": "translated",
             "value": "Acties"
+          }
+        }
+      }
+    },
+    "commandPalette.copied": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copied to clipboard"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gekopieerd naar klembord"
           }
         }
       }
@@ -23721,6 +24171,24 @@
           "stringUnit": {
             "state": "translated",
             "value": "Acties voor deze rij"
+          }
+        }
+      }
+    },
+    "dbEditor.rowsOnPage": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{n} row(s) on this page"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{n} rij(en) op deze pagina"
           }
         }
       }
@@ -33891,6 +34359,222 @@
           "stringUnit": {
             "state": "translated",
             "value": "Marktopzoeker"
+          }
+        }
+      }
+    },
+    "menu.appearance": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Appearance"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Weergave"
+          }
+        }
+      }
+    },
+    "menu.documentation": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Documentation"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Documentatie"
+          }
+        }
+      }
+    },
+    "menu.edit": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wijzig"
+          }
+        }
+      }
+    },
+    "menu.file": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "File"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Archief"
+          }
+        }
+      }
+    },
+    "menu.go": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Go"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ga"
+          }
+        }
+      }
+    },
+    "menu.importCsv": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import CSV…"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importeer CSV…"
+          }
+        }
+      }
+    },
+    "menu.keyboardShortcuts": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keyboard Shortcuts"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toetscombinaties"
+          }
+        }
+      }
+    },
+    "menu.newTransaction": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New transaction"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nieuwe transactie"
+          }
+        }
+      }
+    },
+    "menu.settings": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Settings…"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Instellingen…"
+          }
+        }
+      }
+    },
+    "menu.sourceCode": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Source Code"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Broncode"
+          }
+        }
+      }
+    },
+    "menu.toggleSidebar": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toggle Sidebar"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zijbalk tonen/verbergen"
+          }
+        }
+      }
+    },
+    "menu.view": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "View"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Weergave"
           }
         }
       }
@@ -66925,6 +67609,42 @@
         }
       }
     },
+    "settings.restore.auditContinuityTitle": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restore without verified audit history?"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Herstellen zonder gecontroleerde auditgeschiedenis?"
+          }
+        }
+      }
+    },
+    "settings.restore.auditContinuityWarning": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This backup cannot be verified against this device's audit checkpoint. Restoring it will leave audit continuity unverified and replace the current data."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deze back-up kan niet worden gecontroleerd aan de hand van het auditcontrolepunt van dit apparaat. Na herstel is de continuïteit van de auditgeschiedenis niet verifieerbaar en worden de huidige gegevens vervangen."
+          }
+        }
+      }
+    },
     "settings.restore.cancelButton": {
       "comment": "Generated from i18n/source by scripts/native-strings.ts.",
       "extractionState": "manual",
@@ -67785,6 +68505,60 @@
           "stringUnit": {
             "state": "translated",
             "value": "Laatste verwijdering ongedaan maken"
+          }
+        }
+      }
+    },
+    "splash.starting": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Starting Vision…"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vision starten…"
+          }
+        }
+      }
+    },
+    "splash.startingServices": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Starting services…"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Services starten…"
+          }
+        }
+      }
+    },
+    "splash.waitingApp": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Almost ready…"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bijna klaar…"
           }
         }
       }
@@ -70395,6 +71169,24 @@
           "stringUnit": {
             "state": "translated",
             "value": "+{count} meer…"
+          }
+        }
+      }
+    },
+    "table.noData": {
+      "comment": "Generated from i18n/source by scripts/native-strings.ts.",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No data to display"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geen gegevens beschikbaar"
           }
         }
       }

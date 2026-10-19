@@ -12,6 +12,7 @@ struct NativeTopbar: View {
     let height: CGFloat
     let scrolled: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.visionTheme) private var theme
 
     /// `INLINE_TITLE_THRESHOLD` in AppLayout.
     static let titleThreshold: CGFloat = 96
@@ -59,8 +60,13 @@ struct NativeTopbar: View {
         // The strip drags the window like a titlebar; buttons above it take their own clicks.
         .background { WindowDragArea() }
         .background {
-            Rectangle().fill(.bar)
-                .overlay(alignment: .bottom) { Divider() }
+            // The web topbar's `bg-background/80 backdrop-blur`: the page tint over a blur, so the
+            // strip reads as the page rather than the system's grey bar material.
+            Rectangle().fill(.ultraThinMaterial)
+                .overlay(Color(token: theme.glass.detailTint, opacity: 0.82))
+                .overlay(alignment: .bottom) {
+                    Rectangle().fill(theme.border.opacity(0.6)).frame(height: 1)
+                }
                 .opacity(scrolled ? 1 : 0)
                 .allowsHitTesting(false)
         }

@@ -60,15 +60,10 @@ struct TransactionInspectorView: View {
                     .padding(.top, 4)
             }
             Spacer(minLength: 0)
-            Button {
+            VisionDialogCloseButton(label: strings.t("common.close")) {
                 model.closeInspector()
-            } label: {
-                Image(systemName: "xmark")
             }
-            .buttonStyle(.borderless)
             .keyboardShortcut(docked ? nil : .cancelAction)
-            .help(strings.t("common.close"))
-            .accessibilityLabel(strings.t("common.close"))
         }
     }
 
@@ -306,12 +301,12 @@ struct TransactionInspectorView: View {
             }
         case .comment:
             TextField(label, text: text, axis: .vertical)
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(.vision)
                 .lineLimit(2...5)
                 .onSubmit { Task { await model.saveDetail() } }
         case .amount, .memo, .currency:
             TextField(label, text: text)
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(.vision)
                 .onSubmit { Task { await model.saveDetail() } }
         }
     }

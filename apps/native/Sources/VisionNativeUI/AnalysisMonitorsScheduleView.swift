@@ -37,7 +37,7 @@ struct AnalysisMonitorsScheduleView: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(strings.t(key)).font(.caption)
             TextField(strings.t(key), text: Binding(get: { value }, set: set))
-                .textFieldStyle(.roundedBorder).focused(focus, equals: input)
+                .textFieldStyle(.vision).focused(focus, equals: input)
                 .accessibilityHint(range)
             Text(range).font(.caption2).foregroundStyle(theme.secondaryLabel)
         }

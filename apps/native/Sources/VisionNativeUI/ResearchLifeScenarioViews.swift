@@ -155,7 +155,7 @@ struct ResearchLifeScenarioPanel: View {
                     set: { value in
                         model.draft[keyPath: path] = limit.map { String(value.prefix($0)) } ?? value
                     })
-            ).textFieldStyle(.roundedBorder).disabled(model.saving).accessibilityLabel(strings.t(key))
+            ).textFieldStyle(.vision).disabled(model.saving).accessibilityLabel(strings.t(key))
         }.frame(maxWidth: .infinity, alignment: .leading)
     }
     private func binding(_ key: WritableKeyPath<ResearchLifeScenarioDraft, String>) -> Binding<String> {
@@ -208,7 +208,7 @@ private struct ResearchGoalMonthField: View {
         VStack(alignment: .leading, spacing: 7) {
             Text(shell.strings.t("research.lifeScenario.goalDate")).font(.caption)
             HStack(spacing: 6) {
-                TextField("YYYY-MM", text: $value).textFieldStyle(.roundedBorder)
+                TextField("YYYY-MM", text: $value).textFieldStyle(.vision)
                     .accessibilityLabel(shell.strings.t("research.lifeScenario.goalDate"))
                 Button {
                     let parts = value.split(separator: "-").compactMap { Int($0) }

@@ -44,7 +44,7 @@ struct ResearchDossierEditorView: View {
             }
             HStack(alignment: .top, spacing: 16) {
                 ResearchDossierField(label: strings.t("dossiers.field.title")) {
-                    TextField("", text: text(\.title)).textFieldStyle(.roundedBorder).accessibilityLabel(
+                    TextField("", text: text(\.title)).textFieldStyle(.vision).accessibilityLabel(
                         strings.t("dossiers.field.title")
                     )
                 }

@@ -253,7 +253,7 @@ public struct RecipientsView: View {
                 strings.t("recipientsPage.col.recipient"),
                 text: Binding(get: { model.editing?.name ?? "" }, set: { model.editing?.name = $0 })
             )
-            .textFieldStyle(.roundedBorder)
+            .textFieldStyle(.vision)
             .onSubmit { Task { await model.saveEditing() } }
             .onExitCommand { model.cancelEditing() }
             .accessibilityLabel("\(strings.t("recipientsPage.col.recipient")): \(payee.name)")
@@ -324,7 +324,7 @@ public struct RecipientsView: View {
                 strings.t("recipientsPage.col.notes"),
                 text: Binding(get: { model.editing?.notes ?? "" }, set: { model.editing?.notes = $0 })
             )
-            .textFieldStyle(.roundedBorder)
+            .textFieldStyle(.vision)
             .onSubmit { Task { await model.saveEditing() } }
             .onExitCommand { model.cancelEditing() }
             .accessibilityLabel("\(strings.t("recipientsPage.col.notes")): \(payee.name)")
@@ -487,13 +487,15 @@ struct PayeeAddSheet: View {
 
     var body: some View {
         if let draft = model.add {
-            AccountDialogFrame(title: strings.t("form.addRecipient.title"), width: 440) {
+            AccountDialogFrame(
+                title: strings.t("form.addRecipient.title"), closeLabel: strings.t("common.close"), width: 448
+            ) {
                 AccountField(label: strings.t("form.addRecipient.name")) {
                     TextField(
                         strings.t("addRec.namePlaceholder"),
                         text: Binding(get: { model.add?.name ?? "" }, set: { model.add?.setName($0) })
                     )
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.vision)
                     .focused($nameFocused)
                     .onSubmit(submit)
                     .accessibilityLabel(strings.t("form.addRecipient.name"))
@@ -508,13 +510,13 @@ struct PayeeAddSheet: View {
                         .font(.body)
                         .frame(minHeight: 64, maxHeight: 120)
                         .scrollContentBackground(.hidden)
-                        .padding(4)
+                        .padding(6)
                         .background(
-                            RoundedRectangle(cornerRadius: DesignTokens.Radius.control)
-                                .fill(theme.foreground.opacity(0.04)))
+                            RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
+                                .fill(Color(token: theme.palette.background, opacity: 0.8)))
                         .overlay(
-                            RoundedRectangle(cornerRadius: DesignTokens.Radius.control)
-                                .strokeBorder(theme.border, lineWidth: 1))
+                            RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
+                                .strokeBorder(Color(token: theme.palette.input, opacity: 0.7), lineWidth: 1))
                         .accessibilityLabel(strings.t("addRec.notesOptional"))
                 }
             } footer: {
@@ -550,7 +552,10 @@ struct PayeeMergeSheet: View {
     private var strings: any Localizing { shell.strings }
 
     var body: some View {
-        AccountDialogFrame(title: strings.t("merge.title"), description: strings.t("merge.description"), width: 500) {
+        AccountDialogFrame(
+            title: strings.t("merge.title"), description: strings.t("merge.description"),
+            closeLabel: strings.t("common.close"), width: 512
+        ) {
             if merge.loadFailed {
                 HStack(spacing: 10) {
                     Image(systemName: "exclamationmark.triangle")
@@ -562,6 +567,8 @@ struct PayeeMergeSheet: View {
                     Button(strings.t("common.retry")) {
                         Task { await merge.retryList() }
                     }
+                    .buttonStyle(.visionOutline)
+                    .controlSize(.small)
                     .disabled(merge.isLoadingList)
                 }
                 .padding(10)
@@ -763,7 +770,8 @@ struct MatchRulesSheet: View {
         if let state = model.rules {
             AccountDialogFrame(
                 title: strings.t("recipientPatterns.title"),
-                description: "\(state.recipientName) — \(strings.t("recipientPatterns.subtitle"))", width: 620
+                description: "\(state.recipientName) — \(strings.t("recipientPatterns.subtitle"))",
+                closeLabel: strings.t("common.close"), width: 672
             ) {
                 if let patterns = state.patterns {
                     if state.showsEmpty {
@@ -904,7 +912,7 @@ struct MatchRuleFormCard: View {
                             text: Binding(
                                 get: { model.rules?.form?.pattern ?? "" }, set: { model.rules?.setPattern($0) })
                         )
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(.vision)
                         .font(.body.monospaced())
                         .focused($patternFocused)
                         .onSubmit(save)
@@ -921,6 +929,7 @@ struct MatchRuleFormCard: View {
                                 Text(strings.t("recipientPatterns.previewBtn"))
                             }
                         }
+                        .buttonStyle(.visionOutline)
                         .disabled(!form.canSave || state.isPreviewing)
                     }
                     if let count = state.previewCount {
@@ -952,7 +961,7 @@ struct MatchRuleFormCard: View {
                             text: Binding(
                                 get: { model.rules?.form?.priorityText ?? "" }, set: { model.rules?.setPriority($0) })
                         )
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(.vision)
                         .frame(width: 90)
                         .onSubmit(save)
                         .accessibilityLabel(strings.t("recipientPatterns.priorityLabel"))
@@ -963,7 +972,7 @@ struct MatchRuleFormCard: View {
                         strings.t("recipientPatterns.notesPlaceholder"),
                         text: Binding(get: { model.rules?.form?.notes ?? "" }, set: { model.rules?.setNotes($0) })
                     )
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.vision)
                     .onSubmit(save)
                     .accessibilityLabel(strings.t("recipientPatterns.notesLabel"))
                 }
@@ -977,6 +986,7 @@ struct MatchRuleFormCard: View {
                 HStack(spacing: 8) {
                     Spacer()
                     Button(strings.t("common.cancel")) { model.cancelRuleForm() }
+                        .buttonStyle(.visionOutline)
                     Button(action: save) {
                         HStack(spacing: 6) {
                             if state.isSaving { ProgressView().controlSize(.small) }

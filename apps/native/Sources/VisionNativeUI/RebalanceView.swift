@@ -121,7 +121,7 @@ public struct RebalanceView: View {
     var reserveInput: some View {
         field("rebalance.commitment.reserveFloor") {
             TextField("0", text: Binding(get: { model.reserveFloor }, set: { model.setReserveFloor($0) }))
-                .textFieldStyle(.roundedBorder).frame(width: 160).focused($focus, equals: "reserve")
+                .textFieldStyle(.vision).frame(width: 160).focused($focus, equals: "reserve")
                 .accessibilityLabel(strings.t("rebalance.commitment.reserveFloor"))
             Text(strings.t("rebalance.reserveHelp", ["currency": model.currency])).font(.footnote)
                 .foregroundStyle(theme.secondaryLabel).frame(maxWidth: 260, alignment: .leading)

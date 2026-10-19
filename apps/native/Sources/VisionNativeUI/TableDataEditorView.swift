@@ -446,7 +446,7 @@ public struct TableDataEditorView: View {
     /// Enter commits, Escape reverts the cell, and leaving the field commits (blur).
     private func inlineEditor(_ cell: TableDataEditorModel.Cell, label: String) -> some View {
         TextField(label, text: editingText)
-            .textFieldStyle(.roundedBorder)
+            .textFieldStyle(.vision)
             .font(.footnote.monospaced())
             .labelsHidden()
             .accessibilityLabel(label)
@@ -575,12 +575,10 @@ struct ReviewChangesSheet: View {
 
     var body: some View {
         let counts = model.operationCounts
-        VStack(alignment: .leading, spacing: 14) {
-            Text(strings.t("dbEditor.previewTitle"))
-                .font(.visionCardTitle)
-                .accessibilityAddTraits(.isHeader)
-            Text(strings.t("dbEditor.previewDescription"))
-                .foregroundStyle(theme.secondaryLabel)
+        VStack(alignment: .leading, spacing: 16) {
+            VisionDialogHeader(
+                title: strings.t("dbEditor.previewTitle"), description: strings.t("dbEditor.previewDescription"),
+                closeLabel: strings.t("common.close"), onClose: { model.isReviewPresented = false })
             Text(
                 strings.t(
                     "dbEditor.commitSummary",
@@ -631,11 +629,11 @@ struct ReviewChangesSheet: View {
             .background(
                 RoundedRectangle(cornerRadius: DesignTokens.Radius.card)
                     .fill(theme.foreground.opacity(0.04)))
-            HStack(spacing: 8) {
-                Spacer()
+            VisionDialogFooter {
                 Button(strings.t("dbEditor.cancel")) {
                     model.isReviewPresented = false
                 }
+                .buttonStyle(.visionOutline)
                 .keyboardShortcut(.cancelAction)
                 Button(model.isCommitting ? strings.t("dbEditor.committing") : strings.t("dbEditor.commit")) {
                     Task { await model.commit(strings: strings) }
@@ -645,7 +643,7 @@ struct ReviewChangesSheet: View {
                 .disabled(!model.canCommit)
             }
         }
-        .padding(24)
+        .visionDialogPadding()
         .frame(width: 720)
         .foregroundStyle(theme.foreground)
     }

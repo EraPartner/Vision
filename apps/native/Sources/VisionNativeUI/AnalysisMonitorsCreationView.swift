@@ -39,7 +39,7 @@ struct AnalysisMonitorsCreationView: View {
                     }
                     VStack(alignment: .leading, spacing: 4) {
                         Text(strings.t("monitors.ruleTitle")).font(.caption)
-                        TextField(strings.t("monitors.ruleTitle"), text: text(\.title)).textFieldStyle(.roundedBorder)
+                        TextField(strings.t("monitors.ruleTitle"), text: text(\.title)).textFieldStyle(.vision)
                             .focused($focus, equals: .title)
                     }
                     Text(strings.t("monitors.baselineHint")).font(.caption).foregroundStyle(theme.secondaryLabel)
@@ -112,7 +112,7 @@ struct AnalysisMonitorsCreationView: View {
             }.pickerStyle(.segmented)
             VStack(alignment: .leading, spacing: 4) {
                 Text(strings.t("monitors.threshold")).font(.caption)
-                TextField(strings.t("monitors.threshold"), text: text(\.threshold)).textFieldStyle(.roundedBorder)
+                TextField(strings.t("monitors.threshold"), text: text(\.threshold)).textFieldStyle(.vision)
                     .focused($focus, equals: .threshold)
             }
         }

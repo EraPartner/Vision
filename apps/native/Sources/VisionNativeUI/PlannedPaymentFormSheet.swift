@@ -25,28 +25,16 @@ struct PlannedPaymentFormSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                Text(strings.t(form.titleKey))
-                    .font(.visionCardTitle)
-                    .accessibilityAddTraits(.isHeader)
-                Spacer()
-                Button {
-                    model.dismissEditor()
-                } label: {
-                    Image(systemName: "xmark")
-                }
-                .buttonStyle(.borderless)
-                .accessibilityLabel(strings.t("common.close"))
-                .help(strings.t("common.close"))
-            }
+            VisionDialogHeader(
+                title: strings.t(form.titleKey), closeLabel: strings.t("common.close"),
+                onClose: { model.dismissEditor() })
             .padding(.horizontal, 24)
-            .padding(.top, 20)
-            .padding(.bottom, 8)
+            .padding(.top, 24)
             ScrollViewReader { proxy in
                 ScrollView {
                     fields
                         .padding(.horizontal, 24)
-                        .padding(.vertical, 16)
+                        .padding(.vertical, 20)
                 }
                 .onChange(of: form.focusToken) {
                     guard let field = form.focusField else { return }
@@ -57,7 +45,7 @@ struct PlannedPaymentFormSheet: View {
             Divider()
             footer
         }
-        .frame(minWidth: 460, idealWidth: 500, minHeight: 520, idealHeight: 720)
+        .frame(minWidth: 470, idealWidth: 470, minHeight: 520, idealHeight: 720)
         .foregroundStyle(theme.foreground)
         .task { await model.pickers.load() }
     }
@@ -65,17 +53,17 @@ struct PlannedPaymentFormSheet: View {
     // MARK: Fields
 
     private var fields: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 20) {
             field("plannedForm.nameRequired2", error: .name) {
                 TextField(strings.t("plannedForm.namePlaceholder"), text: $form.name)
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.vision)
                     .focused($focused, equals: .name)
                     .onSubmit(save)
             }
             HStack(alignment: .top, spacing: 12) {
                 field("plannedForm.amountRequired2", error: .amount) {
                     TextField(form.amountPlaceholder, text: $form.amount)
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(.vision)
                         .focused($focused, equals: .amount)
                         .onSubmit(save)
                 }
@@ -134,8 +122,11 @@ struct PlannedPaymentFormSheet: View {
                     .scrollContentBackground(.hidden)
                     .padding(4)
                     .background(
-                        RoundedRectangle(cornerRadius: DesignTokens.Radius.control)
-                            .strokeBorder(theme.border.opacity(0.7), lineWidth: 1))
+                        RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
+                            .fill(Color(token: theme.palette.background, opacity: 0.8)))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
+                            .strokeBorder(Color(token: theme.palette.input, opacity: 0.7), lineWidth: 1))
                     .overlay(alignment: .topLeading) {
                         if form.notes.isEmpty {
                             Text(strings.t("plannedForm.notesPlaceholder2"))
@@ -150,7 +141,7 @@ struct PlannedPaymentFormSheet: View {
             }
             field("plannedForm.link") {
                 TextField(strings.t("plannedForm.linkPlaceholder"), text: $form.url)
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.vision)
                     .onSubmit(save)
                 helpText("plannedForm.linkDesc")
             }
@@ -195,13 +186,13 @@ struct PlannedPaymentFormSheet: View {
             HStack(alignment: .top, spacing: 12) {
                 field("plannedForm.loanPrincipal", error: .loanPrincipal) {
                     TextField("", text: $form.loanPrincipal)
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(.vision)
                         .focused($focused, equals: .loanPrincipal)
                         .onSubmit(save)
                 }
                 field("plannedForm.loanRate", error: .loanRate) {
                     TextField("", text: $form.loanRate)
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(.vision)
                         .focused($focused, equals: .loanRate)
                         .onSubmit(save)
                 }
@@ -209,13 +200,13 @@ struct PlannedPaymentFormSheet: View {
             HStack(alignment: .top, spacing: 12) {
                 field("plannedForm.loanTermMonths", error: .loanTerm) {
                     TextField("", text: $form.loanTermMonths)
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(.vision)
                         .focused($focused, equals: .loanTerm)
                         .onSubmit(save)
                 }
                 field("plannedForm.loanPaymentDay") {
                     TextField(form.loanPaymentDayPlaceholder, text: $form.loanPaymentDay)
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(.vision)
                         .onSubmit(save)
                 }
             }
@@ -238,7 +229,7 @@ struct PlannedPaymentFormSheet: View {
             if form.showsCustomDays {
                 field("plannedForm.repeatEvery", error: .customDays) {
                     TextField(strings.t("plannedForm.customDaysPlaceholder"), text: $form.customDays)
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(.vision)
                         .focused($focused, equals: .customDays)
                         .onSubmit(save)
                 }
@@ -253,7 +244,7 @@ struct PlannedPaymentFormSheet: View {
                 }
                 field("plannedForm.maxOccurrences") {
                     TextField(String("∞"), text: $form.maxOccurrences)
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(.vision)
                         .onSubmit(save)
                 }
             }
@@ -277,6 +268,7 @@ struct PlannedPaymentFormSheet: View {
                 form.resetErrors()
                 model.dismissEditor()
             }
+            .buttonStyle(.visionOutline)
             .keyboardShortcut(.cancelAction)
             Button(action: save) {
                 HStack(spacing: 6) {
@@ -290,8 +282,9 @@ struct PlannedPaymentFormSheet: View {
             .keyboardShortcut(.defaultAction)
             .disabled(saving)
         }
+        .controlSize(.large)
         .padding(.horizontal, 24)
-        .padding(.vertical, 14)
+        .padding(.vertical, 16)
     }
 
     private func save() {
@@ -308,9 +301,10 @@ struct PlannedPaymentFormSheet: View {
     private func field<Content: View>(
         _ labelKey: String, error: PlannedFormField? = nil, @ViewBuilder content: () -> Content
     ) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: .leading, spacing: 6) {
             Text(strings.t(labelKey))
                 .font(.callout.weight(.medium))
+                .foregroundStyle(theme.foreground)
             content()
             if let error, let key = form.visibleErrorKey(error) {
                 Text(strings.t(key))

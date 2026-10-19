@@ -56,8 +56,8 @@ struct NativeSettingsAboutView: View {
                     title: strings.t("settings.app.onboardingWizard"),
                     description: strings.t("settings.app.onboardingWizardHint")
                 ) {
-                    Button(strings.t("settings.app.restart")) { Task { await restartOnboarding() } }.disabled(
-                        model.restartingOnboarding)
+                    Button(strings.t("settings.app.restart")) { Task { await restartOnboarding() } }
+                        .buttonStyle(.visionOutline).disabled(model.restartingOnboarding)
                 }
                 Divider()
                 NativeSettingsRow(
@@ -72,20 +72,24 @@ struct NativeSettingsAboutView: View {
                     title: strings.t("settings.app.resetAll"), description: strings.t("settings.app.resetAllHint"),
                     destructive: true
                 ) {
-                    Button(strings.t("settings.app.reset"), role: .destructive) { confirmingReset = true }.disabled(
-                        !preferencesLoaded)
+                    // Web: `variant="outline"` with destructive text.
+                    Button(strings.t("settings.app.reset"), role: .destructive) { confirmingReset = true }
+                        .buttonStyle(.visionOutline).disabled(!preferencesLoaded)
                 }
             }
         }
-        .confirmationDialog(
-            strings.t("settings.app.resetAllConfirm.title"), isPresented: $confirmingReset, titleVisibility: .visible
-        ) {
-            Button(strings.t("settings.app.resetAllConfirm.action"), role: .destructive) {
-                Task { await resetPreferences() }
-            }
-            Button(strings.t("common.cancel"), role: .cancel) {}
-        } message: {
-            Text(strings.t("settings.app.resetAllConfirm.desc"))
+        // The web `useConfirmDialog` AlertDialog rather than a system alert.
+        .sheet(isPresented: $confirmingReset) {
+            NativeSettingsConfirmSheet(
+                title: strings.t("settings.app.resetAllConfirm.title"),
+                message: strings.t("settings.app.resetAllConfirm.desc"),
+                confirmLabel: strings.t("settings.app.resetAllConfirm.action"),
+                cancelLabel: strings.t("common.cancel"),
+                onConfirm: {
+                    confirmingReset = false
+                    Task { await resetPreferences() }
+                },
+                onCancel: { confirmingReset = false })
         }
         .overlay(alignment: .bottom) {
             if !model.usesExternalNotices {

@@ -4,55 +4,89 @@ import VisionNativeCore
 struct NativeOnboardingCategoriesView: View {
     @Bindable var model: NativeOnboardingModel
     let strings: any Localizing
+    @Environment(\.visionTheme) private var theme
     var body: some View {
         if model.draft.categoriesCreated {
             VStack(alignment: .leading, spacing: 12) {
                 Label(strings.t("onboarding.categories.created"), systemImage: "checkmark.circle")
-                Text(strings.t("onboarding.categories.manage")).font(.caption).foregroundStyle(.secondary)
+                Text(strings.t("onboarding.categories.manage")).font(.footnote).foregroundStyle(theme.secondaryLabel)
             }
         } else {
             VStack(alignment: .leading, spacing: 16) {
-                LazyVGrid(columns: [.init(.flexible()), .init(.flexible()), .init(.flexible())], alignment: .leading) {
+                // The web tiles: `Button variant="outline" aria-pressed`, emoji, name, group,
+                // and a check when selected.
+                LazyVGrid(
+                    columns: [.init(.flexible(), spacing: 8), .init(.flexible(), spacing: 8), .init(.flexible())],
+                    alignment: .leading, spacing: 8
+                ) {
                     ForEach(NativeOnboardingPreset.categories.indices, id: \.self) { index in
-                        let category = NativeOnboardingPreset.categories[index]
-                        Toggle(
-                            isOn: Binding(
-                                get: { model.draft.selectedCategoryIndexes.contains(index) },
-                                set: { _ in model.toggleCategory(index) })
-                        ) {
-                            VStack(alignment: .leading) {
-                                Text(category.emoji + " " + strings.t(category.detailKey))
-                                Text(category.general).font(.caption).foregroundStyle(.secondary)
-                            }
-                        }.toggleStyle(.checkbox).padding(6)
+                        categoryTile(index)
                     }
                 }
-                HStack {
+                HStack(spacing: 8) {
                     Button {
                         Task { await model.createCategories() }
                     } label: {
-                        HStack {
-                            if model.creatingCategories { ProgressView().controlSize(.small) }
+                        HStack(spacing: 6) {
+                            if model.creatingCategories {
+                                ProgressView().controlSize(.small)
+                            } else {
+                                Image(systemName: "tag").accessibilityHidden(true)
+                            }
                             Text(
                                 strings.t(
                                     "onboarding.categories.create",
                                     ["n": String(model.draft.selectedCategoryIndexes.count)]))
                         }
-                    }.disabled(model.creatingCategories || model.draft.selectedCategoryIndexes.isEmpty)
+                    }.buttonStyle(.visionPrimary)
+                        .disabled(model.creatingCategories || model.draft.selectedCategoryIndexes.isEmpty)
                     Button(
                         strings.t(
                             model.draft.selectedCategoryIndexes.count == NativeOnboardingPreset.categories.count
                                 ? "onboarding.categories.deselectAll" : "onboarding.categories.selectAll"),
-                        action: model.toggleAllCategories)
+                        action: model.toggleAllCategories
+                    )
+                    .buttonStyle(NativeSettingsGhostButtonStyle()).controlSize(.small)
                 }
             }
         }
+    }
+    private func categoryTile(_ index: Int) -> some View {
+        let category = NativeOnboardingPreset.categories[index]
+        let selected = model.draft.selectedCategoryIndexes.contains(index)
+        let shape = RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
+        return Button {
+            model.toggleCategory(index)
+        } label: {
+            HStack(spacing: 8) {
+                Text(verbatim: category.emoji).font(.title3).accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(strings.t(category.detailKey)).font(.footnote.weight(.medium))
+                        .foregroundStyle(selected ? theme.foreground : theme.secondaryLabel)
+                    Text(verbatim: category.general).font(.footnote).foregroundStyle(theme.tertiaryLabel)
+                }.lineLimit(1)
+                Spacer(minLength: 0)
+                if selected {
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(theme.primary)
+                        .accessibilityHidden(true)
+                }
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(shape.fill(selected ? theme.primary.opacity(0.05) : Color.clear))
+            .overlay(shape.strokeBorder(selected ? theme.primary : theme.border, lineWidth: 1))
+            .contentShape(shape)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(strings.t(category.detailKey))
+        .accessibilityAddTraits(selected ? [.isSelected] : [])
     }
 }
 
 struct NativeOnboardingBankView: View {
     @Bindable var model: NativeOnboardingModel
     let strings: any Localizing
+    @Environment(\.visionTheme) private var theme
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             if model.adaptersLoading {
@@ -80,7 +114,7 @@ struct NativeOnboardingBankView: View {
                     }
                 }
             }
-            Text(strings.t("onboarding.bank.notListed")).font(.caption).foregroundStyle(.secondary)
+            Text(strings.t("onboarding.bank.notListed")).font(.footnote).foregroundStyle(theme.secondaryLabel)
         }
     }
 }
@@ -88,6 +122,7 @@ struct NativeOnboardingBankView: View {
 struct NativeOnboardingImportView: View {
     @Bindable var model: NativeOnboardingModel
     let strings: any Localizing
+    @Environment(\.visionTheme) private var theme
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text(
@@ -97,14 +132,14 @@ struct NativeOnboardingImportView: View {
                         "bank": model.adapters.first { $0.key == model.draft.selectedBank }?.name
                             ?? strings.t("onboarding.import.yourBank")
                     ])
-            ).foregroundStyle(.secondary)
+            ).foregroundStyle(theme.secondaryLabel)
             if let result = model.draft.importResult {
                 Label(
                     strings.t("onboarding.import.success", ["n": String(result.imported)]),
                     systemImage: "checkmark.circle")
                 if result.duplicates > 0 {
                     Text(strings.t("onboarding.import.duplicates", ["n": String(result.duplicates)]))
-                        .font(.caption).foregroundStyle(.secondary)
+                        .font(.footnote).foregroundStyle(theme.secondaryLabel)
                 }
             } else if let review = model.draft.reviewBatch {
                 Label(
@@ -114,7 +149,7 @@ struct NativeOnboardingImportView: View {
                 Button(strings.t("onboarding.import.review.cta")) {
                     Task { await model.finish(path: ImportRoutes.reviewPath(review.batchId)) }
                 }.buttonStyle(.visionPrimary)
-                Text(strings.t("onboarding.import.review.later")).font(.caption).foregroundStyle(.secondary)
+                Text(strings.t("onboarding.import.review.later")).font(.footnote).foregroundStyle(theme.secondaryLabel)
             } else {
                 CSVDropzone(
                     file: model.file, compact: true, strings: strings,
@@ -124,16 +159,16 @@ struct NativeOnboardingImportView: View {
                     Button {
                         Task { await model.importFile() }
                     } label: {
-                        HStack {
+                        HStack(spacing: 6) {
                             if model.importing { ProgressView().controlSize(.small) }
                             Text(
                                 strings.t(model.importing ? "onboarding.import.importing" : "onboarding.import.button"))
                         }
-                    }.disabled(!model.canImport)
+                    }.buttonStyle(.visionPrimary).disabled(!model.canImport)
                 }
             }
             if model.draft.reviewBatch == nil {
-                Text(strings.t("onboarding.import.skipHint")).font(.caption).foregroundStyle(.secondary)
+                Text(strings.t("onboarding.import.skipHint")).font(.footnote).foregroundStyle(theme.secondaryLabel)
             }
         }
     }

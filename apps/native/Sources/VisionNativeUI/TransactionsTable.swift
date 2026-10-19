@@ -638,7 +638,7 @@ struct TransactionRowView: View {
                     get: { model.rowEditor?.amountText ?? "" },
                     set: { model.rowEditor?.amountText = $0 })
             )
-            .textFieldStyle(.roundedBorder)
+            .textFieldStyle(.vision)
             .multilineTextAlignment(.trailing)
             .overlay(
                 RoundedRectangle(cornerRadius: 6)

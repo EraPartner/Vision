@@ -12,39 +12,71 @@ public struct ShellUpcomingPaymentsBanner: View {
         self.shell = shell
     }
 
+    /// `UpcomingPaymentsNotification`: an `Alert` with `border-primary/30 bg-primary/5`, the
+    /// calendar glyph at the leading edge, the count as a ghost button with a turning chevron,
+    /// the rows indented under the title and the dismiss-all button in the top-right corner.
     public var body: some View {
         if model.shouldShow {
+            let shape = RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous)
             HStack(alignment: .top, spacing: 12) {
-                Image(systemName: "calendar.badge.clock").foregroundStyle(theme.accent).accessibilityHidden(true)
-                DisclosureGroup(
-                    isExpanded: Binding(get: { model.expanded }, set: { model.expanded = $0 })
-                ) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(model.displayedUpcoming, id: \.id) { row in payment(row) }
-                        if model.visibleUpcoming.count > 5 {
-                            Text(shell.strings.t("upcoming.more", ["n": String(model.visibleUpcoming.count - 5)]))
-                                .font(.footnote).foregroundStyle(theme.secondaryLabel)
+                Image(systemName: "calendar.badge.clock")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(theme.primary)
+                    .frame(width: 16, height: 28)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 8) {
+                    Button {
+                        withAnimation(.easeOut(duration: DesignTokens.Duration.fast)) { model.expanded.toggle() }
+                    } label: {
+                        HStack(spacing: 8) {
+                            Text(shell.strings.tc("upcoming.count", model.visibleUpcoming.count))
+                                .font(.headline)
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 11, weight: .semibold))
+                                .rotationEffect(.degrees(model.expanded ? 180 : 0))
+                                .accessibilityHidden(true)
                         }
-                        Button(shell.strings.t("upcoming.viewAllLink")) { shell.navigate(to: "/planned") }
-                            .buttonStyle(.borderless).font(.footnote).padding(.top, 4)
-                    }.padding(.top, 8)
-                } label: {
-                    Text(shell.strings.tc("upcoming.count", model.visibleUpcoming.count))
-                        .font(.headline).foregroundStyle(theme.accent)
-                }.frame(maxWidth: .infinity, alignment: .leading)
-                Button {
-                    model.dismissAll()
-                } label: {
-                    Image(systemName: "xmark")
+                        .foregroundStyle(theme.primary)
+                        .frame(height: 28)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    if model.expanded {
+                        VStack(alignment: .leading, spacing: 4) {
+                            ForEach(model.displayedUpcoming, id: \.id) { row in payment(row) }
+                            if model.visibleUpcoming.count > 5 {
+                                Text(shell.strings.t("upcoming.more", ["n": String(model.visibleUpcoming.count - 5)]))
+                                    .font(.footnote).foregroundStyle(theme.secondaryLabel)
+                            }
+                            Button(shell.strings.t("upcoming.viewAllLink")) { shell.navigate(to: "/planned") }
+                                .buttonStyle(.visionLink).font(.footnote.weight(.medium)).padding(.top, 6)
+                        }
+                    }
                 }
-                .buttonStyle(.borderless).foregroundStyle(theme.secondaryLabel)
-                .accessibilityLabel(shell.strings.t("upcoming.dismissAll"))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                closeButton(label: shell.strings.t("upcoming.dismissAll")) { model.dismissAll() }
             }
-            .padding(14)
-            .background(theme.accent.opacity(0.05), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.card))
-            .overlay(RoundedRectangle(cornerRadius: DesignTokens.Radius.card).stroke(theme.accent.opacity(0.3)))
+            .padding(.leading, 16)
+            .padding(.trailing, 10)
+            .padding(.vertical, 10)
+            .background(shape.fill(theme.primary.opacity(0.05)))
+            .overlay(shape.strokeBorder(theme.primary.opacity(0.3), lineWidth: 1))
             .accessibilityElement(children: .contain)
         }
+    }
+
+    /// The web's ghost `icon-sm` button: 28 pt, secondary glyph, a faint hover fill.
+    private func closeButton(label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: "xmark")
+                .font(.system(size: 11, weight: .semibold))
+                .frame(width: 28, height: 28)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(theme.secondaryLabel)
+        .help(label)
+        .accessibilityLabel(label)
     }
 
     private func payment(_ row: OpenAPI.PlannedTransaction) -> some View {
@@ -52,7 +84,7 @@ public struct ShellUpcomingPaymentsBanner: View {
             [row.memo, row.recipientName].compactMap { $0 }.first { !$0.isEmpty }
             ?? shell.strings.t("upcoming.unnamed")
         let currency = row.currency.flatMap { $0.isEmpty ? nil : $0 } ?? shell.settings.defaultCurrency
-        return HStack(spacing: 12) {
+        return HStack(spacing: 8) {
             Text(verbatim: title).fontWeight(.medium)
             Spacer(minLength: 0)
             Text(VisionFormat.appDate(row.plannedDate, format: shell.settings.dateFormat))
@@ -63,14 +95,7 @@ public struct ShellUpcomingPaymentsBanner: View {
                     fractionDigits: shell.settings.showDecimalPlaces)
             )
             .fontWeight(.medium).monospacedDigit()
-            Button {
-                model.dismiss(row)
-            } label: {
-                Image(systemName: "xmark")
-            }
-            .buttonStyle(.borderless).foregroundStyle(theme.secondaryLabel)
-            .help(shell.strings.t("upcoming.dismissPayment", ["name": title]))
-            .accessibilityLabel(shell.strings.t("upcoming.dismissPayment", ["name": title]))
+            closeButton(label: shell.strings.t("upcoming.dismissPayment", ["name": title])) { model.dismiss(row) }
         }
     }
 }

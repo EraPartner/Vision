@@ -140,7 +140,7 @@ struct ResearchDossierEvidenceView: View {
     }
     private func sourceText(_ key: String, _ path: WritableKeyPath<ResearchDossierEvidence, String>) -> some View {
         ResearchDossierField(label: strings.t(key)) {
-            TextField("", text: text(path)).textFieldStyle(.roundedBorder).accessibilityLabel(strings.t(key))
+            TextField("", text: text(path)).textFieldStyle(.vision).accessibilityLabel(strings.t(key))
         }
     }
 }

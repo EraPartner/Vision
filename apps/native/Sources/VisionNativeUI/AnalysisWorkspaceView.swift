@@ -133,7 +133,7 @@ public struct AnalysisWorkspaceView: View {
                     set: {
                         model.plan[keyPath: path] = $0.isEmpty ? nil : $0
                     })
-            ).textFieldStyle(.roundedBorder).accessibilityLabel(strings.t("analysis.ext.financial." + key))
+            ).textFieldStyle(.vision).accessibilityLabel(strings.t("analysis.ext.financial." + key))
         }
     }
     private func financialDate(_ key: String, path: WritableKeyPath<AnalysisPlan, String?>) -> some View {

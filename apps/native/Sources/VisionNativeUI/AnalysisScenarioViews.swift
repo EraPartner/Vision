@@ -106,7 +106,7 @@ struct AnalysisScenariosView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(label.isEmpty ? id : label).font(.callout)
                             TextField(label.isEmpty ? id : label, text: scenarioValue(index, id: id)).textFieldStyle(
-                                .roundedBorder)
+                                .vision)
                         }
                     }
                     Button(t("remove")) { model.draft.scenarios.remove(at: index) }

@@ -8,25 +8,17 @@ struct ResearchMarketActionSheet: View {
     @Environment(\.visionTheme) private var theme
     private var strings: any Localizing { shell.strings }
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack {
-                Text(
-                    strings.t(
-                        model.step == "choose"
-                            ? "addInvFromMarket.title.add"
-                            : model.step == "new"
-                                ? "addInvFromMarket.title.create" : "addInvFromMarket.title.transaction",
-                        ["symbol": model.quote?.symbol ?? ""])
-                ).font(.title2.weight(.semibold))
-                Spacer()
-                Button {
-                    model.close()
-                } label: {
-                    Image(systemName: "xmark")
-                }.accessibilityLabel(strings.t("common.close"))
-            }
-            Text(strings.t("addInvFromMarket.title.add", ["symbol": model.quote?.symbol ?? ""])).font(.callout)
-                .foregroundStyle(theme.secondaryLabel)
+        VStack(alignment: .leading, spacing: 20) {
+            // The web `DialogDescription` is `sr-only`, so no visible description here.
+            VisionDialogHeader(
+                title: strings.t(
+                    model.step == "choose"
+                        ? "addInvFromMarket.title.add"
+                        : model.step == "new"
+                            ? "addInvFromMarket.title.create" : "addInvFromMarket.title.transaction",
+                    ["symbol": model.quote?.symbol ?? ""]),
+                closeLabel: strings.t("common.close"), onClose: { model.close() }
+            )
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     if model.step == "choose" {
@@ -40,20 +32,23 @@ struct ResearchMarketActionSheet: View {
                         Text(strings.t(key)).font(.callout).foregroundStyle(theme.destructive)
                     }
                     if model.hasUncertainWrite {
-                        HStack {
+                        HStack(spacing: 8) {
                             Button(strings.t("nav.portfolio")) { shell.navigate(to: "/portfolio") }
+                                .buttonStyle(.visionOutline)
                             Button(strings.t("common.retry")) { Task { await model.acknowledgeUncertainWrite() } }
+                                .buttonStyle(.visionOutline)
                         }
                     }
                     if let error = model.error {
                         Text(error).font(.callout).foregroundStyle(theme.destructive).textSelection(.enabled)
                     }
-                }
+                }.padding(.horizontal, 1)
             }
             if model.step != "choose" {
-                HStack {
-                    Button(strings.t("addInv.back")) { model.step = "choose" }
-                    Spacer()
+                // `DialogFooter sm:justify-between`: Back on the left, the submit action on the right.
+                HStack(spacing: 8) {
+                    Button(strings.t("addInv.back")) { model.step = "choose" }.buttonStyle(.visionOutline)
+                    Spacer(minLength: 0)
                     Button(strings.t(model.step == "new" ? "addInv.create" : "addPortTxn.record")) {
                         Task {
                             if model.step == "new" {
@@ -67,9 +62,9 @@ struct ResearchMarketActionSheet: View {
                             || (model.step == "new"
                                 && model.investment.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     )
-                }
+                }.controlSize(.large)
             }
-        }.padding(24).frame(width: 580).frame(maxHeight: 760)
+        }.visionDialogPadding().frame(width: 448).frame(maxHeight: 760)
             .onSubmit {
                 if model.step != "choose" {
                     Task {
@@ -85,46 +80,55 @@ struct ResearchMarketActionSheet: View {
     private var choices: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text(strings.t("addInvFromMarket.prompt", ["symbol": model.quote?.symbol ?? ""]))
+                .font(.footnote).foregroundStyle(theme.secondaryLabel)
             if let holding = model.holding {
                 Button {
                     model.step = "transaction"
                 } label: {
                     VStack(alignment: .leading, spacing: 5) {
-                        Text(strings.t("form.addTransaction.title")).font(.headline)
+                        Text(strings.t("form.addTransaction.title")).font(.body.weight(.medium))
                         Text(strings.t("addInvFromMarket.option.addTxnDesc", ["name": holding.name])).font(.caption)
                             .foregroundStyle(theme.secondaryLabel)
-                    }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
+                    }.lineLimit(nil).fixedSize(horizontal: false, vertical: true).padding(.vertical, 14)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }.buttonStyle(.visionOutline)
             }
             Button {
                 model.step = "new"
             } label: {
                 VStack(alignment: .leading, spacing: 5) {
-                    Text(strings.t("addInvFromMarket.option.createNew")).font(.headline)
+                    Text(strings.t("addInvFromMarket.option.createNew")).font(.body.weight(.medium))
                     Text(
                         strings.t(
                             model.holding == nil
                                 ? "addInvFromMarket.option.createDescNew" : "addInvFromMarket.option.createDescExisting"
                         )
                     ).font(.caption).foregroundStyle(theme.secondaryLabel)
-                }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
+                }.lineLimit(nil).fixedSize(horizontal: false, vertical: true).padding(.vertical, 14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }.buttonStyle(.visionOutline)
         }
     }
     private var newInvestment: some View {
         VStack(alignment: .leading, spacing: 16) {
             newField("addInv.label.name", \.name, limit: 100)
-            VStack(alignment: .leading, spacing: 5) {
-                Text(strings.t("addInv.label.ticker")).font(.caption)
-                TextField("", text: .constant(model.quote?.symbol ?? "")).textFieldStyle(.roundedBorder).disabled(true)
-            }
-            Picker(strings.t("addInv.label.currency"), selection: $model.investment.currency) {
-                ForEach(
-                    ["EUR", "USD", "GBP", "CHF"]
-                        + (["EUR", "USD", "GBP", "CHF"].contains(model.investment.currency)
-                            ? [] : [model.investment.currency]),
-                    id: \.self
-                ) { Text($0).tag($0) }
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 8) {
+                    fieldLabel(strings.t("addInv.label.ticker"))
+                    TextField("", text: .constant(model.quote?.symbol ?? "")).textFieldStyle(.vision).disabled(true)
+                        .accessibilityLabel(strings.t("addInv.label.ticker"))
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    fieldLabel(strings.t("addInv.label.currency"))
+                    Picker(strings.t("addInv.label.currency"), selection: $model.investment.currency) {
+                        ForEach(
+                            ["EUR", "USD", "GBP", "CHF"]
+                                + (["EUR", "USD", "GBP", "CHF"].contains(model.investment.currency)
+                                    ? [] : [model.investment.currency]),
+                            id: \.self
+                        ) { Text($0).tag($0) }
+                    }.labelsHidden().frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
             newField("addInv.label.currentPrice", \.currentPrice)
             newField("addInv.label.notes", \.notes, limit: 500)
@@ -132,10 +136,13 @@ struct ResearchMarketActionSheet: View {
     }
     private var transaction: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Picker(strings.t("addPortTxn.type"), selection: $model.trade.type) {
-                ForEach(["buy", "sell", "dividend", "fee", "tax"], id: \.self) {
-                    Text(strings.t("portfolio.txnType." + $0)).tag($0)
-                }
+            VStack(alignment: .leading, spacing: 8) {
+                fieldLabel(strings.t("addPortTxn.type"))
+                Picker(strings.t("addPortTxn.type"), selection: $model.trade.type) {
+                    ForEach(["buy", "sell", "dividend", "fee", "tax"], id: \.self) {
+                        Text(strings.t("portfolio.txnType." + $0)).tag($0)
+                    }
+                }.labelsHidden().frame(maxWidth: .infinity, alignment: .leading)
             }
             dateField("addPortTxn.date", \.date)
             if ["buy", "sell"].contains(model.trade.type) {
@@ -151,26 +158,33 @@ struct ResearchMarketActionSheet: View {
                     .font(.caption).foregroundStyle(theme.secondaryLabel)
             }
             if ["buy", "sell", "dividend"].contains(model.trade.type) {
-                HStack {
+                HStack(alignment: .top, spacing: 12) {
                     tradeField("addPortTxn.fees", \.fees)
                     tradeField("addPortTxn.taxes", \.taxes)
                 }
                 if model.trade.type == "dividend" {
-                    Picker(strings.t("addPortTxn.dividendAmountConvention"), selection: $model.trade.dividendConvention)
-                    {
-                        ForEach(["unknown", "gross", "net"], id: \.self) {
-                            Text(strings.t("addPortTxn.dividendConvention." + $0)).tag($0)
-                        }
+                    VStack(alignment: .leading, spacing: 8) {
+                        fieldLabel(strings.t("addPortTxn.dividendAmountConvention"))
+                        Picker(
+                            strings.t("addPortTxn.dividendAmountConvention"), selection: $model.trade.dividendConvention
+                        ) {
+                            ForEach(["unknown", "gross", "net"], id: \.self) {
+                                Text(strings.t("addPortTxn.dividendConvention." + $0)).tag($0)
+                            }
+                        }.labelsHidden().frame(maxWidth: .infinity, alignment: .leading)
+                        Text(strings.t("addPortTxn.dividendConvention.help")).font(.footnote).foregroundStyle(
+                            theme.secondaryLabel)
                     }
-                    Text(strings.t("addPortTxn.dividendConvention.help")).font(.caption).foregroundStyle(
-                        theme.secondaryLabel)
                 }
                 Toggle(strings.t("addPortTxn.recurring"), isOn: $model.trade.isRecurring)
                 if model.trade.isRecurring {
-                    Picker(strings.t("addPortTxn.interval"), selection: $model.trade.recurrenceInterval) {
-                        ForEach(["daily", "weekly", "biweekly", "monthly", "quarterly", "yearly"], id: \.self) {
-                            Text(strings.t("addPortTxn.recurrence." + $0)).tag($0)
-                        }
+                    VStack(alignment: .leading, spacing: 8) {
+                        fieldLabel(strings.t("addPortTxn.interval"))
+                        Picker(strings.t("addPortTxn.interval"), selection: $model.trade.recurrenceInterval) {
+                            ForEach(["daily", "weekly", "biweekly", "monthly", "quarterly", "yearly"], id: \.self) {
+                                Text(strings.t("addPortTxn.recurrence." + $0)).tag($0)
+                            }
+                        }.labelsHidden().frame(maxWidth: .infinity, alignment: .leading)
                     }
                     dateField("addPortTxn.endDate", \.recurrenceEndDate)
                 }
@@ -181,15 +195,17 @@ struct ResearchMarketActionSheet: View {
         }
     }
     private var broker: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             let selected = model.brokers.first { $0.id == model.effectiveBrokerId }
             if selected != nil && !showsBrokerPicker {
                 HStack {
                     Text(selected?.name ?? "")
                     Spacer()
                     Button(strings.t("addPortTxn.broker.change")) { showsBrokerPicker = true }
+                        .buttonStyle(.visionOutline)
                 }
             } else {
+                fieldLabel(strings.t("addPortTxn.broker"))
                 Picker(
                     strings.t("addPortTxn.broker"),
                     selection: Binding(
@@ -198,13 +214,13 @@ struct ResearchMarketActionSheet: View {
                 ) {
                     Text(strings.t("addPortTxn.broker.unassigned")).tag("")
                     ForEach(model.brokers, id: \.id) { Text($0.name).tag(String($0.id)) }
-                }
+                }.labelsHidden().frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }
     private func dateField(_ key: String, _ path: WritableKeyPath<ResearchMarketTradeDraft, String>) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(strings.t(key)).font(.caption)
+        VStack(alignment: .leading, spacing: 8) {
+            fieldLabel(strings.t(key))
             VisionDateField(
                 day: PlannedDay(ymd: model.trade[keyPath: path], calendar: .current), placeholder: strings.t(key),
                 allowClear: true,
@@ -219,12 +235,13 @@ struct ResearchMarketActionSheet: View {
         let binding = Binding(
             get: { model.investment[keyPath: path] },
             set: { value in model.investment[keyPath: path] = limit.map { String(value.prefix($0)) } ?? value })
-        return VStack(alignment: .leading, spacing: 5) {
-            Text(strings.t(key)).font(.caption)
+        return VStack(alignment: .leading, spacing: 8) {
+            fieldLabel(strings.t(key))
             if path == \.notes {
                 TextEditor(text: binding).font(.body).frame(height: 75).accessibilityLabel(strings.t(key))
+                    .scrollContentBackground(.hidden).padding(4).background(editorBackground)
             } else {
-                TextField("", text: binding).textFieldStyle(.roundedBorder).accessibilityLabel(strings.t(key))
+                TextField("", text: binding).textFieldStyle(.vision).accessibilityLabel(strings.t(key))
             }
         }
     }
@@ -235,14 +252,25 @@ struct ResearchMarketActionSheet: View {
         let binding = Binding(
             get: { model.trade[keyPath: path] },
             set: { value in model.trade[keyPath: path] = limit.map { String(value.prefix($0)) } ?? value })
-        return VStack(alignment: .leading, spacing: 5) {
-            Text(strings.t(key, variables)).font(.caption)
+        return VStack(alignment: .leading, spacing: 8) {
+            fieldLabel(strings.t(key, variables))
             if path == \.note {
                 TextEditor(text: binding).font(.body).frame(height: 75).accessibilityLabel(strings.t(key, variables))
+                    .scrollContentBackground(.hidden).padding(4).background(editorBackground)
             } else {
-                TextField("", text: binding).textFieldStyle(.roundedBorder).accessibilityLabel(
+                TextField("", text: binding).textFieldStyle(.vision).accessibilityLabel(
                     strings.t(key, variables))
             }
         }
+    }
+    /// The web `Label`: `type-body font-medium text-label-primary` above its input.
+    private func fieldLabel(_ text: String) -> some View {
+        Text(text).font(.body.weight(.medium)).foregroundStyle(theme.foreground)
+    }
+    /// The web `Textarea` frame, matching `.textFieldStyle(.vision)`.
+    private var editorBackground: some View {
+        let shape = RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
+        return shape.fill(Color(token: theme.palette.background, opacity: 0.8))
+            .overlay(shape.strokeBorder(Color(token: theme.palette.input, opacity: 0.7), lineWidth: 1))
     }
 }

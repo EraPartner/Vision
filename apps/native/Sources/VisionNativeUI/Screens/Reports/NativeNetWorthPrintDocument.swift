@@ -486,35 +486,37 @@ public struct NativeNetWorthPrintSectionView: View {
         }
     }
     private var chart: some View {
-        AdminCard {
+        // Quantitative index axis: a categorical one labels every snapshot date.
+        let dates = snapshot.displaySnapshots.map(\.date)
+        let index = Dictionary(dates.enumerated().map { ($1, Double($0)) }, uniquingKeysWith: { first, _ in first })
+        return AdminCard {
             Text(strings.t("networth.overTime")).font(.headline)
             Text(strings.t("networth.chartDesc")).font(.callout).foregroundStyle(theme.secondaryLabel)
             Chart {
                 ForEach(snapshot.series) { line in
                     ForEach(line.points) { point in
-                        if line.id == "netWorth" {
-                            AreaMark(
-                                x: .value("Date", point.key), y: .value(line.label, coordinate(point.value)),
-                                stacking: .unstacked
+                        if let x = index[point.key] {
+                            if line.id == "netWorth" {
+                                AreaMark(
+                                    x: .value("Date", x), y: .value(line.label, coordinate(point.value)),
+                                    stacking: .unstacked
+                                )
+                                .foregroundStyle(by: .value("Series", line.label)).opacity(0.12)
+                            }
+                            LineMark(
+                                x: .value("Date", x), y: .value(line.label, coordinate(point.value)),
+                                series: .value("Series", line.id)
                             )
-                            .foregroundStyle(by: .value("Series", line.label)).opacity(0.12)
+                            .foregroundStyle(by: .value("Series", line.label))
+                            .lineStyle(StrokeStyle(lineWidth: line.id == "netWorth" ? 2.5 : 1.5))
                         }
-                        LineMark(
-                            x: .value("Date", point.key), y: .value(line.label, coordinate(point.value)),
-                            series: .value("Series", line.id)
-                        )
-                        .foregroundStyle(by: .value("Series", line.label))
-                        .lineStyle(StrokeStyle(lineWidth: line.id == "netWorth" ? 2.5 : 1.5))
                     }
                 }
-                if let selection = snapshot.selection,
-                    snapshot.displaySnapshots.contains(where: { $0.date == selection })
-                {
-                    RuleMark(x: .value("Date", selection)).foregroundStyle(theme.secondaryLabel.opacity(0.5))
-                    if let start = snapshot.rangeStart, snapshot.displaySnapshots.contains(where: { $0.date == start })
-                    {
+                if let selection = snapshot.selection, let selectedX = index[selection] {
+                    RuleMark(x: .value("Date", selectedX)).foregroundStyle(theme.secondaryLabel.opacity(0.5))
+                    if let start = snapshot.rangeStart, let startX = index[start] {
                         RectangleMark(
-                            xStart: .value("Date", min(start, selection)), xEnd: .value("Date", max(start, selection))
+                            xStart: .value("Date", min(startX, selectedX)), xEnd: .value("Date", max(startX, selectedX))
                         )
                         .foregroundStyle(theme.primary.opacity(0.08))
                     }
@@ -523,11 +525,15 @@ public struct NativeNetWorthPrintSectionView: View {
             .chartForegroundStyleScale(
                 domain: snapshot.series.map(\.label), range: snapshot.series.map { chartColor($0.id) }
             )
-            .chartXScale(domain: snapshot.displaySnapshots.map(\.date))
+            .chartXScale(domain: 0...Double(max(dates.count - 1, 1)))
             .chartXAxis {
-                AxisMarks(values: ChartAxisTicks.evenlySpaced(snapshot.displaySnapshots.map(\.date))) { value in
+                AxisMarks(values: ChartAxisTicks.evenlySpaced(dates.indices.map(Double.init))) { value in
                     AxisGridLine()
-                    AxisValueLabel { if let key = value.as(String.self) { Text(presentation.tick(key)) } }
+                    AxisValueLabel {
+                        if let position = value.as(Double.self), dates.indices.contains(Int(position.rounded())) {
+                            Text(presentation.tick(dates[Int(position.rounded())]))
+                        }
+                    }
                 }
             }
             .chartYAxis {

@@ -171,28 +171,36 @@ struct TaxMarkFiledSheet: View {
     @Environment(\.visionTheme) private var theme
     @FocusState private var referenceFocused: Bool
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(shell.strings.t("tax.markFiled.title", ["year": String(overview.year)])).font(.title2)
-            Text(shell.strings.t("tax.markFiled.description")).foregroundStyle(theme.secondaryLabel)
-            TextField(
-                shell.strings.t("tax.markFiled.referenceLabel"), text: $reference,
-                prompt: Text(shell.strings.t("tax.markFiled.referencePlaceholder"))
-            )
-            .focused($referenceFocused).onSubmit { confirm() }
-            Text(shell.strings.t("tax.markFiled.referenceHelp")).font(.caption).foregroundStyle(theme.secondaryLabel)
+        VStack(alignment: .leading, spacing: 20) {
+            VisionDialogHeader(
+                title: shell.strings.t("tax.markFiled.title", ["year": String(overview.year)]),
+                description: shell.strings.t("tax.markFiled.description"),
+                closeLabel: shell.strings.t("common.close"), onClose: { dismiss() })
             if !TaxYearMutation.canFile(overview) {
                 Text(shell.strings.t("tax.markFiled.prerequisite")).font(.footnote)
                     .foregroundStyle(theme.secondaryLabel)
             }
+            VStack(alignment: .leading, spacing: 6) {
+                Text(shell.strings.t("tax.markFiled.referenceLabel")).font(.subheadline.weight(.medium))
+                    .foregroundStyle(theme.foreground)
+                TextField(
+                    shell.strings.t("tax.markFiled.referenceLabel"), text: $reference,
+                    prompt: Text(shell.strings.t("tax.markFiled.referencePlaceholder"))
+                )
+                .labelsHidden().textFieldStyle(.vision)
+                .focused($referenceFocused).onSubmit { confirm() }
+                Text(shell.strings.t("tax.markFiled.referenceHelp")).font(.footnote).foregroundStyle(
+                    theme.secondaryLabel)
+            }
             if let error = actions.error { Text(error).foregroundStyle(theme.destructive) }
-            HStack {
-                Spacer()
-                Button(shell.strings.t("common.cancel")) { dismiss() }.keyboardShortcut(.cancelAction)
+            VisionDialogFooter {
+                Button(shell.strings.t("common.cancel")) { dismiss() }
+                    .buttonStyle(.visionOutline).keyboardShortcut(.cancelAction)
                 Button(shell.strings.t("tax.markFiled.confirm")) { confirm() }
                     .buttonStyle(.visionPrimary).keyboardShortcut(.defaultAction)
                     .disabled(!TaxYearMutation.canFile(overview))
             }
-        }.padding(24).frame(width: 480).disabled(actions.isSaving)
+        }.visionDialogPadding().frame(width: 448).disabled(actions.isSaving)
             .task { referenceFocused = true }
     }
     private func confirm() {
@@ -209,38 +217,59 @@ struct TaxHistorySheet: View {
     @Environment(\.visionTheme) private var theme
     private var entries: [TaxValue] { (TaxYearPresentation.metadata(overview)["history"]?.arrayValue ?? []).reversed() }
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(shell.strings.t("tax.history.title", ["year": String(overview.year)])).font(.title2)
-            Text(shell.strings.t("tax.history.description")).foregroundStyle(theme.secondaryLabel)
-            ScrollView {
-                if entries.isEmpty { Text(shell.strings.t("tax.history.empty")).padding(32) }
-                VStack(alignment: .leading, spacing: 16) {
-                    ForEach(entries.indices, id: \.self) { index in
-                        let entry = entries[index]
-                        VStack(alignment: .leading, spacing: 6) {
-                            HStack {
-                                VisionBadge(
-                                    text: shell.strings.t(
-                                        "tax.history.kind." + (entry["kind"]?.stringValue ?? "patched")))
-                                Text(timestamp(entry["at"]?.stringValue ?? "")).font(.caption).foregroundStyle(
-                                    theme.secondaryLabel)
-                                if let reference = entry["reference"]?.stringValue {
-                                    Text("(" + reference + ")").font(.caption)
+        VStack(alignment: .leading, spacing: 20) {
+            VisionDialogHeader(
+                title: shell.strings.t("tax.history.title", ["year": String(overview.year)]),
+                description: shell.strings.t("tax.history.description"),
+                closeLabel: shell.strings.t("common.close"), onClose: { dismiss() }
+            )
+            .keyboardShortcut(.cancelAction)
+            if entries.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: "clock.arrow.circlepath").font(.title2).foregroundStyle(theme.tertiaryLabel)
+                    Text(shell.strings.t("tax.history.empty")).font(.headline).foregroundStyle(theme.foreground)
+                }.frame(maxWidth: .infinity).padding(.vertical, 32)
+            } else {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(entries.indices, id: \.self) { index in
+                            let entry = entries[index]
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack(spacing: 8) {
+                                    VisionBadge(
+                                        text: historyKind(entry["kind"]?.stringValue ?? "patched"), small: true)
+                                    Text(timestamp(entry["at"]?.stringValue ?? "")).font(.footnote).monospacedDigit()
+                                        .foregroundStyle(theme.secondaryLabel)
+                                    if let reference = entry["reference"]?.stringValue {
+                                        Text("(" + reference + ")").font(.footnote.weight(.medium))
+                                            .foregroundStyle(theme.warning)
+                                    }
+                                }
+                                ForEach(summary(entry), id: \.self) { line in
+                                    Text(line).font(.footnote).foregroundStyle(theme.secondaryLabel)
+                                        .fixedSize(horizontal: false, vertical: true)
                                 }
                             }
-                            ForEach(summary(entry), id: \.self) { line in
-                                Text(line).font(.callout).foregroundStyle(theme.secondaryLabel)
-                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 16).padding(.vertical, 12)
+                            if index < entries.count - 1 { Divider().padding(.leading, 16) }
                         }
-                        Divider()
                     }
-                }.frame(maxWidth: .infinity, alignment: .leading)
-            }.frame(maxHeight: 460)
-            HStack {
-                Spacer()
-                Button(shell.strings.t("common.close")) { dismiss() }.keyboardShortcut(.cancelAction)
+                    .background(
+                        RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous)
+                            .fill(theme.card))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DesignTokens.Radius.card, style: .continuous)
+                            .strokeBorder(theme.border.opacity(0.6), lineWidth: 1))
+                }.frame(maxHeight: 460)
             }
-        }.padding(24).frame(width: 680)
+        }.visionDialogPadding().frame(width: 672)
+    }
+    /// `tax.history.kind.*`, or the raw kind for one this build has no label for.
+    private func historyKind(_ kind: String) -> String {
+        let key = "tax.history.kind." + kind
+        let text = shell.strings.t(key)
+        return text == key ? kind : text
     }
     private func timestamp(_ value: String) -> String {
         guard let date = VisionFormat.parseTimestamp(value) else { return value }

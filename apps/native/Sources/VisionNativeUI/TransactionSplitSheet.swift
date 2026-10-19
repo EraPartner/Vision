@@ -17,27 +17,22 @@ struct TransactionSplitSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(strings.t("splitDialog.buttonTitle"))
-                    .font(.visionCardTitle)
-                    .accessibilityAddTraits(.isHeader)
-                Text(strings.t("splitDialog.total", ["amount": money(form.absoluteAmount)]))
-                    .font(.callout)
-                    .foregroundStyle(theme.secondaryLabel)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            VisionDialogHeader(
+                title: strings.t("splitDialog.buttonTitle"),
+                description: strings.t("splitDialog.total", ["amount": money(form.absoluteAmount)]),
+                closeLabel: strings.t("common.close"), onClose: { model.dismissSplit() })
             .padding(.horizontal, 24)
-            .padding(.top, 20)
-            .padding(.bottom, 8)
+            .padding(.top, 24)
+            .padding(.bottom, 4)
             ScrollView {
                 content
                     .padding(.horizontal, 24)
-                    .padding(.vertical, 12)
+                    .padding(.vertical, 16)
             }
             Divider()
             footer
         }
-        .frame(minWidth: 460, idealWidth: 500, minHeight: 440, idealHeight: 620)
+        .frame(minWidth: 480, idealWidth: 512, minHeight: 440, idealHeight: 620)
         .foregroundStyle(theme.foreground)
         .task { await form.load() }
         .task { await model.pickers.load() }
@@ -50,7 +45,7 @@ struct TransactionSplitSheet: View {
     // MARK: Content
 
     private var content: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 16) {
             if !form.isLoadingExisting {
                 existingNote
                 if form.exceedsTotal(format: format) {
@@ -172,7 +167,7 @@ struct TransactionSplitSheet: View {
                         strings.t("splitDialog.amountOwed"),
                         text: Binding(get: { entry.amount }, set: { form.setAmount(entry.id, to: $0) })
                     )
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.vision)
                     .onSubmit(submit)
                     .accessibilityLabel("\(strings.t("splitDialog.amountOwed")) \(number)")
                 }
@@ -180,7 +175,7 @@ struct TransactionSplitSheet: View {
                     strings.t("splitDialog.noteOptional"),
                     text: Binding(get: { entry.note }, set: { form.setNote(entry.id, to: $0) })
                 )
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(.vision)
                 .onSubmit(submit)
                 .accessibilityLabel("\(strings.t("splitDialog.noteOptional")) \(number)")
             }
@@ -205,11 +200,11 @@ struct TransactionSplitSheet: View {
     // MARK: Footer
 
     private var footer: some View {
-        HStack(spacing: 12) {
-            Spacer()
+        VisionDialogFooter {
             Button(strings.t("common.cancel")) {
                 model.dismissSplit()
             }
+            .buttonStyle(.visionOutline)
             .keyboardShortcut(.cancelAction)
             Button(action: submit) {
                 HStack(spacing: 6) {
@@ -224,7 +219,7 @@ struct TransactionSplitSheet: View {
             .disabled(!form.canSubmit(format: format))
         }
         .padding(.horizontal, 24)
-        .padding(.vertical, 14)
+        .padding(.vertical, 16)
     }
 
     private func submit() {

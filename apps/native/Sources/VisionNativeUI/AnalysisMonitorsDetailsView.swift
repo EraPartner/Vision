@@ -26,7 +26,7 @@ struct AnalysisMonitorsDetailsView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(strings.t("monitors.ruleTitle")).font(.caption)
                             TextField(strings.t("monitors.ruleTitle"), text: text(draft, \.title)).textFieldStyle(
-                                .roundedBorder
+                                .vision
                             ).focused($focus, equals: .title)
                         }
                         Toggle(
@@ -50,7 +50,7 @@ struct AnalysisMonitorsDetailsView: View {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(strings.t("monitors.threshold")).font(.caption)
                                 TextField(strings.t("monitors.threshold"), text: text(draft, \.threshold))
-                                    .textFieldStyle(.roundedBorder).focused($focus, equals: .threshold)
+                                    .textFieldStyle(.vision).focused($focus, equals: .threshold)
                             }
                         }
                         AnalysisMonitorsScheduleView(

@@ -28,28 +28,16 @@ struct TransactionAddSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                Text(strings.t("form.addTransaction.title"))
-                    .font(.visionCardTitle)
-                    .accessibilityAddTraits(.isHeader)
-                Spacer()
-                Button {
-                    model.dismissAdd()
-                } label: {
-                    Image(systemName: "xmark")
-                }
-                .buttonStyle(.borderless)
-                .accessibilityLabel(strings.t("common.close"))
-                .help(strings.t("common.close"))
-            }
+            VisionDialogHeader(
+                title: strings.t("form.addTransaction.title"), closeLabel: strings.t("common.close"),
+                onClose: { model.dismissAdd() })
             .padding(.horizontal, 24)
-            .padding(.top, 20)
-            .padding(.bottom, 8)
+            .padding(.top, 24)
             ScrollViewReader { proxy in
                 ScrollView {
                     fields
                         .padding(.horizontal, 24)
-                        .padding(.vertical, 16)
+                        .padding(.vertical, 20)
                 }
                 .onChange(of: form.focusRequest) { _, request in
                     guard let request else { return }
@@ -65,7 +53,7 @@ struct TransactionAddSheet: View {
             Divider()
             footer
         }
-        .frame(minWidth: 440, idealWidth: 470, minHeight: 560, idealHeight: 720)
+        .frame(minWidth: 448, idealWidth: 470, minHeight: 560, idealHeight: 720)
         .foregroundStyle(theme.foreground)
         .task { await model.pickers.load() }
         .onAppear { amountFocused = true }
@@ -74,7 +62,7 @@ struct TransactionAddSheet: View {
     // MARK: Fields
 
     private var fields: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 20) {
             Picker(
                 strings.t("addTxn.kind"),
                 selection: Binding(get: { draft.kind }, set: { form.setKind($0) })
@@ -139,7 +127,7 @@ struct TransactionAddSheet: View {
                 TextField(
                     strings.t("addTxn.descPlaceholder"), text: Binding(get: { draft.memo }, set: { form.setMemo($0) })
                 )
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(.vision)
                 .onSubmit(submit)
             }
             field("addTxn.commentOptional") {
@@ -149,8 +137,11 @@ struct TransactionAddSheet: View {
                     .scrollContentBackground(.hidden)
                     .padding(4)
                     .background(
-                        RoundedRectangle(cornerRadius: DesignTokens.Radius.control)
-                            .strokeBorder(theme.border.opacity(0.7), lineWidth: 1))
+                        RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
+                            .fill(Color(token: theme.palette.background, opacity: 0.8)))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DesignTokens.Radius.control, style: .continuous)
+                            .strokeBorder(Color(token: theme.palette.input, opacity: 0.7), lineWidth: 1))
                     .overlay(alignment: .topLeading) {
                         if draft.comment.isEmpty {
                             Text(strings.t("addTxn.commentPlaceholder"))
@@ -193,7 +184,7 @@ struct TransactionAddSheet: View {
                     strings.t("addTxn.currencyPlaceholder"),
                     text: Binding(get: { draft.currency }, set: { form.setCurrency($0) })
                 )
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(.vision)
                 .frame(width: 64)
                 .onSubmit(submit)
                 .accessibilityLabel(strings.t("accounts.field.currency"))
@@ -268,9 +259,10 @@ struct TransactionAddSheet: View {
     private func field<Content: View>(
         _ labelKey: String, error: AddTransactionField? = nil, @ViewBuilder content: () -> Content
     ) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: .leading, spacing: 6) {
             Text(strings.t(labelKey))
                 .font(.callout.weight(.medium))
+                .foregroundStyle(theme.foreground)
             content()
             if let error, let key = errors[error] {
                 Text(strings.t(key))
@@ -295,6 +287,7 @@ struct TransactionAddSheet: View {
             Button(strings.t("common.cancel")) {
                 model.dismissAdd()
             }
+            .buttonStyle(.visionOutline)
             .keyboardShortcut(.cancelAction)
             Button(action: submit) {
                 HStack(spacing: 6) {
@@ -315,8 +308,9 @@ struct TransactionAddSheet: View {
                 .accessibilityHidden(true)
                 .disabled(form.isPending)
         }
+        .controlSize(.large)
         .padding(.horizontal, 24)
-        .padding(.vertical, 14)
+        .padding(.vertical, 16)
     }
 
     private func submit() {

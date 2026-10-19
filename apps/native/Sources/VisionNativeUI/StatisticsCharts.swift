@@ -26,20 +26,42 @@ struct InsightRankedChart: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             if rows.isEmpty { Text(strings.t("table.noData")).foregroundStyle(theme.secondaryLabel) }
-            Chart(rows) { row in
+            // The web TopRecipientsChart: names in a fixed left gutter, one palette colour per
+            // bar (`--chart-1…8`), compact currency ticks along the value axis.
+            Chart(Array(rows.enumerated()), id: \.element.id) { position, row in
                 BarMark(
-                    x: .value(row.name, NSDecimalNumber(decimal: row.total).doubleValue), y: .value(row.name, row.id)
+                    x: .value(row.name, NSDecimalNumber(decimal: row.total).doubleValue), y: .value(row.name, row.id),
+                    height: .ratio(0.62)
                 )
-                .foregroundStyle(theme.primary)
+                .cornerRadius(4)
+                .foregroundStyle(barColor(position))
+                .opacity(selection == nil || selection == row.id ? 1 : 0.45)
                 .accessibilityLabel(row.name)
                 .accessibilityValue(MoneyText.text(row.total, currency: currency, settings: settings, signed: false))
             }
             .chartYScale(domain: rows.map(\.id))
             .chartYAxis {
-                AxisMarks { value in
-                    AxisValueLabel {
+                AxisMarks(position: .leading) { value in
+                    AxisValueLabel(horizontalSpacing: 10) {
                         if let id = value.as(String.self), let row = rows.first(where: { $0.id == id }) {
                             Text(row.name.count > 20 ? String(row.name.prefix(20)) + "…" : row.name)
+                                .font(.caption)
+                                .foregroundStyle(theme.secondaryLabel)
+                                .lineLimit(1)
+                                .frame(width: 140, alignment: .trailing)
+                        }
+                    }
+                }
+            }
+            .chartXAxis {
+                AxisMarks(values: .automatic(desiredCount: 5)) { value in
+                    AxisGridLine().foregroundStyle(theme.border.opacity(0.5))
+                    AxisValueLabel {
+                        if let number = value.as(Double.self) {
+                            Text(
+                                VisionFormat.currency(
+                                    Decimal(number), code: currency, locale: settings.numberFormat.locale,
+                                    fractionDigits: 0))
                         }
                     }
                 }
@@ -58,7 +80,7 @@ struct InsightRankedChart: View {
                     }
                 }
             }
-            .frame(height: CGFloat(max(180, min(700, rows.count * 28))))
+            .frame(height: CGFloat(max(180, min(700, rows.count * 34))))
             .focusable().focused($focused).onKeyPress(phases: .down) { press in
                 guard !rows.isEmpty else { return .ignored }
                 let index = selection.flatMap { id in rows.firstIndex { $0.id == id } } ?? 0
@@ -87,6 +109,14 @@ struct InsightRankedChart: View {
                 }.font(.caption).accessibilityElement(children: .combine)
             }
         }
+    }
+    private func barColor(_ position: Int) -> Color {
+        let palette = theme.palette
+        let colors = [
+            palette.chart1, palette.chart2, palette.chart3, palette.chart4,
+            palette.chart5, palette.chart6, palette.chart7, palette.chart8,
+        ]
+        return Color(token: colors[position % colors.count])
     }
 }
 

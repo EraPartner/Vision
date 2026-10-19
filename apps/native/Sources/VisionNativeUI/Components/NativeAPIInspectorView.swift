@@ -101,7 +101,7 @@ private struct NativeAPIInspectorPanel: View {
         HStack(spacing: 0) {
             VStack(spacing: 0) {
                 TextField("Filter by endpoint or method…", text: $model.filter)
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.vision)
                     .accessibilityLabel("Filter by endpoint or method")
                     .padding(.horizontal, 8)
                     .padding(.bottom, 6)

@@ -12,12 +12,11 @@ struct HomeForecastDiagnostics: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                HStack {
-                    Text(strings.t("cashflow.diagnostics.title")).font(.visionCardTitle)
-                    Spacer()
-                    Button(strings.t("common.close")) { dismiss() }.keyboardShortcut(.cancelAction)
-                }
+            VStack(alignment: .leading, spacing: 20) {
+                VisionDialogHeader(
+                    title: strings.t("cashflow.diagnostics.title"), closeLabel: strings.t("common.close"),
+                    onClose: { dismiss() })
+                .keyboardShortcut(.cancelAction)
                 if model.isForecastLoading {
                     ProgressView()
                 } else if let diagnostics = model.forecast?.diagnostics {
@@ -56,6 +55,7 @@ struct HomeForecastDiagnostics: View {
                     Text(model.forecastError ?? strings.t("cashflow.loadError")).foregroundStyle(
                         theme.secondaryLabel)
                     Button(strings.t("common.retry")) { Task { await model.loadDiagnostics() } }
+                        .buttonStyle(.visionOutline)
                 }
             }.padding(24)
         }.frame(width: 720, height: 660)

@@ -15,18 +15,24 @@ struct ResearchDossierConfirmationView: View {
     }
     var body: some View {
         if let review = model.pendingReview {
-            VStack(alignment: .leading, spacing: 18) {
-                Text(strings.t(review.titleKey)).font(.title2.weight(.semibold)).accessibilityAddTraits(.isHeader)
-                Text(strings.t(review.descriptionKey)).font(.callout).foregroundStyle(theme.secondaryLabel)
-                HStack {
+            // `AlertDialogContent`: no close control, title-2 heading, secondary body description,
+            // and the actions right-aligned with the confirming action last.
+            VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(strings.t(review.titleKey)).font(.visionCardTitle).foregroundStyle(theme.foreground)
+                        .fixedSize(horizontal: false, vertical: true).accessibilityAddTraits(.isHeader)
+                    Text(strings.t(review.descriptionKey)).font(.body).foregroundStyle(theme.secondaryLabel)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                VisionDialogFooter {
                     Button(strings.t("common.cancel")) { model.cancelPendingReview() }.keyboardShortcut(.cancelAction)
-                    Spacer()
+                        .buttonStyle(.visionOutline)
                     Button(strings.t(review.confirmKey), role: review.destructive ? .destructive : nil) {
                         Task { await model.confirmPendingReview() }
                     }.buttonStyle(.visionPrimary).tint(review.destructive ? theme.destructive : theme.primary)
                         .keyboardShortcut(.defaultAction).disabled(blocksConfirmation)
                 }
-            }.padding(24).frame(width: 470).accessibilityElement(children: .contain)
+            }.visionDialogPadding().frame(width: 512).accessibilityElement(children: .contain)
         }
     }
 }

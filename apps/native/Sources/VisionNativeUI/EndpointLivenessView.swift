@@ -25,7 +25,7 @@ public struct EndpointLivenessView: View {
                             .accessibilityAddTraits(.isHeader)
                         Spacer(minLength: 12)
                         TextField(strings.t("admin.endpoints.filterPlaceholder"), text: filter)
-                            .textFieldStyle(.roundedBorder)
+                            .textFieldStyle(.vision)
                             .frame(maxWidth: 256)
                             .accessibilityLabel(strings.t("admin.endpoints.filterPlaceholder"))
                     }

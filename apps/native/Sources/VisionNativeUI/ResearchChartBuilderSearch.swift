@@ -10,7 +10,7 @@ struct ResearchChartBuilderSearchView: View {
     private var count: Int { model.tickerResults.count + model.macroResults.count }
     private var strings: any Localizing { shell.strings }
     var body: some View {
-        TextField(strings.t("research.builder.addSeries"), text: $model.searchText).textFieldStyle(.roundedBorder)
+        TextField(strings.t("research.builder.addSeries"), text: $model.searchText).textFieldStyle(.vision)
             .focused($focused)
             .accessibilityLabel(strings.t("research.builder.addSeries"))
             .onKeyPress(.downArrow) { move(1) }.onKeyPress(.upArrow) { move(-1) }

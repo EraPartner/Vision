@@ -208,7 +208,7 @@ struct AuditHistoryCardView: View {
                 Text(strings.t("admin.audit.transferPassword"))
                     .font(.subheadline.weight(.medium))
                 SecureField("", text: transferPassword)
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.vision)
                     .frame(maxWidth: 384)
                     .accessibilityLabel(strings.t("admin.audit.transferPassword"))
             }
