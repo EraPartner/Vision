@@ -19,12 +19,11 @@ import {
   convertRowsToEur,
   convertToCurrency,
   warmCache,
-  FALLBACK_RATES,
+  loadCurrentRates,
   backfillPortfolioHistoricalRates,
   __clearHistoricalIndexCache as clearHistoricalIndexCache,
   getHistoricalRateIndex,
 } from "../src/services/currency/currencyConversionService.ts";
-import { hasConversionRate } from "../src/lib/exchangeRates.ts";
 import {
   query as rawQuery,
   withTransaction as rawWithTransaction,
@@ -68,15 +67,6 @@ describe("Currency Conversion Service", () => {
     delete (global as { fetch?: typeof fetch }).fetch;
   });
 
-  it("reports whether a conversion has both required rates", () => {
-    const rates = { EUR: 1, USD: 0.5 };
-    expect(hasConversionRate("USD", "EUR", rates)).toBe(true);
-    expect(hasConversionRate("EUR", "USD", rates)).toBe(true);
-    expect(hasConversionRate("ZZZ", "ZZZ", rates)).toBe(true);
-    expect(hasConversionRate("ZZZ", "EUR", rates)).toBe(false);
-    expect(hasConversionRate("EUR", "ZZZ", rates)).toBe(false);
-  });
-
   // ── EUR identity ──────────────────────────────────────────
   it("should return same amount for EUR to EUR", async () => {
     const result = await convertToCurrency(100.0, "EUR", "EUR");
@@ -105,19 +95,12 @@ describe("Currency Conversion Service", () => {
     expect(typeof result).toBe("number");
   });
 
-  // ── Fallback rates ───────────────────────────────────────
-  it("should convert USD to EUR using fallback rates", async () => {
-    // DB returns nothing, API will fail in test → fallback
-    const result = await convertToCurrency(109.0, "USD", "EUR");
-    expect(typeof result).toBe("number");
-    expect(result).toBeGreaterThan(50); // reasonable range
-    expect(result).toBeLessThan(200);
-  });
-
-  it("should convert GBP to EUR using fallback rates", async () => {
-    const result = await convertToCurrency(100.0, "GBP", "EUR");
-    expect(typeof result).toBe("number");
-    expect(result).toBeGreaterThan(80);
+  // ── No stored rates ──────────────────────────────────────
+  it("has no rate for a currency without a stored rate (never a built-in constant)", async () => {
+    // DB returns nothing: only the EUR base is known.
+    expect(await loadCurrentRates()).toEqual({ EUR: 1 });
+    // The amount is passed through unconverted, not converted at a constant.
+    expect(await convertToCurrency(109.0, "USD", "EUR")).toBe(109.0);
   });
 
   it("should use 1:1 for unsupported currency", async () => {
@@ -161,6 +144,13 @@ describe("Currency Conversion Service", () => {
 
   // ── Multiple currencies ───────────────────────────────────
   it("should convert multiple currencies correctly", async () => {
+    query.mockResolvedValue({
+      rows: [
+        { currency_code: "USD", rate_to_eur: "0.92" },
+        { currency_code: "GBP", rate_to_eur: "1.17" },
+        { currency_code: "JPY", rate_to_eur: "0.0062" },
+      ],
+    });
     const usd = await convertToCurrency(100.0, "USD", "EUR");
     const gbp = await convertToCurrency(100.0, "GBP", "EUR");
     const jpy = await convertToCurrency(10000.0, "JPY", "EUR");
@@ -393,7 +383,12 @@ describe("Currency Conversion Service", () => {
   });
 
   it("keeps historical fallback metadata as an internal diagnostic", async () => {
-    query.mockResolvedValue({ rows: [] });
+    // A latest stored rate exists, but no historical one on or before the day.
+    query.mockImplementation(async (sql) =>
+      String(sql).includes("is_latest = true")
+        ? { rows: [{ currency_code: "USD", rate_to_eur: "0.9" }] }
+        : { rows: [] },
+    );
     global.fetch = vi
       .fn()
       .mockResolvedValue({ ok: false, status: 503, text: async () => "" });
@@ -406,6 +401,7 @@ describe("Currency Conversion Service", () => {
 
     expect(converted).toMatchObject({
       id: 7,
+      amount_eur: 90,
       used_fallback_rate: true,
       fallback_reason: "historical_rate_missing",
     });
@@ -856,9 +852,9 @@ describe("Currency Conversion Service", () => {
       expect(await convertToCurrency(10, "USD", "EUR")).toBeCloseTo(
         provider === "supplementary" ? 2.5 : 5,
       );
-      expect(await convertToCurrency(10, "SAR", "EUR")).toBeCloseTo(
-        10 * FALLBACK_RATES.SAR!,
-      );
+      // Neither provider nor the database knows SAR: it stays unavailable
+      // instead of being filled from a built-in constant.
+      expect((await loadCurrentRates()).SAR).toBeUndefined();
       const written = client.query.mock.calls
         .filter(([sql]) => String(sql).includes("INSERT INTO exchange_rates"))
         .map(([, params]) => params[0]);

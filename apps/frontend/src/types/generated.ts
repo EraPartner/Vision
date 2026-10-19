@@ -5622,11 +5622,10 @@ export interface components {
         ExchangeRates: {
             total_rates: number;
             rates: components["schemas"]["ExchangeRate"][];
-            /** @description Built-in rates to EUR by currency code, used when no stored rate exists */
-            fallback_rates: {
-                [key: string]: number;
-            };
-            /** @enum {string} */
+            /**
+             * @description `database` when rates are stored. `fallback` when none are stored yet; amounts in other currencies are then unavailable (flagged), never converted at built-in constants.
+             * @enum {string}
+             */
             source: "database" | "fallback";
             /** @description The stored rate date is before today */
             is_stale: boolean;
@@ -6328,6 +6327,7 @@ export interface components {
             originalCurrency?: string;
             summarySource?: string;
             is_active?: boolean;
+            /** @description A transaction-date rate was missing (current-rate fallback), or the holding's currency has no latest stored rate, in which case the current figures stay unconverted rather than use a built-in constant. Archived presentation rows set it only for the missing stored rate. */
             usedFallbackRate?: boolean;
             gainLossPercent?: number;
             interestRate?: number;
@@ -6378,6 +6378,8 @@ export interface components {
             oversold: boolean;
             /** @description Exact current holdings and profit/loss partitions for this investment. */
             byAccount: components["schemas"]["PortfolioSummaryByAccountItem"][];
+            /** @description This investment's figures per broker account (account_id null for unassigned), every contribution kind summed with Decimal and rounded once. The Portfolio broker filter reads these instead of adding byAccount rows. */
+            accountTotals: components["schemas"]["PortfolioSummaryAccountTotals"][];
         } & {
             [key: string]: unknown;
         };
@@ -6394,6 +6396,21 @@ export interface components {
              * @enum {string}
              */
             contribution_kind: "position" | "non_position";
+            oversold: boolean;
+            currentValue: number;
+            totalInvested: number;
+            realizedGain: number;
+            unrealizedGain: number;
+            gainLoss: number;
+        };
+        PortfolioSummaryAccountTotals: {
+            /** Format: int32 */
+            account_id: number | null;
+            /**
+             * @description Stable machine-readable identity for accountless contributions.
+             * @enum {string}
+             */
+            assignment: "account" | "unassigned";
             oversold: boolean;
             currentValue: number;
             totalInvested: number;
@@ -6474,6 +6491,8 @@ export interface components {
             archivedPresentation?: components["schemas"]["PortfolioSummaryItem"][];
             summaries: components["schemas"]["PortfolioSummaryItem"][];
             byAccount: components["schemas"]["PortfolioSummaryByAccountItem"][];
+            /** @description Portfolio-wide figures per broker account (account_id null for unassigned), summed over every investment and contribution kind with Decimal and rounded once, sorted by currentValue descending. The Portfolio broker filter's holdings and P/L subtotals. */
+            accountTotals: components["schemas"]["PortfolioSummaryAccountTotals"][];
             /** @description Totals per asset class present in `summaries` (archived holdings included when active=false), in canonical class order. */
             byAssetClass: components["schemas"]["PortfolioAssetClassTotals"][];
             /** @description Totals per asset page group (stocks_etfs, crypto, metals, real_estate, savings_bonds), always all five in that order, zero when empty. */
@@ -7284,7 +7303,7 @@ export interface components {
                 /** Format: date */
                 balance_date: string;
             }[];
-            /** @description The account's anchor+delta computed balance (ADR-094), denominated in `currency`. On a multi-currency account each currency partition is computed separately and converted into `currency` at today's rate, so this figure moves with exchange rates. A partition with no usable source or target rate is excluded rather than treated as 1:1; when that happens `balance_incomplete` is true and the native amount is available in `balance_parts`. */
+            /** @description The account's anchor+delta computed balance (ADR-094), denominated in `currency`. On a multi-currency account each currency partition is computed separately and converted into `currency` at the latest stored exchange rate, so this figure moves with exchange rates. A partition without a stored source or target rate is excluded rather than converted at a built-in constant or 1:1; when that happens `balance_incomplete` is true, the currency is listed in `unconverted_currencies` and the native amount is available in `balance_parts`. */
             computed_balance?: number | null;
             /** @description Native per-currency ledger balances; only returned by the list endpoint. */
             balance_parts?: {
@@ -11385,7 +11404,7 @@ export interface operations {
                                 portfolio?: number;
                                 funding?: number;
                             };
-                            /** @description Post-merge computed balance — anchor+delta evaluated per currency over the union of both accounts' active rows, each currency partition converted at its own current rate into the survivor's currency */
+                            /** @description Post-merge computed balance — anchor+delta evaluated per currency over the union of both accounts' active rows, each currency partition converted at the latest stored rate into the survivor's currency (a partition without one is excluded and listed in unconvertedCurrencies) */
                             projectedBalance?: number;
                             /** @description The survivor's native currency (ISO-4217) */
                             projectedBalanceCurrency?: string;

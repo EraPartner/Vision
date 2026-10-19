@@ -8,7 +8,8 @@
  * - Supplements ECB rates with open.er-api.com for currencies ECB doesn't cover
  *   (AED, SAR, KWD, QAR, BHD, OMR, PKR, EGP, NGN, and ~130 more)
  * - ECB always takes priority over the supplementary source on overlapping currencies
- * - If both APIs are unavailable the service falls back to DB then hardcoded constants
+ * - If both APIs are unavailable the service uses the stored rates; a currency
+ *   without a stored rate has no rate (callers flag it), never a constant
  */
 
 import { query } from "../../database/connection.ts";
@@ -68,8 +69,10 @@ let historicalIndexCache: {
   builtAt: number;
 } | null = null;
 
-// Static hardcoded fallback rates. Never mutated.
-// Covers ECB currencies plus common non-ECB currencies (Gulf, South Asia, Africa, etc.)
+// Static hard-coded rates. Never mutated and never used by the conversion
+// helpers of this module (ADR-216: displayed figures convert at stored rates
+// only). The remaining consumers are the Belgian tax dashboards, whose convert
+// callbacks have no way to surface a missing rate yet.
 export const FALLBACK_RATES: RateTable = {
   EUR: 1.0,
   // ECB currencies
@@ -116,16 +119,18 @@ export const FALLBACK_RATES: RateTable = {
   KES: 1 / 141.0,
 };
 
-// Live fallback — refreshed to latest fetched rates so cache-miss + DB-miss still gets fresh data.
-let liveFallbackRates: RateTable = FALLBACK_RATES;
+// Rate table when nothing is stored yet: only the EUR base, so every other
+// currency reads as unavailable.
+const NO_STORED_RATES: RateTable = Object.freeze({ EUR: 1 });
 
 // ─── Cache helpers ────────────────────────────────────────────────────────────
 
 /**
  * Get current rates using the cache hierarchy:
  *   1. In-memory cache (24-hour TTL)
- *   2. Database (latest rows)
- *   3. Hardcoded fallback
+ *   2. Database (latest stored rows)
+ * With no stored rates the table holds only EUR: other currencies have no
+ * rate, which callers flag or pass through, never convert at a constant.
  */
 async function getRates(): Promise<RateTable> {
   if (memoryCache && Date.now() - memoryCache.timestamp < CACHE_LIFETIME_MS) {
@@ -138,12 +143,10 @@ async function getRates(): Promise<RateTable> {
     return dbRates;
   }
 
-  logger.warn(
-    "Using fallback exchange rates — ECB API and database unavailable",
-  );
+  logger.warn("No stored exchange rates — only EUR amounts can be converted");
   // Return the reference (callers never mutate) so warmCache can detect that
-  // the fallback path was taken via identity comparison.
-  return liveFallbackRates;
+  // nothing is stored via identity comparison.
+  return NO_STORED_RATES;
 }
 
 /**
@@ -182,9 +185,7 @@ export async function getHistoricalRateIndex(
     return cache.index;
   }
 
-  const union = fresh
-    ? [...new Set([...cache.currencies, ...wanted])]
-    : wanted;
+  const union = fresh ? [...new Set([...cache.currencies, ...wanted])] : wanted;
   const rows = await queryRows(
     historicalRateRowSchema,
     `SELECT currency_code, to_char(rate_date, 'YYYY-MM-DD') AS rate_date, rate_to_eur
@@ -261,7 +262,7 @@ export async function listLatestStoredRates(): Promise<{
 }
 
 /**
- * Fetch fresh rates from both sources, update DB, memory cache, and fallback map.
+ * Fetch fresh rates from both sources, update the DB and the memory cache.
  * ECB is fetched first and takes priority; open.er-api fills in currencies ECB doesn't publish.
  * Called on startup and every 12 hours by the scheduler in main.ts.
  */
@@ -287,7 +288,9 @@ export async function warmCache() {
     if (!ecbRates && !erarRates) {
       const rates = await getRates();
       logger.warn(
-        `Exchange rate cache warmed from ${rates === liveFallbackRates ? "fallback" : "database"} (all APIs unavailable)`,
+        rates === NO_STORED_RATES
+          ? "No exchange rates available (all APIs unavailable, none stored)"
+          : "Exchange rate cache warmed from database (all APIs unavailable)",
       );
       return;
     }
@@ -311,13 +314,10 @@ export async function warmCache() {
     // Only provider quotes may be stamped with today's date in the database.
     const storedRates = await loadFromDatabase();
     const mergedRates = {
-      ...FALLBACK_RATES,
-      ...liveFallbackRates,
       ...(storedRates ?? {}),
       ...(memoryCache?.rates ?? {}),
       ...freshRates,
     };
-    liveFallbackRates = mergedRates;
     await saveToDatabase(freshRates);
     memoryCache = { rates: mergedRates, timestamp: Date.now() };
     // Fresh rates were written — drop the cached historical index so the 12h
@@ -731,8 +731,7 @@ export async function backfillPortfolioHistoricalRates() {
 
   let repaired = 0;
   try {
-    repaired =
-      (await repairHistoricalRatesFromFullHistory(pairRows)) ?? 0;
+    repaired = (await repairHistoricalRatesFromFullHistory(pairRows)) ?? 0;
   } catch (err) {
     // A contract violation is a data fault, not a transient failure: surface it.
     if (err instanceof RowContractError) throw err;

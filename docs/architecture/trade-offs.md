@@ -2,8 +2,8 @@
 title: System Design Trade-offs Analysis
 type: architecture-doc
 status: active
-date: 2026-04-02
-updated: 2026-09-04
+date: 2026-10-19
+updated: 2026-10-19
 tags: [system-design, trade-offs, architecture, decisions, analysis]
 description: Analysis of current Vision architectural trade-offs, including the ADR-109 flat investment schema that superseded PostgreSQL inheritance.
 aliases: [trade-offs, design decisions, architecture analysis, alternatives]
@@ -181,6 +181,13 @@ runtime fork and restore enforceable foreign keys. See
 | Complexity      | Moderate (merge logic)              | Simple                  |
 
 **Trade-off:** Hardcoded rates may be stale but ensure the app works even when all external APIs are down. The `warmCache()` function refreshes rates on startup.
+
+> [!note] Revised 2026-10-19
+> Displayed figures no longer use the hard-coded rates
+> ([[docs/adr/216-server-owned-domain-calculations|ADR-216]]). Conversion reads the stored
+> `exchange_rates` rows only; once a provider has succeeded the app keeps working offline from
+> them, and a currency without a stored rate is flagged as unavailable instead of converted at a
+> possibly stale constant. Only the Belgian tax dashboards still read `FALLBACK_RATES`.
 
 ---
 

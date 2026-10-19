@@ -201,6 +201,48 @@ describeDb("GET /api/accounts/totals (real DB)", () => {
     expect(bodyAt(res, "data", "net_cash", "total")).toBe(420);
   });
 
+  it("lists computed_balance at stored rates and flags a currency without one", async () => {
+    await seed();
+
+    const res = await api.get("/api/accounts");
+
+    expect(res.status).toBe(200);
+    const items = bodyAt(res, "data", "items") as Array<{ id: number }>;
+    const byId = (id: number | undefined) => items.find((a) => a.id === id);
+    // 100 EUR + 100 USD × 0.5 (stored).
+    expect(byId(ids.checking)).toMatchObject({
+      computed_balance: 150,
+      balance_incomplete: false,
+      unconverted_currencies: [],
+    });
+    // A GBP account needs no rate for its own currency.
+    expect(byId(ids.gbp)).toMatchObject({
+      computed_balance: 50,
+      balance_incomplete: false,
+    });
+  });
+
+  it("flags a partition when no rate is stored at all instead of using a built-in rate", async () => {
+    // Regression: with an empty exchange_rates table USD used to convert at
+    // the hard-coded 1/1.09, giving 191.74.
+    const checking = await addAccount("Checking");
+    await addTxn(checking, "100");
+    await addTxn(checking, "100", "USD");
+
+    const res = await api.get("/api/accounts");
+
+    expect(res.status).toBe(200);
+    const items = bodyAt(res, "data", "items") as Array<{ id: number }>;
+    expect(items.find((a) => a.id === checking)).toMatchObject({
+      computed_balance: 100,
+      balance_incomplete: true,
+      unconverted_currencies: ["USD"],
+      balance_parts: expect.arrayContaining([
+        { currency: "USD", balance: 100 },
+      ]),
+    });
+  });
+
   it("rejects a malformed currency", async () => {
     const res = await api.get("/api/accounts/totals?currency=euro");
     expect(res.status).toBe(400);

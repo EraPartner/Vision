@@ -20,7 +20,6 @@ describe("FxStatusBanner", () => {
                 return ok({
                     total_rates: 0,
                     rates: [],
-                    fallback_rates: {},
                     base: "EUR",
                     date: "2025-01-01",
                     source: "fallback",
