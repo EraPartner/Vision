@@ -197,16 +197,16 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                         ? `every ${pattern.intervalDays} days`
                         : pattern.detectedPattern,
             });
-            queryClient.invalidateQueries({
+            void queryClient.invalidateQueries({
                 queryKey: plannedKeys.recurringPatterns,
             });
-            queryClient.invalidateQueries({
+            void queryClient.invalidateQueries({
                 queryKey: plannedKeys.transactionsAll,
             });
-            queryClient.invalidateQueries({
+            void queryClient.invalidateQueries({
                 queryKey: plannedKeys.upcomingAll,
             });
-            queryClient.invalidateQueries({
+            void queryClient.invalidateQueries({
                 queryKey: plannedKeys.accountTransactionsAll,
             });
             toast.success(

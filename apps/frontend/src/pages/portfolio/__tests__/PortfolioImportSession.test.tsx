@@ -755,7 +755,7 @@ describe("reviewed portfolio import sessions", () => {
                             (await request.json()) as Record<string, unknown>,
                         );
                         return ok(
-                            cashPlan(commits.length ? "settled" : "cash"),
+                            cashPlan(commits.length > 0 ? "settled" : "cash"),
                         );
                     },
                 ),
@@ -2197,7 +2197,8 @@ describe("reviewed portfolio import sessions", () => {
         const sourceText = await new Promise<string>((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = () => resolve(String(reader.result));
-            reader.onerror = () => reject(reader.error);
+            reader.onerror = () =>
+                reject(reader.error ?? new Error("FileReader failed"));
             reader.readAsText(sourceFile);
         });
         expect(new TextEncoder().encode(sourceText).length).toBe(native.size);

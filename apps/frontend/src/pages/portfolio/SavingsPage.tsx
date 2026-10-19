@@ -265,7 +265,8 @@ export default function SavingsPage() {
                                                         ? t("portfolio.savings")
                                                         : t("portfolio.bond")}
                                                 </Badge>
-                                                {a.interestRate ? (
+                                                {a.interestRate != null &&
+                                                a.interestRate !== 0 ? (
                                                     <span className="tabular-nums text-accent">
                                                         {formatPercent(
                                                             a.interestRate,
@@ -313,14 +314,14 @@ export default function SavingsPage() {
                                     </div>
 
                                     {(Boolean(
-                                        a.interestRate &&
+                                        (a.interestRate ?? 0) !== 0 &&
                                         a.projectedAnnualInterest > 0,
                                     ) ||
                                         a.maturityDate ||
                                         a.totalFees > 0 ||
                                         a.totalTaxes > 0) && (
                                         <dl className="divide-y divide-border/50 border-t border-border/50">
-                                            {a.interestRate &&
+                                            {(a.interestRate ?? 0) !== 0 &&
                                             a.projectedAnnualInterest > 0 ? (
                                                 <>
                                                     <FactRow

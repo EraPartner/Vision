@@ -60,8 +60,7 @@ function buildSeries<T extends MergedDay | MergedDayDate>(
         {
             key: "actual",
             label: actualLabel,
-            accessor: (d) =>
-                (d as MergedDay | MergedDayDate).actual as number | null,
+            accessor: (d) => d.actual,
             color: ACTUAL_COLOR,
             strokeWidth: 2.5,
             connectNulls: false,

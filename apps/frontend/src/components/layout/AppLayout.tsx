@@ -94,7 +94,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     const closeSettings = useCallback(() => {
         if (settingsEntryWasPushedRef.current) {
             settingsEntryWasPushedRef.current = false;
-            navigate(-1);
+            void navigate(-1);
             return;
         }
         setSearchParams(
@@ -146,7 +146,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                 !isShortcutSafeTarget(e.target)
             ) {
                 e.preventDefault();
-                navigate("/transactions?new=1");
+                void navigate("/transactions?new=1");
                 return;
             }
             if (

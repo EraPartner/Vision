@@ -76,7 +76,7 @@ export function RecentTransactionsList({
                                         aria-hidden="true"
                                         className="h-2.5 w-2.5 rounded-full"
                                         style={{
-                                            backgroundColor: row.categoryId
+                                            backgroundColor: row.categoryId != null
                                                 ? getCategoryChartColor(row.category)
                                                 : "hsl(var(--muted-foreground) / 0.4)",
                                         }}

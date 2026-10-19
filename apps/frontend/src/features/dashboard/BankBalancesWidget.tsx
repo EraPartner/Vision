@@ -120,7 +120,7 @@ export function BankBalancesWidget() {
         // (current 0, large past balances) must still appear in the 12-month chart.
         const chartAccounts = accounts.filter((acct) => {
             if (Math.abs(acct.balance) > 0.000001) return true;
-            return (history[acct.bank_account] || []).some(
+            return (history[acct.bank_account] ?? []).some(
                 (h) => Math.abs(h.balance) > 0.000001,
             );
         });
@@ -131,7 +131,7 @@ export function BankBalancesWidget() {
             chartAccounts.map((acct) => [
                 acct.bank_account,
                 new Map(
-                    (history[acct.bank_account] || []).map((h) => [
+                    (history[acct.bank_account] ?? []).map((h) => [
                         h.date,
                         h.balance,
                     ]),

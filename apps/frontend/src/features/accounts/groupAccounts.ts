@@ -80,10 +80,9 @@ export function groupAccounts(
     });
     return ACCOUNT_GROUP_ORDER.map((id) => ({
         id,
-        accounts: [...buckets.get(id)!].sort(
-            (a, b) =>
-                collator.compare(accountLabel(a), accountLabel(b)) ||
-                a.id - b.id,
-        ),
+        accounts: [...buckets.get(id)!].sort((a, b) => {
+            const byLabel = collator.compare(accountLabel(a), accountLabel(b));
+            return byLabel !== 0 ? byLabel : a.id - b.id;
+        }),
     })).filter((g) => g.accounts.length > 0);
 }

@@ -42,7 +42,7 @@ export async function taxReportContext(
             taxableIncome: calculation.taxableIncome,
             totalTax: calculation.totalPIT,
             brackets: calculation.breakdown.filter((entry) => entry.bracket).map((entry) => ({
-                label: entry.bracketNumber ? translate(`tax.pit.row.bracket${entry.bracketNumber}`) : entry.label,
+                label: (entry.bracketNumber ?? 0) !== 0 ? translate(`tax.pit.row.bracket${entry.bracketNumber}`) : entry.label,
                 rate: entry.rate,
                 taxAmount: entry.amount,
             })),

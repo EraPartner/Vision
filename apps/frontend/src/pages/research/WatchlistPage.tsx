@@ -88,7 +88,7 @@ export default function WatchlistPage() {
     );
     const quotesUnavailable = !isOnline || quotesError;
 
-    const priceMap = new Map(quotesData?.map((q) => [q.symbol, q]) || []);
+    const priceMap = new Map(quotesData?.map((q) => [q.symbol, q]) ?? []);
 
     const deleteMutation = useDeleteWatchlistItem();
 
@@ -158,7 +158,7 @@ export default function WatchlistPage() {
                         <Skeleton key={i} className="h-14 w-full" />
                     ))}
                 </div>
-            ) : !data?.items?.length ? (
+            ) : data?.items == null || data.items.length === 0 ? (
                 <Card>
                     <CardContent variant="state">
                         <EmptyState
@@ -236,7 +236,9 @@ export default function WatchlistPage() {
                                     "[&_.truncate]:overflow-visible [&_.truncate]:whitespace-normal [&_.truncate]:break-words [&>div]:flex-wrap [&>div>span:last-child]:basis-full @[36rem]:[&>div]:flex-nowrap @[36rem]:[&>div>span:last-child]:basis-auto",
                                     isBelowTarget && "bg-success/[0.06]",
                                 )}
-                                leading={Icon ? <Icon /> : undefined}
+                                leading={
+                                    Icon !== undefined ? <Icon /> : undefined
+                                }
                                 title={
                                     <span className="flex max-w-full flex-wrap items-baseline gap-x-2 gap-y-1">
                                         {item.symbol ? (

@@ -166,7 +166,7 @@ export function TagInput({ 'aria-labelledby': ariaLabelledBy, value, onChange, d
                 addSlug(exactMatch.slug);
                 setInputValue('');
             } else if (canCreate) {
-                handleCreate();
+                void handleCreate();
             }
         }
         const lastSlug = value.at(-1);

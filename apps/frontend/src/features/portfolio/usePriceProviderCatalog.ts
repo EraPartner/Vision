@@ -52,6 +52,6 @@ export function usePriceProviderCatalog(t: TranslateFn): PriceProviderOption[] {
     staleTime: Number.POSITIVE_INFINITY,
   });
 
-  const catalog = data?.length ? data : FALLBACK_CATALOG;
+  const catalog = (data != null && data.length > 0) ? data : FALLBACK_CATALOG;
   return catalog.map((provider) => toOption(provider, t));
 }

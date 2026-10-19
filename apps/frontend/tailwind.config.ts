@@ -3,7 +3,7 @@ import * as tailwindcssAnimateModule from "tailwindcss-animate";
 import { shimmerAnimation, shimmerKeyframes } from './src/build-support/shimmerAnimation';
 
 // Handle both CommonJS and ES module exports
-const tailwindcssAnimate = (tailwindcssAnimateModule as { default?: typeof tailwindcssAnimateModule }).default || tailwindcssAnimateModule;
+const tailwindcssAnimate = (tailwindcssAnimateModule as { default?: typeof tailwindcssAnimateModule }).default ?? tailwindcssAnimateModule;
 
 export default {
     darkMode: ["class"],

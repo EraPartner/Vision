@@ -54,7 +54,7 @@ export function NetWorthCard({ currency }: NetWorthCardProps) {
                             >
                                 <Money amount={change} currency={currency} signed />{" "}
                                 {t("home.netWorth.change")}
-                                {data?.monthlyChangePercent ? ` (${change > 0 ? "+" : ""}${data.monthlyChangePercent.toFixed(1)}%)` : ""}
+                                {data != null && data.monthlyChangePercent !== 0 ? ` (${change > 0 ? "+" : ""}${data.monthlyChangePercent.toFixed(1)}%)` : ""}
                             </p>
                         </div>
                         <dl className="space-y-2">

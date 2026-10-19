@@ -66,7 +66,7 @@ const enDictPromise: Promise<Record<string, string>> | null =
               .then((mod) => mod.default)
               .catch((err) => {
                   logger.error('Failed to preload locale "en":', err);
-                  return {} as Record<string, string>;
+                  return {};
               })
         : null;
 

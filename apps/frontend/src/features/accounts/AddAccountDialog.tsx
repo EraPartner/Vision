@@ -267,7 +267,7 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
         key: K,
         value: AccountFormValues[K],
     ) => {
-        if ((FLAG_KEYS as readonly string[]).includes(key as string)) {
+        if ((FLAG_KEYS as readonly string[]).includes(key)) {
             setTouchedFlags((prev) => new Set(prev).add(key as FlagKey));
         }
         setForm((f) => ({ ...f, [key]: value }));

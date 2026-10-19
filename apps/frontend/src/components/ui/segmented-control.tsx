@@ -77,6 +77,7 @@ const SegmentedControl = React.forwardRef<
         );
         const layoutId = React.useId();
         const labelId = React.useId();
+        const hasLabel = Boolean(label);
 
         React.useEffect(() => {
             if (value !== undefined) setActive(value);
@@ -103,14 +104,14 @@ const SegmentedControl = React.forwardRef<
                             segmentedControlVariants({ size }),
                             className,
                         )}
-                        aria-labelledby={label ? labelId : undefined}
+                        aria-labelledby={hasLabel ? labelId : undefined}
                         {...props}
                     />
                 </SegmentedControlValueContext.Provider>
             </SegmentedControlLayoutIdContext.Provider>
         );
 
-        if (!label) return control;
+        if (!hasLabel) return control;
         return (
             <div className={cn("space-y-2", wrapperClassName)}>
                 <Label id={labelId}>{label}</Label>

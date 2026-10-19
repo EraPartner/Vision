@@ -47,7 +47,7 @@ function SankeyInner({
     const innerHeight = height - MARGIN.top - MARGIN.bottom;
 
     const graph = useMemo<SankeyGraph<NodeExtra, LinkExtra> | null>(() => {
-        if (!data.nodes.length || !data.links.length) return null;
+        if (data.nodes.length === 0 || data.links.length === 0) return null;
 
         // Deep clone — d3-sankey mutates node/link objects in-place
         const clonedNodes = data.nodes.map((n) => ({
@@ -104,7 +104,7 @@ function SankeyInner({
                         hoveredLinkIndex === i ||
                         hoveredNodeId === sourceId ||
                         hoveredNodeId === targetId;
-                    const d = pathGen(link as Parameters<typeof pathGen>[0]);
+                    const d = pathGen(link);
 
                     return (
                         <path
@@ -200,7 +200,7 @@ function SankeyInner({
 export function SankeyChart({ data, height = 420 }: SankeyChartProps) {
     const { t } = useLanguage();
 
-    if (!data.nodes.length) {
+    if (data.nodes.length === 0) {
         return (
             <div className="flex h-40 items-center justify-center type-callout text-label-secondary">
                 {t("statsPage.sankey.noData")}

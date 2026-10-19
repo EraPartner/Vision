@@ -50,12 +50,18 @@ export function getAggregationMonthlySummary(params?: {
     if (params?.all_time) qp.set("all_time", "true");
     if (params?.start_date) qp.set("start_date", params.start_date);
     if (params?.end_date) qp.set("end_date", params.end_date);
-    if (params?.excluded_category_ids?.length) {
+    if (
+        params?.excluded_category_ids != null &&
+        params.excluded_category_ids.length > 0
+    ) {
         params.excluded_category_ids.forEach((id) =>
             qp.append("excluded_category_ids", String(id)),
         );
     }
-    if (params?.excluded_recipient_ids?.length) {
+    if (
+        params?.excluded_recipient_ids != null &&
+        params.excluded_recipient_ids.length > 0
+    ) {
         params.excluded_recipient_ids.forEach((id) =>
             qp.append("excluded_recipient_ids", String(id)),
         );
@@ -194,12 +200,18 @@ export function getAggregationCategoryPivot(params?: {
     if (params?.currency) qp.set("currency", params.currency);
     if (params?.start_date) qp.set("start_date", params.start_date);
     if (params?.end_date) qp.set("end_date", params.end_date);
-    if (params?.excluded_category_ids?.length) {
+    if (
+        params?.excluded_category_ids != null &&
+        params.excluded_category_ids.length > 0
+    ) {
         params.excluded_category_ids.forEach((id) =>
             qp.append("excluded_category_ids", String(id)),
         );
     }
-    if (params?.excluded_recipient_ids?.length) {
+    if (
+        params?.excluded_recipient_ids != null &&
+        params.excluded_recipient_ids.length > 0
+    ) {
         params.excluded_recipient_ids.forEach((id) =>
             qp.append("excluded_recipient_ids", String(id)),
         );
@@ -225,12 +237,18 @@ export function getAggregationRecipientByYear(params?: {
     if (params?.currency) qp.set("currency", params.currency);
     if (params?.start_date) qp.set("start_date", params.start_date);
     if (params?.end_date) qp.set("end_date", params.end_date);
-    if (params?.excluded_recipient_ids?.length) {
+    if (
+        params?.excluded_recipient_ids != null &&
+        params.excluded_recipient_ids.length > 0
+    ) {
         params.excluded_recipient_ids.forEach((id) =>
             qp.append("excluded_recipient_ids", String(id)),
         );
     }
-    if (params?.excluded_category_ids?.length) {
+    if (
+        params?.excluded_category_ids != null &&
+        params.excluded_category_ids.length > 0
+    ) {
         params.excluded_category_ids.forEach((id) =>
             qp.append("excluded_category_ids", String(id)),
         );
@@ -269,12 +287,15 @@ export function getAggregationRecipientPivot(params?: {
     if (params?.bucket) qp.set("bucket", params.bucket);
     if (params?.start_date) qp.set("start_date", params.start_date);
     if (params?.end_date) qp.set("end_date", params.end_date);
-    if (params?.excluded_recipient_ids?.length) {
+    if (
+        params?.excluded_recipient_ids != null &&
+        params.excluded_recipient_ids.length > 0
+    ) {
         params.excluded_recipient_ids.forEach((id) =>
             qp.append("excluded_recipient_ids", String(id)),
         );
     }
-    if (params?.recipient_ids?.length) {
+    if (params?.recipient_ids != null && params.recipient_ids.length > 0) {
         params.recipient_ids.forEach((id) =>
             qp.append("recipient_ids", String(id)),
         );
@@ -308,7 +329,7 @@ export function getAggregationTagPivot(params?: {
     if (params?.all) {
         // "all tags": let the server return every tag with spend in range.
         qp.set("all", "true");
-    } else if (params?.tag_ids?.length) {
+    } else if (params?.tag_ids != null && params.tag_ids.length > 0) {
         params.tag_ids.forEach((id) => qp.append("tag_ids", String(id)));
     }
     const q = qp.toString();
@@ -418,7 +439,7 @@ export function getCashflowForecastMethods(params?: {
     if (params?.history_months != null)
         qp.set("history_months", String(params.history_months));
     if (params?.mc_paths != null) qp.set("mc_paths", String(params.mc_paths));
-    if (params?.mc_percentiles?.length) {
+    if (params?.mc_percentiles != null && params.mc_percentiles.length > 0) {
         params.mc_percentiles.forEach((p) =>
             qp.append("mc_percentiles", String(p)),
         );
@@ -427,12 +448,18 @@ export function getCashflowForecastMethods(params?: {
         qp.set("include_planned", params.include_planned ? "true" : "false");
     if (params?.include_backtest != null)
         qp.set("include_backtest", params.include_backtest ? "true" : "false");
-    if (params?.excluded_category_ids?.length) {
+    if (
+        params?.excluded_category_ids != null &&
+        params.excluded_category_ids.length > 0
+    ) {
         params.excluded_category_ids.forEach((id) =>
             qp.append("excluded_category_ids", String(id)),
         );
     }
-    if (params?.excluded_recipient_ids?.length) {
+    if (
+        params?.excluded_recipient_ids != null &&
+        params.excluded_recipient_ids.length > 0
+    ) {
         params.excluded_recipient_ids.forEach((id) =>
             qp.append("excluded_recipient_ids", String(id)),
         );
@@ -483,7 +510,7 @@ export function getCashflowForecastRolling(params?: {
     if (params?.days_forward != null)
         qp.set("days_forward", String(params.days_forward));
     if (params?.mc_paths != null) qp.set("mc_paths", String(params.mc_paths));
-    if (params?.mc_percentiles?.length) {
+    if (params?.mc_percentiles != null && params.mc_percentiles.length > 0) {
         params.mc_percentiles.forEach((p) =>
             qp.append("mc_percentiles", String(p)),
         );
@@ -492,12 +519,18 @@ export function getCashflowForecastRolling(params?: {
         qp.set("include_planned", params.include_planned ? "true" : "false");
     if (params?.include_backtest != null)
         qp.set("include_backtest", params.include_backtest ? "true" : "false");
-    if (params?.excluded_category_ids?.length) {
+    if (
+        params?.excluded_category_ids != null &&
+        params.excluded_category_ids.length > 0
+    ) {
         params.excluded_category_ids.forEach((id) =>
             qp.append("excluded_category_ids", String(id)),
         );
     }
-    if (params?.excluded_recipient_ids?.length) {
+    if (
+        params?.excluded_recipient_ids != null &&
+        params.excluded_recipient_ids.length > 0
+    ) {
         params.excluded_recipient_ids.forEach((id) =>
             qp.append("excluded_recipient_ids", String(id)),
         );
@@ -554,12 +587,18 @@ export function getSankeyFlow(params?: {
     const qp = new URLSearchParams();
     if (params?.currency) qp.set("currency", params.currency);
     if (params?.year != null) qp.set("year", String(params.year));
-    if (params?.excluded_category_ids?.length) {
+    if (
+        params?.excluded_category_ids != null &&
+        params.excluded_category_ids.length > 0
+    ) {
         params.excluded_category_ids.forEach((id) =>
             qp.append("excluded_category_ids", String(id)),
         );
     }
-    if (params?.excluded_recipient_ids?.length) {
+    if (
+        params?.excluded_recipient_ids != null &&
+        params.excluded_recipient_ids.length > 0
+    ) {
         params.excluded_recipient_ids.forEach((id) =>
             qp.append("excluded_recipient_ids", String(id)),
         );

@@ -100,7 +100,7 @@ function payment(overrides: Partial<PlannedPayment> = {}): PlannedPayment {
         is_executed: false,
         created_at: "2026-01-01T00:00:00Z",
         ...overrides,
-    } as PlannedPayment;
+    };
 }
 
 function renderTable(

@@ -21,7 +21,9 @@ export function useCreateSavedChart() {
         mutationFn: (payload: SavedChartCreate) =>
             apiClient.createSavedChart(payload),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: savedChartKeys.all });
+            void queryClient.invalidateQueries({
+                queryKey: savedChartKeys.all,
+            });
             toast.success(t("charts.saved"));
         },
         onError: (error: Error) => {
@@ -42,7 +44,9 @@ export function useUpdateSavedChart() {
         }: { id: number } & Partial<SavedChartCreate>) =>
             apiClient.updateSavedChart(id, payload),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: savedChartKeys.all });
+            void queryClient.invalidateQueries({
+                queryKey: savedChartKeys.all,
+            });
         },
         onError: (error: Error) => {
             toast.error(t("charts.updateFailed"), {
@@ -58,7 +62,9 @@ export function useDeleteSavedChart() {
     return useMutation({
         mutationFn: (id: number) => apiClient.deleteSavedChart(id),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: savedChartKeys.all });
+            void queryClient.invalidateQueries({
+                queryKey: savedChartKeys.all,
+            });
             toast.success(t("charts.deleted"));
         },
         onError: (error: Error) => {

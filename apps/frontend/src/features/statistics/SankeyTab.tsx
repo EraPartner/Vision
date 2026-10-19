@@ -51,7 +51,7 @@ export function SankeyTab({
         excludedRecipientIds: resolvedRecIds,
     } = useExcludedIds("statistics");
     const currentYear = useMemo(() => new Date().getFullYear(), []);
-    const yearOptions = availableYears?.length
+    const yearOptions = (availableYears != null && availableYears.length > 0)
         ? [...availableYears].sort((a, b) => b - a)
         : [currentYear];
     const [selectedYear, setSelectedYear] = useState(currentYear);

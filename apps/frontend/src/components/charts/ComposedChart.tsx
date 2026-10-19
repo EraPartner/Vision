@@ -71,7 +71,7 @@ const DOWN = "hsl(var(--loss))";
 function repValue<Datum>(s: ComposedSeries<Datum>, d: Datum): number | null {
     const fn = s.type === "candlestick" ? s.close : s.accessor;
     const v = fn?.(d);
-    return v != null && Number.isFinite(v) ? (v as number) : null;
+    return v != null && Number.isFinite(v) ? v : null;
 }
 
 type ComposedYScale =
@@ -108,7 +108,7 @@ function ComposedSeriesLayerInner<Datum>({
 }: ComposedSeriesLayerProps<Datum>) {
     const scaleFor = (s: ComposedSeries<Datum>) =>
         s.axis === "right" && rightScale ? rightScale : leftScale;
-    const cx = (d: Datum) => xScale(xAccessor(d) as never) ?? 0;
+    const cx = (d: Datum) => xScale(xAccessor(d)) ?? 0;
 
     return (
         <>
@@ -118,14 +118,13 @@ function ComposedSeriesLayerInner<Datum>({
                 const yS = scaleFor(s);
                 const color = s.color ?? getChartColor(i);
                 const base =
-                    yS(Math.max(0, (yS.domain() as number[])[0] ?? 0)) ??
-                    innerHeight;
+                    yS(Math.max(0, yS.domain()[0] ?? 0)) ?? innerHeight;
                 return (
                     <g key={s.key} opacity={s.fillOpacity ?? 0.5}>
                         {data.map((d, j) => {
                             const v = s.accessor?.(d);
                             if (v == null || !Number.isFinite(v)) return null;
-                            const y = yS(v as number) ?? 0;
+                            const y = yS(v) ?? 0;
                             return (
                                 <rect
                                     key={j}
@@ -296,28 +295,25 @@ function Inner<Datum>({
                     if (s.type === "candlestick") {
                         const hi = s.high?.(d);
                         const lo = s.low?.(d);
-                        if (hi != null && Number.isFinite(hi))
-                            values.push(hi as number);
-                        if (lo != null && Number.isFinite(lo))
-                            values.push(lo as number);
+                        if (hi != null && Number.isFinite(hi)) values.push(hi);
+                        if (lo != null && Number.isFinite(lo)) values.push(lo);
                     } else {
                         const v = s.accessor?.(d);
-                        if (v != null && Number.isFinite(v))
-                            values.push(v as number);
+                        if (v != null && Number.isFinite(v)) values.push(v);
                     }
                 }
             }
             // values is finite-filtered above, so d3 min/max match Math.min/max(...)
             // exactly while avoiding the spread stack-size hazard on large series.
-            const lo = values.length ? (min(values) as number) : 0;
-            const hi = values.length ? (max(values) as number) : 1;
+            const lo = values.length > 0 ? (min(values) as number) : 0;
+            const hi = values.length > 0 ? (max(values) as number) : 1;
             if (axis === "left" && logLeft && lo > 0) {
                 return scaleLog({
                     range: [innerHeight, 0],
                     domain: [lo * 0.95, hi * 1.05],
                 });
             }
-            const pad = (hi - lo) * 0.08 || 1;
+            const pad = hi !== lo ? (hi - lo) * 0.08 : 1;
             return scaleLinear({
                 range: [innerHeight, 0],
                 domain: [lo - pad, hi + pad],
@@ -337,9 +333,7 @@ function Inner<Datum>({
     const barWidth = Math.max(1, step * 0.6);
 
     const bisect = useMemo(
-        () =>
-            bisector<Datum, Date | number>((d) => stableXAccessor(d) as Date)
-                .center,
+        () => bisector<Datum, Date | number>((d) => stableXAccessor(d)).center,
         [stableXAccessor],
     );
     const [hoverIdx, setHoverIdx] = useState<number | null>(null);
@@ -357,7 +351,7 @@ function Inner<Datum>({
                 overlayRectRef.current = rect;
             }
             const x0 = xScale.invert(event.clientX - rect.left);
-            const idx = bisect(data, x0 as never);
+            const idx = bisect(data, x0);
             setHoverIdx(idx >= 0 && idx < data.length ? idx : null);
         },
         [bisect, data, xScale],
@@ -378,7 +372,7 @@ function Inner<Datum>({
 
     const hoverDatum = safeHoverIdx != null ? data[safeHoverIdx] : null;
     const tooltipItems: ChartTooltipDatum[] = useMemo(() => {
-        if (!hoverDatum) return [];
+        if (hoverDatum == null) return [];
         return series
             .map((s, i) => {
                 const v = repValue(s, hoverDatum);
@@ -394,7 +388,7 @@ function Inner<Datum>({
             .filter((x): x is NonNullable<typeof x> => x !== null);
     }, [hoverDatum, series, tooltipValueFormat]);
 
-    const cx = (d: Datum) => xScale(stableXAccessor(d) as never) ?? 0;
+    const cx = (d: Datum) => xScale(stableXAccessor(d)) ?? 0;
 
     return (
         <div style={{ position: "relative", width, height }}>
@@ -501,9 +495,9 @@ function Inner<Datum>({
                 left={hoverDatum != null ? MARGIN.left + cx(hoverDatum) : 0}
                 top={MARGIN.top}
                 title={
-                    hoverDatum && tooltipTitle
+                    hoverDatum != null && tooltipTitle
                         ? tooltipTitle(hoverDatum)
-                        : hoverDatum
+                        : hoverDatum != null
                           ? // App date format, not the browser locale, for the fallback title
                             String(
                                 xAccessor(hoverDatum) instanceof Date

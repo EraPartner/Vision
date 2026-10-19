@@ -318,7 +318,7 @@ export function useBulkTagTransactions() {
             apiClient.bulkTagTransactions(request),
         onSuccess: () => {
             invalidateTransactionData(queryClient);
-            queryClient.invalidateQueries({ queryKey: tagKeys.all });
+            void queryClient.invalidateQueries({ queryKey: tagKeys.all });
             toast.success(t("tags.bulkApplied"));
         },
         onError: (error: Error) => {
@@ -377,8 +377,8 @@ export function useBulkUpdateTransactions() {
             apiClient.bulkUpdateTransactions(request),
         onSuccess: (result) => {
             invalidateTransactionData(queryClient);
-            queryClient.invalidateQueries({ queryKey: categoryKeys.all });
-            queryClient.invalidateQueries({ queryKey: recipientKeys.all });
+            void queryClient.invalidateQueries({ queryKey: categoryKeys.all });
+            void queryClient.invalidateQueries({ queryKey: recipientKeys.all });
             toast.success(
                 result.matched !== result.requested
                     ? tc(

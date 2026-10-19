@@ -152,7 +152,7 @@ export function ResearchMappingDialog({
                 mappings,
             }),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: mappingsKey });
+            void queryClient.invalidateQueries({ queryKey: mappingsKey });
             toast.success(t("research.mapping.saved"));
         },
         onError: () => toast.error(t("research.mapping.saveError")),
@@ -161,7 +161,7 @@ export function ResearchMappingDialog({
     const deleteMutation = useMutation({
         mutationFn: (id: number) => apiClient.deleteResearchMapping(id),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: mappingsKey });
+            void queryClient.invalidateQueries({ queryKey: mappingsKey });
             toast.success(t("research.mapping.removed"));
         },
     });

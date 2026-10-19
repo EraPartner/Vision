@@ -383,7 +383,7 @@ export default function TableDataEditorPage() {
             for (const [col, val] of Object.entries(edited)) {
                 if (!valuesEqual(original[col], val)) set[col] = val;
             }
-            if (Object.keys(set).length)
+            if (Object.keys(set).length > 0)
                 out.push({
                     op: "update",
                     pk: pickPk(original, primaryKey),
@@ -655,7 +655,7 @@ export default function TableDataEditorPage() {
                                                     {col.name}
                                                 </span>
                                                 {active ? (
-                                                    sort!.dir === "asc" ? (
+                                                    sort.dir === "asc" ? (
                                                         <ChevronUp
                                                             aria-hidden="true"
                                                             className="text-primary"
@@ -722,7 +722,9 @@ export default function TableDataEditorPage() {
                                 Array.from({ length: 8 }).map((_, i) => (
                                     <TableRow key={i}>
                                         <TableCell
-                                            colSpan={(columns.length || 1) + 1}
+                                            colSpan={
+                                                Math.max(columns.length, 1) + 1
+                                            }
                                         >
                                             <Skeleton className="h-4 w-full" />
                                         </TableCell>
@@ -889,21 +891,23 @@ export default function TableDataEditorPage() {
                                                             "dbEditor.cellLabel",
                                                             {
                                                                 column: col.name,
-                                                                row: primaryKey.length
-                                                                    ? primaryKey
-                                                                          .map(
-                                                                              (
-                                                                                  name,
-                                                                              ) =>
-                                                                                  `${name}=${String(row[name])}`,
-                                                                          )
-                                                                          .join(
-                                                                              ", ",
-                                                                          )
-                                                                    : String(
-                                                                          rowIndex +
-                                                                              1,
-                                                                      ),
+                                                                row:
+                                                                    primaryKey.length >
+                                                                    0
+                                                                        ? primaryKey
+                                                                              .map(
+                                                                                  (
+                                                                                      name,
+                                                                                  ) =>
+                                                                                      `${name}=${String(row[name])}`,
+                                                                              )
+                                                                              .join(
+                                                                                  ", ",
+                                                                              )
+                                                                        : String(
+                                                                              rowIndex +
+                                                                                  1,
+                                                                          ),
                                                             },
                                                         )}
                                                         value={value}
@@ -947,7 +951,9 @@ export default function TableDataEditorPage() {
                                 newRows.length === 0 && (
                                     <TableRow className="hover:bg-transparent">
                                         <TableCell
-                                            colSpan={(columns.length || 1) + 1}
+                                            colSpan={
+                                                Math.max(columns.length, 1) + 1
+                                            }
                                         >
                                             <EmptyState
                                                 size="compact"

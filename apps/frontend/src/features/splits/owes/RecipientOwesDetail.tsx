@@ -87,7 +87,7 @@ export function RecipientOwesDetail({
     const locale = numberFormatToLocale(appSettings.numberFormat);
     const { confirm, ConfirmDialog } = useConfirmDialog();
 
-    const items = data?.items || [];
+    const items = data?.items ?? [];
     // Converted to the display currency on the server; splits in a currency
     // without a stored rate are left out (and named in the description).
     const totalOutstanding = data?.summary.remaining ?? 0;
@@ -113,7 +113,7 @@ export function RecipientOwesDetail({
     };
 
     const handleSettleAll = async () => {
-        if (!items.length) return;
+        if (items.length === 0) return;
         const unconvertedCount = data?.summary.unconverted_count ?? 0;
         const description = t("owesPage.settleAll.confirmDescription", {
             count: items.length,
@@ -138,7 +138,7 @@ export function RecipientOwesDetail({
     };
 
     const handleExportCsv = async () => {
-        if (!items.length || isExportingCsv) return;
+        if (items.length === 0 || isExportingCsv) return;
         setIsExportingCsv(true);
         try {
             const blob = await apiClient.exportOwedByRecipientCsv(recipient.id);
@@ -183,7 +183,7 @@ export function RecipientOwesDetail({
                             label={t("owesPage.menu")}
                         >
                             <DropdownMenuItem
-                                disabled={!items.length || isExportingCsv}
+                                disabled={items.length === 0 || isExportingCsv}
                                 onSelect={() => void handleExportCsv()}
                             >
                                 <Download
@@ -198,7 +198,7 @@ export function RecipientOwesDetail({
                         <Button
                             onClick={() => void handleSettleAll()}
                             disabled={
-                                !items.length ||
+                                items.length === 0 ||
                                 settleAllSplitsByRecipient.isPending
                             }
                         >

@@ -57,7 +57,7 @@ export function useCsvPreview(
                     text,
                     separator,
                     skipRows,
-                    (input, options) => parse(input, options) as string[][],
+                    (input, options) => parse(input, options),
                 );
                 setState({ preview, isLoading: false, error: null });
             } catch {

@@ -199,9 +199,11 @@ function InspectorContent({
         setTagSlugs(txn.tags?.map((tag) => tag.slug) ?? []);
     }, [txn.tags]);
 
-    const recipientId = txn.recipientId || undefined;
+    // The table maps "no recipient" to the 0 sentinel.
+    const recipientId = txn.recipientId !== 0 ? txn.recipientId : undefined;
     const uncategorised =
-        !txn.categoryId || txn.category === t("txPage.field.uncategorized");
+        txn.categoryId === undefined ||
+        txn.category === t("txPage.field.uncategorized");
     const { data: recipient } = useRecipient(recipientId);
     const { data: uncategorisedCount } =
         useUncategorisedCountForRecipient(recipientId);
@@ -213,7 +215,7 @@ function InspectorContent({
     // does not already apply.
     const canSetUsual =
         !!recipient &&
-        !!txn.categoryId &&
+        txn.categoryId !== undefined &&
         recipient.default_category_id !== txn.categoryId;
 
     const startEdit = (field: InfoEditableField, currentValue: string) => {
@@ -370,12 +372,13 @@ function InspectorContent({
         { key: "id", label: t("txPage.field.id"), value: String(txn.id) },
     ];
 
-    const hasRecipient = !!txn.recipientId;
+    const hasRecipient = recipientId !== undefined;
     const canDuplicate = hasRecipient && !!txn.date && !!txn.bank;
     const fieldRows = (
         <dl className="divide-y divide-border/50">
-            {fields.map((field) =>
-                field.value || field.editable ? (
+            {fields.map((field) => {
+                const hasValue = Boolean(field.value);
+                return hasValue || field.editable ? (
                     <div
                         key={field.key}
                         className="flex items-center justify-between gap-3 py-2 type-body"
@@ -514,8 +517,7 @@ function InspectorContent({
                                     <span
                                         className={cn(
                                             "min-w-0 break-words text-foreground tabular-nums",
-                                            !field.value &&
-                                                "text-label-tertiary",
+                                            !hasValue && "text-label-tertiary",
                                         )}
                                     >
                                         {field.value ?? "—"}
@@ -545,8 +547,8 @@ function InspectorContent({
                             )}
                         </dd>
                     </div>
-                ) : null,
-            )}
+                ) : null;
+            })}
         </dl>
     );
 
@@ -633,7 +635,7 @@ function InspectorContent({
                             </label>
                             <RecipientCombobox
                                 id="transaction-info-recipient"
-                                value={txn.recipientId || null}
+                                value={recipientId ?? null}
                                 onSelect={(id, name) =>
                                     onSelectRecipient(txn.id, id, name)
                                 }
@@ -644,44 +646,47 @@ function InspectorContent({
                     </div>
                     {recipient && (canSetUsual || otherUncategorised > 0) && (
                         <div className="space-y-2 rounded-control bg-foreground/[0.04] px-3 py-2 type-footnote text-label-secondary">
-                            {otherUncategorised > 0 && txn.categoryId && (
-                                <p className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-                                    <span>
-                                        {t(
-                                            "txPage.inspector.othersNeedCategory",
-                                            {
+                            {otherUncategorised > 0 &&
+                                txn.categoryId !== undefined && (
+                                    <p className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                                        <span>
+                                            {t(
+                                                "txPage.inspector.othersNeedCategory",
+                                                {
+                                                    count: otherUncategorised,
+                                                    name: recipient.name,
+                                                },
+                                            )}
+                                        </span>
+                                        <Button
+                                            variant="link"
+                                            size="sm"
+                                            className="h-auto p-0"
+                                            disabled={bulkUpdate.isPending}
+                                            onClick={() =>
+                                                bulkUpdate.mutate({
+                                                    filter: {
+                                                        recipient_id:
+                                                            recipient.id,
+                                                        uncategorised: true,
+                                                        active: true,
+                                                    },
+                                                    expected_count:
+                                                        uncategorisedCount ?? 0,
+                                                    fields: {
+                                                        category_id:
+                                                            txn.categoryId ??
+                                                            null,
+                                                    },
+                                                })
+                                            }
+                                        >
+                                            {t("txPage.inspector.useForAll", {
                                                 count: otherUncategorised,
-                                                name: recipient.name,
-                                            },
-                                        )}
-                                    </span>
-                                    <Button
-                                        variant="link"
-                                        size="sm"
-                                        className="h-auto p-0"
-                                        disabled={bulkUpdate.isPending}
-                                        onClick={() =>
-                                            bulkUpdate.mutate({
-                                                filter: {
-                                                    recipient_id: recipient.id,
-                                                    uncategorised: true,
-                                                    active: true,
-                                                },
-                                                expected_count:
-                                                    uncategorisedCount ?? 0,
-                                                fields: {
-                                                    category_id:
-                                                        txn.categoryId ?? null,
-                                                },
-                                            })
-                                        }
-                                    >
-                                        {t("txPage.inspector.useForAll", {
-                                            count: otherUncategorised,
-                                        })}
-                                    </Button>
-                                </p>
-                            )}
+                                            })}
+                                        </Button>
+                                    </p>
+                                )}
                             {canSetUsual && (
                                 <p className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
                                     <span>
@@ -714,7 +719,7 @@ function InspectorContent({
                             )}
                         </div>
                     )}
-                    {recipient?.default_category_id &&
+                    {recipient?.default_category_id != null &&
                         recipient.default_category_id === txn.categoryId && (
                             <p className="flex flex-wrap items-center justify-between gap-x-3 type-footnote text-label-secondary">
                                 <span>

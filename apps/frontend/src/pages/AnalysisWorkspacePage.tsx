@@ -104,7 +104,7 @@ import {
 } from "@/features/analysis/analysisPresentation";
 
 function chartColumns(result: AnalysisResult | null) {
-    const columns = result?.declaredColumns?.length
+    const columns = (result?.declaredColumns != null && result.declaredColumns.length > 0)
         ? result.declaredColumns
         : (result?.columns ?? []);
     return {
@@ -223,7 +223,7 @@ function visualPlanFromSource(
             id: outputId,
             direction,
         })),
-        limit: Number(source.limit) || 500,
+        limit: Number(source.limit) > 0 ? Number(source.limit) : 500,
     };
 }
 
@@ -294,7 +294,7 @@ function compatibleVisualOrigin(
 ): VisualAnalysisPlan | undefined {
     if (!origin || !result) return undefined;
     const originOutputs = new Set([...origin.fields, ...origin.measures]);
-    const resultOutputs = result.declaredColumns?.length
+    const resultOutputs = (result.declaredColumns != null && result.declaredColumns.length > 0)
         ? result.declaredColumns.map((column) => column.id)
         : result.columns.map((column) => column.id);
     return originOutputs.size === resultOutputs.length &&
@@ -359,7 +359,7 @@ function ResultTable({
             appSettings.numberFormat,
         );
     };
-    const columns = result.declaredColumns?.length
+    const columns = (result.declaredColumns != null && result.declaredColumns.length > 0)
         ? result.declaredColumns.map((column) => column.id)
         : result.columns.map((column) => column.id);
     return (
@@ -559,12 +559,18 @@ export default function AnalysisWorkspacePage() {
     const [lastUsableResult, setLastUsableResult] =
         useState<AnalysisResult | null>(null);
     const [exportInputsKnown, setExportInputsKnown] = useState(false);
-    const [resultInputs, setResultInputs] = useState({
+    const [resultInputs, setResultInputs] = useState<{
+        formulasJson: string;
+        assumptionsJson: string;
+        assumptionValuesJson: string;
+        workbench: AnalysisWorkbenchConfig;
+        scenarioModel: AnalysisScenarioModel;
+    }>({
         formulasJson: "[]",
         assumptionsJson: "[]",
         assumptionValuesJson: "{}",
-        workbench: {} as AnalysisWorkbenchConfig,
-        scenarioModel: { attachments: [], joins: [] } as AnalysisScenarioModel,
+        workbench: {},
+        scenarioModel: { attachments: [], joins: [] },
     });
     const [exportContext, setExportContext] =
         useState<AnalysisExportContext | null>(null);
@@ -728,7 +734,7 @@ export default function AnalysisWorkspacePage() {
     const resultHeadingRef = useRef<HTMLHeadingElement>(null);
     const [resultFocusRequest, setResultFocusRequest] = useState(0);
     useEffect(() => {
-        if (!resultFocusRequest) return;
+        if (resultFocusRequest === 0) return;
         resultHeadingRef.current?.focus();
         resultHeadingRef.current?.scrollIntoView?.({ block: "start" });
     }, [resultFocusRequest]);
@@ -941,7 +947,7 @@ export default function AnalysisWorkspacePage() {
                     message: t("analysis.savedActionComplete"),
                 });
             }
-            queryClient.invalidateQueries({ queryKey: ["analysis", "saved"] });
+            void queryClient.invalidateQueries({ queryKey: ["analysis", "saved"] });
         },
         onError: (cause, _variables, epoch) => {
             if (epoch === draftEpoch.current)
@@ -976,7 +982,8 @@ export default function AnalysisWorkspacePage() {
             );
             if (source.plan) setPlan(source.plan);
             if (source.sql !== undefined) setSql(source.sql);
-            if (source.datasetIds?.length) setSqlDatasets(source.datasetIds);
+            if (source.datasetIds != null && source.datasetIds.length > 0)
+                setSqlDatasets(source.datasetIds);
             if (source.visualOrigin) setVisualOrigin(source.visualOrigin);
             setSqlValues(JSON.stringify(saved.parameters.sqlValues ?? []));
             setScenarioModel(
@@ -1000,7 +1007,7 @@ export default function AnalysisWorkspacePage() {
                         ? binding.x
                         : ids[0] || "",
                 y:
-                    binding.y.length &&
+                    binding.y.length > 0 &&
                     (!saved.lastResult ||
                         binding.y.some((id) => numericIds.includes(id)))
                         ? binding.y.filter(
@@ -1010,21 +1017,26 @@ export default function AnalysisWorkspacePage() {
                         : numericIds.slice(0, 1).filter(Boolean),
             });
             setWorkbench(
-                (saved.parameters.workbench as AnalysisWorkbenchConfig) || {},
+                (saved.parameters.workbench as
+                    | AnalysisWorkbenchConfig
+                    | undefined) ?? {},
             );
             setPivotConfig(
-                (saved.parameters.pivotConfig as AnalysisPivotConfig) || {
-                    rows: source.plan?.groups.slice(0, 1) || [],
-                    columns: source.plan?.groups.slice(1, 2) || [],
-                    values: source.plan?.measures || [],
+                (saved.parameters.pivotConfig as
+                    | AnalysisPivotConfig
+                    | undefined) ?? {
+                    rows: source.plan?.groups.slice(0, 1) ?? [],
+                    columns: source.plan?.groups.slice(1, 2) ?? [],
+                    values: source.plan?.measures ?? [],
                     filters: [],
                 },
             );
             if (source.plan)
                 setPlan({
                     ...source.plan,
-                    ...((saved.parameters
-                        .financialPlan as Partial<VisualAnalysisPlan>) || {}),
+                    ...((saved.parameters.financialPlan as
+                        | Partial<VisualAnalysisPlan>
+                        | undefined) ?? {}),
                 });
             setOffset(0);
             setExportInputsKnown(false);
@@ -1049,10 +1061,12 @@ export default function AnalysisWorkspacePage() {
                     )?.assumptionValues ?? {},
                 ),
                 workbench:
-                    (saved.parameters.workbench as AnalysisWorkbenchConfig) ||
-                    {},
-                scenarioModel: (saved.parameters
-                    .scenarioModel as AnalysisScenarioModel) || {
+                    (saved.parameters.workbench as
+                        | AnalysisWorkbenchConfig
+                        | undefined) ?? {},
+                scenarioModel: (saved.parameters.scenarioModel as
+                    | AnalysisScenarioModel
+                    | undefined) ?? {
                     attachments: [],
                     joins: [],
                 },
@@ -1445,7 +1459,7 @@ export default function AnalysisWorkspacePage() {
                                                 setVisualOrigin(plan);
                                                 setSqlDatasets([
                                                     plan.datasetId,
-                                                    ...(plan.joins.length
+                                                    ...(plan.joins.length > 0
                                                         ? ["accounts"]
                                                         : []),
                                                 ]);
@@ -1643,7 +1657,7 @@ export default function AnalysisWorkspacePage() {
                                                                                     current,
                                                                                 ) => ({
                                                                                     ...current,
-                                                                                    fields: checked
+                                                                                    fields: checked === true
                                                                                         ? [
                                                                                               ...current.fields,
                                                                                               field.id,
@@ -1655,7 +1669,7 @@ export default function AnalysisWorkspacePage() {
                                                                                                   id !==
                                                                                                   field.id,
                                                                                           ),
-                                                                                    groups: checked
+                                                                                    groups: checked === true
                                                                                         ? current.groups
                                                                                         : current.groups.filter(
                                                                                               (
@@ -1712,7 +1726,7 @@ export default function AnalysisWorkspacePage() {
                                                                                 ) => ({
                                                                                     ...current,
                                                                                     measures:
-                                                                                        checked
+                                                                                        checked === true
                                                                                             ? [
                                                                                                   ...current.measures,
                                                                                                   measure.id,
@@ -1762,7 +1776,7 @@ export default function AnalysisWorkspacePage() {
                                                                                         current,
                                                                                     ) => ({
                                                                                         ...current,
-                                                                                        joins: checked
+                                                                                        joins: checked === true
                                                                                             ? [
                                                                                                   join.id,
                                                                                               ]
@@ -1805,7 +1819,7 @@ export default function AnalysisWorkspacePage() {
                                                                             current,
                                                                         ) => ({
                                                                             ...current,
-                                                                            groups: checked
+                                                                            groups: checked === true
                                                                                 ? [
                                                                                       ...current.groups,
                                                                                       id,
@@ -2280,7 +2294,7 @@ export default function AnalysisWorkspacePage() {
                                                                             (
                                                                                 current,
                                                                             ) =>
-                                                                                checked
+                                                                                checked === true
                                                                                     ? [
                                                                                           ...new Set(
                                                                                               [
@@ -2460,7 +2474,8 @@ export default function AnalysisWorkspacePage() {
                                     </Alert>
                                 </div>
                             )}
-                            {!!displayedResult.formulaErrors?.length && (
+                            {displayedResult.formulaErrors != null &&
+                                displayedResult.formulaErrors.length > 0 && (
                                 <Alert
                                     variant="warning"
                                     className="mx-6 mb-3 w-auto"
@@ -2663,8 +2678,10 @@ export default function AnalysisWorkspacePage() {
                                             result={{
                                                 ...displayedResult,
                                                 declaredColumns:
-                                                    (displayedResult
-                                                        .declaredColumns?.length
+                                                    (displayedResult.declaredColumns !=
+                                                        null &&
+                                                    displayedResult.declaredColumns
+                                                        .length > 0
                                                         ? displayedResult.declaredColumns
                                                         : displayedResult.columns
                                                     ).map((column) => ({
@@ -2763,7 +2780,7 @@ export default function AnalysisWorkspacePage() {
                             <CardContent className="min-w-0 pt-2">
                                 <AnalysisWorkbenchPanel
                                     result={
-                                        displayedResult?.sourceResult ||
+                                        displayedResult?.sourceResult ??
                                         displayedResult
                                     }
                                     formulasJson={formulasJson}
@@ -2795,8 +2812,8 @@ export default function AnalysisWorkspacePage() {
                                         const updated = {
                                             ...next,
                                             sourceResult:
-                                                displayedResult?.sourceResult ||
-                                                displayedResult ||
+                                                displayedResult?.sourceResult ??
+                                                displayedResult ??
                                                 undefined,
                                         };
                                         setResult(updated);
@@ -3176,7 +3193,7 @@ export default function AnalysisWorkspacePage() {
                                                                 loadSaved(
                                                                     restored,
                                                                 );
-                                                            queryClient.invalidateQueries(
+                                                            void queryClient.invalidateQueries(
                                                                 {
                                                                     queryKey: [
                                                                         "analysis",
@@ -3309,7 +3326,7 @@ export default function AnalysisWorkspacePage() {
                                                                     loadSaved(
                                                                         applied,
                                                                     );
-                                                                queryClient.invalidateQueries(
+                                                                void queryClient.invalidateQueries(
                                                                     {
                                                                         queryKey:
                                                                             [
@@ -3350,7 +3367,7 @@ export default function AnalysisWorkspacePage() {
                             <CardTitle>{t("analysis.savedTitle")}</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-2">
-                            {!!savedQuery.data?.length && (
+                            {(savedQuery.data != null && savedQuery.data.length > 0) && (
                                 <List>
                                     {savedQuery.data?.map((saved) => {
                                         const active =
@@ -3406,7 +3423,7 @@ export default function AnalysisWorkspacePage() {
                                                                             loadSaved(
                                                                                 refreshed,
                                                                             );
-                                                                        queryClient.invalidateQueries(
+                                                                        void queryClient.invalidateQueries(
                                                                             {
                                                                                 queryKey:
                                                                                     [
@@ -3479,7 +3496,7 @@ export default function AnalysisWorkspacePage() {
                                                                                         ? null
                                                                                         : current,
                                                                             );
-                                                                            queryClient.invalidateQueries(
+                                                                            void queryClient.invalidateQueries(
                                                                                 {
                                                                                     queryKey:
                                                                                         [

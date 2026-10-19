@@ -68,7 +68,7 @@ export function useCreateCategoryNode() {
         mutationFn: (input: CategoryNodeCreate) =>
             apiClient.createCategoryNode(input),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: categoryKeys.all });
+            void queryClient.invalidateQueries({ queryKey: categoryKeys.all });
             toast.success(t("categories.created"));
         },
         onError: (error: Error) =>
@@ -85,7 +85,7 @@ export function useUpdateCategoryNode() {
         mutationFn: ({ id, data }: { id: number; data: CategoryNodeUpdate }) =>
             apiClient.updateCategoryNode(id, data),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: categoryKeys.all });
+            void queryClient.invalidateQueries({ queryKey: categoryKeys.all });
             toast.success(t("categories.updated"));
         },
         onError: (error: Error) =>
@@ -101,7 +101,7 @@ export function useDeleteCategoryNode() {
     return useMutation({
         mutationFn: (id: number) => apiClient.deleteCategoryNode(id),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: categoryKeys.all });
+            void queryClient.invalidateQueries({ queryKey: categoryKeys.all });
             toast.success(t("categories.deleted"));
         },
         onError: (error: Error) =>
@@ -123,10 +123,12 @@ export function useMergeCategoryNode() {
             targetId: number;
         }) => apiClient.mergeCategoryNode(sourceId, targetId),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: categoryKeys.all });
-            queryClient.invalidateQueries({ queryKey: recipientKeys.all });
+            void queryClient.invalidateQueries({ queryKey: categoryKeys.all });
+            void queryClient.invalidateQueries({ queryKey: recipientKeys.all });
             invalidateTransactionData(queryClient);
-            queryClient.invalidateQueries({ queryKey: ["research-dossiers"] });
+            void queryClient.invalidateQueries({
+                queryKey: ["research-dossiers"],
+            });
             toast.success(t("categories.updated"));
         },
         onError: (error: Error) =>
@@ -144,7 +146,7 @@ export function useCreateCategory() {
         mutationFn: (category: CategoryCreate) =>
             apiClient.createCategory(category),
         onSuccess: (data) => {
-            queryClient.invalidateQueries({ queryKey: categoryKeys.all });
+            void queryClient.invalidateQueries({ queryKey: categoryKeys.all });
             if (data.wasCreated) {
                 toast.success(t("categories.created"));
             } else {
@@ -167,7 +169,7 @@ export function useUpdateCategory() {
         mutationFn: ({ id, data }: { id: number; data: CategoryUpdate }) =>
             apiClient.updateCategory(id, data),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: categoryKeys.all });
+            void queryClient.invalidateQueries({ queryKey: categoryKeys.all });
             toast.success(t("categories.updated"));
         },
         onError: (error: Error) => {

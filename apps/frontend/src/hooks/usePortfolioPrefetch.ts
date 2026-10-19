@@ -19,7 +19,7 @@ export function usePortfolioPrefetch(_workspace?: string) {
   const currency = appSettings.defaultCurrency || "EUR";
 
   const prefetchNetWorth = useCallback(() => {
-    queryClient.prefetchQuery({
+    void queryClient.prefetchQuery({
       queryKey: netWorthKeys.byCurrency(currency),
       queryFn: () => apiClient.getNetWorth({ currency }),
       staleTime: PREFETCH_STALE_TIME,
@@ -29,7 +29,7 @@ export function usePortfolioPrefetch(_workspace?: string) {
   const prefetchPerformance = useCallback(() => {
     // Same portfolioKeys.performance key PortfolioPage reads, so the
     // prefetch warms that exact cache entry.
-    queryClient.prefetchQuery({
+    void queryClient.prefetchQuery({
       queryKey: portfolioKeys.performance(currency, "all"),
       queryFn: () => apiClient.getPortfolioPerformance({ currency, period: "all" }),
       staleTime: PREFETCH_STALE_TIME,

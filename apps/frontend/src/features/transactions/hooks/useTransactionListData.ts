@@ -153,7 +153,10 @@ export function useTransactionListData({
                     amount_min: amountMinFilter,
                     amount_max: amountMaxFilter,
                     amount_signed: amountSignedFilter || undefined,
-                    tags: tagsFilter?.length ? tagsFilter.join(",") : undefined,
+                    tags:
+                        tagsFilter != null && tagsFilter.length > 0
+                            ? tagsFilter.join(",")
+                            : undefined,
                     account_id: accountIdFilter,
                     bank_account: bankAccountFilter,
                     sort_by: sortKey || undefined,
@@ -230,7 +233,10 @@ export function useTransactionListData({
                 amount_min: amountMinFilter,
                 amount_max: amountMaxFilter,
                 amount_signed: amountSignedFilter || undefined,
-                tags: tagsFilter?.length ? tagsFilter.join(",") : undefined,
+                tags:
+                    tagsFilter != null && tagsFilter.length > 0
+                        ? tagsFilter.join(",")
+                        : undefined,
                 account_id: accountIdFilter,
                 bank_account: bankAccountFilter,
                 sort_by: sortKey || undefined,
@@ -338,7 +344,7 @@ export function useTransactionListData({
         setAllItems,
         totalItems,
         isLoading: isLoading || (!!initialData && !hasInitialItems),
-        error: (error as Error | null) ?? null,
+        error: error ?? null,
         isFetchingMore,
         hasMoreRef,
         sortKey,

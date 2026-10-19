@@ -4,8 +4,9 @@ export function matchesCategorySelection(
     selectedIds: ReadonlySet<number>,
 ): boolean {
     if (category.categoryId == null) return false;
-    const path = category.categoryPathIds?.length
-        ? category.categoryPathIds
-        : [category.categoryId];
+    const path =
+        category.categoryPathIds != null && category.categoryPathIds.length > 0
+            ? category.categoryPathIds
+            : [category.categoryId];
     return path.some((id) => selectedIds.has(id));
 }

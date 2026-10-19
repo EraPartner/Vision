@@ -153,7 +153,7 @@ export async function bulkExportTransactions(
         exported:
             Number.isSafeInteger(exported) && exported >= 0
                 ? exported
-                : "ids" in request && request.ids
+                : "ids" in request && request.ids != null
                   ? request.ids.length
                   : 0,
     };

@@ -64,7 +64,7 @@ export default function OwesPage() {
         );
     }
 
-    const items = summary?.items || [];
+    const items = summary?.items ?? [];
     const totalOwed = summary?.summary.remaining ?? 0;
     const unconvertedCount = summary?.summary.unconverted_count ?? 0;
 

@@ -24,7 +24,7 @@ export function useOwedByRecipient(
     return useQuery({
         queryKey: splitKeys.owedByRecipient(recipientId, currency),
         queryFn: () => apiClient.getOwedByRecipient(recipientId!, currency),
-        enabled: !!recipientId,
+        enabled: recipientId != null,
         staleTime: QUERY_STALE_TIME_MS.FREQUENT,
     });
 }
@@ -33,7 +33,7 @@ export function useSplitsByTransaction(transactionId: number | null) {
     return useQuery({
         queryKey: splitKeys.byTransaction(transactionId),
         queryFn: () => apiClient.getSplitsByTransaction(transactionId!),
-        enabled: !!transactionId,
+        enabled: transactionId != null,
         staleTime: QUERY_STALE_TIME_MS.FREQUENT,
     });
 }
@@ -47,7 +47,7 @@ export function useCreateSplits() {
             splits: SplitCreateInput[];
         }) => apiClient.createSplitsBatch(data.transaction_id, data.splits),
         onSuccess: () => {
-            qc.invalidateQueries({ queryKey: splitKeys.all });
+            void qc.invalidateQueries({ queryKey: splitKeys.all });
             toast.success(t("splits.created"));
         },
         onError: (e: Error) =>
@@ -69,7 +69,7 @@ export function useBulkSplitTransactions() {
         mutationFn: (request: BulkSplitRequest) =>
             apiClient.createBulkSplits(request),
         onSuccess: (result) => {
-            qc.invalidateQueries({ queryKey: splitKeys.all });
+            void qc.invalidateQueries({ queryKey: splitKeys.all });
             invalidateTransactionData(qc);
             const skippedOther =
                 result.skipped_zero_amount + result.skipped_missing;
@@ -118,7 +118,7 @@ export function useRecordPayment() {
                 data.paid_at,
             ),
         onSuccess: () => {
-            qc.invalidateQueries({ queryKey: splitKeys.all });
+            void qc.invalidateQueries({ queryKey: splitKeys.all });
             toast.success(t("splits.paymentRecorded"));
         },
         onError: (e: Error) =>
@@ -134,7 +134,7 @@ export function useSettleSplit() {
     return useMutation({
         mutationFn: (splitId: number) => apiClient.settleSplit(splitId),
         onSuccess: () => {
-            qc.invalidateQueries({ queryKey: splitKeys.all });
+            void qc.invalidateQueries({ queryKey: splitKeys.all });
             toast.success(t("splits.settled"));
         },
         onError: (e: Error) =>
@@ -151,7 +151,7 @@ export function useSettleAllSplitsByRecipient() {
         mutationFn: (recipientId: number) =>
             apiClient.settleAllSplitsByRecipient(recipientId),
         onSuccess: (result) => {
-            qc.invalidateQueries({ queryKey: splitKeys.all });
+            void qc.invalidateQueries({ queryKey: splitKeys.all });
             toast.success(t("splits.allSettled", { n: result.settled_count }));
         },
         onError: (e: Error) =>
@@ -167,7 +167,7 @@ export function useDeleteSplit() {
     return useMutation({
         mutationFn: (splitId: number) => apiClient.deleteSplit(splitId),
         onSuccess: () => {
-            qc.invalidateQueries({ queryKey: splitKeys.all });
+            void qc.invalidateQueries({ queryKey: splitKeys.all });
             toast.success(t("splits.removed"));
         },
         onError: (e: Error) =>

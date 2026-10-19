@@ -19,7 +19,7 @@ export function currentDisplayIsLarge(): boolean {
     return isLargeDisplay(
         window.screen.width,
         window.screen.height,
-        window.devicePixelRatio || 1,
+        window.devicePixelRatio > 0 ? window.devicePixelRatio : 1,
     );
 }
 

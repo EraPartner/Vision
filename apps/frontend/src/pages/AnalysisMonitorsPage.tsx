@@ -419,7 +419,7 @@ const blank: {
     savedAnalysisId: "",
     dossierId: "",
     fieldId: "",
-    operator: "above" as MonitorOperator,
+    operator: "above",
     threshold: "",
     intervalMinutes: 1440,
     cooldownMinutes: 1440,
@@ -1056,7 +1056,8 @@ export default function AnalysisMonitorsPage() {
                     </Card>
                     {(monitors.isLoading ||
                         monitors.isError ||
-                        !!monitors.data?.items.length) && (
+                        (monitors.data?.items != null &&
+                            monitors.data.items.length > 0)) && (
                         <Card>
                             <CardHeader>
                                 <CardTitle variant="sm">
@@ -1076,7 +1077,8 @@ export default function AnalysisMonitorsPage() {
                                 )}
                                 {!monitors.isLoading &&
                                     !monitors.isError &&
-                                    !monitors.data?.items.length && (
+                                    (monitors.data?.items == null ||
+                                        monitors.data.items.length === 0) && (
                                         <EmptyState
                                             size="compact"
                                             headingLevel={3}
@@ -1485,7 +1487,8 @@ export default function AnalysisMonitorsPage() {
                                         )}
                                         {!observations.isError &&
                                             observations.data &&
-                                            !observations.data.items.length && (
+                                            observations.data.items.length ===
+                                                0 && (
                                                 <EmptyState
                                                     size="compact"
                                                     headingLevel={3}
@@ -1539,7 +1542,8 @@ export default function AnalysisMonitorsPage() {
                     )}
                     {(notifications.isLoading ||
                         notifications.isError ||
-                        !!notifications.data?.items.length) && (
+                        (notifications.data?.items != null &&
+                            notifications.data.items.length > 0)) && (
                         <Card>
                             <CardHeader>
                                 <CardTitle variant="sm">
@@ -1561,7 +1565,7 @@ export default function AnalysisMonitorsPage() {
                                 )}
                                 {!notifications.isError &&
                                     notifications.data &&
-                                    !notifications.data.items.length && (
+                                    notifications.data.items.length === 0 && (
                                         <EmptyState
                                             size="compact"
                                             headingLevel={3}

@@ -120,9 +120,7 @@ describe("CategoriesPage hierarchy", () => {
 
     it("toggles a category's status at once and offers undo", async () => {
         const user = userEvent.setup();
-        const success = vi
-            .spyOn(toast, "success")
-            .mockReturnValue("t" as never);
+        const success = vi.spyOn(toast, "success").mockReturnValue("t");
         const patches: unknown[] = [];
         server.use(
             http.get(`${API_BASE}/api/categories/tree`, () =>
@@ -395,9 +393,7 @@ describe("CategoriesPage hierarchy", () => {
 
     it("deletes a leaf only after confirmation and confirms the deletion", async () => {
         const user = userEvent.setup();
-        const success = vi
-            .spyOn(toast, "success")
-            .mockReturnValue("t" as never);
+        const success = vi.spyOn(toast, "success").mockReturnValue("t");
         let deleted = false;
         server.use(
             http.get(`${API_BASE}/api/categories/tree`, () =>

@@ -632,9 +632,9 @@ export default function ChartBuilderPage() {
             };
             patch({
                 series: [
-                    ...priceOnly.map((s) => ({
+                    ...priceOnly.map((s): BuilderSeries => ({
                         ...s,
-                        type: "line" as SeriesType,
+                        type: "line",
                     })),
                     volume,
                 ],
@@ -659,7 +659,7 @@ export default function ChartBuilderPage() {
                 ],
                 series: priceOnly.map((s) => ({
                     ...s,
-                    type: "line" as SeriesType,
+                    type: "line",
                 })),
                 oscillator: "none",
             });
@@ -675,7 +675,7 @@ export default function ChartBuilderPage() {
                 ],
                 series: priceOnly.map((s) => ({
                     ...s,
-                    type: "line" as SeriesType,
+                    type: "line",
                 })),
                 oscillator: "none",
             });
@@ -688,7 +688,7 @@ export default function ChartBuilderPage() {
                 rebase: true,
                 series: priceOnly.map((s) => ({
                     ...s,
-                    type: "line" as SeriesType,
+                    type: "line",
                     axis: "left" as const,
                 })),
             });
@@ -1254,22 +1254,26 @@ export default function ChartBuilderPage() {
                                                         <IndicatorPeriodInput
                                                             indicator={name}
                                                             period={ind.period}
-                                                            onChange={(e) =>
+                                                            onChange={(e) => {
+                                                                const period =
+                                                                    Number(
+                                                                        e.target
+                                                                            .value,
+                                                                    );
                                                                 updateIndicator(
                                                                     ind.id,
                                                                     {
-                                                                        period: Math.max(
-                                                                            2,
-                                                                            Number(
-                                                                                e
-                                                                                    .target
-                                                                                    .value,
-                                                                            ) ||
-                                                                                2,
-                                                                        ),
+                                                                        period: Number.isNaN(
+                                                                            period,
+                                                                        )
+                                                                            ? 2
+                                                                            : Math.max(
+                                                                                  2,
+                                                                                  period,
+                                                                              ),
                                                                     },
-                                                                )
-                                                            }
+                                                                );
+                                                            }}
                                                         />
                                                         <RowMenu
                                                             label={t(

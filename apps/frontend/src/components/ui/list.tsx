@@ -82,7 +82,7 @@ const ListRow = React.forwardRef<HTMLLIElement, ListRowProps>(
         const interactive = asChild || onActivate !== undefined;
         const content = (
             <>
-                {leading && (
+                {Boolean(leading) && (
                     <span className="flex h-7 w-7 shrink-0 items-center justify-center text-label-secondary [&>svg]:size-[18px]">
                         {leading}
                     </span>
@@ -91,13 +91,13 @@ const ListRow = React.forwardRef<HTMLLIElement, ListRowProps>(
                     <span className={cn("truncate", selected && "font-medium")}>
                         {title}
                     </span>
-                    {subtitle && (
+                    {Boolean(subtitle) && (
                         <span className="truncate type-footnote text-label-secondary">
                             {subtitle}
                         </span>
                     )}
                 </span>
-                {trailing && (
+                {Boolean(trailing) && (
                     <span className="flex shrink-0 items-center gap-2 type-body text-label-secondary tabular-nums">
                         {trailing}
                     </span>
@@ -114,14 +114,14 @@ const ListRow = React.forwardRef<HTMLLIElement, ListRowProps>(
             </>
         );
 
-        const surface = cn(rowSurfaceClass, actions && "pr-1");
+        const surface = cn(rowSurfaceClass, Boolean(actions) && "pr-1");
 
         return (
             <li
                 ref={ref}
                 className={cn(
                     "min-h-11",
-                    actions && "flex items-center",
+                    Boolean(actions) && "flex items-center",
                     selected && "bg-primary/[0.08]",
                     className,
                 )}
@@ -156,7 +156,7 @@ const ListRow = React.forwardRef<HTMLLIElement, ListRowProps>(
                 ) : (
                     <div className={surface}>{content}</div>
                 )}
-                {actions && (
+                {Boolean(actions) && (
                     <span className="flex shrink-0 items-center gap-1 pr-2">
                         {actions}
                     </span>

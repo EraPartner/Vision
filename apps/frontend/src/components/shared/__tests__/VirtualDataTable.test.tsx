@@ -174,7 +174,7 @@ describe("VirtualDataTable — rendering", () => {
         function FirstResults() {
             const [rows, setRows] = useState<TestRow[]>([]);
             useLayoutEffect(() => {
-                if (rows.length)
+                if (rows.length > 0)
                     committedText.push(document.body.textContent ?? "");
             }, [rows]);
             return (

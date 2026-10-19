@@ -91,7 +91,7 @@ export function BottomAxis<Scale extends AxisScale>({
             scale={scale}
             {...(top === undefined ? {} : { top })}
             {...optionalAxisProps({ numTicks, hideAxisLine, hideTicks, label })}
-            tickValues={readableTicks as never}
+            tickValues={readableTicks}
             tickFormat={tickFormat as never}
             stroke={AXIS_COLOR}
             tickStroke={AXIS_COLOR}

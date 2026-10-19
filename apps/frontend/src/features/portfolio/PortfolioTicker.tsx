@@ -308,10 +308,10 @@ function TickerManager({ holdings }: { holdings: InvestmentSummary[] }) {
             });
         },
         onSettled: () => {
-            queryClient.invalidateQueries({
+            void queryClient.invalidateQueries({
                 queryKey: portfolioKeys.investments,
             });
-            queryClient.invalidateQueries({
+            void queryClient.invalidateQueries({
                 queryKey: portfolioKeys.summaryAll,
             });
         },

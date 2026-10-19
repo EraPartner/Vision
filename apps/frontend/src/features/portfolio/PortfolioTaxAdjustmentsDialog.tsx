@@ -121,18 +121,20 @@ export function PortfolioTaxAdjustmentsDialog({
         sorted.forEach((inv) => {
             const current = getAdjustment(profile.taxYear, inv.id);
             next[inv.id] = {
-                taxes: current.taxes
-                    ? formatEditableNumber(
-                          current.taxes,
-                          appSettings.numberFormat,
-                      )
-                    : "",
-                fees: current.fees
-                    ? formatEditableNumber(
-                          current.fees,
-                          appSettings.numberFormat,
-                      )
-                    : "",
+                taxes:
+                    current.taxes !== 0
+                        ? formatEditableNumber(
+                              current.taxes,
+                              appSettings.numberFormat,
+                          )
+                        : "",
+                fees:
+                    current.fees !== 0
+                        ? formatEditableNumber(
+                              current.fees,
+                              appSettings.numberFormat,
+                          )
+                        : "",
             };
             const cls = getClassification(inv.id);
             nextClass[inv.id] = {

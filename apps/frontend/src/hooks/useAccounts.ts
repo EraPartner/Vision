@@ -77,11 +77,11 @@ export function useUpdateAccount() {
             if (data.owner !== undefined) {
                 // The owner splits statistics and deduction candidates per partner (ADR-201);
                 // the backend clears its statistics cache on an owner change.
-                queryClient.invalidateQueries({ queryKey: aggregationKeys.all });
-                queryClient.invalidateQueries({
+                void queryClient.invalidateQueries({ queryKey: aggregationKeys.all });
+                void queryClient.invalidateQueries({
                     queryKey: taxKeys.deductionCandidatesAll,
                 });
-                queryClient.invalidateQueries({
+                void queryClient.invalidateQueries({
                     queryKey: taxKeys.dashboardAll,
                 });
             }

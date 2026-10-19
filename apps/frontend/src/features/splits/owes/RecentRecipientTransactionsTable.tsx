@@ -153,7 +153,7 @@ export function RecentRecipientTransactionsTable({
                 pagination: {
                     totalItems,
                     isFetchingMore,
-                    onLoadMore: loadMore,
+                    onLoadMore: () => void loadMore(),
                     hasMore,
                 },
             }}

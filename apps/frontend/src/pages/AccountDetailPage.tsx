@@ -296,7 +296,7 @@ export default function AccountDetailPage() {
         });
         if (!ok) return;
         deleteMutation.mutate(a.id, {
-            onSuccess: () => navigate("/accounts"),
+            onSuccess: () => void navigate("/accounts"),
             onError: (err) => {
                 // Still referenced (409): route to the close flow instead of
                 // dead-ending (lifecycle D5, ADR-088 addendum) — same as the hub.
@@ -317,7 +317,7 @@ export default function AccountDetailPage() {
             account_id: String(a.id),
             filter_label: a.display_name || a.name,
         });
-        navigate(`/transactions?${params.toString()}`);
+        void navigate(`/transactions?${params.toString()}`);
     };
 
     // ── Resolution states ───────────────────────────────────────────────────

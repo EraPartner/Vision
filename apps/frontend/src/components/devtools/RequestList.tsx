@@ -62,7 +62,7 @@ function RequestRow({
                 <span className="shrink-0 animate-pulse type-caption text-warning">…</span>
             ) : (
                 <>
-                    {event.status && (
+                    {event.status !== undefined && (
                         <span
                             className={cn(
                                 'shrink-0 font-mono type-caption tabular-nums',

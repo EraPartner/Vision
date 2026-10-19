@@ -624,7 +624,7 @@ describe("TransactionInspector", () => {
 
         const input = screen.getByRole("textbox", {
             name: "Amount",
-        }) as HTMLInputElement;
+        });
         fireEvent.change(input, { target: { value: "42,5" } });
 
         await user.click(

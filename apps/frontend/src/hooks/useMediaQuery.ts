@@ -7,7 +7,11 @@ import { useEffect, useState } from "react";
 export function useMediaQuery(query: string): boolean {
     const [matches, setMatches] = useState(false);
     useEffect(() => {
-        if (typeof window === "undefined" || !window.matchMedia) return;
+        if (
+            typeof window === "undefined" ||
+            typeof window.matchMedia !== "function"
+        )
+            return;
         const mql = window.matchMedia(query);
         const onChange = () => setMatches(mql.matches);
         onChange();

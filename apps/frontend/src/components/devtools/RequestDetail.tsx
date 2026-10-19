@@ -9,7 +9,7 @@ interface Props {
 }
 
 function StatusBadge({ status }: { status?: number | undefined }) {
-    if (!status) return <span className="text-label-tertiary">—</span>;
+    if (status === undefined) return <span className="text-label-tertiary">—</span>;
     const cls =
         status < 300
             ? 'text-success'

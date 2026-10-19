@@ -57,17 +57,17 @@ export function ChartCard({
                         <CardTitle variant="sm" className={titleClassName}>
                             <span className="truncate">{title}</span>
                         </CardTitle>
-                        {description ? (
+                        {Boolean(description) && (
                             <CardDescription className="mt-0.5">
                                 {description}
                             </CardDescription>
-                        ) : null}
+                        )}
                     </div>
-                    {actions ? (
+                    {Boolean(actions) && (
                         <div className="flex max-w-full flex-wrap items-center gap-2 self-start">
                             {actions}
                         </div>
-                    ) : null}
+                    )}
                 </div>
             </CardHeader>
             <CardContent className={contentClassName}>

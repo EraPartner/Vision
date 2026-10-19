@@ -508,18 +508,21 @@ export default function PortfolioForecastPage() {
                         <StatCard
                             icon={Target}
                             title={
-                                forecast?.targetValue
+                                forecast?.targetValue != null &&
+                                forecast.targetValue !== 0
                                     ? t("research.forecast.probTarget")
                                     : t("research.forecast.probBelowInvested")
                             }
                             loading={isFetching && !forecast}
                             value={fmtPct(
-                                forecast?.targetValue
+                                forecast?.targetValue != null &&
+                                    forecast.targetValue !== 0
                                     ? forecast?.probTarget
                                     : forecast?.probBelowInvested,
                             )}
                             subtitle={
-                                forecast?.targetValue
+                                forecast?.targetValue != null &&
+                                forecast.targetValue !== 0
                                     ? moneyNode(forecast.targetValue)
                                     : moneyNode(forecast?.netInvested)
                             }
@@ -568,7 +571,7 @@ export default function PortfolioForecastPage() {
                                         new Intl.DateTimeFormat(language, {
                                             month: "short",
                                             year: "numeric",
-                                        }).format(v as Date)
+                                        }).format(v)
                                     }
                                     yTickFormat={(v) =>
                                         formatCurrency(v, currency, locale, 0)

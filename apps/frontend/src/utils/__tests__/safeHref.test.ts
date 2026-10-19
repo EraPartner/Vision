@@ -51,7 +51,7 @@ describe('safeHref', () => {
         it.each([[null], [undefined], [123 as unknown as string], [{} as unknown as string]])(
             'non-string input %s',
             (value) => {
-                expect(safeHref(value as string | null | undefined)).toBeUndefined();
+                expect(safeHref(value)).toBeUndefined();
             },
         );
     });

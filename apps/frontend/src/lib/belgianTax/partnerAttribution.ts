@@ -41,7 +41,7 @@ export function deductionFieldValue(
     if (!partner) return 0;
     const source: Record<string, unknown> = PARTNER_FIELDS.has(field)
         ? (partner as unknown as Record<string, unknown>)
-        : (partner.reductions as Record<string, unknown>);
+        : partner.reductions;
     return Number(source[field] ?? 0);
 }
 

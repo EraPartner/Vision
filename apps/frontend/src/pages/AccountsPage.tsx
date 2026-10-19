@@ -554,7 +554,7 @@ export default function AccountsPage() {
                 <ReconcileDialog
                     key={reconciling.id}
                     account={reconciling}
-                    open={!!reconciling}
+                    open
                     onOpenChange={(o) => {
                         if (!o) setReconciling(undefined);
                     }}

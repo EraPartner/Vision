@@ -1,14 +1,18 @@
 import { QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 import { apiClient } from "@/lib/api";
+import logger from "@/lib/logger";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { transactionKeys } from "@/lib/queryKeys";
 import type { Transaction } from "@/types/api";
 
 const RECIPIENT_TRANSACTION_PAGE_SIZE = 10;
 
 export function useRecentRecipientTransactions(recipientId: number) {
+    const { t } = useLanguage();
     const [items, setItems] = useState<Transaction[]>([]);
     const [totalItems, setTotalItems] = useState(0);
     const [isFetchingMore, setIsFetchingMore] = useState(false);
@@ -73,11 +77,17 @@ export function useRecentRecipientTransactions(recipientId: number) {
             hasMoreRef.current =
                 offsetRef.current < (result.total ?? result.items.length);
             setTotalItems(result.total ?? result.items.length);
+        } catch (err) {
+            // `hasMoreRef` is untouched, so scrolling again retries the page.
+            logger.error("Failed to load more recipient transactions:", err);
+            toast.error(t("txPage.loadMoreFailed"), {
+                description: t("txPage.loadMoreFailedDesc"),
+            });
         } finally {
             setIsFetchingMore(false);
             loadingRef.current = false;
         }
-    }, [recipientId]);
+    }, [recipientId, t]);
 
     return {
         items,

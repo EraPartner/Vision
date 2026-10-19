@@ -65,7 +65,8 @@ export class ErrorBoundary extends Component<Props, State> {
 
   override render() {
     if (this.state.hasError) {
-      if (this.props.fallback) return this.props.fallback;
+      const hasFallback = Boolean(this.props.fallback);
+      if (hasFallback) return this.props.fallback;
 
       return (
         <ErrorFallback error={this.state.error} onReset={this.handleReset} />

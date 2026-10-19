@@ -40,7 +40,7 @@ function Harness({ secondDirty = false }: { secondDirty?: boolean }) {
             <button
                 onClick={() => {
                     first.bypassNextNavigation();
-                    navigate("/next");
+                    void navigate("/next");
                 }}
             >
                 Successful exit

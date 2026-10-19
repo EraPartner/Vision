@@ -214,7 +214,7 @@ function Figure({ label, value, detail, hint, tone }: FigureProps) {
             >
                 {value ?? "—"}
             </p>
-            {detail && (
+            {Boolean(detail) && (
                 <p className="truncate type-footnote tabular-nums text-label-secondary">
                     {detail}
                 </p>
@@ -307,7 +307,7 @@ export default function PortfolioPage() {
     const fxRateFellBack = totals?.usedFallbackRate === true;
     const hasFxExposure = (portfolioSummary?.summaries ?? []).some(
         (s) =>
-            s.originalCurrency &&
+            Boolean(s.originalCurrency) &&
             s.originalCurrency !== portfolioSummary?.currency,
     );
 
@@ -319,7 +319,7 @@ export default function PortfolioPage() {
     const metrics = performance.data?.metrics ?? null;
     const heatmapData = performance.data?.heatmap ?? {
         years: [] as number[],
-        data: {} as Record<number, (number | null)[]>,
+        data: {},
         maxAbsPct: 0,
     };
     const breakdownSummary = performance.data?.breakdownSummary ?? [];
@@ -361,7 +361,7 @@ export default function PortfolioPage() {
         if (period === "all") {
             return {
                 amount: totalGainLoss,
-                pct: totalReturnPct as number | undefined,
+                pct: totalReturnPct,
             };
         }
         const first = snapshots[0];
@@ -1113,7 +1113,7 @@ export default function PortfolioPage() {
                             <Figure
                                 label={t("performance.inflationAdjusted")}
                                 value={
-                                    metrics && metrics.cumulativeInflation
+                                    metrics && metrics.cumulativeInflation !== 0
                                         ? formatPercent(metrics.realReturnPct, {
                                               digits: 1,
                                               signed: true,
@@ -1122,7 +1122,7 @@ export default function PortfolioPage() {
                                 }
                                 tone={toneClass(metrics?.realReturnPct ?? 0)}
                                 detail={
-                                    metrics && metrics.cumulativeInflation
+                                    metrics && metrics.cumulativeInflation !== 0
                                         ? t("performance.cumulativeInflation", {
                                               n: formatPercent(
                                                   metrics.cumulativeInflation,
@@ -1132,7 +1132,7 @@ export default function PortfolioPage() {
                                         : t("portfolio.figure.inflationMissing")
                                 }
                                 hint={
-                                    metrics && metrics.cumulativeInflation
+                                    metrics && metrics.cumulativeInflation !== 0
                                         ? t(
                                               "portfolio.figure.afterInflationHint",
                                           )
@@ -1269,7 +1269,8 @@ export default function PortfolioPage() {
                                                             key={inv.id}
                                                             asChild
                                                             leading={
-                                                                Icon ? (
+                                                                Icon !==
+                                                                undefined ? (
                                                                     <Icon />
                                                                 ) : undefined
                                                             }

@@ -18,11 +18,12 @@ applySkinV2Class();
 // of queueing after them. They are independent of each other and run in
 // parallel; SettingsPreloadProvider and useExcludedIds await these same shared
 // promises, so neither request is duplicated.
-startSettingsPreload();
+// Errors surface through SettingsPreloadProvider, which awaits this promise.
+void startSettingsPreload();
 // Categories remain unconditional by design. Mirroring enough settings into
 // localStorage to gate this safely would create a second settings authority;
 // one occasionally unused request is the smaller and more reliable cost.
-startCategoriesPreload();
+void startCategoriesPreload();
 
 createRoot(document.getElementById("root")!).render(
     <StrictMode>

@@ -28,7 +28,7 @@ export function useCreateCustomParserConfig() {
             config: CustomParserConfigPayload;
         }) => apiClient.createCustomParserConfig(name, config),
         onSuccess: () => {
-            queryClient.invalidateQueries({
+            void queryClient.invalidateQueries({
                 queryKey: importKeys.customParserConfigs,
             });
             toast.success(t("importPage.customParser.saved"));
@@ -54,7 +54,7 @@ export function useUpdateCustomParserConfig() {
             config?: CustomParserConfigPayload;
         }) => apiClient.updateCustomParserConfig(id, patch),
         onSuccess: () => {
-            queryClient.invalidateQueries({
+            void queryClient.invalidateQueries({
                 queryKey: importKeys.customParserConfigs,
             });
             toast.success(t("importPage.customParser.updated"));
@@ -73,7 +73,7 @@ export function useDeleteCustomParserConfig() {
     return useMutation({
         mutationFn: (id: number) => apiClient.deleteCustomParserConfig(id),
         onSuccess: () => {
-            queryClient.invalidateQueries({
+            void queryClient.invalidateQueries({
                 queryKey: importKeys.customParserConfigs,
             });
             toast.success(t("importPage.customParser.deleted"));

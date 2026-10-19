@@ -41,7 +41,7 @@ describe("undoToast", () => {
     test("pressing Undo in the toast clears the ⌘Z slot so the restore runs once", () => {
         const undo = vi.fn();
         undoToast({ message: "Deleted", undoLabel: "Undo", undo });
-        const options = toastMock.success.mock.calls[0]?.[1] as unknown as {
+        const options = toastMock.success.mock.calls[0]?.[1] as {
             action: { onClick: () => void };
         };
         options.action.onClick();

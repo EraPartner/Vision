@@ -24,7 +24,7 @@ describe("composeRefs", () => {
   it("skips undefined/null refs without throwing", () => {
     const fn = vi.fn();
     const node = {} as HTMLElement;
-    expect(() => composeRefs<HTMLElement>(undefined, null as never, fn)(node)).not.toThrow();
+    expect(() => composeRefs<HTMLElement>(undefined, null, fn)(node)).not.toThrow();
     expect(fn).toHaveBeenCalledWith(node);
   });
 

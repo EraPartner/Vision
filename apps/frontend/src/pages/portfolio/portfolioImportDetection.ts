@@ -38,10 +38,10 @@ export function resolveDetectedPortfolioAccount(
     if (sourceIds.size > 1) return undefined;
     const exact = eligible.filter((account) =>
         [account.name, account.display_name].some(
-            (value) => value && sourceIds.has(value.trim().toLowerCase()),
+            (value) => !!value && sourceIds.has(value.trim().toLowerCase()),
         ),
     );
-    if (exact.length) return exact.length === 1 ? exact[0]?.id : undefined;
+    if (exact.length > 0) return exact.length === 1 ? exact[0]?.id : undefined;
     const aliases: Record<
         Exclude<PortfolioImportSource, "native_receipts">,
         string[]
@@ -55,7 +55,7 @@ export function resolveDetectedPortfolioAccount(
     const byBroker = eligible.filter((account) =>
         [account.institution, account.name].some(
             (value) =>
-                value && aliases[source].includes(value.trim().toLowerCase()),
+                !!value && aliases[source].includes(value.trim().toLowerCase()),
         ),
     );
     return byBroker.length === 1 ? byBroker[0]?.id : undefined;
@@ -127,7 +127,7 @@ export async function detectPortfolioImportFile(
     };
     // Account identity must include every row; a prefix could conceal a second
     // source account and assign its transactions to the wrong broker account.
-    const records = parse(text, options) as string[][];
+    const records = parse(text, options);
     return detectPortfolioImportRecords(records);
 }
 

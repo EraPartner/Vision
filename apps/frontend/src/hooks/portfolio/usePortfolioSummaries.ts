@@ -113,7 +113,7 @@ export function usePortfolioSummaries({
     const groupedByClass = useMemo(() => {
         const map = new Map<AssetClass, InvestmentSummary[]>();
         for (const s of summaries) {
-            const cls = s.assetClass as AssetClass;
+            const cls = s.assetClass;
             const list = map.get(cls);
             if (list) list.push(s);
             else map.set(cls, [s]);

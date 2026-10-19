@@ -69,7 +69,7 @@ export function CategoryPieChart({
         </div>
     );
 
-    if (!data || data.length === 0) {
+    if (data.length === 0) {
         const emptyContent = (
             <div className="flex h-72 items-center justify-center type-callout text-label-secondary">
                 {t("categoryPie.noData")}

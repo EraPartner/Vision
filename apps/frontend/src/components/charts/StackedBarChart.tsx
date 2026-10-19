@@ -278,7 +278,7 @@ function Inner<Datum>({
     });
 
     const tooltipItems: ChartTooltipDatum[] = useMemo(() => {
-        if (!hoverDatum) return [];
+        if (hoverDatum == null) return [];
         return series.map((s, i) => {
             const v = s.accessor(hoverDatum);
             return {
@@ -367,7 +367,7 @@ function Inner<Datum>({
                 left={hover ? margin.left + hover.x : 0}
                 top={hover ? margin.top + hover.y : 0}
                 title={
-                    hoverDatum
+                    hoverDatum != null
                         ? tooltipTitle
                             ? tooltipTitle(hoverDatum)
                             : categoryAccessor(hoverDatum)

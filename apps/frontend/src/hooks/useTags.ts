@@ -22,7 +22,7 @@ export function useCreateTag() {
     return useMutation({
         mutationFn: (tag: TagCreate) => apiClient.createTag(tag),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: tagKeys.all });
+            void queryClient.invalidateQueries({ queryKey: tagKeys.all });
         },
         onError: (error: Error) => {
             toast.error(t("tags.createFailed"), {

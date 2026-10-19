@@ -9,7 +9,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, waitFor } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router";
-import { createElement, type ReactNode } from "react";
+import { createElement } from "react";
 
 vi.mock("@/contexts/BelgianTaxProfileContext", () => ({
     useBelgianTaxProfile: vi.fn(),
@@ -39,7 +39,7 @@ function setContext({
         profile: { taxYear: LIVE_YEAR },
         snapshotExistsForYear: (y: number) => snapshotYears.includes(y),
         isLoading,
-    } as unknown as ReturnType<typeof useBelgianTaxProfile>);
+    });
 }
 
 function Probe({ onUrl }: { onUrl: (search: string) => void }) {
@@ -49,14 +49,14 @@ function Probe({ onUrl }: { onUrl: (search: string) => void }) {
     return null;
 }
 
-function renderAt(initialUrl: string, onUrl: (search: string) => void): ReactNode {
+function renderAt(initialUrl: string, onUrl: (search: string) => void) {
     return render(
         createElement(
             MemoryRouter,
             { initialEntries: [initialUrl] },
             createElement(Probe, { onUrl }),
         ),
-    ) as unknown as ReactNode;
+    );
 }
 
 describe("useTaxYearParam", () => {

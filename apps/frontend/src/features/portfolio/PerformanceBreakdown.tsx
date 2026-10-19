@@ -158,7 +158,7 @@ export default function PerformanceBreakdown({
         >();
         for (const item of breakdownSummary) {
             const ac = item.assetClass as AssetClass;
-            const existing = grouped.get(ac) || {
+            const existing = grouped.get(ac) ?? {
                 count: 0,
                 value: 0,
                 invested: 0,
@@ -177,10 +177,7 @@ export default function PerformanceBreakdown({
                 data.invested > 0 ? (data.gain / data.invested) * 100 : 0;
             return {
                 assetClass,
-                label:
-                    t(
-                        `performance.${assetClass}` as `performance.${AssetClass}`,
-                    ) || assetClass,
+                label: t(`performance.${assetClass}`) || assetClass,
                 count: data.count,
                 classValue: data.value,
                 classInvested: data.invested,

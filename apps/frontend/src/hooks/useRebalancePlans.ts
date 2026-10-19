@@ -42,7 +42,7 @@ export function useRebalancePlans() {
             });
         },
         onSettled: () => {
-            queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+            void queryClient.invalidateQueries({ queryKey: QUERY_KEY });
         },
     });
 

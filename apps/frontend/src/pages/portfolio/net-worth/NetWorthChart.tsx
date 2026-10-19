@@ -124,7 +124,7 @@ export function NetWorthChart({
                 series={series}
                 xIsDate
                 xTickFormat={(v) => xTickFormat(v as Date)}
-                yTickFormat={(v) => fmt(v as number)}
+                yTickFormat={(v) => fmt(v)}
                 tooltipTitle={(d) => tooltipLabelFormatter(d.date)}
                 tooltipValueFormat={(v) => fmt(v)}
                 height={380}

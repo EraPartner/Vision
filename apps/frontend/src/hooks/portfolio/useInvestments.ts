@@ -33,7 +33,7 @@ async function collectPages<T>(
         signal?.throwIfAborted();
         const page = await fetchPage(items.length);
         total = page.total;
-        if (!page.items.length && items.length < total)
+        if (page.items.length === 0 && items.length < total)
             throw new Error(
                 "Portfolio pagination stopped before all records were loaded",
             );
@@ -258,7 +258,7 @@ export function useInvestmentMutations() {
         ) => apiClient.bulkRetagPortfolioTransactions(data),
         onSuccess: () => {
             invalidateAll();
-            queryClient.invalidateQueries({ queryKey: accountKeys.all });
+            void queryClient.invalidateQueries({ queryKey: accountKeys.all });
         },
         onError: (err: Error) =>
             toast.error(t("portfolio.assignLotsFailedTitle"), {

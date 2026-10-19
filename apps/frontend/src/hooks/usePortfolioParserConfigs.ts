@@ -27,7 +27,7 @@ export function useCreatePortfolioParserConfig() {
             config: PortfolioCustomConfig;
         }) => apiClient.createPortfolioParserConfig(name, config),
         onSuccess: () => {
-            queryClient.invalidateQueries({
+            void queryClient.invalidateQueries({
                 queryKey: importKeys.portfolioParserConfigs,
             });
             toast.success(t("importPage.customParser.saved"));
@@ -53,7 +53,7 @@ export function useUpdatePortfolioParserConfig() {
             config?: PortfolioCustomConfig;
         }) => apiClient.updatePortfolioParserConfig(id, patch),
         onSuccess: () => {
-            queryClient.invalidateQueries({
+            void queryClient.invalidateQueries({
                 queryKey: importKeys.portfolioParserConfigs,
             });
             toast.success(t("importPage.customParser.updated"));
@@ -72,7 +72,7 @@ export function useDeletePortfolioParserConfig() {
     return useMutation({
         mutationFn: (id: number) => apiClient.deletePortfolioParserConfig(id),
         onSuccess: () => {
-            queryClient.invalidateQueries({
+            void queryClient.invalidateQueries({
                 queryKey: importKeys.portfolioParserConfigs,
             });
             toast.success(t("importPage.customParser.deleted"));

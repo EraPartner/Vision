@@ -8,7 +8,6 @@ export { BarChart } from "./BarChart";
 export type { BarSeries, BarOverlay } from "./BarChart";
 
 export { StackedBarChart } from "./StackedBarChart";
-export type { StackedBarSeries } from "./StackedBarChart";
 
 export { LineChart } from "./LineChart";
 export type { LineSeries } from "./LineChart";

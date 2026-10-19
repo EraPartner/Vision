@@ -175,9 +175,11 @@ export function AnalysisWorkbenchPanel(props: Props) {
     const assumptions = Object.fromEntries(
         definitions.map((a) => [a.id, values[a.id] ?? a.defaultValue]),
     );
-    const columns = props.result?.declaredColumns?.length
-        ? props.result.declaredColumns
-        : (props.result?.columns ?? []);
+    const columns =
+        props.result?.declaredColumns != null &&
+        props.result.declaredColumns.length > 0
+            ? props.result.declaredColumns
+            : (props.result?.columns ?? []);
     const starterField = columns.find((c) =>
         /^(decimal|integer|number|numeric|float|double)$/.test(c.type),
     );
@@ -278,9 +280,11 @@ export function AnalysisWorkbenchPanel(props: Props) {
                 rows: props.result!.rows,
                 window: props.result!.window,
                 coverage: props.result!.coverage,
-                columns: props.result!.declaredColumns?.length
-                    ? props.result!.declaredColumns
-                    : props.result!.columns,
+                columns:
+                    props.result!.declaredColumns != null &&
+                    props.result!.declaredColumns.length > 0
+                        ? props.result!.declaredColumns
+                        : props.result!.columns,
                 complete: Boolean(complete),
                 inputComplete: Boolean(complete),
                 formulas: parse(props.formulasJson, []),
@@ -302,7 +306,7 @@ export function AnalysisWorkbenchPanel(props: Props) {
             })
                 .then((value) => {
                     if (!cancelled) {
-                        setPreview(value as ExtensionOutput);
+                        setPreview(value);
                         setPreviewError("");
                     }
                 })
@@ -393,7 +397,7 @@ export function AnalysisWorkbenchPanel(props: Props) {
                     !(response.transformationCoverage ?? []).some(
                         (c) => c.complete === false,
                     ) &&
-                    !(response.transformationErrors ?? []).length;
+                    (response.transformationErrors ?? []).length === 0;
                 props.onResultChange({
                     ...props.result,
                     rows: response.rows,
@@ -608,7 +612,7 @@ export function AnalysisWorkbenchPanel(props: Props) {
                   ? Boolean(outputId.trim() && expression.trim())
                   : stepType === "unpivot"
                     ? Boolean(
-                          selected.length &&
+                          selected.length > 0 &&
                           outputId.trim() &&
                           unpivotValueColumn.trim() &&
                           outputId.trim() !== unpivotValueColumn.trim() &&
@@ -799,13 +803,12 @@ export function AnalysisWorkbenchPanel(props: Props) {
                                                               : c.id,
                                                           t,
                                                       )}
-                                                {"unit" in c && c.unit && (
-                                                    <span className="block type-caption font-normal text-label-tertiary">
-                                                        {unitLabel(
-                                                            c.unit as AnalysisUnit,
-                                                        )}
-                                                    </span>
-                                                )}
+                                                {"unit" in c &&
+                                                    c.unit != null && (
+                                                        <span className="block type-caption font-normal text-label-tertiary">
+                                                            {unitLabel(c.unit)}
+                                                        </span>
+                                                    )}
                                             </TableHead>
                                         ))}
                                     </TableRow>
@@ -1003,7 +1006,7 @@ export function AnalysisWorkbenchPanel(props: Props) {
                                         {tr(`stepHelp.${stepType}`)}
                                     </p>
                                     {["lookup", "append"].includes(stepType) &&
-                                        !props.attachments.length && (
+                                        props.attachments.length === 0 && (
                                             <p
                                                 role="status"
                                                 className={hintClass}
@@ -1147,53 +1150,57 @@ export function AnalysisWorkbenchPanel(props: Props) {
                                     </Button>
                                 </div>
                             )}
-                            {!!props.config.steps?.length && (
-                                <List>
-                                    {props.config.steps?.map((s, i) => (
-                                        <li
-                                            key={i}
-                                            className="flex min-h-11 items-center justify-between gap-2 px-4 py-2 type-body"
-                                        >
-                                            <span className="min-w-0 flex-1 break-words">
-                                                {i + 1}. {stepSummary(s)}
-                                            </span>
-                                            <Button
-                                                size="sm"
-                                                variant="ghost"
-                                                onClick={() =>
-                                                    props.onConfigChange({
-                                                        ...props.config,
-                                                        steps: props.config.steps?.filter(
-                                                            (_, n) => n !== i,
-                                                        ),
-                                                    })
-                                                }
+                            {props.config.steps != null &&
+                                props.config.steps.length > 0 && (
+                                    <List>
+                                        {props.config.steps?.map((s, i) => (
+                                            <li
+                                                key={i}
+                                                className="flex min-h-11 items-center justify-between gap-2 px-4 py-2 type-body"
                                             >
-                                                {tr("remove")}
-                                            </Button>
-                                        </li>
-                                    ))}
-                                </List>
-                            )}
-                            {!!props.config.steps?.length && (
-                                <Button
-                                    disabled={
-                                        busy ||
-                                        props.sourceStale ||
-                                        !props.result ||
-                                        !props.config.steps?.length
-                                    }
-                                    onClick={() =>
-                                        void run(
-                                            "prepare",
-                                            { steps: props.config.steps },
-                                            true,
-                                        )
-                                    }
-                                >
-                                    {tr("applySteps")}
-                                </Button>
-                            )}
+                                                <span className="min-w-0 flex-1 break-words">
+                                                    {i + 1}. {stepSummary(s)}
+                                                </span>
+                                                <Button
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    onClick={() =>
+                                                        props.onConfigChange({
+                                                            ...props.config,
+                                                            steps: props.config.steps?.filter(
+                                                                (_, n) =>
+                                                                    n !== i,
+                                                            ),
+                                                        })
+                                                    }
+                                                >
+                                                    {tr("remove")}
+                                                </Button>
+                                            </li>
+                                        ))}
+                                    </List>
+                                )}
+                            {props.config.steps != null &&
+                                props.config.steps.length > 0 && (
+                                    <Button
+                                        disabled={
+                                            busy ||
+                                            props.sourceStale ||
+                                            !props.result ||
+                                            props.config.steps == null ||
+                                            props.config.steps.length === 0
+                                        }
+                                        onClick={() =>
+                                            void run(
+                                                "prepare",
+                                                { steps: props.config.steps },
+                                                true,
+                                            )
+                                        }
+                                    >
+                                        {tr("applySteps")}
+                                    </Button>
+                                )}
                         </DisclosureContent>
                     </Disclosure>
                 </Card>
@@ -1288,7 +1295,7 @@ export function AnalysisWorkbenchPanel(props: Props) {
                                     props.sourceStale ||
                                     !complete ||
                                     !time.dateColumn ||
-                                    !time.valueColumns.length
+                                    time.valueColumns.length === 0
                                 }
                                 onClick={() => void run("time", time, true)}
                             >
@@ -1574,10 +1581,10 @@ export function AnalysisWorkbenchPanel(props: Props) {
                                             setFieldSearch(e.target.value)
                                         }
                                     />
-                                    {!matchingFields.length && (
+                                    {matchingFields.length === 0 && (
                                         <p role="status" className={hintClass}>
                                             {tr(
-                                                columns.length
+                                                columns.length > 0
                                                     ? "noMatchingFields"
                                                     : "fieldsNeedResult",
                                             )}
@@ -1710,13 +1717,13 @@ export function AnalysisWorkbenchPanel(props: Props) {
                                 )}
                                 {report(preview)}
                             </div>
-                            {!!formulas.length && (
+                            {formulas.length > 0 && (
                                 <Button
                                     disabled={
                                         busy ||
                                         props.sourceStale ||
                                         !props.result ||
-                                        !formulas.length
+                                        formulas.length === 0
                                     }
                                     onClick={() =>
                                         void run("formulas", {}, true)
@@ -1970,7 +1977,7 @@ export function AnalysisWorkbenchPanel(props: Props) {
                             {tr("scenarios")}
                         </DisclosureSummary>
                         <DisclosureContent className="space-y-3 pt-0">
-                            {(!definitions.length ||
+                            {(definitions.length === 0 ||
                                 !formulas.some(
                                     (f) => f.scope === "summary",
                                 )) && (
@@ -2002,7 +2009,7 @@ export function AnalysisWorkbenchPanel(props: Props) {
                                         variant="outline"
                                         disabled={
                                             !scenarioName.trim() ||
-                                            !definitions.length
+                                            definitions.length === 0
                                         }
                                         onClick={() => {
                                             props.onConfigChange({
@@ -2102,8 +2109,10 @@ export function AnalysisWorkbenchPanel(props: Props) {
                                             busy ||
                                             props.sourceStale ||
                                             !complete ||
-                                            !props.config.scenarios?.length ||
-                                            !definitions.length ||
+                                            props.config.scenarios == null ||
+                                            props.config.scenarios.length ===
+                                                0 ||
+                                            definitions.length === 0 ||
                                             !formulas.some(
                                                 (f) => f.scope === "summary",
                                             )

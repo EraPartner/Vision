@@ -1,13 +1,40 @@
 import { ESLint } from "eslint";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-
 const frontendRoot = fileURLToPath(new URL("../../", import.meta.url));
-const eslint = new ESLint({ cwd: frontendRoot });
+const typeAwareConfigUrl = new URL(
+    "../../../../config/eslint-type-aware.mjs",
+    import.meta.url,
+).href;
+const { typeAwareRules } = (await import(typeAwareConfigUrl)) as {
+    typeAwareRules: Record<string, unknown>;
+};
+// The fixtures below are virtual files the TypeScript project service cannot
+// see, so lint them without type information; the guards under test are
+// syntactic and do not need it.
+const eslint = new ESLint({
+    cwd: frontendRoot,
+    overrideConfig: {
+        files: ["**/*.{ts,tsx}"],
+        languageOptions: {
+            parserOptions: { projectService: false, project: null },
+        },
+        rules: Object.fromEntries(
+            Object.keys(typeAwareRules).map((rule) => [rule, "off"]),
+        ),
+    },
+});
 
-async function i18nWarnings(source: string, filePath: string) {
+async function lintFixture(source: string, filePath: string) {
     const [result] = await eslint.lintText(source, { filePath });
     if (!result) throw new Error(`ESLint returned no result for ${filePath}`);
+    const fatal = result.messages.find((message) => message.fatal);
+    if (fatal) throw new Error(`ESLint could not parse ${filePath}: ${fatal.message}`);
+    return result;
+}
+
+async function i18nWarnings(source: string, filePath: string) {
+    const result = await lintFixture(source, filePath);
     return result.messages.filter(
         ({ ruleId }) =>
             ruleId === "vision-i18n/no-hardcoded-user-facing-string",
@@ -15,8 +42,7 @@ async function i18nWarnings(source: string, filePath: string) {
 }
 
 async function inlineQueryErrors(source: string, filePath: string) {
-    const [result] = await eslint.lintText(source, { filePath });
-    if (!result) throw new Error(`ESLint returned no result for ${filePath}`);
+    const result = await lintFixture(source, filePath);
     return result.messages.filter(
         ({ ruleId }) => ruleId === "vision-query/no-inline-server-query",
     );

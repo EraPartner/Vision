@@ -222,7 +222,7 @@ describe("portfolio API client", () => {
                 ok({ ...INVESTMENT_STUB, id: 4 }),
             ),
         );
-        expect((await updateInvestment(4, {} as never)).id).toBe(4);
+        expect((await updateInvestment(4, {})).id).toBe(4);
     });
 
     it("deleteInvestment resolves on void", async () => {

@@ -55,7 +55,7 @@ export function AnalysisChartPanel({
     );
     const displayValue = (value: unknown, id: string) => {
         const column = (
-            result.declaredColumns?.length
+            result.declaredColumns != null && result.declaredColumns.length > 0
                 ? result.declaredColumns
                 : result.columns
         ).find((c) => c.id === id);
@@ -75,9 +75,10 @@ export function AnalysisChartPanel({
             appSettings.numberFormat,
         );
     };
-    const columns = result.declaredColumns?.length
-        ? result.declaredColumns
-        : result.columns;
+    const columns =
+        result.declaredColumns != null && result.declaredColumns.length > 0
+            ? result.declaredColumns
+            : result.columns;
     const data = analysisChartData(result, spec);
     const numeric = columns.filter((c) =>
         /decimal|number|integer|numeric|float|double/.test(c.type),
@@ -116,12 +117,13 @@ export function AnalysisChartPanel({
               : raw;
     const min = Math.min(0, ...domain),
         max = Math.max(0, ...domain),
-        span = max - min || 1;
+        span = max !== min ? max - min : 1;
     const y = (v: number) => top + ((max - v) / span) * plotH;
     const step = plotW / Math.max(1, data.rows.length);
     const xs = data.rows.filter((r) => Number.isFinite(r.x)).map((r) => r.x),
         xmin = Math.min(...xs),
-        xmax = Math.max(...xs);
+        xmax = Math.max(...xs),
+        xspan = xmax !== xmin ? xmax - xmin : 1;
     const x = (i: number) => left + step * (i + 0.5);
     const seriesLabel = (id: string) => {
         const metadata = columns.find((c) => c.id === id);
@@ -248,7 +250,7 @@ export function AnalysisChartPanel({
                 <p role="status" className={statusClass}>
                     {t("analysis.ext.chart.units")}
                 </p>
-            ) : !spec.x || !spec.y.length ? (
+            ) : !spec.x || spec.y.length === 0 ? (
                 <p className={statusClass}>{t("analysis.ext.chart.select")}</p>
             ) : spec.kind === "waterfall" && data.omitted > 0 ? (
                 <p role="status" className={statusClass}>
@@ -258,7 +260,7 @@ export function AnalysisChartPanel({
                 <p className={statusClass}>
                     {t("analysis.ext.chart.oneSeries")}
                 </p>
-            ) : !data.rows.length ? (
+            ) : data.rows.length === 0 ? (
                 <Alert>
                     <AlertDescription>
                         {t("analysis.ext.chart.empty")}
@@ -355,9 +357,7 @@ export function AnalysisChartPanel({
                                                           cx={
                                                               left +
                                                               ((r.x - xmin) /
-                                                                  (xmax -
-                                                                      xmin ||
-                                                                      1)) *
+                                                                  xspan) *
                                                                   plotW
                                                           }
                                                           cy={y(v)}
@@ -452,9 +452,7 @@ export function AnalysisChartPanel({
                                     x={
                                         spec.kind === "scatter"
                                             ? left +
-                                              ((r.x - xmin) /
-                                                  (xmax - xmin || 1)) *
-                                                  plotW
+                                              ((r.x - xmin) / xspan) * plotW
                                             : x(r.index)
                                     }
                                     y={H - 35}

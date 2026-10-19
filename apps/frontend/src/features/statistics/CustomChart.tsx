@@ -21,9 +21,7 @@ import {
     BarChart,
     type BarSeries,
     StackedBarChart,
-    type StackedBarSeries,
     AreaChart,
-    type AreaSeries,
     ChartLegend,
     type ChartLegendItem,
 } from "@/components/charts";
@@ -361,7 +359,7 @@ export function CustomChart({
                         {t(descKey, { n: seriesCount })}
                     </CardDescription>
                 </div>
-                {(onEdit || onDelete) && (
+                {(onEdit !== undefined || onDelete !== undefined) && (
                     <RowMenu
                         ref={menuTriggerRef}
                         size="icon"
@@ -454,9 +452,7 @@ export function CustomChart({
                             <StackedBarChart<ChartDatum>
                                 data={chartData}
                                 categoryAccessor={(d) => d.periodLabel}
-                                series={
-                                    barSeries as StackedBarSeries<ChartDatum>[]
-                                }
+                                series={barSeries}
                                 height={350}
                                 valueTickFormat={yTick}
                                 tooltipTitle={(d) => d.periodLabel}
@@ -476,7 +472,7 @@ export function CustomChart({
                             <AreaChart<ChartDatum>
                                 data={chartData}
                                 xAccessor={(d) => d.date}
-                                series={lineSeries as AreaSeries<ChartDatum>[]}
+                                series={lineSeries}
                                 height={350}
                                 stacked={chartVariant === "stacked"}
                                 xTickFormat={xTickFmt}

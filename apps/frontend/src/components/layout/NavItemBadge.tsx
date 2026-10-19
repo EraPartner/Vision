@@ -31,7 +31,7 @@ export function SidebarCount({
     tone?: "hot" | "quiet";
     collapsed?: boolean;
 }) {
-    if (!count) return null;
+    if (count === 0) return null;
     return (
         <span
             data-sidebar="count"
@@ -54,7 +54,7 @@ export function SidebarCount({
 function NeedsCategoryCount({ collapsed }: { collapsed: boolean }) {
     const { t } = useLanguage();
     const { data: count } = useNeedsCategoryCount();
-    if (!count) return null;
+    if (count === undefined || count === 0) return null;
     return (
         <SidebarCount
             count={count}
@@ -69,7 +69,7 @@ function PlannedDueCount({ collapsed }: { collapsed: boolean }) {
     const { t } = useLanguage();
     const { visibleUpcoming } = useUpcomingPlannedPayments();
     const count = visibleUpcoming.length;
-    if (!count) return null;
+    if (count === 0) return null;
     return (
         <SidebarCount
             count={count}
@@ -84,7 +84,8 @@ function PlannedDueCount({ collapsed }: { collapsed: boolean }) {
 function InsightsCount({ collapsed }: { collapsed: boolean }) {
     const { t } = useLanguage();
     const { data } = useInsightsCount();
-    if (data?.status !== "ready" || !data.count) return null;
+    if (data?.status !== "ready" || data.count === null || data.count === 0)
+        return null;
     return (
         <SidebarCount
             count={data.count}
@@ -99,7 +100,7 @@ function MonitorInboxCount({ collapsed }: { collapsed: boolean }) {
     const { t } = useLanguage();
     const inbox = useMonitorNotifications(0);
     const unread = inbox.data?.unreadCount ?? 0;
-    if (!unread) return null;
+    if (unread === 0) return null;
     return (
         <SidebarCount
             count={unread}

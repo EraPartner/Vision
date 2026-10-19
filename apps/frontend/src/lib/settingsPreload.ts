@@ -19,9 +19,7 @@ let preloadPromise: Promise<unknown> | null = null;
 
 /** Begin the settings fetch (idempotent). Call as early as possible at boot. */
 export function startSettingsPreload(): Promise<unknown> {
-    if (!preloadPromise) {
-        preloadPromise = apiClient.getSettings();
-    }
+    preloadPromise ??= apiClient.getSettings();
     return preloadPromise;
 }
 

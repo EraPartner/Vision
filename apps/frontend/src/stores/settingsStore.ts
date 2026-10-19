@@ -286,9 +286,7 @@ const storedDashboardSettingsSchema = z.looseObject({
  */
 export function migrateDashboardSettings(raw: unknown): DashboardSettings {
     const parsed = storedDashboardSettingsSchema.safeParse(raw);
-    return parsed.success
-        ? (parsed.data as DashboardSettings)
-        : { ...DEFAULT_DASHBOARD_SETTINGS };
+    return parsed.success ? parsed.data : { ...DEFAULT_DASHBOARD_SETTINGS };
 }
 
 export const DEFAULT_THEME_SCHEDULE: ThemeSchedule = {

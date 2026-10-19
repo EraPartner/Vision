@@ -244,7 +244,7 @@ describe("useAvailableTaxYears", () => {
                 { categoryId: 10, incomeMonths: { junk: 100, "2023-02": 50 } },
             ],
             portfolioTxns: [
-                { date: "", taxes: 1 } as { date: string; taxes: number },
+                { date: "", taxes: 1 },
                 { date: "2025-03-03", fees: 2 },
             ],
         });

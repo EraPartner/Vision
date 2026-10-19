@@ -71,7 +71,7 @@ export function diffHousehold(
         if (JSON.stringify(a[key]) !== JSON.stringify(b[key]))
             diff[key] = b[key];
     }
-    return diff as Partial<BelgianTaxHouseholdV2>;
+    return diff;
 }
 
 /**

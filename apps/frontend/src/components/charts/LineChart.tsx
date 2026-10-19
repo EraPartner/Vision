@@ -132,7 +132,7 @@ function LineSeriesLayerInner<Datum>({
                     >
                         <LinePath<Datum>
                             data={filtered}
-                            x={(d) => xScale(xAccessor(d) as never) ?? 0}
+                            x={(d) => xScale(xAccessor(d)) ?? 0}
                             y={(d) => yScale(s.accessor(d) ?? 0) ?? 0}
                             curve={curveMonotoneX}
                             stroke={color}
@@ -222,9 +222,9 @@ function Inner<Datum>({
         }
         // values is finite-filtered above, so d3 min/max match Math.min/max(...)
         // exactly while avoiding the spread stack-size hazard on large series.
-        const lo = values.length ? (min(values) as number) : 0;
-        const hi = values.length ? (max(values) as number) : 1;
-        const pad = (hi - lo) * 0.08 || 1;
+        const lo = values.length > 0 ? (min(values) as number) : 0;
+        const hi = values.length > 0 ? (max(values) as number) : 1;
+        const pad = hi !== lo ? (hi - lo) * 0.08 : 1;
         return scaleLinear({
             range: [innerHeight, 0],
             domain: [lo - pad, hi + pad],
@@ -233,9 +233,7 @@ function Inner<Datum>({
     }, [data, innerHeight, referenceLines, series, yDomain]);
 
     const bisect = useMemo(
-        () =>
-            bisector<Datum, Date | number>((d) => stableXAccessor(d) as Date)
-                .center,
+        () => bisector<Datum, Date | number>((d) => stableXAccessor(d)).center,
         [stableXAccessor],
     );
 
@@ -257,7 +255,7 @@ function Inner<Datum>({
             }
             const x = event.clientX - rect.left;
             const x0 = xScale.invert(x);
-            const idx = bisect(data, x0 as never);
+            const idx = bisect(data, x0);
             return idx >= 0 && idx < data.length ? idx : null;
         },
         [bisect, data, xScale],
@@ -343,7 +341,7 @@ function Inner<Datum>({
     const hoverDatum = effectiveIdx != null ? data[effectiveIdx] : null;
 
     const tooltipItems: ChartTooltipDatum[] = useMemo(() => {
-        if (!hoverDatum) return [];
+        if (hoverDatum == null) return [];
         return series
             .map((s, i) => {
                 const raw = s.accessor(hoverDatum);
@@ -361,7 +359,7 @@ function Inner<Datum>({
 
     const tooltipLeft =
         hoverDatum != null
-            ? margin.left + (xScale(xAccessor(hoverDatum) as never) ?? 0)
+            ? margin.left + (xScale(xAccessor(hoverDatum)) ?? 0)
             : 0;
 
     return (
@@ -411,7 +409,7 @@ function Inner<Datum>({
                         const color = r.color ?? CHART_NEUTRAL.label;
                         const dashAttr = r.dashed === false ? undefined : "4 4";
                         if (r.x != null) {
-                            const x = xScale(r.x as never) ?? 0;
+                            const x = xScale(r.x) ?? 0;
                             return (
                                 <g key={`ref-${i}`}>
                                     <Line
@@ -465,17 +463,11 @@ function Inner<Datum>({
                         <>
                             <Line
                                 from={{
-                                    x:
-                                        xScale(
-                                            xAccessor(hoverDatum) as never,
-                                        ) ?? 0,
+                                    x: xScale(xAccessor(hoverDatum)) ?? 0,
                                     y: 0,
                                 }}
                                 to={{
-                                    x:
-                                        xScale(
-                                            xAccessor(hoverDatum) as never,
-                                        ) ?? 0,
+                                    x: xScale(xAccessor(hoverDatum)) ?? 0,
                                     y: innerHeight,
                                 }}
                                 stroke={CHART_NEUTRAL.label}
@@ -491,11 +483,7 @@ function Inner<Datum>({
                                 return (
                                     <circle
                                         key={`dot-${s.key}`}
-                                        cx={
-                                            xScale(
-                                                xAccessor(hoverDatum) as never,
-                                            ) ?? 0
-                                        }
+                                        cx={xScale(xAccessor(hoverDatum)) ?? 0}
                                         cy={yScale(v) ?? 0}
                                         r={4}
                                         fill={CHART_NEUTRAL.background}
@@ -549,10 +537,8 @@ function Inner<Datum>({
                                   endDatum === undefined
                               )
                                   return null;
-                              const xA =
-                                  xScale(xAccessor(startDatum) as never) ?? 0;
-                              const xB =
-                                  xScale(xAccessor(endDatum) as never) ?? 0;
+                              const xA = xScale(xAccessor(startDatum)) ?? 0;
+                              const xB = xScale(xAccessor(endDatum)) ?? 0;
                               return (
                                   <rect
                                       x={Math.min(xA, xB)}
@@ -614,11 +600,9 @@ function Inner<Datum>({
                               ? tooltipValueFormat(v, first.key)
                               : String(Math.round(v * 100) / 100);
                       const xA =
-                          margin.left +
-                          (xScale(xAccessor(startDatum) as never) ?? 0);
+                          margin.left + (xScale(xAccessor(startDatum)) ?? 0);
                       const xB =
-                          margin.left +
-                          (xScale(xAccessor(endDatum) as never) ?? 0);
+                          margin.left + (xScale(xAccessor(endDatum)) ?? 0);
                       const mid = (xA + xB) / 2;
                       const rising = b - a > 0;
                       return (
@@ -644,9 +628,9 @@ function Inner<Datum>({
                 left={tooltipLeft}
                 top={margin.top}
                 title={
-                    hoverDatum && tooltipTitle
+                    hoverDatum != null && tooltipTitle
                         ? tooltipTitle(hoverDatum)
-                        : hoverDatum
+                        : hoverDatum != null
                           ? formatTitle(
                                 xAccessor(hoverDatum),
                                 appSettings.dateFormat,

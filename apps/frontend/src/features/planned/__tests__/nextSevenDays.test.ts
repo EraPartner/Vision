@@ -21,7 +21,7 @@ function payment(overrides: Partial<PlannedPayment> & { id: number; due_date: st
         is_active: true,
         created_at: "2026-01-01T00:00:00Z",
         ...overrides,
-    } as PlannedPayment;
+    };
 }
 
 describe("bucketNextSevenDays", () => {

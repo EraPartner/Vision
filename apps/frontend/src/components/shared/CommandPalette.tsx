@@ -171,7 +171,7 @@ export function CommandPalette({
     const goTo = (url: string) => {
         onOpenChange(false);
         pushPaletteRecent(url);
-        navigate(url);
+        void navigate(url);
     };
 
     const runAction = (action: () => void) => {
@@ -206,7 +206,7 @@ export function CommandPalette({
             />
             <CommandList>
                 <CommandEmpty>{t("commandPalette.noResults")}</CommandEmpty>
-                {tickerSymbol && (tickerQuote || tickerLoading) && (
+                {tickerSymbol && (tickerQuote != null || tickerLoading) && (
                     <CommandGroup
                         heading={t("commandPalette.market")}
                         forceMount
@@ -389,7 +389,7 @@ export function CommandPalette({
                 <CommandGroup heading={t("commandPalette.actions")}>
                     <CommandItem
                         value={t("shortcuts.newTransaction")}
-                        onSelect={() => runAction(() => navigate("/transactions?new=1"))}
+                        onSelect={() => runAction(() => void navigate("/transactions?new=1"))}
                     >
                         <Plus className="text-label-secondary" />
                         <span>{t("shortcuts.newTransaction")}</span>

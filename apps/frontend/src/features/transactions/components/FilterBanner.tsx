@@ -48,21 +48,24 @@ export function FilterBanner({
     onClear,
     onClearTags,
 }: FilterBannerProps) {
+    // URL-derived ids: absent, 0 and NaN (a malformed param) are all "no filter".
+    const isIdFilter = (id: number | undefined): id is number =>
+        id !== undefined && id > 0;
     const { t } = useLanguage();
     const recipientQuery = useRecipient(recipientIdFilter ?? null);
     const { appSettings } = useAppSettings();
 
     const hasAmountFilter = amountMinFilter != null || amountMaxFilter != null;
     const hasMainFilter =
-        transactionIdFilter ||
-        recipientIdFilter ||
-        categoryIdFilter ||
-        categoryIdsFilter?.length ||
-        startDateFilter ||
-        endDateFilter ||
-        transactionTypeFilter ||
-        accountIdFilter ||
-        bankAccountFilter ||
+        isIdFilter(transactionIdFilter) ||
+        isIdFilter(recipientIdFilter) ||
+        isIdFilter(categoryIdFilter) ||
+        (categoryIdsFilter != null && categoryIdsFilter.length > 0) ||
+        Boolean(startDateFilter) ||
+        Boolean(endDateFilter) ||
+        transactionTypeFilter !== undefined ||
+        isIdFilter(accountIdFilter) ||
+        Boolean(bankAccountFilter) ||
         hasAmountFilter;
     const hasTagFilter = tagsFilter && tagsFilter.length > 0;
 
@@ -96,24 +99,24 @@ export function FilterBanner({
 
     const descriptors: string[] = [];
     const scopeDescriptors: string[] = [];
-    if (transactionIdFilter)
+    if (isIdFilter(transactionIdFilter))
         scopeDescriptors.push(
             t("filter.transactionId", { id: transactionIdFilter }),
         );
-    if (recipientIdFilter)
+    if (isIdFilter(recipientIdFilter))
         scopeDescriptors.push(
             recipientQuery.data?.name ??
                 (recipientQuery.isError
                     ? t("filter.recipientUnknown")
                     : t("filter.recipientId", { id: recipientIdFilter })),
         );
-    if (categoryIdFilter)
+    if (isIdFilter(categoryIdFilter))
         scopeDescriptors.push(t("filter.categoryId", { id: categoryIdFilter }));
-    if (categoryIdsFilter?.length)
+    if (categoryIdsFilter !== undefined && categoryIdsFilter.length > 0)
         scopeDescriptors.push(
             t("filter.categoryIds", { count: categoryIdsFilter.length }),
         );
-    if (accountIdFilter)
+    if (isIdFilter(accountIdFilter))
         scopeDescriptors.push(t("filter.accountId", { id: accountIdFilter }));
     if (bankAccountFilter)
         scopeDescriptors.push(
@@ -151,7 +154,7 @@ export function FilterBanner({
                     <span className="type-footnote text-label-secondary">
                         {t("filter.tags.label")}:
                     </span>
-                    {tagsFilter!.map((slug) => (
+                    {tagsFilter.map((slug) => (
                         <Badge key={slug} variant="outline" size="sm">
                             {slug}
                         </Badge>

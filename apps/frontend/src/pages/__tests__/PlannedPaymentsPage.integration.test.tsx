@@ -794,7 +794,7 @@ describe("PlannedPaymentForm (inline validation)", () => {
         const user = userEvent.setup();
         const success = vi
             .spyOn(toast, "success")
-            .mockReturnValue("t" as never);
+            .mockReturnValue("t");
         server.use(
             http.get(`${API_BASE}/api/planned-transactions`, () =>
                 ok({ items: [], total: 0, limit: 1000, offset: 0, links: [] }),
@@ -850,7 +850,7 @@ describe("PlannedPaymentsPage (success feedback)", () => {
         const user = userEvent.setup();
         const success = vi
             .spyOn(toast, "success")
-            .mockReturnValue("t" as never);
+            .mockReturnValue("t");
         serveRent();
         server.use(
             http.patch(`${API_BASE}/api/planned-transactions/1`, () =>
@@ -877,7 +877,7 @@ describe("PlannedPaymentsPage (success feedback)", () => {
         const user = userEvent.setup();
         const success = vi
             .spyOn(toast, "success")
-            .mockReturnValue("t" as never);
+            .mockReturnValue("t");
         serveRent({ ...rentPayment, is_active: false });
         server.use(
             http.patch(`${API_BASE}/api/planned-transactions/1`, () =>
@@ -906,7 +906,7 @@ describe("PlannedPaymentsPage (success feedback)", () => {
         const user = userEvent.setup();
         const success = vi
             .spyOn(toast, "success")
-            .mockReturnValue("t" as never);
+            .mockReturnValue("t");
         let patched = false;
         serveRent({ ...rentPayment, account_id: ACCOUNT_LIST_ITEM_STUB.id });
         server.use(
@@ -940,7 +940,7 @@ describe("PlannedPaymentsPage (success feedback)", () => {
         const user = userEvent.setup();
         const success = vi
             .spyOn(toast, "success")
-            .mockReturnValue("t" as never);
+            .mockReturnValue("t");
         let deleted = false;
         serveRent();
         server.use(

@@ -146,9 +146,9 @@ function readSession(): Statement[] {
 function persistSession(statements: Statement[]) {
     try {
         const staged = statements.filter(
-            (item) => item.batchId && item.status === "staged",
+            (item) => item.batchId !== undefined && item.status === "staged",
         );
-        if (!staged.length) sessionStorage.removeItem(STORAGE_KEY);
+        if (staged.length === 0) sessionStorage.removeItem(STORAGE_KEY);
         else
             sessionStorage.setItem(
                 STORAGE_KEY,
@@ -356,7 +356,7 @@ export function PortfolioImportSession({ accounts }: Props) {
     }, []);
     useEffect(() => {
         const next = statementsRef.current.map((item) =>
-            item.detected && !item.batchId && !item.accountChosenManually
+            item.detected && item.batchId === undefined && !item.accountChosenManually
                 ? {
                       ...item,
                       accountId: resolveDetectedPortfolioAccount(
@@ -433,13 +433,15 @@ export function PortfolioImportSession({ accounts }: Props) {
             ? { cashFundingPolicy: "own_account_transfer" as const }
             : {}),
         ...(statements.some(
-            (item) => item.status === "staged" && item.adoptPolicy,
+            (item) =>
+                item.status === "staged" && item.adoptPolicy !== undefined,
         )
             ? {
                   batchPolicies: statements
                       .filter(
                           (item) =>
-                              item.status === "staged" && item.adoptPolicy,
+                              item.status === "staged" &&
+                              item.adoptPolicy !== undefined,
                       )
                       .map((item) => ({
                           batchId: item.batchId!,
@@ -457,7 +459,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                 .filter((id): id is number => id !== undefined)
                 .sort((a, b) => a - b);
             if (
-                !checkpointIds.length ||
+                checkpointIds.length === 0 ||
                 statements.some((item) => item.status !== "staged")
             ) {
                 sessionStorage.removeItem(SETTINGS_STORAGE_KEY);
@@ -513,7 +515,7 @@ export function PortfolioImportSession({ accounts }: Props) {
         );
 
     const addFiles = (files: File[]) => {
-        if (locked || !files.length) return;
+        if (locked || files.length === 0) return;
         if (statementsRef.current.length + files.length > 100) {
             setError(t("portfolioImport.session.tooMany"));
             return;
@@ -587,7 +589,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                           accountChosenManually: true,
                           batchId: undefined,
                           status: "ready",
-                          previousBatchIds: item.batchId
+                          previousBatchIds: item.batchId !== undefined
                               ? [...(item.previousBatchIds ?? []), item.batchId]
                               : item.previousBatchIds,
                           rows: undefined,
@@ -611,7 +613,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                           status: "ready",
                           rows: undefined,
                           sourceErrors: undefined,
-                          previousBatchIds: item.batchId
+                          previousBatchIds: item.batchId !== undefined
                               ? [...(item.previousBatchIds ?? []), item.batchId]
                               : item.previousBatchIds,
                       }
@@ -657,7 +659,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                           status: "ready",
                           rows: undefined,
                           sourceErrors: undefined,
-                          previousBatchIds: item.batchId
+                          previousBatchIds: item.batchId !== undefined
                               ? [...(item.previousBatchIds ?? []), item.batchId]
                               : item.previousBatchIds,
                       }
@@ -810,7 +812,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                         row.id === item.id
                             ? {
                                   ...row,
-                                  status: row.batchId ? "staged" : "error",
+                                  status: row.batchId !== undefined ? "staged" : "error",
                                   error: message,
                               }
                             : row,
@@ -861,7 +863,7 @@ export function PortfolioImportSession({ accounts }: Props) {
     };
 
     const commit = async () => {
-        if (!canCommit || !review || operation !== "idle") return;
+        if (!canCommit || operation !== "idle") return;
         setOperation("commit");
         setError(undefined);
         try {
@@ -1180,7 +1182,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                                             id={`broker-${item.id}`}
                                             accounts={accounts}
                                             value={
-                                                item.accountId
+                                                item.accountId !== undefined
                                                     ? String(item.accountId)
                                                     : undefined
                                             }
@@ -1192,7 +1194,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                                         />
                                     </fieldset>
                                 )}
-                                {item.detected && !item.accountId && (
+                                {item.detected && item.accountId === undefined && (
                                     <p
                                         role="alert"
                                         className="type-footnote text-destructive"
@@ -1387,7 +1389,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                                         {t("portfolioImport.session.staging")}
                                     </p>
                                 )}
-                                {item.batchId && (
+                                {item.batchId !== undefined && (
                                     <p className="type-footnote text-label-secondary">
                                         <Link
                                             className="underline"
@@ -1402,7 +1404,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                                             ` · ${t("portfolioImport.session.rows", { n: item.rows, skipped: item.skipped ?? 0, errors: item.sourceErrors ?? 0 })}`}
                                     </p>
                                 )}
-                                {item.originalBatchId && (
+                                {item.originalBatchId !== undefined && (
                                     <p className="type-caption text-label-secondary">
                                         {t(
                                             "portfolioImport.session.existing.readonly",
@@ -1778,7 +1780,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                                                 key={`${blocker.batchId}-${blocker.rowId ?? index}-${blocker.reason}`}
                                             >
                                                 {statementName(blocker.batchId)}
-                                                {blocker.rowOrdinal && (
+                                                {blocker.rowOrdinal !== undefined && (
                                                     <>
                                                         {" "}
                                                         ·{" "}
@@ -1824,7 +1826,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                                                     `portfolioImport.session.actions.${actions.includes(action.action) ? action.action : "other"}`,
                                                 )}
                                             </p>
-                                            {action.existingTransactionId && (
+                                            {action.existingTransactionId !== undefined && (
                                                 <p className="type-caption text-label-secondary">
                                                     {t(
                                                         "portfolioImport.session.existingId",
@@ -1908,7 +1910,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                                                     )}
                                                 </p>
                                             )}
-                                            {action.existingCashFeeTransactionId && (
+                                            {action.existingCashFeeTransactionId !== undefined && (
                                                 <p className="mt-1 type-caption text-label-secondary">
                                                     {t(
                                                         "portfolioImport.session.cashFeeExistingId",

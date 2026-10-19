@@ -62,7 +62,7 @@ function EvidenceAnswer({ answer }: { answer: AiAnswer }) {
         label: string,
         items: Array<{ text: string; evidenceIds: string[] }>,
     ) =>
-        items.length ? (
+        items.length > 0 ? (
             <section className="space-y-1">
                 <h4 className="type-headline">{label}</h4>
                 <ul className="list-disc space-y-1 pl-5 type-body">

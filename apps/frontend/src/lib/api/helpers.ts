@@ -53,12 +53,18 @@ export function buildExclusionQuery(params?: {
 }): string {
     const queryParams = new URLSearchParams();
 
-    if (params?.excluded_category_ids?.length) {
+    if (
+        params?.excluded_category_ids != null &&
+        params.excluded_category_ids.length > 0
+    ) {
         params.excluded_category_ids.forEach((id) =>
             queryParams.append("excluded_category_ids", String(id)),
         );
     }
-    if (params?.excluded_recipient_ids?.length) {
+    if (
+        params?.excluded_recipient_ids != null &&
+        params.excluded_recipient_ids.length > 0
+    ) {
         params.excluded_recipient_ids.forEach((id) =>
             queryParams.append("excluded_recipient_ids", String(id)),
         );

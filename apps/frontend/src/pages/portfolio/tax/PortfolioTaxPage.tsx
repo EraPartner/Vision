@@ -91,7 +91,7 @@ function SectionHeading({ title, description, action }: SectionHeadingProps) {
                     {description}
                 </p>
             </div>
-            {action && <div className="shrink-0">{action}</div>}
+            {Boolean(action) && <div className="shrink-0">{action}</div>}
         </div>
     );
 }

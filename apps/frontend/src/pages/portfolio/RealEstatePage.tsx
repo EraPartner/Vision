@@ -411,7 +411,7 @@ export default function RealEstatePage() {
                                                 value={
                                                     <Money
                                                         amount={
-                                                            p.cadastral_income ||
+                                                            p.cadastral_income ??
                                                             0
                                                         }
                                                         currency={
@@ -427,7 +427,7 @@ export default function RealEstatePage() {
                                                     "invDetail.municipalityTaxRate",
                                                 )}
                                                 value={`${fmtNum(
-                                                    p.municipality_tax_rate ||
+                                                    p.municipality_tax_rate ??
                                                         0,
                                                 )}%`}
                                             />

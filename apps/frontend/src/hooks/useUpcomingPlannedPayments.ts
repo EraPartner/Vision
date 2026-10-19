@@ -57,7 +57,7 @@ function loadDismissed(): Set<string> {
 }
 
 function getDismissedSnapshot(): Set<string> {
-    if (!dismissedCache) dismissedCache = loadDismissed();
+    dismissedCache ??= loadDismissed();
     return dismissedCache;
 }
 

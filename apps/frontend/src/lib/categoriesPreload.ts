@@ -49,14 +49,12 @@ let preloadPromise: Promise<PreloadResult> | null = null;
 
 /** Begin the category fetch (idempotent). Call as early as possible at boot. */
 export function startCategoriesPreload(): Promise<PreloadResult> {
-    if (!preloadPromise) {
-        preloadPromise = fetchCategoriesForExclusions().then(
-            (items) => ({ ok: true, items }) as const,
-            // A boot-time failure (backend still coming up behind the splash) is
-            // not final: the consumer retries on the live network path below.
-            () => ({ ok: false }) as const,
-        );
-    }
+    preloadPromise ??= fetchCategoriesForExclusions().then(
+        (items) => ({ ok: true, items }) as const,
+        // A boot-time failure (backend still coming up behind the splash) is
+        // not final: the consumer retries on the live network path below.
+        () => ({ ok: false }) as const,
+    );
     return preloadPromise;
 }
 

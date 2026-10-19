@@ -128,11 +128,12 @@ function PreviewRowList({ rows }: { rows: PortfolioPreviewRow[] }) {
     }, [rowEstimate, virtualizer]);
 
     const items = virtualizer.getVirtualItems();
-    const paddingTop = items.length ? items[0]!.start - scrollMargin : 0;
-    const paddingBottom = items.length
-        ? virtualizer.getTotalSize() -
-          (items[items.length - 1]!.end - scrollMargin)
-        : 0;
+    const paddingTop = items.length > 0 ? items[0]!.start - scrollMargin : 0;
+    const paddingBottom =
+        items.length > 0
+            ? virtualizer.getTotalSize() -
+              (items[items.length - 1]!.end - scrollMargin)
+            : 0;
 
     return (
         <div
@@ -211,7 +212,7 @@ export function PortfolioImportReviewPage() {
             );
             // Replace, don't push: this batch is consumed, so Back must skip the
             // review URL (it no longer previews) instead of re-inviting a commit.
-            navigate("/portfolio", { replace: true });
+            void navigate("/portfolio", { replace: true });
         },
         onError: (err: Error) =>
             toast.error(t("importPage.toast.serverError"), {
@@ -232,7 +233,7 @@ export function PortfolioImportReviewPage() {
     ) => {
         if (investmentId == null) return;
         const rowIds = g.rows.filter(isHoldingResolvable).map((row) => row.id);
-        if (!rowIds.length) return;
+        if (rowIds.length === 0) return;
         setBusyGroup(groupKey(g));
         try {
             await apiClient.overridePortfolioImportRows(batchId, rowIds, {
@@ -250,7 +251,7 @@ export function PortfolioImportReviewPage() {
 
     const createNew = async (g: PortfolioPreviewGroup) => {
         const rowIds = g.rows.filter(isHoldingResolvable).map((row) => row.id);
-        if (!rowIds.length) return;
+        if (rowIds.length === 0) return;
         setBusyGroup(groupKey(g));
         try {
             await apiClient.overridePortfolioImportRows(batchId, rowIds, {

@@ -75,7 +75,7 @@ export function useCreateTransfer() {
             });
         },
         onSettled: () => {
-            queryClient.invalidateQueries({ queryKey: recipientKeys.all });
+            void queryClient.invalidateQueries({ queryKey: recipientKeys.all });
             invalidateTransactionData(queryClient);
         },
     });

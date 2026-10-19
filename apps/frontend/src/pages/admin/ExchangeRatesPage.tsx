@@ -131,7 +131,9 @@ export default function ExchangeRatesPage() {
     const refreshMutation = useMutation({
         mutationFn: () => apiClient.refreshExchangeRates(),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: exchangeRateKeys.all });
+            void queryClient.invalidateQueries({
+                queryKey: exchangeRateKeys.all,
+            });
             toast.success(t("exchangeRates.refreshSuccess"));
         },
         onError: () => {
@@ -352,7 +354,7 @@ export default function ExchangeRatesPage() {
                         <RatesTable
                             rows={fallbackEntries.map(([currency, rate]) => ({
                                 currency,
-                                rate: rate as number,
+                                rate: rate,
                             }))}
                             showFallbackNote
                         />

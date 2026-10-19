@@ -27,7 +27,6 @@ import { adoptSettingBaselines } from "@/lib/api/settings";
 import { getBelgianTaxOverview } from "@/lib/api/belgianTax";
 import logger from "@/lib/logger";
 import { loadHouseholdRuntime } from "@/lib/belgianTax/loadHouseholdRuntime";
-import type { BelgianTaxProfileSnapshotMetas } from "@/lib/belgianTax";
 
 const HOUSEHOLD_SETTINGS_KEY = "belgian_tax_household_v2";
 const HOUSEHOLD_SNAPSHOTS_SETTINGS_KEY = "belgian_tax_household_snapshots_v2";
@@ -118,7 +117,7 @@ export function BelgianTaxProfileProvider({
                     runtime,
                     live,
                     overview.householdSnapshots,
-                    overview.snapshotMetas as unknown as BelgianTaxProfileSnapshotMetas,
+                    overview.snapshotMetas,
                     overview.storedValueInvalid,
                     liveFiguresComputed
                         ? {

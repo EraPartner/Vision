@@ -339,9 +339,9 @@ function Inner<Datum>({
                 }
             }
         }
-        const lo = values.length ? Math.min(0, ...values) : 0;
-        const hi = values.length ? Math.max(0, ...values) : 1;
-        const pad = (hi - lo) * 0.08 || 1;
+        const lo = values.length > 0 ? Math.min(0, ...values) : 0;
+        const hi = values.length > 0 ? Math.max(0, ...values) : 1;
+        const pad = hi !== lo ? (hi - lo) * 0.08 : 1;
         return [lo, hi + pad] as const;
     }, [data, series, overlays, yDomain]);
 

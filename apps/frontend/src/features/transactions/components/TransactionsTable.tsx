@@ -297,7 +297,8 @@ export function TransactionsTable({
                         );
                     }
                     const uncategorised =
-                        !row.categoryId || row.category === uncategorisedLabel;
+                        row.categoryId === undefined ||
+                        row.category === uncategorisedLabel;
                     return (
                         <span
                             title={uncategorised ? undefined : row.category}
@@ -570,7 +571,8 @@ export function TransactionsTable({
             _sourceIndex: number,
             helpers: { startEditing: () => void },
         ) => {
-            const hasRecipient = !!row.recipientId;
+            // "No recipient" is the 0 sentinel from the page's row mapping.
+            const hasRecipient = (row.recipientId ?? 0) !== 0;
             // Mirrors the create contract (recipient_id + date + bank_account
             // required) — same gate the delete-undo restore uses.
             const canDuplicate = hasRecipient && !!row.date && !!row.bank;

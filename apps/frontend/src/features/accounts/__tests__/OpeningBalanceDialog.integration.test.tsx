@@ -101,7 +101,7 @@ async function renderDialog(account: Account) {
 
 /** The amount field, whose label carries the currency the anchor is stamped in. */
 function balanceInput() {
-    return screen.getByLabelText(/^Opening balance/) as HTMLInputElement;
+    return screen.getByLabelText<HTMLInputElement>(/^Opening balance/);
 }
 
 describe("OpeningBalanceDialog (integration) — anchors in the partition's own currency", () => {
@@ -168,7 +168,7 @@ describe("OpeningBalanceDialog (integration) — anchors in the partition's own 
             statement_balances: [
                 { currency: "EUR", balance: 120, balance_date: "2026-09-01" },
             ],
-        } as Account);
+        });
 
         expect(balanceInput().value).toBe("120");
     });

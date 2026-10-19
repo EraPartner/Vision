@@ -125,7 +125,7 @@ export function YearActionsMenu({ year, pageItems }: YearActionsMenuProps) {
                 label={t("tax.menu.label")}
                 contentClassName="min-w-[240px]"
             >
-                {pageItems && (
+                {Boolean(pageItems) && (
                     <>
                         {pageItems}
                         <DropdownMenuSeparator />

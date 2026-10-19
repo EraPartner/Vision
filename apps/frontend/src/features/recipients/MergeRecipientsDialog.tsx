@@ -57,7 +57,7 @@ export function MergeRecipientsDialog({
 
     // Only show recipients that are NOT already aliases of someone else
     const availableRecipients = recipients.filter(
-        (r) => !r.primary_recipient_id,
+        (r) => r.primary_recipient_id == null,
     );
     const primary = availableRecipients.find((r) => r.id === primaryId);
 
@@ -70,7 +70,7 @@ export function MergeRecipientsDialog({
 
     const handleMerge = () => {
         if (
-            !primaryId ||
+            primaryId === null ||
             aliasIds.length === 0 ||
             recipientsError ||
             recipientsLoading ||
@@ -193,7 +193,7 @@ export function MergeRecipientsDialog({
                     </div>
 
                     {/* Step 2: Select aliases */}
-                    {primaryId && (
+                    {primaryId !== null && (
                         <div className="space-y-2">
                             <Label htmlFor={aliasSearchId}>
                                 {t("merge.selectAliases", {
@@ -267,14 +267,16 @@ export function MergeRecipientsDialog({
                                                     />
                                                     <span
                                                         className={
-                                                            r.primary_recipient_id
+                                                            r.primary_recipient_id !=
+                                                            null
                                                                 ? "text-label-secondary"
                                                                 : ""
                                                         }
                                                     >
                                                         {r.name}
                                                     </span>
-                                                    {r.primary_recipient_id && (
+                                                    {r.primary_recipient_id !=
+                                                        null && (
                                                         <span className="ml-2 type-footnote text-label-secondary">
                                                             {t(
                                                                 "merge.aliasOf",
@@ -306,7 +308,7 @@ export function MergeRecipientsDialog({
                     <Button
                         onClick={handleMerge}
                         disabled={
-                            !primaryId ||
+                            primaryId === null ||
                             aliasIds.length === 0 ||
                             mergeMutation.isPending ||
                             recipientsLoading ||

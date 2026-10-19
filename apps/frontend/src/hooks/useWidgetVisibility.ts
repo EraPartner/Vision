@@ -53,11 +53,11 @@ async function loadFromBackend(): Promise<void> {
             pendingEdits = [];
             hydrated = true;
             notify(merged);
-            if (edits.length) scheduleSave(merged);
+            if (edits.length > 0) scheduleSave(merged);
         } catch (err) {
             logger.error("Failed to load widget visibility:", err);
             // Keep local defaults/edits usable, but never replace unknown saved data.
-            if (pendingEdits.length)
+            if (pendingEdits.length > 0)
                 useSettingsStore.getState()._markSettingsSaveError();
         }
     })();
@@ -99,7 +99,7 @@ export function useWidgetVisibility(
     widgets: WidgetDefinition[],
 ) {
     const [visibility, setVisibility] = useState<WidgetVisibilityMap>(
-        cachedVisibility || {},
+        cachedVisibility ?? {},
     );
     const [isLoaded, setIsLoaded] = useState(hydrated);
     useEffect(() => {
@@ -114,7 +114,7 @@ export function useWidgetVisibility(
         };
     }, []);
     const pageVisibility = useMemo(
-        () => visibility[pageKey] || {},
+        () => visibility[pageKey] ?? {},
         [visibility, pageKey],
     );
     const isVisible = useCallback(
@@ -130,7 +130,7 @@ export function useWidgetVisibility(
         (widgetId: string, visible: boolean) => {
             applyEdit((base) => ({
                 ...base,
-                [pageKey]: { ...(base[pageKey] || {}), [widgetId]: visible },
+                [pageKey]: { ...(base[pageKey] ?? {}), [widgetId]: visible },
             }));
         },
         [pageKey],

@@ -83,6 +83,9 @@ export const BackupSection = memo(function BackupSection() {
                     });
                 }
             })
+            .catch(() => {
+                /* leave unknown — the status line says so and passphrase controls stay disabled */
+            })
             .finally(() => {
                 if (!cancelled) setEncryptionLoading(false);
             });
@@ -101,7 +104,13 @@ export const BackupSection = memo(function BackupSection() {
     }, []);
 
     const persist = (dir: string, onQuit: boolean) => {
-        apiClient.saveBackupSettings({ backupDir: dir, backupOnQuit: onQuit });
+        apiClient
+            .saveBackupSettings({ backupDir: dir, backupOnQuit: onQuit })
+            .catch((err: unknown) => {
+                toast.error(t("settings.saveFailed"), {
+                    description: electronErrorToMessage(err, t),
+                });
+            });
     };
 
     const handleBrowseBackupDir = async () => {

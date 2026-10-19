@@ -25,7 +25,6 @@ import { usePortfolio } from "@/hooks/usePortfolio";
 import { toast } from "sonner";
 import type { InvestmentSummary } from "@/types/portfolio";
 import { isUnitBased } from "@/utils/assetClass";
-import type { PriceProvider } from "@/types/api";
 import { PriceProviderFields } from "./PriceProviderFields";
 import { priceProviderPayload } from "./priceProviderPayload";
 import { formatEditableNumber, INVESTMENT_CURRENCIES } from "@/utils/currency";
@@ -80,7 +79,7 @@ export function EditInvestmentDialog({
                         appSettings.numberFormat,
                     )
                   : "",
-        priceProvider: (investment.price_provider || "manual") as PriceProvider,
+        priceProvider: investment.price_provider || "manual",
         priceProviderId: investment.price_provider_id || "",
         priceProviderUrl: investment.price_provider_url || "",
         priceProviderLatestUrl: investment.price_provider_latest_url || "",

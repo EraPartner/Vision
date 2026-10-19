@@ -155,7 +155,7 @@ const TransactionRow = memo(function TransactionRow({
 }) {
     const fmtNum = (val: number, decimals = 2) =>
         getNumberFmt(locale, decimals).format(val);
-    const transactionLabel = `${getTxnTypeLabel(t, txn.type as PortfolioTxnType)} · ${formatDateStringWithAppSettings(txn.date, dateFormat)}`;
+    const transactionLabel = `${getTxnTypeLabel(t, txn.type)} · ${formatDateStringWithAppSettings(txn.date, dateFormat)}`;
     const editLabel = `${t("aria.editTransaction")}: ${transactionLabel}`;
     const deleteLabel = `${t("aria.deleteTransaction")}: ${transactionLabel}`;
     return (
@@ -169,7 +169,7 @@ const TransactionRow = memo(function TransactionRow({
                             TXN_TYPE_COLORS[txn.type as PortfolioTxnType]
                         }
                     >
-                        {getTxnTypeLabel(t, txn.type as PortfolioTxnType)}
+                        {getTxnTypeLabel(t, txn.type)}
                     </Badge>
                     <span className="flex items-center gap-1 type-caption text-label-secondary">
                         <Calendar className="h-3 w-3" aria-hidden />
@@ -182,10 +182,12 @@ const TransactionRow = memo(function TransactionRow({
                         {t("invDetail.unitsAt", {
                             units: fmtNum(txn.units, 4),
                             price: fmt(
-                                txn.price_per_unit ||
-                                    (txn.units !== 0
-                                        ? txn.amount / txn.units
-                                        : 0),
+                                txn.price_per_unit != null &&
+                                    txn.price_per_unit !== 0
+                                    ? txn.price_per_unit
+                                    : txn.units !== 0
+                                      ? txn.amount / txn.units
+                                      : 0,
                                 {
                                     currency: txn.currency || nativeCurrency,
                                     decimals: 2,
@@ -343,10 +345,11 @@ function TransactionList({
         overscan: 6,
     });
     const items = virtualizer.getVirtualItems();
-    const paddingTop = items.length ? items[0]!.start : 0;
-    const paddingBottom = items.length
-        ? virtualizer.getTotalSize() - items[items.length - 1]!.end
-        : 0;
+    const paddingTop = items.length > 0 ? items[0]!.start : 0;
+    const paddingBottom =
+        items.length > 0
+            ? virtualizer.getTotalSize() - items[items.length - 1]!.end
+            : 0;
 
     return (
         <div ref={scrollRef} className="max-h-[400px] overflow-y-auto pr-2">
@@ -551,7 +554,7 @@ export function InvestmentDetailDialog({
             const ok = await confirm({
                 title: t("invDetail.delete.title"),
                 description: t("invDetail.delete.desc", {
-                    txType: getTxnTypeLabel(t, txn.type as PortfolioTxnType),
+                    txType: getTxnTypeLabel(t, txn.type),
                 }),
                 confirmLabel: t("invDetail.delete.confirm"),
                 variant: "destructive",
@@ -579,7 +582,7 @@ export function InvestmentDetailDialog({
         : undefined;
     const hasRealEstateFacts =
         realEstate &&
-        (investment.municipality ||
+        (Boolean(investment.municipality) ||
             investment.cadastral_income != null ||
             investment.municipality_tax_rate != null);
 
@@ -799,7 +802,9 @@ export function InvestmentDetailDialog({
                                                     },
                                                 )}
                                             />
-                                            {investment.currentPrice ? (
+                                            {investment.currentPrice !==
+                                                undefined &&
+                                            investment.currentPrice !== 0 ? (
                                                 <FactRow
                                                     label={t(
                                                         "invDetail.currentPrice",
@@ -816,7 +821,9 @@ export function InvestmentDetailDialog({
                                             ) : null}
                                         </>
                                     )}
-                                    {fixedIncome && investment.interestRate ? (
+                                    {fixedIncome &&
+                                    investment.interestRate != null &&
+                                    investment.interestRate !== 0 ? (
                                         <FactRow
                                             label={t("invDetail.interestRate")}
                                             value={`${fmtNum(investment.interestRate)}%`}

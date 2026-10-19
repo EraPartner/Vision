@@ -144,7 +144,7 @@ export function SplitTransactionDialog({
         : 0;
     const existingSplits = existingSplitsData?.items ?? [];
     const existingSplitTotal = open
-        ? roundMoney(addAll(existingSplits.map((split) => split.amount || 0)))
+        ? roundMoney(addAll(existingSplits.map((split) => split.amount)))
         : 0;
     const existingRecipientNames = existingSplits
         .map((split) => split.recipient_name)
@@ -163,7 +163,7 @@ export function SplitTransactionDialog({
           : splitType === "full"
             ? fullShares.some((share) => share <= 0)
             : validEntries.some((entry) => {
-                  if (!entry.recipient_id) return false;
+                  if (entry.recipient_id == null) return false;
                   return (
                       parseDecimal(entry.amount, appSettings.numberFormat) <= 0
                   );

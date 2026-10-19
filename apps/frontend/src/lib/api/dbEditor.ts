@@ -117,7 +117,7 @@ export function getTableRows(
     if (params.cursor) q.set("cursor", params.cursor);
     if (params.orderBy) q.set("orderBy", params.orderBy);
     if (params.dir) q.set("dir", params.dir);
-    if (params.filters && params.filters.length)
+    if (params.filters && params.filters.length > 0)
         q.set("filters", JSON.stringify(params.filters));
     const qs = q.toString();
     return apiRequest<TableRows>(`${base(table)}/rows${qs ? `?${qs}` : ""}`, {

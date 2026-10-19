@@ -102,7 +102,7 @@ export default function ImportPage() {
 
     useEffect(() => {
         if (!readCommitReceipt(location.state)) return;
-        navigate(location.pathname, { replace: true, state: null });
+        void navigate(location.pathname, { replace: true, state: null });
     }, [location.pathname, location.state, navigate]);
 
     return (

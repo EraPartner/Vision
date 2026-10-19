@@ -394,7 +394,7 @@ export default function ResearchComparePage() {
             if (an && bn) return 0;
             if (an) return 1; // missing always sorts last
             if (bn) return -1;
-            return (av! - bv!) * dir;
+            return (av - bv) * dir;
         });
     }, [symbols, fundamentalsQueries, sortMetric]);
 

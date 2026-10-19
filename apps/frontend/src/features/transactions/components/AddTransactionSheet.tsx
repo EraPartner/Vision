@@ -144,7 +144,7 @@ export function AddTransactionSheet({
         const usual = recipient.default_category_id;
         setForm((f) => {
             if (f.category_id && !categoryAuto) return f;
-            const next = usual ? String(usual) : "";
+            const next = usual != null ? String(usual) : "";
             if (f.category_id === next) return f;
             return { ...f, category_id: next };
         });
@@ -291,8 +291,8 @@ export function AddTransactionSheet({
                     ? "addTxn.hint.recipientIncome"
                     : "addTxn.hint.recipient",
             );
-        if (!form.account_id) return t("addTxn.hint.account");
-        if (form.kind === "transfer" && !form.to_account_id)
+        if (form.account_id === null) return t("addTxn.hint.account");
+        if (form.kind === "transfer" && form.to_account_id == null)
             return t("addTxn.hint.toAccount");
         return "";
     })();

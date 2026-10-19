@@ -83,7 +83,7 @@ export interface CardTitleProps
 
 const CardTitle = React.forwardRef<HTMLHeadingElement, CardTitleProps>(
     ({ className, variant, level = 2, ...props }, ref) => {
-        const Heading = `h${level}` as "h2" | "h3" | "h4";
+        const Heading: "h2" | "h3" | "h4" = `h${level}`;
         return (
             <Heading
                 ref={ref}

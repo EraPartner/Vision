@@ -33,7 +33,7 @@ export const TopRecipientsChart = memo(function TopRecipientsChart({
     const filteredRecipients =
         yearFilter === "all"
             ? data.topRecipients
-            : data.topRecipientsByYear[yearFilter] || [];
+            : (data.topRecipientsByYear[yearFilter] ?? []);
 
     const chartData: RecipientDatum[] = filteredRecipients
         .slice(0, 10)

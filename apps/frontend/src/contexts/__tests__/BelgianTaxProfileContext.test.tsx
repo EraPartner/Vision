@@ -43,9 +43,7 @@ describe("BelgianTaxProfileContext", () => {
                 ok(settingsWithBaselines({})),
             ),
         );
-        vi.spyOn(apiClient, "saveSettings").mockResolvedValue(
-            undefined as never,
-        );
+        vi.spyOn(apiClient, "saveSettings").mockResolvedValue(undefined);
         vi.spyOn(apiClient, "saveSetting").mockResolvedValue(
             undefined as never,
         );

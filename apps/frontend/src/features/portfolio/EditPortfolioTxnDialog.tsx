@@ -23,11 +23,7 @@ import { toYmd } from "@/lib/dateUtils";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { isUnitBased } from "@/utils/assetClass";
 import { toast } from "sonner";
-import type {
-    InvestmentSummary,
-    PortfolioTxnType,
-    RecurrenceInterval,
-} from "@/types/portfolio";
+import type { InvestmentSummary } from "@/types/portfolio";
 import type { PortfolioTransaction } from "@/types/api";
 import { getTxnTypeLabel } from "@/types/portfolio";
 import {
@@ -152,9 +148,7 @@ export function EditPortfolioTxnDialog({
                 ? String(transaction.account_id)
                 : "",
         isRecurring: Boolean(transaction.is_recurring),
-        recurrenceInterval:
-            transaction.recurrence_interval ??
-            ("monthly" as RecurrenceInterval),
+        recurrenceInterval: transaction.recurrence_interval ?? "monthly",
         recurrenceEndDate: normalizeYmdInput(transaction.recurrence_end_date),
     });
 
@@ -309,10 +303,7 @@ export function EditPortfolioTxnDialog({
             });
             toast.success(
                 t("txnEdit.toast.updated", {
-                    type: getTxnTypeLabel(
-                        t,
-                        transaction.type as PortfolioTxnType,
-                    ),
+                    type: getTxnTypeLabel(t, transaction.type),
                 }),
             );
             resetForm();

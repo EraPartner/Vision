@@ -1913,8 +1913,8 @@ describe("Portfolio pages (integration)", () => {
             server.use(
                 http.get(`${API_BASE}/api/investments`, () =>
                     ok({
-                        items: postCalls ? [created] : [],
-                        total: postCalls ? 1 : 0,
+                        items: postCalls > 0 ? [created] : [],
+                        total: postCalls > 0 ? 1 : 0,
                         limit: 500,
                         offset: 0,
                         links: [],
@@ -1923,7 +1923,7 @@ describe("Portfolio pages (integration)", () => {
                 http.get(`${API_BASE}/api/info/portfolio-summary`, () =>
                     ok({
                         ...PORTFOLIO_SUMMARY_STUB,
-                        summaries: postCalls
+                        summaries: postCalls > 0
                             ? [
                                   {
                                       ...PORTFOLIO_SUMMARY_ITEM_STUB,

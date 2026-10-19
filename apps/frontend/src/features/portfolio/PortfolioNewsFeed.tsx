@@ -120,12 +120,13 @@ function NewsItem({
     article: MarketNewsArticle;
     locale: string;
 }) {
-    const timeAgo = article.publishedAt
-        ? formatDistanceToNow(new Date(article.publishedAt), {
-              addSuffix: true,
-              locale,
-          })
-        : null;
+    const timeAgo =
+        article.publishedAt !== null && article.publishedAt !== 0
+            ? formatDistanceToNow(new Date(article.publishedAt), {
+                  addSuffix: true,
+                  locale,
+              })
+            : null;
 
     // A link `safeHref` rejects yields an inert, unfocusable anchor. Render a
     // plain container for that case instead of a card that keeps the full hover

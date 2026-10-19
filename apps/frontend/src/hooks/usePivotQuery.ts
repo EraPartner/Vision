@@ -50,9 +50,7 @@ function buildPeriodData<
     for (const [period, items] of Object.entries(pivot)) {
         for (const item of items) {
             const id = getItemId(item);
-            if (!map[id]) {
-                map[id] = initRow(item);
-            }
+            map[id] ??= initRow(item);
             map[id].months[period] = item.total;
         }
     }

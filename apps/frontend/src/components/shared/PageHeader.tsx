@@ -94,7 +94,7 @@ export function PageHeader({
                     )}
                 </div>
             </div>
-            {actions && (
+            {Boolean(actions) && (
                 <div className="flex max-w-full flex-wrap items-center gap-2 sm:ml-auto">
                     {actions}
                 </div>

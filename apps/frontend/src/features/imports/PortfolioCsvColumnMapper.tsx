@@ -132,7 +132,7 @@ export function PortfolioCsvColumnMapper({
             headers={headers}
             hasHeaders={hasHeaders}
             required={required}
-            onChange={(v) => set(key)(v as never)}
+            onChange={(v) => set(key)(v)}
             noMappingLabel={noMappingLabel}
         />
     );

@@ -116,7 +116,10 @@ export default function CategoriesPage() {
         }
         for (const siblings of map.values())
             siblings.sort(
-                (a, b) => a.name.localeCompare(b.name) || a.id - b.id,
+                (a, b) => {
+                    const byName = a.name.localeCompare(b.name);
+                    return byName !== 0 ? byName : a.id - b.id;
+                },
             );
         return map;
     }, [visible]);

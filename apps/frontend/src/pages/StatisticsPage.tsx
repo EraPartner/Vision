@@ -413,7 +413,7 @@ export default function StatisticsPage() {
                             // layout until scrolled near is safe (visually free).
                             <div className="cv-auto">
                                 <CategoryPivotTable
-                                    data={getGraphData("pivotTable") || data}
+                                    data={getGraphData("pivotTable") ?? data}
                                     graphKey="pivotTable"
                                     isFiltered={
                                         graphExclusions["pivotTable"] ?? true

@@ -277,7 +277,7 @@ export function AddInvestmentDialog({ allowedAssetClasses, trigger }: Props) {
                     notes: form.notes.trim() || undefined,
                     ...priceProviderPayload(form),
                 });
-                if (!investment) return;
+                if (investment == null) return;
                 investmentId = investment.id;
                 createdInvestmentIdRef.current = investmentId;
             }

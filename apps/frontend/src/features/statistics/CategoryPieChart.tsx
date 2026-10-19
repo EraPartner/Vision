@@ -39,7 +39,7 @@ export const CategoryPieChart = memo(function CategoryPieChart({
                 // months. expenseMonths holds Σ|amount<0| per period.
                 const totalForPeriods = filteredPeriods.reduce(
                     (sum, period) =>
-                        sum + (category.expenseMonths[period] || 0),
+                        sum + (category.expenseMonths[period] ?? 0),
                     0,
                 );
                 return {

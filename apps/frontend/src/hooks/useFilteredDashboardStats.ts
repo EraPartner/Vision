@@ -121,7 +121,9 @@ export function useFilteredDashboardStats(enabled = true) {
         // Use the most recent month with data to keep cards aligned with actual latest activity.
         const monthsWithData = summaryQuery.data.months
             .filter((month) => month.transaction_count > 0)
-            .sort((a, b) => a.year - b.year || a.month - b.month);
+            .sort((a, b) =>
+                a.year !== b.year ? a.year - b.year : a.month - b.month,
+            );
 
         const latest = monthsWithData[monthsWithData.length - 1];
 
