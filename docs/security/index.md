@@ -57,7 +57,7 @@ SORT title ASC
 - **[[docs/adr/050-ci-supply-chain-security-tooling|ADR-050: CI Supply Chain Security Tooling]]** - Historical decision; its Trivy scan is superseded by ADR-221
 - **[[docs/adr/168-github-release-trust-boundary|ADR-168: GitHub Release Trust Boundary]]** - GitHub is the trusted desktop update publisher; the sibling checksum is not an independent signature
 - **[[docs/adr/221-proportional-ci|ADR-221: Proportional CI]]** - Seven-job CI; removes the Trivy filesystem scan that overlapped Dependency Review, `bun audit` and pip-audit; keeps gitleaks and CodeQL; release reuses the tagged commit's `CI Complete` result and re-runs only the full-tree gitleaks scan and the dependency audits
-- **[[docs/guides/cicd-pipelines|CI/CD Pipelines Guide]]** - Full documentation of the security checks (gitleaks and dependency review in `Repo Checks`, `bun audit` and pip-audit in `Lint`, CodeQL in its own workflow) and setup instructions
+- **[[docs/guides/cicd-pipelines|CI/CD Pipelines Guide]]** - Full documentation of the security checks (gitleaks and dependency review in `Repo Checks`, `bun audit` in `Lint`, CodeQL in its own workflow) and setup instructions
 - **GitHub release provenance** - The protected build job creates the packaged-app SBOM and keyless artifact attestations; the release job checks provenance before publishing. GitHub account and workflow authority remain the update trust boundary.
 - **[[docs/guides/contributing|Contributing Guide]]** - Developer setup including pre-commit hook installation (`git config core.hooksPath .githooks`, `brew install gitleaks`)
 

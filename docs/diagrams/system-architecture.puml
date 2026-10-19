@@ -66,7 +66,7 @@ cloud "Build & Distribution" as DevToolsCloud {
   node "GitHub Releases\n(trusted publisher)" as GitHubReleases
   node "Vitest 4 + property tests" as Vitest
   node "gitleaks / dependency audits / CodeQL" as SecurityScans
-  node "ESLint / openapi-typescript" as Lint
+  node "ESLint / dependency-cruiser / knip\nopenapi-typescript" as Lint
 }
 
 package "Client to Server" {
@@ -104,7 +104,7 @@ package "Server Components" {
 }
 
 package "Database Access" {
-  Repos --> DB : parameterised SQL
+  Repos --> DB : Kysely-built SQL (bound parameters)
   DB --> Repos : rows
   Services --> MatViews : REFRESH CONCURRENTLY
   Services --> DB : local monitor rules, observations, inbox

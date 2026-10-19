@@ -42,7 +42,7 @@ Decide on:
 
 ### 2. Create the Route File
 
-Create `apps/node-backend/src/routes/<resource>.js`. Routes are thin: they parse/validate the request, delegate to the **service** (never the repository — the `vision-local/no-repo-direct-from-route` ESLint gate enforces this, [[docs/adr/067-enforce-route-service-boundary|ADR-067]]), and reply with the `res.ok()` envelope ([[docs/adr/026-unified-api-response-envelope|ADR-026]]). Parse `req.params`, `req.query` and `req.body` with zod schemas through `parseInput` ([[docs/adr/193-zod-runtime-contracts|ADR-193]]) and throw the typed errors from `middleware/errorHandler.ts` instead of hand-rolling `res.status(...).json(...)` — the central error handler turns them into the `{ ok:false, error:{ code, message } }` envelope. See `routes/tags.ts` for a live reference.
+Create `apps/node-backend/src/routes/<resource>.ts`. Routes are thin: they parse/validate the request, delegate to the **service** (never the repository — the `vision-local/no-repo-direct-from-route` ESLint gate enforces this, [[docs/adr/067-enforce-route-service-boundary|ADR-067]]), and reply with the `res.ok()` envelope ([[docs/adr/026-unified-api-response-envelope|ADR-026]]). Parse `req.params`, `req.query` and `req.body` with zod schemas through `parseInput` ([[docs/adr/193-zod-runtime-contracts|ADR-193]]) and throw the typed errors from `middleware/errorHandler.ts` instead of hand-rolling `res.status(...).json(...)` — the central error handler turns them into the `{ ok:false, error:{ code, message } }` envelope. See `routes/tags.ts` for a live reference.
 
 `parseInput(schema, value)` (`lib/zodInput.ts`) throws `ValidationError` when the schema fails,
 so a bad request is a 400 `VALIDATION_ERROR` with the issues joined as `path: message`. Reuse the
@@ -51,10 +51,10 @@ sub-resource id, `pageFields`, `booleanQuery()`, `clampedIntQuery()`, `singleQue
 `requiredString`. Declare every field that may be absent as `.optional()`. See
 [[docs/reference/code-patterns#Request validation with parseInput (ADR-193)|Request validation]].
 
-```javascript
+```typescript
 import { Router } from 'express';
 import { z } from 'zod';
-import <resource>Service from '../services/<resource>Service.js';
+import <resource>Service from '../services/<resource>Service.ts';
 import { parsePagination } from '../lib/pagination.ts';
 import { parseInput } from '../lib/zodInput.ts';
 import { idParams, pageFields, requiredString } from './_requestSchemas.ts';
@@ -112,8 +112,8 @@ export default router;
 
 Add to `apps/node-backend/src/main.ts`, using `mountRouter` (which also registers the route in the manifest) — not a bare `app.use`:
 
-```javascript
-import <resource>Router from './routes/<resource>.js';
+```typescript
+import <resource>Router from './routes/<resource>.ts';
 
 // ...alongside the other mounts near main.ts:254+
 mountRouter(app, '/api/<resource>', <resource>Router);
@@ -121,10 +121,10 @@ mountRouter(app, '/api/<resource>', <resource>Router);
 
 ### 4. Create the Service and Repository
 
-**Service** — the ADR-067 seam where validation and orchestration live. Create `apps/node-backend/src/services/<resource>Service.js`:
+**Service** — the ADR-067 seam where validation and orchestration live. Create `apps/node-backend/src/services/<resource>Service.ts`:
 
-```javascript
-import <resource>Repository from '../repositories/<resource>Repository.js';
+```typescript
+import <resource>Repository from '../repositories/<resource>Repository.ts';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler.ts';
 
 const <resource>Service = {
@@ -158,57 +158,76 @@ const <resource>Service = {
 export default <resource>Service;
 ```
 
-**Repository** — parameterized SQL only, via the shared `query` helper (there is no `database/pool.js`; the connection module is `database/connection.ts`). Create `apps/node-backend/src/repositories/<resource>Repository.js`:
+**Repository** — queries are built with Kysely through `db` from `database/db.ts`, not SQL strings
+([[docs/adr/226-kysely-query-builder|ADR-226]]). The driver runs every compiled query through
+`query()` in `database/connection.ts`, so it joins the ambient `withTransaction()` transaction.
+`checkedRows(schema, builder)` and `checkedRow(...)` check the returned rows against a row schema
+([[docs/adr/193-zod-runtime-contracts|ADR-193]]). Analytical SQL that the builder would make harder
+to read uses Kysely's `sql` tag with bound parameters. Create
+`apps/node-backend/src/repositories/<resource>Repository.ts` (see `repositories/tagRepository.ts`
+for a live reference):
 
-```javascript
-import { query } from '../database/connection.ts';
+```typescript
+import { sql } from 'kysely';
+import { checkedRow, checkedRows, db } from '../database/db.ts';
+import { countRowSchema } from '../database/rowSchemas.ts';
+import { <resource>RowSchema } from '../database/rows/<area>.ts';
+import type { <Resource>Id } from '@vision/types/brands';
 
 const <resource>Repository = {
   async getAllWithCount({ limit = 50, offset = 0 }) {
-    const { rows } = await query(
-      'SELECT *, COUNT(*) OVER() AS total_count FROM <resource> ORDER BY id ASC LIMIT $1 OFFSET $2',
-      [limit, offset]
+    const items = await checkedRows(
+      <resource>RowSchema,
+      db.selectFrom('<resource>').selectAll().orderBy('id').limit(limit).offset(offset),
     );
-    const total = rows.length ? Number(rows[0].total_count) : 0;
-    return { items: rows.map(({ total_count, ...r }) => r), total };
-  },
-
-  async getById(id) {
-    const { rows } = await query('SELECT * FROM <resource> WHERE id = $1', [id]);
-    return rows[0] || null;
-  },
-
-  async create(data) {
-    const { rows } = await query(
-      'INSERT INTO <resource> (name, created_at) VALUES ($1, NOW()) RETURNING *',
-      [data.name]
+    const count = await checkedRow(
+      countRowSchema,
+      db.selectFrom('<resource>').select(sql<string>`COUNT(*)`.as('count')),
     );
-    return rows[0];
+    return { items, total: Number(count?.count ?? 0) };
   },
 
-  async update(id, data) {
-    const { rows } = await query(
-      'UPDATE <resource> SET name = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
-      [data.name, id]
+  getById(id: <Resource>Id) {
+    return checkedRow(
+      <resource>RowSchema,
+      db.selectFrom('<resource>').selectAll().where('id', '=', id),
     );
-    return rows[0] || null;
   },
 
-  async hardDelete(id) {
-    const { rowCount } = await query('DELETE FROM <resource> WHERE id = $1', [id]);
-    return rowCount > 0;
+  create(data: { name: string }) {
+    return checkedRow(
+      <resource>RowSchema,
+      db.insertInto('<resource>').values({ name: data.name }).returningAll(),
+    );
+  },
+
+  update(id: <Resource>Id, data: { name?: string }) {
+    return checkedRow(
+      <resource>RowSchema,
+      db
+        .updateTable('<resource>')
+        .set({ ...data, updated_at: sql<Date>`NOW()` })
+        .where('id', '=', id)
+        .returningAll(),
+    );
+  },
+
+  async hardDelete(id: <Resource>Id) {
+    const result = await db.deleteFrom('<resource>').where('id', '=', id).executeTakeFirst();
+    return result.numDeletedRows > 0n;
   },
 };
 
 export default <resource>Repository;
 ```
 
-> [!tip] Row contracts
-> Check what PostgreSQL returns: add a schema to the area module `database/rows/<area>.ts`
-> (built from the `pg*` primitives in `database/rowSchemas.ts`) and read through
-> `queryRows(schema, sql, params)` or `queryOne(...)` from `database/rowContracts.ts`. Export the
-> row type as `z.output<typeof schema>` next to the schema. A bare `query()` returns `unknown`
-> rows. See
+> [!tip] Row contracts and generated types
+> The table must exist in `database/schema.generated.ts` (run `bun run db:codegen` after the
+> migration in step 5) before the builder accepts it. Add the row schema to the area module
+> `database/rows/<area>.ts` (built from the `pg*` primitives in `database/rowSchemas.ts`) and export
+> the row type as `z.output<typeof schema>` next to it. Brand the new id
+> ([[docs/adr/220-branded-ids-currency-codes-and-money|ADR-220]]) and add its override line to
+> `apps/node-backend/.kysely-codegenrc.json`. See
 > [[docs/reference/code-patterns#Row contracts for new queries (ADR-193)|Row contracts]].
 
 ### 5. Create the Database Migration
@@ -236,12 +255,12 @@ Add `NNNN_add_<resource>_table.down.sql` with `DROP TABLE "<resource>";`, then r
 
 ### 6. Add Tests
 
-Create `apps/node-backend/tests/<resource>.test.js`:
+Create `apps/node-backend/tests/<resource>.test.ts`:
 
-```javascript
+```typescript
 import { describe, it, expect, vi } from "vitest";
-import { mockConnection } from "./helpers/repoMocks.js";
-import { routeAgent } from "./helpers/routeApp.js";
+import { mockConnection } from "./helpers/repoMocks.ts";
+import { routeAgent } from "./helpers/routeApp.ts";
 
 vi.mock("../src/database/connection.ts", () => mockConnection());
 
@@ -277,7 +296,7 @@ The endpoint is not "done" until the API contract and the generated frontend typ
 
 - [ ] Route file created (thin — parses input with `parseInput`, delegates to the service, uses `res.ok()`, throws typed errors)
 - [ ] Service module created (ADR-067 seam; validation + orchestration)
-- [ ] Repository created (parameterized SQL; rows read through `queryRows`/`queryOne` with a schema in `database/rows/<area>.ts`)
+- [ ] Repository created (Kysely builder through `db`; rows read through `checkedRows`/`checkedRow` with a schema in `database/rows/<area>.ts`)
 - [ ] Route registered in `main.ts` via `mountRouter`
 - [ ] Database migration created and tested
 - [ ] Tests written for all endpoints

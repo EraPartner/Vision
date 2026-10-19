@@ -241,21 +241,26 @@ Key protections:
 
 ## SQL Injection Prevention
 
-All database queries use **parameterized queries**:
+All database queries bind their values as parameters
+([[docs/adr/226-kysely-query-builder|ADR-226]]):
 
-```javascript
-// ✅ Safe
-await query("SELECT * FROM transactions WHERE id = $1", [id]);
+```typescript
+// ✅ Safe: Kysely query builder (apps/node-backend/src/database/db.ts)
+await db.selectFrom("transactions").selectAll().where("id", "=", id).execute();
+
+// ✅ Safe: Kysely sql tag, interpolations become bound parameters
+await sql`SELECT * FROM transactions WHERE id = ${id}`.execute(db);
 
 // ❌ Never do this
-await query(`SELECT * FROM transactions WHERE id = ${id}`);
+await sql.raw(`SELECT * FROM transactions WHERE id = ${id}`).execute(db);
 ```
 
 ### Repository Convention
 
-- Positional parameters (`$1`, `$2`, ...)
-- Manual parameter index tracking
-- No string concatenation in SQL
+- Plain reads and writes use the Kysely query builder over the generated schema types
+- Analytical SQL uses Kysely's `sql` template tag; its interpolations are bound, not concatenated
+- No string concatenation of values into SQL; `sql.raw` is reserved for trusted static
+  SQL text (migration files, module constants) and validated identifiers
 
 ---
 

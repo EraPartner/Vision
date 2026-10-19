@@ -66,7 +66,7 @@ aliases: [tag guide, tagging, categories, labels]
 | `postgresql`         | PostgreSQL-specific content                                  |
 | `plantuml`           | PlantUML diagrams                                            |
 | `alembic`            | Alembic migrations (historical; replaced by ADR-222)         |
-| `kysely`             | Kysely migrator, `db/migrations/` and generated DB types     |
+| `kysely`             | Kysely migrator and query builder, `db/migrations/`, DB types |
 | `vitest`             | Vitest testing                                               |
 | `eslint`             | ESLint configuration and rules, including type-aware rules   |
 | `dependency-cruiser` | Import-boundary checks (`bun run lint:deps`)                 |

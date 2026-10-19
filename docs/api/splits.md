@@ -745,6 +745,9 @@ interface SplitCreateInput {
 
 ## Migrations
 
+These historical Alembic revisions are folded into `db/migrations/0001_baseline.sql`
+([[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]]); the `.py` files survive only in Git history.
+
 - `0019_transaction_splits_and_agg.py` — Added `transaction_splits`, `split_payments`, and the trigger-maintained outstanding aggregate
 - `0021_split_audit.py` — Added the append-only `split_audit` table
 - `0088_money_precision_alignment.py` — Widened split and payment amounts to `NUMERIC(18,4)` and retired the pre-squash overpayment trigger on upgraded databases

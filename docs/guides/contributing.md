@@ -51,9 +51,10 @@ Follow the [[docs/guides/setup|Setup Guide]] to configure your local development
 
 **Install pre-commit hooks:**
 
+`bun install` points git at `.githooks/` through the root `prepare` script
+(`scripts/setup-git-hooks.ts`); run `bun run hooks:setup` to redo it by hand.
+
 ```bash
-# Configure git to use hooks from .githooks directory
-git config core.hooksPath .githooks
 
 # Install gitleaks (required for secrets scanning)
 brew install gitleaks
@@ -175,22 +176,29 @@ import { useTransaction } from "@/hooks/useTransaction";
 
 See [[docs/reference/code-patterns#typescript-type-annotation-best-practices-phase-5|Type Annotation Best Practices]] and [[docs/components/index|Component Documentation]] for more.
 
-### JavaScript/Node.js (Backend)
+### TypeScript/Node.js (Backend)
 
-```javascript
-// ES2022+ with ESM modules
-import { Router } from "express";
+The backend is strict TypeScript ([[docs/adr/186-backend-strict-typescript|ADR-186]]). Entity ids and
+currency codes use the branded types from `@vision/types/brands`
+([[docs/adr/220-branded-ids-currency-codes-and-money|ADR-220]]). Repositories build queries with
+Kysely through `db` from `apps/node-backend/src/database/db.ts`; analytical SQL uses Kysely's `sql`
+tag with bound parameters ([[docs/adr/226-kysely-query-builder|ADR-226]]).
 
-// Use async/await
-async function createTransaction(data) {
-  const transaction = await transactionRepository.create(data);
-  return transaction;
-}
+```typescript
+// ES2022+ ESM with async/await
+import type { TransactionId } from "@vision/types/brands";
+import { db } from "../database/db.ts";
 
 // Never use null - use undefined for optional values
-function findTransaction(id) {
-  // Good: returns undefined
-  return repository.findById(id);
+async function findTransactionComment(
+  id: TransactionId,
+): Promise<string | undefined> {
+  const row = await db
+    .selectFrom("transactions")
+    .select("comment")
+    .where("id", "=", id)
+    .executeTakeFirst();
+  return row?.comment ?? undefined;
 }
 ```
 

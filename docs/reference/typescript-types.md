@@ -2,8 +2,8 @@
 title: TypeScript Types Reference
 type: reference
 status: active
-date: 2026-10-11
-updated: 2026-10-11
+date: 2026-10-19
+updated: 2026-10-19
 tags:
   [
     reference,
@@ -129,21 +129,30 @@ through `tests/helpers/responseBody.ts`, and the backend lint rule
 
 **Source:** [[apps/frontend/src/types/api.ts]]
 
+> [!info] Branded ids and currencies (ADR-220)
+> Entity ids and currency codes are branded types from `@vision/types/brands`
+> (`TransactionId`, `CategoryId`, `RecipientId`, `PlannedTransactionId`, `InvestmentId`,
+> `PortfolioTransactionId`, `AccountId`, `CurrencyCode`, …), not bare `number` / `string`.
+> Use the `as*` constructors only for unchecked input. See
+> [[docs/adr/220-branded-ids-currency-codes-and-money|ADR-220]]. The snippets below abbreviate
+> the interfaces; `api.ts` is authoritative.
+
 ### Transaction
 
 ```typescript
 interface Transaction {
-  id: number;
-  date: string; // ISO date (YYYY-MM-DD)
+  id: TransactionId;
+  transaction_date: string; // ISO date (YYYY-MM-DD)
   amount: number; // Negative = expense, Positive = income
-  currency: string; // ISO 4217
+  currency?: CurrencyCode; // ISO 4217
   balance: number | null;
   memo: string | null;
   comment: string | null;
   bank_account: string | null;
-  recipient_id: number;
+  account_id?: AccountId | null;
+  recipient_id?: RecipientId | null;
   recipient_bank_account_id: number | null;
-  category_id: number | null;
+  category_id?: CategoryId | null;
   is_active: boolean;
   created_at: string;
   updated_at: string | null;
@@ -154,7 +163,7 @@ interface Transaction {
 
 ```typescript
 interface Category {
-  id: number;
+  id: CategoryId;
   general: string; // e.g., "FOOD"
   detail: string; // e.g., "GROCERIES"
   description: string | null;
@@ -168,11 +177,11 @@ interface Category {
 
 ```typescript
 interface Recipient {
-  id: number;
+  id: RecipientId;
   name: string;
   normalized_name: string;
-  default_category_id: number | null;
-  primary_recipient_id: number | null;
+  default_category_id?: CategoryId;
+  primary_recipient_id?: RecipientId | null;
   notes: string | null;
   is_active: boolean;
   created_at: string;
@@ -184,16 +193,16 @@ interface Recipient {
 
 ```typescript
 interface PlannedTransaction {
-  id: number;
+  id: PlannedTransactionId;
   planned_date: string;
   amount: number;
-  currency: string | null;
+  currency?: CurrencyCode;
   memo: string | null;
   comment: string | null;
   url: string | null;
   bank_account: string | null;
-  recipient_id: number | null;
-  category_id: number | null;
+  recipient_id?: RecipientId;
+  category_id?: CategoryId;
   is_recurring: boolean;
   recurrence_pattern: string | null;
   is_loan: boolean;
@@ -231,11 +240,11 @@ interface PaginatedResponse<T> {
 
 ```typescript
 interface Investment {
-  id: number;
+  id: InvestmentId;
   name: string;
   symbol: string | null;
   asset_class: AssetClass;
-  currency: string;
+  currency: CurrencyCode;
   current_price: number | null;
   interest_rate: number | null;
   maturity_date: string | null;
@@ -271,8 +280,8 @@ type PriceProvider = "manual" | "binance" | "yahoo" | "kinesis" | "custom";
 
 ```typescript
 interface PortfolioTransaction {
-  id: number;
-  investment_id: number;
+  id: PortfolioTransactionId;
+  investment_id: InvestmentId;
   type: PortfolioTxnType;
   date: string;
   amount: number;

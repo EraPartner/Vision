@@ -114,7 +114,7 @@ Splits are **hard-deleted** (not soft-deleted), but audit rows survive via `ON D
 | note       | TEXT          | Payment note                    |
 | created_at | TIMESTAMPTZ   | Creation timestamp              |
 
-**Migration:** `0019_transaction_splits_and_agg.py`
+**Migration:** historical Alembic `0019_transaction_splits_and_agg.py`, now part of `db/migrations/0001_baseline.sql`
 
 ### split_audit
 
@@ -129,7 +129,7 @@ Splits are **hard-deleted** (not soft-deleted), but audit rows survive via `ON D
 
 **Index:** `idx_split_audit_split_id` on (`split_id`)
 
-**Migration:** `0021_split_audit.py`
+**Migration:** historical Alembic `0021_split_audit.py`, now part of `db/migrations/0001_baseline.sql`
 
 ---
 

@@ -154,7 +154,7 @@ aliases:
 
 ```bash
 # Development
-bun run dev              # Start native Electron development
+bun run dev              # Start private PostgreSQL, backend and Vite
 bun run db:migrate       # Run migrations
 
 # Testing

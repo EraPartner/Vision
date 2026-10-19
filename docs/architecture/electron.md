@@ -534,8 +534,8 @@ settings). Simplified merged view:
   executable `native-runtime/` payload and the compiled `audit-keychain` helper.
 
 - **`native-runtime/`** — Also kept outside asar. It contains the compiled Bun backend,
-  production frontend, migrations, migration runner, configuration, and checksum manifest used by
-  the default native provider.
+  production frontend, `db/` migrations (applied in-process by the compiled backend), configuration,
+  and checksum manifest used by the default native provider.
 
 - **`demo-seed/`** — Vision Demo only. Contains a PostgreSQL custom-format dump and checksum/count
   manifest produced from a migrated disposable database. The data-only SQL generator remains a
@@ -1445,7 +1445,8 @@ file dist/mac-arm64/Vision.app/Contents/Resources/app.asar
 ```
 
 **Verification:** After build, verify `app.asar` and the external native payload manifest. The
-payload must contain the compiled backend, frontend, migrations, and migration runner.
+payload must contain the compiled backend, frontend and `db/` migrations; the backend applies the
+migrations in-process.
 
 ```bash
 bun packaging/electron/build.ts

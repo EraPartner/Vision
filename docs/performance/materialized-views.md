@@ -166,9 +166,9 @@ Outstanding balance per split (original minus paid).
 
 **Example:** When a split payment is recorded:
 
-```javascript
+```typescript
 // App code does nothing special — triggers handle it:
-await query("INSERT INTO split_payments (split_id, amount) VALUES (...)");
+await db.insertInto("split_payments").values({ split_id, amount /* ... */ }).execute();
 // Automatically: agg_split_outstanding.outstanding_amount updated in <1ms
 ```
 
@@ -239,15 +239,19 @@ REFRESH MATERIALIZED VIEW CONCURRENTLY mv_monthly_summary;
 
 **Fallback:** On first refresh after migration, if `CONCURRENTLY` fails with "has not been populated", the orchestrator falls back to non-concurrent refresh:
 
-```javascript
-try {
-  await query(`REFRESH MATERIALIZED VIEW CONCURRENTLY ${view}`);
-} catch (err) {
-  if (err.message.includes("has not been populated")) {
-    await query(`REFRESH MATERIALIZED VIEW ${view}`); // Blocks reads during refresh
+```typescript
+// apps/node-backend/src/services/materializedViewService.ts (simplified)
+runMaintenanceStatement(`REFRESH MATERIALIZED VIEW CONCURRENTLY ${view}`).catch((err) => {
+  const msg = (err.message || "").toLowerCase();
+  if (msg.includes("not populated") || msg.includes("concurrently") /* ... */) {
+    return runMaintenanceStatement(`REFRESH MATERIALIZED VIEW ${view}`); // Blocks reads during refresh
   }
-}
+  throw err;
+});
 ```
+
+`runMaintenanceStatement` runs the statement on a dedicated client with `statement_timeout = 0`
+and resets the timeout before returning the client to the pool.
 
 ### Request Coalescing
 

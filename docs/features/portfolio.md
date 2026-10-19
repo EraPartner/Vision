@@ -539,7 +539,7 @@ Code links: [[apps/node-backend/src/repositories/infoRepository.ts]], [[apps/nod
 ## Cross-Currency Display Normalization
 
 - Portfolio Overview, Performance, Portfolio Tax, and asset listing pages now normalize displayed monetary amounts to `appSettings.defaultCurrency`.
-- UI conversion uses live rates from `/api/info/exchange-rates` so cards, charts, and tables aggregate mixed-source currencies consistently in the selected target currency.
+- Conversion happens on the server at stored rates ([[docs/adr/216-server-owned-domain-calculations|ADR-216]]): pages pass the display currency (for example `usePerformanceQueries(currency, period)` in `apps/frontend/src/features/portfolio/usePortfolioQueries.ts`) and render the returned figures. The browser-side `useCurrencyConverter` remains only for previews of unsaved input such as the command palette's FX calculator.
 - Percentage metrics remain unchanged (no currency conversion applied).
 - Asset page scope includes Stocks, Crypto, Real Estate, and Savings; Metals inherits the same behavior by reusing Stocks page logic.
 - Performance chart valuation now consumes custom-provider historical points (when configured) for unit-based investments; past points without historical quotes are skipped instead of falling back to mutable `current_price`.
@@ -914,7 +914,7 @@ Each investment can be individually included in or excluded from the ticker. The
 **Side table** (`investment_ticker_prefs`):
 
 - Schema: `investment_ticker_prefs(investment_id INTEGER PRIMARY KEY, show_in_ticker BOOLEAN NOT NULL DEFAULT true)`.
-- Created by migration `0061_investments_show_in_ticker` (revision `0061_investments_show_in_ticker`, down_revision `0060_brokerage_import_routing`) via `CREATE TABLE IF NOT EXISTS`. Downgrade: `DROP TABLE IF EXISTS investment_ticker_prefs`.
+- Created by the historical Alembic migration `0061_investments_show_in_ticker` via `CREATE TABLE IF NOT EXISTS`; the table is now part of `db/migrations/0001_baseline.sql` ([[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]]).
 - The original side table has no FK on `investment_id` for historical upgrade compatibility. At head, `investments` is always a flat table; an orphaned pref row remains harmless because it never joins. There is **no `investments.show_in_ticker` column**.
 - An absent row means visible (`COALESCE(tp.show_in_ticker, true)`); only explicit opt-outs need storing — no backfill required for existing holdings.
 - **Read path**: `investmentRepository` reads (`getById`, `getAll`, `getAllWithCount`) each `LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id` and select `COALESCE(tp.show_in_ticker, true) AS show_in_ticker`.

@@ -2,7 +2,7 @@
 title: Documentation Templates
 type: index
 status: active
-date: 2026-04-02
+date: 2026-10-19
 tags: [templates, index, documentation, guide]
 description: Templates for creating new documentation in the Vision knowledge base
 aliases: [template, templates, new doc, create doc]
@@ -39,7 +39,7 @@ date: {YYYY-MM-DD}
 tags: [tag1, tag2, tag3]
 description: {Brief description (max 200 chars)}
 aliases: [alias1, alias2]
-related_code: ["path/to/code/file.js"]
+related_code: ["path/to/code/file.ts"]
 ---
 ```
 
@@ -52,7 +52,7 @@ related_code: ["path/to/code/file.js"]
 
 ### Wiki-Links Format
 
-- Code links: `[[apps/node-backend/src/routes/file.js]]`
+- Code links: `[[apps/node-backend/src/routes/file.ts]]`
 - Doc links: `[[docs/api/index|API Index]]`
 - Diagrams: `[[docs/diagrams/diagram.puml]]`
 

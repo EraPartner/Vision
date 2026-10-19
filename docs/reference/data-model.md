@@ -145,14 +145,16 @@ remaining brokerage-origin rows. See [[docs/adr/189-proved-brokerage-cash-histor
 
 **Indexes:** `idx_transactions_date`, `idx_transactions_recipient`, `idx_transactions_category`, `idx_transactions_amount_date` (transfer matching), `idx_transactions_transfer_peer` (partial, peer lookups)
 
-> [!warning] Pending migrations (AUTHORED, NOT YET APPLIED unless noted)
+> [!note] Historical migrations folded into the baseline
 >
-> - **0046**: backfills `currency` NULL → `'EUR'`; adds ISO format CHECK (`^[A-Z]{3}$`) NOT VALID; sets `DEFAULT 'EUR' NOT NULL`. Three INSERT paths now write `'EUR'` instead of NULL (`transactionRepository.create`, `plannedTransactionService.create`, `importPipeline/commit.js`).
-> - **0048**: changes `category_id` FK to `ON DELETE SET NULL` (previously implicit RESTRICT, which surfaced as 500 on category delete).
-> - **0047**: adds partial unique index `uq_recipient_primary_account ON recipient_bank_accounts (recipient_id) WHERE is_primary` (see RecipientBankAccount below).
-> - **0050** (ADR-088): creates the `accounts` table + nullable `account_id` FKs (`ON DELETE RESTRICT`) on transactions/planned_transactions, backfilled one account per distinct `bank_account` string.
-> - **0051** (ADR-088): `BEFORE INSERT/UPDATE` trigger that keeps `account_id` in sync with `bank_account` (dual-write phase).
-> - **0062** (ADR-088 addendum, 2026-06-25, AUTHORED NOT YET APPLIED): hardens `sync_account_id_from_bank_account()` to be **lookup-only on UPDATE** (INSERT still resolves-or-creates; UPDATE only resolves against existing accounts, never creates). Also adds `trg_enforce_split_within_amount` — a `BEFORE UPDATE` trigger on `transactions` that raises `check_violation` when `amount` is reduced below the sum of its splits (`SUM(transaction_splits.amount) > ABS(NEW.amount) + 0.005`). Down-revision: `0061_investments_show_in_ticker`. See `0062_trigger_lookup_only_on_update` and [[docs/adr/088-account-entity|ADR-088 addendum]].
+> These Alembic revisions are applied in `db/migrations/0001_baseline.sql`
+> ([[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]]):
+>
+> - **0046**: `currency` NOT NULL, `DEFAULT 'EUR'`, ISO format CHECK `chk_transactions_currency_iso` (`^[A-Z]{3}$`). INSERT paths write `'EUR'` instead of NULL.
+> - **0048**: `category_id` FK is `ON DELETE SET NULL` (previously implicit RESTRICT, which surfaced as 500 on category delete).
+> - **0047**: partial unique index `uq_recipient_primary_account ON recipient_bank_accounts (recipient_id) WHERE is_primary` (see RecipientBankAccount below).
+> - **0050** (ADR-088): the `accounts` table and `account_id` FKs (`ON DELETE RESTRICT`) on transactions/planned_transactions.
+> - **0051 / 0062** (ADR-088): the `bank_account` → `account_id` dual-write trigger, later made lookup-only on UPDATE; removed again by the manual contract below. 0062 also added `trg_enforce_split_within_amount`, a `BEFORE UPDATE` trigger on `transactions` that raises `check_violation` when `amount` is reduced below the sum of its splits (`SUM(transaction_splits.amount) > ABS(NEW.amount) + 0.005`). See [[docs/adr/088-account-entity|ADR-088 addendum]].
 > - **ADR-088 manual contract** (APPLIED TO THE MAINTAINED LIVE DATABASE 2026-09-08): the former out-of-band `contract_drop_bank_account` operation removed both canonical-table `bank_account` columns and the dual-write trigger under a race-free parity guard. The coupled source accepts the legacy API field only as account-resolution input and persists `account_id`. The `0001` baseline already has the contracted shape; the manual scripts were deleted with the Alembic tree ([[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]]).
 
 **Related:** [[docs/features/transactions|Transactions Feature]], [[docs/api/transactions|Transactions API]]
@@ -307,10 +309,7 @@ is no active UI control or business-rule consumer. Flag enum types: `account_typ
 | `is_primary`     | BOOLEAN     | DEFAULT false   | Primary payment account |
 | `is_active`      | BOOLEAN     | DEFAULT true    | Soft delete             |
 
-**Indexes:** Partial unique index `uq_recipient_primary_account ON recipient_bank_accounts (recipient_id) WHERE is_primary` — enforces at most one primary account per recipient at the DB level (migration 0047, AUTHORED NOT YET APPLIED; previously enforced at application level only).
-
-> [!warning] Pending migration 0047 (AUTHORED, NOT YET APPLIED)
-> Pre-existing duplicate primaries are demoted (lowest `id` wins) before the index is built. Downgrade drops the index but does not restore the prior duplicates.
+**Indexes:** Partial unique index `uq_recipient_primary_account ON recipient_bank_accounts (recipient_id) WHERE is_primary` — enforces at most one primary account per recipient at the DB level (historical migration 0047, part of the `0001` baseline; previously enforced at application level only).
 
 **Related:** [[docs/api/recipientBankAccounts|Recipient Bank Accounts API]]
 
@@ -329,7 +328,7 @@ is no active UI control or business-rule consumer. Flag enum types: `account_typ
 | `amount`                      | NUMERIC(18,4) | NOT NULL                                                             | Planned amount; widened by migration 0088                    |
 | `recipient_id`                | INTEGER       | FK → recipients                                                      | Payee                                                        |
 | `category_id`                 | INTEGER       | FK → categories ON DELETE SET NULL, NULLABLE                         | Category; FK updated to ON DELETE SET NULL by migration 0048 |
-| `currency`                    | VARCHAR(3)    | NOT NULL, DEFAULT 'EUR', CHECK (`currency ~ '^[A-Z]{3}$'`) NOT VALID | Currency code (migration 0046, AUTHORED NOT YET APPLIED)     |
+| `currency`                    | VARCHAR(3)    | NOT NULL, DEFAULT 'EUR', CHECK (`currency ~ '^[A-Z]{3}$'`) NOT VALID | Currency code (historical migration 0046, in the baseline)   |
 | `is_recurring`                | BOOLEAN       | DEFAULT false                                                        | Recurring flag                                               |
 | `recurrence_pattern`          | TEXT          | NULLABLE                                                             | Pattern (daily, weekly, monthly, etc.)                       |
 | `reminder_days_before`        | INTEGER       | NULLABLE                                                             | Days before planned_date to show reminder (Phase 6)          |
@@ -504,12 +503,12 @@ role retains literal income separately from ordinary income and gain; see
 | `symbol`       | VARCHAR(20)   | NOT NULL    | Trading symbol                                                                                                                                                                                                                    |
 | `asset_class`  | asset_class   | NOT NULL    | Asset type                                                                                                                                                                                                                        |
 | `target_price` | NUMERIC(18,6) | NOT NULL    | Target price                                                                                                                                                                                                                      |
-| `added_price`  | NUMERIC(18,6) | NULLABLE    | **New (ADR-097, migration 0058 — authored, not applied).** Live quote snapshotted at add time; used for the "Since added +X%" what-if backtest. `null` when no live quote was available at add time or migration not yet applied. |
+| `added_price`  | NUMERIC(18,6) | NULLABLE    | ADR-097 (historical migration 0058, in the `0001` baseline). Live quote snapshotted at add time; used for the "Since added +X%" what-if backtest. `null` when no live quote was available at add time. |
 | `currency`     | VARCHAR(10)   | NULLABLE    | Currency                                                                                                                                                                                                                          |
 
-> [!info] Migration 0058 required
-> `added_price` is added by migration `0058_watchlist_added_price` (authored, not applied). Existing
-> rows will have `added_price = null` until set manually via `PATCH /api/watchlist/:id`.
+> [!info] Rows created before 0058
+> `added_price` was added by historical migration `0058_watchlist_added_price`, now part of the
+> `0001` baseline. Rows created before it have `added_price = null`.
 
 **Related:** [[docs/features/watchlist|Watchlist Feature]], [[docs/api/watchlist|API]], [[docs/adr/097-portfolio-research-analytics|ADR-097]]
 

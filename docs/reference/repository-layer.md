@@ -25,7 +25,7 @@ The repository layer is the lowest layer in Vision's [[docs/adr/006-three-layer-
 Service Layer (business logic)
         │
         ▼
-   Repository Layer ←── connection.js (PostgreSQL pool)
+   Repository Layer ←── db.ts (Kysely builder) → connection.ts query() (PostgreSQL pool)
         │
         ▼
    PostgreSQL Database
@@ -34,7 +34,9 @@ Service Layer (business logic)
 **Design principles:**
 
 - Repositories are function modules — no classes
-- All SQL uses parameterized queries via `connection.js` or prepared statements (Phase 0+)
+- Queries are built with Kysely's `db` (`database/db.ts`) over the generated `DB` types, or with
+  Kysely's `sql` tag for analytical SQL; every value is bound as a parameter and executes through
+  `query()` in `connection.ts` ([[docs/adr/226-kysely-query-builder|ADR-226]])
 - Repositories return plain JavaScript objects, not domain models
 - Error handling is delegated to the calling service/route
 - Almost every repository read whose rows are used is checked against a zod row schema through
@@ -50,7 +52,7 @@ Service Layer (business logic)
   [[docs/reference/database-query-patterns#Row contracts (ADR-193)|Row contracts]] and
   [[docs/adr/193-zod-runtime-contracts|ADR-193]].
 
-**Phase 0+ Note:** Hot-path queries now use `queryPrepared()` for plan caching. This includes frequent repository methods like `getById`, `create`, `hardDelete` in `transactionRepository`, and equivalents in `infoRepository`. The prepared-statement name is the function name + operation, e.g., `'tx_get_by_id'` for `transactionRepository.getById`. See `apps/node-backend/src/database/connection.ts` for the implementation and `docs/reference/query-patterns.md` for usage guidelines.
+**Phase 0+ Note:** A few hot-path queries compile their Kysely query and run it through `queryPrepared()` for plan caching, for example `transactionRepository.getById` (statement name `'tx_get_by_id'`) and the statistics queries in `infoRepositoryStatistics.ts`. See `apps/node-backend/src/database/connection.ts` for the implementation and [[docs/reference/database-query-patterns|Database Query Patterns]] for usage guidelines.
 
 **Phase 9+ Note — Decimal Enforcement (Mandatory):** All repositories returning monetary values must coerce NUMERIC/DECIMAL columns on emit to eliminate IEEE 754 floating-point drift (node-postgres returns NUMERIC as JS strings; no global type parser is set deliberately to avoid loss in the decimal.js pipeline). Two helpers in `packages/shared-utils/src/money.ts` (re-exported via `apps/node-backend/src/lib/money.ts`) cover the boundary:
 
@@ -498,7 +500,7 @@ The main `infoRepository.js` file:
 ## Repository Dependency Map
 
 ```
-connection.js (PostgreSQL pool)
+database/db.ts (Kysely builder) ──→ connection.ts query() (PostgreSQL pool)
     │
     ├── transactionRepository
     ├── recipientRepository ──→ textNormalization
@@ -555,6 +557,9 @@ const rows = await getAll({ ...filters, limit, offset });
 // Pattern B: Window function (single query)
 const { rows, total } = await getAllWithCount({ filters, limit, offset });
 ```
+
+The SQL below is what the Kysely builder emits; repositories write it with `db.insertInto(...)`,
+`db.updateTable(...)` and so on rather than as query strings.
 
 ### Optimistic Upsert Pattern
 
