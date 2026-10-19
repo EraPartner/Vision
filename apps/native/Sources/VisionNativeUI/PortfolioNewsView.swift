@@ -76,6 +76,7 @@ struct PortfolioNewsView: View {
     private func relative(_ milliseconds: Decimal) -> String {
         let locale = LanguageLocale.locale(shell.strings.language)
         let formatter = FormatterCache.shared("relative.abbreviated|\(locale.identifier)") {
+            () -> RelativeDateTimeFormatter in
             let made = RelativeDateTimeFormatter()
             made.locale = locale
             made.unitsStyle = .abbreviated

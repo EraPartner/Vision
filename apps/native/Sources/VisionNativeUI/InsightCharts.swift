@@ -271,6 +271,7 @@ struct InsightTimelineChart: View {
         else { return key }
         // Built once per locale: axis ticks format on every layout pass.
         let formatter = FormatterCache.shared("insight.period|\(locale.identifier)") {
+            () -> DateFormatter in
             let made = DateFormatter()
             made.locale = locale
             made.dateFormat = "MMM yyyy"

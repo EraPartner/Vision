@@ -142,6 +142,7 @@ struct ResearchMarketChartView: View {
         let locale = shell.settings.numberFormat.locale
         let template = range == "1d" ? "jm" : ["1y", "5y", "max"].contains(range) ? "MMMyy" : "dMMM"
         let formatter = FormatterCache.shared("researchMarket.tick|\(locale.identifier)|\(template)") {
+            () -> DateFormatter in
             let made = DateFormatter()
             made.locale = locale
             made.setLocalizedDateFormatFromTemplate(template)
