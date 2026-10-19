@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { taxKeys } from "@/lib/queryKeys";
 import { computeBelgianTax } from "@/lib/api/belgianTax";
 import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
+import { useBackgroundQueryCue } from "@/components/shared/BackgroundQueryIndicator";
 import { resolveBelgianTaxHousehold } from "@/stores/belgianTaxStore";
 import { EMPTY_BELGIAN_TAX_CALCULATION } from "@/lib/belgianTax/emptyCalculation";
 import type { BelgianTaxCalculation } from "@/lib/belgianTax/types";
@@ -49,11 +50,13 @@ const yearOfKey = (queryKey: readonly unknown[] | undefined) =>
  * the previous figures of the same tax year stay on screen. The household the overview
  * hydrated reuses the figures it came with.
  */
-export function useHouseholdComputation(household: BelgianTaxHouseholdV2 | null) {
+export function useHouseholdComputation(
+    household: BelgianTaxHouseholdV2 | null,
+) {
     const settled = useSettledHousehold(household, TAX_COMPUTE_DEBOUNCE_MS);
     const seed = useBelgianTaxProfile((state) => state.hydratedComputation);
     const year = settled?.taxYear;
-    return useQuery({
+    const query = useQuery({
         queryKey: taxKeys.compute(settled),
         queryFn: ({ signal }) =>
             computeBelgianTax(settled as BelgianTaxHouseholdV2, signal),
@@ -67,6 +70,8 @@ export function useHouseholdComputation(household: BelgianTaxHouseholdV2 | null)
         placeholderData: (previous, previousQuery) =>
             yearOfKey(previousQuery?.queryKey) === year ? previous : undefined,
     });
+    useBackgroundQueryCue(query.isFetching && query.isPlaceholderData);
+    return query;
 }
 
 export interface TaxYearFiguresView {
