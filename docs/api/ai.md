@@ -2,8 +2,8 @@
 title: AI Chat API
 type: api
 status: active
-date: 2026-10-13
-updated: 2026-10-13
+date: 2026-10-19
+updated: 2026-10-19
 tags: [api, ai, chat, ollama, sse, streaming, llm, phase-1, idle-timeout, tool-call-accumulation]
 description: Local AI chat endpoints — Ollama status, model discovery, conversation CRUD, chat turn (JSON + SSE) with tools opt-out toggle and 30 tool-calling tools. All responses use camelCase field names. June 2026: streaming uses per-chunk idle timeout (OLLAMA_STREAM_IDLE_TIMEOUT_MS) instead of a fixed total budget; tool calls accumulated across all NDJSON chunks and deduped.
 aliases: [ai api, chat api, ollama api, ai endpoints]
@@ -41,15 +41,13 @@ their precedence; nested array rows and ignored `xField`/`yField` metadata retai
 For pie charts, `pieRenderable` and `pieRows` carry the original Recharts default composition:
 name, value, fractional `percent`, percentage-valued `labelPercent`, and start/end angles. Missing
 or nonnumeric values become zero; negative values remain signed. A nonpositive source sum produces
-no sectors. Labels use the source JavaScript string conversion. These fields let native clients
+no sectors. Labels use the source JavaScript string conversion. These fields let clients
 render without recomputing financial proportions or losing JSON member order.
 
 Inference runs against the JSON wire representation, so dates, omitted values and nonfinite
 numbers have the same forms the web client receives. The server does not rewrite stored results,
 change the provider prompt, make another tool/provider request, or add presentation keys to the
-raw result. Native tool rendering and Investigation controls are described in
-[[docs/reference/native-parity/research-and-ai-chat|the parity inventory]]; macOS/Demo visual review
-remains a separate pending gate.
+raw result.
 
 ## GET /api/ai/status
 

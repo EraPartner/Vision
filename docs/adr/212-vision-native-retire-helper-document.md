@@ -1,8 +1,8 @@
 ---
 title: "ADR-212: Retire the helper document"
 type: adr
-status: accepted
-date: 2026-10-18
+status: superseded
+date: 2026-10-19
 tags: [adr, architecture, swift, native-app, phase-4, demo, webkit, typescript]
 description: "Accepted on 2026-10-18 by Tor. With native-only the passing Debug Demo default, the ADR-210 helper document is removed from the app, frontend build and backend; the retained web document stays as the explicit opt-out and for every ineligible build. Native-only stays limited to the Debug Demo."
 aliases: [adr-212, retire helper document]
@@ -11,6 +11,9 @@ aliases: [adr-212, retire helper document]
 # ADR-212: Retire the helper document
 
 ## Status
+
+> [!note] Superseded on 2026-10-19 by
+> [[docs/adr/214-retire-vision-native-swift-port|ADR-214]]: the Swift port is retired together with its native-only mode.
 
 Accepted on 2026-10-18 by Tor. It supersedes [[docs/adr/210-vision-native-helper-document|ADR-210]]'s
 helper document and completes the "owner removes them" step in
@@ -60,4 +63,4 @@ route namespace, a WebKit bridge and its session authority.
 - [[docs/adr/205-vision-native-hand-over|ADR-205: Vision Native hand-over]]
 - [[docs/adr/210-vision-native-helper-document|ADR-210: Helper document]]
 - [[docs/adr/211-vision-native-without-web-content|ADR-211: Finish phase 4 without web content]]
-- [[docs/reference/native-parity/agent-handoff|Vision Native agent handoff]]
+- Vision Native agent handoff (page removed by ADR-214)

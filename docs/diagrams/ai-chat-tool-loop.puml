@@ -7,7 +7,7 @@ skinparam participantPadding 15
 skinparam sequenceMessageAlign center
 
 actor User
-participant "Chat client\nReact background store / native AIChatStreamStore" as Frontend
+participant "Chat client\nReact background store" as Frontend
 participant "routes/ai.ts" as Route
 participant "aiChatService" as Chat
 participant "Ollama client\nintegrations/ollama/client.ts" as Client
@@ -85,14 +85,12 @@ end note
 note over Chat, Presentation
   JSON turns and historical message reads use the same outgoing enrichment.
   Stored results and provider prompts stay unchanged.
-  Native only draws / formats returned data; macOS Demo review remains pending.
 end note
 
 legend bottom
   Sources: apps/frontend/src/lib/aiChatStreamStore.ts; apps/frontend/src/lib/api/ai.ts;
   apps/node-backend/src/routes/ai.ts; apps/node-backend/src/services/aiChatService.ts;
-  packages/shared-utils/src/ai-chat/toolPresentation.ts;
-  apps/native/Sources/VisionNativeCore/Screens/AIChat/AIChatStreamStore.swift.
+  packages/shared-utils/src/ai-chat/toolPresentation.ts.
 endlegend
 
 @enduml

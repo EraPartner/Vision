@@ -2,8 +2,8 @@
 title: Statistics Feature
 type: feature
 status: active
-date: 2026-10-08
-updated: 2026-10-13
+date: 2026-10-19
+updated: 2026-10-19
 last_modified: 2026-09-27
 tags:
   [
@@ -537,13 +537,6 @@ portfolio, or tax reports. It selects a period, sections, and currency, posts to
 `vision-<type>-<YYYY-MM-DD>.pdf`. The backend renders the PDF with headless Chrome; the tax request
 still serializes the TypeScript frontend's computed tax result. See
 [[docs/features/pdf-report-export|PDF Report Export]] for the complete report contract.
-
-Vision Native's six Insights tabs are implemented in SwiftUI. Its PDF action temporarily opens
-this same report dialog through `?export=pdf`; closing removes that parameter and restores the
-native tab/window. Native report serialization awaits the tax-engine backend operation required
-by [[docs/adr/204-vision-native-swift-app-target|ADR-204]]. The macOS build and Demo visual review
-remain pending; see [[docs/architecture/native-app|Vision Native architecture]] and
-[[docs/reference/native-parity/home-and-statistics|the native parity inventory]].
 
 ### Browser print layout
 

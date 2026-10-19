@@ -4,8 +4,8 @@ type: endpoint
 method: POST, GET, PATCH, DELETE
 path: /api/portfolio/import
 description: Portfolio CSV/Saxo XLSX/native IBKR funding XLS or XLSX staging, reviewed reconciliation, immutable receipts, and dated custody/unit adjustments with original basis
-date: 2026-10-11
-updated: 2026-10-13
+date: 2026-10-19
+updated: 2026-10-19
 last_modified: 2026-10-13
 tags:
   [
@@ -104,7 +104,7 @@ All routes are mounted at `/api/portfolio/import` with `importRateLimiter`.
 
 ### POST /api/portfolio/import/probe
 
-The native Import screen sends a read-only multipart probe before staging. `file` is required;
+`POST /api/portfolio/import/probe` is a read-only multipart probe a client can send before staging. `file` is required;
 `separator` can be comma, semicolon, tab or pipe (omit to sniff), `encoding` defaults to `utf-8`
 and also accepts `latin1` or `windows-1252` (case-insensitive, with `utf8`, `latin-1` and
 `iso-8859-1` aliases), and `skipRows` is a decimal string defaulting to `0`.
@@ -122,8 +122,8 @@ empty header set. Distinct type mapping values come from these preview rows, as 
 
 Maintained record and funding-workbook predicates and CSV preview decoding now live in
 `@vision/shared-utils`; the web frontend keeps compatibility entry points. Detection uses the
-complete file so another source account cannot be hidden beyond the preview prefix. This is an
-additive API prerequisite for ADR-204 phase 3j; existing upload behavior is unchanged.
+complete file so another source account cannot be hidden beyond the preview prefix. This is
+additive; existing upload behavior is unchanged.
 
 ### POST /api/portfolio/import/csv/custom
 
@@ -1159,7 +1159,7 @@ and nonbreaking for supported readers. Role setters remain read-only. Omitting t
 or selecting `full` preserves the full-scope response and writer. These endpoints and policy fields
 are additive. Maintained single-batch commit now adopts exact
 history and rejects incomplete/unsafe or runtime-failed scopes atomically, which tightens earlier
-partial behavior. API support does not prove real-source completeness or native-app acceptance.
+partial behavior. API support does not prove real-source completeness.
 
 ---
 

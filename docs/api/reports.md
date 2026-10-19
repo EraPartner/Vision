@@ -2,8 +2,8 @@
 title: Reports API
 type: endpoint
 status: active
-date: 2026-10-13
-updated: 2026-10-13
+date: 2026-10-19
+updated: 2026-10-19
 tags:
   - api
   - reports
@@ -47,7 +47,7 @@ Server-side PDF generation via **Puppeteer headless Chrome** (Phase 3 redesign).
 
 The OpenAPI contract now describes the existing binary response and shared validated request for all
 three routes. This corrects stale JSON-envelope responses and top-level `start_date`, `end_date`,
-and `year` fields in the specification; it changes no route or backend behavior. Native callers
+and `year` fields in the specification; it changes no route or backend behavior. Callers
 must use a binary download transport rather than the envelope-decoding API client. The endpoint
 count remains 309 HTTP operations (336 including health and Electron IPC).
 This is a breaking correction for clients generated from the old specification: success is binary
@@ -64,16 +64,6 @@ request and download PDF bytes retain the same behavior.
 - **Full i18n support** (Phase 6): 32 translation keys for dialog UI, period labels, section toggles, and actions (en/nl)
 - **Source failures**: Any requested source failure aborts export; successful empty results remain distinct from unavailable data (see [[#Performance]])
 - **Three report types**: Financial (complete), Portfolio (Phase 8 — 6 sections), Tax (Phase 8 — 7 sections + Belgian tax pass-through)
-
-## Native client ownership
-
-The phase-3p native sheet uses these existing binary operations through a dedicated 900-second
-single-attempt client sharing the restore-fenced data session. Tax submission preserves raw Decimal
-and frozen-result values. Its fixed retained TypeScript projection/context callbacks reuse the source
-fiscal engine; the extreme-year callback receives only a fresh five-key fiscal settings snapshot.
-No HTTP operation is added. See [[docs/architecture/native-app#Shell overlays and reports (phase 3p)|native architecture]]
-and [[docs/features/pdf-report-export|export behavior]].
-
 
 ## Phase Updates
 

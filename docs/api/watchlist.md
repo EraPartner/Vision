@@ -4,8 +4,8 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/watchlist
 description: Investment watchlist management
-date: 2026-10-13
-updated: 2026-10-13
+date: 2026-10-19
+updated: 2026-10-19
 tags:
   [
     api,
@@ -150,10 +150,10 @@ Remove item from watchlist.
 
 Related docs: [[docs/testing/testing|Testing Documentation]], [[docs/testing/test-inventory|Test Inventory]].
 
-## Native submitted-data presentation
+## Submitted-data presentation
 
 The named OpenAPI list schema records the existing `{items,total,limit,offset}` response and
-`asset_class`/`limit`/`offset` parameters, including the 5000 limit ceiling. Native list readers can
+`asset_class`/`limit`/`offset` parameters, including the 5000 limit ceiling. List readers can
 submit all quoted page rows in one `watchlistBatch` request to
 [[docs/api/research#POST /api/research/presentation|Research presentation]]; it computes existing
 target/since-added metrics without fetching quotes or merging them into persisted watchlist rows.

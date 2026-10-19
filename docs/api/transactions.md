@@ -4,8 +4,8 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/transactions
 description: CRUD operations for financial transactions, including CSV and NDJSON export, bulk operations
-date: 2026-10-11
-updated: 2026-10-13
+date: 2026-10-19
+updated: 2026-10-19
 last_modified: 2026-10-13
 tags: [api, transactions, finance, phase-5a, phase-9, phase-13, phase-q, decimal, money, export, drillthrough, filters, recipient-groups, bulk-actions, amount-filter, date-search, tag-search]
 status: active
@@ -182,8 +182,8 @@ Implementation note:
 - Route-owned CSV/JSON request parsing (`buildExportFilters`) returns a validated domain filter model. `transactionExport.js` converts that model with the shared `buildTransactionWhere` and owns SQL construction and streaming. Both export endpoints therefore accept the same filter set as `GET /api/transactions` without putting database access in the route (Phase 13) ([[apps/node-backend/src/routes/transactions.ts]], [[apps/node-backend/src/services/transactionExport.ts]]).
 - Export filters include newly supported params: `transaction_id`, `recipient_id`, `recipient_name`, `search`, `transaction_type` (Phase 13). Existing params (`start_date`, `end_date`, `bank_account`, `bank_accounts`, `category_id`, `category_ids`) continue to work as before.
 - CSV/JSON export request parsing supports both singular (`bank_account`, `category_id`) and plural (`bank_accounts`, `category_ids`) parameters. Plural parameters take precedence when both are provided (Phase 13) ([[apps/node-backend/src/routes/transactions.ts]]).
-- `openapi.yaml` declares `bank_accounts` and `category_ids` on both export operations since 2026-10-13 (a non-breaking spec catch-up: the routes always read them, and the Export card of the web and Vision Native sends them).
-- Since 2026-10-13 `openapi.yaml` also declares `transaction_id`, `recipient_id`, `category_id`, `search`, `transaction_type`, `amount_min`, `amount_max` and `amount_signed` on both export operations, and `is_active` on the `Transaction` schema (non-breaking spec catch-ups: the routes already accept and return them, and the Transactions filter banner of the web and Vision Native sends them).
+- `openapi.yaml` declares `bank_accounts` and `category_ids` on both export operations since 2026-10-13 (a non-breaking spec catch-up: the routes always read them, and the web Export card sends them).
+- Since 2026-10-13 `openapi.yaml` also declares `transaction_id`, `recipient_id`, `category_id`, `search`, `transaction_type`, `amount_min`, `amount_max` and `amount_signed` on both export operations, and `is_active` on the `Transaction` schema (non-breaking spec catch-ups: the routes already accept and return them, and the web Transactions filter banner sends them).
 - Shared SQL and streaming helpers in `transactionExport.js` ensure existence probes and chunk queries use the same recipient/category joins, preventing `recipient_name` and `search` filters from drifting ([[apps/node-backend/src/services/transactionExport.ts]]).
 - CSV escaping, row assembly, filename creation, and database streaming are owned by `transactionExport.js`; the route validates the request and passes the response stream to that service ([[apps/node-backend/src/services/transactionExport.ts]]).
 - CSV export neutralizes formula-like cell prefixes (`=`, `+`, `-`, `@`) before writing values to reduce spreadsheet formula-injection risk when opening exports in Excel/Sheets ([[apps/node-backend/src/services/transactionExport.ts]]).
