@@ -3,7 +3,7 @@ title: Test Inventory
 type: testing
 status: active
 date: 2026-10-19
-last_modified: 2026-10-11
+last_modified: 2026-10-19
 updated: 2026-10-19
 last-updated: 2026-10-08
 last_updated_timestamp: 2026-10-06T00:00:00Z
@@ -169,7 +169,7 @@ Expanded to cover additional boot-time endpoints so more pages render without pe
 | `/api/planned-transactions`                               | Paginated list envelope                       | **Phase A** |
 | `/api/investments`                                        | Paginated list envelope                       | **Phase A** |
 | `/api/aggregations/:name`                                 | Null envelope                                 | **Phase A** |
-| `/api/info/exchange-rates`                                | { rates, fallback_rates, base, date }         | **Phase A** |
+| `/api/info/exchange-rates`                                | { total_rates, rates, source, is_stale }      | **Phase A** |
 | `/api/market/news`                                        | { articles: [] }                              | **Phase A** |
 | `/api/import/batches`                                     | { items: [], total: 0, limit, offset }        | **Phase A** |
 | `/api/admin/endpoint-liveness`                            | { items: [], total: 0 }                       | Phase 0     |
@@ -424,7 +424,7 @@ Complete resolution of all 34 integration test files (231 tests passing). Fixes 
   - PlannedTransactionItemSchema: 25+ fields including loan/recurrence config
 - Planned: array of objects
 - Aggregations: nullable blob
-- Exchange-Rates: `{ rates[{currency, rate_to_eur, rate_date, fetched_at}], fallback_rates, base, date }`
+- Exchange-Rates: `{ total_rates, rates[{currency, rate_to_eur, rate_date, fetched_at}], source, is_stale, last_fetched_at }`
 - Market News: `{ articles[{title, link, publisher, publishedAt, thumbnail, relatedSymbols}] }`
 - Import Batches: `{ batches[], total }`
 - Portfolio Summary: `{ currency, computed_at, totals{10 fields}, summaries[] }`
@@ -1104,7 +1104,7 @@ Related docs: [[docs/adr/026-unified-api-response-envelope|ADR-026]], [[docs/tes
 | [[apps/node-backend/tests/plannedTransactionRepository.test.ts]] | Planned transaction repository | `getAll` empty-page fallback count query and guard against unnecessary execution/loan-schedule follow-up queries                         |
 
 > [!note] Schema initialization test archived
-> `schemaInit.test.js` was deleted in Phase 1 (2026-04-21) when `schemaInit.js` was replaced with Alembic migrations ([[docs/adr/027-alembic-single-source-of-schema|ADR-027]]).
+> `schemaInit.test.js` was deleted in Phase 1 (2026-04-21) when `schemaInit.js` was replaced with Alembic migrations ([[docs/adr/027-alembic-single-source-of-schema|ADR-027]]); since [[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]] the schema comes from `db/migrations/` through the Kysely migrator.
 
 Validation runs (passed): `bun vitest run tests/categoryRepository.test.ts tests/plannedTransactionRepository.test.ts`; `npm test -- --coverage`
 

@@ -45,7 +45,7 @@ import {
     parseISO,
 } from "@/lib/dateUtils";
 import { accountLabel } from "@/features/accounts/groupAccounts";
-import { addAll, toNumber } from "@vision/shared-utils/money";
+import type { PortfolioSummaryAccountTotals } from "@/lib/api/info";
 import {
     getAssetClassGroups,
     getAssetClassLabel,
@@ -463,11 +463,9 @@ export default function PortfolioPage() {
     const brokerFilterOptions = useMemo(() => {
         const accountIds = new Set<number>();
         let hasUnassigned = false;
-        for (const summary of portfolioSummary?.summaries ?? []) {
-            for (const row of summary.byAccount ?? []) {
-                if (row.account_id == null) hasUnassigned = true;
-                else accountIds.add(row.account_id);
-            }
+        for (const row of portfolioSummary?.accountTotals ?? []) {
+            if (row.account_id == null) hasUnassigned = true;
+            else accountIds.add(row.account_id);
         }
         const accounts = new Map(
             (accountsData?.items ?? []).map((account) => [account.id, account]),
@@ -488,39 +486,27 @@ export default function PortfolioPage() {
                 ),
             hasUnassigned,
         };
-    }, [accountsData?.items, portfolioSummary?.summaries]);
+    }, [accountsData?.items, portfolioSummary?.accountTotals]);
 
+    // Broker-filter figures are server totals per account (ADR-216); the page
+    // only picks the selected account's rows and derives the return percent.
+    const selectedAccountId =
+        brokerFilter === "all"
+            ? undefined
+            : brokerFilter === "unassigned"
+              ? null
+              : Number(brokerFilter);
     const filteredBrokerMetrics = useMemo(() => {
-        if (brokerFilter === "all") return undefined;
-        const accountId =
-            brokerFilter === "unassigned" ? null : Number(brokerFilter);
-        const byInvestment = new Map<
-            number,
-            {
-                currentValue: number;
-                totalInvested: number;
-                gainLoss: number;
-                oversold: boolean;
-            }
-        >();
+        if (selectedAccountId === undefined) return undefined;
+        const byInvestment = new Map<number, PortfolioSummaryAccountTotals>();
         for (const summary of portfolioSummary?.summaries ?? []) {
-            const rows = (summary.byAccount ?? []).filter(
-                (row) => row.account_id === accountId,
+            const row = summary.accountTotals?.find(
+                (entry) => entry.account_id === selectedAccountId,
             );
-            if (rows.length === 0) continue;
-            byInvestment.set(summary.id, {
-                currentValue: toNumber(
-                    addAll(rows.map((row) => row.currentValue)),
-                ),
-                totalInvested: toNumber(
-                    addAll(rows.map((row) => row.totalInvested)),
-                ),
-                gainLoss: toNumber(addAll(rows.map((row) => row.gainLoss))),
-                oversold: rows.some((row) => row.oversold === true),
-            });
+            if (row) byInvestment.set(summary.id, row);
         }
         return byInvestment;
-    }, [brokerFilter, portfolioSummary?.summaries]);
+    }, [selectedAccountId, portfolioSummary?.summaries]);
 
     const serverSummariesById = useMemo(
         () =>
@@ -566,15 +552,22 @@ export default function PortfolioPage() {
     }, [summaries, filteredBrokerMetrics, serverSummariesById, sortBy]);
 
     const brokerSubtotal = useMemo(() => {
-        if (!filteredBrokerMetrics) {
+        if (selectedAccountId === undefined) {
             return { currentValue: totalValue, gainLoss: totalGainLoss };
         }
-        const rows = [...filteredBrokerMetrics.values()];
+        const row = portfolioSummary?.accountTotals?.find(
+            (entry) => entry.account_id === selectedAccountId,
+        );
         return {
-            currentValue: toNumber(addAll(rows.map((row) => row.currentValue))),
-            gainLoss: toNumber(addAll(rows.map((row) => row.gainLoss))),
+            currentValue: row?.currentValue ?? 0,
+            gainLoss: row?.gainLoss ?? 0,
         };
-    }, [filteredBrokerMetrics, totalValue, totalGainLoss]);
+    }, [
+        selectedAccountId,
+        portfolioSummary?.accountTotals,
+        totalValue,
+        totalGainLoss,
+    ]);
 
     const detailInvestment = summaries.find((inv) => inv.id === detailId);
     const txnInvestment = summaries.find((inv) => inv.id === txnId);

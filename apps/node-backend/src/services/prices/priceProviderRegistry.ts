@@ -15,7 +15,10 @@ import {
 } from '../../config/kinesisConfig.ts';
 import { toNumber, isValidPrice } from './priceCache.ts';
 import { madReturnStats, isRobustNeedle } from '../../lib/math.ts';
-import { convertToCurrency } from '../currency/currencyConversionService.ts';
+import {
+    convertAtLatestRates,
+    loadLatestRatesToEur,
+} from '../currency/latestRateConversion.ts';
 import { assertPublicHttpUrl } from '../../lib/urlSafety.ts';
 import { getYahooClient } from './yahooClient.ts';
 import { forEachConcurrent } from '../../lib/concurrency.ts';
@@ -666,11 +669,25 @@ export const PROVIDERS = {
         if (isValidPrice(usdPrice)) {
           // Kinesis only quotes USD. When a EUR symbol was remapped to its USD
           // variant, convert the latest price to the investment's currency at
-          // the current rate before it becomes this asset's current price.
+          // the latest stored rate before it becomes this asset's current
+          // price. Without a stored rate the quote is skipped, never stored
+          // 1:1 or at a built-in rate.
           const invCurrency = (inv.currency || 'EUR').toUpperCase();
           let price = usdPrice;
           if (needsUsdToEur && invCurrency !== 'USD') {
-            price = await convertToCurrency(usdPrice, 'USD', invCurrency);
+            const converted = convertAtLatestRates(
+              usdPrice,
+              'USD',
+              invCurrency,
+              await loadLatestRatesToEur(),
+            );
+            if (converted === undefined) {
+              logger.warn(
+                `Kinesis: no stored USD/${invCurrency} rate, skipping ${symbol}`,
+              );
+              return;
+            }
+            price = converted.toNumber();
           }
           if (isValidPrice(price)) {
             prices[inv.id] = { price, currency: invCurrency, source: 'live' };

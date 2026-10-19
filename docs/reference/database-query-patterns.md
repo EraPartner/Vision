@@ -2,8 +2,8 @@
 title: Database Query Patterns & Optimization
 type: reference
 status: active
-date: 2026-10-10
-updated: 2026-10-08
+date: 2026-10-19
+updated: 2026-10-19
 tags:
   [
     database,
@@ -23,7 +23,7 @@ related_code:
   [
     "apps/node-backend/src/repositories/",
     "apps/node-backend/src/database/",
-    "alembic/versions/",
+    "db/migrations/0001_baseline.sql",
   ]
 ---
 
@@ -48,9 +48,9 @@ related_code:
                ▼
 ┌─────────────────────────────────────────────┐
 │         Schema Initialization                │
-│  alembic/versions/0001_initial_database...  │
+│  db/migrations/0001_baseline.sql + NNNN_*    │
 │  - Indexes, triggers, DDL via migrations     │
-│  - Idempotent (safe to run multiple times)   │
+│  - Kysely migrator, applied once per file    │
 └─────────────────────────────────────────────┘
 ```
 
@@ -344,12 +344,12 @@ CREATE INDEX idx_recipients_normalized ON recipients(LOWER(normalized_name))
 
 ### Example: Adding a Column
 
-```python
-def upgrade():
-    op.add_column('transactions', sa.Column('memo', sa.Text(), nullable=True))
+```sql
+-- db/migrations/NNNN_add_transactions_memo.sql
+ALTER TABLE "transactions" ADD COLUMN "memo" text;
 
-def downgrade():
-    op.drop_column('transactions', 'memo')
+-- db/migrations/NNNN_add_transactions_memo.down.sql
+ALTER TABLE "transactions" DROP COLUMN "memo";
 ```
 
 ---

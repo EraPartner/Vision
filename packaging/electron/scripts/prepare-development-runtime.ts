@@ -5,7 +5,6 @@ import { spawnSync } from "node:child_process";
 import type { SpawnSyncOptions } from "node:child_process";
 
 import { appRoot } from "../paths";
-import { prepareAlembicRuntime } from "./prepare-alembic-runtime";
 import {
   CHROMIUM_VERSION,
   findSourceExecutable,
@@ -68,17 +67,12 @@ export function run(): void {
     sourceBin: process.env.VISION_POSTGRES_SOURCE_BIN,
     destination: path.join(outputRoot, "postgres"),
   });
-  const alembic = prepareAlembicRuntime({
-    python: process.env.VISION_PYTHON_BIN,
-    prebuilt: process.env.VISION_ALEMBIC_RUNTIME_BIN,
-    destination: path.join(outputRoot, "vision-alembic"),
-  });
   const chromium = prepareChromiumRuntime({
     source: ensureChromiumSource(),
     destination: path.join(outputRoot, "chromium"),
   });
   console.log(
-    `Prepared native development services: PostgreSQL ${postgres.postgresVersion}, ${alembic.version}, Chrome Headless Shell ${chromium.browserVersion}`,
+    `Prepared native development services: PostgreSQL ${postgres.postgresVersion}, Chrome Headless Shell ${chromium.browserVersion}`,
   );
 }
 

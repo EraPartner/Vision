@@ -53,6 +53,7 @@ describe("Archived ordinary presentation parity", () => {
       transactions,
       canonical,
       new Map([["USD", 0.8]]),
+      new Set<string>(),
       "weighted_avg",
       "2026-06-01",
     );
@@ -79,6 +80,7 @@ describe("Archived ordinary presentation parity", () => {
       [tx({ amount: 100.01, units: 1 })],
       canonical,
       new Map([["USD", 0.8]]),
+      new Set<string>(),
       "weighted_avg",
       "2026-06-01",
     );
@@ -95,6 +97,7 @@ describe("Archived ordinary presentation parity", () => {
       txns,
       canonical,
       new Map([["USD", 1]]),
+      new Set<string>(),
       "weighted_avg",
       "2026-06-01",
     );

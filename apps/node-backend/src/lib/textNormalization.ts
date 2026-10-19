@@ -87,7 +87,6 @@ export function normalizeToUppercase(name: unknown): string | null | undefined {
 
 /**
  * Normalize a name for uniqueness matching by sorting all non-initial tokens.
- * Mirrors Python's normalize_name_for_matching() exactly.
  *
  * This creates a canonical form that:
  * - Filters out single-letter alphabetic tokens (initials like "F", "J")

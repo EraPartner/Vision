@@ -26,7 +26,6 @@
         "scripts/**/*.{ts,mjs,js}"
       ],
       "ignoreDependencies": [
-        "@types/pg",
         "prettier"
       ],
       "commitlint": {
@@ -52,7 +51,8 @@
     "apps/node-backend": {
       "entry": [
         "scripts/*.ts",
-        "src/integrations/openai/egress-helper.mjs"
+        "src/integrations/openai/egress-helper.mjs",
+        "src/database/schema.generated.ts"
       ],
       "project": [
         "src/**/*.{ts,mjs}",
@@ -60,7 +60,8 @@
         "tests/**/*.ts"
       ],
       "ignoreDependencies": [
-        "yauzl"
+        "yauzl",
+        "kysely-codegen"
       ]
     },
     "packaging/electron": {

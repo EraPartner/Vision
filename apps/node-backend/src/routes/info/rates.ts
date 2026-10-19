@@ -11,7 +11,6 @@ import { z } from "zod";
 import { logger } from "../../config/logger.ts";
 import { rateLimiter, adminRateLimiter } from "../../middleware/rateLimiter.ts";
 import {
-  FALLBACK_RATES,
   warmCache,
   clearMemoryCache,
   listLatestStoredRates,
@@ -28,7 +27,7 @@ import { booleanQueryFlag } from "../_inputBridges.ts";
 
 // The pg row shape for `exchange_rates` as SELECTed above — NUMERIC columns
 // arrive as strings (see toDecimal/toNumber below), DATE as a Date at local
-// midnight (verified against alembic/versions' exchange_rates definition).
+// midnight (verified against the exchange_rates definition in db/migrations).
 interface ExchangeRateRow {
   currency_code: string;
   rate_to_eur: string;
@@ -82,6 +81,7 @@ router.get(
       const ts = row.fetched_at != null ? new Date(row.fetched_at).getTime() : NaN;
       return Number.isFinite(ts) && ts > latest ? ts : latest;
     }, 0);
+    // "fallback" means nothing is stored: only EUR amounts can be converted.
     const source = rates.length > 0 ? "database" : "fallback";
 
     if (isStale && !dbOnly) {
@@ -96,7 +96,6 @@ router.get(
     res.ok({
       total_rates: rates.length,
       rates,
-      fallback_rates: FALLBACK_RATES,
       source,
       is_stale: isStale,
       last_fetched_at:

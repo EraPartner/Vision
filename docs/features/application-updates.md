@@ -82,15 +82,19 @@ installation, progress, and restart events. It does not expose an image-pull ope
 
 ## Release pipeline
 
-`.github/workflows/release.yml` verifies code and generated artifacts, runs native runtime checks,
-builds the macOS app and disk image, computes checksums, attests the artifacts, generates the
+`.github/workflows/release.yml` checks the tag and manifest versions, requires a passing
+`CI Complete` check run on the tagged `main` commit instead of re-running the CI suites
+([[docs/adr/221-proportional-ci|ADR-221]]), re-runs the full-tree secrets scan and dependency
+audits, builds the macOS app and disk image, computes checksums, attests the artifacts, generates the
 packaged-app CycloneDX SBOM, and creates the GitHub release. The
 release job verifies build provenance before publishing. No application image is built or published.
 
 ## Rollback boundaries
 
 Application rollback and database rollback are separate. Replacing the app does not downgrade the
-database. Alembic downgrades require explicit review and a backup. A failed native database switch
+database. A migration rollback (`bun run db:migrate:down`, only for migrations with a `.down.sql`) requires
+explicit review and a backup; below the `0001` baseline, recovery is a backup restore taken after
+the baseline switch. A failed native database switch
 keeps the previous database until validation succeeds.
 
 ## Security properties

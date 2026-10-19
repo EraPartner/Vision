@@ -1,8 +1,8 @@
 /**
  * Backup Coverage Enforcement Tests
  *
- * These tests ensure that BACKUP_COVERED_TABLES stays in sync with the actual
- * Alembic schema.  A new migration that creates a table not listed in the
+ * These tests ensure that BACKUP_COVERED_TABLES stays in sync with the schema
+ * built by db/migrations.  A new migration that creates a table not listed in the
  * registry will fail CI here, forcing the developer to update backup coverage.
  *
  * No database connection required — all assertions are static / file-based.
@@ -21,97 +21,39 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const REPO_ROOT = resolve(__dirname, "../../..");
-const MIGRATIONS_DIR = join(REPO_ROOT, "alembic", "versions");
+const MIGRATIONS_DIR = join(REPO_ROOT, "db", "migrations");
 
 // ---------------------------------------------------------------------------
-// Helper: derive the net table set from alembic migrations
+// Helper: derive the net table set from db/migrations
 // ---------------------------------------------------------------------------
+
+const IDENT = String.raw`"?([a-z_][a-z0-9_]*)"?`;
+const QUALIFIED = String.raw`(?:"?[a-z_][a-z0-9_]*"?\.)?${IDENT}`;
 
 /**
- * Parse all alembic migration files and simulate the schema after all
- * upgrade() calls have run.
- *
- * Handles three authoring styles found in Vision migrations:
- *   1. Raw SQL string constants at module level (0001-style baseline)
- *      → CREATE TABLE ... in text before `def upgrade()`
- *   2. Raw SQL inside op.execute() strings within upgrade()
- *      → CREATE TABLE / DROP TABLE in upgrade body text
- *   3. SQLAlchemy Alembic API calls within upgrade()
- *      → op.create_table('name', ...) / op.drop_table('name')
- *   4. Literal renames (0087-style conversion migrations)
- *      → ALTER TABLE a RENAME TO b — the old name leaves the schema, the new
- *        name enters it. Only literal names are tracked; dynamically built
- *        renames (f-strings/plpgsql) reference tables this parser never saw
- *        created, so they cannot desync the set.
- *
- * For correctness inside a single migration (e.g. 0014 drops then re-creates
- * the same table) the upgrade body tokens are processed IN SEQUENCE, not as
- * two independent sets.
- *
- * downgrade() bodies are intentionally excluded — rollback DDL should not
- * affect the current-schema computation.
- *
- * @returns {Set<string>}
+ * Replay every up migration (0001_baseline.sql first) in order and track the
+ * public tables it creates, drops and renames. Down migrations are excluded:
+ * rollback DDL does not describe the current schema.
  */
 function deriveMigrationTableSet() {
   const files = readdirSync(MIGRATIONS_DIR)
-    .filter((f) => f.endsWith(".py") && !f.startsWith("__"))
-    .sort(); // alphabetical = chronological given the 0001_ prefix naming
+    .filter((f) => f.endsWith(".sql") && !f.endsWith(".down.sql"))
+    .sort();
 
   const schema = new Set<string>();
-
-  // Matches both raw SQL and SQLAlchemy API create calls.
-  // Group 1 captures the table name.
-  const CREATE_RE =
-    /(?:CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?|op\.create_table\s*\(\s*['"])([a-z_][a-z0-9_]*)/gi;
-
-  // Matches both raw SQL and SQLAlchemy API drop calls.
-  const DROP_RE =
-    /(?:DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?|op\.drop_table\s*\(\s*['"])([a-z_][a-z0-9_]*)/gi;
+  const TOKEN_RE = new RegExp(
+    String.raw`(?:(CREATE)\s+(?:UNLOGGED\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?|(DROP)\s+TABLE\s+(?:IF\s+EXISTS\s+)?|(ALTER)\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:ONLY\s+)?${QUALIFIED}\s+RENAME\s+TO\s+)${QUALIFIED}`,
+    "gi",
+  );
 
   for (const file of files) {
     const content = readFileSync(join(MIGRATIONS_DIR, file), "utf8");
-
-    // Split into: text before upgrade(), the upgrade() body, the rest.
-    const upgradeIdx = content.search(/\ndef upgrade\s*\(/);
-    const downgradeIdx = content.search(/\ndef downgrade\s*\(/);
-
-    // Pre-upgrade: module-level SQL string constants (0001 baseline style).
-    // Only CREATE TABLE is expected here; DROP would be unusual.
-    const preUpgrade = upgradeIdx >= 0 ? content.slice(0, upgradeIdx) : "";
-
-    // Upgrade body: from after "def upgrade():" until "def downgrade()" or EOF.
-    const upgradeStart = upgradeIdx >= 0 ? upgradeIdx : 0;
-    const upgradeEnd =
-      downgradeIdx > upgradeStart ? downgradeIdx : content.length;
-    const upgradeBody = content.slice(upgradeStart, upgradeEnd);
-
-    // Step 1: apply pre-upgrade creates (module-level SQL constants).
-    CREATE_RE.lastIndex = 0;
-    for (const m of preUpgrade.matchAll(CREATE_RE)) {
-      schema.add(m[1]!.toLowerCase());
-    }
-
-    // Step 2: process upgrade body tokens IN SEQUENCE so that drop+re-create
-    // within the same migration is handled correctly.
-    const TOKEN_RE =
-      /(?:(CREATE)\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?|(DROP)\s+TABLE\s+(?:IF\s+EXISTS\s+)?|op\.(create_table|drop_table)\s*\(\s*['"]|(ALTER)\s+TABLE\s+(?:IF\s+EXISTS\s+)?([a-z_][a-z0-9_]*)\s+RENAME\s+TO\s+)([a-z_][a-z0-9_]*)/gi;
-
-    for (const m of upgradeBody.matchAll(TOKEN_RE)) {
-      // m[1]: CREATE keyword (raw SQL create)
-      // m[2]: DROP keyword (raw SQL drop)
-      // m[3]: op.create_table | op.drop_table (alembic API)
-      // m[4]: ALTER keyword (raw SQL rename) — m[5] is the old table name
-      // m[6]: table name (created / dropped / rename target)
-      const table = m[6]!.toLowerCase();
-      const isCreate = !!(m[1] || m[3] === "create_table");
-      const isDrop = !!(m[2] || m[3] === "drop_table");
-      const isRename = !!m[4];
-
-      if (isCreate) schema.add(table);
-      else if (isDrop) schema.delete(table);
-      else if (isRename) {
-        schema.delete(m[5]!.toLowerCase());
+    for (const m of content.matchAll(TOKEN_RE)) {
+      const table = m[5]!.toLowerCase();
+      if (m[1]) schema.add(table);
+      else if (m[2]) schema.delete(table);
+      else if (m[3]) {
+        schema.delete(m[4]!.toLowerCase());
         schema.add(table);
       }
     }
@@ -141,7 +83,7 @@ describe("BACKUP_COVERED_TABLES registry", () => {
     expect(unique.size).toBe(BACKUP_COVERED_TABLES.length);
   });
 
-  it("matches the net table set derived from alembic migrations", () => {
+  it("matches the net table set derived from db/migrations", () => {
     const migrationTables = deriveMigrationTableSet();
 
     // Tables in migrations but not in registry → backup gap (CI blocker)

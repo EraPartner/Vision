@@ -62,7 +62,6 @@ const PUBLIC_NAMED_EXPORTS = new Set([
   // moved to zod params schemas, but the middleware stays available.
   "apps/node-backend/src/middleware/validation.ts:validateIntParam",
   // Imported by the root baseline maintenance scripts, which this scan does not read.
-  "apps/node-backend/src/database/baselineManifest.ts:readBaselineManifest",
   // Named helpers mirrored by a stable runtime default object.
   "apps/node-backend/src/lib/calculations/splits.ts:roundToCents",
   "apps/node-backend/src/lib/calculations/splits.ts:validatePaymentAmount",

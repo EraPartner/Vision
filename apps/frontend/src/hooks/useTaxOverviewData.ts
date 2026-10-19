@@ -29,6 +29,7 @@ export interface MonthlyIncomeTaxDatum {
 const NO_YEARLY_INCOME: YearlyIncomeDatum[] = [];
 const NO_MONTHLY_INCOME: MonthlyIncomeTaxDatum[] = [];
 const NO_YEARS: BelgianTaxDashboardYear[] = [];
+const NO_CURRENCIES: string[] = [];
 
 /**
  * Domain data for the budget-tax overview page (TaxOverviewPage).
@@ -134,5 +135,8 @@ export function useTaxOverviewData() {
         suggestions,
         hasProfile,
         isEmpty,
+        /** Currencies left out of the dashboard figures for want of a stored rate. */
+        unconvertedCurrencies:
+            dashboard?.unconvertedCurrencies ?? NO_CURRENCIES,
     };
 }

@@ -1,9 +1,9 @@
 ---
 title: ADR-027 - Alembic as Single Source of Schema Truth
 type: adr
-status: Accepted
-date: 2026-04-21
-updated: 2026-04-27
+status: superseded
+date: 2026-10-19
+updated: 2026-10-19
 tags: [adr, backend, database, migrations, alembic, phase-1, schema]
 description: Port node-backend schemaInit.js (1021 LOC, idempotent CREATE-IF-NOT-EXISTS suite) into Alembic revisions and make Alembic the sole owner of schema DDL; node startup shells out to `alembic upgrade head`
 aliases: [adr-027, alembic-port, schema-ownership, single-migration-system]
@@ -12,6 +12,9 @@ aliases: [adr-027, alembic-port, schema-ownership, single-migration-system]
 # ADR-027: Alembic as Single Source of Schema Truth
 
 ## Status
+
+> [!note] Superseded by [[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]] on 2026-10-19.
+
 Accepted
 
 ## Date

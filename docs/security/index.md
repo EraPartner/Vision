@@ -17,7 +17,7 @@ tags:
     ssrf,
     electron,
   ]
-description: Security practices and policies for the Vision application including input validation, rate limiting, SSRF guard for outbound URLs, and supply chain security (secrets scanning, dependency audit, container scanning, Electron --ignore-scripts)
+description: Security practices and policies for the Vision application including input validation, rate limiting, SSRF guard for outbound URLs, and supply chain security (secrets scanning, dependency review and audit, CodeQL, Electron --ignore-scripts)
 aliases:
   [
     security,
@@ -54,9 +54,10 @@ SORT title ASC
 
 ## Supply Chain Security (2026-05-07)
 
-- **[[docs/adr/050-ci-supply-chain-security-tooling|ADR-050: CI Supply Chain Security Tooling]]** - Historical decision; current CI uses secrets scanning, dependency audits, and Trivy filesystem scanning
+- **[[docs/adr/050-ci-supply-chain-security-tooling|ADR-050: CI Supply Chain Security Tooling]]** - Historical decision; its Trivy scan is superseded by ADR-221
 - **[[docs/adr/168-github-release-trust-boundary|ADR-168: GitHub Release Trust Boundary]]** - GitHub is the trusted desktop update publisher; the sibling checksum is not an independent signature
-- **[[docs/guides/cicd-pipelines|CI/CD Pipelines Guide]]** - Full documentation of security scanning jobs (`secrets-scan`, `deps-audit`, `trivy-scan`) and setup instructions
+- **[[docs/adr/221-proportional-ci|ADR-221: Proportional CI]]** - Seven-job CI; removes the Trivy filesystem scan that overlapped Dependency Review, `bun audit` and pip-audit; keeps gitleaks and CodeQL; release reuses the tagged commit's `CI Complete` result and re-runs only the full-tree gitleaks scan and the dependency audits
+- **[[docs/guides/cicd-pipelines|CI/CD Pipelines Guide]]** - Full documentation of the security checks (gitleaks and dependency review in `Repo Checks`, `bun audit` and pip-audit in `Lint`, CodeQL in its own workflow) and setup instructions
 - **GitHub release provenance** - The protected build job creates the packaged-app SBOM and keyless artifact attestations; the release job checks provenance before publishing. GitHub account and workflow authority remain the update trust boundary.
 - **[[docs/guides/contributing|Contributing Guide]]** - Developer setup including pre-commit hook installation (`git config core.hooksPath .githooks`, `brew install gitleaks`)
 

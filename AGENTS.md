@@ -49,10 +49,12 @@ bun run typecheck
 bun run test
 bun run test:frontend
 bun run check
-# database (Python Alembic toolchain from config/requirements.txt; needs DATABASE_URL):
-bun run db:migrate            # upgrade to head through the app's migration runner
-bun run db:check              # single Alembic head plus migration-fidelity run on a test database
-bun run db:check-destructive  # flag destructive operations in migrations
+# database (Kysely migrator over db/migrations/; needs DATABASE_URL):
+bun run db:migrate            # apply pending migrations through the app's migration runner
+bun run db:status             # list applied and pending migrations
+bun run db:lint               # squawk lint of migration SQL for destructive DDL
+bun run db:drift-check        # compare a database's schema with the 0001 baseline (read-only)
+bun run db:codegen            # regenerate the Kysely database types from a migrated database
 # from apps/node-backend:
 bun vitest run src/path/to/x.test.js
 bun vitest run --test-name-pattern="name"
@@ -85,7 +87,7 @@ replace these rules.
 
 - Vision is a personal-finance app that holds sensitive financial data. Never read or print `.env`
   files such as `.env` or `.env.local`. The committed `.env.example` template is safe to read.
-- `alembic downgrade` can destroy data. Ask before running it.
+- `bun run db:migrate:down` (a `.down.sql` rollback) can destroy data. Ask before running it.
 - Ask before running `rm` in `packaging/` or `dist/`.
 
 ## Conventions
@@ -158,7 +160,7 @@ native/Electron journeys in verification reports.
 | ------------------------------- | ------------------------------- |
 | `apps/frontend/src/`            | React frontend                  |
 | `apps/node-backend/src/main.ts` | Backend entry point             |
-| `alembic/versions/`             | Database migrations             |
+| `db/migrations/`                | Database migrations             |
 | `config/`                       | Shared tool configuration       |
 | `i18n/source/`                  | Locale source files             |
 | `apps/frontend/src/locales/`    | Generated locales               |

@@ -181,6 +181,7 @@ export default function PortfolioTaxPage() {
         taxTable,
         isEmpty,
         hasInKindIncomeUnclassified,
+        unconvertedCurrencies,
     } = view;
 
     return (
@@ -248,6 +249,13 @@ export default function PortfolioTaxPage() {
                     title={t("tax.portfolioDisclaimerTitle")}
                     description={t("tax.portfolioDisclaimerText")}
                 />
+            )}
+            {unconvertedCurrencies.length > 0 && (
+                <p className="type-footnote text-warning">
+                    {t("tax.fxUnavailable", {
+                        currencies: unconvertedCurrencies.join(", "),
+                    })}
+                </p>
             )}
 
             {isEmpty ? (

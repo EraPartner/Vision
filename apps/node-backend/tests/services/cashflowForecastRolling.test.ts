@@ -68,6 +68,7 @@ vi.mock("../../src/repositories/infoRepository.ts", () => ({
           { date: isoOffsetFromToday(daysForward + 50), net: -999 }, // outside window — repo would already exclude in real query, but we leave it to verify the engine is not asked to plot it
         ],
         historyMonths,
+        unconverted: { count: 0, currencies: new Set<string>() },
       }),
     ),
     getCashflowForecastData: vi.fn(),

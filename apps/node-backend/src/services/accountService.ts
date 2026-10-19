@@ -18,10 +18,10 @@ import {
   validateId,
 } from "../lib/validation.ts";
 import {
-  loadCurrentRates,
-  convertWithRates,
-} from "./currency/currencyConversionService.ts";
-import { hasConversionRate } from "../lib/exchangeRates.ts";
+  convertAtLatestRates,
+  currencyCode,
+  loadLatestRatesToEur,
+} from "./currency/latestRateConversion.ts";
 import { toDecimal, toNumber, roundToCents } from "../lib/money.ts";
 import { statementPartition } from "../repositories/accountBalanceSql.ts";
 import { withTransaction } from "../database/connection.ts";
@@ -313,10 +313,12 @@ const accountService = {
     offset?: number | undefined;
   } = {}) {
     const rows = await accountRepository.getAll({ active, limit, offset });
-    // Fetch one cached rate table for the entire page. The service owns this
-    // stateful conversion and the API-facing numeric shape; the repository
-    // returns only database rows and native-currency partitions.
-    const rates = await loadCurrentRates();
+    // One table of the latest STORED rates for the entire page (ADR-216). The
+    // service owns the conversion and the API-facing numeric shape; the
+    // repository returns only database rows and native-currency partitions.
+    // A partition without a stored rate is left out and listed in
+    // unconverted_currencies, never converted at a constant or 1:1.
+    const rates = await loadLatestRatesToEur();
     const items = rows.map((row): AccountWithBalanceRow => {
       const {
         balance_parts: parts,
@@ -324,25 +326,22 @@ const accountService = {
         ...rest
       } = row;
       const partitions = parts ?? [];
-      const accountCurrency = (row.currency || "EUR").toUpperCase();
+      const accountCurrency = currencyCode(row.currency);
       let total = toDecimal(0);
       const unconvertedCurrencies: string[] = [];
       for (const part of partitions) {
-        const partCurrency = (part.currency || "EUR").toUpperCase();
-        if (!hasConversionRate(partCurrency, accountCurrency, rates)) {
+        const partCurrency = currencyCode(part.currency);
+        const converted = convertAtLatestRates(
+          part.balance,
+          partCurrency,
+          accountCurrency,
+          rates,
+        );
+        if (converted === undefined) {
           unconvertedCurrencies.push(partCurrency);
           continue;
         }
-        total = total.plus(
-          toDecimal(
-            convertWithRates(
-              toNumber(toDecimal(part.balance)),
-              partCurrency,
-              accountCurrency,
-              rates,
-            ),
-          ),
-        );
+        total = total.plus(converted);
       }
       const base = statementPartition(partitions, row.currency);
       const baseBalance = toNumber(roundToCents(toDecimal(base.balance)));

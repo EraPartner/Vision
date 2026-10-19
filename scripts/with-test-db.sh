@@ -9,10 +9,10 @@
 #
 #   bun run test:db                                  # whole backend suite
 #   bun run test:db tests/services/transferReconciliation.db.test.ts
+#   VISION_TEST_DB_VERIFY_CODEGEN=1 bun run test:db  # also verify schema.generated.ts
 #
 # Any arguments are forwarded to Vitest, so a single file or -t filter works.
-# The Python Alembic toolchain must be available on PATH
-# (`pip install -r config/requirements.txt`) to build the schema.
+# The schema is built with the Kysely migrator (db-migrate.ts up).
 #
 # An exported TEST_DATABASE_URL is ignored by default: this suite deletes test
 # tables and must not accidentally target a development or production database.
@@ -29,7 +29,6 @@ cd "$REPO_ROOT"
 PORT=${VISION_TEST_DB_PORT:-55432}
 KEEP=${VISION_TEST_DB_KEEP:-0}
 CHECK_ONLY=${VISION_TEST_DB_CHECK_ONLY:-0}
-TASK=${VISION_TEST_DB_TASK:-tests}
 WATCH=${VISION_TEST_DB_WATCH:-0}
 ACTIVE_PROVIDER=
 NATIVE_ROOT=
@@ -37,13 +36,6 @@ NATIVE_DATA=
 NATIVE_LOG=
 POSTGRES_BIN=
 
-case "$TASK" in
-  tests|migration-fidelity|legacy-retirements|adr090-retirement|adr088-contract|statement-contract|baseline-restore) ;;
-  *)
-    echo "[test-db] Unknown VISION_TEST_DB_TASK." >&2
-    exit 1
-    ;;
-esac
 case "$WATCH" in
   0|1) ;;
   *)
@@ -51,10 +43,6 @@ case "$WATCH" in
     exit 1
     ;;
 esac
-if [ "$WATCH" = 1 ] && [ "$TASK" != tests ]; then
-  echo "[test-db] Watch mode supports only VISION_TEST_DB_TASK=tests." >&2
-  exit 1
-fi
 
 case "$PORT" in
   ''|*[!0-9]*)
@@ -72,14 +60,9 @@ if [ -n "${TEST_DATABASE_URL:-}" ] && [ "${VISION_TEST_DB_USE_CALLER:-0}" = 1 ];
     echo "[test-db] Caller-managed TEST_DATABASE_URL is available."
     exit 0
   fi
-  if [ "$TASK" = migration-fidelity ] || [ "$TASK" = legacy-retirements ] || [ "$TASK" = adr090-retirement ] || [ "$TASK" = adr088-contract ] || [ "$TASK" = statement-contract ] || [ "$TASK" = baseline-restore ]; then
-    echo "[test-db] Destructive migration lifecycle tasks refuse a caller-managed TEST_DATABASE_URL." >&2
-    echo "[test-db] Unset it so this script provisions a disposable database." >&2
-    exit 1
-  fi
   echo "[test-db] Using caller-managed TEST_DATABASE_URL; no database provider was started."
   DATABASE_URL=$TEST_DATABASE_URL
-  unset DATABASE_URL_MIGRATIONS DATABASE_URL_ANALYSIS VISION_BASELINE_BRIDGE_APPROVED
+  unset DATABASE_URL_MIGRATIONS DATABASE_URL_ANALYSIS
   export DATABASE_URL TEST_DATABASE_URL
   cd apps/node-backend
   if [ "$WATCH" = 1 ]; then
@@ -219,15 +202,13 @@ start_native_postgres() {
     --locale=C \
     --template=template0 \
     vision_test
-  if [ "$TASK" != baseline-restore ]; then
-    PGPASSWORD=$VISION_TEST_DB_PASSWORD "$POSTGRES_BIN/psql" \
-      -h 127.0.0.1 \
-      -p "$PORT" \
-      -U vision_test \
-      -d vision_test \
-      -v ON_ERROR_STOP=1 \
-      -c 'CREATE EXTENSION IF NOT EXISTS pg_trgm; CREATE EXTENSION IF NOT EXISTS pgcrypto; CREATE EXTENSION IF NOT EXISTS pg_stat_statements;' >/dev/null
-  fi
+  PGPASSWORD=$VISION_TEST_DB_PASSWORD "$POSTGRES_BIN/psql" \
+    -h 127.0.0.1 \
+    -p "$PORT" \
+    -U vision_test \
+    -d vision_test \
+    -v ON_ERROR_STOP=1 \
+    -c 'CREATE EXTENSION IF NOT EXISTS pg_trgm; CREATE EXTENSION IF NOT EXISTS pgcrypto; CREATE EXTENSION IF NOT EXISTS pg_stat_statements;' >/dev/null
 }
 
 if ! find_native_postgres; then
@@ -246,156 +227,12 @@ export TEST_DATABASE_URL="$URL"
 VISION_TEST_ANALYSIS_PASSWORD=$(node -e "process.stdout.write(require('node:crypto').randomUUID())")
 export DATABASE_URL_ANALYSIS="postgresql://vision_analysis_executor:$VISION_TEST_ANALYSIS_PASSWORD@127.0.0.1:$PORT/vision_test"
 export VISION_TEST_DB_ISOLATED=1
-# The bridge is allowed only inside this script's disposable native cluster.
-# Caller-managed TEST_DATABASE_URL returns above and never receives this flag.
-export VISION_BASELINE_BRIDGE_APPROVED=1
-# Keep boot-time migration state outside the repository. A disposable database
-# must never consult or overwrite the normal development cache.
-export VISION_CACHE_DIR="$NATIVE_ROOT/vision-cache"
-
-if [ "$TASK" = baseline-restore ]; then
-  if [ -z "${VISION_BASELINE_BACKUP_PATH:-}" ] || [ -z "${VISION_BASELINE_SOURCE_MANIFEST:-}" ]; then
-    echo "[test-db] baseline-restore requires backup and source manifest paths." >&2
-    exit 1
-  fi
-  echo "[test-db] Restoring and verifying the exact supplied logical backup in disposable PostgreSQL 18."
-  "$POSTGRES_BIN/pg_restore" --exit-on-error --no-owner --no-acl \
-    -d "$URL" "$VISION_BASELINE_BACKUP_PATH"
-  bun scripts/verify-baseline-restore.ts
-  exit 0
-fi
-
-MIGRATION_TARGET='head'
-case "$TASK" in
-  legacy-retirements) MIGRATION_TARGET=0105_retire_legacy_exchange_rate_cache ;;
-  adr090-retirement) MIGRATION_TARGET=0102_retire_adr090_transaction_schema ;;
-esac
-echo "[test-db] Migrating the disposable database to $MIGRATION_TARGET."
-bun run apps/node-backend/scripts/db-migrate.ts upgrade "$MIGRATION_TARGET"
-
-if [ "$TASK" = migration-fidelity ]; then
-  echo "[test-db] Verifying latest-revision downgrade and upgrade fidelity."
-  bun run apps/node-backend/scripts/db-migrate.ts downgrade -1
-  # A populated legacy category must keep its ID and label across both
-  # directions; an empty-database cycle cannot catch backfill regressions.
-  "$POSTGRES_BIN/psql" "$TEST_DATABASE_URL" -X -q -v ON_ERROR_STOP=1 -c \
-    "INSERT INTO categories (general, detail) VALUES ('VISION_FIDELITY', 'LEGACY')" >/dev/null
-  VISION_MIGRATION_CATEGORY_ID=$("$POSTGRES_BIN/psql" "$TEST_DATABASE_URL" -X -At -v ON_ERROR_STOP=1 -c \
-    "SELECT id FROM categories WHERE general = 'VISION_FIDELITY' AND detail = 'LEGACY'")
-  bun run apps/node-backend/scripts/db-migrate.ts upgrade head
-  VISION_MIGRATION_CATEGORY_PATH=$("$POSTGRES_BIN/psql" "$TEST_DATABASE_URL" -X -At -v ON_ERROR_STOP=1 -c \
-    "SELECT path_name FROM categories WHERE id = $VISION_MIGRATION_CATEGORY_ID AND general = 'VISION_FIDELITY' AND detail = 'LEGACY'")
-  if [ "$VISION_MIGRATION_CATEGORY_PATH" != 'VISION_FIDELITY:LEGACY' ]; then
-    echo "[test-db] Legacy category ID/path changed on hierarchy upgrade." >&2
-    exit 1
-  fi
-  bun run apps/node-backend/scripts/db-migrate.ts downgrade -1
-  VISION_MIGRATION_CATEGORY_PAIR=$("$POSTGRES_BIN/psql" "$TEST_DATABASE_URL" -X -At -v ON_ERROR_STOP=1 -c \
-    "SELECT general || ':' || detail FROM categories WHERE id = $VISION_MIGRATION_CATEGORY_ID")
-  if [ "$VISION_MIGRATION_CATEGORY_PAIR" != 'VISION_FIDELITY:LEGACY' ]; then
-    echo "[test-db] Legacy category ID/pair changed on hierarchy downgrade." >&2
-    exit 1
-  fi
-  bun run apps/node-backend/scripts/db-migrate.ts upgrade head
-  echo "[test-db] Migration fidelity check passed."
-  exit 0
-fi
-
-if [ "$TASK" = legacy-retirements ]; then
-  echo "[test-db] Verifying guarded legacy-retirement lifecycles."
-  bun run scripts/test-legacy-retirements.ts
-  exit 0
-fi
-
-if [ "$TASK" = adr090-retirement ]; then
-  echo "[test-db] Verifying ADR-090 guarded retirement lifecycle."
-  bun run scripts/test-adr090-retirement.ts
-  exit 0
-fi
-
-if [ "$TASK" = adr088-contract ]; then
-  # The reviewed fresh baseline already has the ADR-088 contract shape. Build
-  # the prior compatibility shape using its real rollback before exercising
-  # the guarded forward contract on this disposable database.
-  echo "[test-db] Restoring ADR-088 compatibility schema for the contract test."
-  "$POSTGRES_BIN/psql" "$TEST_DATABASE_URL" -X -v ON_ERROR_STOP=1 \
-    -f alembic/manual/contract_drop_bank_account/down.sql >/dev/null
-  echo "[test-db] Applying the ADR-088 contract to the disposable database."
-  # This database is created solely for this lifecycle test and is discarded by
-  # the EXIT trap. Acknowledge the production backup gate explicitly so the
-  # contract SQL exercises its real guarded path instead of stopping at psql's
-  # missing-variable refusal.
-  "$POSTGRES_BIN/psql" "$TEST_DATABASE_URL" -X -v ON_ERROR_STOP=1 \
-    -v backup_verified=yes \
-    -f alembic/manual/contract_drop_bank_account/up.sql >/dev/null
-  (
-    cd apps/node-backend
-    bun vitest run tests/adr088Contract.db.test.ts
-  )
-  echo "[test-db] Restoring the ADR-088 compatibility schema."
-  "$POSTGRES_BIN/psql" "$TEST_DATABASE_URL" -X -v ON_ERROR_STOP=1 \
-    -f alembic/manual/contract_drop_bank_account/down.sql >/dev/null
-  restored=$(
-    "$POSTGRES_BIN/psql" "$TEST_DATABASE_URL" -X -At -v ON_ERROR_STOP=1 -c "
-      SELECT
-        (SELECT count(*) FROM information_schema.columns
-          WHERE table_schema = 'public'
-            AND table_name IN ('transactions', 'planned_transactions')
-            AND column_name = 'bank_account'),
-        (SELECT count(*) FROM pg_indexes
-          WHERE schemaname = 'public'
-            AND indexname IN ('idx_transactions_bank_account',
-                              'idx_transactions_bank_date',
-                              'idx_transactions_bank_date_active')),
-        (SELECT count(*) FROM pg_trigger
-          WHERE tgname IN ('trg_transactions_account_sync',
-                           'trg_planned_transactions_account_sync')
-            AND NOT tgisinternal),
-        (SELECT count(*) FROM transactions t
-          LEFT JOIN accounts a ON a.id = t.account_id
-          WHERE (t.bank_account IS NULL) <> (t.account_id IS NULL)
-             OR (t.account_id IS NOT NULL
-                 AND lower(btrim(t.bank_account)) <> lower(btrim(a.name)))),
-        (SELECT count(*) FROM planned_transactions p
-          LEFT JOIN accounts a ON a.id = p.account_id
-          WHERE (p.bank_account IS NULL) <> (p.account_id IS NULL)
-             OR (p.account_id IS NOT NULL
-                 AND lower(btrim(p.bank_account)) <> lower(btrim(a.name))));
-    "
-  )
-  if [ "$restored" != "2|3|2|0|0" ]; then
-    echo "[test-db] ADR-088 rollback verification failed." >&2
-    exit 1
-  fi
-  echo "[test-db] ADR-088 dropped-schema writes and rollback lifecycle passed."
-  exit 0
-fi
-
-if [ "$TASK" = statement-contract ]; then
-  echo "[test-db] Applying the statement-scalar contract to the disposable database."
-  "$POSTGRES_BIN/psql" "$TEST_DATABASE_URL" -X -v ON_ERROR_STOP=1 \
-    -v backup_verified=yes \
-    -f alembic/manual/contract_drop_statement_scalars/up.sql >/dev/null
-  (
-    cd apps/node-backend
-    bun vitest run tests/accountStatementScalarContract.db.test.ts
-  )
-  echo "[test-db] Restoring the statement-scalar compatibility schema."
-  "$POSTGRES_BIN/psql" "$TEST_DATABASE_URL" -X -v ON_ERROR_STOP=1 \
-    -f alembic/manual/contract_drop_statement_scalars/down.sql >/dev/null
-  restored=$(
-    "$POSTGRES_BIN/psql" "$TEST_DATABASE_URL" -X -At -v ON_ERROR_STOP=1 -c "
-      SELECT count(*) FROM information_schema.columns
-       WHERE table_schema = 'public' AND table_name = 'accounts'
-         AND column_name IN ('statement_balance', 'statement_balance_date');
-    "
-  )
-  if [ "$restored" != "2" ]; then
-    echo "[test-db] Statement-scalar rollback verification failed." >&2
-    exit 1
-  fi
-  echo "[test-db] Statement-scalar dropped-schema writes and rollback lifecycle passed."
-  exit 0
+echo "[test-db] Migrating the disposable database to the latest migration."
+bun run apps/node-backend/scripts/db-migrate.ts up
+# CI sets this so the committed Kysely types cannot drift from the migrated schema.
+if [ "${VISION_TEST_DB_VERIFY_CODEGEN:-0}" = 1 ]; then
+  echo "[test-db] Verifying generated database types against the migrated schema."
+  bun run db:codegen --verify
 fi
 
 cd apps/node-backend

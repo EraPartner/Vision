@@ -15,8 +15,11 @@ import {
   type OwnerAmounts,
 } from "@vision/shared-utils/belgian-tax/recordedIncomeAttribution";
 import {
+  leaveOutUnconverted,
   recordedTaxesForYear,
+  type MaybeConvertFn,
   type PortfolioTaxInvestment,
+  type UnconvertedFigures,
 } from "@vision/shared-utils/belgian-tax/portfolioTax";
 import type { BelgianTaxCalculation } from "@vision/shared-utils/belgian-tax/types";
 import type {
@@ -26,9 +29,9 @@ import type {
 import { computeMonthlySummary } from "../calculations/aggregation/monthly.ts";
 import { computeCategoryPivot } from "../calculations/aggregation/categoryPivot.ts";
 import {
-  listLatestStoredRates,
-  FALLBACK_RATES,
-} from "../currency/currencyConversionService.ts";
+  convertAtLatestRates,
+  loadLatestRatesToEur,
+} from "../currency/latestRateConversion.ts";
 import { portfolioTransactionRepository } from "../../repositories/portfolioTransactionRepository.ts";
 import { firstOfMonthYmd, todayAppDateString } from "../../lib/timezone.ts";
 import { toYmd } from "../../lib/dateFormat.ts";
@@ -37,6 +40,11 @@ import { buildDashboardSuggestions } from "./dashboardSuggestions.ts";
 
 type Overview = Awaited<ReturnType<typeof getTaxOverview>>;
 type Monthly = { year: number; month: number; total_income: number };
+/** Rows the monthly summary left out for want of a stored rate. */
+type MonthlyUnconverted = {
+  unconverted_count: number;
+  unconverted_currencies: string[];
+};
 type Pivot = Awaited<ReturnType<typeof computeCategoryPivot>>["data"];
 export interface TaxDashboardOptions {
   year?: number | undefined;
@@ -80,9 +88,19 @@ export function buildTaxDashboard(
   months: Monthly[],
   pivot: Pivot,
   investments: PortfolioTaxInvestment[],
-  convert: (amount: number, currency?: string) => number,
+  convert: MaybeConvertFn,
   currency: string,
+  monthlyUnconverted: MonthlyUnconverted = {
+    unconverted_count: 0,
+    unconverted_currencies: [],
+  },
 ) {
+  // Amounts without an exchange rate are left out of the figures they feed,
+  // which are listed in `incompleteFigures` (never converted 1:1).
+  const missing: UnconvertedFigures = {
+    currencies: new Set(),
+    figures: new Set(),
+  };
   const profile = projectHouseholdToProfileV1(overview.household, filesJointly);
   const selected = new Set(profile.taxIncomeCategoryIds ?? []);
   const liveSelected = new Set(
@@ -212,7 +230,17 @@ export function buildTaxDashboard(
   }));
   let portfolioTaxesForYear = 0;
   for (const inv of investments) {
-    portfolioTaxesForYear += recordedTaxesForYear(inv, overview.year, convert);
+    portfolioTaxesForYear += recordedTaxesForYear(
+      inv,
+      overview.year,
+      leaveOutUnconverted(
+        convert,
+        missing,
+        "portfolioTaxesForYear",
+        "totalTaxIncludingPortfolio",
+        "totalTaxIncludingPropertyEstimate",
+      ),
+    );
     for (const txn of inv.transactions)
       if (
         Number(txn.taxes) > 0 ||
@@ -318,6 +346,25 @@ export function buildTaxDashboard(
     computeHouseholdTax(overview.liveHousehold),
     overview.liveHousehold,
   );
+  // Recorded income comes from the category pivot when income categories are
+  // selected, else from the monthly summary; transactions either left out
+  // make the income figures and the taxes estimated from them incomplete.
+  const incomeSource = hasIncomeSources
+    ? {
+        unconverted_count: pivot.unconverted_count,
+        unconverted_currencies: pivot.unconverted_currencies,
+      }
+    : monthlyUnconverted;
+  if (incomeSource.unconverted_count > 0) {
+    for (const code of incomeSource.unconverted_currencies)
+      missing.currencies.add(code);
+    for (const figure of [
+      "yearlyIncome",
+      "monthlyIncomeTax",
+      ...(recordedIncomeByPartner ? ["recordedIncomeByPartner"] : []),
+    ])
+      missing.figures.add(figure);
+  }
   return {
     year: overview.year,
     currency,
@@ -340,6 +387,8 @@ export function buildTaxDashboard(
     ),
     householdBreakdownRows,
     rules: TAX_DASHBOARD_RULES,
+    unconvertedCurrencies: [...missing.currencies].sort(),
+    incompleteFigures: [...missing.figures].sort(),
   };
 }
 
@@ -359,27 +408,16 @@ export async function getTaxDashboard(options: TaxDashboardOptions = {}) {
     portfolioTransactionRepository.getRowsForPortfolioMath({
       activeInvestmentsOnly: false,
     }),
-    listLatestStoredRates(),
+    loadLatestRatesToEur(),
   ]);
-  const rates: Record<string, number> = {
-    ...FALLBACK_RATES,
-    EUR: 1,
-    ...Object.fromEntries(
-      latest.rows.map((r) => [r.currency_code, Number(r.rate_to_eur)]),
-    ),
-  };
-  // Web recorded-tax widgets use latest stored FX with an original-amount fallback, not portfolio flow-date FX.
+  // Recorded-tax widgets use the latest stored FX, not portfolio flow-date FX.
+  // A currency without a stored rate converts to undefined and is flagged.
   const convert = (amount: number, fromCurrency?: string) => {
     const from = (fromCurrency ?? "EUR").toUpperCase();
     const to = currency.toUpperCase();
-    return from === to ||
-      rates[from] === undefined ||
-      rates[from] === 0 ||
-      rates[to] === undefined ||
-      rates[to] === 0
-      ? amount
-      : // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
-        (amount * rates[from]) / rates[to];
+    if (from === to) return amount;
+    const converted = convertAtLatestRates(amount, from, to, latest);
+    return converted === undefined ? undefined : converted.toNumber();
   };
   const investment: PortfolioTaxInvestment = {
     id: 0,
@@ -400,5 +438,6 @@ export async function getTaxDashboard(options: TaxDashboardOptions = {}) {
     [investment],
     convert,
     currency,
+    monthly.data,
   );
 }

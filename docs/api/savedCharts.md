@@ -2,8 +2,8 @@
 title: Saved Charts API
 type: endpoint
 status: active
-date: 2026-10-07
-updated: 2026-09-04
+date: 2026-10-19
+updated: 2026-10-19
 tags:
   - api
   - charts
@@ -20,7 +20,7 @@ aliases:
 related_code:
   - apps/node-backend/src/routes/savedCharts.ts
   - apps/node-backend/src/repositories/savedChartsRepository.ts
-  - alembic/versions/0096_normalize_saved_chart_filters.py
+  - db/migrations/0001_baseline.sql
 ---
 
 # Saved Charts API

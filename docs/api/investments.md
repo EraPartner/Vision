@@ -5,7 +5,7 @@ method: GET, POST, PUT, PATCH, DELETE
 path: /api/investments
 description: Investment portfolio management (stocks, crypto, real estate, savings)
 date: 2026-10-19
-last_modified: 2026-10-13
+last_modified: 2026-10-19
 updated: 2026-10-19
 tags:
   [
@@ -267,10 +267,10 @@ Additional refresh behavior:
 Historical migration notes (not current runtime behavior):
 
 - A DB migration adds an `INSTEAD OF UPDATE` trigger on the `investments` view, so legacy `UPDATE investments ...` statements are redirected to inheritance tables and no longer error.
-- Migration `0017_investment_custom_provider_history` adds custom-provider latest/history columns on `investments_base`, conditionally applies legacy `investments` table column updates only for table/partition relations, creates `metals_investments` if missing, and refreshes both `investments` view + `investments_view_update_instead()` to include new provider fields and metals handling ([[alembic/versions/0017_investment_custom_provider_history.py]]).
-- Migration `0021_price_provider_binance` replaces `coingecko`/`kraken` enum values with `binance` by altering `investments_base.price_provider` directly (not the `investments` compatibility view), dropping the default before enum conversion, then restoring `DEFAULT 'manual'` after conversion. The migration also handles PostgreSQL relation dependencies by backing up and dropping all dependent `public` views that reference `investments_base` (table-level or `price_provider` column-level dependencies), then recreating them from captured definitions; when the `investments` view is restored and `investments_view_update_instead()` exists, it recreates trigger `update_investments_view_instead` ([[alembic/versions/0021_update_price_provider_enum.py]]).
-- Migration `0022_add_kinesis_price_provider_enum` extends enum `price_provider` with value `kinesis`. Downgrade remaps `kinesis` rows to `manual`, rebuilds the enum without `kinesis`, and applies the same dependent-view/trigger handling pattern used by the prior enum migration to keep compatibility views functional ([[alembic/versions/0022_add_kinesis_price_provider_enum.py]]).
-- Alembic baseline migration `0001_initial_database_schema` guards indexes and triggers to only operate on base tables (`relkind='r'`) in `public`, preventing `cannot create index on relation "investments"` when `investments` is a compatibility view in inheritance-schema setups ([[alembic/versions/0001_initial_database_schema.py]]).
+- Migration `0017_investment_custom_provider_history` adds custom-provider latest/history columns on `investments_base`, conditionally applies legacy `investments` table column updates only for table/partition relations, creates `metals_investments` if missing, and refreshes both `investments` view + `investments_view_update_instead()` to include new provider fields and metals handling (`0017_investment_custom_provider_history`).
+- Migration `0021_price_provider_binance` replaces `coingecko`/`kraken` enum values with `binance` by altering `investments_base.price_provider` directly (not the `investments` compatibility view), dropping the default before enum conversion, then restoring `DEFAULT 'manual'` after conversion. The migration also handles PostgreSQL relation dependencies by backing up and dropping all dependent `public` views that reference `investments_base` (table-level or `price_provider` column-level dependencies), then recreating them from captured definitions; when the `investments` view is restored and `investments_view_update_instead()` exists, it recreates trigger `update_investments_view_instead` (`0021_update_price_provider_enum`).
+- Migration `0022_add_kinesis_price_provider_enum` extends enum `price_provider` with value `kinesis`. Downgrade remaps `kinesis` rows to `manual`, rebuilds the enum without `kinesis`, and applies the same dependent-view/trigger handling pattern used by the prior enum migration to keep compatibility views functional (`0022_add_kinesis_price_provider_enum`).
+- Historical Alembic baseline migration `0001_initial_database_schema` guarded indexes and triggers to only operate on base tables (`relkind='r'`) in `public`, preventing `cannot create index on relation "investments"` when `investments` is a compatibility view in inheritance-schema setups (`0001_initial_database_schema`).
 
 **Response:**
 
@@ -344,7 +344,7 @@ Fallback compatibility:
 
 - legacy `price_provider_url` and `price_provider_id` are still read for custom latest-price resolution.
 - legacy-schema create compatibility: when DB relation `investments` lacks new custom-provider columns, create falls back to legacy insert fields and maps `price_provider_latest_path` → `price_provider_id`, `price_provider_latest_url` → `price_provider_url`.
-- recommended schema state for full custom-provider latest/history compatibility is migration `0017_investment_custom_provider_history` ([[alembic/versions/0017_investment_custom_provider_history.py]]).
+- recommended schema state for full custom-provider latest/history compatibility is migration `0017_investment_custom_provider_history` (`0017_investment_custom_provider_history`).
 
 **Required Fields:** name, asset_class
 
@@ -379,7 +379,7 @@ Validation and mutability rules:
 - Controls whether this investment appears in the Portfolio Overview ticker tape.
 - `true` (default): the holding is included in the ticker and its symbol is quoted from Yahoo.
 - `false`: the holding is excluded; no Yahoo quote request is made for it.
-- Persisted in the **`investment_ticker_prefs` side table** (not a column on `investments`). The repository `update()` method peels `show_in_ticker` out of the body — it is **not** in the `allowed` / `BASE_ALLOWED_FIELDS` column allow-lists — and UPSERTs into `investment_ticker_prefs` via `INSERT ... ON CONFLICT (investment_id) DO UPDATE`. Reads use `LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id` and return `COALESCE(tp.show_in_ticker, true) AS show_in_ticker`. Migration `0061_investments_show_in_ticker` **creates this table** (not adds a column); **not auto-applied** — run `bun run db:upgrade`. There is no `investments.show_in_ticker` column.
+- Persisted in the **`investment_ticker_prefs` side table** (not a column on `investments`). The repository `update()` method peels `show_in_ticker` out of the body — it is **not** in the `allowed` / `BASE_ALLOWED_FIELDS` column allow-lists — and UPSERTs into `investment_ticker_prefs` via `INSERT ... ON CONFLICT (investment_id) DO UPDATE`. Reads use `LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id` and return `COALESCE(tp.show_in_ticker, true) AS show_in_ticker`. Historical migration `0061_investments_show_in_ticker` **created this table** (not a column); it is part of the `0001` migration baseline. There is no `investments.show_in_ticker` column.
 - The response includes `show_in_ticker` once migration 0061 has been applied (via the joined read path described above).
 - The frontend `PortfolioTicker` `TickerManager` popover uses this field via an optimistic `PATCH` + React Query cache update (rolls back on error, invalidates investments + portfolio-summary on settle).
 
@@ -586,10 +586,10 @@ Create-path compatibility:
 
 - `portfolio_transactions` is one flat table on every supported install. Migration 0087 converts the former inheritance layout before the backend starts accepting requests ([[docs/adr/109-flat-investments-schema-canonical|ADR-109]]).
 - `investmentService` validates request field shapes. `portfolioTransactionService.create` and `portfolioTransactionRules` own type-specific normalization, unit math, recurrence hygiene, and sell-availability policy before the repository performs a parameterized insert ([[apps/node-backend/src/services/investmentService.ts]], [[apps/node-backend/src/services/portfolio/portfolioTransactionService.ts]], [[apps/node-backend/src/services/portfolio/portfolioTransactionRules.ts]]).
-- Optional `fx_rate_to_eur` is accepted and persisted for portfolio transactions, enabling transaction-level FX locking for later P&L calculations ([[apps/node-backend/src/services/investmentService.ts]], [[alembic/versions/0016_add_fx_rate_to_portfolio_transactions.py]], [[apps/frontend/src/types/api.ts]]).
+- Optional `fx_rate_to_eur` is accepted and persisted for portfolio transactions, enabling transaction-level FX locking for later P&L calculations ([[apps/node-backend/src/services/investmentService.ts]], `0016_add_fx_rate_to_portfolio_transactions`, [[apps/frontend/src/types/api.ts]]).
 - `POST /api/investments/:id/transactions` forwards the investment lookup's `asset_class` into `portfolioTransactionService.create` as `preloaded_asset_class`, so the service can skip a duplicate metadata query while preserving validation and response behavior ([[apps/node-backend/src/services/investmentService.ts]], [[apps/node-backend/src/services/portfolio/portfolioTransactionService.ts]]).
 - `POST /api/investments/refresh-prices` now performs update writes in bounded batches (instead of one unbounded `Promise.all`) to reduce DB/pool contention spikes while preserving response payload semantics (`updated`, `total`, `prices`, `priceSources`) and per-investment update behavior ([[apps/node-backend/src/routes/investments.ts]]).
-- Migration safety note: in inherited-schema deployments where `portfolio_transactions` is a compatibility view, migration `0016_add_fx_rate_to_portfolio_transactions` now checks relation kind before running `ALTER TABLE` (`r`/`p` only) and keeps the view recreation path for `relkind='v'`, so migration does not fail on view-backed schemas ([[alembic/versions/0016_add_fx_rate_to_portfolio_transactions.py]], [[docs/features/portfolio|Feature: Portfolio & Investments]]).
+- Migration safety note: in inherited-schema deployments where `portfolio_transactions` is a compatibility view, migration `0016_add_fx_rate_to_portfolio_transactions` now checks relation kind before running `ALTER TABLE` (`r`/`p` only) and keeps the view recreation path for `relkind='v'`, so migration does not fail on view-backed schemas (`0016_add_fx_rate_to_portfolio_transactions`, [[docs/features/portfolio|Feature: Portfolio & Investments]]).
 - Add/Edit portfolio transaction dialogs expose an optional `fx_rate_to_eur` field and pass it through to create payloads when set ([[apps/frontend/src/features/portfolio/AddPortfolioTxnDialog.tsx]], [[apps/frontend/src/features/portfolio/EditPortfolioTxnDialog.tsx]], [[apps/frontend/src/hooks/usePortfolio.ts]]).
 - If `fx_rate_to_eur` is omitted, FX conversion uses historical rates from `exchange_rates` for transaction dates; missing rows are auto-backfilled from ECB historical data at startup, with nearest DB historical-rate fallback when exact dates are unavailable ([[apps/node-backend/src/services/currency/currencyConversionService.ts]], [[apps/node-backend/src/main.ts]]).
 
@@ -638,7 +638,7 @@ Update endpoint notes:
 Update-path compatibility:
 
 - Updates target the canonical flat `portfolio_transactions` table. Migration 0087 owns conversion from the retired inheritance layout; runtime schema-shape fallbacks are no longer part of the supported write path ([[docs/adr/109-flat-investments-schema-canonical|ADR-109]], [[apps/node-backend/src/repositories/portfolioTxRepo.writes.ts]]).
-- Migration `0016_add_fx_rate_to_portfolio_transactions` retains its relation-kind guard for historical upgrade ordering, while current installs reach the flat-table runtime contract through the full migration chain ([[alembic/versions/0016_add_fx_rate_to_portfolio_transactions.py]]).
+- Migration `0016_add_fx_rate_to_portfolio_transactions` retains its relation-kind guard for historical upgrade ordering, while current installs reach the flat-table runtime contract through the full migration chain (`0016_add_fx_rate_to_portfolio_transactions`).
 
 ### DELETE /api/investments/transactions/:txnId
 
@@ -776,7 +776,7 @@ For real estate investments:
 
 Metals implementation code links: [[apps/node-backend/src/repositories/investmentRepository.ts]], [[apps/node-backend/src/repositories/infoRepository.ts]], [[apps/node-backend/src/services/priceProviderService.ts]]
 
-Historical quote cache code links: [[apps/node-backend/src/services/priceProviderService.ts]], [[apps/node-backend/src/config/kinesisConfig.ts]], [[apps/node-backend/src/routes/investments.ts]], [[apps/node-backend/src/main.ts]], [[alembic/versions/0019_asset_price_history_cache.py]]
+Historical quote cache code links: [[apps/node-backend/src/services/priceProviderService.ts]], [[apps/node-backend/src/config/kinesisConfig.ts]], [[apps/node-backend/src/routes/investments.ts]], [[apps/node-backend/src/main.ts]], `0019_asset_price_history_cache`
 
 ## Research history contract
 

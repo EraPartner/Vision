@@ -1467,9 +1467,9 @@
             "y": 752
           },
           {
-            "id": "db.alembic",
-            "label": "Alembic migrations",
-            "sub": "alembic/  · schema evolution",
+            "id": "db.migrations",
+            "label": "Database migrations",
+            "sub": "db/migrations/  · Kysely migrator",
             "kind": "data",
             "x": 400,
             "y": 752
@@ -2162,7 +2162,7 @@
             "db.postgres"
           ],
           [
-            "db.alembic",
+            "db.migrations",
             "db.postgres"
           ],
           [
@@ -2803,7 +2803,7 @@
                 "title": "Provision the restricted analysis role"
               },
               {
-                "from": "db.alembic",
+                "from": "db.migrations",
                 "to": "db.postgres",
                 "payload": "after successful migrations: validate executor and grant six approved views",
                 "annotation": "apps/node-backend/src/main.ts calls database/analysisRoleBootstrap.ts after runMigrations(); a restricted owner validates the preprovisioned role and resets relation grants without ALTER ROLE.",
@@ -2893,7 +2893,7 @@
                 "from": "sv.dossiers",
                 "to": "db.postgres",
                 "payload": "transactionally append snapshot and update current row plus links",
-                "annotation": "alembic/versions/0115_research_dossiers.py creates current, immutable-version, and deletion-safe link tables."
+                "annotation": "Historical migration 0115_research_dossiers (now part of db/migrations/0001_baseline.sql) created current, immutable-version, and deletion-safe link tables."
               },
               {
                 "from": "be.routes",
@@ -2949,7 +2949,7 @@
                 "from": "sv.monitors",
                 "to": "db.postgres",
                 "payload": "baseline, partial/failure, trigger, cooldown, or inbox episode",
-                "annotation": "alembic/versions/0116_analysis_monitors.py adds due rules, durable observations, and deduplicated in-app notifications."
+                "annotation": "Historical migration 0116_analysis_monitors (now part of db/migrations/0001_baseline.sql) added due rules, durable observations, and deduplicated in-app notifications."
               },
               {
                 "from": "db.postgres",
@@ -3821,7 +3821,7 @@
             "id": "github-release",
             "name": "Build & ship a desktop release",
             "category": "Build",
-            "summary": "GitHub Actions verifies the native runtime, builds the Electron bundle, and publishes the macOS release.",
+            "summary": "GitHub Actions requires a passing CI Complete on the tagged main commit, re-runs the secrets scan and dependency audits, builds the Electron bundle, and publishes the macOS release.",
             "steps": [
               {
                 "from": "build.release",
@@ -3832,14 +3832,14 @@
               {
                 "from": "build.electron",
                 "to": "db.postgres",
-                "payload": "embed migration bundle",
-                "annotation": "Alembic migrations packaged so the app can self-upgrade on first launch."
+                "payload": "embed db/ migration files",
+                "annotation": "packaging/electron/scripts/prepare-native-runtime.ts copies db/ (migrations and schema-inventory.sql) into the payload; the compiled backend applies them in-process on boot."
               },
               {
                 "from": "build.release",
                 "to": "build.githubrelease",
                 "payload": "draft assets + checksums, then publish",
-                "annotation": "release.yml checks the tag version and main ancestry, builds the exact verified commit, stages every asset in a draft, rechecks the tag, then publishes. Live immutable-release protection still needs readback."
+                "annotation": "release.yml checks the tag version and main ancestry, requires a successful github-actions CI Complete check run on that commit (ADR-221) instead of re-running the CI suites, builds the exact verified commit, stages every asset in a draft, rechecks the tag, then publishes. Live immutable-release protection still needs readback."
               },
               {
                 "from": "build.githubrelease",
@@ -4131,7 +4131,7 @@
                 "from": "build.native",
                 "to": "db.postgres",
                 "payload": "disposable PostgreSQL 18 · guarded migration to head · data-only seed SQL",
-                "annotation": "build-demo-seed.ts uses the packaged PostgreSQL and migration executable; native.ts applies the compiled demo-db/generate.mts output as the owner with ON_ERROR_STOP and one transaction."
+                "annotation": "build-demo-seed.ts uses the packaged PostgreSQL and the in-process migrator and rejects seed SQL that touches kysely_migration; native.ts applies the compiled demo-db/generate.mts output as the owner with ON_ERROR_STOP and one transaction."
               },
               {
                 "from": "db.postgres",
@@ -5172,7 +5172,7 @@
                 "from": "sv.auditverify",
                 "to": "db.postgres",
                 "payload": "scan chain, domain links, schema migration heads, and legacy cutover",
-                "annotation": "The verifier compares a supplied trusted checkpoint with the full audit history and current alembic_version."
+                "annotation": "apps/node-backend/src/services/auditVerificationService.ts compares a supplied trusted checkpoint with the full audit history and the latest public.kysely_migration name."
               },
               {
                 "from": "browser",
@@ -5214,7 +5214,7 @@
                 "from": "sv.auditretention",
                 "to": "db.postgres",
                 "payload": "delete eligible complete prefix under chain-head lock",
-                "annotation": "alembic/versions/0118_audit_retention_pruner.py rechecks age, continuity, checkpoint metadata, boundary hash, and successor."
+                "annotation": "audit_chain_prune_prefix (historical migration 0118, now in db/migrations/0001_baseline.sql) rechecks age, continuity, checkpoint metadata, boundary hash, and successor."
               },
               {
                 "from": "build.electron",
@@ -5519,14 +5519,14 @@
               },
               {
                 "from": "be.routes",
-                "to": "db.alembic",
-                "title": "Run guarded migrations",
-                "note": "Use the reviewed migration path before normal requests.",
+                "to": "db.migrations",
+                "title": "Run migrations",
+                "note": "Apply pending db/migrations files before normal requests.",
                 "payload": "runMigrations",
-                "annotation": "apps/node-backend/src/database/migrate.ts recognizes reviewed 0120–0127 revisions and pins their additive upgrade target to 0127. Legacy audit-bridge maintenance remains deferred and unknown revisions fail closed. Migration 0127 preserves bank chronology; see docs/adr/206-bank-chronology.md."
+                "annotation": "apps/node-backend/src/database/migrate.ts runs Kysely's Migrator in one transaction: an empty database gets 0001_baseline.sql and a fingerprint check, an Alembic database is adopted only at 0128 with the baseline fingerprint, and anything else fails closed (ADR-222)."
               },
               {
-                "from": "db.alembic",
+                "from": "db.migrations",
                 "to": "db.postgres",
                 "title": "Finish database initialization",
                 "note": "Ensure the analysis role and application grants after migrations.",

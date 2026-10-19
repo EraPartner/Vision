@@ -15,7 +15,7 @@ tags:
     native-runtime,
     postgresql,
   ]
-description: Current GitHub Actions quality gates, native PostgreSQL verification, and macOS release flow.
+description: The seven-job GitHub Actions CI layout, native PostgreSQL verification, Dependabot grouping, and the macOS release flow that reuses the CI Complete result.
 aliases: [CI, CD, GitHub Actions, release pipeline]
 related_code: [".github/workflows/ci.yml", ".github/workflows/release.yml"]
 ---
@@ -27,22 +27,40 @@ scan, or publish a product container image. The required aggregate check remains
 
 ## Pull-request and push CI
 
-`.github/workflows/ci.yml` classifies changed paths and runs the relevant independent jobs:
+`.github/workflows/ci.yml` runs seven jobs
+([[docs/adr/221-proportional-ci|ADR-221]]). `Detect Changes` classifies the diff with
+`scripts/ci-classify.py`; `Repo Checks` and `CI Complete` run on every diff, and the four code
+jobs run only when the diff is classified as code:
 
-| Area              | Jobs and evidence                                                             |
-| ----------------- | ----------------------------------------------------------------------------- |
-| Repository policy | cloud tooling, package/workflow supply-chain checks, commitlint, secrets scan |
-| Dependencies      | PR dependency review, Bun audit and pip-audit                                 |
-| Static checks     | frontend/backend lint, frontend/backend/Python type checks, generated checks  |
-| Builds and tests  | frontend build, frontend tests, Electron/runtime tests, backend tests         |
-| Database safety   | destructive-migration check against repository source                         |
-| Security          | Trivy filesystem scan with table and SARIF output                             |
-| Runtime           | native production-health and migration-reversibility smoke                    |
-| Contracts         | live API contract tests against a native backend and disposable PostgreSQL 18 |
+| Job                                     | Runs on             | Evidence                                                                                                                                                                                                                                 |
+| --------------------------------------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Detect Changes`                        | every diff          | path classification (`code` output; fails safe to `true`)                                                                                                                                                                                |
+| `Repo Checks`                           | every diff          | PR dependency review, gitleaks, agent-instruction and CI-classification checks, package boundaries, workflow supply-chain policy (each with its tests), commitlint, branch-protection verifier                                           |
+| `Lint`                                  | code diffs          | `bun audit` (`scripts/audit-js.sh`), frontend and backend ESLint, locale and OpenAPI-type drift, endpoint matrix, `test:scripts`, squawk migration lint (`db:lint`)                                                                     |
+| `Type Check`                            | code diffs          | strict TypeScript for frontend, shared packages, backend, backend tests, backend and repository scripts, and the Electron shell; shared package tests; production frontend build and `size:check`                                        |
+| `Test (Frontend 1/2)`, `(Frontend 2/2)` | code PRs            | Vitest split over two runners with `--shard`, without coverage                                                                                                                                                                           |
+| `Test (Frontend 1/1)`                   | code push to `main` | one unsharded `test:coverage` run that enforces the v8 coverage ratchet in `apps/frontend/vite.config.ts`                                                                                                                                |
+| `Test (Backend)`                        | code diffs          | Electron and native-runtime contract tests, backend tests with coverage on native PostgreSQL 18 and the Kysely type drift check, one production frontend build, native production-health and migration-reversibility smoke, live API contracts |
+| `CI Complete`                           | every diff          | aggregate result; the only required status check                                                                                                                                                                                         |
 
-`quality-gate` aggregates the portable pre-runtime checks. `CI Complete` aggregates every required
-stage and keeps a stable branch-protection name. A skipped path-filtered job is handled explicitly;
-an absent or failed required result is not treated as green.
+`CI Complete` keeps a stable branch-protection name. On a documentation-only diff it passes once
+`Detect Changes` and `Repo Checks` succeed. On a code diff every code job must report `success`;
+a skipped or failed job is fatal. A cancelled job is tolerated only when
+`scripts/ci-cancellation-policy.ts` confirms the pull request head has moved on. There is no
+separate Quality Gate job.
+
+The workflow triggers on pushes to `main` and on `opened`, `synchronize` and `reopened` pull
+request events. Every job, including the live API contracts, also runs on draft pull requests, so
+marking a pull request ready does not start a second run. Superseded pull request runs are
+cancelled; pushes to `main` are never cancelled, so every `main` commit gets a `CI Complete`
+verdict. On a documentation-only push that verdict covers only `Detect Changes` and
+`Repo Checks`.
+
+Pull requests do not measure frontend coverage and no longer receive a frontend coverage comment.
+The coverage ratchet runs on every push to `main`, and a release requires that run to have passed.
+A change that lowers coverage below a threshold therefore fails on `main` after merge, not on the
+pull request. Run `bun run test:coverage` locally when a change may affect coverage. The backend
+job still reports backend coverage on the pull request.
 
 The frontend build is followed by `size:check`. Its reviewed gzip limits are 475 KB for the
 initial preload graph and 1374 KB for all route assets. The 2026-10-13 build, including the
@@ -52,13 +70,13 @@ and engine remain lazy as required by [[docs/adr/200-belgian-tax-household-model
 The checker reads the generated `index.html` and assets to catch new eager imports and total
 bundle growth.
 
-Python is checked by `mypy --strict` from `config/mypy.ini` (Alembic env and migrations,
-`scripts/`, the packaged Alembic wrapper) in the `Type Check (Python)` job, which installs the
-hash-pinned `config/requirements.txt` and `config/requirements-dev.txt` and also runs the Alembic
-audit callback test. See [[docs/adr/184-strict-python-type-checking|ADR-184]].
+The repository has no Python. The pip-audit, `mypy --strict` and destructive-migration steps left
+`Lint` with Alembic ([[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]]). `Lint` now
+runs `bun run db:lint`, which lints `db/migrations/*.sql` with squawk and `config/squawk.toml`;
+destructive DDL fails unless a `-- squawk-ignore <rule>` comment marks it as intended.
 
 The backend source (`src/**/*.ts`) is checked by the strict `apps/node-backend/tsconfig.json` in
-the `Type Check (Backend)` job and in the release workflow; see
+the `Type Check` job; see
 [[docs/adr/186-backend-strict-typescript|ADR-186]] and
 [[docs/adr/191-retire-backend-checkjs|ADR-191]]. The earlier checkJs program and its
 `noImplicitAny` ratchet were retired once the last JavaScript source file converted. The backend
@@ -68,7 +86,8 @@ The same job installs the Electron workspace and runs `bun run typecheck:electro
 the strict TypeScript Electron shell (`packaging/electron/tsconfig.json`) and its sandboxed preload
 (`packaging/electron/tsconfig.preload.json`) without emitting
 ([[docs/adr/196-electron-shell-typescript|ADR-196]]). `bun run test:electron` compiles the shell
-into `packaging/electron/out/` before running its `node:test` suites, and the release job compiles
+into `packaging/electron/out/` before running its `node:test` suites in `Test (Backend)`, and the
+release packaging job compiles
 it with `bun build.ts` before `node out/scripts/build-native-package.js` packages the app.
 
 ### Dependency and workflow admission
@@ -84,59 +103,65 @@ reviewed workspace and an internal name in either Bun lockfile that resolves fro
 It also checks manifest and lockfile dependency agreement, requires integrity digests for registry
 packages, and rejects direct external package sources except reviewed tarballs pinned by URL and
 sha512 integrity (today only SheetJS `xlsx` 0.20.3 from `cdn.sheetjs.com`, which SheetJS no longer
-publishes to npm). It admits only the two reviewed project install hooks. The pull-request-only GitHub dependency review job rejects new high or critical severity
-vulnerabilities in ecosystems GitHub supports, and `quality-gate` requires that job to succeed on
-every pull request. GitHub does not currently list `bun.lock` as a supported dependency graph
+publishes to npm). It admits only the two reviewed project install hooks. The pull-request-only GitHub dependency review step in `Repo Checks` rejects new high or
+critical severity vulnerabilities in ecosystems GitHub supports. GitHub does not currently list `bun.lock` as a supported dependency graph
 format, so this check must not be treated as review of transitive Bun lockfile changes. The shared
 `scripts/audit-js.sh` audits both the root and Electron Bun lockfiles for known high or critical
 advisories. The package boundary check verifies their sources and integrity fields.
-`scripts/check-workflow-supply-chain.py` requires full commit SHA pins for external Actions,
+`scripts/check-workflow-supply-chain.ts` requires full commit SHA pins for external Actions,
 full commit SHA refs for external repository checkouts, `persist-credentials: false` on every
 checkout, and the frozen script-disabled shared install. Agent tooling checks use only the
 checked-in project scripts; no external agent-container repository is fetched.
-Both checks run in CI and release verification; their adversarial tests run in CI.
+Both checks and their adversarial tests run in the `Repo Checks` job. Release verification relies
+on the `CI Complete` result for the tagged commit instead of running them again.
 
-Dependabot delays routine version updates by seven days across the configured ecosystems. Security
-updates are not delayed by this setting. Updates are opened separately. Automatic dependency
-merging is disabled; every update requires human review. The sole maintainer reports that the
+Dependabot checks the root Bun workspace, the Electron npm lockfile and GitHub Actions weekly, and delays routine version updates by seven days. Each
+ecosystem has one group matching every dependency, so routine updates arrive as at most one
+grouped pull request per ecosystem per week. Security updates are not delayed by the cooldown.
+Automatic dependency merging is disabled; every update requires human review. The sole maintainer reports that the
 live branch rules require `CI Complete`; this was not independently read back.
 
 The sole maintainer reports that the GitHub settings are enabled. The first hosted release still
 needs to pass the release checks below before its artifacts are treated as verified.
 
-### Native database jobs
+### Native database checks
 
-Database-backed jobs install PostgreSQL 18 packages on the runner and use
-`scripts/with-test-db.sh` or the native runtime smoke harness. Each cluster is private, loopback
-only, migrated to the current Alembic head, and removed after the job. The test harness uses a
-generated password and SCRAM authentication so role-bootstrap password rejection is tested. It also
-enables the extensions required by production behavior. This is a real PostgreSQL check, not a
-mock and not a dependency on a pre-existing runner service.
+`Test (Backend)` installs PostgreSQL 18 packages on the runner and uses `scripts/with-test-db.sh`
+and the native runtime smoke harness. Each cluster is private, loopback only, migrated with the
+Kysely migrator to the latest `db/migrations/` file, and removed after its step. The test harness
+uses a generated password and SCRAM authentication so role-bootstrap password rejection is tested.
+It also enables the extensions required by production behavior. This is a real PostgreSQL check,
+not a mock and not a dependency on a pre-existing runner service.
 Direct `bun run test:db` runs also create a disposable cluster even if database URLs are exported;
 using a caller-managed test database requires `VISION_TEST_DB_USE_CALLER=1`.
 
-The backend CI job enables the audit and transaction performance probes, then runs migration
-fidelity, legacy retirement, ADR-088, ADR-090, and statement-scalar contract lifecycles in separate
-disposable clusters. Contract suites intentionally skip in the ordinary head-schema run because
-their fixtures require the guarded manual schema drop.
+The backend job enables the audit and transaction performance probes and sets
+`VISION_TEST_DB_VERIFY_CODEGEN=1`, so the run fails when
+`apps/node-backend/src/database/schema.generated.ts` differs from `kysely-codegen` output for the
+migrated schema. Migrator and adoption behaviour is covered by the ordinary suite
+(`tests/migrate.db.test.ts`). The same job then builds the production frontend once and starts the
+native production stack twice, in sequence: first migrate, `/health` and, when the latest
+migration ships a `.down.sql`, a down/up round trip (`VISION_NATIVE_VERIFY_MIGRATIONS=1`), then the
+live API contracts against the real backend.
 
-### Security scan
+### Security scanning
 
-Trivy scans the checked-out filesystem for vulnerable dependencies and known secrets. Results are
-uploaded to GitHub code scanning as SARIF when permitted. JavaScript and Python dependency audits
-remain separate gates so package-manager findings are visible even when the filesystem scan is
-unchanged.
+Repository security scanning is gitleaks, PR dependency review, `bun audit` in `ci.yml`, plus CodeQL in `.github/workflows/codeql.yml`. CodeQL is gated by the branch ruleset's
+`code_scanning` rule rather than by a required status check. Trivy is no longer run in CI or
+release, and `.trivyignore` was removed; see [[docs/adr/221-proportional-ci|ADR-221]], which
+supersedes the Trivy part of [[docs/adr/050-ci-supply-chain-security-tooling|ADR-050]].
 
 ## Release workflow
 
 `.github/workflows/release.yml` runs for version tags and manual releases:
 
-1. **Verify Release** checks that the tag's commit is reachable from `main`, checks the tag and
-   manifest versions, scans secrets and the release
-   filesystem, audits dependencies, regenerates checked artifacts, runs lint/type checks, builds
-   the frontend and its bundle limit, exercises native health and migration reversibility, and runs
-   script, Electron, frontend coverage, backend coverage against a disposable PostgreSQL cluster,
-   and live API contract tests.
+1. **Verify Release** checks the tag format, that the tag's commit is reachable from `main`, and
+   that the tag matches the root, frontend and Electron manifest versions. It does not run lint,
+   type checks, tests or native checks again. Instead it requires a successful `CI Complete`
+   check run from the GitHub Actions app on the tagged commit, which is the push run on `main`
+   that includes the frontend coverage ratchet. It then runs the checks whose answer can change
+   after CI: a full-tree gitleaks scan, and `scripts/audit-js.sh`. If CI on that commit
+   has not finished or failed, wait for it or re-run it before releasing.
 2. **Build mac .app + DMG** builds the ad-hoc signed native macOS artifacts from the exact
    verified commit with pinned runtime inputs. It scans the packaged app into a CycloneDX software
    bill of materials (SBOM), checks that it contains components, and attests the artifacts and SBOM
@@ -195,7 +220,7 @@ bun run lint
 bun run lint:backend
 bun run typecheck
 bun run typecheck:electron
-bun run typecheck:python
+bun run db:lint
 bun run validate-locales
 bun run test:scripts
 bun run test
@@ -225,6 +250,7 @@ bypass is permitted.
 
 ## Related
 
+- [[docs/adr/221-proportional-ci|ADR-221: Proportional CI]]
 - [[docs/testing/testing|Testing Guide]]
 - [[docs/guides/deployment|Deployment Guide]]
 - [[docs/security/index|Security Documentation]]

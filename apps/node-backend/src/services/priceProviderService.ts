@@ -16,6 +16,7 @@ import {
   recordError as recordProviderError,
 } from "./providerHealthService.ts";
 import { convertRowsToEur } from "./currency/currencyConversionService.ts";
+import { loadLatestRatesToEur } from "./currency/latestRateConversion.ts";
 import {
   cacheGet,
   cacheSet,
@@ -626,6 +627,15 @@ export async function fetchHistoricalPrices(
       Array.isArray(points) &&
       points.length > 0
     ) {
+      // Without stored USD and target rates the series cannot be converted:
+      // keep the stored history rather than persist USD prices 1:1.
+      const latest = await loadLatestRatesToEur();
+      if (!latest.has("USD") || !latest.has(invCurrency)) {
+        logger.warn(
+          `Kinesis history: no stored USD/${invCurrency} rate, keeping stored points for ${symbol}`,
+        );
+        return _filterHistoricalPoints(cachedDbPoints, from, to);
+      }
       const rows = points.map((p) => ({
         amount: p.price,
         currency: "USD",
@@ -636,10 +646,11 @@ export async function fetchHistoricalPrices(
         useHistoricalRatesByDate: true,
         dateField: "date",
       });
-      points = converted.map(({ point, amount_eur }) => ({
-        ...point,
-        price: amount_eur,
-      }));
+      // The stored-rate check above means every point converts; a point that
+      // still has no rate is dropped rather than persisted in USD.
+      points = converted.flatMap(({ point, amount_eur }) =>
+        amount_eur === undefined ? [] : [{ ...point, price: amount_eur }],
+      );
     }
 
     return _persistAndResolve(

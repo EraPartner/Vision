@@ -69,6 +69,8 @@ export interface StatisticsData {
     totalSpending: number;
     averageMonthlySpending: number;
     averageMonthlyIncome: number;
+    /** Transactions left out of the figures for want of a stored rate (ADR-216). */
+    unconvertedCount: number;
 }
 
 export type GraphExclusions = Record<string, boolean>;
@@ -301,6 +303,8 @@ export function mapToStatisticsData(
         totalSpending,
         averageMonthlySpending: totalSpending / monthCount,
         averageMonthlyIncome: totalIncome / monthCount,
+        // The monthly summary covers every transaction in the window.
+        unconvertedCount: monthlySummary.unconverted_count ?? 0,
     };
 }
 

@@ -40,7 +40,7 @@ export function SankeyTab({
     exclusionsApply,
     availableYears,
 }: SankeyTabProps) {
-    const { t } = useLanguage();
+    const { t, tc } = useLanguage();
     const loadingSurfaceProps = useLoadingSurfaceProps();
     const { currency } = useChartCurrencyFormatter();
     // Resolved exclusion set (settings + hidden categories) — using raw
@@ -120,6 +120,14 @@ export function SankeyTab({
                     <div className="flex h-40 items-center justify-center type-callout text-label-secondary">
                         {t("statsPage.sankey.noData")}
                     </div>
+                )}
+                {flowData && !isLoading && flowData.unconverted_count > 0 && (
+                    <p className="mb-3 type-footnote text-warning">
+                        {tc(
+                            "common.fxUnavailableTransactions",
+                            flowData.unconverted_count,
+                        )}
+                    </p>
                 )}
                 {flowData && !isLoading && (
                     <SankeyChart data={flowData} height={420} />

@@ -2,8 +2,8 @@
 title: Testing Documentation Index
 type: testing-index
 status: active
-date: 2026-10-13
-updated: 2026-10-08
+date: 2026-10-19
+updated: 2026-10-19
 last-updated: 2026-10-06
 modified: 2026-10-06
 last_updated_timestamp: 2026-10-06T00:00:00Z
@@ -236,7 +236,7 @@ bun vitest run src/path/to/test.test.js
 - Related code: [[apps/node-backend/src/repositories/categoryRepository.ts]], [[apps/node-backend/src/repositories/plannedTransactionRepository.ts]]
 
 > [!note] Schema initialization test archived
-> Schema bootstrap testing was removed in Phase 1 (2026-04-21) when `schemaInit.js` was replaced by Alembic migrations ([[docs/adr/027-alembic-single-source-of-schema|ADR-027]]).
+> Schema bootstrap testing was removed in Phase 1 (2026-04-21) when `schemaInit.js` was replaced by Alembic migrations ([[docs/adr/027-alembic-single-source-of-schema|ADR-027]]); since [[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]] the schema comes from `db/migrations/` through the Kysely migrator.
 
 ### Coverage update addendum (2026-04-11, adapters/raw import)
 

@@ -36,10 +36,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Database migrations moved to TypeScript** ([ADR-222]). Alembic and its 128 revisions are
+  replaced by Kysely's migrator and one squashed baseline, `db/migrations/0001_baseline.sql`;
+  migration SQL is linted with squawk (`bun run db:lint`). Python, the PyInstaller migration
+  runner, mypy and `pip-audit` are gone from development, CI and the macOS app. **Breaking:**
+  backups taken before the switch are refused on restore (`BACKUP_PRE_BASELINE`); take a fresh
+  backup after upgrading.
 - Upgraded to **React 19** ([ADR-076]).
 - Replaced hard-coded color literals with semantic design tokens across the UI.
 - Centralized dashboard/statistics exclusion resolution; numerous memoization and query
   refactors.
+- **Proportional CI** — CI runs seven jobs instead of about 22; pull requests split the
+  frontend tests over two shards without coverage, while pushes to `main` keep the coverage
+  ratchet. Dependabot opens one grouped pull request per ecosystem. Release verification
+  requires a passing `CI Complete` on the tagged commit instead of re-running the suites
+  ([ADR-221]).
 
 ### Fixed
 
@@ -62,6 +73,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Admin auth** replaced IP-allowlist with token-or-open + a CSRF guard ([ADR-063]).
 - CI supply-chain tooling: gitleaks (CI + pre-commit), `bun audit`, `pip-audit`, Trivy
   image scan, CodeQL SAST, and Electron release builds with `--ignore-scripts` ([ADR-050]).
+  The Trivy scan was later removed as overlapping Dependency Review, `bun audit` and
+  `pip-audit` ([ADR-221]).
 - Bumped transitive `tmp` 0.2.5 → 0.2.7 (GHSA-ph9p-34f9-6g65).
 
 ## [1.0.2] — 2026-05-04
@@ -94,3 +107,5 @@ planned/recurring transactions, en/nl i18n, and an Electron desktop build.
 [ADR-075]: docs/adr/075-visual-effects-tiers-display-adaptation.md
 [ADR-076]: docs/adr/076-react-19-upgrade.md
 [ADR-077]: docs/adr/077-devcontainer-apple-container-runtime.md
+[ADR-221]: docs/adr/221-proportional-ci.md
+[ADR-222]: docs/adr/222-typescript-migrations-kysely-baseline.md

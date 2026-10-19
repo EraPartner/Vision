@@ -16,8 +16,7 @@ bun run dev
 
 This starts Vision's private PostgreSQL 18.6 development cluster, the backend in watch mode, and
 Vite. It does not require a running Homebrew PostgreSQL service. The native preparation step needs
-PostgreSQL 18.6 build files, the pinned Python migration build environment, and the
-pinned Chrome Headless Shell download. See
+PostgreSQL 18.6 build files and the pinned Chrome Headless Shell download. See
 [`docs/guides/native-macos-runtime.md`](../../docs/guides/native-macos-runtime.md).
 
 To run only the backend, provide a real `DATABASE_URL` and, for schema changes,
@@ -48,15 +47,20 @@ The authoritative variable inventory is
 
 ## Database migrations
 
-Alembic remains the single source of schema definition, but writes must go through Vision's
-guarded JavaScript runner because it preflights `alembic_version.version_num` as `VARCHAR(64)`:
+`db/migrations/` holds the schema. `0001_baseline.sql` is the full schema; each later
+`NNNN_name.sql` is one migration, and an optional `NNNN_name.down.sql` makes it reversible.
+`src/database/migrate.ts` applies them with Kysely's migrator, records them in
+`public.kysely_migration`, and appends a `schema_migration` audit event for each step:
 
 ```bash
-bun run db:upgrade
+bun run db:migrate                                   # apply pending migrations
+bun run apps/node-backend/scripts/db-migrate.ts status
+bun run apps/node-backend/scripts/db-migrate.ts new <name>
+bun run apps/node-backend/scripts/db-migrate.ts down # only with a .down.sql
 ```
 
-Do not use bare `alembic upgrade`, stamp, reset, or downgrade against live data. Native startup
-invokes the same underlying migration runner automatically.
+The migrator uses `DATABASE_URL_MIGRATIONS` when set, otherwise `DATABASE_URL`. Native startup
+runs the same migrator automatically.
 
 ## Focused checks
 

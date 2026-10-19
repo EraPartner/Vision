@@ -2,8 +2,8 @@
 title: Materialized Views & Aggregation Strategy
 type: performance
 status: active
-date: 2026-10-11
-updated: 2026-10-08
+date: 2026-10-19
+updated: 2026-10-19
 tags:
   [
     performance,
@@ -32,11 +32,7 @@ related_code:
   [
     "apps/node-backend/src/services/aggregationRefresh.ts",
     "apps/node-backend/src/services/materializedViewService.ts",
-    "alembic/versions/0035_add_recipient_aggregations.py",
-    "alembic/versions/0038_drop_mv_recipient_monthly.py",
-    "alembic/versions/0080_drop_agg_recipient_totals.py",
-    "alembic/versions/0082_drop_mv_bank_balances.py",
-    "alembic/versions/0094_drop_mv_cashflow_daily.py",
+    "db/migrations/0001_baseline.sql",
   ]
 ---
 
@@ -384,7 +380,7 @@ date_trunc('month', t.date)
 - [[docs/reference/database-triggers|Database Triggers]] — All trigger definitions
 - [[apps/node-backend/src/services/aggregationRefresh.ts|aggregationRefresh.js]] — Orchestrator source
 - **Migrations:**
-  - [[alembic/legacy_versions/0026_finance_aggregations.py|0026_finance_aggregations.py]] (legacy, archived)
-  - [[alembic/versions/0035_add_recipient_aggregations.py|0035_add_recipient_aggregations.py]] (historical Phase 1 baseline)
-  - [[alembic/versions/0080_drop_agg_recipient_totals.py|0080_drop_agg_recipient_totals.py]]
-  - [[alembic/versions/0082_drop_mv_bank_balances.py|0082_drop_mv_bank_balances.py]]
+  - `0026_finance_aggregations` (legacy, archived)
+  - `0035_add_recipient_aggregations` (historical Phase 1 baseline)
+  - `0080_drop_agg_recipient_totals`
+  - `0082_drop_mv_bank_balances`

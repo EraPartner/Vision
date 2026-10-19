@@ -264,6 +264,8 @@ export interface Transaction {
     memo?: string | null | undefined;
     amount: number;
     amount_eur?: number | undefined;
+    /** normalize_to_eur only: no stored rate, `amount_eur` is the native amount (ADR-216). */
+    amount_eur_unconverted?: true | undefined;
     currency?: string | undefined;
     balance?: number | undefined;
     /** Per-account, per-currency running balance; present when include_balance=true. */

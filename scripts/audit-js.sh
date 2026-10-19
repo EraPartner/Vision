@@ -2,7 +2,7 @@
 #
 # Single source of truth for the JS dependency audit.
 #
-# Both the CI "Deps Audit (JS)" job (.github/workflows/ci.yml) and the release
+# Both the CI "Lint" job (.github/workflows/ci.yml) and the release
 # "verify" job (.github/workflows/release.yml) call this script instead of each
 # spelling out their own `bun audit` invocation. Previously they diverged — CI
 # carried --ignore flags while release ran a plain `bun audit --audit-level=high`
@@ -12,8 +12,12 @@
 # Accepted-risk ignores, if ever needed, go on the command below as
 # `--ignore=<GHSA-id>` with a one-line justification comment. Prefer bumping the
 # dependency past its fix (root package.json overrides/resolutions) over ignoring
-# it whenever a patched version exists. There are currently no accepted-risk
-# ignores: all known HIGH advisories are resolved past their fix in-tree.
+# it whenever a patched version exists.
+#
+# Accepted risk (no patched release exists; recheck when braces > 3.0.3 ships):
+#   GHSA-vfj7-8cjw-p6xm  braces <=3.0.3 stack exhaustion on deeply nested
+#   patterns. Reached only through kysely-codegen > micromatch, a dev-only tool
+#   that is never bundled; its only pattern is the fixed `db:codegen` argument.
 #
 # Runs from the repo root; the workflows check out + install before invoking it.
 # The root and Electron package each have a committed Bun lockfile, so both
@@ -21,5 +25,5 @@
 
 set -eu
 
-bun audit --audit-level=high
+bun audit --audit-level=high --ignore=GHSA-vfj7-8cjw-p6xm
 (cd packaging/electron && bun audit --audit-level=high)

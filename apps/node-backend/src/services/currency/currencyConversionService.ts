@@ -8,7 +8,8 @@
  * - Supplements ECB rates with open.er-api.com for currencies ECB doesn't cover
  *   (AED, SAR, KWD, QAR, BHD, OMR, PKR, EGP, NGN, and ~130 more)
  * - ECB always takes priority over the supplementary source on overlapping currencies
- * - If both APIs are unavailable the service falls back to DB then hardcoded constants
+ * - If both APIs are unavailable the service uses the stored rates; a currency
+ *   without a stored rate has no rate (callers flag it), never a constant
  */
 
 import { query } from "../../database/connection.ts";
@@ -68,64 +69,18 @@ let historicalIndexCache: {
   builtAt: number;
 } | null = null;
 
-// Static hardcoded fallback rates. Never mutated.
-// Covers ECB currencies plus common non-ECB currencies (Gulf, South Asia, Africa, etc.)
-export const FALLBACK_RATES: RateTable = {
-  EUR: 1.0,
-  // ECB currencies
-  USD: 1 / 1.09,
-  GBP: 1 / 0.85,
-  CHF: 1 / 0.95,
-  JPY: 1 / 163.0,
-  SEK: 1 / 11.2,
-  NOK: 1 / 11.5,
-  DKK: 1 / 7.46,
-  PLN: 1 / 4.3,
-  CZK: 1 / 25.3,
-  HUF: 1 / 395.0,
-  RON: 1 / 4.97,
-  TRY: 1 / 35.0,
-  AUD: 1 / 1.66,
-  CAD: 1 / 1.5,
-  CNY: 1 / 7.9,
-  INR: 1 / 91.0,
-  BRL: 1 / 5.4,
-  IDR: 1 / 17600.0,
-  KRW: 1 / 1450.0,
-  MXN: 1 / 18.5,
-  MYR: 1 / 4.8,
-  NZD: 1 / 1.78,
-  PHP: 1 / 61.0,
-  SGD: 1 / 1.46,
-  THB: 1 / 37.5,
-  ZAR: 1 / 19.5,
-  HKD: 1 / 8.5,
-  ISK: 1 / 150.0,
-  ILS: 1 / 3.95,
-  // Supplementary currencies (open.er-api.com)
-  AED: 1 / 4.01,
-  SAR: 1 / 4.09,
-  KWD: 1 / 0.335,
-  QAR: 1 / 3.97,
-  BHD: 1 / 0.41,
-  OMR: 1 / 0.42,
-  PKR: 1 / 305.0,
-  EGP: 1 / 53.0,
-  MAD: 1 / 10.9,
-  NGN: 1 / 1650.0,
-  KES: 1 / 141.0,
-};
-
-// Live fallback — refreshed to latest fetched rates so cache-miss + DB-miss still gets fresh data.
-let liveFallbackRates: RateTable = FALLBACK_RATES;
+// Rate table when nothing is stored yet: only the EUR base, so every other
+// currency reads as unavailable.
+const NO_STORED_RATES: RateTable = Object.freeze({ EUR: 1 });
 
 // ─── Cache helpers ────────────────────────────────────────────────────────────
 
 /**
  * Get current rates using the cache hierarchy:
  *   1. In-memory cache (24-hour TTL)
- *   2. Database (latest rows)
- *   3. Hardcoded fallback
+ *   2. Database (latest stored rows)
+ * With no stored rates the table holds only EUR: other currencies have no
+ * rate, which callers flag and leave out, never convert at a constant or 1:1.
  */
 async function getRates(): Promise<RateTable> {
   if (memoryCache && Date.now() - memoryCache.timestamp < CACHE_LIFETIME_MS) {
@@ -138,12 +93,10 @@ async function getRates(): Promise<RateTable> {
     return dbRates;
   }
 
-  logger.warn(
-    "Using fallback exchange rates — ECB API and database unavailable",
-  );
+  logger.warn("No stored exchange rates — only EUR amounts can be converted");
   // Return the reference (callers never mutate) so warmCache can detect that
-  // the fallback path was taken via identity comparison.
-  return liveFallbackRates;
+  // nothing is stored via identity comparison.
+  return NO_STORED_RATES;
 }
 
 /**
@@ -182,9 +135,7 @@ export async function getHistoricalRateIndex(
     return cache.index;
   }
 
-  const union = fresh
-    ? [...new Set([...cache.currencies, ...wanted])]
-    : wanted;
+  const union = fresh ? [...new Set([...cache.currencies, ...wanted])] : wanted;
   const rows = await queryRows(
     historicalRateRowSchema,
     `SELECT currency_code, to_char(rate_date, 'YYYY-MM-DD') AS rate_date, rate_to_eur
@@ -261,7 +212,7 @@ export async function listLatestStoredRates(): Promise<{
 }
 
 /**
- * Fetch fresh rates from both sources, update DB, memory cache, and fallback map.
+ * Fetch fresh rates from both sources, update the DB and the memory cache.
  * ECB is fetched first and takes priority; open.er-api fills in currencies ECB doesn't publish.
  * Called on startup and every 12 hours by the scheduler in main.ts.
  */
@@ -281,13 +232,18 @@ export async function warmCache() {
     if (erarRates) {
       void recordProviderSuccess("open.er-api");
     } else {
-      void recordProviderError("open.er-api", "open.er-api fetch returned no rates");
+      void recordProviderError(
+        "open.er-api",
+        "open.er-api fetch returned no rates",
+      );
     }
 
     if (!ecbRates && !erarRates) {
       const rates = await getRates();
       logger.warn(
-        `Exchange rate cache warmed from ${rates === liveFallbackRates ? "fallback" : "database"} (all APIs unavailable)`,
+        rates === NO_STORED_RATES
+          ? "No exchange rates available (all APIs unavailable, none stored)"
+          : "Exchange rate cache warmed from database (all APIs unavailable)",
       );
       return;
     }
@@ -311,13 +267,10 @@ export async function warmCache() {
     // Only provider quotes may be stamped with today's date in the database.
     const storedRates = await loadFromDatabase();
     const mergedRates = {
-      ...FALLBACK_RATES,
-      ...liveFallbackRates,
       ...(storedRates ?? {}),
       ...(memoryCache?.rates ?? {}),
       ...freshRates,
     };
-    liveFallbackRates = mergedRates;
     await saveToDatabase(freshRates);
     memoryCache = { rates: mergedRates, timestamp: Date.now() };
     // Fresh rates were written — drop the cached historical index so the 12h
@@ -340,9 +293,13 @@ export interface ConvertRowsOptions {
   dateField?: string | null;
 }
 
-/** Fields {@link convertRowsToEur} adds to each row. */
+/**
+ * Fields {@link convertRowsToEur} adds to each row. `amount_eur` is undefined
+ * when no stored rate converts the row (ADR-216): callers leave such a row out
+ * of a total and count it, never add its native amount 1:1.
+ */
 export type ConversionFields = {
-  amount_eur: number;
+  amount_eur: number | undefined;
   used_fallback_rate?: boolean;
   fallback_reason?: string;
 };
@@ -383,7 +340,9 @@ function toDateColumn(value: unknown): DateColumn {
 /**
  * Convert an array of rows to a target currency (default EUR).
  * Rows must have `amount` and `currency` fields.
- * Returns rows with an `amount_eur` field containing the converted amount.
+ * Returns rows with an `amount_eur` field containing the converted amount, or
+ * undefined when no stored rate (historical or latest) exists for the source or
+ * the target currency.
  *
  * Rows are arbitrary query projections (any column may be the date — see
  * `dateField`); each result row keeps the caller's own row type.
@@ -503,24 +462,19 @@ export async function convertRowsToEur<T extends ConvertibleRow>(
       ? { used_fallback_rate: true, fallback_reason: "historical_rate_missing" }
       : {};
 
-    if (fromResolved.rate === undefined || fromResolved.rate === 0) {
-      logger.warn(
-        `Unsupported source currency ${currency}, using 1:1 conversion`,
-      );
-      converted.push({ ...row, amount_eur: amount, ...fallbackFields });
-      continue;
-    }
-    if (toResolved.rate === undefined || toResolved.rate === 0) {
-      logger.warn(`Unsupported target currency ${toCur}, falling back to EUR`);
-      converted.push({
-        ...row,
-        // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
-        amount_eur: amount * fromResolved.rate,
-        ...fallbackFields,
+    if (
+      fromResolved.rate == null ||
+      fromResolved.rate === 0 ||
+      toResolved.rate == null ||
+      toResolved.rate === 0
+    ) {
+      logger.warn("No stored exchange rate, row left unconverted", {
+        from: currency,
+        to: toCur,
       });
+      converted.push({ ...row, amount_eur: undefined, ...fallbackFields });
       continue;
     }
-
     converted.push({
       ...row,
       // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
@@ -533,16 +487,18 @@ export async function convertRowsToEur<T extends ConvertibleRow>(
 }
 
 /**
- * Generic converter from any currency to any currency.
+ * Generic converter from any currency to any currency at the latest stored
+ * rates.
  *
  * @param fromCurrency falsy short-circuits to `amount`
  * @param toCurrency defaults to EUR when falsy
+ * @returns undefined when either currency has no stored rate
  */
 export async function convertToCurrency(
   amount: number,
   fromCurrency: string | null | undefined,
   toCurrency: string | null | undefined,
-): Promise<number> {
+): Promise<number | undefined> {
   if (
     !fromCurrency ||
     fromCurrency.toUpperCase().trim() ===
@@ -569,13 +525,15 @@ export async function loadCurrentRates(): Promise<RateTable> {
  *
  * @param fromCurrency falsy short-circuits to `amount`
  * @param toCurrency defaults to EUR when falsy
+ * @returns undefined when the table has no rate for either currency; callers
+ *   leave the amount out of a total and flag it, never add it 1:1
  */
 export function convertWithRates(
   amount: number,
   fromCurrency: string | null | undefined,
   toCurrency: string | null | undefined,
   rates: RateTable,
-): number {
+): number | undefined {
   if (
     !fromCurrency ||
     fromCurrency.toUpperCase().trim() ===
@@ -590,16 +548,12 @@ export function convertWithRates(
   const rateFrom = rates[from];
   const rateTo = rates[to];
 
-  if (rateFrom === undefined || rateFrom === 0) {
-    logger.warn(`Unsupported currency ${from}, using 1:1 conversion`);
-    return amount;
-  }
-  if (rateTo === undefined || rateTo === 0) {
-    logger.warn(
-      `Unsupported target currency ${to}, falling back to EUR conversion`,
-    );
-    // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
-    return amount * rateFrom;
+  if (rateFrom == null || rateFrom === 0 || rateTo == null || rateTo === 0) {
+    logger.warn("No stored exchange rate, amount left unconverted", {
+      from,
+      to,
+    });
+    return undefined;
   }
 
   // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
@@ -731,8 +685,7 @@ export async function backfillPortfolioHistoricalRates() {
 
   let repaired = 0;
   try {
-    repaired =
-      (await repairHistoricalRatesFromFullHistory(pairRows)) ?? 0;
+    repaired = (await repairHistoricalRatesFromFullHistory(pairRows)) ?? 0;
   } catch (err) {
     // A contract violation is a data fault, not a transient failure: surface it.
     if (err instanceof RowContractError) throw err;
@@ -836,7 +789,6 @@ export default {
   warmCache,
   clearMemoryCache,
   backfillPortfolioHistoricalRates,
-  FALLBACK_RATES,
 };
 
 export { clearHistoricalIndexCache as __clearHistoricalIndexCache };

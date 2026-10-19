@@ -32,6 +32,7 @@ describe("computeSankeyFlow (SQL-grouped rows)", () => {
         currency: "EUR",
         is_income: true,
         amount: "1000",
+        cnt: "1",
       },
       {
         category_id: 1,
@@ -39,6 +40,7 @@ describe("computeSankeyFlow (SQL-grouped rows)", () => {
         currency: "USD",
         is_income: true,
         amount: "100",
+        cnt: "1",
       },
       {
         category_id: 2,
@@ -46,6 +48,7 @@ describe("computeSankeyFlow (SQL-grouped rows)", () => {
         currency: "EUR",
         is_income: false,
         amount: "300",
+        cnt: "1",
       },
       {
         category_id: 3,
@@ -53,6 +56,7 @@ describe("computeSankeyFlow (SQL-grouped rows)", () => {
         currency: "EUR",
         is_income: false,
         amount: "400",
+        cnt: "1",
       },
     ]);
     convertRowsToEur.mockResolvedValueOnce([
@@ -116,6 +120,7 @@ describe("computeSankeyFlow (SQL-grouped rows)", () => {
         currency: "EUR",
         is_income: true,
         amount: "1000",
+        cnt: "1",
       },
       {
         category_id: null,
@@ -123,6 +128,7 @@ describe("computeSankeyFlow (SQL-grouped rows)", () => {
         currency: "EUR",
         is_income: false,
         amount: "100",
+        cnt: "1",
       },
       {
         category_id: 7,
@@ -130,6 +136,7 @@ describe("computeSankeyFlow (SQL-grouped rows)", () => {
         currency: "EUR",
         is_income: false,
         amount: "200",
+        cnt: "1",
       },
       {
         category_id: 8,
@@ -137,6 +144,7 @@ describe("computeSankeyFlow (SQL-grouped rows)", () => {
         currency: "EUR",
         is_income: false,
         amount: "50",
+        cnt: "1",
       },
     ]);
     convertRowsToEur.mockResolvedValueOnce([
@@ -199,6 +207,7 @@ describe("computeSankeyFlow (SQL-grouped rows)", () => {
         currency: "EUR",
         is_income: true,
         amount: "100",
+        cnt: "1",
       },
       {
         category_id: 2,
@@ -206,6 +215,7 @@ describe("computeSankeyFlow (SQL-grouped rows)", () => {
         currency: "EUR",
         is_income: false,
         amount: "150",
+        cnt: "1",
       },
     ]);
     convertRowsToEur.mockResolvedValueOnce([
@@ -251,6 +261,7 @@ describe("computeSankeyFlow (SQL-grouped rows)", () => {
         currency: "EUR",
         is_income: true,
         amount: "1.005",
+        cnt: "1",
       },
       ...[2, 3, 4].map((category_id) => ({
         category_id,
@@ -258,6 +269,7 @@ describe("computeSankeyFlow (SQL-grouped rows)", () => {
         currency: "EUR",
         is_income: false,
         amount: "0.335",
+        cnt: "1",
       })),
     ]);
     convertRowsToEur.mockResolvedValueOnce([

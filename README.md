@@ -76,14 +76,13 @@ Most finance apps trade your privacy for convenience. Vision gives you both:
 
 ### Option A — macOS Desktop (recommended for end users)
 
-Install the release DMG. The application contains PostgreSQL 18, the migration
-runner, the Bun backend, the production frontend, and the browser used for PDF
+Install the release DMG. The application contains PostgreSQL 18, the schema
+migrations, the Bun backend, the production frontend, and the browser used for PDF
 reports. A running Homebrew PostgreSQL service is not required.
 
-To build the same application from source, first provide Bun, Node.js, a
-PostgreSQL 18.6 distribution from Postgres.app or Homebrew, and a Python build
-environment containing the pinned requirements and PyInstaller 6.22.2. The
-PostgreSQL service does not need to be started. Then run:
+To build the same application from source, first provide Bun, Node.js, and a
+PostgreSQL 18.6 distribution from Postgres.app or Homebrew. No Python toolchain is
+needed. The PostgreSQL service does not need to be started. Then run:
 
 ```bash
 git clone https://github.com/EraPartner/Vision.git
@@ -125,12 +124,12 @@ that staging directory on exit. They do not depend on, reuse, or clear the repos
 git clone https://github.com/EraPartner/Vision.git
 cd Vision
 bun install
-bun run native:prepare     # one-time native PostgreSQL/migration/PDF payload
+bun run native:prepare     # one-time native PostgreSQL/PDF payload
 bun run dev                # start private PostgreSQL, backend, and frontend
 ```
 
-`native:prepare` needs PostgreSQL 18.6 build files and the pinned Python build
-dependencies, but it never starts the external PostgreSQL service.
+`native:prepare` needs PostgreSQL 18.6 build files, but it never starts the external
+PostgreSQL service.
 
 | Service     | URL                                                         |
 | ----------- | ----------------------------------------------------------- |
@@ -165,19 +164,19 @@ Vision/
 │   └── types/                  # Shared TypeScript types (generated from openapi.yaml)
 ├── packaging/
 │   └── electron/               # Desktop wrapper
-├── alembic/                    # PostgreSQL migrations
+├── db/migrations/              # PostgreSQL migrations (Kysely migrator, 0001 baseline)
 ├── i18n/source/                # i18n source files → compiled to apps/frontend/src/locales/
 ├── scripts/                    # Locale generation, validation, sync tooling
 ├── docs/                       # Obsidian knowledge base (ADRs, API docs, feature specs)
 ├── openapi.yaml                # REST API contract (source of truth for types)
-└── config/                     # Alembic config
+└── config/                     # Shared tool configuration (squawk, gitleaks, PostgreSQL)
 ```
 
 ### All Scripts
 
 ```bash
 # Development
-bun run native:prepare       # one-time private PostgreSQL/migration/PDF payload
+bun run native:prepare       # one-time private PostgreSQL/PDF payload
 bun run dev                  # private PostgreSQL + watched backend + Vite
 bun run backend              # backend only; requires an explicit database config
 
@@ -198,18 +197,18 @@ bun run test                 # backend Vitest suite
 bun run test:db              # backend suite with a private temporary PostgreSQL 18
 bun run test:frontend        # full frontend suite with disposable PostgreSQL 18 and live API contracts
 bun run test:all             # backend + full frontend suites (concurrent)
-bun run test:coverage        # frontend unit/integration coverage report; CI runs live contracts separately
+bun run test:coverage        # frontend unit/integration coverage report; CI enforces it on pushes to main
 bun run test:watch           # backend watch mode with disposable PostgreSQL 18
 
-# Database (Alembic / PostgreSQL)
-bun run db:upgrade           # apply all pending migrations
-bun run db:downgrade         # destructive maintenance only; never run on live data
-bun run db:current           # show current revision
-bun run db:history           # show migration history
-bun run db:stamp             # expert recovery only; does not run migrations
-bun run db:revision          # create a new autogenerate migration
+# Database (Kysely migrator / PostgreSQL)
+bun run db:migrate           # apply all pending migrations
+bun run db:migrate:down      # revert the latest migration (needs its .down.sql); never on live data
+bun run db:status            # list applied and pending migrations
+bun run db:new -- <name>     # create db/migrations/NNNN_<name>.sql
+bun run db:lint              # squawk lint of migration SQL
+bun run db:drift-check       # compare a database with the 0001 baseline (read-only)
+bun run db:codegen           # regenerate the Kysely database types
 bun run db:index-stats       # report index usage stats
-bun run db:precision-drift   # check for numeric precision drift
 bun run quotes:densify       # backfill/densify asset price history
 
 # Electron
@@ -307,7 +306,7 @@ When adding new adapters, endpoints, or env vars, update `openapi.yaml`, regener
 
 ## Releases
 
-Tag-driven releases (`vX.Y.Z`) trigger GitHub Actions to build and push release artifacts (container images + Electron packages) and publish a GitHub Release.
+Tag-driven releases (`vX.Y.Z`) trigger GitHub Actions to build the Apple Silicon macOS app and DMG and publish a GitHub Release. The release does not re-run the test suites: it requires the tagged commit, which must be on `main`, to have a passing `CI Complete` check, then re-runs the full-tree secrets scan and the dependency audits before packaging. See [docs/guides/cicd-pipelines.md](docs/guides/cicd-pipelines.md).
 
 Workflow: `.github/workflows/release.yml`
 

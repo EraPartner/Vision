@@ -125,7 +125,8 @@ related_code:
     "apps/frontend/src/hooks/useUpdateStatus.ts",
     "apps/frontend/src/features/settings/sections/AboutSection.tsx",
     "apps/node-backend/src/main.ts",
-    "alembic/versions/0001_initial_database_schema.py",
+    "apps/node-backend/src/database/migrate.ts",
+    "db/migrations/0001_baseline.sql",
     ".github/workflows/ci.yml",
     ".github/workflows/release.yml",
   ]
@@ -136,7 +137,7 @@ related_code:
 ## Overview
 
 Vision runs as an Electron desktop application, bundling the React frontend, compiled Bun backend,
-PostgreSQL 18.6, migration executable, and Chrome Headless Shell into one distributable package.
+PostgreSQL 18.6, the `db/` migration files, and Chrome Headless Shell into one distributable package.
 Electron manages a private PostgreSQL cluster in the durable Vision application-data directory.
 The desktop product has one runtime and does not require an external database service.
 
@@ -297,7 +298,7 @@ startup sets the canonical identity but does not inspect, rename, archive, or im
 
 5. **Native initialization**:
    - choose and persist an available loopback backend port;
-   - verify the packaged PostgreSQL 18.6, compiled backend, migration executable, Chrome Headless
+   - verify the packaged PostgreSQL 18.6, compiled backend, `db/` migration files, Chrome Headless
      Shell, and full checksum manifest. `runtime/runtime-manifest.ts` validates the complete
      manifest in a worker thread and hashes files in 64 KiB chunks, keeping synchronous filesystem
      and SHA-256 work off the Electron main event loop. Missing, extra, changed, and symlinked
@@ -329,8 +330,8 @@ startup sets the canonical identity but does not inspect, rename, archive, or im
    A missing, wrong-version, wrong-architecture, or corrupt packaged component is a hard native
    preflight failure. A PostgreSQL port collision also fails closed rather than selecting the
    unknown listener.
-   Native migration children set `VISION_SKIP_CONFIG_ENV_LOCAL=true`, so a source checkout's
-   local `config/.env.local` cannot override the generated native database URLs.
+   Native migration children always receive the generated `DATABASE_URL`, so the migrator CLI
+   never falls back to a source checkout's `config/.env.local`.
 
    For Vision Demo, the native branch verifies the packaged seed checksum and custom-format dump,
    creates Vision's required extensions in the fresh staging database as the private cluster
@@ -347,9 +348,10 @@ startup sets the canonical identity but does not inspect, rename, archive, or im
 
 6. **Backend startup** (`apps/node-backend/src/main.ts`, native Bun):
    - **Database connection** — `checkConnection()` polls with exponential backoff (40 attempts, 50ms→1s)
-   - **Alembic migrations** — JS runner checks DB version + migrations fingerprint; skips if at
-     head. The version-table preflight uses the owner connection in split-role mode, while the
-     application pool remains least-privilege.
+   - **Database migrations** — `runMigrations()` applies pending `db/migrations/` files in-process
+     with Kysely's migrator in one transaction (installing or adopting the `0001` baseline when
+     needed). It uses the owner connection in split-role mode, while the application pool remains
+     least-privilege ([[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]]).
    - **Materialized-view warmup** — Post-listen create, index, and refresh for `mv_monthly_summary`
      and `mv_category_totals`; boot trace keeps the three phases separate.
    - **FX cache warmup** — Exchange rate and portfolio historical rate refresh (parallel promises)
@@ -606,8 +608,8 @@ platform would need those branches back ([[docs/adr/219-minimal-electron-shell-h
 - React frontend (built with Vite)
 - Compiled Bun backend, spawned as a verified child process
 - PostgreSQL 18.6 server and version-matched client tools
-- Alembic migrations, migration configuration, guarded JS migration runner, and standalone
-  migration executable
+- `db/migrations/` SQL files and `db/schema-inventory.sql`, applied in-process by the compiled
+  backend (no separate migration executable)
 - Chrome Headless Shell pinned to the Electron workspace's Puppeteer version
 - Native runtime provider and checksum manifest
 - Vision Demo's deterministic seed dump and validation manifest in Demo packages
@@ -969,7 +971,10 @@ The topbar update badge and dialog (`UpdateNotification`) were removed ([[docs/a
 
 > [!history]
 > The following paragraphs describe the former image-based pipeline. ADR-133 retired it. Current CI
-> uses native PostgreSQL and filesystem scanning; current releases publish macOS artifacts only. See [[docs/guides/cicd-pipelines|CI/CD Pipelines]].
+> runs seven native jobs on disposable PostgreSQL 18 clusters without a filesystem vulnerability
+> scan, and current releases require a passing `CI Complete` on the tagged commit before publishing
+> macOS artifacts only. See [[docs/guides/cicd-pipelines|CI/CD Pipelines]] and
+> [[docs/adr/221-proportional-ci|ADR-221]].
 
 **release.yml** (May 2026):
 
@@ -1366,25 +1371,22 @@ See [[docs/api/health|Health API]] for full field semantics and the `caches.mate
 
 ## Packaging Troubleshooting
 
-### Fresh Database Installation Fails on Migration 0003
+### Startup refuses the existing database
 
-**Symptom:** A fresh database fails migration with an FK constraint violation or string truncation
-error on revision `0003_import_batch_id_on_transactions`.
+**Symptom:** The backend exits during `runMigrations()` and Electron shows the startup error page.
 
-**Root cause:** Two pre-ADR-027 squash oversights:
+**Cause:** The database carries Alembic's `alembic_version` at a revision other than
+`0128_category_path_on_legacy_rename`, its catalog fingerprint differs from the `0001` baseline,
+or it has application objects but no migration marker. Adoption and fresh install fail closed and
+change nothing.
 
-1. Baseline migration 0001 was missing `import_batches` and `import_staging_rows` tables; migration 0003 tried to FK to non-existent tables.
-2. If DB is truly fresh (no `alembic_version` table), alembic auto-creates it at `VARCHAR(32)`, but revision name `0003_import_batch_id_on_transactions` (38 chars) causes string truncation.
+**Fix:** Run `bun run db:drift-check` against that database to see the revision and the differing
+objects; do not wipe the database to make it boot. See
+[[docs/guides/migrations|Database Migration Guide]].
 
-**Fix:** Implemented in 2026-04-27 release:
-
-1. Ported import staging tables from legacy 0030 into 0001 baseline.
-2. Preflight-created `alembic_version` table at `VARCHAR(64)` before alembic runs.
-
-See [[docs/adr/027-alembic-single-source-of-schema#follow-up-migration-ordering-bugs-fixed-2026-04-27|ADR-027 follow-up: Migration Ordering Bugs Fixed]].
-
-**Verification:** The current migration runner preflights `alembic_version VARCHAR(64)`. A fresh
-synthetic native database must migrate to the current head.
+The former Alembic-era "fresh database fails on migration 0003" problem (`alembic_version`
+`VARCHAR(32)`) no longer applies: there is no Alembic version table; see
+[[docs/adr/027-alembic-single-source-of-schema|ADR-027]] for its history.
 
 ### Cannot find module './backup/bundle'
 

@@ -110,7 +110,7 @@ Phase 7 adds category and recipient filter exclusion support to PDF reports with
 
 ### Database Schema
 
-Migrations (if needed) are handled via existing alembic; no new tables added. Exclusions are passed as query parameters only, not persisted.
+No schema changes and no new tables. Exclusions are passed as query parameters only, not persisted.
 
 ---
 
@@ -917,6 +917,7 @@ and [[docs/adr/208-bounded-report-pipeline|ADR-208]].
 
 - **Parallel loading**: Selected sources fetch concurrently, including only needed portfolio datasets
 - **Source failures**: A requested source failure aborts the report rather than presenting incomplete totals
+- **Missing exchange rates**: A dividend or recorded tax without a stored rate is left out, never added 1:1, and the section says so with an "Incomplete" warning
 - **Puppeteer rendering**: Chrome headless print-to-PDF (memory-efficient)
 - **No streaming chunking**: Entire PDF buffered; suitable for typical reports (< 20 pages)
 

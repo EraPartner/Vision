@@ -1,5 +1,6 @@
 import {
     getAggregationTagPivot,
+    type RecipientPivotConversion,
     type TagPivotItem,
 } from "@/lib/api/aggregations";
 import type { SavedChart } from "@/types/apiClient";
@@ -11,7 +12,11 @@ export interface TagPeriodData {
     months: Record<string, number>;
 }
 
-const config: PivotConfig<TagPivotItem, TagPeriodData> = {
+const config: PivotConfig<
+    TagPivotItem,
+    TagPeriodData,
+    RecipientPivotConversion
+> = {
     kind: "tag-pivot",
     fetchPivot: async ({ currency, bucket, start, end, all, ids }) => {
         const res = await getAggregationTagPivot({
@@ -24,7 +29,10 @@ const config: PivotConfig<TagPivotItem, TagPeriodData> = {
             all,
             tag_ids: all ? undefined : ids,
         });
-        return { pivot: res.data?.tagPivot ?? {} };
+        return {
+            pivot: res.data?.tagPivot ?? {},
+            metadata: res.data?.conversion,
+        };
     },
     getItemId: (item) => item.tagId,
     initRow: (item) => ({ tagId: item.tagId, slug: item.slug, months: {} }),
@@ -32,11 +40,11 @@ const config: PivotConfig<TagPivotItem, TagPeriodData> = {
 };
 
 export function useTagPivot(chart: SavedChart | null | undefined) {
-    const { query, rows } = usePivotQuery(
+    const { query, rows, metadata } = usePivotQuery(
         chart,
         !!chart?.all_tags,
         chart?.tag_ids,
         config,
     );
-    return { ...query, tagData: rows };
+    return { ...query, tagData: rows, conversion: metadata };
 }

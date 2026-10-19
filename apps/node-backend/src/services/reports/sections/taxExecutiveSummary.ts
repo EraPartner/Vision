@@ -14,6 +14,7 @@ import {
   signClass,
 } from "../sectionHelpers.ts";
 import type { TaxReportData } from '../dataFetcherTax.ts';
+import { nanToZero } from '../../../lib/math.ts';
 
 export function renderTaxExecutiveSummary(
   data: TaxReportData | null,
@@ -57,15 +58,16 @@ export function renderTaxExecutiveSummary(
     ? `<p style="color:hsl(var(--muted));font-size:11px;margin:0 0 12px;">${periodNote}</p>`
     : "";
 
-  // Flag any foreign currency that had no FX rate available and was therefore
-  // summed at an unconverted 1:1 rate, so the totals above are not mistaken for
-  // exact figures (ADR-085).
+  // Flag rows left out of the totals because no stored rate converts their
+  // currency, so the totals are not mistaken for complete figures (ADR-085,
+  // ADR-216).
   const unconverted = Array.isArray(data?.unconvertedCurrencies)
     ? data.unconvertedCurrencies
     : [];
+  const unconvertedCount = nanToZero(Number(data?.unconvertedCount));
   const fxWarningHtml =
     unconverted.length > 0
-      ? `<p style="color:hsl(var(--warning, 38 92% 50%));font-size:11px;margin:0 0 12px;"><strong>Approximate:</strong> no exchange rate was available for ${unconverted.join(", ")}; ${unconverted.length > 1 ? "these amounts were" : "this amount was"} included at a 1:1 rate.</p>`
+      ? `<p style="color:hsl(var(--warning, 38 92% 50%));font-size:11px;margin:0 0 12px;"><strong>Incomplete:</strong> no exchange rate was available for ${unconverted.join(", ")}; ${unconvertedCount === 1 ? "1 transaction was" : `${unconvertedCount} transactions were`} left out of these totals.</p>`
       : "";
 
   const profileHtml = taxProfile

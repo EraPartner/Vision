@@ -150,6 +150,8 @@ export const signedDailyAmountRowSchema = z
     currency: z.string(),
     is_spending: z.boolean(),
     amount: pgNumeric,
+    /** COUNT(*): the group's transactions. */
+    cnt: pgBigint,
   })
   .describe("signed daily amount row");
 
@@ -160,6 +162,8 @@ export const signedDailyAmountRowSchema = z
 export const dailyAmountRowSchema = z
   .object({
     amount: pgNumeric,
+    /** COUNT(*): the group's transactions (planned rows for overlays). */
+    cnt: pgBigint,
     currency: z.string(),
     date: pgDate,
   })
@@ -179,6 +183,8 @@ export const dailyAmountMonthRowSchema = dailyAmountDomRowSchema
 export const plannedDailyAmountDomRowSchema = z
   .object({
     amount: pgNumeric,
+    /** COUNT(*): the group's planned rows. */
+    cnt: pgBigint,
     currency: z.string(),
     planned_date: pgDate,
     day_of_month: pgInt,
@@ -384,6 +390,8 @@ export const sankeyAggregateRowSchema = z
     is_income: z.boolean(),
     /** SUM(ABS(NUMERIC)) */
     amount: pgNumeric,
+    /** COUNT(*): the group's transactions. */
+    cnt: pgBigint,
   })
   .describe("sankey aggregate row");
 export type SankeyAggregateRow = z.output<typeof sankeyAggregateRowSchema>;

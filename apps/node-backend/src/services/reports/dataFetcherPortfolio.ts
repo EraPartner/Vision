@@ -17,6 +17,10 @@ import {
   loadCurrentRates,
   getHistoricalRateIndex,
 } from "../currency/currencyConversionService.ts";
+import {
+  createUnconvertedTally,
+  noteUnconverted,
+} from "../../lib/unconvertedTally.ts";
 import { toAppDateString } from "../../lib/timezone.ts";
 import { logger } from "../../config/logger.ts";
 import { findRateOnOrBeforeInIndex } from "../currency/rateFetcher.ts";
@@ -57,6 +61,9 @@ export type DividendData = {
   byInvestment: DividendInvestmentRow[];
   totalInKindIncome: number;
   inKindIncomeCount: number;
+  /** Dividend rows left out of every figure for want of a stored rate. */
+  unconvertedCount: number;
+  unconvertedCurrencies: string[];
 };
 
 export type PerformanceTrendPoint = {
@@ -268,6 +275,8 @@ async function fetchDividends(
       ? await getHistoricalRateIndex(currencies)
       : new Map();
   let totalInKindIncome = addAll([]);
+  // A dividend with no stored rate is left out and counted, never added 1:1.
+  const unconverted = createUnconvertedTally();
   for (const row of dividendRows) {
     if (row.income_recognition_role === "included_in_units") {
       const dateRates: Record<string, number> = { EUR: 1 };
@@ -277,15 +286,14 @@ async function fetchDividends(
           rates[code];
         if (rate !== undefined) dateRates[code] = rate;
       }
-      totalInKindIncome = addAll([
-        totalInKindIncome,
-        convertWithRates(
-          Number(row.amount),
-          row.currency,
-          targetCurrency,
-          dateRates,
-        ),
-      ]);
+      const inKind = convertWithRates(
+        Number(row.amount),
+        row.currency,
+        targetCurrency,
+        dateRates,
+      );
+      if (inKind === undefined) noteUnconverted(unconverted, row.currency);
+      else totalInKindIncome = addAll([totalInKindIncome, inKind]);
       continue;
     }
     const converted =
@@ -297,6 +305,10 @@ async function fetchDividends(
             rates,
           )
         : Number(row.amount);
+    if (converted === undefined) {
+      noteUnconverted(unconverted, row.currency);
+      continue;
+    }
 
     const monthKey = `${row.year}-${String(row.month).padStart(2, "0")}`;
     byMonthMap.set(monthKey, (byMonthMap.get(monthKey) ?? 0) + converted);
@@ -333,6 +345,8 @@ async function fetchDividends(
     byInvestment,
     totalInKindIncome: toNumber(totalInKindIncome),
     inKindIncomeCount: inKind.length,
+    unconvertedCount: unconverted.count,
+    unconvertedCurrencies: [...unconverted.currencies].sort(),
   };
 }
 

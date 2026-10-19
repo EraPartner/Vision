@@ -601,6 +601,18 @@ describe("AccountDetailPage (integration, WP-B4 ledger route)", () => {
                             gainLoss: 250,
                         },
                     ],
+                    accountTotals: [
+                        {
+                            account_id: 2,
+                            assignment: "account",
+                            oversold: false,
+                            currentValue: 1250,
+                            totalInvested: 1000,
+                            realizedGain: 20,
+                            unrealizedGain: 230,
+                            gainLoss: 250,
+                        },
+                    ],
                 }),
             ),
         );
@@ -696,6 +708,18 @@ describe("AccountDetailPage (integration, WP-B4 ledger route)", () => {
                             account_id: 7,
                             assignment: "account",
                             contribution_kind: "position",
+                            oversold: true,
+                            currentValue: 300,
+                            totalInvested: 275,
+                            realizedGain: 0,
+                            unrealizedGain: 25,
+                            gainLoss: 25,
+                        },
+                    ],
+                    accountTotals: [
+                        {
+                            account_id: 7,
+                            assignment: "account",
                             oversold: true,
                             currentValue: 300,
                             totalInvested: 275,

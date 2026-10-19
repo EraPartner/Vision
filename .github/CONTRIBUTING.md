@@ -49,8 +49,9 @@ See [ADR-050](docs/adr/050-ci-supply-chain-security-tooling.md) for why.
 - [ ] Types check (`bun run typecheck`)
 - [ ] No leftover `console.log` / debug code
 - [ ] Affected `docs/` pages updated
-- [ ] Database changes ship an Alembic migration **and** a rollback plan (migrations are
-      not auto-run — see [`.agents/skills/db-migrations`](../.agents/skills/db-migrations/))
+- [ ] Database changes ship a `db/migrations/` migration **and** a rollback plan (pending
+      migrations auto-run during backend startup — see
+      [`.agents/skills/db-migrations`](../.agents/skills/db-migrations/))
 
 ## Reporting bugs & requesting features
 

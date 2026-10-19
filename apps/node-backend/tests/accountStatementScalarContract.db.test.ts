@@ -8,7 +8,7 @@ import { reconcileAccount } from "../src/services/reconcileService.ts";
 import { closeTestPool, getTestPool, hasTestDatabase } from "./setup/db.ts";
 
 const describeDb =
-  hasTestDatabase() && process.env.VISION_TEST_DB_TASK === "statement-contract"
+  hasTestDatabase()
     ? describe
     : describe.skip;
 // Only dereferenced inside the database-gated suite.

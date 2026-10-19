@@ -8,8 +8,6 @@ ELECTRON_DIR="$REPO_PATH/packaging/electron"
 APP_NAME="Vision Demo"
 APP_DEST="/Applications/$APP_NAME.app"
 CHROMIUM_VERSION="150.0.7871.24"
-VISION_INSTALLER_COMMAND="./install-demo.sh"
-export VISION_INSTALLER_COMMAND
 
 # shellcheck source=scripts/lib/mac-install.sh
 source "$REPO_PATH/scripts/lib/mac-install.sh"

@@ -23,6 +23,11 @@ import {
   validateInt4Ids,
 } from "../lib/filterBuilder.ts";
 import { convertRowsToEur } from "../services/currency/currencyConversionService.ts";
+import {
+  createUnconvertedTally,
+  noteUnconverted,
+  unconvertedFields,
+} from "../lib/unconvertedTally.ts";
 import { logger } from "../config/logger.ts";
 import {
   toDecimal,
@@ -32,6 +37,7 @@ import {
 import { formatDateToYmd, toWireDate } from "../lib/dateFormat.ts";
 import { formatYearMonthKey } from "../lib/dateKeys.ts";
 import { todayAppDateString, firstOfMonthYmd } from "../lib/timezone.ts";
+import { nanToZero } from "../lib/math.ts";
 import {
   mvAvailable,
   buildMonthlySummary,
@@ -157,20 +163,32 @@ export async function getMonthlyFinancialSummary(
       dateField: "date",
     });
 
+    // Every MV row is already in the target currency (checked above), so no
+    // row lacks a rate here; the tally keeps the response shape uniform.
+    const unconverted = createUnconvertedTally();
     const monthMap: Record<string, MonthTotals> = {};
     for (const conv of mergedConverted) {
       const key = conv._key;
       const r = conv._row;
+      if (conv.amount_eur === undefined) {
+        if (conv._type === "income")
+          noteUnconverted(
+            unconverted,
+            conv.currency,
+            nanToZero(parseInt(r.transaction_count, 10)),
+          );
+        continue;
+      }
       monthMap[key] ??= {
-          month: r.month,
-          year: r.year,
-          period_start: toWireDate(r.month_start),
-          period_end: null,
-          total_spending: 0,
-          total_income: 0,
-          net_amount: 0,
-          transaction_count: 0,
-        };
+        month: r.month,
+        year: r.year,
+        period_start: toWireDate(r.month_start),
+        period_end: null,
+        total_spending: 0,
+        total_income: 0,
+        net_amount: 0,
+        transaction_count: 0,
+      };
       // Decimal accumulation (ADR money-hygiene): summing per-month EUR amounts
       // with native `+=` drifts sub-cent across many rows before the final round.
       if (conv._type === "income")
@@ -205,15 +223,15 @@ export async function getMonthlyFinancialSummary(
       const month = Number(monthStart.slice(5, 7));
       const key = formatYearMonthKey(year, month);
       monthMap[key] ??= {
-          month,
-          year,
-          period_start: monthStart,
-          period_end: null,
-          total_spending: 0,
-          total_income: 0,
-          net_amount: 0,
-          transaction_count: 0,
-        };
+        month,
+        year,
+        period_start: monthStart,
+        period_end: null,
+        total_spending: 0,
+        total_income: 0,
+        net_amount: 0,
+        transaction_count: 0,
+      };
     }
 
     for (const m of Object.values(monthMap)) {
@@ -230,7 +248,11 @@ export async function getMonthlyFinancialSummary(
         net_amount: roundToCents(m.net_amount),
       }));
 
-    return { months, summary: buildMonthlySummary(months) };
+    return {
+      months,
+      summary: buildMonthlySummary(months),
+      ...unconvertedFields(unconverted),
+    };
   }
 
   // Canonical exclusion clauses (lib/filterBuilder.buildExclusionClauses):
@@ -268,9 +290,10 @@ export async function getMonthlyFinancialSummary(
     params.push(validAccountIds);
     transactionFilters.push(`t.account_id = ANY($${params.length}::int[])`);
   }
-  const transactionWhere = transactionFilters.length > 0
-    ? `AND ${transactionFilters.join(" AND ")}`
-    : "";
+  const transactionWhere =
+    transactionFilters.length > 0
+      ? `AND ${transactionFilters.join(" AND ")}`
+      : "";
 
   // Aggregate per (date, currency) in SQL instead of streaming every transaction
   // into JS. This path converts at each transaction's historical date rate
@@ -359,17 +382,20 @@ export async function getMonthlyFinancialSummary(
   for (const row of liveRows) {
     const key = formatYearMonthKey(row.year, row.month);
     monthMap[key] ??= {
-        month: row.month,
-        year: row.year,
-        period_start: toWireDate(row.period_start),
-        period_end: toWireDate(row.period_end),
-        total_spending: 0,
-        total_income: 0,
-        net_amount: 0,
-        transaction_count: 0,
-      };
+      month: row.month,
+      year: row.year,
+      period_start: toWireDate(row.period_start),
+      period_end: toWireDate(row.period_end),
+      total_spending: 0,
+      total_income: 0,
+      net_amount: 0,
+      transaction_count: 0,
+    };
   }
 
+  // A (date, currency) group without a stored rate is left out of its month
+  // (amounts and transaction count) and counted once in `unconverted_count`.
+  const unconverted = createUnconvertedTally();
   for (const [i, row] of dailyRows.entries()) {
     const key = formatYearMonthKey(row.year, row.month);
     // Every live row seeded its month above, and convertRowsToEur returns one
@@ -381,6 +407,10 @@ export async function getMonthlyFinancialSummary(
       throw new Error(
         "monthly summary: converted rows out of step with daily rows",
       );
+    }
+    if (income.amount_eur === undefined || spending.amount_eur === undefined) {
+      noteUnconverted(unconverted, row.currency, nanToZero(Number(row.cnt)));
+      continue;
     }
     totals.total_income = toNumber(
       toDecimal(totals.total_income).plus(toDecimal(income.amount_eur)),
@@ -403,5 +433,9 @@ export async function getMonthlyFinancialSummary(
       net_amount: roundToCents(m.net_amount),
     }));
 
-  return { months, summary: buildMonthlySummary(months) };
+  return {
+    months,
+    summary: buildMonthlySummary(months),
+    ...unconvertedFields(unconverted),
+  };
 }

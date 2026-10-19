@@ -164,8 +164,7 @@ export interface TransactionFilters {
 // Shared JOIN fragment used by every multi-join query.
 // `acct` carries the canonical account label (ADR-088): read paths derive
 // `bank_account` from accounts.name over the FK — see ACCOUNT_LABEL_SQL —
-// so nothing here breaks when the retired string column is dropped
-// (alembic/manual/contract_drop_bank_account).
+// so nothing here depends on the retired string column, which no longer exists.
 const TRANSACTION_JOINS = `
   LEFT JOIN recipients r ON t.recipient_id = r.id
   LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id

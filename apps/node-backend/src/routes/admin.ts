@@ -3,7 +3,7 @@
  *
  * Update strategy (packaged desktop app):
  *   - Electron shell updates: handled by the Electron wrapper (verified packaged-app ZIP install)
- *   - Alembic migrations: run automatically during native backend startup
+ *   - Database migrations (db/migrations): run automatically during native backend startup
  *
  * The git-pull based update approach has been removed. The Node backend running
  * in a packaged application has no git repository, so those endpoints were only
@@ -255,7 +255,9 @@ router.post("/database/init", async (req, res) => {
   res.status(201);
   res.ok({
     message: "Database connection verified successfully",
-    details: { note: "Tables are managed by Alembic migrations" },
+    details: {
+      note: "Tables are managed by database migrations (db/migrations)",
+    },
     links: [],
   });
 });
@@ -278,10 +280,10 @@ router.post("/database/reset", adminMutateLimiter, async (req, res) => {
   }
 
   res.ok({
-    message:
-      "Database reset should be performed via Alembic migrations (Python backend)",
+    message: "Database reset is not performed through the API",
     details: {
-      warning: "Use the Python backend for destructive database operations",
+      warning:
+        "Restore a backup or rebuild the database with the migration runner instead",
     },
     links: [],
   });

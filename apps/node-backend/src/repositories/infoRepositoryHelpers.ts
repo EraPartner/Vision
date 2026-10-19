@@ -5,6 +5,11 @@
 
 import { query } from "../database/connection.ts";
 import { convertRowsToEur } from "../services/currency/currencyConversionService.ts";
+import { partitionConvertedRows } from "../lib/unconvertedTally.ts";
+import type {
+  UnconvertedTally,
+  WithConvertedAmount,
+} from "../lib/unconvertedTally.ts";
 import { toDecimal, toNumber, roundMoney } from "../lib/money.ts";
 import type { DecimalInput } from "../lib/money.ts";
 import settingsRepository from "./settingsRepository.ts";
@@ -89,10 +94,13 @@ export function clearMvCache(): void {
 /** The columns `convertRowsToEur` reads; every other column passes through. */
 export type ConvertibleRow = Parameters<typeof convertRowsToEur>[0][number];
 
-/** A row as returned by `convertRowsToEur`: the caller's row plus `amount_eur`. */
-export type ConvertedRow<T extends ConvertibleRow = ConvertibleRow> = Awaited<
-  ReturnType<typeof convertRowsToEur<T>>
->[number];
+/**
+ * A converted row whose `amount_eur` is known: the caller's row plus
+ * `amount_eur`. Rows without a stored rate are split off by
+ * `partitionConvertedRows` before they reach a total.
+ */
+export type ConvertedRow<T extends ConvertibleRow = ConvertibleRow> =
+  WithConvertedAmount<Awaited<ReturnType<typeof convertRowsToEur<T>>>[number]>;
 
 /** A converted period-pivot row: one entity's total for a period. */
 export type PeriodPivotRow = ConvertibleRow & { period: string; cnt: string };
@@ -277,7 +285,9 @@ export function buildCategoryFromConvertedRows<T extends CategoryTotalRow>(
 /**
  * @param rows Rows with `amount` + `currency`.
  * @param dateField Date field used for the historical rate lookup.
- * @returns rows with `amount_eur` merged in
+ * @param unconverted Receives the rows left out for want of a stored rate.
+ * @param countOf Source records one row stands for (default one).
+ * @returns the converted rows, `amount_eur` merged in
  */
 export async function convertRowsWithHistoricalRateFallback<
   T extends ConvertibleRow,
@@ -285,15 +295,19 @@ export async function convertRowsWithHistoricalRateFallback<
   rows: readonly T[],
   targetCurrency: string,
   dateField = "date",
+  unconverted?: UnconvertedTally,
+  countOf?: (row: T) => number,
 ): Promise<ConvertedRow<T>[]> {
+  let converted;
   try {
-    return await convertRowsToEur(rows, targetCurrency, {
+    converted = await convertRowsToEur(rows, targetCurrency, {
       useHistoricalRatesByDate: true,
       dateField,
     });
   } catch {
-    return await convertRowsToEur(rows, targetCurrency);
+    converted = await convertRowsToEur(rows, targetCurrency);
   }
+  return partitionConvertedRows(converted, countOf, unconverted).converted;
 }
 
 /**
@@ -302,10 +316,13 @@ export async function convertRowsWithHistoricalRateFallback<
  * Instead of N separate `convertRowsToEur` calls (each querying `exchange_rates`),
  * this combines all groups into one batch, converts once, then splits back.
  *
- * The `_batchGroup` tag is stripped from all returned rows.
+ * The `_batchGroup` tag is stripped from all returned rows. Rows without a
+ * stored rate are left out of their group and recorded in `unconverted`.
  *
  * @param groups - Each group has rows with `amount` + `currency`
  * @param dateField - Date field used for historical rate lookup
+ * @param unconverted - Receives the rows left out for want of a stored rate
+ * @param countOf - Source records one row stands for (default one)
  * @returns Converted groups in the same order as input
  */
 export async function batchConvertGroupsWithHistoricalRateFallback<
@@ -314,21 +331,24 @@ export async function batchConvertGroupsWithHistoricalRateFallback<
   groups: G,
   targetCurrency: string,
   dateField = "date",
+  unconverted?: UnconvertedTally,
+  countOf?: (row: ConvertibleRow) => number,
 ): Promise<ConvertedGroups<G>> {
   const TAG = "_batchGroup";
   const tagged = groups.flatMap((group, groupIdx) =>
     group.map((row) => ({ ...row, [TAG]: groupIdx })),
   );
 
-  let converted;
+  let all;
   try {
-    converted = await convertRowsToEur(tagged, targetCurrency, {
+    all = await convertRowsToEur(tagged, targetCurrency, {
       useHistoricalRatesByDate: true,
       dateField,
     });
   } catch {
-    converted = await convertRowsToEur(tagged, targetCurrency);
+    all = await convertRowsToEur(tagged, targetCurrency);
   }
+  const { converted } = partitionConvertedRows(all, countOf, unconverted);
 
   // One output group per input group, in order, each holding its own rows:
   // the tuple type above.

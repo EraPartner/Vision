@@ -88,7 +88,7 @@ export interface CreateBundleOptions {
   destDir: string;
   /** short device identifier */
   deviceId: string;
-  /** alembic_version value at dump time */
+  /** highest public.kysely_migration name at dump time */
   schemaHead?: string | null | undefined;
   /** Electron app.getVersion() */
   appVersion?: string | null;

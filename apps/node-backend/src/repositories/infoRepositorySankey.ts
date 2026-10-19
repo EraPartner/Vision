@@ -43,7 +43,8 @@ export async function getSankeyAggregates({
            ELSE c.path_name END AS category_name,
       t.currency,
       (t.amount > 0) AS is_income,
-      SUM(ABS(t.amount)) AS amount
+      SUM(ABS(t.amount)) AS amount,
+      COUNT(*) AS cnt
     FROM transactions t
     LEFT JOIN recipients r ON t.recipient_id = r.id
     LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id

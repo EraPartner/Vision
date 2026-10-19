@@ -1,6 +1,6 @@
 /**
  * Data access for `cashflow_forecast_accuracy`.
- * Table created by Alembic migration 0012_cashflow_forecast_accuracy.
+ * Table is defined in db/migrations/0001_baseline.sql.
  * All mutations use parameterised queries; UPSERT is idempotent on
  * (user_id, method_id, as_of_month).
  */

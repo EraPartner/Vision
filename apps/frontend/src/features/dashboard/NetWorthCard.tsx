@@ -56,6 +56,11 @@ export function NetWorthCard({ currency }: NetWorthCardProps) {
                                 {t("home.netWorth.change")}
                                 {data != null && data.monthlyChangePercent !== 0 ? ` (${change > 0 ? "+" : ""}${data.monthlyChangePercent.toFixed(1)}%)` : ""}
                             </p>
+                            {(data?.unconvertedCurrencies?.length ?? 0) > 0 && (
+                                <p className="type-footnote text-warning">
+                                    {t("accounts.totalIncomplete")}
+                                </p>
+                            )}
                         </div>
                         <dl className="space-y-2">
                             {[

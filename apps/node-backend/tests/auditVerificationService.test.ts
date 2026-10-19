@@ -77,8 +77,8 @@ function fixture(
       // Only `rows` of the pg result is read.
       runQuery: loose<NonNullable<VerifyAuditHistoryOptions["runQuery"]>>(
         async (sql: string) => {
-          if (sql.includes("FROM alembic_version"))
-            return { rows: revisions.map((version_num) => ({ version_num })) };
+          if (sql.includes("FROM public.kysely_migration"))
+            return { rows: revisions.map((name) => ({ name })) };
           if (sql.includes("FROM db_editor_audit WHERE id"))
             return { rows: rows.dbEditor ?? [] };
           if (sql.includes("FROM split_audit WHERE id"))
@@ -156,21 +156,21 @@ describe("verifyAuditHistory", () => {
       ).code,
     ).toBe("retention_boundary");
   });
-  it("checks Alembic's current revision against the last chained migration event", async () => {
+  it("checks the current migration head against the last chained migration event", async () => {
     const payload = {
       stream: "schema_migration",
       event: "revision_applied",
       direction: "upgrade",
-      revision: "0117_audit_chain",
-      heads: ["0117_audit_chain"],
+      revision: "0002_example",
+      heads: ["0002_example"],
     };
-    const f = fixture([payload], { revisions: ["0117_audit_chain"] });
+    const f = fixture([payload], { revisions: ["0002_example"] });
     expect(
       (await verifyAuditHistory({ ...f.options, trustedCheckpoint: f.head }))
         .status,
     ).toBe("verified");
     const changed = fixture([payload], {
-      revisions: ["0116_analysis_monitors"],
+      revisions: ["0001_baseline"],
     });
     expect(
       (

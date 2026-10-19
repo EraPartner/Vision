@@ -36,32 +36,6 @@ prepare_native_macos_build() {
     fi
   done
 
-  local python_bin
-  if [ -n "${VISION_PYTHON_BIN:-}" ]; then
-    python_bin="$VISION_PYTHON_BIN"
-  else
-    python_bin="$(command -v python3 || true)"
-  fi
-  if [ -z "$python_bin" ] || [ ! -x "$python_bin" ]; then
-    echo "ERROR: Python is required at build time for the standalone migration runner."
-    return 1
-  fi
-
-  if ! "$python_bin" -c 'import alembic, dotenv, psycopg2, sqlalchemy, PyInstaller; assert alembic.__version__ == "1.19.1"; assert PyInstaller.__version__ == "6.22.2"' >/dev/null 2>&1; then
-    cat <<EOF
-ERROR: the pinned migration build dependencies are missing from:
-  $python_bin
-
-Create a dedicated build environment, then rerun the installer with it:
-  python3 -m venv .venv-native-build
-  .venv-native-build/bin/pip install --require-hashes -r config/requirements.txt
-  .venv-native-build/bin/pip install PyInstaller==6.22.2
-  VISION_PYTHON_BIN="$REPO_PATH/.venv-native-build/bin/python" ${VISION_INSTALLER_COMMAND:-./install.sh}
-EOF
-    return 1
-  fi
-  export VISION_PYTHON_BIN="$python_bin"
-
   echo "==> Installing locked application dependencies..."
   cd "$REPO_PATH" || return 1
   bun install --frozen-lockfile --ignore-scripts

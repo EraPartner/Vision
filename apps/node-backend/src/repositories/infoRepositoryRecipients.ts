@@ -30,6 +30,11 @@ import {
 } from "../lib/filterBuilder.ts";
 import { convertRowsToEur } from "../services/currency/currencyConversionService.ts";
 import {
+  createUnconvertedTally,
+  partitionConvertedRows,
+  unconvertedFields,
+} from "../lib/unconvertedTally.ts";
+import {
   buildPeriodPivot,
   mapRowsForAmountConversion,
 } from "./infoRepositoryHelpers.ts";
@@ -63,11 +68,55 @@ interface RecipientTotal {
   transactionCount: number;
 }
 
+/**
+ * Response-level conversion contract of the period pivots. A historical rate
+ * that fell back to the latest stored rate sets `usedHistoricalFallback`; a
+ * row with no stored rate at all is left out and counted in
+ * `unconvertedCount` (transactions) and `unconvertedCurrencies`.
+ */
+export interface PeriodPivotConversion {
+  usedHistoricalFallback: boolean;
+  affectedCurrencies: string[];
+  unconvertedCount: number;
+  unconvertedCurrencies: string[];
+}
+
 export interface RecipientPivotResult {
   recipientPivot: Record<string, PeriodPivotEntity[]>;
-  conversion: {
-    usedHistoricalFallback: boolean;
-    affectedCurrencies: string[];
+  conversion: PeriodPivotConversion;
+}
+
+/** The conversion contract of rows returned by `convertRowsToEur`. */
+export function periodPivotConversion(
+  rows: ReadonlyArray<{
+    currency?: string | null;
+    used_fallback_rate?: boolean;
+    amount_eur: number | undefined;
+    cnt: string;
+  }>,
+): PeriodPivotConversion {
+  const fellBack = rows.filter(
+    (row) => row.used_fallback_rate === true && row.amount_eur !== undefined,
+  );
+  const { unconverted } = partitionConvertedRows(rows, (row) =>
+    nanToZero(parseInt(row.cnt, 10)),
+  );
+  const fields = unconvertedFields(unconverted);
+  return {
+    usedHistoricalFallback: fellBack.length > 0,
+    affectedCurrencies: [
+      ...new Set(
+        fellBack
+          .map((row) =>
+            String(row.currency || "")
+              .trim()
+              .toUpperCase(),
+          )
+          .filter(Boolean),
+      ),
+    ].sort(),
+    unconvertedCount: fields.unconverted_count,
+    unconvertedCurrencies: fields.unconverted_currencies,
   };
 }
 
@@ -110,9 +159,8 @@ export const recipientInsightsRepository = {
       params.push(endDate);
       dateFilters.push(`t.date <= $${params.length}`);
     }
-    const dateWhere = dateFilters.length > 0
-      ? `AND ${dateFilters.join(" AND ")}`
-      : "";
+    const dateWhere =
+      dateFilters.length > 0 ? `AND ${dateFilters.join(" AND ")}` : "";
 
     // Grouped per (recipient, DATE, currency) — the extra `t.date` key exists so
     // the conversion below can use each row's OWN date rate, exactly as
@@ -151,10 +199,17 @@ export const recipientInsightsRepository = {
     // Historical per-date rates, matching getRecipientByYear / getRecipientPivot.
     // Converting at the LATEST rate here made one 2024 USD purchase read 90 in
     // Top merchants and 25 in the by-year / pivot views of the same recipient.
-    const topConverted = await convertRowsToEur(
-      mapRowsForAmountConversion(topRawRows, "total_abs_amount", false),
-      targetCurrency,
-      { useHistoricalRatesByDate: true, dateField: "date" },
+    // A row without a stored rate is left out of the merchant figures and
+    // counted once below (top merchants and month-over-month share rows).
+    const unconverted = createUnconvertedTally();
+    const { converted: topConverted } = partitionConvertedRows(
+      await convertRowsToEur(
+        mapRowsForAmountConversion(topRawRows, "total_abs_amount", false),
+        targetCurrency,
+        { useHistoricalRatesByDate: true, dateField: "date" },
+      ),
+      (row) => nanToZero(parseInt(row.tx_count, 10)),
+      unconverted,
     );
 
     const recipientAgg: Record<
@@ -167,15 +222,15 @@ export const recipientInsightsRepository = {
       const count = parseInt(row.tx_count, 10);
 
       recipientAgg[rid] ??= {
-          recipientId: rid,
-          name: row.recipient_name,
-          totalSpend: 0,
-          transactionCount: 0,
-          // DATE columns as calendar-day strings (Y-M-D compares
-          // lexicographically, so the min/max below still works).
-          firstSeen: toWireDate(row.first_seen),
-          lastSeen: toWireDate(row.last_seen),
-        };
+        recipientId: rid,
+        name: row.recipient_name,
+        totalSpend: 0,
+        transactionCount: 0,
+        // DATE columns as calendar-day strings (Y-M-D compares
+        // lexicographically, so the min/max below still works).
+        firstSeen: toWireDate(row.first_seen),
+        lastSeen: toWireDate(row.last_seen),
+      };
       // Decimal accumulation (money-hygiene): native `+=` over per-currency
       // converted spend drifts sub-cent before the final round.
       recipientAgg[rid].totalSpend = toNumber(
@@ -260,10 +315,12 @@ export const recipientInsightsRepository = {
     );
 
     // Historical per-date rates, matching top merchants / by-year / pivot.
-    const momConverted = await convertRowsToEur(
-      mapRowsForAmountConversion(momRawRows, "abs_amount", false),
-      targetCurrency,
-      { useHistoricalRatesByDate: true, dateField: "date" },
+    const { converted: momConverted } = partitionConvertedRows(
+      await convertRowsToEur(
+        mapRowsForAmountConversion(momRawRows, "abs_amount", false),
+        targetCurrency,
+        { useHistoricalRatesByDate: true, dateField: "date" },
+      ),
     );
 
     // Derive the current / previous month keys in the database from the same
@@ -317,7 +374,11 @@ export const recipientInsightsRepository = {
       .sort((a, b) => b.currentSpend - a.currentSpend)
       .slice(0, 10);
 
-    return { topMerchants, monthOverMonth };
+    return {
+      topMerchants,
+      monthOverMonth,
+      ...unconvertedFields(unconverted),
+    };
   },
 
   async getRecipientByYear({
@@ -328,6 +389,8 @@ export const recipientInsightsRepository = {
     endDate,
   }: RecipientByYearOptions = {}): Promise<{
     recipientsByYear: Record<string, RecipientTotal[]>;
+    unconverted_count: number;
+    unconverted_currencies: string[];
   }> {
     // Canonical exclusion clauses (lib/filterBuilder.buildExclusionClauses).
     // Category exclusion (incl. hidden categories) must apply here too, or the
@@ -348,9 +411,8 @@ export const recipientInsightsRepository = {
       params.push(endDate);
       dateFilters.push(`t.date <= $${params.length}`);
     }
-    const dateWhere = dateFilters.length > 0
-      ? `AND ${dateFilters.join(" AND ")}`
-      : "";
+    const dateWhere =
+      dateFilters.length > 0 ? `AND ${dateFilters.join(" AND ")}` : "";
 
     // Aggregate in SQL per (recipient, year, date, currency) instead of streaming
     // every expense row to JS. amount < 0 is pinned, so ABS distributes over the
@@ -377,10 +439,13 @@ export const recipientInsightsRepository = {
 
     const rows = await queryRows(recipientYearRowSchema, sql, params);
 
-    const converted = await convertRowsToEur(
-      mapRowsForAmountConversion(rows, "abs_amount", false),
-      targetCurrency,
-      { useHistoricalRatesByDate: true, dateField: "date" },
+    const { converted, unconverted } = partitionConvertedRows(
+      await convertRowsToEur(
+        mapRowsForAmountConversion(rows, "abs_amount", false),
+        targetCurrency,
+        { useHistoricalRatesByDate: true, dateField: "date" },
+      ),
+      (row) => nanToZero(parseInt(row.cnt, 10)),
     );
 
     const yearRecMap: Record<string, Record<string, RecipientTotal>> = {};
@@ -413,7 +478,7 @@ export const recipientInsightsRepository = {
         .map((r) => ({ ...r, totalSpend: roundToCents(r.totalSpend) }));
     }
 
-    return { recipientsByYear };
+    return { recipientsByYear, ...unconvertedFields(unconverted) };
   },
 
   async getRecipientPivot({
@@ -470,10 +535,7 @@ export const recipientInsightsRepository = {
       if (memberIds.length === 0) {
         return {
           recipientPivot: {},
-          conversion: {
-            usedHistoricalFallback: false,
-            affectedCurrencies: [],
-          },
+          conversion: periodPivotConversion([]),
         };
       }
       params.push(memberIds);
@@ -506,11 +568,12 @@ export const recipientInsightsRepository = {
 
     const rows = await queryRows(recipientPivotRowSchema, sql, params);
 
-    const converted = await convertRowsToEur(
+    const all = await convertRowsToEur(
       mapRowsForAmountConversion(rows, "abs_amount", false),
       targetCurrency,
       { useHistoricalRatesByDate: true, dateField: "date" },
     );
+    const { converted } = partitionConvertedRows(all);
 
     const recipientPivot = buildPeriodPivot(converted, {
       idField: "recipient_id",
@@ -519,28 +582,6 @@ export const recipientInsightsRepository = {
       labelKey: "name",
     });
 
-    const usedHistoricalFallback = converted.some(
-      (row) => row.used_fallback_rate === true,
-    );
-    const affectedCurrencies = [
-      ...new Set(
-        converted
-          .filter((row) => row.used_fallback_rate === true)
-          .map((row) =>
-            String(row.currency || "")
-              .trim()
-              .toUpperCase(),
-          )
-          .filter(Boolean),
-      ),
-    ].sort();
-
-    return {
-      recipientPivot,
-      conversion: {
-        usedHistoricalFallback,
-        affectedCurrencies,
-      },
-    };
+    return { recipientPivot, conversion: periodPivotConversion(all) };
   },
 };

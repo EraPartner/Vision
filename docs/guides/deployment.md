@@ -2,7 +2,7 @@
 title: Deployment Guide
 type: guide
 status: active
-date: 2026-10-11
+date: 2026-10-19
 tags:
   [
     guide,
@@ -36,7 +36,8 @@ provider's built-in sandbox; see [[docs/guides/devcontainer|Agent Sandbox Guide]
 
 Build prerequisites and runtime behavior are in
 [[docs/guides/native-macos-runtime|Native macOS Runtime Guide]]. A packaged app contains the
-production frontend, Bun backend, PostgreSQL 18.6, migration executable, and Chrome Headless Shell.
+production frontend, Bun backend with its `db/` migration files, PostgreSQL 18.6, and Chrome Headless
+Shell.
 It does not require a host PostgreSQL service.
 
 ```bash
@@ -74,7 +75,7 @@ ADMIN_AUTH_TOKEN=<random-secret>
 Run the guarded migration command before starting the backend:
 
 ```bash
-bun run db:upgrade
+bun run db:migrate
 bun run build
 bun run backend
 curl --fail http://127.0.0.1:3002/health
@@ -82,7 +83,8 @@ curl --fail http://127.0.0.1:3002/health
 
 `DATABASE_URL_MIGRATIONS` owns schema changes. `DATABASE_URL` is the least-privilege application
 role. The grant template at `config/postgres/app-role-grants.sql.tpl` records the expected grants.
-Never run a bare Alembic write against Vision; use the repository migration runner.
+Apply schema changes only through the repository migrator (`bun run db:migrate`); the backend
+also applies pending migrations before it listens.
 
 ## Network and admin security
 
@@ -111,8 +113,8 @@ attachments, preferences, and a checksum manifest. Restore validates and stages 
 switching the active database. See [[docs/features/backup-coverage-audit|Backup Coverage Audit]].
 
 Source deployments must use PostgreSQL-native backup tools plus a separately versioned attachment
-backup. Verify restore into a disposable database and record the application version and Alembic
-head with each backup. A database dump alone is not a complete Vision backup.
+backup. Verify restore into a disposable database and record the application version and schema
+revision (the highest `public.kysely_migration` name) with each backup. A database dump alone is not a complete Vision backup.
 
 ## Updates
 

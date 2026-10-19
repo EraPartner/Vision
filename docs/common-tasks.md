@@ -2,8 +2,8 @@
 title: Common Tasks Quick Reference
 type: map-of-content
 status: active
-date: 2026-09-24
-updated: 2026-09-24
+date: 2026-10-19
+updated: 2026-10-19
 tags:
   [
     moc,
@@ -106,13 +106,14 @@ aliases:
 
 ## Release & Deployment Tasks
 
-| I want to...                   | Start here                                                                  | Also check                                                                         |
-| ------------------------------ | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| Release a new version          | [[docs/guides/cicd-pipelines\|CI/CD Pipelines]]                             | [[docs/guides/deployment\|Deployment Guide]]                                       |
-| Understand update modes        | [[docs/features/application-updates\|Application Updates]]                  | [[docs/architecture/electron\|Electron Architecture]]                              |
-| Verify a release was published | [[docs/guides/cicd-pipelines#monitoring--alerts\|CI/CD Monitoring]]         | GitHub Actions dashboard                                                           |
-| Fix a failed CI/CD job         | [[docs/guides/cicd-pipelines#common-failure-causes\|CI/CD Common Failures]] | [[docs/troubleshooting\|Troubleshooting]]                                          |
-| Generate installer checksum    | [[docs/adr/023-update-installer-checksum-verification\|ADR-023]]            | [[docs/guides/cicd-pipelines#packagemac--build-macos-installer\|Release Workflow]] |
+| I want to...                   | Start here                                                             | Also check                                                        |
+| ------------------------------ | ---------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Release a new version          | [[docs/guides/cicd-pipelines#release-workflow\|Release Workflow]]      | [[docs/guides/deployment\|Deployment Guide]]                      |
+| Check why a release is blocked | `CI Complete` on the tagged `main` commit                              | [[docs/adr/221-proportional-ci\|ADR-221]]                         |
+| Understand update modes        | [[docs/features/application-updates\|Application Updates]]             | [[docs/architecture/electron\|Electron Architecture]]             |
+| Verify a release was published | [[docs/guides/cicd-pipelines#release-workflow\|Release Workflow]]      | GitHub Actions dashboard                                          |
+| Fix a failed CI job            | [[docs/guides/cicd-pipelines#pull-request-and-push-ci\|CI job layout]] | [[docs/troubleshooting\|Troubleshooting]]                         |
+| Generate installer checksum    | [[docs/adr/023-update-installer-checksum-verification\|ADR-023]]       | [[docs/guides/cicd-pipelines#release-workflow\|Release Workflow]] |
 
 ## Testing Tasks
 
@@ -123,7 +124,7 @@ aliases:
 | Run mutation tests                                                      | [[docs/testing/testing#phase-f6-mutation-testing-harness-2026-05-02--complete\|Mutation Testing]] | `bun run --filter 'vision-frontend' test:mutation` |
 | Write a unit test                                                       | [[docs/testing/testing\|Testing Documentation]]                                                   | [[docs/reference/code-patterns\|Code Patterns]]    |
 | Write an integration test                                               | [[docs/testing/frontend-component-integration\|Component-Integration Test Guide]]                 | [[docs/testing/test-inventory\|Test Inventory]]    |
-| Check test coverage                                                     | `bun run test:coverage`                                                                           | [[docs/reference/scripts\|Scripts Reference]]      |
+| Check test coverage (CI enforces it only on pushes to `main`)           | `bun run test:coverage`                                                                           | [[docs/reference/scripts\|Scripts Reference]]      |
 
 ## Debugging Tasks
 
@@ -152,7 +153,7 @@ aliases:
 ```bash
 # Development
 bun run dev              # Start native Electron development
-bun run db:upgrade       # Run migrations
+bun run db:migrate       # Run migrations
 
 # Testing
 bun run check            # Run all local checks (lint, typecheck, locales, endpoint matrix, tests)

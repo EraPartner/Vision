@@ -1,7 +1,7 @@
 /**
  * Provider Health Repository — data access for the provider_health table.
  *
- * Table is created by Alembic migration 0010_add_provider_health.
+ * Table is defined in db/migrations/0001_baseline.sql.
  * All mutations use parameterised queries.
  */
 

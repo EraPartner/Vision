@@ -2,7 +2,7 @@
 title: Contributing Guide
 type: guide
 status: active
-date: 2026-10-08
+date: 2026-10-19
 tags:
   [
     guide,
@@ -59,7 +59,7 @@ git config core.hooksPath .githooks
 brew install gitleaks
 ```
 
-The `.githooks/pre-commit` script runs before every `git commit`, scanning staged changes for hardcoded secrets (API keys, credentials, passphrases). If gitleaks is not installed, the hook gracefully skips with a warning; the CI `secrets-scan` job will catch any leaks during PR review.
+The `.githooks/pre-commit` script runs before every `git commit`, scanning staged changes for hardcoded secrets (API keys, credentials, passphrases). If gitleaks is not installed, the hook gracefully skips with a warning; the gitleaks step in the CI `Repo Checks` job will catch any leaks during PR review.
 
 See [[docs/adr/050-ci-supply-chain-security-tooling|ADR-050]] for details.
 
@@ -304,17 +304,19 @@ it("should submit form with correct data", () => {
 ### Creating a Migration
 
 ```bash
-# Create new migration
-bun run db:revision -- "add new_column to transactions"
+# Create db/migrations/NNNN_add_new_column_to_transactions.sql
+bun run db:new -- add_new_column_to_transactions
 ```
 
 ### Migration Guidelines
 
 - Always test migrations locally first
 - Provide rollback plan in PR description
-- Don't execute migrations automatically
-- Use meaningful migration names
-- **Keep revision IDs under 32 characters** (the `alembic_version.version_num` column has a 32-char limit in existing databases; use short prefixes like `0010_` followed by a concise name)
+- Pending migrations run automatically at the next backend start, so ship destructive DDL only
+  after the code that stops reading the object; `bun run db:lint` (squawk) flags it
+- Add a `.down.sql` rollback and regenerate types with `bun run db:codegen`
+- Use meaningful snake_case migration names; never edit an applied migration file
+- See [[docs/guides/migrations|Database Migration Guide]]
 
 ## Documentation
 

@@ -115,7 +115,11 @@ export async function main(
   prepare();
   const runtimeRoot = nativeRuntimeRoot();
   fs.accessSync(path.join(runtimeRoot, "manifest.json"), fs.constants.R_OK);
-  fs.accessSync(path.join(runtimeRoot, "vision-alembic"), fs.constants.X_OK);
+  fs.accessSync(path.join(runtimeRoot, "vision-backend"), fs.constants.X_OK);
+  fs.accessSync(
+    path.join(runtimeRoot, "db", "migrations", "0001_baseline.sql"),
+    fs.constants.R_OK,
+  );
   const demoSeed = args.demo
     ? await prepareDemo({ nativeRuntimeRoot: runtimeRoot })
     : undefined;

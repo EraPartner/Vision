@@ -1,14 +1,16 @@
 ---
 title: ADR-166 - Maintained Database Canonical Conversion
 type: adr
-status: Accepted
-date: 2026-09-20
+status: superseded
+date: 2026-10-19
 tags: [adr, database, migration, backup, recovery]
 description: Convert the reviewed maintained legacy database into the fresh 0119 schema with UTC timestamps, a verified archive export, and a retained rollback database.
 aliases: [maintained database conversion, legacy baseline conversion]
 ---
 
 # ADR-166: Maintained Database Canonical Conversion
+
+> [!note] Superseded by [[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]] on 2026-10-19.
 
 ## Context
 

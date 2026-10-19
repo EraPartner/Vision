@@ -1,7 +1,7 @@
 /**
  * Accuracy persistence store.
- * Delegates to cashflowForecastAccuracyRepository (Postgres, table created
- * by Alembic migration 0012_cashflow_forecast_accuracy).
+ * Delegates to cashflowForecastAccuracyRepository (Postgres, table defined
+ * in db/migrations/0001_baseline.sql).
  *
  * Falls back to an in-memory stub when the DB table does not yet exist
  * (e.g. during development before running migrations) or when Postgres
@@ -72,7 +72,7 @@ async function withFallback<T, F>(
       if (!missingTableWarned) {
         missingTableWarned = true;
         logger.error(
-          "cashflow_forecast_accuracy table missing — run Alembic migration 0012",
+          "cashflow_forecast_accuracy table missing — run database migrations",
         );
       }
       return fallbackFn();

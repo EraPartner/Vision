@@ -36,7 +36,7 @@ test("the synthetic generator is deterministic data-only SQL", async () => {
   assert.equal(first.demoSeedReferenceDate, "2026-09-03");
   assert.equal(typeof first.demoSeedSql, "string");
   const firstSql = String(first.demoSeedSql);
-  assert.doesNotMatch(firstSql, /\balembic_version\b/i);
+  assert.doesNotMatch(firstSql, /\bkysely_migration\b/i);
   assert.doesNotMatch(
     firstSql,
     /\bstatement_balance_date\b|\bbank_account,recipient_id\b/,
