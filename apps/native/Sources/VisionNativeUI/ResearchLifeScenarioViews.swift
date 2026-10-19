@@ -247,6 +247,7 @@ private struct ResearchGoalMonthField: View {
     private func monthName(_ number: Int) -> String {
         let locale = LanguageLocale.locale(shell.strings.language)
         let formatter = FormatterCache.shared("monthSymbols|\(locale.identifier)") {
+            () -> DateFormatter in
             let made = DateFormatter()
             made.locale = locale
             return made

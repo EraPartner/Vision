@@ -244,6 +244,7 @@ struct AnalysisResultCharts: View {
     private func tick(_ value: Double) -> String {
         let locale = shell.settings.numberFormat.locale
         let formatter = FormatterCache.shared("analysis.tick|\(locale.identifier)") {
+            () -> NumberFormatter in
             let made = NumberFormatter()
             made.locale = locale
             made.numberStyle = .decimal

@@ -413,6 +413,7 @@ public struct NetWorthView: View {
     }
     private func tick(_ day: String) -> String {
         let parser = FormatterCache.shared("netWorth.day") {
+            () -> DateFormatter in
             let made = DateFormatter()
             made.locale = Locale(identifier: "en_US_POSIX")
             made.calendar = Calendar(identifier: .gregorian)
@@ -423,6 +424,7 @@ public struct NetWorthView: View {
         let locale = LanguageLocale.locale(shell.strings.language)
         let format = [.month, .quarter, .halfYear].contains(model.period) ? "d MMM" : "MMM yy"
         let formatter = FormatterCache.shared("netWorth.tick|\(locale.identifier)|\(format)") {
+            () -> DateFormatter in
             let made = DateFormatter()
             made.locale = locale
             made.dateFormat = format
