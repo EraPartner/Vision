@@ -2913,9 +2913,16 @@ const CSV_OPEN_MAX_BYTES = 25 * 1024 * 1024;
 async function forwardCsvOpen(filePath: string): Promise<void> {
   try {
     if (!/\.csv$/i.test(filePath)) return;
-    const stat = await fs.promises.stat(filePath);
-    if (!stat.isFile() || stat.size > CSV_OPEN_MAX_BYTES) return;
-    const content = await fs.promises.readFile(filePath, "utf8");
+    // Size check and read through one handle, so the file read is the file measured.
+    const handle = await fs.promises.open(filePath, "r");
+    let content: string;
+    try {
+      const stat = await handle.stat();
+      if (!stat.isFile() || stat.size > CSV_OPEN_MAX_BYTES) return;
+      content = await handle.readFile("utf8");
+    } finally {
+      await handle.close();
+    }
     sendToApp("app:csv-opened", { name: path.basename(filePath), content });
   } catch (err) {
     console.warn("open-file forward failed (non-fatal):", errorMessage(err));
