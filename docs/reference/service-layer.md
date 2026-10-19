@@ -2,7 +2,7 @@
 title: Service Layer Reference
 type: reference
 status: active
-date: 2026-10-11
+date: 2026-10-19
 last_modified: 2026-10-11
 tags: [backend, services, reference, business-logic, phase-1, phase-c, import-pipeline, graceful-shutdown, bug-hunt-2026-05-05, error-handling, robustness, route-service-boundary, repo-service-boundary, layering, thin-seams, adr-067]
 description: Reference for backend service responsibilities and route/repository boundaries enforced by the local architecture lint rules.
@@ -160,7 +160,7 @@ directly. See [[docs/integrations/bank-adapters#adding-new-banks|Adding New Bank
 ## 3. currency/currencyConversionService.js
 
 **File:** [[apps/node-backend/src/services/currency/currencyConversionService.ts]]  
-**Purpose:** Converts amounts between currencies using ECB (primary), open.er-api.com (supplementary), database, and hardcoded fallbacks.
+**Purpose:** Converts amounts between currencies using ECB (primary), open.er-api.com (supplementary) and the stored database rates. Since 2026-10-19 there is no hard-coded tier: a currency without a stored rate is unavailable (ADR-216).
 
 **Status:** Live canonical implementation (moved to `services/currency/` in Phase 0). Direct imports use this path.
 
@@ -178,8 +178,11 @@ directly. See [[docs/integrations/bank-adapters#adding-new-banks|Adding New Bank
 
 1. **ECB XML API** — Daily reference rates (primary)
 2. **open.er-api.com** — Supplementary rates for gaps
-3. **Database** — Persisted historical rates
-4. **FALLBACK_RATES** — ~40 hardcoded currency rates
+3. **Database** — Persisted latest and historical rates
+
+`FALLBACK_RATES` no longer feeds any helper here; only the Belgian tax dashboards still read it
+(see [[docs/integrations/currency-conversion|Currency Conversion]]). Server-owned display totals
+use `services/currency/latestRateConversion.ts` (`loadLatestRatesToEur`, `convertAtLatestRates`).
 
 ### Key Algorithms
 

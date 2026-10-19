@@ -41,10 +41,10 @@ import { NotFoundError, ValidationError } from "../middleware/errorHandler.ts";
 import { roundToCents, toDecimal, toNumber } from "../lib/money.ts";
 import { computedBalanceByCurrencyAggLateral } from "../repositories/accountBalanceSql.ts";
 import {
-  convertWithRates,
-  loadCurrentRates,
-} from "./currency/currencyConversionService.ts";
-import { hasConversionRate } from "../lib/exchangeRates.ts";
+  convertAtLatestRates,
+  currencyCode,
+  loadLatestRatesToEur,
+} from "./currency/latestRateConversion.ts";
 import { accountRepository } from "../repositories/accountRepository.ts";
 import { transactionRepository } from "../repositories/transactionRepository.ts";
 import { plannedTransactionRepository } from "../repositories/plannedTransactionRepository.ts";
@@ -418,33 +418,31 @@ export async function previewMerge(
          ${computedBalanceByCurrencyAggLateral({ account: "ANY($1::int[])", asOfDate: "$2::date" })}`,
       [unionIds, todayAppDateString()],
     ),
-    // One rate table for every partition; these are CURRENT balances, so each
-    // converts at today's rate (see computedBalanceByCurrencyLateral).
-    loadCurrentRates(),
+    // One table of the latest stored rates for every partition; these are
+    // CURRENT balances, so each converts at the latest rate, exactly as the
+    // account list's computed_balance (see computedBalanceByCurrencyLateral).
+    loadLatestRatesToEur(),
     transactionRepository.getStampedDateRangesByAccount(unionIds),
     transactionRepository.getOpeningAnchorsByAccount(unionIds),
   ]);
 
-  const targetCurrency = (target.currency || "EUR").toUpperCase();
+  const targetCurrency = currencyCode(target.currency);
   const partitions = projected?.balance_parts ?? [];
   let total = toDecimal(0);
   const unconvertedCurrencies: string[] = [];
   for (const part of partitions) {
-    const partCurrency = (part.currency || "EUR").toUpperCase();
-    if (!hasConversionRate(partCurrency, targetCurrency, rates)) {
+    const partCurrency = currencyCode(part.currency);
+    const converted = convertAtLatestRates(
+      part.balance,
+      partCurrency,
+      targetCurrency,
+      rates,
+    );
+    if (converted === undefined) {
       unconvertedCurrencies.push(partCurrency);
       continue;
     }
-    total = total.plus(
-      toDecimal(
-        convertWithRates(
-          toNumber(toDecimal(part.balance)),
-          partCurrency,
-          targetCurrency,
-          rates,
-        ),
-      ),
-    );
+    total = total.plus(converted);
   }
 
   return {

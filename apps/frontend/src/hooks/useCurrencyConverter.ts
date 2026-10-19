@@ -32,9 +32,8 @@ export function useCurrencyConverter(targetCurrency: string) {
         gcTime: 30 * 60_000,
     });
 
-    // Stored rates only. The response's `fallback_rates` are hard-coded server
-    // constants: a currency without a stored rate is unavailable here, never
-    // converted at a stale constant (ADR-216).
+    // Stored rates only: a currency without a stored rate is unavailable
+    // here, never converted at a constant (ADR-216).
     const ratesToEur: Record<string, number> = useMemo(
         () => ({
             EUR: 1,

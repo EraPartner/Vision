@@ -303,7 +303,6 @@ describe("info API client", () => {
                 return ok({
                     total_rates: 0,
                     rates: [],
-                    fallback_rates: {},
                     source: "fallback",
                     is_stale: true,
                     last_fetched_at: null,

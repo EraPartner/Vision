@@ -105,8 +105,9 @@ still apply. No write or migration is added.
 The all-investment response also supplies `archivedPresentation`, containing inactive holdings
 only. It reproduces the archive behavior that `usePortfolioSummaries` had before 2026-10-19: ordinary CRUD history is limited
 to the newest 1000 rows per investment and replayed by the shared TypeScript portfolio helper,
-then converted at the latest stored quote-currency rate with the same static-rate/original-value
-fallback as the web. Custody and adjustment events remain in the canonical summaries, rather
+then converted at the latest stored quote-currency rate. Since 2026-10-19 there is no static-rate
+fallback: a holding whose currency has no stored rate keeps its original values and is flagged with
+`usedFallbackRate: true`. Custody and adjustment events remain in the canonical summaries, rather
 than being introduced into the retained ordinary archive display. `totalInKindIncome` alone
 continues to use the canonical transaction-date bridge. `transactionCount` records the archive
 history count; `summarySource` is `local`. Converted ordinary values retain web precision.
@@ -125,8 +126,9 @@ active response for current totals. They must not replace these display values w
 all-investment P&L: a historical purchase rate and today's quote rate can produce different
 costs, and this frontend migration preserves that distinction. Canonical `byAccount` remains a
 separate broker snapshot, matching existing detail API reads. Archive presentation omits
-canonical-only `assetGain`, `fxGain`, `nativeCurrentValue` and `usedFallbackRate`; clients show
-these as unavailable rather than borrowing the canonical decomposition.
+canonical-only `assetGain`, `fxGain` and `nativeCurrentValue`; clients show these as unavailable
+rather than borrowing the canonical decomposition. `usedFallbackRate` is omitted too, except
+`true` when the holding's currency has no stored rate (2026-10-19).
 
 The active cache retains its currency key; all-investment requests use `all:<currency>`. Both
 are cleared by existing investment/transaction mutation invalidation. Synthetic tests verify
@@ -269,6 +271,7 @@ including dated custody and unit adjustments; ordinary transaction lists remain 
 | `byAssetClass` | array             | **2026-10-19 (ADR-216).** One `PortfolioHoldingTotals` entry per asset class present (plus `assetClass`). See [[docs/api/portfolio-summary#Asset-class and asset-group totals                                                                                                          | Asset-class and asset-group totals]]. |
 | `byAssetGroup` | array             | **2026-10-19 (ADR-216).** One `PortfolioHoldingTotals` entry per page group (`stocks_etfs`, `crypto`, `metals`, `real_estate`, `savings_bonds`) plus its `assetClasses`.                                                                                                               |
 | `byAccount`    | array             | **ADR-108 (2026-08-10): full per-broker P&L.** Per-account partition breakdown from the partitioned lot engine (sells consume same-account lots under the user's configured cost-basis method; corporate actions apply investment-wide). Additive — pre-existing fields are unchanged. |
+| `accountTotals` | array            | **2026-10-19 (ADR-216), additive.** Portfolio-wide figures per broker account (`account_id` `null` = unassigned): every `byAccount` contribution kind of that account summed with Decimal and rounded once, sorted by `currentValue` descending. The Portfolio broker filter's holdings and P/L subtotals. Fields as `byAccount[]` without `contribution_kind`. |
 
 **byAccount[] object (identified by `account_id` plus `contribution_kind`):**
 
@@ -297,6 +300,20 @@ the browser. While an instrument has broker-unassigned lots, its **entire** figu
 Unassigned row and its global math stays the flat replay. A legacy partition deficit remains
 readable with `oversold: true`; writes reject a new or worsened deficit but allow unchanged or
 improving repair edits.
+
+**Broker-filter totals (2026-10-19, ADR-216, additive).** Each `summaries[]` entry also carries
+`accountTotals: PortfolioSummaryAccountTotals[]`, one row per broker account of that investment with
+its contribution kinds summed on the server (Decimal, rounded once), and the response carries the
+portfolio-wide `accountTotals` above. The Portfolio Overview broker filter reads the selected
+account's row of each investment and the top-level subtotal; it no longer adds `byAccount` rows in
+the browser and derives only the return percentage. Not a breaking change: existing fields are
+unchanged. Covered on real PostgreSQL by
+[[apps/node-backend/tests/portfolioSummaryTotals.db.test.ts]].
+
+**Current-rate conversion (2026-10-19).** Current values (and the archived presentation of
+`active=false`) convert at the latest **stored** exchange rate. A holding whose currency has no
+stored rate keeps its unconverted figures and sets `usedFallbackRate: true` (and so
+`totals.usedFallbackRate`); it is never converted at the hard-coded `FALLBACK_RATES` constants.
 
 **Parity invariant (locked by `tests/portfolioSummaryPartitionParity.db.test.ts` under weighted_avg/fifo/lifo, per ADR-061 discipline):**
 

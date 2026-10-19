@@ -99,6 +99,21 @@ const txnRow = (overrides = {}) =>
     }),
   );
 
+// Latest stored rates: 1 USD = 0.9 EUR, the same current rate the mocked
+// convertToCurrency applies. Current values convert at stored rates only.
+beforeEach(() => {
+  vi.mocked(listLatestStoredRates).mockResolvedValue({
+    rows: [
+      {
+        currency_code: "USD",
+        rate_to_eur: "0.9",
+        rate_date: "2026-06-01",
+        fetched_at: "2026-06-01T10:00:00Z",
+      },
+    ] as never,
+  });
+});
+
 describe("getPortfolioSummary", () => {
   beforeEach(() => {
     query.mockReset();

@@ -53,6 +53,14 @@ import { RowContractError } from "../src/database/rowContracts.ts";
 import { __clearHistoricalIndexCache as clearHistoricalIndexCache } from "../src/services/currency/currencyConversionService.ts";
 import { pgLocalDate } from "./helpers/portfolioPgRows.ts";
 
+/** A latest stored USD row as `exchange_rates` returns it. */
+const latestUsdRate = (rateToEur: string) => ({
+  currency_code: "USD",
+  rate_to_eur: rateToEur,
+  rate_date: pgLocalDate("2026-01-02"),
+  fetched_at: new Date("2026-01-02T10:00:00Z"),
+});
+
 /** `query` as these tests drive it: SQL text in, a bare `{ rows }` result out. */
 const query = vi.mocked(rawQuery) as unknown as Mock<
   (sql: string, params?: readonly unknown[]) => Promise<Partial<PgQueryResult>>
@@ -254,7 +262,7 @@ describe("Price Provider Service", () => {
     it("converts a Kinesis EUR-symbol live price out of USD", async () => {
       // exchange_rates: 1 USD = 0.5 EUR (rate_to_eur), so the live price halves.
       query.mockResolvedValue({
-        rows: [{ currency_code: "USD", rate_to_eur: "0.5" }],
+        rows: [latestUsdRate("0.5")],
       });
       vi.spyOn(globalThis, "fetch").mockResolvedValue(
         partial<Response>({
@@ -279,6 +287,32 @@ describe("Price Provider Service", () => {
       ]);
 
       expect(result[1]).toBe(50);
+    });
+
+    it("skips a Kinesis EUR-symbol live price when no USD rate is stored", async () => {
+      // No stored rates: the USD quote must not become a EUR price 1:1 or at a
+      // built-in rate.
+      query.mockResolvedValue({ rows: [] });
+      vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        partial<Response>({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              KAU_USD: [{ createdAt: "2026-01-02T00:00:00Z", price: 100 }],
+            }),
+        }),
+      );
+
+      const result = await fetchLivePrices([
+        partial<InvestmentRow>({
+          id: 1,
+          price_provider: "kinesis",
+          price_provider_id: "KAU_EUR",
+          currency: "EUR",
+        }),
+      ]);
+
+      expect(result[1]).toBeUndefined();
     });
 
     it("should resolve Kinesis symbol from configured asset name when provider id is missing", async () => {
@@ -908,6 +942,9 @@ describe("Price Provider Service", () => {
       // each point's historical rate. A 1:1 USD rate keeps the converted
       // values identical so the spike-sanitisation assertions stay meaningful.
       query.mockImplementation(async (sql) => {
+        if (typeof sql === "string" && sql.includes("is_latest = true")) {
+          return { rows: [latestUsdRate("1")] };
+        }
         if (typeof sql === "string" && sql.includes("FROM exchange_rates")) {
           return {
             rows: [
@@ -967,6 +1004,9 @@ describe("Price Provider Service", () => {
     it("converts a Kinesis EUR symbol history series from USD at historical rates", async () => {
       // USD rate 2.0 → every converted EUR price is double the USD source.
       query.mockImplementation(async (sql) => {
+        if (typeof sql === "string" && sql.includes("is_latest = true")) {
+          return { rows: [latestUsdRate("2")] };
+        }
         if (typeof sql === "string" && sql.includes("FROM exchange_rates")) {
           return {
             rows: ["2023-05-19", "2023-05-20", "2023-05-21"].map(

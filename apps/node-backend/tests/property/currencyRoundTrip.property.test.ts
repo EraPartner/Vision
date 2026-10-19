@@ -5,24 +5,49 @@
  * amount within rounding tolerance. Property locks the symmetric behaviour of
  * `convertToCurrency` against silent rate-map corruption or sign drift.
  *
- * We drive the conversion through the FALLBACK_RATES path (mocking the DB +
- * fetch to empty) so the test is deterministic and offline.
+ * We drive the conversion through a fixed table of stored latest rates
+ * (mocking the DB rows and failing fetch) so the test is deterministic and
+ * offline.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mockLogger } from "../helpers/mockLogger.ts";
 import { mockConnection } from "../helpers/repoMocks.ts";
 
+// Latest stored rates (rate_to_eur per unit), as `exchange_rates` returns them.
+const STORED_RATES: Record<string, string> = {
+  USD: "0.9174311927",
+  GBP: "1.1764705882",
+  CHF: "1.0526315789",
+  JPY: "0.0061349693",
+  SEK: "0.0892857143",
+  HUF: "0.0025316456",
+  IDR: "0.0000568182",
+  KWD: "2.9850746269",
+  SAR: "0.2444987775",
+};
+
 vi.mock("../../src/database/connection.ts", () =>
   mockConnection({
-    query: vi.fn(async () => ({ rows: [] })),
+    query: vi.fn(async (sql: string) =>
+      String(sql).includes("is_latest = true")
+        ? {
+            rows: Object.entries(STORED_RATES).map(
+              ([currency_code, rate_to_eur]) => ({
+                currency_code,
+                rate_to_eur,
+              }),
+            ),
+          }
+        : { rows: [] },
+    ),
   }),
 );
 vi.mock("../../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
-const { convertToCurrency, clearMemoryCache, FALLBACK_RATES } =
+const { convertToCurrency, clearMemoryCache } =
   await import("../../src/services/currency/currencyConversionService.ts");
 
 const originalFetch = global.fetch;
@@ -42,7 +67,7 @@ function seeded(seed: number) {
 describe("property: currency round-trip identity", () => {
   beforeEach(() => {
     clearMemoryCache();
-    // Force fetch failure so FALLBACK_RATES is used deterministically
+    // Force fetch failure so the stored rates are used deterministically
     global.fetch = vi
       .fn()
       .mockRejectedValue(new Error("offline-for-property-test"));
@@ -53,9 +78,7 @@ describe("property: currency round-trip identity", () => {
     else delete (global as { fetch?: typeof fetch }).fetch;
   });
 
-  const CURRENCIES = Object.keys(FALLBACK_RATES).filter(
-    (c) => FALLBACK_RATES[c]! > 0,
-  );
+  const CURRENCIES = ["EUR", ...Object.keys(STORED_RATES)];
 
   it("convert(convert(x, A, B), B, A) ≈ x across 200 random (x, A, B) triples", async () => {
     const rng = seeded(0xface0ff);

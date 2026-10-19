@@ -574,7 +574,8 @@ Get the latest stored exchange rate per currency from the database
 Notes:
 
 - When the stored rates are stale and `db_only` is not set, the backend clears its in-memory rate cache and starts a background refresh; the response never waits for it.
-- `source` is `database` when stored rates exist and `fallback` when there are none. `fallback_rates` carries the server's hard-coded constants; since 2026-10-19 the web app no longer merges them into its client-side converter (`useCurrencyConverter` uses stored rates only, ADR-216), so a currency without a stored rate is shown as unavailable rather than converted at a stale constant.
+- `source` is `database` when stored rates exist and `fallback` when there are none; only EUR amounts can then be converted. Conversions on the server and in the web app use stored rates only (ADR-216): a currency without a stored rate is unavailable and flagged, never converted at a built-in constant.
+- Contract change (2026-10-19, breaking for readers of the field): the `fallback_rates` field (the server's hard-coded constants) was removed from the response. The web app was its only reader (the removed Fallback tab of the admin Exchange Rates page).
 - `is_stale` is `true` when the stored rate date is before today, or when nothing is stored.
 - `last_fetched_at` is the latest `fetched_at` of the returned rows as an ISO timestamp, or `null` when there are none.
 - Contract change (October 2026, non-breaking): `openapi.yaml` now types the response and documents `db_only`, `source`, `is_stale` and `last_fetched_at`, which the route already returned or accepted. It drops the `base` and `month` query parameters, which the route never read.
@@ -599,7 +600,6 @@ Notes:
       "fetched_at": "2025-03-18T10:30:00Z"
     }
   ],
-  "fallback_rates": { "USD": 0.917, "GBP": 1.176 },
   "source": "database",
   "is_stale": false,
   "last_fetched_at": "2025-03-18T10:30:00.000Z"
