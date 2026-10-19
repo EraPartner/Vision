@@ -1,5 +1,6 @@
+import { sql } from "kysely";
 import { withTransaction } from "../database/connection.ts";
-import { queryRows } from "../database/rowContracts.ts";
+import { checkedRows, db } from "../database/db.ts";
 import { belgianInflationMonthRowSchema } from "../database/rows/info.ts";
 import { logger } from "../config/logger.ts";
 import {
@@ -640,18 +641,15 @@ async function loadFromDatabase(
   startMonth?: string,
   endMonth?: string,
 ): Promise<BelgianInflationRate[]> {
-  const rows = await queryRows(
-    belgianInflationMonthRowSchema,
-    `SELECT month_date, monthly_rate
-     FROM belgian_inflation_rates
-     WHERE ($1::date IS NULL OR month_date >= $1::date)
-       AND ($2::date IS NULL OR month_date <= $2::date)
-     ORDER BY month_date ASC`,
-    [
-      startMonth ? `${startMonth}-01` : null,
-      endMonth ? `${endMonth}-01` : null,
-    ],
-  );
+  let builder = db
+    .selectFrom("belgian_inflation_rates")
+    .select(["month_date", "monthly_rate"])
+    .orderBy("month_date", "asc");
+  if (startMonth)
+    builder = builder.where("month_date", ">=", sql<Date>`${`${startMonth}-01`}::date`);
+  if (endMonth)
+    builder = builder.where("month_date", "<=", sql<Date>`${`${endMonth}-01`}::date`);
+  const rows = await checkedRows(belgianInflationMonthRowSchema, builder);
 
   return rows
     .map((row) => ({
@@ -671,27 +669,27 @@ async function saveToDatabase(
 ): Promise<void> {
   if (!Array.isArray(rates) || rates.length === 0) return;
 
-  await withTransaction(async (client) => {
+  await withTransaction(async () => {
     for (let i = 0; i < rates.length; i += INFLATION_INSERT_CHUNK) {
       const chunk = rates.slice(i, i + INFLATION_INSERT_CHUNK);
-      const params: (string | number)[] = [];
-      const valueRows = chunk.map((rate, idx) => {
-        const offset = idx * 3;
-        params.push(`${rate.month}-01`, rate.monthly_rate, source);
-        return `($${offset + 1}::date, $${offset + 2}, $${offset + 3})`;
-      });
-
-      await client.query(
-        `INSERT INTO belgian_inflation_rates (month_date, monthly_rate, source)
-         VALUES ${valueRows.join(", ")}
-         ON CONFLICT (month_date)
-         DO UPDATE SET
-            monthly_rate = EXCLUDED.monthly_rate,
-            source = EXCLUDED.source,
-            fetched_at = NOW(),
-            updated_at = NOW()`,
-        params,
-      );
+      await db
+        .insertInto("belgian_inflation_rates")
+        .values(
+          chunk.map((rate) => ({
+            month_date: sql<Date>`${`${rate.month}-01`}::date`,
+            monthly_rate: rate.monthly_rate,
+            source,
+          })),
+        )
+        .onConflict((oc) =>
+          oc.column("month_date").doUpdateSet((eb) => ({
+            monthly_rate: eb.ref("excluded.monthly_rate"),
+            source: eb.ref("excluded.source"),
+            fetched_at: sql<Date>`NOW()`,
+            updated_at: sql<Date>`NOW()`,
+          })),
+        )
+        .execute();
     }
   });
 }

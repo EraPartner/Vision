@@ -58,6 +58,20 @@ const { query, poolQuery } = connection as unknown as {
   poolQuery: SqlSpy;
 };
 
+/** SQL text without identifier quotes, case or layout differences. */
+function norm(sql: string): string {
+  return sql.replaceAll('"', "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+/** The opening-anchor read, whether 'opening' is a literal or a parameter. */
+function isOpeningAnchorRead(sql: string, params: readonly unknown[] = []) {
+  const text = norm(sql);
+  return (
+    text.includes("transfer_source = 'opening'") ||
+    (/transfer_source = \$\d/.test(text) && params.includes("opening"))
+  );
+}
+
 interface StampRange {
   account_id: number;
   min_date: string;
@@ -84,31 +98,31 @@ function happyPath({
   >;
 } = {}) {
   mockClient.query.mockImplementation(async (sql, params = []) => {
-    if (sql.includes("transfer_source = 'opening'"))
+    if (isOpeningAnchorRead(sql, params))
       return { rows: openingAnchors };
-    if (sql.includes("FOR UPDATE") && sql.includes("WHERE id = $1"))
+    if (norm(sql).includes("for update") && norm(sql).includes("where id = $1"))
       return { rows: [{ id: 2, name: "TARGET" }] };
-    if (sql.includes("FOR UPDATE") && sql.includes("ANY"))
+    if (norm(sql).includes("for update") && norm(sql).includes("any"))
       return { rows: [{ id: 1 }] };
-    if (sql.includes("FROM accounts WHERE id = $1"))
+    if (norm(sql).includes("from accounts where id = $1"))
       return {
         rows: fundingAccounts[params[0]] ? [fundingAccounts[params[0]]] : [],
       };
-    if (sql.includes("GROUP BY account_id")) return { rows: stampRanges };
-    if (sql.includes("UPDATE transactions")) return { rowCount: 3 };
-    if (sql.includes("UPDATE planned_transactions")) return { rowCount: 1 };
-    if (sql.includes("UPDATE portfolio_transactions")) return { rowCount: 2 };
-    if (sql.includes("UPDATE portfolio_import_batches")) return { rowCount: 1 };
-    if (sql.includes("UPDATE accounts SET funding_account_id"))
+    if (norm(sql).includes("group by account_id")) return { rows: stampRanges };
+    if (norm(sql).includes("update transactions")) return { rowCount: 3 };
+    if (norm(sql).includes("update planned_transactions")) return { rowCount: 1 };
+    if (norm(sql).includes("update portfolio_transactions")) return { rowCount: 2 };
+    if (norm(sql).includes("update portfolio_import_batches")) return { rowCount: 1 };
+    if (norm(sql).includes("update accounts set funding_account_id"))
       return { rowCount: 0 };
-    if (sql.includes("DELETE FROM accounts")) return { rowCount: 1 };
+    if (norm(sql).includes("delete from accounts")) return { rowCount: 1 };
     return { rows: [], rowCount: 0 };
   });
 }
 
 const clearAnchorCall = () =>
   mockClient.query.mock.calls.find(([sql]) =>
-    sql.includes("DELETE FROM account_statement_balances"),
+    norm(sql).includes("delete from account_statement_balances"),
   );
 
 beforeEach(() => {
@@ -139,16 +153,16 @@ describe("mergeAccounts (ADR-088)", () => {
 
   it("throws NotFound when the survivor is missing", async () => {
     mockClient.query.mockImplementation(async (sql) =>
-      sql.includes("WHERE id = $1") ? { rows: [] } : { rows: [], rowCount: 0 },
+      norm(sql).includes("where id = $1") ? { rows: [] } : { rows: [], rowCount: 0 },
     );
     await expect(mergeAccounts(asAccountId(2), [asAccountId(1)])).rejects.toThrow(NotFoundError);
   });
 
   it("throws NotFound when a source is missing", async () => {
     mockClient.query.mockImplementation(async (sql) => {
-      if (sql.includes("WHERE id = $1"))
+      if (norm(sql).includes("where id = $1"))
         return { rows: [{ id: 2, name: "TARGET" }] };
-      if (sql.includes("ANY")) return { rows: [] }; // no sources found
+      if (norm(sql).includes("any")) return { rows: [] }; // no sources found
       return { rows: [], rowCount: 0 };
     });
     await expect(mergeAccounts(asAccountId(2), [asAccountId(1)])).rejects.toThrow(NotFoundError);
@@ -168,46 +182,46 @@ describe("mergeAccounts (ADR-088)", () => {
     const calls = mockClient.query.mock.calls.map(([sql]) => sql);
     const batchLockIndex = calls.findIndex(
       (s) =>
-        s.includes("FROM portfolio_import_batches") && s.includes("FOR UPDATE"),
+        norm(s).includes("from portfolio_import_batches") && norm(s).includes("for update"),
     );
     const accountLockIndex = calls.findIndex(
-      (s) => s.includes("FROM accounts") && s.includes("FOR UPDATE"),
+      (s) => norm(s).includes("from accounts") && norm(s).includes("for update"),
     );
     expect(batchLockIndex).toBeGreaterThan(-1);
     expect(batchLockIndex).toBeLessThan(accountLockIndex);
     expect(
       calls.some(
-        (s) => s.includes("UPDATE transactions") && !s.includes("bank_account"),
+        (s) => norm(s).includes("update transactions") && !norm(s).includes("bank_account"),
       ),
     ).toBe(true);
     expect(
       calls.some(
         (s) =>
-          s.includes("UPDATE planned_transactions") &&
-          !s.includes("bank_account"),
+          norm(s).includes("update planned_transactions") &&
+          !norm(s).includes("bank_account"),
       ),
     ).toBe(true);
-    expect(calls.some((s) => s.includes("UPDATE portfolio_transactions"))).toBe(
+    expect(calls.some((s) => norm(s).includes("update portfolio_transactions"))).toBe(
       true,
     );
     const batchRepointIndex = calls.findIndex((s) =>
-      s.includes("UPDATE portfolio_import_batches"),
+      norm(s).includes("update portfolio_import_batches"),
     );
     const deleteSourcesIndex = calls.findIndex((s) =>
-      s.includes("DELETE FROM accounts"),
+      norm(s).includes("delete from accounts"),
     );
     expect(batchRepointIndex).toBeGreaterThan(-1);
     expect(batchRepointIndex).toBeLessThan(deleteSourcesIndex);
     const batchCall = mockClient.query.mock.calls[batchRepointIndex]!;
     expect(batchCall[1]).toEqual([2, [1]]);
     expect(
-      calls.some((s) => s.includes("UPDATE accounts SET funding_account_id")),
+      calls.some((s) => norm(s).includes("update accounts set funding_account_id")),
     ).toBe(true);
-    expect(calls.some((s) => s.includes("DELETE FROM accounts"))).toBe(true);
+    expect(calls.some((s) => norm(s).includes("delete from accounts"))).toBe(true);
 
     // transactions repoint carries the survivor's name (so the dual-write trigger keeps it merged)
     const txCall = mockClient.query.mock.calls.find(([sql]) =>
-      sql.includes("UPDATE transactions"),
+      norm(sql).includes("update transactions"),
     );
     expect(txCall![1]).toEqual([2, [1]]);
   });
@@ -243,10 +257,10 @@ describe("mergeAccounts (ADR-088)", () => {
 
     const calls = mockClient.query.mock.calls.map(([sql]) => sql);
     const graphLockIndex = calls.findIndex((sql) =>
-      sql.includes("pg_advisory_xact_lock"),
+      norm(sql).includes("pg_advisory_xact_lock"),
     );
     const firstGraphReadIndex = calls.findIndex((sql) =>
-      sql.includes("FROM accounts WHERE id = $1"),
+      norm(sql).includes("from accounts where id = $1"),
     );
     expect(graphLockIndex).toBeGreaterThanOrEqual(0);
     expect(graphLockIndex).toBeLessThan(firstGraphReadIndex);
@@ -270,7 +284,7 @@ describe("mergeAccounts (ADR-088)", () => {
     await mergeAccounts(2, [1, 1, 0, -1, 1.5, "1", null]);
 
     const txCall = mockClient.query.mock.calls.find(([sql]) =>
-      sql.includes("UPDATE transactions"),
+      norm(sql).includes("update transactions"),
     );
     expect(txCall![1]).toEqual([2, [1]]);
   });
@@ -292,13 +306,13 @@ describe("mergeAccounts (ADR-088)", () => {
     expect(result.stampsInterleaved).toBe(true);
     const clear = clearAnchorCall();
     expect(clear).toBeDefined();
-    expect(clear![0]).toContain("WHERE account_id = $1");
+    expect(norm(clear![0])).toContain("where account_id = $1");
     expect(clear![1]).toEqual([2]); // clears the SURVIVOR's anchor only
 
     // Historical per-row stamps are never rewritten — no UPDATE touches
     // transactions.balance.
     const balanceRewrites = mockClient.query.mock.calls.filter(
-      ([sql]) => sql.includes("UPDATE transactions") && sql.includes("balance"),
+      ([sql]) => norm(sql).includes("update transactions") && norm(sql).includes("balance"),
     );
     expect(balanceRewrites).toEqual([]);
   });
@@ -335,9 +349,9 @@ describe("mergeAccounts (ADR-088)", () => {
     });
     await mergeAccounts(asAccountId(2), [asAccountId(1)]);
     const calls = mockClient.query.mock.calls.map(([sql]) => sql);
-    const rangeIdx = calls.findIndex((s) => s.includes("GROUP BY account_id"));
+    const rangeIdx = calls.findIndex((s) => norm(s).includes("group by account_id"));
     const repointIdx = calls.findIndex((s) =>
-      s.includes("UPDATE transactions"),
+      norm(s).includes("update transactions"),
     );
     expect(rangeIdx).toBeGreaterThanOrEqual(0);
     expect(rangeIdx).toBeLessThan(repointIdx);
@@ -382,11 +396,11 @@ describe("mergeAccounts (ADR-088)", () => {
     happyPath({ openingAnchors: [{ account_id: 1, currency: "EUR" }] });
     await mergeAccounts(asAccountId(2), [asAccountId(1)]);
     const calls = mockClient.query.mock.calls.map(([sql]) => sql);
-    const anchorIdx = calls.findIndex((s) =>
-      s.includes("transfer_source = 'opening'"),
+    const anchorIdx = mockClient.query.mock.calls.findIndex(([sql, params]) =>
+      isOpeningAnchorRead(sql, params),
     );
     const repointIdx = calls.findIndex((s) =>
-      s.includes("UPDATE transactions"),
+      norm(s).includes("update transactions"),
     );
     expect(anchorIdx).toBeGreaterThanOrEqual(0);
     expect(anchorIdx).toBeLessThan(repointIdx);
@@ -492,22 +506,22 @@ describe("previewMerge (GET /api/accounts/:id/merge-preview)", () => {
     stampRanges?: StampRange[];
     openingAnchors?: OpeningAnchor[];
   } = {}) {
-    poolQuery.mockImplementation(async (sql) => {
-      if (sql.includes("transfer_source = 'opening'"))
+    poolQuery.mockImplementation(async (sql, params = []) => {
+      if (isOpeningAnchorRead(sql, params))
         return { rows: openingAnchors };
-      if (sql.includes("SELECT id, currency FROM accounts"))
+      if (norm(sql).includes("group by account_id")) return { rows: stampRanges };
+      if (norm(sql).includes("select id, currency from accounts"))
         return { rows: accounts };
-      if (sql.includes("balance_parts"))
+      if (norm(sql).includes("balance_parts"))
         return { rows: [{ balance_parts: parts }] };
-      if (sql.includes("FROM transactions WHERE account_id"))
+      if (norm(sql).includes("from transactions where account_id"))
         return { rows: [{ n: counts.transactions }] };
-      if (sql.includes("FROM planned_transactions"))
+      if (norm(sql).includes("from planned_transactions"))
         return { rows: [{ n: counts.planned }] };
-      if (sql.includes("portfolio_transactions"))
+      if (norm(sql).includes("portfolio_transactions"))
         return { rows: [{ n: counts.portfolio }] };
-      if (sql.includes("funding_account_id"))
+      if (norm(sql).includes("funding_account_id"))
         return { rows: [{ n: counts.funding }] };
-      if (sql.includes("GROUP BY account_id")) return { rows: stampRanges };
       return { rows: [], rowCount: 0 };
     });
   }
@@ -577,7 +591,7 @@ describe("previewMerge (GET /api/accounts/:id/merge-preview)", () => {
     primePreview();
     await previewMerge(asAccountId(1), asAccountId(2));
     const projectedCall = query.mock.calls.find(([sql]) =>
-      sql.includes("balance_parts"),
+      norm(sql).includes("balance_parts"),
     );
     expect(projectedCall).toBeDefined();
     const [projectedSql] = projectedCall!;
@@ -673,9 +687,9 @@ describe("previewMerge (GET /api/accounts/:id/merge-preview)", () => {
     expect(result.reassigned.portfolio).toBe(7);
     const portfolioSql = query.mock.calls
       .map(([sql]) => sql)
-      .find((s) => s.includes("portfolio_transactions") && s.includes("COUNT"));
-    expect(portfolioSql).toContain(
-      "FROM portfolio_transactions WHERE account_id = $1",
+      .find((s) => norm(s).includes("portfolio_transactions") && norm(s).includes("count"));
+    expect(norm(portfolioSql!)).toContain(
+      "from portfolio_transactions where account_id = $1",
     );
   });
 });

@@ -3,8 +3,11 @@
  *
  */
 
-import { query } from "../database/connection.ts";
-import { queryRows } from "../database/rowContracts.ts";
+import { sql } from "kysely";
+import type { Updateable } from "kysely";
+import { checkedRow, checkedRows, compileQuery, db } from "../database/db.ts";
+import type { BuiltQuery } from "../database/db.ts";
+import type { PlannedTransactions } from "../database/schema.generated.ts";
 import {
   countRowSchema,
   keyedLoanScheduleRowSchema,
@@ -30,7 +33,6 @@ import type {
   TransactionId,
 } from "@vision/types/brands";
 import { todayAppDateString } from "../lib/timezone.ts";
-import { buildSetClauses } from "../lib/sqlClauses.ts";
 
 import { z } from "zod";
 import type {
@@ -96,7 +98,7 @@ export interface PlannedTransactionFilters {
 // NB: `category_id` in the projection is deliberately still pt's OWN stored
 // column (that is the editable field the PATCH round-trips); `category_name` is
 // the resolved DISPLAY name. They only coincide when pt.category_id is set.
-const PLANNED_CATEGORY_NAME_SQL = `CASE
+const plannedCategoryName = sql<string | null>`CASE
                 WHEN c.id IS NOT NULL THEN c.path_name
                 WHEN rc.id IS NOT NULL THEN rc.path_name
                 WHEN pc.id IS NOT NULL THEN pc.path_name
@@ -106,24 +108,41 @@ const PLANNED_CATEGORY_NAME_SQL = `CASE
 // Display the recipient cluster root, matching transactionRepository. Keep
 // pt.recipient_id unchanged so edit/match behavior still targets the stored
 // recipient row; this expression is presentation-only.
-const PLANNED_RECIPIENT_NAME_SQL = "COALESCE(pr.name, r.name)";
+const plannedRecipientName = sql<string | null>`COALESCE(pr.name, r.name)`;
+
+function plannedJoins() {
+  return db
+    .selectFrom("planned_transactions as pt")
+    .leftJoin("recipients as r", "pt.recipient_id", "r.id")
+    .leftJoin("recipients as pr", "r.primary_recipient_id", "pr.id")
+    .leftJoin("categories as c", "pt.category_id", "c.id")
+    .leftJoin("categories as rc", "r.default_category_id", "rc.id")
+    .leftJoin("categories as pc", "pr.default_category_id", "pc.id")
+    .leftJoin("accounts as acct", "pt.account_id", "acct.id");
+}
+
+type PlannedJoinQuery = ReturnType<typeof plannedJoins>;
 
 // `acct.name AS bank_account` is selected AFTER `pt.*` so the projected
 // `bank_account` key resolves to the canonical accounts.name over the FK
 // (node-postgres keeps the LAST duplicate field) — ADR-088 contract phase:
 // reads must survive the out-of-band drop of the string column, and stay
 // byte-identical pre-drop under the dual-write parity invariant.
-const PLANNED_SELECT_FIELDS = `pt.*,
-             acct.name AS bank_account,
-             ${PLANNED_RECIPIENT_NAME_SQL} AS recipient_name,
-             ${PLANNED_CATEGORY_NAME_SQL} AS category_name`;
+function selectPlannedFields(builder: PlannedJoinQuery) {
+  return builder
+    .selectAll("pt")
+    .select([
+      "acct.name as bank_account",
+      plannedRecipientName.as("recipient_name"),
+      plannedCategoryName.as("category_name"),
+    ]);
+}
 
-const PLANNED_JOINS = `LEFT JOIN recipients r ON pt.recipient_id = r.id
-      LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
-      LEFT JOIN categories c ON pt.category_id = c.id
-      LEFT JOIN categories rc ON r.default_category_id = rc.id
-      LEFT JOIN categories pc ON pr.default_category_id = pc.id
-      LEFT JOIN accounts acct ON pt.account_id = acct.id`;
+/** Run a built query on the caller's transaction client. */
+async function runOn(client: QueryRunner, builder: BuiltQuery) {
+  const compiled = compileQuery(builder);
+  return client.query(compiled.sql, [...compiled.parameters]);
+}
 
 /**
  * Attach the executions, loan_schedule and tags sub-collections to a hydrated
@@ -133,47 +152,59 @@ const PLANNED_JOINS = `LEFT JOIN recipients r ON pt.recipient_id = r.id
  * @param row - a planned_transactions row (must carry id, is_loan)
  * @returns the same row, hydrated
  */
+const LOAN_SCHEDULE_COLUMNS = [
+  "installment_number",
+  "due_date",
+  "payment_amount",
+  "principal_amount",
+  "interest_amount",
+  "remaining_principal",
+] as const;
+
 async function hydratePlannedRow(
   row: PlannedRowInHydration,
   id: PlannedTransactionId,
 ): Promise<HydratedPlannedTransactionRow> {
-  const executions = await queryRows(
+  const executions = await checkedRows(
     plannedExecutionRowSchema,
-    `SELECT * FROM planned_transaction_executions WHERE planned_transaction_id = $1 ORDER BY execution_date DESC`,
-    [id],
+    db
+      .selectFrom("planned_transaction_executions")
+      .selectAll()
+      .where("planned_transaction_id", "=", id)
+      .orderBy("execution_date", "desc"),
   );
   row.executions = executions;
   row.execution_count = executions.length;
   row.executed_transaction_id = executions[0]?.executed_transaction_id ?? null;
 
   if (row.is_loan) {
-    row.loan_schedule = await queryRows(
+    row.loan_schedule = await checkedRows(
       loanScheduleRowSchema,
-      `SELECT installment_number, due_date, payment_amount, principal_amount, interest_amount, remaining_principal
-           FROM planned_transaction_loan_schedule
-          WHERE planned_transaction_id = $1
-          ORDER BY installment_number ASC`,
-      [id],
+      db
+        .selectFrom("planned_transaction_loan_schedule")
+        .select(LOAN_SCHEDULE_COLUMNS)
+        .where("planned_transaction_id", "=", id)
+        .orderBy("installment_number", "asc"),
     );
   } else {
     row.loan_schedule = [];
   }
 
-  row.tags = await queryRows(
+  row.tags = await checkedRows(
     transactionTagRefSchema,
-    `SELECT tg.id, tg.slug, tg.color, tg.is_active
-       FROM planned_transaction_tags ptt
-       JOIN tags tg ON tg.id = ptt.tag_id
-       WHERE ptt.planned_transaction_id = $1
-       ORDER BY tg.slug ASC`,
-    [id],
+    db
+      .selectFrom("planned_transaction_tags as ptt")
+      .innerJoin("tags as tg", "tg.id", "ptt.tag_id")
+      .select(["tg.id", "tg.slug", "tg.color", "tg.is_active"])
+      .where("ptt.planned_transaction_id", "=", id)
+      .orderBy("tg.slug", "asc"),
   );
 
   // Every sub-collection above is now attached.
   return row as HydratedPlannedTransactionRow;
 }
 
-function buildPlannedTransactionWhereClause({
+function filterPlannedTransactions({
   startDate = null,
   endDate = null,
   bankAccount = null,
@@ -184,63 +215,56 @@ function buildPlannedTransactionWhereClause({
   isExecuted = null,
   search = null,
   active = true,
-}: PlannedTransactionFilters = {}): { whereClause: string; params: unknown[] } {
-  let whereClause = "WHERE 1=1";
-  const params: unknown[] = [];
-  let paramIdx = 1;
+}: PlannedTransactionFilters = {}): PlannedJoinQuery {
+  let builder = plannedJoins();
 
-  if (active) whereClause += ` AND pt.is_active = true`;
-  if (startDate) {
-    whereClause += ` AND pt.planned_date >= $${paramIdx++}`;
-    params.push(startDate);
-  }
-  if (endDate) {
-    whereClause += ` AND pt.planned_date <= $${paramIdx++}`;
-    params.push(endDate);
-  }
+  if (active) builder = builder.where("pt.is_active", "=", true);
+  if (startDate)
+    builder = builder.where("pt.planned_date", ">=", sql<Date>`${startDate}`);
+  if (endDate)
+    builder = builder.where("pt.planned_date", "<=", sql<Date>`${endDate}`);
   // Bank filter via the FK (ADR-088) — matches the account's canonical name,
   // never the retired bank_account string.
   if (accountId != null) {
-    whereClause += ` AND pt.account_id = $${paramIdx++}`;
-    params.push(accountId);
+    builder = builder.where("pt.account_id", "=", accountId);
   } else if (bankAccount) {
-    whereClause += ` AND pt.account_id IN (SELECT fa.id FROM accounts fa WHERE fa.name ILIKE $${paramIdx++})`;
-    params.push(`%${bankAccount}%`);
+    builder = builder.where("pt.account_id", "in", (eb) =>
+      eb
+        .selectFrom("accounts as fa")
+        .select("fa.id")
+        .where("fa.name", "ilike", `%${bankAccount}%`),
+    );
   }
   if (categoryId != null) {
-    whereClause += ` AND pt.category_id IN (SELECT category_id FROM category_ancestors WHERE ancestor_id = $${paramIdx++})`;
-    params.push(categoryId);
+    builder = builder.where(
+      sql<boolean>`pt.category_id IN (SELECT category_id FROM category_ancestors WHERE ancestor_id = ${categoryId})`,
+    );
   }
-  if (recipientId != null) {
-    whereClause += ` AND pt.recipient_id = $${paramIdx++}`;
-    params.push(recipientId);
-  }
-  if (isRecurring != null) {
-    whereClause += ` AND pt.is_recurring = $${paramIdx++}`;
-    params.push(isRecurring);
-  }
-  if (isExecuted != null) {
-    whereClause += ` AND pt.is_executed = $${paramIdx++}`;
-    params.push(isExecuted);
-  }
+  if (recipientId != null)
+    builder = builder.where("pt.recipient_id", "=", recipientId);
+  if (isRecurring != null)
+    builder = builder.where("pt.is_recurring", "=", isRecurring);
+  if (isExecuted != null)
+    builder = builder.where("pt.is_executed", "=", isExecuted);
   if (search) {
     const sp = `%${search}%`;
-    whereClause += ` AND (
-      pt.memo ILIKE $${paramIdx} OR
-      pt.comment ILIKE $${paramIdx} OR
-      acct.name ILIKE $${paramIdx} OR
-      ${PLANNED_RECIPIENT_NAME_SQL} ILIKE $${paramIdx} OR
-      r.name ILIKE $${paramIdx} OR
-      -- Match the RESOLVED label the row displays, not each candidate level in
-      -- turn. ORing c/rc separately both missed rows categorised through the
-      -- primary recipient (no pc term at all) and matched rows whose own
-      -- category_id overrode the recipient default the term hit.
-      ${PLANNED_CATEGORY_NAME_SQL} ILIKE $${paramIdx}
-    )`;
-    params.push(sp);
+    builder = builder.where((eb) =>
+      eb.or([
+        eb("pt.memo", "ilike", sp),
+        eb("pt.comment", "ilike", sp),
+        eb("acct.name", "ilike", sp),
+        eb(plannedRecipientName, "ilike", sp),
+        eb("r.name", "ilike", sp),
+        // Match the RESOLVED label the row displays, not each candidate level
+        // in turn. ORing c/rc separately both missed rows categorised through
+        // the primary recipient (no pc term at all) and matched rows whose own
+        // category_id overrode the recipient default the term hit.
+        eb(plannedCategoryName, "ilike", sp),
+      ]),
+    );
   }
 
-  return { whereClause, params };
+  return builder;
 }
 
 /** One installment to write: a `LoanScheduleRow` or a computed `LoanInstallment`. */
@@ -261,31 +285,19 @@ export async function insertLoanScheduleBatch(
 ): Promise<void> {
   if (!Array.isArray(scheduleEntries) || scheduleEntries.length === 0) return;
 
-  const values: string[] = [];
-  const params: unknown[] = [];
-  let paramIdx = 1;
+  const values = scheduleEntries.map(
+    (installment) =>
+      sql`(${plannedTransactionId}, ${installment.installment_number}, ${installment.due_date},
+           ${installment.payment_amount}, ${installment.principal_amount},
+           ${installment.interest_amount}, ${installment.remaining_principal})`,
+  );
 
-  for (const installment of scheduleEntries) {
-    values.push(
-      `($${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++})`,
-    );
-    params.push(
-      plannedTransactionId,
-      installment.installment_number,
-      installment.due_date,
-      installment.payment_amount,
-      installment.principal_amount,
-      installment.interest_amount,
-      installment.remaining_principal,
-    );
-  }
-
-  await client.query(
-    `INSERT INTO planned_transaction_loan_schedule (
+  await runOn(
+    client,
+    sql`INSERT INTO planned_transaction_loan_schedule (
        planned_transaction_id, installment_number, due_date,
        payment_amount, principal_amount, interest_amount, remaining_principal
-     ) VALUES ${values.join(", ")}`,
-    params,
+     ) VALUES ${sql.join(values)}`,
   );
 }
 
@@ -294,24 +306,29 @@ export async function setPlannedTransactionTags(
   plannedTransactionId: PlannedTransactionId,
   slugs: string[] | null | undefined,
 ): Promise<void> {
-  await client.query(
-    "DELETE FROM planned_transaction_tags WHERE planned_transaction_id = $1",
-    [plannedTransactionId],
+  await runOn(
+    client,
+    db
+      .deleteFrom("planned_transaction_tags")
+      .where("planned_transaction_id", "=", plannedTransactionId),
   );
   if (!slugs || slugs.length === 0) return;
-  const resolved = await queryRows(
+  const resolved = await checkedRows(
     tagKeyRowSchema,
-    "SELECT id FROM tags WHERE slug = ANY($1::text[]) AND is_active = true",
-    [slugs],
+    db
+      .selectFrom("tags")
+      .select("id")
+      .where("slug", "=", sql<string>`ANY(${slugs}::text[])`)
+      .where("is_active", "=", true),
     client,
   );
   if (resolved.length === 0) return;
   const tagIds = resolved.map((r) => r.id);
-  await client.query(
-    `INSERT INTO planned_transaction_tags (planned_transaction_id, tag_id)
-     SELECT $1, unnest($2::int[])
+  await runOn(
+    client,
+    sql`INSERT INTO planned_transaction_tags (planned_transaction_id, tag_id)
+     SELECT ${plannedTransactionId}, unnest(${tagIds}::int[])
      ON CONFLICT DO NOTHING`,
-    [plannedTransactionId, tagIds],
   );
 }
 
@@ -329,23 +346,24 @@ export async function applyPlannedFieldUpdate(
   id: PlannedTransactionId,
   sanitized: Record<string, unknown>,
 ): Promise<boolean> {
-  const {
-    clauses: setClauses,
-    params,
-    nextIdx: paramIdx,
-  } = buildSetClauses(sanitized, { quote: true });
-  if (setClauses.length === 0) {
-    const r = await client.query(
-      "SELECT id FROM planned_transactions WHERE id = $1",
-      [id],
+  // sanitizeUpdateFields() already whitelisted the planned_transactions columns.
+  const changes = Object.fromEntries(
+    Object.entries(sanitized).filter(([, value]) => value !== undefined),
+  ) as Updateable<PlannedTransactions>;
+  if (Object.keys(changes).length === 0) {
+    const r = await runOn(
+      client,
+      db.selectFrom("planned_transactions").select("id").where("id", "=", id),
     );
     return (r.rowCount ?? 0) > 0;
   }
-  setClauses.push("updated_at = NOW()");
-  params.push(id);
-  const r = await client.query(
-    `UPDATE planned_transactions SET ${setClauses.join(", ")} WHERE id = $${paramIdx} RETURNING id`,
-    params,
+  const r = await runOn(
+    client,
+    db
+      .updateTable("planned_transactions")
+      .set({ ...changes, updated_at: sql<Date>`NOW()` })
+      .where("id", "=", id)
+      .returning("id"),
   );
   return (r.rowCount ?? 0) > 0;
 }
@@ -358,9 +376,11 @@ export async function replaceLoanScheduleInTransaction(
   plannedTransactionId: PlannedTransactionId,
   scheduleEntries: ReadonlyArray<LoanScheduleEntryInput> = [],
 ): Promise<void> {
-  await client.query(
-    "DELETE FROM planned_transaction_loan_schedule WHERE planned_transaction_id = $1",
-    [plannedTransactionId],
+  await runOn(
+    client,
+    db
+      .deleteFrom("planned_transaction_loan_schedule")
+      .where("planned_transaction_id", "=", plannedTransactionId),
   );
   await insertLoanScheduleBatch(client, plannedTransactionId, scheduleEntries);
 }
@@ -370,9 +390,9 @@ export async function insertPlannedTransactionInTransaction(
   client: QueryRunner,
   input: Record<string, unknown>,
 ): Promise<PlannedTransactionId> {
-  const [inserted] = await queryRows(
+  const inserted = await checkedRow(
     plannedTransactionKeyRowSchema,
-    `INSERT INTO planned_transactions (
+    sql`INSERT INTO planned_transactions (
        planned_date, account_id, recipient_id, amount, memo, currency, category_id, comment, url,
        is_recurring, recurrence_pattern, recurrence_end_date, max_occurrences,
        reminder_days_before, is_executed, is_active,
@@ -380,35 +400,17 @@ export async function insertPlannedTransactionInTransaction(
        loan_term_months, loan_start_date, loan_payment_day,
        loan_regular_payment_amount, loan_first_payment_date
      ) VALUES (
-       $1, $2, $3, $4, $5, $6, $7, $8, $9,
-       $10, $11, $12, $13, $14, false, true,
-       $15, $16, $17, $18, $19, $20, $21, $22, $23
+       ${input.planned_date}, ${input.account_id}, ${input.recipient_id},
+       ${input.amount}, ${input.memo}, ${input.currency}, ${input.category_id},
+       ${input.comment}, ${input.url},
+       ${input.is_recurring}, ${input.recurrence_pattern},
+       ${input.recurrence_end_date}, ${input.max_occurrences},
+       ${input.reminder_days_before}, false, true,
+       ${input.is_loan}, ${input.loan_type}, ${input.loan_principal},
+       ${input.loan_annual_interest_rate}, ${input.loan_term_months},
+       ${input.loan_start_date}, ${input.loan_payment_day},
+       ${input.loan_regular_payment_amount}, ${input.loan_first_payment_date}
      ) RETURNING id`,
-    [
-      input.planned_date,
-      input.account_id,
-      input.recipient_id,
-      input.amount,
-      input.memo,
-      input.currency,
-      input.category_id,
-      input.comment,
-      input.url,
-      input.is_recurring,
-      input.recurrence_pattern,
-      input.recurrence_end_date,
-      input.max_occurrences,
-      input.reminder_days_before,
-      input.is_loan,
-      input.loan_type,
-      input.loan_principal,
-      input.loan_annual_interest_rate,
-      input.loan_term_months,
-      input.loan_start_date,
-      input.loan_payment_day,
-      input.loan_regular_payment_amount,
-      input.loan_first_payment_date,
-    ],
     client,
   );
   // A plain INSERT ... RETURNING yields exactly one row or throws.
@@ -423,13 +425,21 @@ export async function insertExecutionInTransaction(
   executedTransactionId: TransactionId,
   executionDate: string,
 ): Promise<boolean> {
-  const result = await client.query(
-    `INSERT INTO planned_transaction_executions
-       (planned_transaction_id, executed_transaction_id, execution_date)
-     VALUES ($1, $2, $3)
-     ON CONFLICT (planned_transaction_id, executed_transaction_id) DO NOTHING
-     RETURNING id`,
-    [plannedTransactionId, executedTransactionId, executionDate],
+  const result = await runOn(
+    client,
+    db
+      .insertInto("planned_transaction_executions")
+      .values({
+        planned_transaction_id: plannedTransactionId,
+        executed_transaction_id: executedTransactionId,
+        execution_date: executionDate,
+      })
+      .onConflict((oc) =>
+        oc
+          .columns(["planned_transaction_id", "executed_transaction_id"])
+          .doNothing(),
+      )
+      .returning("id"),
   );
   return (result.rowCount ?? 0) > 0;
 }
@@ -439,45 +449,64 @@ export async function inheritTransactionTagsInTransaction(
   transactionId: TransactionId,
   tagIds: TagId[],
 ): Promise<void> {
-  await client.query(
-    `INSERT INTO transaction_tags (transaction_id, tag_id)
-     SELECT $1, unnest($2::int[])
+  await runOn(
+    client,
+    sql`INSERT INTO transaction_tags (transaction_id, tag_id)
+     SELECT ${transactionId}, unnest(${tagIds}::int[])
      ON CONFLICT DO NOTHING`,
-    [transactionId, tagIds],
   );
 }
 
 export const plannedTransactionRepository = {
   /** Lock the parent before reading recurrence state on the ambient transaction. */
   async lockForExecution(id: PlannedTransactionId): Promise<void> {
-    await query(
-      "SELECT id FROM planned_transactions WHERE id = $1 FOR UPDATE",
-      [id],
-    );
+    await db
+      .selectFrom("planned_transactions")
+      .select("id")
+      .where("id", "=", id)
+      .forUpdate()
+      .execute();
   },
   /** Execution needs scalar state and tag IDs, not full history or loan schedules. */
   async getExecutionState(
     id: PlannedTransactionId,
     transactionId: TransactionId,
   ) {
-    const [row] = await queryRows(
+    const row = await checkedRow(
       plannedTransactionListRowSchema.extend({
         execution_count: z.number(),
         duplicate: z.boolean(),
         recipient_cluster_id: pgRecipientId.nullable(),
       }),
-      `SELECT ${PLANNED_SELECT_FIELDS},
-        COALESCE(r.primary_recipient_id, pt.recipient_id) AS recipient_cluster_id,
-        (SELECT count(*)::int FROM planned_transaction_executions WHERE planned_transaction_id = pt.id) AS execution_count,
-        EXISTS (SELECT 1 FROM planned_transaction_executions WHERE planned_transaction_id = pt.id AND executed_transaction_id = $2) AS duplicate
-       FROM planned_transactions pt ${PLANNED_JOINS} WHERE pt.id = $1`,
-      [id, transactionId],
+      selectPlannedFields(plannedJoins().where("pt.id", "=", id)).select(
+        (eb) => [
+          eb.fn
+            .coalesce("r.primary_recipient_id", "pt.recipient_id")
+            .as("recipient_cluster_id"),
+          eb
+            .selectFrom("planned_transaction_executions as e")
+            .select(sql<number>`count(*)::int`.as("n"))
+            .whereRef("e.planned_transaction_id", "=", "pt.id")
+            .as("execution_count"),
+          eb
+            .exists(
+              eb
+                .selectFrom("planned_transaction_executions as e")
+                .select(sql<number>`1`.as("one"))
+                .whereRef("e.planned_transaction_id", "=", "pt.id")
+                .where("e.executed_transaction_id", "=", transactionId),
+            )
+            .as("duplicate"),
+        ],
+      ),
     );
     if (!row) return null;
-    const tags = await queryRows(
+    const tags = await checkedRows(
       tagKeyRowSchema,
-      "SELECT tag_id AS id FROM planned_transaction_tags WHERE planned_transaction_id = $1",
-      [id],
+      db
+        .selectFrom("planned_transaction_tags")
+        .select("tag_id as id")
+        .where("planned_transaction_id", "=", id),
     );
     return { ...row, tags };
   },
@@ -498,7 +527,7 @@ export const plannedTransactionRepository = {
     items: HydratedPlannedTransactionRow[];
     total: number;
   }> {
-    const { whereClause, params } = buildPlannedTransactionWhereClause({
+    const filtered = filterPlannedTransactions({
       startDate,
       endDate,
       bankAccount,
@@ -511,34 +540,21 @@ export const plannedTransactionRepository = {
       active,
     });
 
-    const limitParam = params.length + 1;
-    const offsetParam = params.length + 2;
-    const sql = `
-      SELECT ${PLANNED_SELECT_FIELDS},
-             COUNT(*) OVER() AS total_count
-      FROM planned_transactions pt
-      ${PLANNED_JOINS}
-      ${whereClause}
-      ORDER BY pt.planned_date DESC
-      LIMIT $${limitParam}
-      OFFSET $${offsetParam}
-    `;
-
-    const pageRows = await queryRows(plannedTransactionPageRowSchema, sql, [
-      ...params,
-      limit,
-      offset,
-    ]);
+    const pageRows = await checkedRows(
+      plannedTransactionPageRowSchema,
+      selectPlannedFields(filtered)
+        .select(sql<string>`COUNT(*) OVER()`.as("total_count"))
+        .orderBy("pt.planned_date", "desc")
+        .limit(limit)
+        .offset(offset),
+    );
     const [firstPageRow] = pageRows;
     let total = firstPageRow ? parseInt(firstPageRow.total_count, 10) : 0;
     if (!firstPageRow) {
-      const countSql = `
-        SELECT count(*)
-        FROM planned_transactions pt
-        ${PLANNED_JOINS}
-        ${whereClause}
-      `;
-      const [countRow] = await queryRows(countRowSchema, countSql, params);
+      const countRow = await checkedRow(
+        countRowSchema,
+        filtered.select(sql<string>`count(*)`.as("count")),
+      );
       // String(): parseInt coerced a missing row's `undefined` the same way.
       total = nanToZero(parseInt(String(countRow?.count), 10));
     }
@@ -552,13 +568,18 @@ export const plannedTransactionRepository = {
       PlannedExecutionRow[]
     >();
     if (plannedTransactionIds.length > 0) {
-      const executionRows = await queryRows(
+      const executionRows = await checkedRows(
         plannedExecutionRowSchema,
-        `SELECT *
-         FROM planned_transaction_executions
-         WHERE planned_transaction_id = ANY($1::int[])
-         ORDER BY planned_transaction_id ASC, execution_date DESC`,
-        [plannedTransactionIds],
+        db
+          .selectFrom("planned_transaction_executions")
+          .selectAll()
+          .where(
+            "planned_transaction_id",
+            "=",
+            sql<PlannedTransactionId>`ANY(${plannedTransactionIds}::int[])`,
+          )
+          .orderBy("planned_transaction_id", "asc")
+          .orderBy("execution_date", "desc"),
       );
 
       for (const execution of executionRows) {
@@ -587,13 +608,18 @@ export const plannedTransactionRepository = {
       LoanScheduleRow[]
     >();
     if (loanPlannedTransactionIds.length > 0) {
-      const scheduleRows = await queryRows(
+      const scheduleRows = await checkedRows(
         keyedLoanScheduleRowSchema,
-        `SELECT planned_transaction_id, installment_number, due_date, payment_amount, principal_amount, interest_amount, remaining_principal
-           FROM planned_transaction_loan_schedule
-          WHERE planned_transaction_id = ANY($1::int[])
-          ORDER BY planned_transaction_id ASC, installment_number ASC`,
-        [loanPlannedTransactionIds],
+        db
+          .selectFrom("planned_transaction_loan_schedule")
+          .select(["planned_transaction_id", ...LOAN_SCHEDULE_COLUMNS])
+          .where(
+            "planned_transaction_id",
+            "=",
+            sql<PlannedTransactionId>`ANY(${loanPlannedTransactionIds}::int[])`,
+          )
+          .orderBy("planned_transaction_id", "asc")
+          .orderBy("installment_number", "asc"),
       );
 
       for (const scheduleRow of scheduleRows) {
@@ -616,14 +642,25 @@ export const plannedTransactionRepository = {
 
     const tagsByPlannedTransactionId = new Map<PlannedTransactionId, TransactionTagRef[]>();
     if (plannedTransactionIds.length > 0) {
-      const tagRows = await queryRows(
+      const tagRows = await checkedRows(
         plannedTagRowSchema,
-        `SELECT ptt.planned_transaction_id, tg.id, tg.slug, tg.color, tg.is_active
-         FROM planned_transaction_tags ptt
-         JOIN tags tg ON tg.id = ptt.tag_id
-         WHERE ptt.planned_transaction_id = ANY($1::int[])
-         ORDER BY ptt.planned_transaction_id ASC, tg.slug ASC`,
-        [plannedTransactionIds],
+        db
+          .selectFrom("planned_transaction_tags as ptt")
+          .innerJoin("tags as tg", "tg.id", "ptt.tag_id")
+          .select([
+            "ptt.planned_transaction_id",
+            "tg.id",
+            "tg.slug",
+            "tg.color",
+            "tg.is_active",
+          ])
+          .where(
+            "ptt.planned_transaction_id",
+            "=",
+            sql<PlannedTransactionId>`ANY(${plannedTransactionIds}::int[])`,
+          )
+          .orderBy("ptt.planned_transaction_id", "asc")
+          .orderBy("tg.slug", "asc"),
       );
       for (const tagRow of tagRows) {
         if (!tagsByPlannedTransactionId.has(tagRow.planned_transaction_id)) {
@@ -657,36 +694,40 @@ export const plannedTransactionRepository = {
   // silently advance. Recurring rows are always eligible (they never stay
   // is_executed=true), one-off rows only while is_executed=false.
   async listActiveUnexecuted(): Promise<PlannedMatchCandidateRow[]> {
-    return queryRows(
+    return checkedRows(
       plannedMatchCandidateRowSchema,
-      `SELECT pt.id,
-              pt.recipient_id,
-              COALESCE(r.primary_recipient_id, pt.recipient_id) AS recipient_cluster_id,
-              pt.amount,
-              pt.planned_date,
-              pt.currency,
-              pt.is_recurring,
-              pt.recurrence_pattern,
-              pt.memo,
-              ${PLANNED_RECIPIENT_NAME_SQL} AS recipient_name
-         FROM planned_transactions pt
-         LEFT JOIN recipients r ON pt.recipient_id = r.id
-         LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
-        WHERE pt.is_active = true
-          AND pt.is_executed = false
-          AND pt.recipient_id IS NOT NULL
-          AND (pt.is_loan = false OR pt.is_loan IS NULL)`,
+      db
+        .selectFrom("planned_transactions as pt")
+        .leftJoin("recipients as r", "pt.recipient_id", "r.id")
+        .leftJoin("recipients as pr", "r.primary_recipient_id", "pr.id")
+        .select((eb) => [
+          "pt.id",
+          "pt.recipient_id",
+          eb.fn
+            .coalesce("r.primary_recipient_id", "pt.recipient_id")
+            .as("recipient_cluster_id"),
+          "pt.amount",
+          "pt.planned_date",
+          "pt.currency",
+          "pt.is_recurring",
+          "pt.recurrence_pattern",
+          "pt.memo",
+          plannedRecipientName.as("recipient_name"),
+        ])
+        .where("pt.is_active", "=", true)
+        .where("pt.is_executed", "=", false)
+        .where("pt.recipient_id", "is not", null)
+        .where((eb) =>
+          eb.or([eb("pt.is_loan", "=", false), eb("pt.is_loan", "is", null)]),
+        ),
     );
   },
 
   async getById(id: PlannedTransactionId): Promise<HydratedPlannedTransactionRow | null> {
-    const sql = `
-      SELECT ${PLANNED_SELECT_FIELDS}
-      FROM planned_transactions pt
-      ${PLANNED_JOINS}
-      WHERE pt.id = $1
-    `;
-    const [row] = await queryRows(plannedTransactionListRowSchema, sql, [id]);
+    const row = await checkedRow(
+      plannedTransactionListRowSchema,
+      selectPlannedFields(plannedJoins().where("pt.id", "=", id)),
+    );
     if (!row) return null;
 
     return hydratePlannedRow(row, id);
@@ -706,20 +747,21 @@ export const plannedTransactionRepository = {
    * @param days - Lookahead window (1–365)
    */
   async getDueSoon(days: number): Promise<PlannedTransactionListRow[]> {
-    const sql = `
-      SELECT ${PLANNED_SELECT_FIELDS}
-      FROM planned_transactions pt
-      ${PLANNED_JOINS}
-      WHERE pt.is_active = true
-        AND pt.is_executed = false
-        AND pt.planned_date >= $2::date
-        AND pt.planned_date <= $2::date + make_interval(days => $1::int)
-      ORDER BY pt.planned_date ASC
-    `;
-    return queryRows(plannedTransactionListRowSchema, sql, [
-      days,
-      todayAppDateString(),
-    ]);
+    const today = todayAppDateString();
+    return checkedRows(
+      plannedTransactionListRowSchema,
+      selectPlannedFields(
+        plannedJoins()
+          .where("pt.is_active", "=", true)
+          .where("pt.is_executed", "=", false)
+          .where("pt.planned_date", ">=", sql<Date>`${today}::date`)
+          .where(
+            "pt.planned_date",
+            "<=",
+            sql<Date>`${today}::date + make_interval(days => ${days}::int)`,
+          ),
+      ).orderBy("pt.planned_date", "asc"),
+    );
   },
 
   /**
@@ -735,22 +777,29 @@ export const plannedTransactionRepository = {
    * @param months - Forecast horizon in months (1–24)
    */
   async getForForecast(months: number): Promise<PlannedForecastRow[]> {
-    const sql = `
-      SELECT pt.id, pt.planned_date, pt.amount, pt.currency,
-             pt.memo, pt.is_recurring, pt.recurrence_pattern,
-             ${PLANNED_RECIPIENT_NAME_SQL} AS recipient_name,
-             ${PLANNED_CATEGORY_NAME_SQL} AS category_name
-      FROM planned_transactions pt
-      ${PLANNED_JOINS}
-      WHERE pt.is_active = true
-        AND pt.is_executed = false
-        AND pt.planned_date <= $2::date + make_interval(months => $1::int)
-      ORDER BY pt.planned_date ASC
-    `;
-    return queryRows(plannedForecastRowSchema, sql, [
-      months,
-      todayAppDateString(),
-    ]);
+    return checkedRows(
+      plannedForecastRowSchema,
+      plannedJoins()
+        .select([
+          "pt.id",
+          "pt.planned_date",
+          "pt.amount",
+          "pt.currency",
+          "pt.memo",
+          "pt.is_recurring",
+          "pt.recurrence_pattern",
+          plannedRecipientName.as("recipient_name"),
+          plannedCategoryName.as("category_name"),
+        ])
+        .where("pt.is_active", "=", true)
+        .where("pt.is_executed", "=", false)
+        .where(
+          "pt.planned_date",
+          "<=",
+          sql<Date>`${todayAppDateString()}::date + make_interval(months => ${months}::int)`,
+        )
+        .orderBy("pt.planned_date", "asc"),
+    );
   },
 
   /**
@@ -760,27 +809,39 @@ export const plannedTransactionRepository = {
   async getForCommitmentProjection(
     horizonEnd: string,
   ): Promise<PlannedCommitmentRow[]> {
-    return queryRows(
+    return checkedRows(
       plannedCommitmentRowSchema,
-      `SELECT pt.id, pt.planned_date, pt.amount, pt.currency,
-              pt.is_recurring, pt.recurrence_pattern,
-              pt.recurrence_end_date, pt.max_occurrences,
-              (SELECT COUNT(*)::int FROM planned_transaction_executions pte
-                WHERE pte.planned_transaction_id = pt.id) AS execution_count
-         FROM planned_transactions pt
-        WHERE pt.is_active = true AND pt.is_executed = false
-          AND pt.planned_date <= $1::date
-        ORDER BY pt.planned_date, pt.id`,
-      [horizonEnd],
+      db
+        .selectFrom("planned_transactions as pt")
+        .select((eb) => [
+          "pt.id",
+          "pt.planned_date",
+          "pt.amount",
+          "pt.currency",
+          "pt.is_recurring",
+          "pt.recurrence_pattern",
+          "pt.recurrence_end_date",
+          "pt.max_occurrences",
+          eb
+            .selectFrom("planned_transaction_executions as pte")
+            .select(sql<number>`COUNT(*)::int`.as("n"))
+            .whereRef("pte.planned_transaction_id", "=", "pt.id")
+            .as("execution_count"),
+        ])
+        .where("pt.is_active", "=", true)
+        .where("pt.is_executed", "=", false)
+        .where("pt.planned_date", "<=", sql<Date>`${horizonEnd}::date`)
+        .orderBy("pt.planned_date")
+        .orderBy("pt.id"),
     );
   },
 
   async hardDelete(id: PlannedTransactionId): Promise<boolean> {
-    const result = await query(
-      "DELETE FROM planned_transactions WHERE id = $1",
-      [id],
-    );
-    return (result.rowCount ?? 0) > 0;
+    const result = await db
+      .deleteFrom("planned_transactions")
+      .where("id", "=", id)
+      .executeTakeFirst();
+    return result.numDeletedRows > 0n;
   },
 
   /** @param executionDate 'YYYY-MM-DD'; defaults to app-timezone today */
@@ -789,17 +850,16 @@ export const plannedTransactionRepository = {
     executedTransactionId: TransactionId,
     executionDate?: string | null,
   ): Promise<void> {
-    await query(
-      `INSERT INTO planned_transaction_executions (planned_transaction_id, executed_transaction_id, execution_date)
-       VALUES ($1, $2, $3)`,
-      // App-timezone today (ADR-009) — the UTC calendar day is yesterday
-      // between local midnight and 01:00/02:00 Brussels.
-      [
-        plannedTransactionId,
-        executedTransactionId,
-        executionDate || todayAppDateString(),
-      ],
-    );
+    await db
+      .insertInto("planned_transaction_executions")
+      .values({
+        planned_transaction_id: plannedTransactionId,
+        executed_transaction_id: executedTransactionId,
+        // App-timezone today (ADR-009) — the UTC calendar day is yesterday
+        // between local midnight and 01:00/02:00 Brussels.
+        execution_date: executionDate || todayAppDateString(),
+      })
+      .execute();
   },
 
   /**
@@ -812,11 +872,12 @@ export const plannedTransactionRepository = {
     targetId: AccountId,
     sourceIds: AccountId[],
   ): Promise<number> {
-    const result = await query(
-      `UPDATE planned_transactions SET account_id = $1 WHERE account_id = ANY($2::int[])`,
-      [targetId, sourceIds],
-    );
-    return result.rowCount ?? 0;
+    const result = await db
+      .updateTable("planned_transactions")
+      .set({ account_id: targetId })
+      .where("account_id", "=", sql<AccountId>`ANY(${sourceIds}::int[])`)
+      .executeTakeFirst();
+    return Number(result.numUpdatedRows);
   },
 
   /**
@@ -824,12 +885,10 @@ export const plannedTransactionRepository = {
    * column, and the recipient merge must skip the repoint rather than fail.
    */
   async hasRecipientIdColumn(): Promise<boolean> {
-    const result = await query(
-      `SELECT 1 FROM information_schema.columns
+    const { rows } = await sql`SELECT 1 FROM information_schema.columns
        WHERE table_name = 'planned_transactions' AND column_name = 'recipient_id'
-       LIMIT 1`,
-    );
-    return result.rows.length > 0;
+       LIMIT 1`.execute(db);
+    return rows.length > 0;
   },
 
   /**
@@ -841,13 +900,12 @@ export const plannedTransactionRepository = {
     primaryId: RecipientId,
     aliasIds: RecipientId[],
   ): Promise<number> {
-    const result = await query(
-      `UPDATE planned_transactions
-            SET recipient_id = $1
-          WHERE recipient_id = ANY($2::int[])`,
-      [primaryId, aliasIds],
-    );
-    return result.rowCount ?? 0;
+    const result = await db
+      .updateTable("planned_transactions")
+      .set({ recipient_id: primaryId })
+      .where("recipient_id", "=", sql<RecipientId>`ANY(${aliasIds}::int[])`)
+      .executeTakeFirst();
+    return Number(result.numUpdatedRows);
   },
 };
 

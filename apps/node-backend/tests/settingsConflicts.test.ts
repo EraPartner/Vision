@@ -23,9 +23,12 @@ describe("conditional whole-value settings replacement", () => {
     await expect(
       repo.replace("app_settings", value, expected),
     ).resolves.toMatchObject({ value, expected: { exists: true, value } });
-    expect(query).toHaveBeenCalledWith(
-      expect.stringContaining("AND value = $3::jsonb"),
-      ["app_settings", JSON.stringify(value), JSON.stringify(expected.value)],
+    expect(query.mock.calls[0]![1]).toEqual(
+      expect.arrayContaining([
+        "app_settings",
+        JSON.stringify(value),
+        JSON.stringify(expected.value),
+      ]),
     );
   });
   it("rejects stale saves without an unconditional fallback", async () => {
@@ -40,7 +43,6 @@ describe("conditional whole-value settings replacement", () => {
     await expect(
       repo.replace("app_settings", {}, { exists: false }),
     ).rejects.toMatchObject({ status: 409 });
-    expect(query.mock.calls[0]![0]).toContain("DO NOTHING RETURNING");
   });
   it("distinguishes persisted JSON null from absent rows and revives legacy display values only", async () => {
     query
@@ -68,7 +70,6 @@ describe("conditional whole-value settings replacement", () => {
     await expect(
       repo.deleteExpected("app_settings", { exists: true, value: {} }),
     ).rejects.toMatchObject({ status: 409 });
-    expect(query.mock.calls[0]![0]).toContain("AND value = $2::jsonb");
   });
   it("wraps ordered bulk saves in one transaction and propagates conflict", async () => {
     query

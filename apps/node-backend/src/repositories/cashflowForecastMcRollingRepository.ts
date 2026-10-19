@@ -1,6 +1,7 @@
-import { query } from "../database/connection.ts";
-import { queryOne } from "../database/rowContracts.ts";
+import { sql } from "kysely";
+import { checkedRow, db } from "../database/db.ts";
 import { forecastMcCacheRowSchema } from "../database/rows/info.ts";
+import type { Json } from "../database/schema.generated.ts";
 import type { McCacheRow } from "./cashflowForecastMcRepository.ts";
 
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
@@ -20,14 +21,17 @@ export async function get({
   daysForward,
   filterHash,
 }: McRollingKey): Promise<McCacheRow | null> {
-  const row = await queryOne(
+  const row = await checkedRow(
     forecastMcCacheRowSchema,
-    `SELECT payload, computed_at
-       FROM cashflow_forecast_mc_rolling
-      WHERE user_id = $1 AND today_iso = $2::date AND days_back = $3
-        AND days_forward = $4 AND filter_hash = $5
-      LIMIT 1`,
-    [userId, todayIso, daysBack, daysForward, filterHash],
+    db
+      .selectFrom("cashflow_forecast_mc_rolling")
+      .select(["payload", "computed_at"])
+      .where("user_id", "=", userId)
+      .where("today_iso", "=", sql<Date>`${todayIso}::date`)
+      .where("days_back", "=", daysBack)
+      .where("days_forward", "=", daysForward)
+      .where("filter_hash", "=", filterHash)
+      .limit(1),
   );
   return row ?? null;
 }
@@ -48,25 +52,28 @@ export async function upsert({
   mcPaths,
   payload,
 }: McRollingKey & { mcPaths: number; payload: object }): Promise<void> {
-  await query(
-    `INSERT INTO cashflow_forecast_mc_rolling
-       (user_id, today_iso, days_back, days_forward, filter_hash, mc_paths, payload, computed_at)
-     VALUES ($1, $2::date, $3, $4, $5, $6, $7::jsonb, NOW())
-     ON CONFLICT (user_id, today_iso, days_back, days_forward, filter_hash)
-     DO UPDATE SET
-       mc_paths    = EXCLUDED.mc_paths,
-       payload     = EXCLUDED.payload,
-       computed_at = NOW()`,
-    [
-      userId,
-      todayIso,
-      daysBack,
-      daysForward,
-      filterHash,
-      mcPaths,
-      JSON.stringify(payload),
-    ],
-  );
+  await db
+    .insertInto("cashflow_forecast_mc_rolling")
+    .values({
+      user_id: userId,
+      today_iso: sql<Date>`${todayIso}::date`,
+      days_back: daysBack,
+      days_forward: daysForward,
+      filter_hash: filterHash,
+      mc_paths: mcPaths,
+      payload: sql<Json>`${JSON.stringify(payload)}::jsonb`,
+      computed_at: sql<Date>`NOW()`,
+    })
+    .onConflict((oc) =>
+      oc
+        .columns(["user_id", "today_iso", "days_back", "days_forward", "filter_hash"])
+        .doUpdateSet((eb) => ({
+          mc_paths: eb.ref("excluded.mc_paths"),
+          payload: eb.ref("excluded.payload"),
+          computed_at: sql<Date>`NOW()`,
+        })),
+    )
+    .execute();
 }
 
 /**
@@ -74,7 +81,7 @@ export async function upsert({
  * when transactions change so diagnostics recompute against fresh data.
  */
 export async function clearAll(): Promise<void> {
-  await query("DELETE FROM cashflow_forecast_mc_rolling");
+  await db.deleteFrom("cashflow_forecast_mc_rolling").execute();
 }
 
 export default { get, isFresh, upsert, clearAll };

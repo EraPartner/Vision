@@ -8,7 +8,8 @@
  * - Returns suggestions for planned transactions
  */
 
-import { queryOne, queryRows } from "../database/rowContracts.ts";
+import { sql } from "kysely";
+import { checkedRow, checkedRows, db } from "../database/db.ts";
 import {
   plannedRecipientIdRowSchema,
   recurringCandidateRowSchema,
@@ -20,6 +21,7 @@ import { addDaysYmd, differenceInCalendarDaysYmd } from "../lib/timezone.ts";
 import { logger } from "../config/logger.ts";
 import { addAll, divide, roundMoney, toDecimal } from "../lib/money.ts";
 import { median, firstNonZero } from "../lib/math.ts";
+import type { RecipientId } from "@vision/types/brands";
 
 /**
  * The bespoke projection `detectRecurringPatterns`' query selects — not a
@@ -234,25 +236,54 @@ export async function detectRecurringPatterns(): Promise<RecurringDetectionResul
     // a row recorded under an alias whose PRIMARY carries the default category
     // must not report a null category_name here while the transactions list
     // shows it categorised.
-    const rows = await queryRows(
+    const rows = await checkedRows(
       recurringCandidateRowSchema,
-      `
-      SELECT t.id, t.date, t.amount, t.currency, t.memo, t.account_id,
-             acct.name AS bank_account,
-             COALESCE(r.primary_recipient_id, t.recipient_id) AS recipient_id,
-             COALESCE(pr.name, r.name) AS recipient_name,
-             COALESCE(t.category_id, r.default_category_id, pr.default_category_id) AS effective_category_id,
-             c.path_name AS category_name
-      FROM transactions t
-      LEFT JOIN accounts acct ON t.account_id = acct.id
-      LEFT JOIN recipients r ON t.recipient_id = r.id
-      LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
-      LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id, pr.default_category_id) = c.id
-      WHERE t.is_active = true
-        AND t.recipient_id IS NOT NULL
-        AND t.date >= CURRENT_DATE - INTERVAL '3 years'
-      ORDER BY COALESCE(r.primary_recipient_id, t.recipient_id), t.date
-    `,
+      db
+        .selectFrom("transactions as t")
+        .leftJoin("accounts as acct", "t.account_id", "acct.id")
+        .leftJoin("recipients as r", "t.recipient_id", "r.id")
+        .leftJoin("recipients as pr", "r.primary_recipient_id", "pr.id")
+        .leftJoin("categories as c", (join) =>
+          join.on((eb) =>
+            eb(
+              eb.fn.coalesce(
+                "t.category_id",
+                "r.default_category_id",
+                "pr.default_category_id",
+              ),
+              "=",
+              eb.ref("c.id"),
+            ),
+          ),
+        )
+        .select((eb) => [
+          "t.id",
+          "t.date",
+          "t.amount",
+          "t.currency",
+          "t.memo",
+          "t.account_id",
+          "acct.name as bank_account",
+          eb.fn
+            .coalesce("r.primary_recipient_id", "t.recipient_id")
+            .as("recipient_id"),
+          eb.fn.coalesce("pr.name", "r.name").as("recipient_name"),
+          eb.fn
+            .coalesce(
+              "t.category_id",
+              "r.default_category_id",
+              "pr.default_category_id",
+            )
+            .as("effective_category_id"),
+          "c.path_name as category_name",
+        ])
+        .where("t.is_active", "=", true)
+        .where("t.recipient_id", "is not", null)
+        .where("t.date", ">=", sql<Date>`CURRENT_DATE - INTERVAL '3 years'`)
+        .orderBy((eb) =>
+          eb.fn.coalesce("r.primary_recipient_id", "t.recipient_id"),
+        )
+        .orderBy("t.date"),
     );
 
     if (rows.length === 0) {
@@ -265,9 +296,13 @@ export async function detectRecurringPatterns(): Promise<RecurringDetectionResul
     }
 
     // planned_transactions may not exist in partially initialized environments.
-    const plannedTableCheck = await queryOne(
+    const plannedTableCheck = await checkedRow(
       tableExistsRowSchema,
-      `SELECT to_regclass('public.planned_transactions') IS NOT NULL AS exists`,
+      db.selectNoFrom(
+        sql<boolean>`to_regclass('public.planned_transactions') IS NOT NULL`.as(
+          "exists",
+        ),
+      ),
     );
     const plannedTableAvailable = Boolean(plannedTableCheck?.exists);
 
@@ -301,14 +336,25 @@ export async function detectRecurringPatterns(): Promise<RecurringDetectionResul
     ];
     const plannedRecipientIds = new Set<number | null>();
     if (plannedTableAvailable && allRecipientIds.length > 0) {
-      const plannedRows = await queryRows(
+      const plannedRows = await checkedRows(
         plannedRecipientIdRowSchema,
-        `SELECT DISTINCT COALESCE(r.primary_recipient_id, pt.recipient_id) AS recipient_id
-           FROM planned_transactions pt
-           LEFT JOIN recipients r ON pt.recipient_id = r.id
-          WHERE COALESCE(r.primary_recipient_id, pt.recipient_id) = ANY($1)
-            AND pt.is_active = true`,
-        [allRecipientIds],
+        db
+          .selectFrom("planned_transactions as pt")
+          .leftJoin("recipients as r", "pt.recipient_id", "r.id")
+          .select((eb) =>
+            eb.fn
+              .coalesce("r.primary_recipient_id", "pt.recipient_id")
+              .as("recipient_id"),
+          )
+          .distinct()
+          .where((eb) =>
+            eb(
+              eb.fn.coalesce("r.primary_recipient_id", "pt.recipient_id"),
+              "=",
+              sql<RecipientId>`ANY(${allRecipientIds})`,
+            ),
+          )
+          .where("pt.is_active", "=", true),
       );
       for (const row of plannedRows) plannedRecipientIds.add(row.recipient_id);
     }

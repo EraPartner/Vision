@@ -31,7 +31,10 @@
 import { withTransaction } from "../database/connection.ts";
 import { storedCurrencyCode } from "../lib/currencyCode.ts";
 import type { AccountId, CurrencyCode } from "@vision/types/brands";
-import { queryOne, queryRows } from "../database/rowContracts.ts";
+import { sql } from "kysely";
+import { checkedRow, checkedRows, db } from "../database/db.ts";
+import type { BuiltQuery } from "../database/db.ts";
+import { queryOne } from "../database/rowContracts.ts";
 import {
   accountCurrencyRowSchema,
   balancePartsRowSchema,
@@ -81,9 +84,11 @@ export interface AccountMergePreview {
   openingAnchorCollision: boolean;
 }
 
+const countN = sql<string>`COUNT(*)`.as("n");
+
 /** Run a bare `COUNT(*) AS n` query; it always returns exactly one row. */
-async function countOf(sql: string, params: unknown[]): Promise<number> {
-  const row = await queryOne(bigintCountRowSchema, sql, params);
+async function countOf(builder: BuiltQuery): Promise<number> {
+  const row = await checkedRow(bigintCountRowSchema, builder);
   if (!row) throw new Error("account merge count returned no row");
   return parseInt(row.n, 10);
 }
@@ -368,10 +373,12 @@ export async function previewMerge(
     throw new ValidationError("An account cannot be merged into itself");
   }
 
-  const accounts = await queryRows(
+  const accounts = await checkedRows(
     accountCurrencyRowSchema,
-    "SELECT id, currency FROM accounts WHERE id = ANY($1::int[])",
-    [[sourceId, targetId]],
+    db
+      .selectFrom("accounts")
+      .select(["id", "currency"])
+      .where("id", "in", [sourceId, targetId]),
   );
   const byId = new Map(accounts.map((r) => [r.id, r]));
   const target = byId.get(targetId);
@@ -391,27 +398,37 @@ export async function previewMerge(
     stampRanges,
     anchors,
   ] = await Promise.all([
-    countOf("SELECT COUNT(*) AS n FROM transactions WHERE account_id = $1", [
-      sourceId,
-    ]),
     countOf(
-      "SELECT COUNT(*) AS n FROM planned_transactions WHERE account_id = $1",
-      [sourceId],
+      db
+        .selectFrom("transactions")
+        .select(countN)
+        .where("account_id", "=", sourceId),
     ),
     countOf(
-      "SELECT COUNT(*) AS n FROM portfolio_transactions WHERE account_id = $1",
-      [sourceId],
+      db
+        .selectFrom("planned_transactions")
+        .select(countN)
+        .where("account_id", "=", sourceId),
     ),
     countOf(
-      "SELECT COUNT(*) AS n FROM accounts WHERE funding_account_id = $1",
-      [sourceId],
+      db
+        .selectFrom("portfolio_transactions")
+        .select(countN)
+        .where("account_id", "=", sourceId),
+    ),
+    countOf(
+      db
+        .selectFrom("accounts")
+        .select(countN)
+        .where("funding_account_id", "=", sourceId),
     ),
     // Per-currency anchor+delta over the union set, via the shared hub builder:
     // within each currency the most recent stamped row across BOTH accounts
     // anchors and every active row of that currency after it is the delta. The
     // account expression is the LITERAL `ANY($1::int[])` (never user input), so
     // the builder's `t.account_id = ${account}` becomes the union predicate —
-    // which is exactly what the merged account's rows will look like.
+    // which is exactly what the merged account's rows will look like. The
+    // fragment binds positional $1/$2, so it stays a positional query.
     queryOne(
       balancePartsRowSchema,
       `SELECT bp.balance_parts

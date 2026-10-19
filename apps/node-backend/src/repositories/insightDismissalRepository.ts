@@ -1,4 +1,6 @@
-import { queryOne, queryRows } from "../database/rowContracts.ts";
+import { sql } from "kysely";
+import { asCategoryId, asRecipientId } from "@vision/types/brands";
+import { checkedRow, checkedRows, db } from "../database/db.ts";
 import {
   computedAtRowSchema,
   existsRowSchema,
@@ -14,24 +16,39 @@ import type {
 
 export type { InsightDigestStateRow, InsightDismissalRow };
 
+const monthKey = sql<string | null>`to_char(month_start, 'YYYY-MM')`.as(
+  "month_key",
+);
+
 export async function listDismissals(): Promise<
   Omit<InsightDismissalRow, "id">[]
 > {
-  return queryRows(
+  return checkedRows(
     insightDismissalListRowSchema,
-    `SELECT kind, recipient_id, category_id,
-            to_char(month_start, 'YYYY-MM') AS month_key,
-            dismissed_at, deviation_at_dismiss
-       FROM insight_dismissals
-      ORDER BY id`,
+    db
+      .selectFrom("insight_dismissals")
+      .select([
+        "kind",
+        "recipient_id",
+        "category_id",
+        monthKey,
+        "dismissed_at",
+        "deviation_at_dismiss",
+      ])
+      .orderBy("id"),
   );
 }
 
 export async function recipientExists(recipientId: number): Promise<boolean> {
-  const row = await queryOne(
+  const row = await checkedRow(
     existsRowSchema,
-    "SELECT EXISTS (SELECT 1 FROM recipients WHERE id = $1) AS exists",
-    [recipientId],
+    db.selectNoFrom(({ exists, selectFrom }) =>
+      exists(
+        selectFrom("recipients")
+          .select(sql<number>`1`.as("one"))
+          .where("id", "=", asRecipientId(recipientId)),
+      ).as("exists"),
+    ),
   );
   return row?.exists === true;
 }
@@ -43,50 +60,77 @@ export async function upsertSubscription(
   | Pick<InsightDismissalRow, "id" | "kind" | "recipient_id" | "dismissed_at">
   | undefined
 > {
-  return queryOne(
+  return checkedRow(
     insightSubscriptionDismissalRowSchema,
-    `INSERT INTO insight_dismissals (kind, recipient_id)
-     VALUES ($1, $2)
-     ON CONFLICT (kind, recipient_id)
-       WHERE kind IN ('subscription_new', 'subscription_price_change')
-     DO UPDATE SET dismissed_at = insight_dismissals.dismissed_at
-     RETURNING id, kind, recipient_id, dismissed_at`,
-    [kind, recipientId],
+    db
+      .insertInto("insight_dismissals")
+      .values({ kind, recipient_id: asRecipientId(recipientId) })
+      .onConflict((oc) =>
+        oc
+          .columns(["kind", "recipient_id"])
+          // Literal predicate so PostgreSQL can match the partial unique index.
+          .where(sql<boolean>`kind IN ('subscription_new', 'subscription_price_change')`)
+          .doUpdateSet({
+            dismissed_at: (eb) => eb.ref("insight_dismissals.dismissed_at"),
+          }),
+      )
+      .returning(["id", "kind", "recipient_id", "dismissed_at"]),
   );
 }
 
 type OutlierDismissalRow = Omit<InsightDismissalRow, "recipient_id">;
 
-/** @param monthKey YYYY-MM */
+/** @param month YYYY-MM */
 export async function upsertOutlier(
   categoryId: number,
-  monthKey: string,
+  month: string,
   deviation: number,
 ): Promise<OutlierDismissalRow | undefined> {
-  return queryOne(
+  return checkedRow(
     insightOutlierDismissalRowSchema,
-    `INSERT INTO insight_dismissals
-       (kind, category_id, month_start, deviation_at_dismiss)
-     VALUES ('category_outlier', $1, ($2 || '-01')::date, $3)
-     ON CONFLICT (category_id, month_start)
-       WHERE kind = 'category_outlier'
-     DO UPDATE SET dismissed_at = NOW(),
-                   deviation_at_dismiss = EXCLUDED.deviation_at_dismiss
-     RETURNING id, kind, category_id,
-               to_char(month_start, 'YYYY-MM') AS month_key,
-               dismissed_at, deviation_at_dismiss`,
-    [categoryId, monthKey, deviation],
+    db
+      .insertInto("insight_dismissals")
+      .values({
+        kind: "category_outlier",
+        category_id: asCategoryId(categoryId),
+        month_start: sql<Date>`(${month} || '-01')::date`,
+        deviation_at_dismiss: deviation,
+      })
+      .onConflict((oc) =>
+        oc
+          .columns(["category_id", "month_start"])
+          .where(sql<boolean>`kind = 'category_outlier'`)
+          .doUpdateSet({
+            dismissed_at: sql<Date>`NOW()`,
+            deviation_at_dismiss: (eb) => eb.ref("excluded.deviation_at_dismiss"),
+          }),
+      )
+      .returning([
+        "id",
+        "kind",
+        "category_id",
+        monthKey,
+        "dismissed_at",
+        "deviation_at_dismiss",
+      ]),
   );
 }
 
 export async function getCountState(): Promise<
   InsightDigestStateRow | undefined
 > {
-  return queryOne(
+  return checkedRow(
     insightDigestStateRowSchema,
-    `SELECT undismissed_count, dirty_version, computed_version,
-            computed_at, expires_at
-       FROM insight_digest_state WHERE singleton_id = 1`,
+    db
+      .selectFrom("insight_digest_state")
+      .select([
+        "undismissed_count",
+        "dirty_version",
+        "computed_version",
+        "computed_at",
+        "expires_at",
+      ])
+      .where("singleton_id", "=", 1),
   );
 }
 
@@ -94,16 +138,19 @@ export async function saveCountIfVersion(
   count: number,
   version: number,
 ): Promise<{ computed_at: Date } | undefined> {
-  return queryOne(
+  return checkedRow(
     computedAtRowSchema,
-    `UPDATE insight_digest_state
-        SET undismissed_count = $1,
-            computed_version = $2,
-            computed_at = NOW(),
-            expires_at = NOW() + INTERVAL '3 minutes'
-      WHERE singleton_id = 1 AND dirty_version = $2
-      RETURNING computed_at`,
-    [count, version],
+    db
+      .updateTable("insight_digest_state")
+      .set({
+        undismissed_count: count,
+        computed_version: version,
+        computed_at: sql<Date>`NOW()`,
+        expires_at: sql<Date>`NOW() + INTERVAL '3 minutes'`,
+      })
+      .where("singleton_id", "=", 1)
+      .where("dirty_version", "=", String(version))
+      .returning("computed_at"),
   );
 }
 

@@ -17,6 +17,7 @@ import {
 import { rollbackBatch } from "../src/repositories/importBatchRepository.ts";
 import { commitBatch } from "../src/services/importPipeline/commit.ts";
 import {
+  asAccountId,
   asTransactionId,
 } from "@vision/types/brands";
 
@@ -107,7 +108,7 @@ describe.skipIf(!hasTestDatabase())(
       const closed = deferred();
       const release = deferred();
       const closing = withTransaction(async () => {
-        await closeAccount(accountId, { balance_handling: "adjustment" });
+        await closeAccount(asAccountId(accountId), { balance_handling: "adjustment" });
         closed.resolve();
         await release.promise;
       });
@@ -148,7 +149,7 @@ describe.skipIf(!hasTestDatabase())(
         await release.promise;
       });
       await Promise.race([written.promise, writing]);
-      const closing = closeAccount(accountId, {
+      const closing = closeAccount(asAccountId(accountId), {
         balance_handling: "adjustment",
       });
       try {
@@ -209,7 +210,7 @@ describe.skipIf(!hasTestDatabase())(
         const closed = deferred();
         const release = deferred();
         const closing = withTransaction(async () => {
-          await closeAccount(accountId, { balance_handling: "adjustment" });
+          await closeAccount(asAccountId(accountId), { balance_handling: "adjustment" });
           closed.resolve();
           await release.promise;
         });
@@ -270,7 +271,7 @@ describe.skipIf(!hasTestDatabase())(
           await release.promise;
         });
         await Promise.race([written.promise, writing]);
-        const closing = closeAccount(accountId, {
+        const closing = closeAccount(asAccountId(accountId), {
           balance_handling: "adjustment",
         });
         const observed = Promise.allSettled([closing]);

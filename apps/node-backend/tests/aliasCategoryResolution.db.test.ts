@@ -631,6 +631,27 @@ describe.skipIf(!hasTestDatabase())(
         expect(rows[0]?.name).toBe(alias!.categoryName);
         expect(alias!.categoryId).toBe(cat.Bills);
       });
+
+      it("marks a PRIMARY pattern as planned when the planned row names an alias", async () => {
+        await seedBase();
+        for (const daysAgo of [90, 60, 30]) {
+          await insertTxn({
+            dateSql: `(CURRENT_DATE - interval '${daysAgo} days')::date`,
+            amount: "-120.00",
+            recipientId: rec.electrabel,
+          });
+        }
+        await insertPlanned({
+          dateSql: "(CURRENT_DATE + interval '30 days')::date",
+          amount: "-120.00",
+          recipientId: rec.electrabelAlias,
+        });
+        __clearRecurringCacheForTests();
+
+        const { patterns } = await detectRecurringPatterns();
+        const primary = patterns.find((p) => p.recipientId === rec.electrabel);
+        expect(primary?.isAlreadyPlanned).toBe(true);
+      });
     });
 
     // ───────────────────────────────────────────────────────────────────────────

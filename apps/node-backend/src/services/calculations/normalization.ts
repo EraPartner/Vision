@@ -10,7 +10,8 @@
  * The DB-level UNIQUE constraint on `recipients.normalized_name` (migration
  * 0029) guarantees that an exact-normalized match returns at most one row.
  */
-import { query } from '../../database/connection.ts';
+import { sql } from 'kysely';
+import { db } from '../../database/db.ts';
 import { normalizeForMatching } from '../../lib/textNormalization.ts';
 
 export {
@@ -75,9 +76,9 @@ export async function findBestRecipientMatches(
   //   * `fuzzy_matches` uses pg_trgm `%` (GIN-backed) then DISTINCT ON keeps
   //     the best similarity per candidate above the threshold.
   //   * The final UNION prefers exact over fuzzy via `is_exact` ranking.
-  const sql = `
+  const result = await sql<RecipientMatchQueryRow>`
     WITH candidates AS (
-      SELECT DISTINCT norm FROM unnest($1::text[]) AS t(norm)
+      SELECT DISTINCT norm FROM unnest(${uniqNorms}::text[]) AS t(norm)
     ),
     exact_matches AS (
       SELECT c.norm,
@@ -97,7 +98,7 @@ export async function findBestRecipientMatches(
       JOIN recipients r
         ON r.normalized_name % c.norm
        AND r.normalized_name <> c.norm
-      WHERE similarity(r.normalized_name, c.norm) >= $2
+      WHERE similarity(r.normalized_name, c.norm) >= ${threshold}
     ),
     fuzzy_matches AS (
       SELECT DISTINCT ON (norm) norm, recipient_id, normalized_name, sim, false AS is_exact
@@ -108,9 +109,7 @@ export async function findBestRecipientMatches(
     UNION ALL
     SELECT f.* FROM fuzzy_matches f
     WHERE NOT EXISTS (SELECT 1 FROM exact_matches e WHERE e.norm = f.norm)
-  `;
-
-  const result = await query<RecipientMatchQueryRow>(sql, [uniqNorms, threshold]);
+  `.execute(db);
 
   const byNorm = new Map<string, RecipientMatch>();
   for (const row of result.rows) {

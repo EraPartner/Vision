@@ -32,6 +32,7 @@ import {
 import { scheduleAggregationRefresh } from "../src/services/aggregationRefresh.ts";
 import { invalidatePortfolioCaches } from "../src/services/info/cache.ts";
 import { partial } from "./helpers/partial.ts";
+import { asAccountId } from "@vision/types/brands";
 
 const { default: accountsRouter } = await import("../src/routes/accounts.ts");
 
@@ -102,7 +103,7 @@ describe("GET /:id/portfolio-lot-retag-preview listener-free route contract", ()
 
   it("returns the exact service preview without mutating derived caches", async () => {
     previewAccountPortfolioLots.mockResolvedValue({
-      account_id: 7,
+      account_id: asAccountId(7),
       eligible_count: 2,
       transaction_ids: [11, 12],
       limit: 500,
