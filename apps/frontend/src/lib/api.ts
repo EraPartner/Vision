@@ -76,6 +76,7 @@ export const apiClient = {
 
     // Accounts (ADR-088)
     getAccounts: acct.getAccounts,
+    getAccountTotals: acct.getAccountTotals,
     createAccount: acct.createAccount,
     updateAccount: acct.updateAccount,
     deleteAccount: acct.deleteAccount,

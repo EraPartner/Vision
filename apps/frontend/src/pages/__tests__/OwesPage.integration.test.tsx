@@ -45,9 +45,17 @@ function owedSummaryWithRecipient() {
                 total_paid: 10,
                 remaining: 40,
                 split_count: 1,
+                unconverted_count: 0,
+                unconverted_currencies: [],
             },
         ],
         total: 1,
+        summary: {
+            currency: "EUR",
+            remaining: 40,
+            unconverted_count: 0,
+            unconverted_currencies: [],
+        },
     });
 }
 
@@ -76,6 +84,12 @@ function splitDetailForRecipient() {
             },
         ],
         total: 1,
+        summary: {
+            currency: "EUR",
+            remaining: 40,
+            unconverted_count: 0,
+            unconverted_currencies: [],
+        },
     });
 }
 
@@ -143,6 +157,58 @@ describe("OwesPage (integration)", () => {
         renderWithApp(<OwesPage />);
 
         expect(await screen.findByText("Alice")).toBeInTheDocument();
+    });
+
+    it("shows the server's converted total outstanding and the splits it left out", async () => {
+        let currency: string | null = null;
+        server.use(
+            http.get(`${API_BASE}/api/splits/owed`, ({ request }) => {
+                currency = new URL(request.url).searchParams.get("currency");
+                // Rows of 40 and 30 converted; the server total is the
+                // figure shown, never a browser sum of the rows.
+                return ok({
+                    items: [
+                        {
+                            recipient_id: 1,
+                            recipient_name: "Alice",
+                            total_owed: 40,
+                            total_paid: 0,
+                            remaining: 40,
+                            split_count: 2,
+                            unconverted_count: 1,
+                            unconverted_currencies: ["GBP"],
+                        },
+                        {
+                            recipient_id: 2,
+                            recipient_name: "Bob",
+                            total_owed: 30,
+                            total_paid: 0,
+                            remaining: 30,
+                            split_count: 1,
+                            unconverted_count: 0,
+                            unconverted_currencies: [],
+                        },
+                    ],
+                    total: 2,
+                    summary: {
+                        currency: "EUR",
+                        remaining: 70,
+                        unconverted_count: 1,
+                        unconverted_currencies: ["GBP"],
+                    },
+                });
+            }),
+        );
+
+        renderWithApp(<OwesPage />);
+
+        const notice = await screen.findByText(
+            "1 split left out: exchange rate unavailable",
+        );
+        const hero = notice.parentElement?.parentElement as HTMLElement;
+        expect(hero).toHaveTextContent(/Total outstanding/);
+        expect(hero).toHaveTextContent(/70,00/);
+        expect(currency).toBe("EUR");
     });
 
     it("navigates to recipient detail and shows Record payment button when card is clicked", async () => {

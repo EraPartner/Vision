@@ -10,8 +10,10 @@ import {
     AccountMergeResultSchema,
     AccountPortfolioLotRetagPreviewSchema,
     AccountSchema,
+    AccountTotalsSchema,
     OpeningBalanceResultSchema,
 } from "@vision/types/contracts";
+import type { AccountTotals } from "@vision/types/contracts";
 import { apiRequest } from "@/lib/api/client";
 import { requestWithQuery } from "@/lib/api/helpers";
 
@@ -50,6 +52,20 @@ export async function getAccounts(params?: {
         { schema: AccountListSchema },
     );
     return { ...res, items: res.items.map(normalizeAccount) };
+}
+
+export type { AccountTotals };
+
+/**
+ * Accounts hub totals computed on the server in `currency`: converted
+ * per-account balances, group subtotals and net cash (ADR-216).
+ */
+export function getAccountTotals(currency: string): Promise<AccountTotals> {
+    return requestWithQuery<AccountTotals>(
+        "/api/accounts/totals",
+        { currency },
+        { schema: AccountTotalsSchema },
+    );
 }
 
 export function createAccount(account: AccountCreate): Promise<Account> {

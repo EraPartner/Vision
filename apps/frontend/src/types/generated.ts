@@ -902,6 +902,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/accounts/totals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Accounts hub totals in one display currency
+         * @description Server-computed accounts hub figures (ADR-216). Every balance partition converts to `currency` at the latest stored exchange rate; a partition without a rate is left out and its account counted in `unconverted_count`. `net_cash` covers active, in_net_worth accounts outside the portfolio types. Group subtotals add the portfolio-summary position value of the group's brokerage, crypto_exchange and wallet accounts to the ledger balances (holdings-only types excluded).
+         */
+        get: operations["getAccountTotals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/accounts/{id}": {
         parameters: {
             query?: never;
@@ -7202,6 +7222,42 @@ export interface components {
             color?: string | null;
             is_active?: boolean | null;
         };
+        AccountGroupTotal: {
+            /** @description cash + holdings. */
+            total: number;
+            /** @description Converted ledger balances; crypto_exchange and wallet accounts excluded. */
+            cash: number;
+            /** @description Portfolio-summary position value of the group's portfolio-type accounts. */
+            holdings: number;
+            /** @description The portfolio summary could not be computed; holdings is 0. */
+            holdings_unavailable: boolean;
+            /** @description Accounts with a balance partition left out for want of a stored rate. */
+            unconverted_count: number;
+            unconverted_currencies: string[];
+        };
+        AccountTotals: {
+            currency: string;
+            /** @description Active, in_net_worth accounts outside brokerage, crypto_exchange and wallet. */
+            net_cash: {
+                total: number;
+                unconverted_count: number;
+                unconverted_currencies: string[];
+            };
+            groups: {
+                cash: components["schemas"]["AccountGroupTotal"];
+                portfolio: components["schemas"]["AccountGroupTotal"];
+                liabilities: components["schemas"]["AccountGroupTotal"];
+                archived: components["schemas"]["AccountGroupTotal"];
+            };
+            accounts: {
+                id: number;
+                /** @enum {string} */
+                group: "cash" | "portfolio" | "liabilities" | "archived";
+                /** @description Sum of the account's convertible balance partitions. */
+                converted_balance: number;
+                unconverted_currencies: string[];
+            }[];
+        };
         Account: {
             id: number;
             name: string;
@@ -7526,6 +7582,27 @@ export interface components {
             };
             monthly_equivalent: {
                 total: number;
+                unconverted_count: number;
+            };
+            /** @description Today and the seven days after it (eight entries), every recurring occurrence counted on its own day. `unconverted_count` counts the occurrences on that day without a stored rate. */
+            next_days: {
+                /** Format: date */
+                date: string;
+                incoming: number;
+                /** @description Negative or zero. */
+                outgoing: number;
+                unconverted_count: number;
+            }[];
+            /** @description The `next_days` window summed; `unconverted_count` counts rows without a stored rate, like `rest_of_month`. */
+            next_days_total: {
+                /** Format: date */
+                from: string;
+                /** Format: date */
+                to: string;
+                incoming: number;
+                /** @description Negative or zero. */
+                outgoing: number;
+                net: number;
                 unconverted_count: number;
             };
         };
@@ -8111,6 +8188,7 @@ export interface components {
             skipped_missing: number;
             items: components["schemas"]["Split"][];
         };
+        /** @description Owed, paid and remaining amounts converted to the requested currency at the latest stored exchange rates, per transaction currency. Open splits in a currency without a stored rate are left out and counted. */
         SplitOwed: {
             recipient_id: number;
             recipient_name: string;
@@ -8118,6 +8196,16 @@ export interface components {
             total_paid: number;
             remaining: number;
             split_count: number;
+            /** @description Open splits left out for want of a stored rate. */
+            unconverted_count: number;
+            unconverted_currencies: string[];
+        };
+        OwedTotals: {
+            currency: string;
+            remaining: number;
+            /** @description Open splits left out for want of a stored rate. */
+            unconverted_count: number;
+            unconverted_currencies: string[];
         };
         SplitOwedDetail: components["schemas"]["Split"] & {
             /** Format: date */
@@ -10987,6 +11075,37 @@ export interface operations {
             };
             /** @description An account with that name already exists */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getAccountTotals: {
+        parameters: {
+            query?: {
+                currency?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Account totals */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["AccountTotals"];
+                    };
+                };
+            };
+            /** @description VALIDATION_ERROR: currency is not a 3-letter ISO code */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -15547,6 +15666,8 @@ export interface operations {
     getSplitsOwed: {
         parameters: {
             query?: {
+                /** @description Currency of the converted figures. */
+                currency?: string;
                 /** @description Page size. Omit (together with offset) to receive the whole collection. Values above the endpoint's cap are clamped. */
                 limit?: components["parameters"]["OptionalLimit"];
                 /** @description Rows to skip. Omit (together with limit) to receive the whole collection. */
@@ -15558,7 +15679,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Owed summary per recipient (complete unless limit/offset are supplied) */
+            /** @description Owed summary per recipient (complete unless limit/offset are supplied), converted to `currency`; `summary` is the total outstanding across every recipient. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -15567,15 +15688,25 @@ export interface operations {
                     "application/json": components["schemas"]["Envelope"] & {
                         data?: components["schemas"]["OptionalPaginationFields"] & {
                             items: components["schemas"]["SplitOwed"][];
+                            summary: components["schemas"]["OwedTotals"];
                         };
                     };
                 };
+            };
+            /** @description VALIDATION_ERROR: currency is not a 3-letter ISO code */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
     getSplitOwedByRecipient: {
         parameters: {
             query?: {
+                /** @description Currency of `summary`; split rows stay in their transaction currency. */
+                currency?: string;
                 /** @description Page size. Omit (together with offset) to receive the whole collection. Values above the endpoint's cap are clamped. */
                 limit?: components["parameters"]["OptionalLimit"];
                 /** @description Rows to skip. Omit (together with limit) to receive the whole collection. */
@@ -15589,7 +15720,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Owed detail (complete unless limit/offset are supplied) */
+            /** @description Owed detail (complete unless limit/offset are supplied); `summary` is the recipient's total outstanding over every unsettled split, converted to `currency` at the latest stored rates. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -15598,9 +15729,17 @@ export interface operations {
                     "application/json": components["schemas"]["Envelope"] & {
                         data?: components["schemas"]["OptionalPaginationFields"] & {
                             items: components["schemas"]["SplitOwedDetail"][];
+                            summary: components["schemas"]["OwedTotals"];
                         };
                     };
                 };
+            };
+            /** @description VALIDATION_ERROR: currency is not a 3-letter ISO code */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

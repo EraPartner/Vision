@@ -41,7 +41,7 @@ import {
   buildAssetGroupTotals,
 } from "./portfolioAssetClassTotals.ts";
 import {
-  convertAtLatestRate,
+  convertAtLatestRates,
   loadLatestRatesToEur,
 } from "../currency/latestRateConversion.ts";
 import type { LatestRatesToEur } from "../currency/latestRateConversion.ts";
@@ -803,7 +803,7 @@ function buildInvestmentSummary(
   // Rows arrive ordered by (date, id): the last rent row is the latest one.
   const latestRent = txns.filter((t) => t.type === "rent_income").at(-1);
   const monthlyRent = latestRent
-    ? convertAtLatestRate(
+    ? convertAtLatestRates(
         latestRent.amount ?? 0,
         (latestRent.currency || invCurrency).toUpperCase(),
         targetCurrency,

@@ -7,17 +7,28 @@ import { AccountsList } from "../AccountsList";
 
 const state = vi.hoisted(() => ({ items: [] as Account[], usdRate: 0.5 }));
 
+// Stand-in for GET /api/accounts/totals: the server converts each balance
+// (USD at `usdRate`, no rate for any other currency).
 vi.mock("@/hooks/useAccounts", () => ({
     useAccounts: () => ({ data: { items: state.items } }),
-}));
-vi.mock("@/hooks/useCurrencyConverter", () => ({
-    useCurrencyConverter: () => ({
-        convertToTargetIfAvailable: (amount: number, currency: string) =>
-            currency === "EUR"
-                ? amount
-                : currency === "USD"
-                  ? amount * state.usdRate
-                  : undefined,
+    useAccountTotals: () => ({
+        data: {
+            accounts: state.items.map((item) => {
+                const balance = item.computed_balance ?? 0;
+                const rate =
+                    item.currency === "EUR"
+                        ? 1
+                        : item.currency === "USD"
+                          ? state.usdRate
+                          : undefined;
+                return {
+                    id: item.id,
+                    converted_balance: rate === undefined ? 0 : balance * rate,
+                    unconverted_currencies:
+                        rate === undefined ? [item.currency] : [],
+                };
+            }),
+        },
     }),
 }));
 

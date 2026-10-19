@@ -11,8 +11,9 @@ import { queryRows } from "../database/rowContracts.ts";
 import {
   countRowSchema,
   owedExportRawRowSchema,
+  owedRemainingCurrencyRowSchema,
   owedSplitRawRowSchema,
-  splitOutstandingRowSchema,
+  splitOutstandingCurrencyRowSchema,
   splitPaymentRowSchema,
   splitTotalsRowSchema,
   transactionSplitRowSchema,
@@ -153,10 +154,9 @@ export async function recipientExistsInTransaction(
   client: QueryRunner,
   recipientId: number,
 ): Promise<boolean> {
-  const result = await client.query(
-    "SELECT 1 FROM recipients WHERE id = $1",
-    [recipientId],
-  );
+  const result = await client.query("SELECT 1 FROM recipients WHERE id = $1", [
+    recipientId,
+  ]);
   return result.rows.length > 0;
 }
 
@@ -373,9 +373,13 @@ export const splitRepository = {
    * computeOwedSummary after the aggregate, so a LIMIT pushed into the query
    * would page pre-projection rows and hand back the wrong slice; the route
    * slices the computed array instead. Cardinality is one row per recipient
-   * with outstanding splits, not per split.
+   * and transaction currency with outstanding splits, not per split: a split
+   * is denominated in its transaction's currency, so the service converts each
+   * currency before it adds them up.
    */
-  async getOwedSummaryRows(): Promise<SplitOutstandingRow[]> {
+  async getOwedSummaryRows(): Promise<
+    Array<SplitOutstandingRow & { currency: string | null }>
+  > {
     // Collapse alias recipients into their primary so linked recipients show
     // as a single row. recipient_id returned is the primary's id (or self
     // when not aliased) — the detail endpoint expands this back to the full
@@ -383,6 +387,7 @@ export const splitRepository = {
     const sql = `
       SELECT COALESCE(r.primary_recipient_id, r.id) AS recipient_id,
              COALESCE(pr.name, r.name) AS recipient_name,
+             t.currency,
              SUM(a.original_amount) AS total_owed,
              SUM(a.paid_amount) AS total_paid,
              COUNT(a.split_id) AS split_count
@@ -390,10 +395,34 @@ export const splitRepository = {
       JOIN recipients r ON r.id = a.recipient_id
       LEFT JOIN recipients pr ON pr.id = r.primary_recipient_id
       JOIN transaction_splits ts ON ts.id = a.split_id
+      JOIN transactions t ON t.id = ts.transaction_id
       WHERE ts.is_settled = false
-      GROUP BY COALESCE(r.primary_recipient_id, r.id), COALESCE(pr.name, r.name)
+      GROUP BY COALESCE(r.primary_recipient_id, r.id), COALESCE(pr.name, r.name),
+               t.currency
     `;
-    return queryRows(splitOutstandingRowSchema, sql, []);
+    return queryRows(splitOutstandingCurrencyRowSchema, sql, []);
+  },
+
+  /**
+   * A recipient group's unsettled remainder per transaction currency (same
+   * alias-group + settled filter as getOwedByRecipientRows, never paged), for
+   * the server-converted detail total.
+   */
+  async getOwedRemainingByCurrency(recipientId: number) {
+    const sql = `
+      ${RECIPIENT_GROUP_CTE}
+      SELECT t.currency,
+             SUM(GREATEST(ts.amount - COALESCE(sp_agg.paid, 0), 0)) AS remaining,
+             COUNT(ts.id) AS split_count
+      FROM transaction_splits ts
+      JOIN transactions t ON ts.transaction_id = t.id
+      LEFT JOIN LATERAL (
+        SELECT SUM(amount) AS paid FROM split_payments WHERE split_id = ts.id
+      ) sp_agg ON true
+      WHERE ts.recipient_id IN (SELECT id FROM recipient_group) AND ts.is_settled = false
+      GROUP BY t.currency
+    `;
+    return queryRows(owedRemainingCurrencyRowSchema, sql, [recipientId]);
   },
 
   /**

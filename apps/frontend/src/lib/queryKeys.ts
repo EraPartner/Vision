@@ -83,6 +83,8 @@ export const accountKeys = {
      *  prefix so account mutations invalidate stale previews too. */
     mergePreview: (sourceId: number, targetId: number) =>
         ["accounts", "merge-preview", sourceId, targetId] as const,
+    /** Server-computed hub totals; under 'accounts' so balance changes refetch them. */
+    totals: (currency: string) => ["accounts", "totals", currency] as const,
 };
 
 export const bankAccountKeys = {
@@ -94,9 +96,10 @@ export const bankAccountKeys = {
 
 export const splitKeys = {
     all: ["splits"] as const,
-    owedSummary: ["splits", "owed"] as const,
-    owedByRecipient: (recipientId: number | null) =>
-        ["splits", "owed", recipientId] as const,
+    owedSummary: (currency: string) =>
+        ["splits", "owed", "summary", currency] as const,
+    owedByRecipient: (recipientId: number | null, currency: string) =>
+        ["splits", "owed", recipientId, currency] as const,
     byTransaction: (transactionId: number | null) =>
         ["splits", "transaction", transactionId] as const,
 };

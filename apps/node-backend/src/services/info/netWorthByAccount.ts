@@ -12,7 +12,7 @@
 import accountService from "../accountService.ts";
 import { resolveLiveSummary } from "./liveSummary.ts";
 import {
-  convertAtLatestRate,
+  convertAtLatestRates,
   loadLatestRatesToEur,
 } from "../currency/latestRateConversion.ts";
 import { addAll, roundMoney } from "../../lib/money.ts";
@@ -53,7 +53,7 @@ export async function getNetWorthByAccount(targetCurrency: string) {
       cashById.set(Number(account.id), 0);
       continue;
     }
-    const converted = convertAtLatestRate(
+    const converted = convertAtLatestRates(
       account.computed_balance ?? 0,
       account.currency || "EUR",
       target,

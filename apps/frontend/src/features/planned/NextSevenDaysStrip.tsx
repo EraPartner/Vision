@@ -17,8 +17,8 @@ import {
     toYmd,
 } from "@/lib/dateUtils";
 import { bucketNextSevenDays, WINDOW_DAYS } from "./nextSevenDays";
-import { sumConvertedAmounts } from "./plannedCurrencyTotals";
 import type { PlannedPayment } from "@/hooks/usePlannedPayments";
+import type { PlannedTotals } from "@/lib/api/planned";
 import { cn } from "@/lib/utils";
 
 /**
@@ -45,13 +45,11 @@ interface NextSevenDaysStripProps {
     estimatedMonthly: number | undefined;
     /** Active recurring rows omitted from the monthly total because an FX rate is unavailable. */
     estimatedMonthlyUnavailableCount: number;
-    /** True while the shared FX query is still resolving. */
-    currencyRatesLoading: boolean;
-    /** The page's optional FX converter for the per-day totals. */
-    convertAmount: (
-        amount: number,
-        fromCurrency?: string,
-    ) => number | undefined;
+    /**
+     * Money due in the window (every recurring occurrence counted), computed
+     * and converted on the server; undefined while it loads.
+     */
+    windowTotal: PlannedTotals["next_days_total"] | undefined;
     /** Open a due item for editing — same target as the row's pencil action. */
     onSelect: (payment: PlannedPayment) => void;
 }
@@ -60,8 +58,7 @@ export function NextSevenDaysStrip({
     payments,
     estimatedMonthly,
     estimatedMonthlyUnavailableCount,
-    currencyRatesLoading,
-    convertAmount,
+    windowTotal,
     onSelect,
 }: NextSevenDaysStripProps) {
     const { t, tc, language } = useLanguage();
@@ -73,14 +70,6 @@ export function NextSevenDaysStrip({
         [payments],
     );
     const dueCount = buckets.reduce((n, b) => n + b.items.length, 0);
-    const windowTotal = useMemo(
-        () =>
-            sumConvertedAmounts(
-                buckets.flatMap((bucket) => bucket.items),
-                convertAmount,
-            ),
-        [buckets, convertAmount],
-    );
 
     const weekdayFormat = useMemo(
         () => new Intl.DateTimeFormat(locale, { weekday: "short" }),
@@ -122,7 +111,7 @@ export function NextSevenDaysStrip({
                                     <span className="text-label-tertiary">
                                         ·
                                     </span>
-                                    {currencyRatesLoading ? (
+                                    {windowTotal === undefined ? (
                                         <span
                                             role="status"
                                             aria-label={t("common.loading")}
@@ -136,13 +125,13 @@ export function NextSevenDaysStrip({
                                         <span
                                             className={cn(
                                                 "type-headline tabular-nums",
-                                                windowTotal.total < 0
+                                                windowTotal.net < 0
                                                     ? "text-foreground"
                                                     : "text-gain",
                                             )}
                                         >
                                             <Money
-                                                amount={windowTotal.total}
+                                                amount={windowTotal.net}
                                                 signed
                                             />
                                         </span>
@@ -154,8 +143,8 @@ export function NextSevenDaysStrip({
                                 {rangeLabel}
                             </span>
                         </div>
-                        {!currencyRatesLoading &&
-                            windowTotal.unavailableCount > 0 && (
+                        {windowTotal !== undefined &&
+                            windowTotal.unconverted_count > 0 && (
                                 <p className="mt-1 flex items-center gap-1.5 type-footnote text-warning">
                                     <AlertCircle
                                         className="h-3.5 w-3.5 shrink-0"
@@ -163,7 +152,7 @@ export function NextSevenDaysStrip({
                                     />
                                     {tc(
                                         "plannedPage.fxUnavailable",
-                                        windowTotal.unavailableCount,
+                                        windowTotal.unconverted_count,
                                     )}
                                 </p>
                             )}

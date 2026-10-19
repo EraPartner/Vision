@@ -95,7 +95,8 @@ export function CommandPalette({
         [appSettings.numberFormat, query],
     );
     const fxTarget = fxParsed?.to ?? appSettings.defaultCurrency ?? "EUR";
-    const { convertToTarget } = useCurrencyConverter(fxTarget);
+    // Preview of typed input; no result when either stored rate is missing.
+    const { convertToTargetIfAvailable } = useCurrencyConverter(fxTarget);
     // User-typed/provider currency codes share the canonical guarded formatter.
     // Keep this surface's useful code-bearing fallback for malformed values.
     const fmtSafeCurrency = useCallback(
@@ -113,10 +114,13 @@ export function CommandPalette({
 
     const fxResult = useMemo(() => {
         if (!fxParsed || fxParsed.from === fxTarget) return null;
-        const converted = convertToTarget(fxParsed.amount, fxParsed.from);
+        const converted = convertToTargetIfAvailable(
+            fxParsed.amount,
+            fxParsed.from,
+        );
         if (converted == null || !Number.isFinite(converted)) return null;
         return fmtSafeCurrency(converted, fxTarget);
-    }, [fxParsed, fxTarget, convertToTarget, fmtSafeCurrency]);
+    }, [fxParsed, fxTarget, convertToTargetIfAvailable, fmtSafeCurrency]);
 
     const calcResult = useMemo(() => {
         if (fxParsed) return null;

@@ -5,7 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
-import { ok, SPLIT_STUB } from "@/test/msw/handlers";
+import { ok, OWED_TOTALS_STUB, SPLIT_STUB } from "@/test/msw/handlers";
 import { RecipientOwesDetail } from "../RecipientOwesDetail";
 
 it.each(["0", "-1", "12,,3"])(
@@ -28,6 +28,7 @@ it.each(["0", "-1", "12,,3"])(
                         },
                     ],
                     total: 1,
+                    summary: OWED_TOTALS_STUB,
                 }),
             ),
             http.post("http://localhost:3002/api/splits/1/pay", () => {

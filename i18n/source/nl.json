@@ -2309,6 +2309,8 @@
   "owesPage.export.success": "CSV geëxporteerd",
   "owesPage.fromPeople": "van {n} personen",
   "owesPage.fromPerson": "van {n} persoon",
+  "owesPage.fxUnavailable.one": "{count} splitsing niet meegerekend: wisselkoers niet beschikbaar",
+  "owesPage.fxUnavailable.other": "{count} splitsingen niet meegerekend: wisselkoersen niet beschikbaar",
   "owesPage.markSettled": "Markeren als verrekend",
   "owesPage.menu": "Meer acties",
   "owesPage.noDebts": "Geen openstaande schulden",

@@ -29,19 +29,26 @@ function payment(id: number, amount: number, currency: string): PlannedPayment {
   };
 }
 
+/** The server's next_days_total: -10 EUR converted, the GBP row left out. */
+const WINDOW_TOTAL = {
+  from: todayYmd(),
+  to: todayYmd(),
+  incoming: 0,
+  outgoing: -10,
+  net: -10,
+  unconverted_count: 1,
+};
+
 describe("NextSevenDaysStrip currency totals", () => {
-  it("shows that missing-rate payments are excluded from both visible aggregates", async () => {
+  it("shows the server window total and that missing-rate payments are left out", async () => {
     const payments = [payment(1, -10, "EUR"), payment(2, -99, "GBP")];
-    const convertAmount = (amount: number, currency?: string) =>
-      currency === "GBP" ? undefined : amount;
 
     renderWithApp(
       <NextSevenDaysStrip
         payments={payments}
         estimatedMonthly={-10}
         estimatedMonthlyUnavailableCount={1}
-        currencyRatesLoading={false}
-        convertAmount={convertAmount}
+        windowTotal={WINDOW_TOTAL}
         onSelect={vi.fn()}
       />,
     );
@@ -56,7 +63,7 @@ describe("NextSevenDaysStrip currency totals", () => {
     expect(windowSummary).not.toHaveTextContent("99");
   });
 
-  it("keeps both aggregates pending while exchange rates are loading", async () => {
+  it("keeps both aggregates pending while the server totals load", async () => {
     const payments = [payment(1, -10, "EUR"), payment(2, -99, "GBP")];
 
     renderWithApp(
@@ -64,8 +71,7 @@ describe("NextSevenDaysStrip currency totals", () => {
         payments={payments}
         estimatedMonthly={undefined}
         estimatedMonthlyUnavailableCount={1}
-        currencyRatesLoading
-        convertAmount={(amount, currency) => currency === "GBP" ? undefined : amount}
+        windowTotal={undefined}
         onSelect={vi.fn()}
       />,
     );

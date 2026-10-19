@@ -19,21 +19,22 @@ import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
 import { PageShell } from "@/components/shared/PageShell";
 
 export default function OwesPage() {
+    const { appSettings } = useAppSettings();
+    const defaultCurrency = appSettings.defaultCurrency || "EUR";
+    // Amounts arrive converted to the display currency on the server.
     const {
         data: summary,
         isLoading,
         error: loadError,
         refetch,
-    } = useOwedSummary();
+    } = useOwedSummary(defaultCurrency);
     const [selectedRecipient, setSelectedRecipient] = useState<{
         id: number;
         name: string;
     } | null>(null);
-    const { t } = useLanguage();
+    const { t, tc } = useLanguage();
     const loadingSurfaceProps = useLoadingSurfaceProps();
-    const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings.numberFormat);
-    const defaultCurrency = appSettings.defaultCurrency || "EUR";
     const decimals = appSettings.showDecimalPlaces ?? 2;
 
     if (isLoading) {
@@ -64,7 +65,8 @@ export default function OwesPage() {
     }
 
     const items = summary?.items || [];
-    const totalOwed = items.reduce((sum, item) => sum + item.remaining, 0);
+    const totalOwed = summary?.summary.remaining ?? 0;
+    const unconvertedCount = summary?.summary.unconverted_count ?? 0;
 
     if (selectedRecipient) {
         return (
@@ -89,7 +91,7 @@ export default function OwesPage() {
                     onRetry={() => void refetch()}
                 />
             )}
-            {totalOwed > 0 && (
+            {(totalOwed > 0 || unconvertedCount > 0) && (
                 <Card>
                     <CardContent variant="headerless">
                         <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
@@ -106,6 +108,14 @@ export default function OwesPage() {
                                               n: items.length,
                                           })}
                                 </p>
+                                {unconvertedCount > 0 && (
+                                    <p className="type-footnote text-warning">
+                                        {tc(
+                                            "owesPage.fxUnavailable",
+                                            unconvertedCount,
+                                        )}
+                                    </p>
+                                )}
                             </div>
                             <p className="type-large-title tabular-nums text-foreground">
                                 <Money

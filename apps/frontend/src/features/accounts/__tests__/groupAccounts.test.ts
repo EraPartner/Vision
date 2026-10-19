@@ -4,11 +4,9 @@ import {
     ACCOUNT_GROUP_ORDER,
     accountGroupId,
     accountLabel,
-    computeNetCash,
     groupAccounts,
     isHoldingsOnlyPortfolioType,
     isPortfolioType,
-    sumConvertedBalances,
 } from "@/features/accounts/groupAccounts";
 
 let nextId = 1;
@@ -33,8 +31,6 @@ function makeAccount(overrides: Partial<Account> = {}): Account {
         ...overrides,
     };
 }
-
-const identity = (amount: number) => amount;
 
 describe("accountGroupId", () => {
     it.each([
@@ -184,116 +180,5 @@ describe("groupAccounts", () => {
             "B liability",
             "C checking",
         ]);
-    });
-});
-
-describe("sumConvertedBalances", () => {
-    it("sums converted computed balances, treating missing balances as 0", () => {
-        const eur = makeAccount({ computed_balance: 100, currency: "EUR" });
-        const usd = makeAccount({ computed_balance: 50, currency: "USD" });
-        const { computed_balance: _missing, ...withoutBalance } = makeAccount();
-        const accounts: Account[] = [eur, usd, withoutBalance];
-        const double = (amount: number, from?: string) =>
-            from === "USD" ? amount * 2 : amount;
-        expect(sumConvertedBalances(accounts, double)).toBe(200);
-    });
-
-    it("is naturally negative for liability balances", () => {
-        const accounts = [
-            makeAccount({ type: "liability", computed_balance: -1200 }),
-            makeAccount({ type: "liability", computed_balance: -300 }),
-        ];
-        expect(sumConvertedBalances(accounts, identity)).toBe(-1500);
-    });
-});
-
-describe("computeNetCash — reconciles with the WP-A1 Liquid+Liabilities population", () => {
-    // Same-currency fixture so FX is identity: the reconciliation under test is
-    // POPULATION + SIGN, matching WP-A1's net-worth definition (in_net_worth
-    // gates aggregates; liabilities enter with their negative sign; portfolio
-    // ledger balances are excluded until WP-C5 makes them real).
-    const inNetWorthChecking = makeAccount({
-        type: "checking",
-        computed_balance: 1000,
-    });
-    const inNetWorthSavings = makeAccount({
-        type: "savings",
-        computed_balance: 500,
-    });
-    const inNetWorthLiability = makeAccount({
-        type: "liability",
-        computed_balance: -300,
-    });
-    const notInNetWorth = makeAccount({
-        type: "checking",
-        in_net_worth: false,
-        computed_balance: 999,
-    });
-    const archived = makeAccount({
-        type: "savings",
-        is_active: false,
-        computed_balance: 555,
-    });
-    const portfolioBrokerage = makeAccount({
-        type: "brokerage",
-        computed_balance: 42,
-    });
-    const fixture = [
-        inNetWorthChecking,
-        inNetWorthSavings,
-        inNetWorthLiability,
-        notInNetWorth,
-        archived,
-        portfolioBrokerage,
-    ];
-
-    it("equals Σ(in_net_worth, active, non-portfolio computed_balance) — 1000 + 500 − 300", () => {
-        expect(computeNetCash(fixture, identity)).toBe(1200);
-    });
-
-    it("matches the Cash&Savings + Liabilities group subtotals over in_net_worth accounts", () => {
-        const groups = groupAccounts(fixture);
-        const netCashFromGroups = groups
-            .filter((g) => g.id === "cash" || g.id === "liabilities")
-            .flatMap((g) => g.accounts)
-            .filter((a) => a.in_net_worth)
-            .reduce((sum, a) => sum + (a.computed_balance ?? 0), 0);
-        expect(computeNetCash(fixture, identity)).toBe(netCashFromGroups);
-    });
-
-    it("excludes the not-in-net-worth account", () => {
-        expect(computeNetCash([...fixture], identity)).toBe(
-            computeNetCash(
-                fixture.filter((a) => a !== notInNetWorth),
-                identity,
-            ),
-        );
-    });
-
-    it("excludes the archived account", () => {
-        expect(computeNetCash([...fixture], identity)).toBe(
-            computeNetCash(
-                fixture.filter((a) => a !== archived),
-                identity,
-            ),
-        );
-    });
-
-    it("excludes portfolio-type ledger balances", () => {
-        expect(computeNetCash([...fixture], identity)).toBe(
-            computeNetCash(
-                fixture.filter((a) => a !== portfolioBrokerage),
-                identity,
-            ),
-        );
-    });
-
-    it("carries the liability's negative sign into the net", () => {
-        const withoutLiability = fixture.filter(
-            (a) => a !== inNetWorthLiability,
-        );
-        expect(computeNetCash(fixture, identity)).toBe(
-            computeNetCash(withoutLiability, identity) - 300,
-        );
     });
 });

@@ -7,18 +7,23 @@ import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import type { BulkSplitRequest, SplitCreateInput } from "@/lib/api/splits";
 
-export function useOwedSummary() {
+/** Who owes what, converted to `currency` on the server. */
+export function useOwedSummary(currency: string) {
     return useQuery({
-        queryKey: splitKeys.owedSummary,
-        queryFn: () => apiClient.getOwedSummary(),
+        queryKey: splitKeys.owedSummary(currency),
+        queryFn: () => apiClient.getOwedSummary(currency),
         staleTime: QUERY_STALE_TIME_MS.FREQUENT,
     });
 }
 
-export function useOwedByRecipient(recipientId: number | null) {
+/** A recipient's open splits plus their server-converted total outstanding. */
+export function useOwedByRecipient(
+    recipientId: number | null,
+    currency: string,
+) {
     return useQuery({
-        queryKey: splitKeys.owedByRecipient(recipientId),
-        queryFn: () => apiClient.getOwedByRecipient(recipientId!),
+        queryKey: splitKeys.owedByRecipient(recipientId, currency),
+        queryFn: () => apiClient.getOwedByRecipient(recipientId!, currency),
         enabled: !!recipientId,
         staleTime: QUERY_STALE_TIME_MS.FREQUENT,
     });

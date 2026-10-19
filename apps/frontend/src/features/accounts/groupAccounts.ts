@@ -1,7 +1,7 @@
 /**
- * Grouped-hub partitioning (WP-B3, ADR-107 §3 F8) — pure helpers so the
- * grouping, ordering and the "Net cash" reconciliation are unit-testable
- * without rendering.
+ * Grouped-hub partitioning (WP-B3, ADR-107 §3 F8) — pure presentation helpers
+ * for grouping and ordering. The group subtotals and "Net cash" are computed on
+ * the server (GET /api/accounts/totals, ADR-216) with the same groups.
  *
  * Groups (fixed order):
  *   cash        — checking · savings · pension
@@ -86,42 +86,4 @@ export function groupAccounts(
                 a.id - b.id,
         ),
     })).filter((g) => g.accounts.length > 0);
-}
-
-export type ConvertFn = (amount: number, fromCurrency?: string) => number;
-
-/**
- * Converted subtotal of a set of accounts' computed balances (native →
- * display currency). Liability balances are negative, so a Liabilities
- * subtotal is naturally negative. Accounts without a computed balance
- * contribute 0.
- */
-export function sumConvertedBalances(
-    accounts: Account[],
-    convert: ConvertFn,
-): number {
-    return accounts.reduce(
-        (sum, a) => sum + convert(a.computed_balance ?? 0, a.currency),
-        0,
-    );
-}
-
-/**
- * The grand "Net cash" line — Σ converted computed_balance over ACTIVE,
- * in_net_worth accounts outside the portfolio group (i.e. Cash & Savings +
- * Liabilities). This is WP-A1's net-worth Liquid + Liabilities population
- * (in_net_worth gates aggregates, ADR-089), minus portfolio-type ledger
- * balances which aren't real value until WP-C5's holdings land. Signs come
- * from the balances themselves (liabilities negative), so the sum is the net.
- */
-export function computeNetCash(
-    accounts: Account[],
-    convert: ConvertFn,
-): number {
-    return sumConvertedBalances(
-        accounts.filter(
-            (a) => a.is_active && a.in_net_worth && !isPortfolioType(a.type),
-        ),
-        convert,
-    );
 }

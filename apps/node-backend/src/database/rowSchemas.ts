@@ -436,6 +436,21 @@ export const splitOutstandingRowSchema = z
   })
   .describe("split outstanding row");
 
+/** `getOwedSummaryRows`: one row per (recipient group, transaction currency). */
+export const splitOutstandingCurrencyRowSchema = splitOutstandingRowSchema
+  .extend({ currency: z.string().nullable() })
+  .describe("split outstanding currency row");
+
+/** `getOwedRemainingByCurrency`: a recipient group's unsettled remainder per currency. */
+export const owedRemainingCurrencyRowSchema = z
+  .object({
+    currency: z.string().nullable(),
+    remaining: pgNumeric,
+    /** Bare COUNT() */
+    split_count: pgBigint,
+  })
+  .describe("owed remaining currency row");
+
 /** SPLIT_TOTALS_SQL: both aggregates are NUMERIC. */
 export const splitTotalsRowSchema = z
   .object({

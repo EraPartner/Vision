@@ -6,7 +6,7 @@ import {
     SplitListSchema,
 } from '@vision/types/contracts';
 import { apiRequest } from '@/lib/api/client';
-import { requestBlob } from '@/lib/api/helpers';
+import { requestBlob, requestWithQuery } from '@/lib/api/helpers';
 
 /**
  * Canonical home for the splits API types. `@/types/splits.ts` used to hold a
@@ -58,14 +58,29 @@ export interface BulkSplitResult {
     items: SplitItem[];
 }
 
-/** Aggregated "who owes what" row from GET /api/splits/owed (computeOwedSummary). */
-export interface OwedSummaryItem {
+/** Open splits left out of a converted owed figure because their currency has no stored rate. */
+interface OwedUnconverted {
+    unconverted_count: number;
+    unconverted_currencies: string[];
+}
+
+/**
+ * Aggregated "who owes what" row from GET /api/splits/owed, its amounts
+ * converted on the server to the requested currency.
+ */
+export interface OwedSummaryItem extends OwedUnconverted {
     recipient_id: number;
     recipient_name: string;
     total_owed: number;
     total_paid: number;
     remaining: number;
     split_count: number;
+}
+
+/** Server-computed total outstanding (`summary` on both owed reads). */
+export interface OwedTotals extends OwedUnconverted {
+    currency: string;
+    remaining: number;
 }
 
 /** Per-split detail row from GET /api/splits/owed/:recipientId, enriched with parent-transaction fields. */
@@ -89,12 +104,21 @@ export interface SplitPayment {
     created_at: string;
 }
 
-export function getOwedSummary(): Promise<{ items: OwedSummaryItem[] }> {
-    return apiRequest('/api/splits/owed', { schema: OwedSummaryListSchema });
+export function getOwedSummary(
+    currency: string,
+): Promise<{ items: OwedSummaryItem[]; summary: OwedTotals }> {
+    return requestWithQuery('/api/splits/owed', { currency }, { schema: OwedSummaryListSchema });
 }
 
-export function getOwedByRecipient(recipientId: number): Promise<{ items: OwedDetailItem[] }> {
-    return apiRequest(`/api/splits/owed/${recipientId}`, { schema: OwedDetailListSchema });
+export function getOwedByRecipient(
+    recipientId: number,
+    currency: string,
+): Promise<{ items: OwedDetailItem[]; summary: OwedTotals }> {
+    return requestWithQuery(
+        `/api/splits/owed/${recipientId}`,
+        { currency },
+        { schema: OwedDetailListSchema },
+    );
 }
 
 export async function exportOwedByRecipientCsv(recipientId: number): Promise<Blob> {

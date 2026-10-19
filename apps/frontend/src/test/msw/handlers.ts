@@ -567,6 +567,38 @@ export const SPLIT_STUB = {
     updated_at: "2025-01-01T00:00:00.000Z",
 };
 
+/** `summary` on GET /api/splits/owed[/:id]: nothing outstanding. */
+export const OWED_TOTALS_STUB = {
+    currency: "EUR",
+    remaining: 0,
+    unconverted_count: 0,
+    unconverted_currencies: [],
+};
+
+const EMPTY_ACCOUNT_GROUP_TOTAL = {
+    total: 0,
+    cash: 0,
+    holdings: 0,
+    holdings_unavailable: false,
+    unconverted_count: 0,
+    unconverted_currencies: [],
+};
+
+/** GET /api/accounts/totals for the default empty account list. */
+export function accountTotalsStub(currency = "EUR") {
+    return {
+        currency,
+        net_cash: { total: 0, unconverted_count: 0, unconverted_currencies: [] },
+        groups: {
+            cash: EMPTY_ACCOUNT_GROUP_TOTAL,
+            portfolio: EMPTY_ACCOUNT_GROUP_TOTAL,
+            liabilities: EMPTY_ACCOUNT_GROUP_TOTAL,
+            archived: EMPTY_ACCOUNT_GROUP_TOTAL,
+        },
+        accounts: [],
+    };
+}
+
 /**
  * A `split_payments` row as `splitRepository.formatPayment` emits it
  * (splitRepository.js:701): NUMERIC `amount` coerced to a number, DATE
@@ -679,6 +711,14 @@ export const defaultHandlers = [
     // fetches from leaking past teardown or tripping the unhandled-request guard.
     http.get(`${API_BASE}/api/accounts`, () =>
         ok({ items: [], total: 0, links: [] }),
+    ),
+    // Before /:id: server-computed hub totals (GET /api/accounts/totals).
+    http.get(`${API_BASE}/api/accounts/totals`, ({ request }) =>
+        ok(
+            accountTotalsStub(
+                new URL(request.url).searchParams.get("currency") ?? "EUR",
+            ),
+        ),
     ),
     http.get(`${API_BASE}/api/accounts/:id`, () => ok(ACCOUNT_STUB)),
     // Tags API — used by TagPicker inside dialogs/forms across the app.
@@ -860,9 +900,11 @@ export const defaultHandlers = [
         }),
     ),
 
-    // Real route answers listBody(items, total, page) — `{items, total}`
-    // (apps/node-backend/src/routes/splits.js, GET /owed).
-    http.get(`${API_BASE}/api/splits/owed`, () => ok({ items: [], total: 0 })),
+    // Real route answers listBody(items, total, page) plus the converted
+    // `summary` (apps/node-backend/src/routes/splits.ts, GET /owed).
+    http.get(`${API_BASE}/api/splits/owed`, () =>
+        ok({ items: [], total: 0, summary: OWED_TOTALS_STUB }),
+    ),
 
     http.get(`${API_BASE}/api/market/quote`, () => ok({ items: [], total: 0 })),
     // marketLookupService search: `{items}` without `total`.
@@ -1463,10 +1505,10 @@ export const defaultHandlers = [
     http.post(`${API_BASE}/api/splits/:id/settle`, () =>
         ok({ ...SPLIT_STUB, is_settled: true }),
     ),
-    // Real route answers listBody(splits, total, page) — `{items, total}`, never
-    // a `total_owed` field (apps/node-backend/src/routes/splits.js, GET /owed/:id).
+    // Real route answers listBody(splits, total, page) plus the converted
+    // `summary`, never a `total_owed` field (routes/splits.ts, GET /owed/:id).
     http.get(`${API_BASE}/api/splits/owed/:recipientId`, () =>
-        ok({ items: [], total: 0 }),
+        ok({ items: [], total: 0, summary: OWED_TOTALS_STUB }),
     ),
     http.post(`${API_BASE}/api/splits/owed/:recipientId/settle-all`, () =>
         ok({ message: "Settled", settled_count: 0 }),

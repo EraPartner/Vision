@@ -2,8 +2,9 @@
  * Provides a stable convertToTarget(amount, fromCurrency?) callback and
  * the ratesToEur map for pages that need direct rate access.
  *
- * Replaces the inline FX query + ratesToEur memo + convertToTarget callback
- * that was duplicated across every portfolio page.
+ * Domain totals are computed on the server (ADR-216); this hook is for
+ * previews of unsaved input (the command palette's quick FX calculator) and
+ * the portfolio and tax pages that have not moved to server figures yet.
  */
 
 import { useCallback, useMemo } from "react";
@@ -31,12 +32,11 @@ export function useCurrencyConverter(targetCurrency: string) {
         gcTime: 30 * 60_000,
     });
 
-    // Fallback rates are hardcoded constants that only fill gaps the live DB
-    // rates don't cover — so they must be spread first (lowest priority) and the
-    // live rates last, otherwise stale constants shadow real rates.
+    // Stored rates only. The response's `fallback_rates` are hard-coded server
+    // constants: a currency without a stored rate is unavailable here, never
+    // converted at a stale constant (ADR-216).
     const ratesToEur: Record<string, number> = useMemo(
         () => ({
-            ...(exchangeData?.fallback_rates ?? {}),
             EUR: 1,
             ...Object.fromEntries(
                 (exchangeData?.rates ?? []).map((r) => [

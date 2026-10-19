@@ -4927,6 +4927,88 @@ components:
           type: boolean
           nullable: true
 
+    AccountGroupTotal:
+      type: object
+      required:
+        [
+          total,
+          cash,
+          holdings,
+          holdings_unavailable,
+          unconverted_count,
+          unconverted_currencies,
+        ]
+      properties:
+        total:
+          type: number
+          description: cash + holdings.
+        cash:
+          type: number
+          description: Converted ledger balances; crypto_exchange and wallet accounts excluded.
+        holdings:
+          type: number
+          description: Portfolio-summary position value of the group's portfolio-type accounts.
+        holdings_unavailable:
+          type: boolean
+          description: The portfolio summary could not be computed; holdings is 0.
+        unconverted_count:
+          type: integer
+          description: Accounts with a balance partition left out for want of a stored rate.
+        unconverted_currencies:
+          type: array
+          items:
+            type: string
+
+    AccountTotals:
+      type: object
+      required: [currency, net_cash, groups, accounts]
+      properties:
+        currency:
+          type: string
+        net_cash:
+          type: object
+          description: Active, in_net_worth accounts outside brokerage, crypto_exchange and wallet.
+          required: [total, unconverted_count, unconverted_currencies]
+          properties:
+            total:
+              type: number
+            unconverted_count:
+              type: integer
+            unconverted_currencies:
+              type: array
+              items:
+                type: string
+        groups:
+          type: object
+          required: [cash, portfolio, liabilities, archived]
+          properties:
+            cash:
+              $ref: "#/components/schemas/AccountGroupTotal"
+            portfolio:
+              $ref: "#/components/schemas/AccountGroupTotal"
+            liabilities:
+              $ref: "#/components/schemas/AccountGroupTotal"
+            archived:
+              $ref: "#/components/schemas/AccountGroupTotal"
+        accounts:
+          type: array
+          items:
+            type: object
+            required: [id, group, converted_balance, unconverted_currencies]
+            properties:
+              id:
+                type: integer
+              group:
+                type: string
+                enum: [cash, portfolio, liabilities, archived]
+              converted_balance:
+                type: number
+                description: Sum of the account's convertible balance partitions.
+              unconverted_currencies:
+                type: array
+                items:
+                  type: string
+
     Account:
       type: object
       required:
@@ -5642,7 +5724,16 @@ components:
 
     PlannedTotals:
       type: object
-      required: [currency, today, month_end, rest_of_month, monthly_equivalent]
+      required:
+        [
+          currency,
+          today,
+          month_end,
+          rest_of_month,
+          monthly_equivalent,
+          next_days,
+          next_days_total,
+        ]
       properties:
         currency:
           type: string
@@ -5668,6 +5759,48 @@ components:
           required: [total, unconverted_count]
           properties:
             total:
+              type: number
+            unconverted_count:
+              type: integer
+        next_days:
+          type: array
+          description: >
+            Today and the seven days after it (eight entries), every recurring
+            occurrence counted on its own day. `unconverted_count` counts the
+            occurrences on that day without a stored rate.
+          items:
+            type: object
+            required: [date, incoming, outgoing, unconverted_count]
+            properties:
+              date:
+                type: string
+                format: date
+              incoming:
+                type: number
+              outgoing:
+                type: number
+                description: Negative or zero.
+              unconverted_count:
+                type: integer
+        next_days_total:
+          type: object
+          description: >
+            The `next_days` window summed; `unconverted_count` counts rows
+            without a stored rate, like `rest_of_month`.
+          required: [from, to, incoming, outgoing, net, unconverted_count]
+          properties:
+            from:
+              type: string
+              format: date
+            to:
+              type: string
+              format: date
+            incoming:
+              type: number
+            outgoing:
+              type: number
+              description: Negative or zero.
+            net:
               type: number
             unconverted_count:
               type: integer
@@ -6976,7 +7109,13 @@ components:
           total_paid,
           remaining,
           split_count,
+          unconverted_count,
+          unconverted_currencies,
         ]
+      description: >
+        Owed, paid and remaining amounts converted to the requested currency at
+        the latest stored exchange rates, per transaction currency. Open splits
+        in a currency without a stored rate are left out and counted.
       properties:
         recipient_id:
           type: integer
@@ -6990,6 +7129,31 @@ components:
           type: number
         split_count:
           type: integer
+        unconverted_count:
+          type: integer
+          description: Open splits left out for want of a stored rate.
+        unconverted_currencies:
+          type: array
+          items:
+            type: string
+
+    # Total outstanding in one currency (`summary` on GET /api/splits/owed and
+    # GET /api/splits/owed/{id}), whatever page of items is returned.
+    OwedTotals:
+      type: object
+      required: [currency, remaining, unconverted_count, unconverted_currencies]
+      properties:
+        currency:
+          type: string
+        remaining:
+          type: number
+        unconverted_count:
+          type: integer
+          description: Open splits left out for want of a stored rate.
+        unconverted_currencies:
+          type: array
+          items:
+            type: string
 
     # One unsettled split of a recipient (GET /api/splits/owed/{id}) — a Split
     # enriched with the fields of the transaction it was carved out of.
@@ -9741,6 +9905,41 @@ paths:
           description: Invalid field (for example funding_account_id is not a positive integer or does not identify an existing account)
         "409":
           description: An account with that name already exists
+
+  /api/accounts/totals:
+    get:
+      summary: Accounts hub totals in one display currency
+      description: >
+        Server-computed accounts hub figures (ADR-216). Every balance partition
+        converts to `currency` at the latest stored exchange rate; a partition
+        without a rate is left out and its account counted in
+        `unconverted_count`. `net_cash` covers active, in_net_worth accounts
+        outside the portfolio types. Group subtotals add the portfolio-summary
+        position value of the group's brokerage, crypto_exchange and wallet
+        accounts to the ledger balances (holdings-only types excluded).
+      operationId: getAccountTotals
+      tags: [Accounts]
+      parameters:
+        - in: query
+          name: currency
+          schema:
+            type: string
+            pattern: "^[A-Za-z]{3}$"
+            default: EUR
+      responses:
+        "200":
+          description: Account totals
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/AccountTotals"
+        "400":
+          description: "VALIDATION_ERROR: currency is not a 3-letter ISO code"
 
   /api/accounts/{id}:
     parameters:
@@ -14420,11 +14619,21 @@ paths:
       operationId: getSplitsOwed
       tags: [Splits]
       parameters:
+        - in: query
+          name: currency
+          description: Currency of the converted figures.
+          schema:
+            type: string
+            pattern: "^[A-Za-z]{3}$"
+            default: EUR
         - $ref: "#/components/parameters/OptionalLimit"
         - $ref: "#/components/parameters/OptionalOffset"
       responses:
         "200":
-          description: Owed summary per recipient (complete unless limit/offset are supplied)
+          description: >
+            Owed summary per recipient (complete unless limit/offset are
+            supplied), converted to `currency`; `summary` is the total
+            outstanding across every recipient.
           content:
             application/json:
               schema:
@@ -14436,12 +14645,16 @@ paths:
                         allOf:
                           - $ref: "#/components/schemas/OptionalPaginationFields"
                           - type: object
-                            required: [items]
+                            required: [items, summary]
                             properties:
                               items:
                                 type: array
                                 items:
                                   $ref: "#/components/schemas/SplitOwed"
+                              summary:
+                                $ref: "#/components/schemas/OwedTotals"
+        "400":
+          description: "VALIDATION_ERROR: currency is not a 3-letter ISO code"
 
   /api/splits/owed/{id}:
     parameters:
@@ -14457,11 +14670,21 @@ paths:
       operationId: getSplitOwedByRecipient
       tags: [Splits]
       parameters:
+        - in: query
+          name: currency
+          description: Currency of `summary`; split rows stay in their transaction currency.
+          schema:
+            type: string
+            pattern: "^[A-Za-z]{3}$"
+            default: EUR
         - $ref: "#/components/parameters/OptionalLimit"
         - $ref: "#/components/parameters/OptionalOffset"
       responses:
         "200":
-          description: Owed detail (complete unless limit/offset are supplied)
+          description: >
+            Owed detail (complete unless limit/offset are supplied); `summary`
+            is the recipient's total outstanding over every unsettled split,
+            converted to `currency` at the latest stored rates.
           content:
             application/json:
               schema:
@@ -14473,12 +14696,16 @@ paths:
                         allOf:
                           - $ref: "#/components/schemas/OptionalPaginationFields"
                           - type: object
-                            required: [items]
+                            required: [items, summary]
                             properties:
                               items:
                                 type: array
                                 items:
                                   $ref: "#/components/schemas/SplitOwedDetail"
+                              summary:
+                                $ref: "#/components/schemas/OwedTotals"
+        "400":
+          description: "VALIDATION_ERROR: currency is not a 3-letter ISO code"
 
   /api/splits/owed/{id}/export/csv:
     parameters:

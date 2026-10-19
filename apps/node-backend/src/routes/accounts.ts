@@ -3,6 +3,7 @@
  *
  * GET    /api/accounts        — list (filter by ?active=true|false|all, default true;
  *                               optional ?limit/?offset — absent means the full list)
+ * GET    /api/accounts/totals — converted balances, group subtotals, net cash (?currency=)
  * GET    /api/accounts/:id    — fetch one
  * POST   /api/accounts        — create
  * PATCH  /api/accounts/:id    — update (partial)
@@ -29,7 +30,9 @@ import {
 } from "../services/accountCloseService.ts";
 import { scheduleAggregationRefresh } from "../services/aggregationRefresh.ts";
 import { invalidatePortfolioCaches } from "../services/info/cache.ts";
-import { validateId } from "../lib/validation.ts";
+import { computeAccountTotals } from "../services/accountTotalsService.ts";
+import { assertCurrency, validateId } from "../lib/validation.ts";
+import { optionalQueryString } from "../lib/httpParams.ts";
 import { ValidationError } from "../middleware/errorHandler.ts";
 import { listBody, parseOptionalPagination } from "../lib/pagination.ts";
 import { parseInput } from "../lib/zodInput.ts";
@@ -126,6 +129,14 @@ router.get("/", async (req, res) => {
     ...(page ?? {}),
   });
   res.ok({ ...listBody(items, total, page), links: [] });
+});
+
+// Server-owned hub totals (ADR-216) in one display currency at the latest
+// stored rates. Registered before /:id.
+router.get("/totals", async (req, res) => {
+  const currency =
+    assertCurrency(optionalQueryString(req.query, "currency")) ?? "EUR";
+  res.ok(await computeAccountTotals({ currency }));
 });
 
 router.get("/:id", async (req, res) => {
