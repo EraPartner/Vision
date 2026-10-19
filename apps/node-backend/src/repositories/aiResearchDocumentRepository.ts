@@ -1,5 +1,7 @@
-import { query, withTransaction } from "../database/connection.ts";
-import { queryOne, queryRows } from "../database/rowContracts.ts";
+import { sql } from "kysely";
+import { withTransaction } from "../database/connection.ts";
+import { checkedRow, checkedRows, db } from "../database/db.ts";
+import type { Json } from "../database/schema.generated.ts";
 import {
   nextVersionRowSchema,
   researchDocumentRowSchema,
@@ -37,14 +39,47 @@ export type ResearchPassageInput = {
   embedding?: ResearchPassageEmbedding | null;
 };
 
-const DOCUMENT_COLUMNS = `id, title, source_name AS "sourceName", media_type AS "mediaType",
-  content_sha256 AS "contentSha256", version, extraction_status AS "extractionStatus",
-  extraction_error AS "extractionError", created_at AS "createdAt", updated_at AS "updatedAt"`;
+const DOCUMENT_COLUMNS = [
+  "id",
+  "title",
+  "source_name as sourceName",
+  "media_type as mediaType",
+  "content_sha256 as contentSha256",
+  "version",
+  "extraction_status as extractionStatus",
+  "extraction_error as extractionError",
+  "created_at as createdAt",
+  "updated_at as updatedAt",
+] as const;
+
+function selectDocuments() {
+  return db.selectFrom("ai_research_documents").select(DOCUMENT_COLUMNS);
+}
+
+function selectReadyPassages() {
+  return db
+    .selectFrom("ai_research_passages as p")
+    .innerJoin("ai_research_documents as d", "d.id", "p.document_id")
+    .select([
+      "p.id",
+      "p.document_id as documentId",
+      "p.ordinal",
+      "p.page_number as pageNumber",
+      "p.section",
+      "p.content",
+      "p.embedding_json as embedding",
+      "d.title",
+      "d.source_name as sourceName",
+      "d.version",
+      "d.content_sha256 as documentHash",
+    ])
+    .where("d.extraction_status", "=", "ready");
+}
 
 export async function listDocuments(): Promise<ResearchDocumentRow[]> {
-  return queryRows(
+  return checkedRows(
     researchDocumentRowSchema,
-    `SELECT ${DOCUMENT_COLUMNS} FROM ai_research_documents ORDER BY updated_at DESC`,
+    selectDocuments().orderBy("updated_at", "desc"),
   );
 }
 
@@ -52,10 +87,9 @@ export async function getDocument(
   id: string,
 ): Promise<ResearchDocumentRow | null> {
   return (
-    (await queryOne(
+    (await checkedRow(
       researchDocumentRowSchema,
-      `SELECT ${DOCUMENT_COLUMNS} FROM ai_research_documents WHERE id=$1`,
-      [id],
+      selectDocuments().where("id", "=", id),
     )) ?? null
   );
 }
@@ -64,107 +98,99 @@ export async function createDocument(
   input: ResearchDocumentInput,
   passages: ResearchPassageInput[],
 ): Promise<ResearchDocumentRow> {
-  return withTransaction(async (client) => {
-    await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [
-      `ai-research-document:${input.sourceName}`,
-    ]);
-    const existing = await queryOne(
+  return withTransaction(async () => {
+    await sql`SELECT pg_advisory_xact_lock(hashtext(${`ai-research-document:${input.sourceName}`}))`.execute(
+      db,
+    );
+    const existing = await checkedRow(
       researchDocumentRowSchema,
-      `SELECT ${DOCUMENT_COLUMNS} FROM ai_research_documents
-       WHERE source_name=$1 AND content_sha256=$2`,
-      [input.sourceName, input.contentSha256],
-      client,
+      selectDocuments()
+        .where("source_name", "=", input.sourceName)
+        .where("content_sha256", "=", input.contentSha256),
     );
     if (existing) return existing;
-    const next = await queryOne(
+    const next = await checkedRow(
       nextVersionRowSchema,
-      "SELECT COALESCE(MAX(version),0)+1 AS version FROM ai_research_documents WHERE source_name=$1",
-      [input.sourceName],
-      client,
+      db
+        .selectFrom("ai_research_documents")
+        .select(sql<number>`COALESCE(MAX(version),0)+1`.as("version"))
+        .where("source_name", "=", input.sourceName),
     );
     // An aggregate without GROUP BY always returns exactly one row.
     if (!next)
       throw new Error("research document version query returned no row");
-    const document = await queryOne(
+    const document = await checkedRow(
       researchDocumentRowSchema,
-      `INSERT INTO ai_research_documents
-        (title,source_name,media_type,content_sha256,version,extraction_status,extraction_error)
-       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING ${DOCUMENT_COLUMNS}`,
-      [
-        input.title,
-        input.sourceName,
-        input.mediaType,
-        input.contentSha256,
-        Number(next.version),
-        input.extractionStatus,
-        input.extractionError ?? null,
-      ],
-      client,
+      db
+        .insertInto("ai_research_documents")
+        .values({
+          title: input.title,
+          source_name: input.sourceName,
+          media_type: input.mediaType,
+          content_sha256: input.contentSha256,
+          version: Number(next.version),
+          extraction_status: input.extractionStatus,
+          extraction_error: input.extractionError ?? null,
+        })
+        .returning(DOCUMENT_COLUMNS),
     );
     if (!document)
       throw new Error("ai_research_documents insert returned no row");
     for (const passage of passages) {
-      await client.query(
-        `INSERT INTO ai_research_passages
-          (document_id,ordinal,page_number,section,content,embedding_json)
-         VALUES ($1,$2,$3,$4,$5,$6::jsonb)`,
-        [
-          document.id,
-          passage.ordinal,
-          passage.pageNumber ?? null,
-          passage.section ?? null,
-          passage.content,
-          passage.embedding ? JSON.stringify(passage.embedding) : null,
-        ],
-      );
+      await db
+        .insertInto("ai_research_passages")
+        .values({
+          document_id: document.id,
+          ordinal: passage.ordinal,
+          page_number: passage.pageNumber ?? null,
+          section: passage.section ?? null,
+          content: passage.content,
+          embedding_json: passage.embedding
+            ? sql<Json>`${JSON.stringify(passage.embedding)}::jsonb`
+            : null,
+        })
+        .execute();
     }
     return document;
   });
 }
 
 export async function deleteDocument(id: string): Promise<boolean> {
-  const result = await query(
-    "DELETE FROM ai_research_documents WHERE id=$1 RETURNING id",
-    [id],
-  );
-  return (result.rowCount ?? 0) > 0;
+  const rows = await db
+    .deleteFrom("ai_research_documents")
+    .where("id", "=", id)
+    .returning("id")
+    .execute();
+  return rows.length > 0;
 }
 
 export async function keywordSearch(
   search: string,
   limit: number,
 ): Promise<ScoredResearchPassageRow[]> {
+  const tsquery = sql`websearch_to_tsquery('simple',${search})`;
   // ts_rank_cd() returns REAL, which pg parses to a number.
-  return queryRows(
+  return checkedRows(
     scoredResearchPassageRowSchema,
-    `SELECT p.id, p.document_id AS "documentId", p.ordinal,
-            p.page_number AS "pageNumber", p.section, p.content,
-            p.embedding_json AS embedding, d.title, d.source_name AS "sourceName",
-            d.version, d.content_sha256 AS "documentHash",
-            ts_rank_cd(p.search_vector, websearch_to_tsquery('simple',$1)) AS score
-       FROM ai_research_passages p
-       JOIN ai_research_documents d ON d.id=p.document_id
-      WHERE d.extraction_status='ready'
-        AND p.search_vector @@ websearch_to_tsquery('simple',$1)
-      ORDER BY score DESC, d.updated_at DESC, p.ordinal
-      LIMIT $2`,
-    [search, limit],
+    selectReadyPassages()
+      .select(sql<number>`ts_rank_cd(p.search_vector, ${tsquery})`.as("score"))
+      .where(sql<boolean>`p.search_vector @@ ${tsquery}`)
+      .orderBy("score", "desc")
+      .orderBy("d.updated_at", "desc")
+      .orderBy("p.ordinal")
+      .limit(limit),
   );
 }
 
 export async function semanticCandidates(
   limit = 200,
 ): Promise<ResearchPassageRow[]> {
-  return queryRows(
+  return checkedRows(
     researchPassageRowSchema,
-    `SELECT p.id, p.document_id AS "documentId", p.ordinal,
-            p.page_number AS "pageNumber", p.section, p.content,
-            p.embedding_json AS embedding, d.title, d.source_name AS "sourceName",
-            d.version, d.content_sha256 AS "documentHash"
-       FROM ai_research_passages p
-       JOIN ai_research_documents d ON d.id=p.document_id
-      WHERE d.extraction_status='ready' AND p.embedding_json IS NOT NULL
-      ORDER BY d.updated_at DESC, p.ordinal LIMIT $1`,
-    [limit],
+    selectReadyPassages()
+      .where("p.embedding_json", "is not", null)
+      .orderBy("d.updated_at", "desc")
+      .orderBy("p.ordinal")
+      .limit(limit),
   );
 }

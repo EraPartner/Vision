@@ -12,8 +12,10 @@ import {
 import { randomUUID } from "node:crypto";
 import { analysisDefinitionSchema } from "@vision/types/analysis";
 import { assertAnalysisDatasetReference } from "@vision/types/analysis-datasets";
+import { sql } from "kysely";
 import { withTransaction } from "../database/connection.ts";
-import { queryOne, queryRows } from "../database/rowContracts.ts";
+import { checkedRow, checkedRows, db } from "../database/db.ts";
+import type { Json } from "../database/schema.generated.ts";
 import {
   savedAnalysisRowSchema,
   savedAnalysisTableRowSchema,
@@ -450,38 +452,45 @@ function resolveFormulaModel(
   };
 }
 
+function jsonb(value: unknown) {
+  return sql<Json>`${JSON.stringify(value)}::jsonb`;
+}
+
+function selectSaved() {
+  return db
+    .selectFrom("saved_analyses as sa")
+    .innerJoin("saved_analysis_definition_versions as versions", (join) =>
+      join
+        .onRef("versions.saved_analysis_id", "=", "sa.id")
+        .onRef("versions.version", "=", "sa.current_version"),
+    )
+    .leftJoin(
+      "saved_analysis_runs as runs",
+      "runs.id",
+      "sa.last_successful_run_id",
+    )
+    .selectAll("sa")
+    .select(["versions.definition_json", "runs.result_json"]);
+}
+
 export async function listSavedAnalyses(workspace?: string) {
-  const params: string[] = [];
-  const where = workspace ? "WHERE sa.workspace = $1" : "";
+  let builder = selectSaved();
   if (workspace) {
     if (!WORKSPACES.has(workspace))
       throw new Error("Unsupported analysis workspace");
-    params.push(workspace);
+    builder = builder.where("sa.workspace", "=", workspace);
   }
-  const rows = await queryRows(
+  const rows = await checkedRows(
     savedAnalysisRowSchema,
-    `SELECT sa.*, versions.definition_json, runs.result_json
-       FROM saved_analyses sa
-       JOIN saved_analysis_definition_versions versions
-         ON versions.saved_analysis_id = sa.id AND versions.version = sa.current_version
-       LEFT JOIN saved_analysis_runs runs ON runs.id = sa.last_successful_run_id
-       ${where}
-      ORDER BY sa.updated_at DESC`,
-    params,
+    builder.orderBy("sa.updated_at", "desc"),
   );
   return rows.map(mapSaved);
 }
 
 export async function getSavedAnalysis(id: string) {
-  const row = await queryOne(
+  const row = await checkedRow(
     savedAnalysisRowSchema,
-    `SELECT sa.*, versions.definition_json, runs.result_json
-       FROM saved_analyses sa
-       JOIN saved_analysis_definition_versions versions
-         ON versions.saved_analysis_id = sa.id AND versions.version = sa.current_version
-       LEFT JOIN saved_analysis_runs runs ON runs.id = sa.last_successful_run_id
-      WHERE sa.id = $1`,
-    [id],
+    selectSaved().where("sa.id", "=", id),
   );
   return row ? mapSaved(row) : null;
 }
@@ -509,35 +518,32 @@ export async function createSavedAnalysis(input: SavedAnalysisInput) {
       ({ calculationVersion }) => calculationVersion !== "vision-formula-v1",
     ),
   );
-  await withTransaction(async (client) => {
-    await client.query(
-      `INSERT INTO saved_analyses
-        (id, definition_id, name, workspace, current_version, refresh_mode,
-         parameters_json, charts_json, source_references_json)
-       VALUES ($1,$2,$3,$4,1,$5,$6::jsonb,$7::jsonb,$8::jsonb)`,
-      [
+  await withTransaction(async () => {
+    await db
+      .insertInto("saved_analyses")
+      .values({
         id,
-        definitionId,
-        input.name,
-        input.workspace,
-        input.refreshMode || "live",
-        JSON.stringify({
+        definition_id: definitionId,
+        name: input.name,
+        workspace: input.workspace,
+        current_version: 1,
+        refresh_mode: input.refreshMode || "live",
+        parameters_json: jsonb({
           ...(input.parameters ?? {}),
           formulaModel,
           scenarioModel,
         }),
-        JSON.stringify(input.charts ?? []),
-        JSON.stringify(input.sourceReferences ?? []),
-      ],
-    );
-    await client.query(
-      `INSERT INTO saved_analysis_definition_versions
-        (saved_analysis_id, version, definition_json, state_json)
-       VALUES ($1,1,$2::jsonb,$3::jsonb)`,
-      [
-        id,
-        JSON.stringify(definition),
-        JSON.stringify(
+        charts_json: jsonb(input.charts ?? []),
+        source_references_json: jsonb(input.sourceReferences ?? []),
+      })
+      .execute();
+    await db
+      .insertInto("saved_analysis_definition_versions")
+      .values({
+        saved_analysis_id: id,
+        version: 1,
+        definition_json: jsonb(definition),
+        state_json: jsonb(
           versionState({
             parameters: { ...(input.parameters ?? {}), scenarioModel },
             formulaModel,
@@ -546,22 +552,28 @@ export async function createSavedAnalysis(input: SavedAnalysisInput) {
             refreshMode: input.refreshMode,
           }),
         ),
-      ],
-    );
+      })
+      .execute();
   });
   return getSavedAnalysis(id);
+}
+
+function lockSaved(id: string) {
+  return db
+    .selectFrom("saved_analyses")
+    .selectAll()
+    .where("id", "=", id)
+    .forUpdate();
 }
 
 export async function updateSavedAnalysis(
   id: string,
   input: SavedAnalysisUpdate,
 ) {
-  await withTransaction(async (client) => {
-    const current = await queryOne(
+  await withTransaction(async () => {
+    const current = await checkedRow(
       savedAnalysisTableRowSchema,
-      "SELECT * FROM saved_analyses WHERE id = $1 FOR UPDATE",
-      [id],
-      client,
+      lockSaved(id),
     );
     if (!current)
       throw Object.assign(new Error("Saved analysis not found"), {
@@ -615,34 +627,35 @@ export async function updateSavedAnalysis(
         input.sourceReferences ?? current.source_references_json,
       refreshMode: input.refreshMode || current.refresh_mode,
     });
-    await client.query(
-      `INSERT INTO saved_analysis_definition_versions
-        (saved_analysis_id, version, definition_json, state_json)
-       VALUES ($1,$2,$3::jsonb,$4::jsonb)`,
-      [id, version, JSON.stringify(definition), JSON.stringify(state)],
-    );
-    await client.query(
-      `UPDATE saved_analyses SET name=$2, workspace=$3, current_version=$4,
-         refresh_mode=$5, parameters_json=$6::jsonb, charts_json=$7::jsonb,
-         source_references_json=$8::jsonb, updated_at=now()
-       WHERE id=$1`,
-      [
-        id,
-        definition.name,
-        definition.workspace,
+    await db
+      .insertInto("saved_analysis_definition_versions")
+      .values({
+        saved_analysis_id: id,
         version,
-        input.refreshMode || current.refresh_mode,
-        JSON.stringify({
+        definition_json: jsonb(definition),
+        state_json: jsonb(state),
+      })
+      .execute();
+    await db
+      .updateTable("saved_analyses")
+      .set({
+        name: definition.name,
+        workspace: definition.workspace,
+        current_version: version,
+        refresh_mode: input.refreshMode || current.refresh_mode,
+        parameters_json: jsonb({
           ...(input.parameters ?? current.parameters_json),
           formulaModel,
           scenarioModel,
         }),
-        JSON.stringify(input.charts ?? current.charts_json),
-        JSON.stringify(
+        charts_json: jsonb(input.charts ?? current.charts_json),
+        source_references_json: jsonb(
           input.sourceReferences ?? current.source_references_json,
         ),
-      ],
-    );
+        updated_at: sql<Date>`now()`,
+      })
+      .where("id", "=", id)
+      .execute();
   });
   return getSavedAnalysis(id);
 }
@@ -812,17 +825,27 @@ export async function runSavedAnalysis(
   if (!saved)
     throw Object.assign(new Error("Saved analysis not found"), { status: 404 });
   const runId = randomUUID();
-  await withTransaction(async (client) => {
-    await client.query(
-      `INSERT INTO saved_analysis_runs
-        (id, saved_analysis_id, definition_version, status, parameters_json, started_at)
-       VALUES ($1,$2,$3,'running',$4::jsonb,now())`,
-      [runId, id, saved.version, JSON.stringify(saved.parameters)],
-    );
-    await client.query(
-      "UPDATE saved_analyses SET refresh_status='running', last_error_json=NULL, updated_at=now() WHERE id=$1",
-      [id],
-    );
+  await withTransaction(async () => {
+    await db
+      .insertInto("saved_analysis_runs")
+      .values({
+        id: runId,
+        saved_analysis_id: id,
+        definition_version: saved.version,
+        status: "running",
+        parameters_json: jsonb(saved.parameters),
+        started_at: sql<Date>`now()`,
+      })
+      .execute();
+    await db
+      .updateTable("saved_analyses")
+      .set({
+        refresh_status: "running",
+        last_error_json: null,
+        updated_at: sql<Date>`now()`,
+      })
+      .where("id", "=", id)
+      .execute();
   });
   try {
     const request = runtimeRequest(saved);
@@ -845,16 +868,26 @@ export async function runSavedAnalysis(
       !finalized.complete
         ? "partial"
         : "completed";
-    await withTransaction(async (client) => {
-      await client.query(
-        `UPDATE saved_analysis_runs SET status=$2, result_json=$3::jsonb, completed_at=now() WHERE id=$1`,
-        [runId, status, JSON.stringify(completedResult)],
-      );
-      await client.query(
-        `UPDATE saved_analyses SET refresh_status='succeeded', last_successful_run_id=$2,
-           last_error_json=NULL, updated_at=now() WHERE id=$1`,
-        [id, runId],
-      );
+    await withTransaction(async () => {
+      await db
+        .updateTable("saved_analysis_runs")
+        .set({
+          status,
+          result_json: jsonb(completedResult),
+          completed_at: sql<Date>`now()`,
+        })
+        .where("id", "=", runId)
+        .execute();
+      await db
+        .updateTable("saved_analyses")
+        .set({
+          refresh_status: "succeeded",
+          last_successful_run_id: runId,
+          last_error_json: null,
+          updated_at: sql<Date>`now()`,
+        })
+        .where("id", "=", id)
+        .execute();
     });
     const updated = await getSavedAnalysis(id);
     return options.includeRunId ? { saved: updated, runId } : updated;
@@ -866,15 +899,26 @@ export async function runSavedAnalysis(
       code: cancelled ? "cancelled" : "execution-failed",
       message: error.message,
     };
-    await withTransaction(async (client) => {
-      await client.query(
-        `UPDATE saved_analysis_runs SET status=$2, error_json=$3::jsonb, completed_at=now() WHERE id=$1`,
-        [runId, cancelled ? "cancelled" : "failed", JSON.stringify(errorJson)],
-      );
-      await client.query(
-        `UPDATE saved_analyses SET refresh_status=$2, last_error_json=$3::jsonb, updated_at=now() WHERE id=$1`,
-        [id, cancelled ? "cancelled" : "failed", JSON.stringify(errorJson)],
-      );
+    const failedStatus = cancelled ? "cancelled" : "failed";
+    await withTransaction(async () => {
+      await db
+        .updateTable("saved_analysis_runs")
+        .set({
+          status: failedStatus,
+          error_json: jsonb(errorJson),
+          completed_at: sql<Date>`now()`,
+        })
+        .where("id", "=", runId)
+        .execute();
+      await db
+        .updateTable("saved_analyses")
+        .set({
+          refresh_status: failedStatus,
+          last_error_json: jsonb(errorJson),
+          updated_at: sql<Date>`now()`,
+        })
+        .where("id", "=", id)
+        .execute();
     });
     error.monitorRunId = runId;
     throw error;
@@ -882,10 +926,18 @@ export async function runSavedAnalysis(
 }
 
 export async function listSavedAnalysisVersions(id: string) {
-  return queryRows(
+  return checkedRows(
     savedAnalysisVersionRowSchema,
-    `SELECT version,definition_json AS definition,state_json AS state,created_at AS "createdAt" FROM saved_analysis_definition_versions WHERE saved_analysis_id=$1 ORDER BY version DESC`,
-    [id],
+    db
+      .selectFrom("saved_analysis_definition_versions")
+      .select([
+        "version",
+        "definition_json as definition",
+        "state_json as state",
+        "created_at as createdAt",
+      ])
+      .where("saved_analysis_id", "=", id)
+      .orderBy("version", "desc"),
   );
 }
 
@@ -894,13 +946,8 @@ export async function restoreSavedAnalysisVersion(
   version: number | string,
   expectedVersion: number | string,
 ) {
-  await withTransaction(async (client) => {
-    const locked = await queryOne(
-      savedAnalysisTableRowSchema,
-      `SELECT * FROM saved_analyses WHERE id=$1 FOR UPDATE`,
-      [id],
-      client,
-    );
+  await withTransaction(async () => {
+    const locked = await checkedRow(savedAnalysisTableRowSchema, lockSaved(id));
     if (!locked)
       throw Object.assign(new Error("Saved analysis not found"), {
         status: 404,
@@ -910,11 +957,13 @@ export async function restoreSavedAnalysisVersion(
         new Error("Saved analysis changed since this restore was prepared"),
         { status: 409, code: "ANALYSIS_VERSION_CONFLICT" },
       );
-    const source = await queryOne(
+    const source = await checkedRow(
       savedAnalysisVersionSourceRowSchema,
-      `SELECT definition_json,state_json FROM saved_analysis_definition_versions WHERE saved_analysis_id=$1 AND version=$2`,
-      [id, version],
-      client,
+      db
+        .selectFrom("saved_analysis_definition_versions")
+        .select(["definition_json", "state_json"])
+        .where("saved_analysis_id", "=", id)
+        .where("version", "=", sql<number>`${version}`),
     );
     if (!source)
       throw Object.assign(new Error("Saved analysis version not found"), {
@@ -930,37 +979,39 @@ export async function restoreSavedAnalysisVersion(
     const next = Number(locked.current_version) + 1;
     const restored = { ...source.definition_json, definitionVersion: next };
     const state = source.state_json;
-    await client.query(
-      `INSERT INTO saved_analysis_definition_versions
-        (saved_analysis_id,version,definition_json,state_json)
-       VALUES ($1,$2,$3::jsonb,$4::jsonb)`,
-      [id, next, JSON.stringify(restored), JSON.stringify(state)],
-    );
-    await client.query(
-      `UPDATE saved_analyses SET current_version=$2,name=$3,workspace=$4,
-         parameters_json=$5::jsonb,charts_json=$6::jsonb,
-         source_references_json=$7::jsonb,refresh_mode=$8,updated_at=NOW()
-       WHERE id=$1`,
-      [
-        id,
-        next,
-        restored.name,
-        restored.workspace,
-        JSON.stringify(state.parameters ?? locked.parameters_json),
-        JSON.stringify(state.charts ?? locked.charts_json),
-        JSON.stringify(state.sourceReferences ?? locked.source_references_json),
-        state.refreshMode || locked.refresh_mode,
-      ],
-    );
+    await db
+      .insertInto("saved_analysis_definition_versions")
+      .values({
+        saved_analysis_id: id,
+        version: next,
+        definition_json: jsonb(restored),
+        state_json: jsonb(state),
+      })
+      .execute();
+    await db
+      .updateTable("saved_analyses")
+      .set({
+        current_version: next,
+        name: restored.name,
+        workspace: restored.workspace,
+        parameters_json: jsonb(state.parameters ?? locked.parameters_json),
+        charts_json: jsonb(state.charts ?? locked.charts_json),
+        source_references_json: jsonb(
+          state.sourceReferences ?? locked.source_references_json,
+        ),
+        refresh_mode: state.refreshMode || locked.refresh_mode,
+        updated_at: sql<Date>`NOW()`,
+      })
+      .where("id", "=", id)
+      .execute();
   });
   return getSavedAnalysis(id);
 }
 
 export async function deleteSavedAnalysis(id: string) {
-  const rows = await queryRows(
+  const rows = await checkedRows(
     textIdRowSchema,
-    "DELETE FROM saved_analyses WHERE id = $1 RETURNING id",
-    [id],
+    db.deleteFrom("saved_analyses").where("id", "=", id).returning("id"),
   );
   return rows.length > 0;
 }

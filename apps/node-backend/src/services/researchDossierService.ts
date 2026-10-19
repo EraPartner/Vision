@@ -3,8 +3,12 @@
 import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { z } from "zod";
-import { query, withTransaction } from "../database/connection.ts";
-import { queryOne, queryRows } from "../database/rowContracts.ts";
+import { asCategoryId, asInvestmentId } from "@vision/types/brands";
+import type { CategoryId, InvestmentId } from "@vision/types/brands";
+import { sql } from "kysely";
+import { withTransaction } from "../database/connection.ts";
+import { checkedRow, checkedRows, db } from "../database/db.ts";
+import type { Json } from "../database/schema.generated.ts";
 import { intTotalRowSchema } from "../database/rows/ai.ts";
 import {
   researchDossierDocumentRowSchema,
@@ -109,13 +113,21 @@ export type DossierContent = z.output<typeof dossierContentSchema>;
 
 type DossierRow = ResearchDossierRow;
 
+type LiveLink =
+  | { category_id: CategoryId }
+  | { investment_id: InvestmentId }
+  | { saved_analysis_id: string };
+
 interface ResolvedLink {
   kind: string;
   ordinal: number;
   historicalId: string;
   label: string;
-  liveColumn: string;
-  id: number | string;
+  live: LiveLink;
+}
+
+function jsonb(value: unknown) {
+  return sql<Json>`${JSON.stringify(value)}::jsonb`;
 }
 
 function parse<T>(schema: z.ZodType<T>, input: unknown): T {
@@ -167,10 +179,12 @@ async function validateDocuments(
         item.id === evidence.id && isDeepStrictEqual(item.source, source),
     );
     if (previouslySaved) continue;
-    const document = await queryOne(
+    const document = await checkedRow(
       researchDossierDocumentRowSchema,
-      `SELECT id,title,version,content_sha256 FROM ai_research_documents WHERE id=$1`,
-      [source.documentId],
+      db
+        .selectFrom("ai_research_documents")
+        .select(["id", "title", "version", "content_sha256"])
+        .where("id", "=", source.documentId),
     );
     if (!document) {
       throw new ValidationError(
@@ -187,11 +201,13 @@ async function validateDocuments(
         source.contentSha256 !== document.content_sha256) ||
       (source.passageOrdinal !== undefined &&
         (
-          await query(
-            `SELECT 1 FROM ai_research_passages WHERE document_id=$1 AND ordinal=$2`,
-            [source.documentId, source.passageOrdinal],
-          )
-        ).rows.length === 0)
+          await db
+            .selectFrom("ai_research_passages")
+            .select(sql<number>`1`.as("found"))
+            .where("document_id", "=", source.documentId)
+            .where("ordinal", "=", source.passageOrdinal)
+            .execute()
+        ).length === 0)
     ) {
       throw new ValidationError(
         "Document source no longer matches its saved version, digest, or passage",
@@ -212,40 +228,53 @@ async function resolvedLinks(content: DossierContent) {
     [
       kind: string,
       ids: Array<number | string>,
-      table: string,
-      labelColumn: string,
-      liveColumn: string,
+      lookup: (id: number | string) => Promise<{ label: unknown } | undefined>,
+      live: (id: number | string) => LiveLink,
     ]
   > = [
     [
       "category",
       content.links.categoryIds,
-      "categories",
-      "path_name",
-      "category_id",
+      (id) =>
+        checkedRow(
+          researchDossierLinkLabelRowSchema,
+          db
+            .selectFrom("categories")
+            .select("path_name as label")
+            .where("id", "=", asCategoryId(Number(id))),
+        ),
+      (id) => ({ category_id: asCategoryId(Number(id)) }),
     ],
     [
       "investment",
       content.links.investmentIds,
-      "investments",
-      "name",
-      "investment_id",
+      (id) =>
+        checkedRow(
+          researchDossierLinkLabelRowSchema,
+          db
+            .selectFrom("investments")
+            .select("name as label")
+            .where("id", "=", asInvestmentId(Number(id))),
+        ),
+      (id) => ({ investment_id: asInvestmentId(Number(id)) }),
     ],
     [
       "saved-analysis",
       content.links.savedAnalysisIds,
-      "saved_analyses",
-      "name",
-      "saved_analysis_id",
+      (id) =>
+        checkedRow(
+          researchDossierLinkLabelRowSchema,
+          db
+            .selectFrom("saved_analyses")
+            .select("name as label")
+            .where("id", "=", String(id)),
+        ),
+      (id) => ({ saved_analysis_id: String(id) }),
     ],
   ];
-  for (const [kind, ids, table, labelColumn, liveColumn] of definitions) {
+  for (const [kind, ids, lookup, live] of definitions) {
     for (const [ordinal, id] of ids.entries()) {
-      const label = await queryOne(
-        researchDossierLinkLabelRowSchema,
-        `SELECT ${labelColumn} AS label FROM ${table} WHERE id=$1`,
-        [id],
-      );
+      const label = await lookup(id);
       if (!label) {
         throw new ValidationError(`Unknown ${kind} link: ${id}`, {
           code: "INVALID_DOSSIER_LINK",
@@ -256,8 +285,7 @@ async function resolvedLinks(content: DossierContent) {
         ordinal,
         historicalId: String(id),
         label: String(label.label),
-        liveColumn,
-        id,
+        live: live(id),
       });
     }
   }
@@ -265,49 +293,69 @@ async function resolvedLinks(content: DossierContent) {
 }
 
 async function replaceLinks(id: string, entries: ResolvedLink[]) {
-  const unavailable = await queryRows(
+  const unavailable = await checkedRows(
     researchDossierUnavailableLinkRowSchema,
-    `SELECT link_type,historical_id,label_snapshot FROM research_dossier_links
-     WHERE dossier_id=$1 AND category_id IS NULL AND investment_id IS NULL
-       AND saved_analysis_id IS NULL ORDER BY link_type,ordinal`,
-    [id],
+    db
+      .selectFrom("research_dossier_links")
+      .select(["link_type", "historical_id", "label_snapshot"])
+      .where("dossier_id", "=", id)
+      .where("category_id", "is", null)
+      .where("investment_id", "is", null)
+      .where("saved_analysis_id", "is", null)
+      .orderBy("link_type")
+      .orderBy("ordinal"),
   );
-  await query(`DELETE FROM research_dossier_links WHERE dossier_id=$1`, [id]);
+  await db
+    .deleteFrom("research_dossier_links")
+    .where("dossier_id", "=", id)
+    .execute();
   for (const entry of entries) {
-    await query(
-      `INSERT INTO research_dossier_links
-       (dossier_id,link_type,ordinal,historical_id,label_snapshot,${entry.liveColumn})
-       VALUES ($1,$2,$3,$4,$5,$6)`,
-      [
-        id,
-        entry.kind,
-        entry.ordinal,
-        entry.historicalId,
-        entry.label,
-        entry.id,
-      ],
-    );
+    await db
+      .insertInto("research_dossier_links")
+      .values({
+        dossier_id: id,
+        link_type: entry.kind,
+        ordinal: entry.ordinal,
+        historical_id: entry.historicalId,
+        label_snapshot: entry.label,
+        ...entry.live,
+      })
+      .execute();
   }
   const nextOrdinal = new Map<string, number>();
   for (const entry of entries) nextOrdinal.set(entry.kind, entry.ordinal + 1);
   for (const link of unavailable) {
     const ordinal = nextOrdinal.get(link.link_type) ?? 0;
     nextOrdinal.set(link.link_type, ordinal + 1);
-    await query(
-      `INSERT INTO research_dossier_links
-       (dossier_id,link_type,ordinal,historical_id,label_snapshot)
-       VALUES ($1,$2,$3,$4,$5)`,
-      [id, link.link_type, ordinal, link.historical_id, link.label_snapshot],
-    );
+    await db
+      .insertInto("research_dossier_links")
+      .values({
+        dossier_id: id,
+        link_type: link.link_type,
+        ordinal,
+        historical_id: link.historical_id,
+        label_snapshot: link.label_snapshot,
+      })
+      .execute();
   }
 }
 
 async function hydrate(row: DossierRow) {
-  const rows = await queryRows(
+  const rows = await checkedRows(
     researchDossierLinkRowSchema,
-    `SELECT link_type,historical_id,label_snapshot,category_id,investment_id,saved_analysis_id
-     FROM research_dossier_links WHERE dossier_id=$1 ORDER BY link_type,ordinal`,
-    [row.id],
+    db
+      .selectFrom("research_dossier_links")
+      .select([
+        "link_type",
+        "historical_id",
+        "label_snapshot",
+        "category_id",
+        "investment_id",
+        "saved_analysis_id",
+      ])
+      .where("dossier_id", "=", row.id)
+      .orderBy("link_type")
+      .orderBy("ordinal"),
   );
   const content = row.content_json;
   const links: DossierContent["links"] = {
@@ -347,10 +395,13 @@ async function hydrate(row: DossierRow) {
 }
 
 async function getRow(id: string, lock = false): Promise<DossierRow> {
-  const row = await queryOne(
+  const builder = db
+    .selectFrom("research_dossiers")
+    .selectAll()
+    .where("id", "=", parse(uuid, id));
+  const row = await checkedRow(
     researchDossierRowSchema,
-    `SELECT * FROM research_dossiers WHERE id=$1${lock ? " FOR UPDATE" : ""}`,
-    [parse(uuid, id)],
+    lock ? builder.forUpdate() : builder,
   );
   if (!row)
     throw new NotFoundError("Research dossier not found", {
@@ -371,16 +422,30 @@ export async function listResearchDossiers({
     { limit, offset },
   );
   const [rows, count] = await Promise.all([
-    queryRows(
+    checkedRows(
       researchDossierSummaryRowSchema,
-      `SELECT id,version,workspace,title,content_json->>'question' AS question,
-              content_json->>'reviewDate' AS review_date,created_at,updated_at
-       FROM research_dossiers ORDER BY updated_at DESC,id DESC LIMIT $1 OFFSET $2`,
-      [paging.limit, paging.offset],
+      db
+        .selectFrom("research_dossiers")
+        .select([
+          "id",
+          "version",
+          "workspace",
+          "title",
+          sql<string | null>`content_json->>'question'`.as("question"),
+          sql<string | null>`content_json->>'reviewDate'`.as("review_date"),
+          "created_at",
+          "updated_at",
+        ])
+        .orderBy("updated_at", "desc")
+        .orderBy("id", "desc")
+        .limit(paging.limit)
+        .offset(paging.offset),
     ),
-    queryOne(
+    checkedRow(
       intTotalRowSchema,
-      `SELECT count(*)::int AS total FROM research_dossiers`,
+      db
+        .selectFrom("research_dossiers")
+        .select(sql<number>`count(*)::int`.as("total")),
     ),
   ]);
   return {
@@ -411,18 +476,23 @@ export async function createResearchDossier(input: unknown) {
     await validateDocuments(content);
     const links = await resolvedLinks(content);
     const id = randomUUID();
-    const created = await queryOne(
+    const created = await checkedRow(
       researchDossierRowSchema,
-      `INSERT INTO research_dossiers (id,workspace,title,content_json)
-       VALUES ($1,$2,$3,$4::jsonb) RETURNING *`,
-      [id, content.workspace, content.title, JSON.stringify(content)],
+      db
+        .insertInto("research_dossiers")
+        .values({
+          id,
+          workspace: content.workspace,
+          title: content.title,
+          content_json: jsonb(content),
+        })
+        .returningAll(),
     );
     if (!created) throw new Error("research_dossiers insert returned no row");
-    await query(
-      `INSERT INTO research_dossier_versions (dossier_id,version,snapshot_json)
-                 VALUES ($1,1,$2::jsonb)`,
-      [id, JSON.stringify(content)],
-    );
+    await db
+      .insertInto("research_dossier_versions")
+      .values({ dossier_id: id, version: 1, snapshot_json: jsonb(content) })
+      .execute();
     await replaceLinks(id, links);
     return hydrate(created);
   });
@@ -444,18 +514,29 @@ async function writeVersion(
     await validateDocuments(content, current.content_json);
     const links = await resolvedLinks(content);
     // The row is locked above, so the UPDATE matches it.
-    const updated = await queryOne(
+    const updated = await checkedRow(
       researchDossierRowSchema,
-      `UPDATE research_dossiers SET version=version+1,workspace=$2,title=$3,
-       content_json=$4::jsonb,updated_at=now() WHERE id=$1 RETURNING *`,
-      [current.id, content.workspace, content.title, JSON.stringify(content)],
+      db
+        .updateTable("research_dossiers")
+        .set((eb) => ({
+          version: eb("version", "+", 1),
+          workspace: content.workspace,
+          title: content.title,
+          content_json: jsonb(content),
+          updated_at: sql<Date>`now()`,
+        }))
+        .where("id", "=", current.id)
+        .returningAll(),
     );
     if (!updated) throw new Error("research_dossiers update returned no row");
-    await query(
-      `INSERT INTO research_dossier_versions (dossier_id,version,snapshot_json)
-                 VALUES ($1,$2,$3::jsonb)`,
-      [id, updated.version, JSON.stringify(content)],
-    );
+    await db
+      .insertInto("research_dossier_versions")
+      .values({
+        dossier_id: id,
+        version: updated.version,
+        snapshot_json: jsonb(content),
+      })
+      .execute();
     await replaceLinks(id, links);
     return hydrate(updated);
   });
@@ -472,11 +553,13 @@ export async function updateResearchDossier(id: string, input: unknown) {
 
 export async function listResearchDossierVersions(id: string) {
   await getRow(id);
-  const rows = await queryRows(
+  const rows = await checkedRows(
     researchDossierVersionRowSchema,
-    `SELECT version,snapshot_json,created_at FROM research_dossier_versions
-     WHERE dossier_id=$1 ORDER BY version DESC`,
-    [id],
+    db
+      .selectFrom("research_dossier_versions")
+      .select(["version", "snapshot_json", "created_at"])
+      .where("dossier_id", "=", id)
+      .orderBy("version", "desc"),
   );
   return {
     items: rows.map((row) => ({
@@ -494,10 +577,13 @@ export async function restoreResearchDossier(id: string, input: unknown) {
       .strict(),
     input,
   );
-  const snapshot = await queryOne(
+  const snapshot = await checkedRow(
     researchDossierSnapshotRowSchema,
-    `SELECT snapshot_json FROM research_dossier_versions WHERE dossier_id=$1 AND version=$2`,
-    [parse(uuid, id), version],
+    db
+      .selectFrom("research_dossier_versions")
+      .select("snapshot_json")
+      .where("dossier_id", "=", parse(uuid, id))
+      .where("version", "=", version),
   );
   if (!snapshot)
     throw new NotFoundError("Dossier version not found", {
@@ -511,11 +597,11 @@ export async function restoreResearchDossier(id: string, input: unknown) {
 }
 
 export async function deleteResearchDossier(id: string) {
-  const { rowCount } = await query(
-    `DELETE FROM research_dossiers WHERE id=$1`,
-    [parse(uuid, id)],
-  );
-  if ((rowCount ?? 0) === 0)
+  const { numDeletedRows } = await db
+    .deleteFrom("research_dossiers")
+    .where("id", "=", parse(uuid, id))
+    .executeTakeFirst();
+  if (numDeletedRows === 0n)
     throw new NotFoundError("Research dossier not found", {
       code: "DOSSIER_NOT_FOUND",
     });
@@ -535,9 +621,13 @@ export async function exportResearchDossier(id: string) {
 }
 
 export async function exportResearchDossiers() {
-  const rows = await queryRows(
+  const rows = await checkedRows(
     researchDossierRowSchema,
-    `SELECT * FROM research_dossiers ORDER BY created_at,id`,
+    db
+      .selectFrom("research_dossiers")
+      .selectAll()
+      .orderBy("created_at")
+      .orderBy("id"),
   );
   const items = await Promise.all(rows.map(hydrate));
   return {

@@ -162,18 +162,17 @@ describe("research dossier persistence", () => {
     };
     mockQuery.mockImplementation(async (sql) => {
       if (typeof sql !== "string") return { rows: [] };
-      if (sql.includes("FROM ai_research_documents"))
+      if (sql.includes('from "ai_research_documents"'))
         throw new Error("Unchanged source was queried");
       if (
-        sql.includes("FROM research_dossiers WHERE id=") &&
-        sql.includes("FOR UPDATE")
+        sql.includes('from "research_dossiers" where "id" =') &&
+        sql.includes("for update")
       )
         return { rows: [{ ...row, content_json: prior }] };
-      if (sql.includes("UPDATE research_dossiers"))
+      if (sql.includes('update "research_dossiers"'))
         return { rows: [{ ...row, version: 2, content_json: prior }] };
-      if (sql.includes("WHERE dossier_id=$1 AND category_id IS NULL"))
-        return { rows: [tombstone] };
-      if (sql.includes("FROM research_dossier_links"))
+      if (sql.includes('"category_id" is null')) return { rows: [tombstone] };
+      if (sql.includes('from "research_dossier_links"'))
         return {
           rows: [
             {
@@ -196,8 +195,8 @@ describe("research dossier persistence", () => {
       mockQuery.mock.calls.some(
         ([sql]) =>
           typeof sql === "string" &&
-          sql.includes("INSERT INTO research_dossier_links") &&
-          sql.includes("label_snapshot)"),
+          sql.includes('insert into "research_dossier_links"') &&
+          sql.includes('"label_snapshot")'),
       ),
     ).toBe(true);
   });
@@ -217,12 +216,12 @@ describe("research dossier persistence", () => {
     }));
     mockQuery.mockImplementation(async (sql) => {
       if (typeof sql !== "string") return { rows: [] };
-      if (sql.includes("FROM research_dossiers ORDER BY created_at"))
+      if (sql.includes('from "research_dossiers" order by "created_at"'))
         return { rows: many };
-      if (sql.includes("FROM research_dossier_links")) return { rows: [] };
-      if (sql.includes("FROM research_dossiers WHERE id="))
+      if (sql.includes('from "research_dossier_links"')) return { rows: [] };
+      if (sql.includes('from "research_dossiers" where "id" ='))
         return { rows: [row] };
-      if (sql.includes("FROM research_dossier_versions")) return { rows: [] };
+      if (sql.includes('from "research_dossier_versions"')) return { rows: [] };
       throw new Error(`Unexpected query: ${sql}`);
     });
     const exported = await exportResearchDossiers();

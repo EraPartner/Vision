@@ -11,22 +11,36 @@
  * so this module never needs to touch `updated_at` manually.
  */
 
-import { queryOne, queryRows } from "../database/rowContracts.ts";
+import { sql } from "kysely";
+import { checkedRow, checkedRows, db } from "../database/db.ts";
 import {
   aiConversationRowSchema,
   aiMessageRowSchema,
   intTotalRowSchema,
   uuidIdRowSchema,
 } from "../database/rows/ai.ts";
+import type { Json } from "../database/schema.generated.ts";
 import type { AiConversationRow, AiMessageRow } from "../types/rows.ts";
 import { nanToZero } from "../lib/math.ts";
 
-const CONVERSATION_COLUMNS =
-  'id, title, model, created_at AS "createdAt", updated_at AS "updatedAt"';
-const MESSAGE_COLUMNS =
-  'id, conversation_id AS "conversationId", role, content, ' +
-  'tool_name AS "toolName", tool_args AS "toolArgs", tool_result AS "toolResult", ' +
-  'status, created_at AS "createdAt"';
+const CONVERSATION_COLUMNS = [
+  "id",
+  "title",
+  "model",
+  "created_at as createdAt",
+  "updated_at as updatedAt",
+] as const;
+const MESSAGE_COLUMNS = [
+  "id",
+  "conversation_id as conversationId",
+  "role",
+  "content",
+  "tool_name as toolName",
+  "tool_args as toolArgs",
+  "tool_result as toolResult",
+  "status",
+  "created_at as createdAt",
+] as const;
 
 const PG_FK_VIOLATION = "23503";
 
@@ -52,9 +66,9 @@ export class ConversationDeletedError extends Error {
 /**
  * @param value Arbitrary JSON-serialisable value.
  */
-function serializeJsonb(value: unknown): string | null {
+function jsonb(value: unknown) {
   if (value === undefined || value === null) return null;
-  return JSON.stringify(value);
+  return sql<Json>`${JSON.stringify(value)}::jsonb`;
 }
 
 const aiChatRepository = {
@@ -63,17 +77,20 @@ const aiChatRepository = {
     offset: number;
   }): Promise<{ items: AiConversationRow[]; total: number }> {
     const [items, countRows] = await Promise.all([
-      queryRows(
+      checkedRows(
         aiConversationRowSchema,
-        `SELECT ${CONVERSATION_COLUMNS}
-           FROM ai_conversations
-          ORDER BY updated_at DESC
-          LIMIT $1 OFFSET $2`,
-        [page.limit, page.offset],
+        db
+          .selectFrom("ai_conversations")
+          .select(CONVERSATION_COLUMNS)
+          .orderBy("updated_at", "desc")
+          .limit(page.limit)
+          .offset(page.offset),
       ),
-      queryRows(
+      checkedRows(
         intTotalRowSchema,
-        `SELECT COUNT(*)::int AS total FROM ai_conversations`,
+        db
+          .selectFrom("ai_conversations")
+          .select(sql<number>`COUNT(*)::int`.as("total")),
       ),
     ]);
     return {
@@ -86,10 +103,12 @@ const aiChatRepository = {
    * @param id UUID.
    */
   async getConversation(id: string): Promise<AiConversationRow | null> {
-    const row = await queryOne(
+    const row = await checkedRow(
       aiConversationRowSchema,
-      `SELECT ${CONVERSATION_COLUMNS} FROM ai_conversations WHERE id = $1`,
-      [id],
+      db
+        .selectFrom("ai_conversations")
+        .select(CONVERSATION_COLUMNS)
+        .where("id", "=", id),
     );
     return row ?? null;
   },
@@ -101,12 +120,12 @@ const aiChatRepository = {
     title: string;
     model: string;
   }): Promise<AiConversationRow> {
-    const row = await queryOne(
+    const row = await checkedRow(
       aiConversationRowSchema,
-      `INSERT INTO ai_conversations (title, model)
-       VALUES ($1, $2)
-       RETURNING ${CONVERSATION_COLUMNS}`,
-      [title, model],
+      db
+        .insertInto("ai_conversations")
+        .values({ title, model })
+        .returning(CONVERSATION_COLUMNS),
     );
     if (!row) throw new Error("ai_conversations insert returned no row");
     return row;
@@ -119,13 +138,13 @@ const aiChatRepository = {
     id: string,
     title: string,
   ): Promise<AiConversationRow | null> {
-    const row = await queryOne(
+    const row = await checkedRow(
       aiConversationRowSchema,
-      `UPDATE ai_conversations
-          SET title = $2, updated_at = NOW()
-        WHERE id = $1
-        RETURNING ${CONVERSATION_COLUMNS}`,
-      [id, title],
+      db
+        .updateTable("ai_conversations")
+        .set({ title, updated_at: sql<Date>`NOW()` })
+        .where("id", "=", id)
+        .returning(CONVERSATION_COLUMNS),
     );
     return row ?? null;
   },
@@ -137,13 +156,13 @@ const aiChatRepository = {
     id: string,
     model: string,
   ): Promise<AiConversationRow | null> {
-    const row = await queryOne(
+    const row = await checkedRow(
       aiConversationRowSchema,
-      `UPDATE ai_conversations
-          SET model = $2, updated_at = NOW()
-        WHERE id = $1
-        RETURNING ${CONVERSATION_COLUMNS}`,
-      [id, model],
+      db
+        .updateTable("ai_conversations")
+        .set({ model, updated_at: sql<Date>`NOW()` })
+        .where("id", "=", id)
+        .returning(CONVERSATION_COLUMNS),
     );
     return row ?? null;
   },
@@ -153,10 +172,9 @@ const aiChatRepository = {
    * @returns true if a row was removed
    */
   async deleteConversation(id: string): Promise<boolean> {
-    const rows = await queryRows(
+    const rows = await checkedRows(
       uuidIdRowSchema,
-      `DELETE FROM ai_conversations WHERE id = $1 RETURNING id`,
-      [id],
+      db.deleteFrom("ai_conversations").where("id", "=", id).returning("id"),
     );
     return rows.length > 0;
   },
@@ -165,13 +183,14 @@ const aiChatRepository = {
    * @param conversationId UUID.
    */
   async getMessages(conversationId: string): Promise<AiMessageRow[]> {
-    return queryRows(
+    return checkedRows(
       aiMessageRowSchema,
-      `SELECT ${MESSAGE_COLUMNS}
-         FROM ai_messages
-        WHERE conversation_id = $1
-        ORDER BY created_at ASC, id ASC`,
-      [conversationId],
+      db
+        .selectFrom("ai_messages")
+        .select(MESSAGE_COLUMNS)
+        .where("conversation_id", "=", conversationId)
+        .orderBy("created_at", "asc")
+        .orderBy("id", "asc"),
     );
   },
 
@@ -193,21 +212,20 @@ const aiChatRepository = {
     status?: string;
   }): Promise<AiMessageRow> {
     try {
-      const row = await queryOne(
+      const row = await checkedRow(
         aiMessageRowSchema,
-        `INSERT INTO ai_messages
-           (conversation_id, role, content, tool_name, tool_args, tool_result, status)
-         VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7)
-         RETURNING ${MESSAGE_COLUMNS}`,
-        [
-          conversationId,
-          role,
-          content,
-          toolName,
-          serializeJsonb(toolArgs),
-          serializeJsonb(toolResult),
-          status,
-        ],
+        db
+          .insertInto("ai_messages")
+          .values({
+            conversation_id: conversationId,
+            role,
+            content,
+            tool_name: toolName,
+            tool_args: jsonb(toolArgs),
+            tool_result: jsonb(toolResult),
+            status,
+          })
+          .returning(MESSAGE_COLUMNS),
       );
       if (!row) throw new Error("ai_messages insert returned no row");
       return row;

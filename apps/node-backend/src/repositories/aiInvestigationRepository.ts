@@ -1,6 +1,8 @@
 import type { AiInvestigationRequest } from "@vision/types/aiResearch";
-import { query, withTransaction } from "../database/connection.ts";
-import { queryOne, queryRows } from "../database/rowContracts.ts";
+import { sql } from "kysely";
+import { withTransaction } from "../database/connection.ts";
+import { checkedRow, checkedRows, db } from "../database/db.ts";
+import type { Json } from "../database/schema.generated.ts";
 import {
   aiInvestigationJobRowSchema,
   aiInvestigationStepRowSchema,
@@ -20,54 +22,91 @@ import type {
  */
 export type { AiInvestigationJobRow, AiInvestigationStepRow };
 
-const COLUMNS = `id,conversation_id AS "conversationId",question,route,model,depth,language,state,
- scope_json AS scope,plan_json AS plan,checkpoint_json AS checkpoint,result_json AS result,
- error_json AS error,grant_id AS "grantId",cancel_requested_at AS "cancelRequestedAt",
- started_at AS "startedAt",completed_at AS "completedAt",created_at AS "createdAt",updated_at AS "updatedAt"`;
+const COLUMNS = [
+  "id",
+  "conversation_id as conversationId",
+  "question",
+  "route",
+  "model",
+  "depth",
+  "language",
+  "state",
+  "scope_json as scope",
+  "plan_json as plan",
+  "checkpoint_json as checkpoint",
+  "result_json as result",
+  "error_json as error",
+  "grant_id as grantId",
+  "cancel_requested_at as cancelRequestedAt",
+  "started_at as startedAt",
+  "completed_at as completedAt",
+  "created_at as createdAt",
+  "updated_at as updatedAt",
+] as const;
+
+const now = () => sql<Date>`NOW()`;
+
+function jsonb(value: unknown) {
+  return sql<Json>`${JSON.stringify(value)}::jsonb`;
+}
+
+function nullableJsonb(value: unknown) {
+  return value == null ? null : jsonb(value);
+}
+
+function selectJobs() {
+  return db.selectFrom("ai_investigation_jobs").select(COLUMNS);
+}
 
 export async function createJob(
   request: AiInvestigationRequest & { conversationId?: string | null },
   referenceExpiresAt: string | null = null,
 ): Promise<AiInvestigationJobRow> {
-  return withTransaction(async (client) => {
-    const job = await queryOne(
+  return withTransaction(async () => {
+    const job = await checkedRow(
       aiInvestigationJobRowSchema,
-      `INSERT INTO ai_investigation_jobs (conversation_id,question,route,model,depth,language,state,scope_json,grant_id)
-     VALUES ($1,$2,$3,$4,$5,$6,'queued',$7::jsonb,$8) RETURNING ${COLUMNS}`,
-      [
-        request.conversationId ?? null,
-        request.question,
-        request.route,
-        request.model,
-        request.depth,
-        request.language,
-        JSON.stringify({
-          scope: request.scope,
-          researchMode: request.researchMode,
-          publicQuestion: request.publicQuestion,
-          publicWebQuery: request.publicWebQuery,
-          publicSymbols: request.publicSymbols,
-          publicMacroQueries: request.publicMacroQueries,
-          clarification: request.clarification,
-          selectedSummary: request.selectedSummary,
-          selectedEvidence: request.selectedEvidence,
-          referenceScopeId: request.referenceScopeId,
-          savedAnalysisId: request.savedAnalysisId,
-        }),
-        request.grantId,
-      ],
-      client,
+      db
+        .insertInto("ai_investigation_jobs")
+        .values({
+          conversation_id: request.conversationId ?? null,
+          question: request.question,
+          route: request.route,
+          model: request.model,
+          depth: request.depth,
+          language: request.language,
+          state: "queued",
+          scope_json: jsonb({
+            scope: request.scope,
+            researchMode: request.researchMode,
+            publicQuestion: request.publicQuestion,
+            publicWebQuery: request.publicWebQuery,
+            publicSymbols: request.publicSymbols,
+            publicMacroQueries: request.publicMacroQueries,
+            clarification: request.clarification,
+            selectedSummary: request.selectedSummary,
+            selectedEvidence: request.selectedEvidence,
+            referenceScopeId: request.referenceScopeId,
+            savedAnalysisId: request.savedAnalysisId,
+          }),
+          grant_id: request.grantId,
+        })
+        .returning(COLUMNS),
     );
     if (!job) throw new Error("ai_investigation_jobs insert returned no row");
     if (request.referenceScopeId) {
-      const claimed = await queryOne(
+      const claimed = await checkedRow(
         uuidIdRowSchema,
-        `UPDATE ai_reference_scopes
-           SET job_id=$2,claimed_at=NOW(),expires_at=$3
-           WHERE id=$1 AND job_id IS NULL AND expires_at > NOW()
-           RETURNING id`,
-        [request.referenceScopeId, job.id, referenceExpiresAt],
-        client,
+        db
+          .updateTable("ai_reference_scopes")
+          .set({
+            job_id: job.id,
+            claimed_at: now(),
+            expires_at: sql<Date>`${referenceExpiresAt}::timestamptz`,
+          })
+          .where("id", "=", request.referenceScopeId)
+          .where("job_id", "is", null)
+          .where("expires_at", ">", now())
+          .returning("id"),
       );
       if (!claimed)
         throw Object.assign(
@@ -81,27 +120,27 @@ export async function createJob(
   });
 }
 export async function listJobs(): Promise<AiInvestigationJobRow[]> {
-  return queryRows(
+  return checkedRows(
     aiInvestigationJobRowSchema,
-    `SELECT ${COLUMNS} FROM ai_investigation_jobs ORDER BY updated_at DESC LIMIT 200`,
+    selectJobs().orderBy("updated_at", "desc").limit(200),
   );
 }
 export async function listRecoverableJobs(): Promise<AiInvestigationJobRow[]> {
-  return queryRows(
+  return checkedRows(
     aiInvestigationJobRowSchema,
-    `SELECT ${COLUMNS} FROM ai_investigation_jobs
-       WHERE state IN ('queued','running') AND cancel_requested_at IS NULL
-       ORDER BY created_at ASC`,
+    selectJobs()
+      .where("state", "in", ["queued", "running"])
+      .where("cancel_requested_at", "is", null)
+      .orderBy("created_at", "asc"),
   );
 }
 export async function getJob(
   id: string,
 ): Promise<AiInvestigationJobRow | null> {
   return (
-    (await queryOne(
+    (await checkedRow(
       aiInvestigationJobRowSchema,
-      `SELECT ${COLUMNS} FROM ai_investigation_jobs WHERE id=$1`,
-      [id],
+      selectJobs().where("id", "=", id),
     )) ?? null
   );
 }
@@ -110,10 +149,19 @@ export async function setPlan(
   plan: unknown,
 ): Promise<AiInvestigationJobRow | null> {
   return (
-    (await queryOne(
+    (await checkedRow(
       aiInvestigationJobRowSchema,
-      `UPDATE ai_investigation_jobs SET plan_json=$2::jsonb,state='running',started_at=COALESCE(started_at,NOW()),updated_at=NOW() WHERE id=$1 AND cancel_requested_at IS NULL RETURNING ${COLUMNS}`,
-      [id, JSON.stringify(plan)],
+      db
+        .updateTable("ai_investigation_jobs")
+        .set({
+          plan_json: jsonb(plan),
+          state: "running",
+          started_at: sql<Date>`COALESCE(started_at,NOW())`,
+          updated_at: now(),
+        })
+        .where("id", "=", id)
+        .where("cancel_requested_at", "is", null)
+        .returning(COLUMNS),
     )) ?? null
   );
 }
@@ -122,10 +170,14 @@ export async function setWaiting(
   plan: unknown,
 ): Promise<AiInvestigationJobRow | null> {
   return (
-    (await queryOne(
+    (await checkedRow(
       aiInvestigationJobRowSchema,
-      `UPDATE ai_investigation_jobs SET plan_json=$2::jsonb,state='waiting',updated_at=NOW() WHERE id=$1 AND cancel_requested_at IS NULL RETURNING ${COLUMNS}`,
-      [id, JSON.stringify(plan)],
+      db
+        .updateTable("ai_investigation_jobs")
+        .set({ plan_json: jsonb(plan), state: "waiting", updated_at: now() })
+        .where("id", "=", id)
+        .where("cancel_requested_at", "is", null)
+        .returning(COLUMNS),
     )) ?? null
   );
 }
@@ -135,12 +187,20 @@ export async function resolveWaiting(
   scope: unknown,
 ): Promise<AiInvestigationJobRow | null> {
   return (
-    (await queryOne(
+    (await checkedRow(
       aiInvestigationJobRowSchema,
-      `UPDATE ai_investigation_jobs
-       SET scope_json=jsonb_set(jsonb_set(scope_json,'{clarification}',to_jsonb($2::text),true),'{scope}',$3::jsonb,true),plan_json=NULL,state='queued',updated_at=NOW()
-       WHERE id=$1 AND state='waiting' AND cancel_requested_at IS NULL RETURNING ${COLUMNS}`,
-      [id, clarification, JSON.stringify(scope)],
+      db
+        .updateTable("ai_investigation_jobs")
+        .set({
+          scope_json: sql<Json>`jsonb_set(jsonb_set(scope_json,'{clarification}',to_jsonb(${clarification}::text),true),'{scope}',${JSON.stringify(scope)}::jsonb,true)`,
+          plan_json: null,
+          state: "queued",
+          updated_at: now(),
+        })
+        .where("id", "=", id)
+        .where("state", "=", "waiting")
+        .where("cancel_requested_at", "is", null)
+        .returning(COLUMNS),
     )) ?? null
   );
 }
@@ -149,16 +209,28 @@ export async function seedSteps(
   steps: readonly { id: string }[],
 ): Promise<void> {
   for (const step of steps)
-    await query(
-      `INSERT INTO ai_investigation_steps (job_id,step_id,state) VALUES ($1,$2,'pending') ON CONFLICT DO NOTHING`,
-      [id, step.id],
-    );
+    await db
+      .insertInto("ai_investigation_steps")
+      .values({ job_id: id, step_id: step.id, state: "pending" })
+      .onConflict((oc) => oc.doNothing())
+      .execute();
 }
 export async function getSteps(id: string): Promise<AiInvestigationStepRow[]> {
-  return queryRows(
+  return checkedRows(
     aiInvestigationStepRowSchema,
-    `SELECT step_id AS "stepId",state,attempt,result_json AS result,error_json AS error,started_at AS "startedAt",completed_at AS "completedAt" FROM ai_investigation_steps WHERE job_id=$1 ORDER BY step_id`,
-    [id],
+    db
+      .selectFrom("ai_investigation_steps")
+      .select([
+        "step_id as stepId",
+        "state",
+        "attempt",
+        "result_json as result",
+        "error_json as error",
+        "started_at as startedAt",
+        "completed_at as completedAt",
+      ])
+      .where("job_id", "=", id)
+      .orderBy("step_id"),
   );
 }
 export async function startStep(
@@ -166,10 +238,20 @@ export async function startStep(
   stepId: string,
 ): Promise<AiInvestigationStepTableRow | null> {
   return (
-    (await queryOne(
+    (await checkedRow(
       aiInvestigationStepTableRowSchema,
-      `UPDATE ai_investigation_steps SET state='running',attempt=attempt+1,started_at=NOW(),updated_at=NOW() WHERE job_id=$1 AND step_id=$2 AND state <> 'completed' RETURNING *`,
-      [jobId, stepId],
+      db
+        .updateTable("ai_investigation_steps")
+        .set((eb) => ({
+          state: "running",
+          attempt: eb("attempt", "+", 1),
+          started_at: now(),
+          updated_at: now(),
+        }))
+        .where("job_id", "=", jobId)
+        .where("step_id", "=", stepId)
+        .where("state", "<>", "completed")
+        .returningAll(),
     )) ?? null
   );
 }
@@ -179,16 +261,18 @@ export async function finishStep(
   result: unknown,
   error: unknown = null,
 ): Promise<void> {
-  await query(
-    `UPDATE ai_investigation_steps SET state=$3,result_json=$4::jsonb,error_json=$5::jsonb,completed_at=NOW(),updated_at=NOW() WHERE job_id=$1 AND step_id=$2`,
-    [
-      jobId,
-      stepId,
-      error ? "failed" : "completed",
-      result == null ? null : JSON.stringify(result),
-      error == null ? null : JSON.stringify(error),
-    ],
-  );
+  await db
+    .updateTable("ai_investigation_steps")
+    .set({
+      state: error ? "failed" : "completed",
+      result_json: nullableJsonb(result),
+      error_json: nullableJsonb(error),
+      completed_at: now(),
+      updated_at: now(),
+    })
+    .where("job_id", "=", jobId)
+    .where("step_id", "=", stepId)
+    .execute();
 }
 
 export async function resetSteps(
@@ -196,13 +280,21 @@ export async function resetSteps(
   stepIds: readonly string[],
 ): Promise<number> {
   if (stepIds.length === 0) return 0;
-  const result = await query(
-    `UPDATE ai_investigation_steps
-     SET state='pending',result_json=NULL,error_json=NULL,started_at=NULL,completed_at=NULL,updated_at=NOW()
-     WHERE job_id=$1 AND step_id=ANY($2::text[]) AND state='completed'`,
-    [jobId, stepIds],
-  );
-  return result.rowCount ?? 0;
+  const result = await db
+    .updateTable("ai_investigation_steps")
+    .set({
+      state: "pending",
+      result_json: null,
+      error_json: null,
+      started_at: null,
+      completed_at: null,
+      updated_at: now(),
+    })
+    .where("job_id", "=", jobId)
+    .where(sql<boolean>`step_id = ANY(${stepIds}::text[])`)
+    .where("state", "=", "completed")
+    .executeTakeFirst();
+  return Number(result.numUpdatedRows);
 }
 export async function finishJob(
   id: string,
@@ -210,23 +302,23 @@ export async function finishJob(
   result: unknown,
   error: unknown = null,
 ): Promise<AiInvestigationJobRow | undefined> {
-  return queryOne(
+  const resultJson = result == null ? null : JSON.stringify(result);
+  const errorJson = error == null ? null : JSON.stringify(error);
+  return checkedRow(
     aiInvestigationJobRowSchema,
-    `UPDATE ai_investigation_jobs
-       SET state=CASE WHEN cancel_requested_at IS NOT NULL THEN 'cancelled' ELSE $2 END,
-           result_json=CASE WHEN cancel_requested_at IS NOT NULL THEN NULL ELSE $3::jsonb END,
-           error_json=CASE WHEN cancel_requested_at IS NOT NULL
-             THEN '{"code":"CANCELLED"}'::jsonb ELSE $4::jsonb END,
-           completed_at=CASE WHEN cancel_requested_at IS NOT NULL
-             OR $2 IN ('completed','failed','cancelled') THEN NOW() ELSE NULL END,
-           updated_at=NOW()
-       WHERE id=$1 RETURNING ${COLUMNS}`,
-    [
-      id,
-      state,
-      result == null ? null : JSON.stringify(result),
-      error == null ? null : JSON.stringify(error),
-    ],
+    db
+      .updateTable("ai_investigation_jobs")
+      .set({
+        state: sql<string>`CASE WHEN cancel_requested_at IS NOT NULL THEN 'cancelled' ELSE ${state}::text END`,
+        result_json: sql<Json | null>`CASE WHEN cancel_requested_at IS NOT NULL THEN NULL ELSE ${resultJson}::jsonb END`,
+        error_json: sql<Json | null>`CASE WHEN cancel_requested_at IS NOT NULL
+             THEN '{"code":"CANCELLED"}'::jsonb ELSE ${errorJson}::jsonb END`,
+        completed_at: sql<Date | null>`CASE WHEN cancel_requested_at IS NOT NULL
+             OR ${state}::text IN ('completed','failed','cancelled') THEN NOW() ELSE NULL END`,
+        updated_at: now(),
+      })
+      .where("id", "=", id)
+      .returning(COLUMNS),
   );
 }
 
@@ -234,44 +326,60 @@ export async function setProviderResult(
   id: string,
   result: unknown,
 ): Promise<{ id: string } | undefined> {
-  return queryOne(
+  return checkedRow(
     uuidIdRowSchema,
-    `UPDATE ai_investigation_jobs
-       SET checkpoint_json=jsonb_set(checkpoint_json,'{providerResult}',$2::jsonb,true),updated_at=NOW()
-       WHERE id=$1 AND cancel_requested_at IS NULL RETURNING id`,
-    [id, JSON.stringify(result)],
+    db
+      .updateTable("ai_investigation_jobs")
+      .set({
+        checkpoint_json: sql<Json>`jsonb_set(checkpoint_json,'{providerResult}',${JSON.stringify(result)}::jsonb,true)`,
+        updated_at: now(),
+      })
+      .where("id", "=", id)
+      .where("cancel_requested_at", "is", null)
+      .returning("id"),
   );
 }
 
 export async function clearProviderResult(
   id: string,
 ): Promise<{ id: string } | undefined> {
-  return queryOne(
+  return checkedRow(
     uuidIdRowSchema,
-    `UPDATE ai_investigation_jobs
-       SET checkpoint_json=checkpoint_json - 'providerResult',updated_at=NOW()
-       WHERE id=$1 RETURNING id`,
-    [id],
+    db
+      .updateTable("ai_investigation_jobs")
+      .set({
+        checkpoint_json: sql<Json>`checkpoint_json - 'providerResult'`,
+        updated_at: now(),
+      })
+      .where("id", "=", id)
+      .returning("id"),
   );
 }
 export async function requestCancel(
   id: string,
 ): Promise<AiInvestigationJobRow | null> {
   return (
-    (await queryOne(
+    (await checkedRow(
       aiInvestigationJobRowSchema,
-      `UPDATE ai_investigation_jobs SET cancel_requested_at=NOW(),state=CASE WHEN state='queued' THEN 'cancelled' ELSE state END,checkpoint_json=checkpoint_json - 'providerResult',updated_at=NOW() WHERE id=$1 AND state NOT IN ('completed','failed','cancelled') RETURNING ${COLUMNS}`,
-      [id],
+      db
+        .updateTable("ai_investigation_jobs")
+        .set({
+          cancel_requested_at: now(),
+          state: sql<string>`CASE WHEN state='queued' THEN 'cancelled' ELSE state END`,
+          checkpoint_json: sql<Json>`checkpoint_json - 'providerResult'`,
+          updated_at: now(),
+        })
+        .where("id", "=", id)
+        .where("state", "not in", ["completed", "failed", "cancelled"])
+        .returning(COLUMNS),
     )) ?? null
   );
 }
 export async function deleteJob(id: string): Promise<boolean> {
-  return (
-    (
-      await query(
-        `DELETE FROM ai_investigation_jobs WHERE id=$1 RETURNING id`,
-        [id],
-      )
-    ).rows.length > 0
-  );
+  const rows = await db
+    .deleteFrom("ai_investigation_jobs")
+    .where("id", "=", id)
+    .returning("id")
+    .execute();
+  return rows.length > 0;
 }

@@ -1,5 +1,6 @@
-import { query, withTransaction } from "../database/connection.ts";
-import { queryOne, queryRows } from "../database/rowContracts.ts";
+import { sql } from "kysely";
+import { withTransaction } from "../database/connection.ts";
+import { checkedRow, checkedRows, db } from "../database/db.ts";
 import {
   aiReferenceEntryRowSchema,
   aiReferenceScopeRowSchema,
@@ -25,42 +26,52 @@ export async function createScope({
   expiresAt: string;
   entries: AiReferenceEntry[];
 }): Promise<{ id: string; expiresAt: string }> {
-  return withTransaction(async (client) => {
-    await client.query(
-      `INSERT INTO ai_reference_scopes (id,expires_at) VALUES ($1,$2)`,
-      [id, expiresAt],
-    );
+  return withTransaction(async () => {
+    await db
+      .insertInto("ai_reference_scopes")
+      .values({ id, expires_at: expiresAt })
+      .execute();
     for (const entry of entries)
-      await client.query(
-        `INSERT INTO ai_reference_entries
-           (scope_id,token,reference_type,ciphertext,nonce,auth_tag)
-         VALUES ($1,$2,$3,$4,$5,$6)`,
-        [
-          id,
-          entry.token,
-          entry.referenceType,
-          entry.ciphertext,
-          entry.nonce,
-          entry.authTag,
-        ],
-      );
+      await db
+        .insertInto("ai_reference_entries")
+        .values({
+          scope_id: id,
+          token: entry.token,
+          reference_type: entry.referenceType,
+          ciphertext: entry.ciphertext,
+          nonce: entry.nonce,
+          auth_tag: entry.authTag,
+        })
+        .execute();
     return { id, expiresAt };
   });
 }
 
+function selectScope() {
+  return db
+    .selectFrom("ai_reference_scopes")
+    .select(["id", "job_id as jobId", "expires_at as expiresAt"]);
+}
+
 export async function getScope(id: string): Promise<AiReferenceScope | null> {
-  const scope = await queryOne(
+  const scope = await checkedRow(
     aiReferenceScopeRowSchema,
-    `SELECT id,job_id AS "jobId",expires_at AS "expiresAt"
-       FROM ai_reference_scopes WHERE id=$1`,
-    [id],
+    selectScope().where("id", "=", id),
   );
   if (!scope) return null;
-  const entries = await queryRows(
+  const entries = await checkedRows(
     aiReferenceEntryRowSchema,
-    `SELECT token,reference_type AS "referenceType",ciphertext,nonce,auth_tag AS "authTag"
-       FROM ai_reference_entries WHERE scope_id=$1 ORDER BY token`,
-    [id],
+    db
+      .selectFrom("ai_reference_entries")
+      .select([
+        "token",
+        "reference_type as referenceType",
+        "ciphertext",
+        "nonce",
+        "auth_tag as authTag",
+      ])
+      .where("scope_id", "=", id)
+      .orderBy("token"),
   );
   return { ...scope, entries };
 }
@@ -68,19 +79,18 @@ export async function getScope(id: string): Promise<AiReferenceScope | null> {
 export async function getScopeForJob(
   jobId: string,
 ): Promise<AiReferenceScope | null> {
-  const scope = await queryOne(
+  const scope = await checkedRow(
     aiReferenceScopeRowSchema,
-    `SELECT id,job_id AS "jobId",expires_at AS "expiresAt"
-       FROM ai_reference_scopes WHERE job_id=$1`,
-    [jobId],
+    selectScope().where("job_id", "=", jobId),
   );
   return scope ? getScope(scope.id) : null;
 }
 
 export async function deleteExpiredUnclaimed(): Promise<number | null> {
-  return (
-    await query(
-      `DELETE FROM ai_reference_scopes WHERE job_id IS NULL AND expires_at <= NOW()`,
-    )
-  ).rowCount;
+  const result = await db
+    .deleteFrom("ai_reference_scopes")
+    .where("job_id", "is", null)
+    .where("expires_at", "<=", sql<Date>`NOW()`)
+    .executeTakeFirst();
+  return Number(result.numDeletedRows);
 }
