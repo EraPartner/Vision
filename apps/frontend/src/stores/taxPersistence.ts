@@ -2,6 +2,8 @@ import { apiClient } from "@/lib/api";
 import logger from "@/lib/logger";
 import {
     buildFiledTaxState,
+    computeTaxYearResults,
+    isTaxYearFileable,
     publishFiledYear,
     type BelgianTaxSlice,
 } from "./belgianTaxStore";
@@ -43,7 +45,7 @@ function reportFailure(error: unknown) {
     useSettingsStore.getState()._markSaveError();
 }
 export function scheduleTaxPersistence(state: BelgianTaxSlice) {
-    // After a failed engine load nothing was hydrated, so nothing may be written back.
+    // After a failed load nothing was hydrated, so nothing may be written back.
     if (state.isLoading || state.householdLoadFailed || !state.household)
         return;
     const values = payload(state);
@@ -60,21 +62,35 @@ export function scheduleTaxPersistence(state: BelgianTaxSlice) {
     }, 500);
 }
 
-/** Only expose Filed after the household, snapshot and frozen metadata commit together. */
+/**
+ * Only expose Filed after the household, snapshot and frozen metadata commit together. A year
+ * that is not frozen yet is filed with the server's figures for its household, computed first.
+ */
 export async function persistTaxFiling(year: number, reference?: string) {
     if (filingInFlight) throw new Error("A filing save is already in progress");
     const state = useSettingsStore.getState();
     if (state.isLoading) throw new Error("Tax settings are still loading");
-    const update = buildFiledTaxState(state, year, reference);
-    if (update === state) throw new Error("This tax year is not ready to file");
-    const filedMeta = update.snapshotMetas?.[year];
-    if (!filedMeta) throw new Error("The filing record is missing");
-    const filedHousehold = update.householdSnapshots?.[year];
-    const values = payload({ ...state, ...update });
-    clearTimeout(timer);
-    pending = undefined;
+    if (!isTaxYearFileable(state, year))
+        throw new Error("This tax year is not ready to file");
+    // The filing payload carries every edit made so far; edits made while the figures are
+    // computed or saved stay pending and are saved after it.
     filingInFlight = true;
+    clearTimeout(timer);
+    const hadPending = pending !== undefined;
+    pending = undefined;
+    let saveSent = false;
     try {
+        const computed = state.snapshotMetas[year]?.frozenCalculation
+            ? undefined
+            : await computeTaxYearResults(state, year);
+        const update = buildFiledTaxState(state, year, reference, computed);
+        if (update === state)
+            throw new Error("This tax year is not ready to file");
+        const filedMeta = update.snapshotMetas?.[year];
+        if (!filedMeta) throw new Error("The filing record is missing");
+        const filedHousehold = update.householdSnapshots?.[year];
+        const values = payload({ ...state, ...update });
+        saveSent = true;
         await apiClient.saveSettings(values);
         // Apply only the confirmed filing. Other years and the live household
         // may have been edited while this request waited for acknowledgment.
@@ -87,6 +103,8 @@ export async function persistTaxFiling(year: number, reference?: string) {
         throw error;
     } finally {
         filingInFlight = false;
-        if (pending) scheduleTaxPersistence(useSettingsStore.getState());
+        // Edits the filing payload would have carried are saved on their own when it never left.
+        if (pending || (hadPending && !saveSent))
+            scheduleTaxPersistence(useSettingsStore.getState());
     }
 }

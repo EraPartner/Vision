@@ -2,6 +2,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { apiClient } from "@/lib/api";
 import { DEFAULT_BELGIAN_TAX_PROFILE } from "../belgianTaxStore";
 import * as runtime from "@/lib/belgianTax/householdRuntime";
+import { upgradeProfileV1ToHousehold } from "@/lib/belgianTax/householdMigration";
 import { useSettingsStore } from "../settingsStore";
 import {
     onTaxSettingsSaved,
@@ -15,7 +16,7 @@ afterEach(() => {
 });
 
 it("preserves other-year and live-household edits made during filing, including their next persisted payload", async () => {
-    vi.useFakeTimers();
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     let acknowledge!: () => void;
     const save = vi
         .spyOn(apiClient, "saveSettings")
@@ -31,7 +32,7 @@ it("preserves other-year and live-household edits made during filing, including 
         .getState()
         ._hydrate(
             runtime,
-            runtime.upgradeProfileV1ToHousehold({
+            upgradeProfileV1ToHousehold({
                 ...DEFAULT_BELGIAN_TAX_PROFILE,
                 profileConfigured: true,
                 grossAnnualIncome: 40000,
@@ -48,6 +49,8 @@ it("preserves other-year and live-household edits made during filing, including 
     useSettingsStore.getState().createSnapshotFromLive(year - 2);
     useSettingsStore.getState().updateProfile({ grossAnnualIncome: 60000 });
     scheduleTaxPersistence(useSettingsStore.getState());
+    // The filing saves once the server has computed the figures it freezes.
+    await vi.waitFor(() => expect(save).toHaveBeenCalledTimes(1));
     acknowledge();
     await filing;
     const state = useSettingsStore.getState();
@@ -79,7 +82,7 @@ it("notifies saved-listeners only after the debounced save is acknowledged", asy
         .getState()
         ._hydrate(
             runtime,
-            runtime.upgradeProfileV1ToHousehold({
+            upgradeProfileV1ToHousehold({
                 ...DEFAULT_BELGIAN_TAX_PROFILE,
                 profileConfigured: true,
                 grossAnnualIncome: 40000,

@@ -45,6 +45,19 @@ export async function getSetting(key: string): Promise<SettingResult> {
     return result;
 }
 
+/**
+ * Adopt the baselines of a read whose values now hydrate local state (the Belgian-tax
+ * overview), so later saves compare against what this tab shows. A key this tab has already
+ * written keeps its acknowledged baseline.
+ */
+export function adoptSettingBaselines(
+    records: ReadonlyArray<{ key: string; expected: SettingBaseline }>,
+): void {
+    for (const { key, expected } of records) {
+        if (!saves.has(key)) baselines.set(key, expected);
+    }
+}
+
 export function saveSetting(
     key: string,
     value: unknown,

@@ -73,11 +73,13 @@ ordinary dividend conventions leave gross dividend base, reclaim, and net cost n
 units dividends do not enter dividend income/WHT estimates.
 
 Source scope preserves `usePortfolioTaxData` rather than introducing fiscal changes: first 500 name-ordered investment metadata rows, newest 1000 ordinary transactions
-per investment, active canonical summaries, and inactive `archivedPresentation` summaries from
+per investment, and the canonical all-holdings summaries (`active=false`) from
 [[docs/api/portfolio-summary|Portfolio Summary]]. Ordinary recorded costs use latest stored rates
 over fallbacks and retain the existing original-amount display fallback when a currency rate is
-unavailable, even when a transaction stores dated FX. Archived ordinary gains/current values keep
-the web current-FX presentation; active canonical gains retain their dated attribution. A historical
+unavailable, even when a transaction stores dated FX. Since 2026-10-19 archived gains and current
+values come from those canonical summaries (dated FX, configured cost-basis method), matching the
+web portfolio; before that they used
+the current-FX `archivedPresentation`. A historical
 selection changes recorded cost/dividend/buy-leg years, manual adjustment keys and annual tax tables;
 realized/unrealized gains and current-value estimates remain the current all-time holdings figures.
 PIT retains the selected overview's frozen-first number and existing currency behavior. Monthly
@@ -134,10 +136,11 @@ frozen scaling, partner attribution, recorded FX, exclusions, and read failures.
 
 ## Compute an unsaved household
 
-`POST /api/belgian-tax/compute` exposes the same PIT and household engine used by the web
-Tax screen. This is an additive, nonbreaking API; existing settings and report operations retain
-their contracts. The shared implementation lives in `packages/shared-utils/src/belgianTax/`;
-frontend paths remain compatibility exports with the existing lazy loading.
+`POST /api/belgian-tax/compute` runs the PIT and household engine for the web Tax screen, which
+calls it for every unfrozen figure, debounced while the profile is edited
+([[docs/adr/217-belgian-tax-figures-on-the-server|ADR-217]]). This is an additive, nonbreaking
+API; existing settings and report operations retain their contracts. The shared implementation
+lives in `packages/shared-utils/src/belgianTax/`; the browser no longer runs it.
 
 Send `{ "household": <complete v2 household> }` with JSON content type. The household has the
 same fields and bounds as the `belgian_tax_household_v2` setting. Partner A is required; partner

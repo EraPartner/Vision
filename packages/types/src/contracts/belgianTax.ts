@@ -166,3 +166,82 @@ export const BelgianPortfolioTaxDashboardSchema = z.looseObject({
   ),
   records: z.array(SettingRecordSchema),
 });
+
+// ── /api/belgian-tax/compute and /api/belgian-tax/overview ───────────────────
+
+/** Legacy-compatible PIT figures (`toBelgianTaxCalculation`); frozen ones may be older shapes. */
+const BelgianTaxCalculationSchema = z.looseObject({
+  grossIncome: z.number(),
+  taxableIncome: z.number(),
+  totalPIT: z.number(),
+  totalTaxBurden: z.number(),
+  effectiveRate: z.number(),
+  marginalRate: z.number(),
+  netTakeHome: z.number(),
+  propertyTaxEstimate: z.number(),
+  breakdown: z.array(
+    z.looseObject({ label: z.string(), amount: z.number() }),
+  ),
+});
+
+/** Household engine result (`computeHouseholdTax`). */
+const BelgianTaxHouseholdResultSchema = z.looseObject({
+  incomeYear: z.number().int(),
+  assessment: z.looseObject({
+    mode: z.enum(["single", "separate", "joint"]),
+    reason: z.string(),
+    legalBasis: z.string(),
+  }),
+  partners: z.array(
+    z.looseObject({
+      partnerId: z.enum(["A", "B"]),
+      grossIncome: z.number(),
+      taxableIncome: z.number(),
+      totalPIT: z.number(),
+    }),
+  ),
+  quotient: z.looseObject({
+    applied: z.boolean(),
+    transfer: z.number(),
+    benefit: z.number(),
+  }),
+  totals: z.looseObject({}),
+  issues: z.array(
+    z.looseObject({ code: z.string(), severity: z.string() }),
+  ),
+});
+
+/** `POST /api/belgian-tax/compute` — stateless engine run on a submitted household. */
+export const BelgianTaxComputationSchema = z.looseObject({
+  result: BelgianTaxHouseholdResultSchema,
+  calculation: BelgianTaxCalculationSchema,
+});
+
+const HouseholdSchema = z.looseObject({
+  version: z.literal(2),
+  taxYear: z.number().int(),
+  partners: z.array(z.looseObject({ id: z.enum(["A", "B"]) })),
+});
+
+/** `GET /api/belgian-tax/overview` — services/tax/overviewService.getTaxOverview. */
+export const BelgianTaxOverviewSchema = z.looseObject({
+  year: z.number().int(),
+  liveYear: z.number().int(),
+  isHistorical: z.boolean(),
+  hasSnapshot: z.boolean(),
+  hasProfile: z.boolean(),
+  household: HouseholdSchema,
+  liveHousehold: HouseholdSchema,
+  householdSnapshots: z.record(z.string(), HouseholdSchema),
+  snapshotMetas: z.record(z.string(), z.looseObject({})),
+  metadata: z.looseObject({}),
+  calculation: HistoricalCalculationSchema,
+  result: z.looseObject({}),
+  calculationSource: z.enum(["frozen", "computed"]),
+  householdResultSource: z.enum(["frozen", "computed"]),
+  householdMigrationNeeded: z.boolean(),
+  snapshotsMigrationNeeded: z.boolean(),
+  storedValueInvalid: z.boolean(),
+  warnings: z.array(z.looseObject({ key: z.string(), kind: z.string() })),
+  records: z.array(SettingRecordSchema),
+});

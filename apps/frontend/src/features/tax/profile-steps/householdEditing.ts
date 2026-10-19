@@ -5,7 +5,7 @@
  * are dropped once no activity uses their category.
  */
 // By path, not through the `@/lib/belgianTax` barrel, which re-exports the household engine.
-import { forfaitCategoryOf } from "@/lib/belgianTax/household";
+import { forfaitCategoryOf } from "@/lib/belgianTax/forfaitCategory";
 import type { useLanguage } from "@/stores/hydration/LanguageHydration";
 import type {
     ActivityKind,

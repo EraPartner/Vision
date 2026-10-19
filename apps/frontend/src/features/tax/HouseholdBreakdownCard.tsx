@@ -1,8 +1,6 @@
-import { useMemo } from "react";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
-import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
-import { resolveBelgianTaxHouseholdResult } from "@/stores/belgianTaxStore";
+import { useTaxYearFigures } from "@/hooks/useBelgianTaxComputation";
 import type {
     HouseholdTaxResult,
     PartnerTaxResult,
@@ -58,6 +56,7 @@ const sum = (result: HouseholdTaxResult, pick: (p: PartnerTaxResult) => number) 
  * column adds up,
  * with the assessment mode and the marital quotient. Renders nothing for one partner.
  *
+ * Any other year shows the server's result for its household (POST /api/belgian-tax/compute).
  * A frozen year shows its frozen household result. A year frozen before the household result
  * was stored (only `frozenCalculation`) renders nothing rather than a live recompute that could
  * disagree with the frozen figures.
@@ -68,19 +67,7 @@ export function HouseholdBreakdownCard({
 }: HouseholdBreakdownCardProps) {
     const { t } = useLanguage();
     const fmt = useCurrencyFormatter();
-    const inputs = useBelgianTaxProfile((state) => ({
-        profile: state.profile,
-        snapshots: state.snapshots,
-        household: state.household,
-        householdSnapshots: state.householdSnapshots,
-        householdResult: state.householdResult,
-        snapshotMetas: state.snapshotMetas,
-    }));
-    const result = useMemo(() => {
-        const meta = inputs.snapshotMetas[viewedYear];
-        if (meta?.frozenCalculation && !meta.frozenHouseholdResult) return null;
-        return resolveBelgianTaxHouseholdResult(inputs, viewedYear);
-    }, [inputs, viewedYear]);
+    const result = useTaxYearFigures(viewedYear).householdResult;
 
     if (!result || result.partners.length < 2) return null;
 

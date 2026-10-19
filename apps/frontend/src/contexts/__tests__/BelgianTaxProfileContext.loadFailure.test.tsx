@@ -29,7 +29,7 @@ function Wrapper({ children }: { children: ReactNode }) {
     );
 }
 
-describe("BelgianTaxProfileContext when the household engine fails to load", () => {
+describe("BelgianTaxProfileContext when the household helpers fail to load", () => {
     beforeEach(() => {
         server.use(
             http.get(`${API_BASE}/api/settings`, () =>
@@ -60,12 +60,12 @@ describe("BelgianTaxProfileContext when the household engine fails to load", () 
         expect(result.current.isLoading).toBe(false);
         expect(result.current.household).toBeNull();
         expect(logger.error).toHaveBeenCalledWith(
-            "Failed to load the Belgian tax household engine:",
+            "Failed to load the Belgian tax household:",
             expect.any(Error),
         );
 
         act(() => result.current.updateProfile({ grossAnnualIncome: 1 }));
-        act(() => result.current.freezeCalculation(2024));
+        await act(() => result.current.freezeCalculation(2024));
         await act(async () => {
             await new Promise((resolve) => setTimeout(resolve, 550));
         });

@@ -1,4 +1,12 @@
 import { http, HttpResponse } from "msw";
+// Test-only: the MSW stand-ins for the tax overview and compute routes run the same shared
+// engine the backend serves; the application bundle never imports it.
+import { buildTaxOverview } from "@vision/shared-utils/belgian-tax/overview";
+import {
+    computeHouseholdTax,
+    toBelgianTaxCalculation,
+} from "@vision/shared-utils/belgian-tax/household";
+import type { BelgianTaxHouseholdV2 } from "@vision/shared-utils/belgian-tax/householdTypes";
 
 const API_BASE = "http://localhost:3002";
 
@@ -705,6 +713,56 @@ function requestedTaxYear(request: Request): number {
 }
 
 /**
+ * GET /api/belgian-tax/overview body for the given stored settings, as the route answers it
+ * (same shared builder, JSON round-tripped).
+ */
+export function taxOverviewStub(
+    settings: Record<string, unknown> = {},
+    year?: number,
+) {
+    const { expected } = settingsWithBaselines(settings);
+    const overview = buildTaxOverview(settings, expected, year);
+    return JSON.parse(JSON.stringify(overview)) as typeof overview;
+}
+
+/**
+ * GET /api/belgian-tax/overview built from whatever the current GET /api/settings handler
+ * serves, so a test seeds the tax household through the settings it stores. `undefined` when
+ * that settings read fails: the route reads the same table, so it fails too.
+ */
+async function taxOverviewFromSettings(request: Request) {
+    const response = await fetch(`${API_BASE}/api/settings?withBaselines=true`);
+    if (!response.ok) return undefined;
+    const body = (await response.json()) as { data?: Record<string, unknown> };
+    const data = body.data ?? {};
+    const { settings, expected } =
+        data.settings && data.expected
+            ? (data as ReturnType<typeof settingsWithBaselines>)
+            : settingsWithBaselines(data);
+    const year = new URL(request.url).searchParams.get("year");
+    const overview = buildTaxOverview(
+        settings,
+        expected,
+        year ? Number(year) : undefined,
+    );
+    return JSON.parse(JSON.stringify(overview)) as typeof overview;
+}
+
+/** POST /api/belgian-tax/compute as the route answers it, from the shared engine. */
+export function computeTaxStub(household: BelgianTaxHouseholdV2) {
+    const result = computeHouseholdTax(household);
+    return JSON.parse(
+        JSON.stringify({
+            result,
+            calculation: toBelgianTaxCalculation(result, household),
+        }),
+    ) as {
+        result: ReturnType<typeof computeHouseholdTax>;
+        calculation: ReturnType<typeof toBelgianTaxCalculation>;
+    };
+}
+
+/**
  * Default handlers cover the chatty boot-time endpoints so any page can render
  * without crashing. Tests override per-flow handlers via `server.use(...)`.
  */
@@ -733,6 +791,18 @@ export const defaultHandlers = [
     http.get(`${API_BASE}/api/belgian-tax/portfolio-dashboard`, ({ request }) =>
         ok(portfolioTaxDashboardStub(requestedTaxYear(request))),
     ),
+    http.get(`${API_BASE}/api/belgian-tax/overview`, async ({ request }) => {
+        const overview = await taxOverviewFromSettings(request);
+        return overview
+            ? ok(overview)
+            : err(500, "Failed to read the Belgian tax settings");
+    }),
+    http.post(`${API_BASE}/api/belgian-tax/compute`, async ({ request }) => {
+        const body = (await request.json()) as {
+            household: BelgianTaxHouseholdV2;
+        };
+        return ok(computeTaxStub(body.household));
+    }),
 
     http.get(`${API_BASE}/api/categories`, ({ request }) => {
         const params = new URL(request.url).searchParams;

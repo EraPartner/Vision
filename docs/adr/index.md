@@ -271,6 +271,13 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 > ADR-213 after merging `main`, which already uses ADR-206 to ADR-208 (bank chronology,
 > coordinated native recovery, bounded report pipeline).
 
+### 2026-10-19: Compute Belgian tax figures on the server (accepted)
+
+[[docs/adr/217-belgian-tax-figures-on-the-server|ADR-217]] removes the PIT/household engine from
+the browser. The tax store hydrates from `GET /api/belgian-tax/overview`, the editor's live
+figures come from a debounced `POST /api/belgian-tax/compute`, and freezing, filing and exports
+use server figures. It amends the lazily loaded engine of ADR-200 phase B2.
+
 ### 2026-10-19: Retire the Vision Native Swift port (accepted)
 
 [[docs/adr/214-retire-vision-native-swift-port|ADR-214]] retires the Swift app under

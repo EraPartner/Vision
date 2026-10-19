@@ -10,6 +10,7 @@
  */
 import type { ReactNode } from "react";
 import { Snowflake, Lock, History, FileDown, Unlock } from "lucide-react";
+import { toast } from "sonner";
 import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import {
@@ -25,8 +26,10 @@ import { exportTaxYearCsv } from "@/lib/belgianTax/exportTaxYearCsv";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import {
     resolveBelgianTaxHousehold,
-    resolveBelgianTaxHouseholdResult,
+    resolveTaxYearFigures,
 } from "@/stores/belgianTaxStore";
+import { apiErrorToMessage } from "@/lib/api/errorMessage";
+import logger from "@/lib/logger";
 
 interface YearActionsMenuProps {
     /** The year the menu operates on. Typically the page's `viewedYear`. */
@@ -43,7 +46,6 @@ export function YearActionsMenu({ year, pageItems }: YearActionsMenuProps) {
     const {
         snapshotExists,
         profileForYear,
-        displayCalculationForYear,
         hasFrozen,
         filed,
         freezeCalculation,
@@ -56,37 +58,48 @@ export function YearActionsMenu({ year, pageItems }: YearActionsMenuProps) {
             year,
         ),
         profileForYear: state.profileForYear,
-        displayCalculationForYear: state.displayCalculationForYear,
         hasFrozen: Boolean(state.snapshotMetas[year]?.frozenCalculation),
         filed: Boolean(state.snapshotMetas[year]?.filing),
         freezeCalculation: state.freezeCalculation,
         unfreezeCalculation: state.unfreezeCalculation,
         unmarkYearAsFiled: state.unmarkYearAsFiled,
-        profile: state.profile,
-        snapshots: state.snapshots,
         household: state.household,
         householdSnapshots: state.householdSnapshots,
-        householdResult: state.householdResult,
         snapshotMetas: state.snapshotMetas,
     }));
 
-    function handleExport() {
-        exportTaxYearCsv({
-            year,
-            profile: profileForYear(year),
-            calculation: displayCalculationForYear(year),
-            currency: appSettings.defaultCurrency || "EUR",
-            isFiled: filed,
-            hasFrozenCalculation: hasFrozen,
-            // Friendly stamp for the file header.
-            generatedAt: new Date().toISOString(),
-            household: resolveBelgianTaxHousehold(yearState, year),
-            // A year frozen before the household result was stored has none to export.
-            householdResult:
-                hasFrozen && !yearState.snapshotMetas[year]?.frozenHouseholdResult
-                    ? null
-                    : resolveBelgianTaxHouseholdResult(yearState, year),
+    function reportComputeFailure(error: unknown) {
+        logger.error("Failed to compute the Belgian tax year:", error);
+        toast.error(t("tax.yearActions.computeFailed", { year: String(year) }), {
+            description: apiErrorToMessage(error, t),
         });
+    }
+
+    function handleFreeze() {
+        freezeCalculation(year).catch(reportComputeFailure);
+    }
+
+    // The server's figures for the year (the frozen ones for a frozen year, never a recompute).
+    async function handleExport() {
+        try {
+            const figures = await resolveTaxYearFigures(yearState, year);
+            if (!figures) return;
+            exportTaxYearCsv({
+                year,
+                profile: profileForYear(year),
+                calculation: figures.calculation,
+                currency: appSettings.defaultCurrency || "EUR",
+                isFiled: filed,
+                hasFrozenCalculation: hasFrozen,
+                // Friendly stamp for the file header.
+                generatedAt: new Date().toISOString(),
+                household: resolveBelgianTaxHousehold(yearState, year),
+                // A year frozen before the household result was stored has none to export.
+                householdResult: figures.householdResult,
+            });
+        } catch (error) {
+            reportComputeFailure(error);
+        }
     }
 
     return (
@@ -102,7 +115,7 @@ export function YearActionsMenu({ year, pageItems }: YearActionsMenuProps) {
                     }
                 />
             )}
-            <Button variant="outline" onClick={handleExport}>
+            <Button variant="outline" onClick={() => void handleExport()}>
                 <FileDown />
                 {t("tax.yearActions.exportCsv")}
             </Button>
@@ -123,7 +136,7 @@ export function YearActionsMenu({ year, pageItems }: YearActionsMenuProps) {
                 </DropdownMenuLabel>
 
                 {!filed && !hasFrozen && (
-                    <DropdownMenuItem onSelect={() => freezeCalculation(year)}>
+                    <DropdownMenuItem onSelect={handleFreeze}>
                         <Snowflake className={itemIconClass} />
                         {t("tax.yearActions.freeze")}
                     </DropdownMenuItem>
@@ -159,7 +172,7 @@ export function YearActionsMenu({ year, pageItems }: YearActionsMenuProps) {
                     }
                 />
 
-                <DropdownMenuItem onSelect={handleExport}>
+                <DropdownMenuItem onSelect={() => void handleExport()}>
                     <FileDown className={itemIconClass} />
                     {t("tax.yearActions.exportCsv")}
                 </DropdownMenuItem>

@@ -10,6 +10,7 @@ import {
     ok,
     settingsWithBaselines,
     taxDashboardStub,
+    taxOverviewStub,
 } from "@/test/msw/handlers";
 import TaxOverviewPage from "@/pages/TaxOverviewPage";
 
@@ -212,10 +213,11 @@ describe("TaxOverviewPage (integration)", () => {
         expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
 
-    it("renders empty state gracefully when settings API fails with 500", async () => {
+    it("shows the load failure instead of the setup prompt when the stored settings cannot be read", async () => {
         const consoleSpy = vi
             .spyOn(console, "error")
             .mockImplementation(() => {});
+        // GET /api/belgian-tax/overview reads the same settings table, so it fails with it.
         server.use(
             http.get(`${API_BASE}/api/settings`, () =>
                 err(500, "db unavailable"),
@@ -228,20 +230,26 @@ describe("TaxOverviewPage (integration)", () => {
         // apiRequest retries on 500 (MAX_RETRIES=2, ~1.5 s backoff) — needs extended timeout
         expect(
             await screen.findByText(
-                /no tax profile yet/i,
+                /tax calculator could not be loaded/i,
                 {},
-                { timeout: 5000 },
+                { timeout: 8000 },
             ),
         ).toBeInTheDocument();
+        expect(
+            screen.queryByText(/no tax profile yet/i),
+        ).not.toBeInTheDocument();
         consoleSpy.mockRestore();
-    });
+    }, 15000);
 
-    it("renders empty state gracefully when settings API fails with 403", async () => {
+    it("renders the empty state when only the settings preload is refused", async () => {
         const consoleSpy = vi
             .spyOn(console, "error")
             .mockImplementation(() => {});
         server.use(
             http.get(`${API_BASE}/api/settings`, () => err(403, "Forbidden")),
+            http.get(`${API_BASE}/api/belgian-tax/overview`, () =>
+                ok(taxOverviewStub()),
+            ),
         );
         renderWithApp(<TaxOverviewPage />);
         expect(

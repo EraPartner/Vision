@@ -11,7 +11,7 @@ vi.mock("@/lib/belgianTax/loadHouseholdRuntime", () => ({
     ),
 }));
 
-describe("TaxOverviewPage when the household engine fails to load", () => {
+describe("TaxOverviewPage when the household helpers fail to load", () => {
     it("shows an error instead of loading forever", async () => {
         const errorSpy = vi.spyOn(logger, "error").mockImplementation(() => {});
         renderWithApp(<TaxOverviewPage />);

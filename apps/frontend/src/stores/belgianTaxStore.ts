@@ -1,9 +1,7 @@
 import type { StateCreator } from "zustand";
 import type { SettingsStore } from "@/stores/settingsStore";
-// Value imports by path, not through the `@/lib/belgianTax` barrel: the barrel also re-exports
-// the household engine, and a boot-path import of it pulls that engine into the boot chunk
-// once the lazily loaded householdRuntime uses it (see scripts/check-bundle-size.ts).
-import { computeBelgianPIT } from "@/lib/belgianTax/pit";
+// Type-only imports from the `@/lib/belgianTax` barrel: it also re-exports the tax engine,
+// which runs on the server and must stay out of the browser bundle.
 import type {
     BelgianTaxCalculation,
     BelgianTaxHouseholdSnapshotsV2,
@@ -16,9 +14,13 @@ import type {
     SnapshotAuditEntry,
     SnapshotAuditEntryKind,
 } from "@/lib/belgianTax";
-// Type-only: the provider loads the household engine lazily and passes it to `_hydrate`.
+// Type-only: the provider loads the household helpers lazily and passes them to `_hydrate`.
 import type * as HouseholdRuntimeModule from "@/lib/belgianTax/householdRuntime";
 import type { HouseholdUpdate } from "@/lib/belgianTax/householdRuntime";
+import {
+    computeBelgianTax,
+    type BelgianTaxComputation,
+} from "@/lib/api/belgianTax";
 
 export type HouseholdRuntime = typeof HouseholdRuntimeModule;
 
@@ -36,9 +38,8 @@ export {
 } from "@vision/shared-utils/belgian-tax/profileDefaults";
 
 /**
- * Household engine handed over by `_hydrate`. Until the provider has loaded it, the year
- * resolvers fall back to `computeBelgianPIT` on the v1 projection (the defaults are a
- * one-partner household, for which both engines agree) and the editing actions are no-ops.
+ * Household helpers handed over by `_hydrate`. Until the provider has loaded them the editing
+ * actions are no-ops. Every tax figure comes from the server.
  */
 let householdRuntime: HouseholdRuntime | undefined;
 
@@ -67,12 +68,13 @@ export interface BelgianTaxSlice {
     household: BelgianTaxHouseholdV2 | null;
     /** Source of truth: year snapshots of the household. */
     householdSnapshots: BelgianTaxHouseholdSnapshotsV2;
-    /** Raw engine result of the live household (per partner, quotient, CSSS, issues). */
-    householdResult: HouseholdTaxResult | null;
+    /**
+     * Server figures of the household the overview hydrated (not for a frozen live year), so
+     * the first render needs no extra compute request. Edits are computed by the server.
+     */
+    hydratedComputation: HydratedComputation | null;
     /** v1 projection of `household` for v1-shaped editors and consumers. */
     profile: BelgianTaxProfile;
-    /** v1-shaped calculation of the live household. */
-    calculation: BelgianTaxCalculation;
     /** v1 projection of `householdSnapshots`. */
     snapshots: BelgianTaxProfileSnapshots;
     snapshotMetas: BelgianTaxProfileSnapshotMetas;
@@ -81,7 +83,7 @@ export interface BelgianTaxSlice {
     isLoading: boolean;
     /** A stored household value was unreadable and replaced in memory; the next edit overwrites it. */
     storedHouseholdUnreadable: boolean;
-    /** The household engine chunk failed to load; editing is disabled and nothing is saved. */
+    /** The household could not be loaded; editing is disabled and nothing is saved. */
     householdLoadFailed: boolean;
     saveErrorNonce: number;
     updateProfile: (updates: Partial<BelgianTaxProfile>) => void;
@@ -91,8 +93,6 @@ export interface BelgianTaxSlice {
     setViewedYear: (year: number) => void;
     snapshotExistsForYear: (year: number) => boolean;
     profileForYear: (year: number) => BelgianTaxProfile;
-    calculationForYear: (year: number) => BelgianTaxCalculation;
-    displayCalculationForYear: (year: number) => BelgianTaxCalculation;
     createSnapshotFromLive: (year: number) => void;
     updateSnapshot: (year: number, updates: Partial<BelgianTaxProfile>) => void;
     /** Edit the household snapshot of `year` (kept on that year); audited as `patched`. */
@@ -101,9 +101,14 @@ export interface BelgianTaxSlice {
     isYearFiled: (year: number) => boolean;
     getFrozenCalculation: (year: number) => BelgianTaxCalculation | null;
     getSnapshotHistory: (year: number) => SnapshotAuditEntry[];
-    freezeCalculation: (year: number) => void;
+    /** Freeze the server's figures for `year`; rejects when the server could not compute them. */
+    freezeCalculation: (year: number) => Promise<void>;
     unfreezeCalculation: (year: number) => void;
-    markYearAsFiled: (year: number, reference?: string) => void;
+    /**
+     * Record a filing in memory without persisting it first (persistTaxFiling is the
+     * acknowledged path); an unfrozen year is frozen with the server's figures.
+     */
+    markYearAsFiled: (year: number, reference?: string) => Promise<void>;
     unmarkYearAsFiled: (year: number) => void;
     _hydrate: (
         runtime: HouseholdRuntime,
@@ -111,16 +116,18 @@ export interface BelgianTaxSlice {
         householdSnapshots: BelgianTaxHouseholdSnapshotsV2,
         metas: BelgianTaxProfileSnapshotMetas,
         storedHouseholdUnreadable?: boolean,
+        hydratedComputation?: HydratedComputation | null,
     ) => void;
     _beginHydration: () => void;
     _markHydrationFailed: () => void;
     _markSaveError: () => void;
 }
 
-type YearState = Pick<
-    BelgianTaxSlice,
-    "profile" | "snapshots" | "household" | "householdSnapshots"
->;
+/** Server figures of one household, remembered with the household they belong to. */
+export interface HydratedComputation {
+    household: BelgianTaxHouseholdV2;
+    computation: BelgianTaxComputation;
+}
 
 export function resolveBelgianTaxProfile(
     state: Pick<BelgianTaxSlice, "profile" | "snapshots">,
@@ -148,78 +155,53 @@ type YearResults = Pick<
     frozenCalculation: BelgianTaxCalculation;
 };
 
-function computeYearResults(
-    state: YearState,
-    year: number,
-    runtime: HouseholdRuntime | undefined = householdRuntime,
-): YearResults {
-    const household = resolveBelgianTaxHousehold(state, year);
-    if (runtime && household) {
-        const result = runtime.computeHouseholdTax(household);
-        return {
-            frozenCalculation: runtime.toBelgianTaxCalculation(
-                result,
-                household,
-            ),
-            frozenHouseholdResult: result,
-        };
-    }
-    return {
-        frozenCalculation: computeBelgianPIT(
-            resolveBelgianTaxProfile(state, year),
-        ),
-    };
-}
-
 /**
- * Calculation of `year`'s household with a v1 patch applied (e.g. a chart bar's gross income on
- * partner A's primary activity), through the loaded engine; `undefined` before hydration.
+ * Server figures of `year`'s household as it stands in `state` (POST /api/belgian-tax/compute),
+ * in the stored frozen-metadata shape. `undefined` before hydration.
  */
-export function calculateBelgianTaxHouseholdWithPatch(
+export async function computeTaxYearResults(
     state: Pick<BelgianTaxSlice, "household" | "householdSnapshots">,
     year: number,
-    patch: Partial<BelgianTaxProfile>,
-): BelgianTaxCalculation | undefined {
-    const runtime = householdRuntime;
+    signal?: AbortSignal,
+): Promise<YearResults | undefined> {
     const household = resolveBelgianTaxHousehold(state, year);
-    if (!runtime || !household) return undefined;
-    const next: BelgianTaxHouseholdV2 = {
-        ...runtime.applyProfileV1PatchToHousehold(household, patch),
-        taxYear: year,
-    };
-    return runtime.toBelgianTaxCalculation(
-        runtime.computeHouseholdTax(next),
-        next,
-    );
+    if (!household) return undefined;
+    const { calculation, result } = await computeBelgianTax(household, signal);
+    return { frozenCalculation: calculation, frozenHouseholdResult: result };
 }
 
-export function resolveBelgianTaxCalculation(
-    state: YearState & Pick<BelgianTaxSlice, "snapshotMetas">,
-    year: number,
-    runtime?: HouseholdRuntime,
-): BelgianTaxCalculation {
-    return (
-        state.snapshotMetas[year]?.frozenCalculation ??
-        computeYearResults(state, year, runtime).frozenCalculation
-    );
+/** Figures of one year as an export shows them. */
+export interface TaxYearFigures {
+    calculation: BelgianTaxCalculation;
+    /** `null` for a year frozen before household results were stored. */
+    householdResult: HouseholdTaxResult | null;
 }
 
 /**
- * Household engine result shown for `year`, alongside `resolveBelgianTaxCalculation`: the
- * frozen one when the year is frozen, else the live result or a fresh computation. `null`
- * until the provider has loaded the engine.
+ * Figures of `year` for exports: the frozen ones when the year is frozen (never a recompute,
+ * ADR-059), else the server's computation of the year's household. `undefined` before
+ * hydration.
  */
-export function resolveBelgianTaxHouseholdResult(
-    state: YearState &
-        Pick<BelgianTaxSlice, "snapshotMetas" | "householdResult">,
+export async function resolveTaxYearFigures(
+    state: Pick<
+        BelgianTaxSlice,
+        "household" | "householdSnapshots" | "snapshotMetas"
+    >,
     year: number,
-    runtime?: HouseholdRuntime,
-): HouseholdTaxResult | null {
-    const frozen = state.snapshotMetas[year]?.frozenHouseholdResult;
-    if (frozen) return frozen;
-    if (state.household && year === state.household.taxYear)
-        return state.householdResult;
-    return computeYearResults(state, year, runtime).frozenHouseholdResult ?? null;
+): Promise<TaxYearFigures | undefined> {
+    const meta = state.snapshotMetas[year];
+    if (meta?.frozenCalculation)
+        return {
+            calculation: meta.frozenCalculation,
+            householdResult: meta.frozenHouseholdResult ?? null,
+        };
+    const computed = await computeTaxYearResults(state, year);
+    return (
+        computed && {
+            calculation: computed.frozenCalculation,
+            householdResult: computed.frozenHouseholdResult ?? null,
+        }
+    );
 }
 
 /**
@@ -233,7 +215,10 @@ function commitLiveHousehold(
     current: BelgianTaxHouseholdV2,
     next: BelgianTaxHouseholdV2,
 ): Partial<BelgianTaxSlice> {
-    const live = runtime.liveHouseholdState(next, DEFAULT_BELGIAN_TAX_PROFILE);
+    const live = {
+        household: next,
+        profile: runtime.projectProfileV1(next, DEFAULT_BELGIAN_TAX_PROFILE),
+    };
     const isViewingHistorical = state.viewedYear !== next.taxYear;
     const year = current.taxYear;
     if (next.taxYear <= year || state.householdSnapshots[year])
@@ -259,9 +244,8 @@ export const createBelgianTaxSlice: StateCreator<
 > = (set, get) => ({
     household: null,
     householdSnapshots: {},
-    householdResult: null,
+    hydratedComputation: null,
     profile: DEFAULT_BELGIAN_TAX_PROFILE,
-    calculation: computeBelgianPIT(DEFAULT_BELGIAN_TAX_PROFILE),
     snapshots: {},
     snapshotMetas: {},
     viewedYear: DEFAULT_BELGIAN_TAX_PROFILE.taxYear,
@@ -301,7 +285,8 @@ export const createBelgianTaxSlice: StateCreator<
                 DEFAULT_BELGIAN_TAX_PROFILE,
             );
             return {
-                ...runtime.liveHouseholdState(
+                household,
+                profile: runtime.projectProfileV1(
                     household,
                     DEFAULT_BELGIAN_TAX_PROFILE,
                 ),
@@ -316,10 +301,6 @@ export const createBelgianTaxSlice: StateCreator<
     snapshotExistsForYear: (year) =>
         Object.prototype.hasOwnProperty.call(get().householdSnapshots, year),
     profileForYear: (year) => resolveBelgianTaxProfile(get(), year),
-    calculationForYear: (year) =>
-        computeYearResults(get(), year).frozenCalculation,
-    displayCalculationForYear: (year) =>
-        resolveBelgianTaxCalculation(get(), year),
     createSnapshotFromLive: (year) =>
         set((state) => {
             const runtime = householdRuntime;
@@ -411,7 +392,9 @@ export const createBelgianTaxSlice: StateCreator<
     getFrozenCalculation: (year) =>
         get().snapshotMetas[year]?.frozenCalculation ?? null,
     getSnapshotHistory: (year) => get().snapshotMetas[year]?.history ?? [],
-    freezeCalculation: (year) =>
+    freezeCalculation: async (year) => {
+        const frozen = await computeTaxYearResults(get(), year);
+        if (!frozen) return;
         set((state) => {
             const { frozenHouseholdResult: _stale, ...existing } =
                 state.snapshotMetas[year] ?? {};
@@ -419,16 +402,14 @@ export const createBelgianTaxSlice: StateCreator<
                 snapshotMetas: appendHistoryEntry(
                     {
                         ...state.snapshotMetas,
-                        [year]: {
-                            ...existing,
-                            ...computeYearResults(state, year),
-                        },
+                        [year]: { ...existing, ...frozen },
                     },
                     year,
                     "frozen",
                 ),
             };
-        }),
+        });
+    },
     unfreezeCalculation: (year) =>
         set((state) => {
             const existing = state.snapshotMetas[year];
@@ -446,8 +427,16 @@ export const createBelgianTaxSlice: StateCreator<
                 ),
             };
         }),
-    markYearAsFiled: (year, reference) =>
-        set((state) => buildFiledTaxState(state, year, reference)),
+    markYearAsFiled: async (year, reference) => {
+        const state = get();
+        if (!isTaxYearFileable(state, year)) return;
+        const computed = state.snapshotMetas[year]?.frozenCalculation
+            ? undefined
+            : await computeTaxYearResults(state, year);
+        set((current) =>
+            buildFiledTaxState(current, year, reference, computed),
+        );
+    },
     unmarkYearAsFiled: (year) =>
         set((state) => {
             const existing = state.snapshotMetas[year];
@@ -467,13 +456,16 @@ export const createBelgianTaxSlice: StateCreator<
         householdSnapshots,
         snapshotMetas,
         storedHouseholdUnreadable = false,
+        hydratedComputation = null,
     ) => {
         householdRuntime = runtime;
         set({
-            ...runtime.liveHouseholdState(
+            household,
+            profile: runtime.projectProfileV1(
                 household,
                 DEFAULT_BELGIAN_TAX_PROFILE,
             ),
+            hydratedComputation,
             householdSnapshots,
             snapshots: runtime.projectSnapshotsToV1(
                 householdSnapshots,
@@ -491,9 +483,8 @@ export const createBelgianTaxSlice: StateCreator<
         set({
             household: null,
             householdSnapshots: {},
-            householdResult: null,
+            hydratedComputation: null,
             profile: DEFAULT_BELGIAN_TAX_PROFILE,
-            calculation: computeBelgianPIT(DEFAULT_BELGIAN_TAX_PROFILE),
             snapshots: {},
             snapshotMetas: {},
             viewedYear: DEFAULT_BELGIAN_TAX_PROFILE.taxYear,
@@ -510,36 +501,53 @@ export const createBelgianTaxSlice: StateCreator<
 });
 
 /**
- * Prepare a filing without publishing it before persistence has acknowledged it.
- *
  * A year is fileable when it is the live year, has its own household snapshot, or has an
- * explicitly frozen calculation. A past year that would only use a live estimate is refused.
- * The live year is pinned as its own snapshot so the filed household survives later edits; a
- * frozen year without a snapshot is not pinned, because the live household would disagree with
- * the frozen figures. Results are frozen next to the filing unless the year was already frozen.
+ * explicitly frozen calculation, and holds meaningful data. A past year that would only use a
+ * live estimate is refused.
  */
-export function buildFiledTaxState(
-    state: BelgianTaxSlice,
-    year: number,
-    reference?: string,
-): Partial<BelgianTaxSlice> {
-    const runtime = householdRuntime;
+export function isTaxYearFileable(state: BelgianTaxSlice, year: number): boolean {
     const live = state.household;
     const existing = state.snapshotMetas[year];
     if (
-        !runtime ||
+        !householdRuntime ||
         !live ||
         state.isLoading ||
         state.householdLoadFailed ||
         existing?.filing
     )
-        return state;
+        return false;
+    if (
+        year !== live.taxYear &&
+        !Object.hasOwn(state.householdSnapshots, year) &&
+        !existing?.frozenCalculation
+    )
+        return false;
+    return hasMeaningfulBelgianTaxData(resolveBelgianTaxProfile(state, year));
+}
+
+/**
+ * Prepare a filing without publishing it before persistence has acknowledged it.
+ *
+ * `computed` holds the server's figures for the year (computeTaxYearResults); they are frozen
+ * next to the filing unless the year was already frozen. The state is returned unchanged when
+ * the year is not fileable (isTaxYearFileable) or unfrozen figures are missing. The live year
+ * is pinned as its own snapshot so the filed household survives later edits; a frozen year
+ * without a snapshot is not pinned, because the live household would disagree with the frozen
+ * figures.
+ */
+export function buildFiledTaxState(
+    state: BelgianTaxSlice,
+    year: number,
+    reference?: string,
+    computed?: YearResults,
+): Partial<BelgianTaxSlice> {
+    const runtime = householdRuntime;
+    const live = state.household;
+    const existing = state.snapshotMetas[year];
+    if (!runtime || !live || !isTaxYearFileable(state, year)) return state;
+    if (!existing?.frozenCalculation && !computed) return state;
     const isLiveYear = year === live.taxYear;
     const hasSnapshot = Object.hasOwn(state.householdSnapshots, year);
-    if (!isLiveYear && !hasSnapshot && !existing?.frozenCalculation)
-        return state;
-    if (!hasMeaningfulBelgianTaxData(resolveBelgianTaxProfile(state, year)))
-        return state;
     const householdSnapshots =
         isLiveYear && !hasSnapshot
             ? {
@@ -567,9 +575,7 @@ export function buildFiledTaxState(
                 [year]: {
                     ...(existing ?? {}),
                     filing,
-                    ...(existing?.frozenCalculation
-                        ? {}
-                        : computeYearResults(state, year)),
+                    ...(existing?.frozenCalculation ? {} : computed),
                 },
             },
             year,

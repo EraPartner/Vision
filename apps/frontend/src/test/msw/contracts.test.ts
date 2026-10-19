@@ -19,8 +19,12 @@ import { z } from "zod";
 import { server } from "./server";
 import {
     BelgianPortfolioTaxDashboardSchema,
+    BelgianTaxComputationSchema,
     BelgianTaxDashboardSchema,
+    BelgianTaxOverviewSchema,
 } from "@vision/types/contracts";
+import { defaultHousehold } from "@vision/shared-utils/belgian-tax/settings";
+import { DEFAULT_BELGIAN_TAX_PROFILE } from "@vision/shared-utils/belgian-tax/profileDefaults";
 import {
     CategoryItemSchema,
     collectionSchema,
@@ -1001,6 +1005,12 @@ describe("Phase F1: extended GET endpoint contracts", () => {
             "GET /api/belgian-tax/portfolio-dashboard",
             BelgianPortfolioTaxDashboardSchema,
         ],
+        [
+            "GET /api/belgian-tax/overview returns the hydrated tax overview",
+            "/api/belgian-tax/overview",
+            "GET /api/belgian-tax/overview",
+            BelgianTaxOverviewSchema,
+        ],
     ])("%s", async (_name, path, label, schema) => {
         validate(schema, await getEnvelope(path), label);
     });
@@ -1570,5 +1580,21 @@ describe("Phase F1: extended mutation contracts", () => {
         expect(data).not.toHaveProperty("total");
         expect(data).not.toHaveProperty("imported");
         expect(data).not.toHaveProperty("total_processed");
+    });
+});
+
+describe("Belgian tax compute contract", () => {
+    it("POST /api/belgian-tax/compute returns the household result and calculation", async () => {
+        const household = {
+            ...defaultHousehold(DEFAULT_BELGIAN_TAX_PROFILE),
+            profileConfigured: true,
+        };
+        validate(
+            BelgianTaxComputationSchema,
+            await mutateEnvelope("POST", "/api/belgian-tax/compute", {
+                household,
+            }),
+            "POST /api/belgian-tax/compute",
+        );
     });
 });

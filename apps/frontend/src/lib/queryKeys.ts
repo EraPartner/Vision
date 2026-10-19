@@ -352,6 +352,11 @@ export const taxKeys = {
     portfolioDashboardAll: ["tax", "portfolio-dashboard"] as const,
     portfolioDashboard: (year: number, currency: string) =>
         ["tax", "portfolio-dashboard", year, currency] as const,
+    /**
+     * POST /api/belgian-tax/compute for one household (hashed structurally). The result is a
+     * pure function of the household, so an entry never goes stale.
+     */
+    compute: (household: unknown) => ["tax", "compute", household] as const,
 };
 
 // ── Cash-flow forecast / bank balances ──────────────────────────────────────

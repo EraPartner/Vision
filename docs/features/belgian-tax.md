@@ -89,33 +89,41 @@ category matches remain suggestions requiring confirmation; category text does n
 ## Module layout
 
 The PIT and household calculation engine lives in `packages/shared-utils/src/belgianTax/`,
-exported through `@vision/shared-utils/belgian-tax/*`. The original frontend module paths are
-compatibility exports, so lazy loading, store behavior, and existing callers retain their behavior.
-The shared package also owns v1/v2 migration, settings validation/loading, and profile defaults.
-React provider/store orchestration and CSV helpers remain in the frontend. Portfolio tax
-and recorded-income attribution are shared TypeScript modules with frontend compatibility exports. `householdRuntime` still loads on demand and re-exports the shared hydration helpers.
+exported through `@vision/shared-utils/belgian-tax/*`, and runs only on the server
+([[docs/adr/217-belgian-tax-figures-on-the-server|ADR-217]]). The original frontend module paths
+remain as compatibility exports for the engine tests; application code no longer imports the
+engine. The shared package also owns v1/v2 migration, settings validation/loading, profile
+defaults and the overview builder (`overview.ts`). React provider/store orchestration and CSV
+helpers remain in the frontend. `householdRuntime` loads on demand and holds only shape helpers:
+the v1 projection and patch, the household diff and the zod check of edits.
 
 `POST /api/belgian-tax/compute` exposes the same engine over HTTP. It accepts a
 complete v2 household and returns `result` (assessment, partner/activity breakdowns, quotient,
 CSSS, totals, and issues) plus `calculation` (the legacy-compatible PIT presentation). This is a
 stateless preview: it does not select a live or historical profile, persist edits, create snapshots,
-or mark a year filed. Callers must retain the existing frozen-result precedence. Existing report
-requests and frontend calculations are unchanged. See [[docs/api/belgian-tax|the API contract]].
+or mark a year filed. Callers must retain the existing frozen-result precedence. The web app
+computes every unfrozen figure through it (see below). See [[docs/api/belgian-tax|the API contract]].
 
 `GET /api/belgian-tax/overview` reads a normalized live or historical overview using those same
 hydration routines. It preserves frozen PIT and household results verbatim and returns original
 settings baselines. A fully frozen filing never calls the current engine. Legacy frozen PIT without
 a household breakdown retains its PIT while obtaining that missing breakdown from the engine,
-as the web store does. A read does not write an upgrade, create a snapshot, or file a year.
+although the web screen shows no household breakdown for such a year. A read does not write an upgrade, create a snapshot, or file a year.
 The `year` query accepts any four-digit year; a year outside the storable 1900–2200 snapshot range
 gets the year-pinned live estimate, for example for a custom report period.
 
 `GET /api/belgian-tax/dashboard` derives the chart, attribution, frozen scaling and fiscal display
 values on the server. The web `/tax` page reads its yearly and monthly charts, recorded portfolio
 taxes, recorded income per partner, per-year calculations (trend strip and year comparison) and
-deduction suggestions from it through `useTaxOverviewData`. The viewed year's profile and
-calculation (masthead, computation flow, PIT breakdown, current inputs, household breakdown) stay
-on the household store, which the profile dialog edits live. The dashboard reads the stored
+deduction suggestions from it through `useTaxOverviewData`. The viewed year's profile stays on the
+household store, which the profile dialog edits live. Its figures (masthead, computation flow, PIT
+breakdown, current inputs, household breakdown, the two totals and the household step's
+assessment) come from `useTaxYearFigures` in `hooks/useBelgianTaxComputation.ts`: the frozen
+figures of a frozen year, else `POST /api/belgian-tax/compute` on the year's household, 300 ms
+after the last edit. Each household content is its own React Query entry, so a late response for
+an older edit never replaces newer figures and superseded requests are aborted; the previous
+figures of the same year stay on screen while an edit computes, and a failed computation shows
+`tax.page.computeError`. The dashboard reads the stored
 household, so `stores/taxPersistence.ts` notifies `onTaxSettingsSaved` listeners after each
 acknowledged save and the page refetches; transaction and investment mutations invalidate it
 through `invalidateTransactionData` / `invalidateInvestmentData`. `/portfolio/tax` likewise reads
@@ -145,7 +153,9 @@ Modules are split by concern:
 | `settings.ts`           | Shared v1/v2 settings hydration and upgrade decisions                                                                                                    |
 | `profileDefaults.ts`    | Shared v1 defaults and meaningful-profile detection                                                                                                      |
 | `householdSchema.ts`    | zod schemas for the v2 setting values                                                                                                                    |
-| `householdRuntime.ts`   | Lazily loaded engine entry for the store: settings load/upgrade, projections, household diff                                                             |
+| `householdRuntime.ts`   | Frontend only, lazily loaded: v1 projection and patch, household diff, zod check of edits (no tax computation)                                            |
+| `forfaitCategory.ts`    | Art. 51 forfait category of an activity kind, without the engine                                                                                         |
+| `overview.ts`           | `buildTaxOverview` for `GET /api/belgian-tax/overview` (server and test stubs)                                                                           |
 | `index.ts`              | Explicit supported public re-exports; year-table internals stay private                                                                                  |
 
 ### `portfolioTax.ts` — Pure Portfolio-Tax Estimators (2026-05-29)
@@ -176,12 +186,16 @@ Modules are split by concern:
 **Tests:** `apps/frontend/src/lib/belgianTax/__tests__/portfolioTax.test.ts` — 13 golden-output cases locking all estimators to 8 decimal places. Integrated into the frontend Vitest suite (94 tax-unit + 88 portfolio-integration tests pass; see [[docs/testing/test-inventory|Test Inventory]]).
 
 The Belgian-tax slice in [[apps/frontend/src/stores/belgianTaxStore]] owns household, snapshot,
-audit, viewed-year, and calculation state; `profile` and `snapshots` are v1 projections of the
-household (see [Household taxation](#household-taxation)). The compatibility provider in
-[[apps/frontend/src/contexts/BelgianTaxProfileContext]] only hydrates and persists that slice.
-Consumers use narrow selectors, and pure tax symbols come directly from `lib/belgianTax`.
-Boot-path modules import the library by file path, not through the barrel, so the household
-engine stays in the lazily loaded `householdRuntime.ts` chunk.
+audit and viewed-year state; `profile` and `snapshots` are v1 projections of the household (see
+[Household taxation](#household-taxation)). It holds no calculation: figures come from the server.
+The compatibility provider in [[apps/frontend/src/contexts/BelgianTaxProfileContext]] hydrates
+the slice from `GET /api/belgian-tax/overview` (which runs the v1→v2 upgrade), adopts the
+overview's CAS baselines for later saves, writes the v2 keys once when the overview reports a
+pending upgrade, and persists edits. Freezing, filing (`persistTaxFiling`), the year CSV and the
+PDF report's precomputed PIT and household blocks take the server's figures for the year
+(`computeTaxYearResults`, `resolveTaxYearFigures`); stored frozen metadata keeps its shape.
+Consumers use narrow selectors; boot-path modules import types only from the `lib/belgianTax`
+barrel.
 
 ## Sources of truth
 
@@ -402,8 +416,8 @@ The tax overview page includes a `SuggestedDeductionsCard` component that sugges
 ## Household taxation
 
 > [!info] Phase C1 (2026-10-11, [[docs/adr/200-belgian-tax-household-model|ADR-200]])
-> The store computes the live tax from the household, and the tax profile sheet edits the
-> household directly (see [[#Household editor and breakdown]]). The partner-to-account-owner
+> The server computes the live tax from the household (ADR-217), and the tax profile sheet edits
+> the household directly (see [[#Household editor and breakdown]]). The partner-to-account-owner
 > link and exports follow in phase C2.
 
 A household (`BelgianTaxHouseholdV2`) has one or two partners. Each partner has income

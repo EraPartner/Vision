@@ -2,10 +2,8 @@ import { useMemo } from "react";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
-import {
-    resolveBelgianTaxCalculation,
-    resolveBelgianTaxProfile,
-} from "@/stores/belgianTaxStore";
+import { resolveBelgianTaxProfile } from "@/stores/belgianTaxStore";
+import { useTaxYearFigures } from "@/hooks/useBelgianTaxComputation";
 import { usePortfolioTaxDashboardQuery } from "@/hooks/useBelgianTaxDashboards";
 import type { BelgianPortfolioTaxDashboard } from "@/lib/api/belgianTax";
 import { getAssetClassLabel, type AssetClass } from "@/types/portfolio";
@@ -64,29 +62,20 @@ export interface PortfolioTaxInvestmentSummary {
  * breakdowns, TOB / TACR / Reynders / CGT / dividend-WHT estimates, totals) comes
  * from GET /api/belgian-tax/portfolio-dashboard, which reads the stored manual
  * adjustments and classifications. This hook only localizes labels; the viewed
- * year's profile and calculation for the profile-inputs card stay on the household
- * store, which the profile dialog edits live.
+ * year's profile for the profile-inputs card stays on the household store, which the
+ * profile dialog edits live, and its figures come from POST /api/belgian-tax/compute
+ * (or the frozen figures).
  */
 export function usePortfolioTaxData() {
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
-    const {
-        liveProfile,
-        snapshots,
-        household,
-        householdSnapshots,
-        snapshotMetas,
-        viewedYear,
-        isProfileLoading,
-    } = useBelgianTaxProfile((state) => ({
-        liveProfile: state.profile,
-        snapshots: state.snapshots,
-        household: state.household,
-        householdSnapshots: state.householdSnapshots,
-        snapshotMetas: state.snapshotMetas,
-        viewedYear: state.viewedYear,
-        isProfileLoading: state.isLoading,
-    }));
+    const { liveProfile, snapshots, viewedYear, isProfileLoading } =
+        useBelgianTaxProfile((state) => ({
+            liveProfile: state.profile,
+            snapshots: state.snapshots,
+            viewedYear: state.viewedYear,
+            isProfileLoading: state.isLoading,
+        }));
     const profile = useMemo(
         () =>
             resolveBelgianTaxProfile(
@@ -95,27 +84,7 @@ export function usePortfolioTaxData() {
             ),
         [liveProfile, snapshots, viewedYear],
     );
-    const calculation = useMemo(
-        () =>
-            resolveBelgianTaxCalculation(
-                {
-                    profile: liveProfile,
-                    snapshots,
-                    household,
-                    householdSnapshots,
-                    snapshotMetas,
-                },
-                viewedYear,
-            ),
-        [
-            liveProfile,
-            snapshots,
-            household,
-            householdSnapshots,
-            snapshotMetas,
-            viewedYear,
-        ],
-    );
+    const { calculation } = useTaxYearFigures(viewedYear);
 
     const dashboardQuery = usePortfolioTaxDashboardQuery({
         year: viewedYear,

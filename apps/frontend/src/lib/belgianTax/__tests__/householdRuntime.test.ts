@@ -1,9 +1,10 @@
 import { describe, expect, test } from "vitest";
 import { DEFAULT_BELGIAN_TAX_PROFILE } from "@/stores/belgianTaxStore";
+// The upgrade runs on the server (GET /api/belgian-tax/overview); it is shared code.
 import {
     loadHouseholdSettings,
     type StoredBelgianTaxSettings,
-} from "../householdRuntime";
+} from "@vision/shared-utils/belgian-tax/settings";
 import { parseHouseholdSnapshotsV2, parseHouseholdV2 } from "../householdSchema";
 import { upgradeProfileV1ToHousehold } from "../householdMigration";
 import type { BelgianTaxProfile } from "../types";

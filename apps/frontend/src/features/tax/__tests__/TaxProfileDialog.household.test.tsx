@@ -15,6 +15,7 @@ import {
 } from "@/lib/belgianTax/householdMigration";
 import type { BelgianTaxHouseholdV2 } from "@/lib/belgianTax/householdTypes";
 import { TaxProfileDialog } from "@/features/tax/TaxProfileDialog";
+import { TAX_COMPUTE_DEBOUNCE_MS } from "@/hooks/useBelgianTaxComputation";
 
 const API_BASE = "http://localhost:3002";
 
@@ -158,8 +159,9 @@ describe("TaxProfileDialog household editing", () => {
 
         await user.click(await screen.findByRole("switch", { name: /I have a partner/ }));
         expect(storedHousehold()?.partners.map((p) => p.id)).toEqual(["A", "B"]);
-        // Two partners without a marriage or legal cohabitation are assessed separately.
-        expect(screen.getByText("Separate")).toBeInTheDocument();
+        // Two partners without a marriage or legal cohabitation are assessed separately; the
+        // server derives the assessment once the edit settles.
+        expect(await screen.findByText("Separate")).toBeInTheDocument();
         expect(screen.getByText(/No marriage or legal cohabitation recorded/)).toBeInTheDocument();
 
         await next(user);
@@ -217,7 +219,11 @@ describe("TaxProfileDialog household editing", () => {
         expect(stored?.relationship.events).toEqual([
             { id: "evt_1", kind: "marriage", date: `${migrated.taxYear - 1}-01-01` },
         ]);
-        expect(screen.getByText("Joint")).toBeInTheDocument();
+        // Still joint once the server has assessed the edited household.
+        await new Promise((resolve) =>
+            setTimeout(resolve, TAX_COMPUTE_DEBOUNCE_MS + 100),
+        );
+        await waitFor(() => expect(screen.getByText("Joint")).toBeInTheDocument());
         expect(screen.queryByText("Separate")).not.toBeInTheDocument();
     });
 

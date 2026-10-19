@@ -1,20 +1,32 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { useSettingsStore } from "@/stores/settingsStore";
 import {
+    computeTaxYearResults,
     DEFAULT_BELGIAN_TAX_PROFILE,
-    resolveBelgianTaxCalculation,
-    resolveBelgianTaxHouseholdResult,
     resolveBelgianTaxProfile,
+    resolveTaxYearFigures,
 } from "@/stores/belgianTaxStore";
 import * as runtime from "@/lib/belgianTax/householdRuntime";
 import {
-    computeBelgianPIT,
-    type BelgianTaxHouseholdV2,
-    type BelgianTaxProfile,
-} from "@/lib/belgianTax";
+    upgradeProfileV1ToHousehold,
+    upgradeSnapshotsV1ToV2,
+} from "@/lib/belgianTax/householdMigration";
+import type { BelgianTaxHouseholdV2, BelgianTaxProfile } from "@/lib/belgianTax";
+// Test-only reference: the MSW compute route runs this engine, as the backend does.
+import { computeHouseholdTax } from "@vision/shared-utils/belgian-tax/household";
 
 function householdOf(profile: BelgianTaxProfile): BelgianTaxHouseholdV2 {
-    return runtime.upgradeProfileV1ToHousehold(profile);
+    return upgradeProfileV1ToHousehold(profile);
+}
+
+/** The server's figures for `year` of the current store state. */
+async function serverFigures(year: number) {
+    const results = await computeTaxYearResults(
+        useSettingsStore.getState(),
+        year,
+    );
+    if (!results) throw new Error("store not hydrated");
+    return results;
 }
 
 function hydrate(
@@ -26,7 +38,7 @@ function hydrate(
         ._hydrate(
             runtime,
             householdOf(profile),
-            runtime.upgradeSnapshotsV1ToV2(snapshots),
+            upgradeSnapshotsV1ToV2(snapshots),
             {},
         );
 }
@@ -36,44 +48,23 @@ describe("Belgian tax settings slice", () => {
         hydrate(DEFAULT_BELGIAN_TAX_PROFILE);
     });
 
-    it("updates the live profile and calculation atomically", () => {
+    it("updates the live profile and household atomically, and the server computes the edit", async () => {
         useSettingsStore
             .getState()
             .updateProfile({ grossAnnualIncome: 50_000 });
         const state = useSettingsStore.getState();
         expect(state.profile.grossAnnualIncome).toBe(50_000);
-        expect(state.calculation.grossIncome).toBe(50_000);
         expect(state.household?.partners[0]?.activities[0]?.grossIncome).toBe(
             50_000,
         );
-        expect(state.householdResult?.totals.totalPIT).toBe(
-            state.calculation.totalPIT,
+        const figures = await serverFigures(state.profile.taxYear);
+        expect(figures.frozenCalculation.grossIncome).toBe(50_000);
+        expect(figures.frozenHouseholdResult?.totals.totalPIT).toBe(
+            figures.frozenCalculation.totalPIT,
         );
     });
 
-    it("gives a one-partner household the same calculation as computeBelgianPIT on the projected profile", () => {
-        hydrate({
-            ...DEFAULT_BELGIAN_TAX_PROFILE,
-            profileConfigured: true,
-            grossAnnualIncome: 64_000,
-            region: "brussels",
-            dependentChildren: 2,
-            personalPensionContributions: 1_020,
-            pensionEligible: true,
-            cadastralIncome: 1_250,
-        });
-        const state = useSettingsStore.getState();
-        expect(state.household?.partners).toHaveLength(1);
-        expect(state.calculation).toEqual(computeBelgianPIT(state.profile));
-
-        useSettingsStore
-            .getState()
-            .updateProfile({ grossAnnualIncome: 41_500 });
-        const updated = useSettingsStore.getState();
-        expect(updated.calculation).toEqual(computeBelgianPIT(updated.profile));
-    });
-
-    it("computes a two-partner household through the household engine", () => {
+    it("sends a two-partner household to the server and projects it onto the v1 profile", async () => {
         hydrate({
             ...DEFAULT_BELGIAN_TAX_PROFILE,
             grossAnnualIncome: 60_000,
@@ -82,11 +73,8 @@ describe("Belgian tax settings slice", () => {
         });
         const state = useSettingsStore.getState();
         expect(state.household?.partners.map((p) => p.id)).toEqual(["A", "B"]);
-        expect(state.householdResult?.assessment.mode).toBe("joint");
-        const result = runtime.computeHouseholdTax(state.household!);
-        expect(state.calculation).toEqual(
-            runtime.toBelgianTaxCalculation(result, state.household!),
-        );
+        const figures = await serverFigures(state.profile.taxYear);
+        expect(figures.frozenHouseholdResult?.assessment.mode).toBe("joint");
         expect(state.profile.filingStatus).toBe("married_joint");
         expect(state.profile.spouseProfessionalIncome).toBe(15_000);
     });
@@ -105,7 +93,7 @@ describe("Belgian tax settings slice", () => {
         ).toEqual(["created"]);
     });
 
-    it("resolves current snapshots and frozen calculations from reactive state", () => {
+    it("resolves current snapshots and frozen calculations from reactive state", async () => {
         const liveYear = DEFAULT_BELGIAN_TAX_PROFILE.taxYear;
         const historicalYear = liveYear - 1;
         hydrate(
@@ -118,18 +106,21 @@ describe("Belgian tax settings slice", () => {
                 },
             },
         );
-        useSettingsStore.getState().freezeCalculation(historicalYear);
+        await useSettingsStore.getState().freezeCalculation(historicalYear);
 
         const state = useSettingsStore.getState();
         expect(resolveBelgianTaxProfile(state, liveYear)).toBe(state.profile);
         expect(
             resolveBelgianTaxProfile(state, historicalYear).grossAnnualIncome,
         ).toBe(45_000);
-        expect(resolveBelgianTaxCalculation(state, historicalYear)).toBe(
-            state.snapshotMetas[historicalYear]!.frozenCalculation,
-        );
+        expect(
+            state.snapshotMetas[historicalYear]!.frozenCalculation?.grossIncome,
+        ).toBe(45_000);
+        expect(
+            (await resolveTaxYearFigures(state, historicalYear))?.calculation,
+        ).toBe(state.snapshotMetas[historicalYear]!.frozenCalculation);
     });
-    it("records the configured live year and preserves its frozen record across reload and unfiling", () => {
+    it("records the configured live year and preserves its frozen record across reload and unfiling", async () => {
         const year = DEFAULT_BELGIAN_TAX_PROFILE.taxYear;
         useSettingsStore
             .getState()
@@ -137,9 +128,9 @@ describe("Belgian tax settings slice", () => {
                 profileConfigured: true,
                 grossAnnualIncome: 50_000,
             });
-        useSettingsStore.getState().freezeCalculation(year);
+        await useSettingsStore.getState().freezeCalculation(year);
         const frozen = useSettingsStore.getState().getFrozenCalculation(year);
-        useSettingsStore
+        await useSettingsStore
             .getState()
             .markYearAsFiled(year, "synthetic-reference");
         const saved = useSettingsStore.getState();
@@ -175,20 +166,20 @@ describe("Belgian tax settings slice", () => {
         ).toEqual(["frozen", "filed", "unfiled"]);
     });
 
-    it("requires a reviewed profile for historical filing instead of freezing a live-profile estimate", () => {
+    it("requires a reviewed profile for historical filing instead of freezing a live-profile estimate", async () => {
         const year = DEFAULT_BELGIAN_TAX_PROFILE.taxYear - 1;
         useSettingsStore.getState().updateProfile({ profileConfigured: true });
-        useSettingsStore.getState().markYearAsFiled(year);
+        await useSettingsStore.getState().markYearAsFiled(year);
         expect(useSettingsStore.getState().isYearFiled(year)).toBe(false);
         useSettingsStore.getState().createSnapshotFromLive(year);
-        useSettingsStore.getState().markYearAsFiled(year);
+        await useSettingsStore.getState().markYearAsFiled(year);
         expect(useSettingsStore.getState().isYearFiled(year)).toBe(true);
     });
 
-    it("freezes the household result next to the calculation and drops both on unfreeze", () => {
+    it("freezes the household result next to the calculation and drops both on unfreeze", async () => {
         const year = DEFAULT_BELGIAN_TAX_PROFILE.taxYear - 1;
         useSettingsStore.getState().createSnapshotFromLive(year);
-        useSettingsStore.getState().freezeCalculation(year);
+        await useSettingsStore.getState().freezeCalculation(year);
         const meta = useSettingsStore.getState().snapshotMetas[year]!;
         expect(meta.frozenHouseholdResult?.engineVersion).toBe(2);
         expect(meta.frozenHouseholdResult?.totals.totalPIT).toBe(
@@ -227,7 +218,7 @@ describe("Belgian tax settings slice", () => {
         ]);
     });
 
-    it("updateHousehold edits the live household and recomputes result, calculation and projection", () => {
+    it("updateHousehold edits the live household and its projection; the server computes it", async () => {
         useSettingsStore.getState().updateHousehold((h) => {
             h.partners[0]!.activities.push({
                 id: "act_A_2",
@@ -240,16 +231,11 @@ describe("Belgian tax settings slice", () => {
         let state = useSettingsStore.getState();
         expect(state.household?.partners[0]?.activities).toHaveLength(2);
         expect(state.household?.partners[0]?.birthYear).toBe(1980);
-        expect(state.householdResult).toEqual(
-            runtime.computeHouseholdTax(state.household!),
-        );
-        expect(state.calculation).toEqual(
-            runtime.toBelgianTaxCalculation(
-                state.householdResult!,
-                state.household!,
-            ),
-        );
         expect(state.profile.grossAnnualIncome).toBe(10_000);
+        const figures = await serverFigures(state.household!.taxYear);
+        expect(figures.frozenHouseholdResult).toEqual(
+            JSON.parse(JSON.stringify(computeHouseholdTax(state.household!))),
+        );
 
         useSettingsStore.getState().updateHousehold({ region: "wallonia" });
         state = useSettingsStore.getState();
@@ -257,7 +243,7 @@ describe("Belgian tax settings slice", () => {
         expect(state.profile.region).toBe("wallonia");
     });
 
-    it("updateHousehold adds and removes partner B and derives the assessment from events", () => {
+    it("updateHousehold adds and removes partner B and the server derives the assessment from events", async () => {
         const before = useSettingsStore.getState().household!;
         useSettingsStore.getState().updateHousehold((h) => ({
             ...h,
@@ -281,7 +267,10 @@ describe("Belgian tax settings slice", () => {
             },
         }));
         let state = useSettingsStore.getState();
-        expect(state.householdResult?.assessment.mode).toBe("joint");
+        const year = state.household!.taxYear;
+        expect(
+            (await serverFigures(year)).frozenHouseholdResult?.assessment.mode,
+        ).toBe("joint");
         expect(state.profile.filingStatus).toBe("married_joint");
 
         useSettingsStore.getState().updateHousehold((h) => ({
@@ -290,7 +279,9 @@ describe("Belgian tax settings slice", () => {
             relationship: { events: [] },
         }));
         state = useSettingsStore.getState();
-        expect(state.householdResult?.assessment.mode).toBe("single");
+        expect(
+            (await serverFigures(year)).frozenHouseholdResult?.assessment.mode,
+        ).toBe("single");
         expect(state.household).toEqual(before);
     });
 
@@ -331,7 +322,7 @@ describe("Belgian tax settings slice", () => {
         ).toEqual(["created"]);
     });
 
-    it("updateHouseholdSnapshot keeps the year, recomputes the projection and audits the household diff", () => {
+    it("updateHouseholdSnapshot keeps the year, recomputes the projection and audits the household diff", async () => {
         const year = DEFAULT_BELGIAN_TAX_PROFILE.taxYear - 1;
         useSettingsStore.getState().createSnapshotFromLive(year);
         useSettingsStore.getState().updateHouseholdSnapshot(year, (h) => {
@@ -342,7 +333,9 @@ describe("Belgian tax settings slice", () => {
         const state = useSettingsStore.getState();
         expect(state.householdSnapshots[year]?.taxYear).toBe(year);
         expect(state.snapshots[year]?.grossAnnualIncome).toBe(42_000);
-        expect(state.calculationForYear(year).grossIncome).toBe(42_000);
+        expect((await serverFigures(year)).frozenCalculation.grossIncome).toBe(
+            42_000,
+        );
         const entry = state.getSnapshotHistory(year).at(-1)!;
         expect(entry.kind).toBe("patched");
         expect(entry.changes).toBeUndefined();
@@ -366,20 +359,26 @@ describe("Belgian tax settings slice", () => {
         );
     });
 
-    it("resolves the household result shown for a year: live, frozen or computed", () => {
+    it("resolves the figures exported for a year: computed by the server, or frozen", async () => {
         const liveYear = DEFAULT_BELGIAN_TAX_PROFILE.taxYear;
         const year = liveYear - 1;
         useSettingsStore.getState().createSnapshotFromLive(year);
         let state = useSettingsStore.getState();
-        expect(resolveBelgianTaxHouseholdResult(state, liveYear)).toBe(
-            state.householdResult,
+        expect(
+            (await resolveTaxYearFigures(state, liveYear))?.householdResult,
+        ).toEqual(JSON.parse(JSON.stringify(computeHouseholdTax(state.household!))));
+        expect(
+            (await resolveTaxYearFigures(state, year))?.householdResult,
+        ).toEqual(
+            JSON.parse(
+                JSON.stringify(
+                    computeHouseholdTax(state.householdSnapshots[year]!),
+                ),
+            ),
         );
-        expect(resolveBelgianTaxHouseholdResult(state, year)).toEqual(
-            runtime.computeHouseholdTax(state.householdSnapshots[year]!),
-        );
-        useSettingsStore.getState().freezeCalculation(year);
+        await useSettingsStore.getState().freezeCalculation(year);
         state = useSettingsStore.getState();
-        expect(resolveBelgianTaxHouseholdResult(state, year)).toBe(
+        expect((await resolveTaxYearFigures(state, year))?.householdResult).toBe(
             state.snapshotMetas[year]!.frozenHouseholdResult,
         );
     });

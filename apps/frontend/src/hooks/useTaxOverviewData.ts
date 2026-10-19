@@ -1,10 +1,8 @@
 import { useMemo } from "react";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
-import {
-    resolveBelgianTaxCalculation,
-    resolveBelgianTaxProfile,
-} from "@/stores/belgianTaxStore";
+import { resolveBelgianTaxProfile } from "@/stores/belgianTaxStore";
+import { useTaxYearFigures } from "@/hooks/useBelgianTaxComputation";
 import type { PartnerAmounts } from "@/lib/belgianTax/partnerAttribution";
 import type {
     BelgianTaxDashboardSuggestion,
@@ -38,26 +36,22 @@ const NO_YEARS: BelgianTaxDashboardYear[] = [];
  * The transaction-derived figures (taxable income by month and year, PIT per bar,
  * the monthly reserve, recorded portfolio taxes, recorded income per partner, the
  * per-year calculations and the deduction suggestions) come from
- * GET /api/belgian-tax/dashboard. The viewed year's profile and calculation stay
- * on the household store, which the profile dialog edits live; the server reads
- * the stored household and is refetched after each acknowledged save.
+ * GET /api/belgian-tax/dashboard. The viewed year's profile stays on the household
+ * store, which the profile dialog edits live; its figures come from
+ * POST /api/belgian-tax/compute on that household as it is edited (or the frozen
+ * figures). The dashboard reads the stored household and is refetched after each
+ * acknowledged save.
  */
 export function useTaxOverviewData() {
     const { appSettings } = useAppSettings();
     const {
         profile: liveProfile,
         snapshots,
-        household,
-        householdSnapshots,
-        snapshotMetas,
         isLoading: isProfileLoading,
         viewedYear,
     } = useBelgianTaxProfile((state) => ({
         profile: state.profile,
         snapshots: state.snapshots,
-        household: state.household,
-        householdSnapshots: state.householdSnapshots,
-        snapshotMetas: state.snapshotMetas,
         isLoading: state.isLoading,
         viewedYear: state.viewedYear,
     }));
@@ -71,29 +65,10 @@ export function useTaxOverviewData() {
             ),
         [liveProfile, snapshots, viewedYear],
     );
-    // Use the display calc — falls back to the frozen "as-filed" value when present so
-    // engine drift doesn't retroactively change filed numbers (ADR-059).
-    const calculation = useMemo(
-        () =>
-            resolveBelgianTaxCalculation(
-                {
-                    profile: liveProfile,
-                    snapshots,
-                    household,
-                    householdSnapshots,
-                    snapshotMetas,
-                },
-                viewedYear,
-            ),
-        [
-            liveProfile,
-            snapshots,
-            household,
-            householdSnapshots,
-            snapshotMetas,
-            viewedYear,
-        ],
-    );
+    // The frozen "as-filed" figures when present, so engine drift doesn't retroactively
+    // change filed numbers (ADR-059); else the server's figures for the viewed household.
+    const figures = useTaxYearFigures(viewedYear);
+    const { calculation } = figures;
 
     const dashboardQuery = useTaxDashboardQuery({
         year: viewedYear,
@@ -141,6 +116,8 @@ export function useTaxOverviewData() {
         profile,
         /** Display PIT calculation for the viewed year (frozen "as-filed" when present). */
         calculation,
+        /** Server computation state of `calculation` (pending, refreshing, failed). */
+        figures,
         isProfileLoading,
         viewedYear,
         hasIncomeSources: dashboard?.hasIncomeSources ?? false,

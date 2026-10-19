@@ -95,6 +95,7 @@ export default function TaxOverviewPage() {
         stats,
         profile,
         calculation,
+        figures,
         isProfileLoading,
         viewedYear,
         hasIncomeSources,
@@ -110,11 +111,12 @@ export default function TaxOverviewPage() {
         isEmpty,
     } = useTaxOverviewData();
     // Household engine notes for the live year (ADR-200); one line per issue code.
-    const householdIssues = useBelgianTaxProfile((state) =>
-        state.isViewingHistorical
-            ? NO_HOUSEHOLD_ISSUES
-            : (state.householdResult?.issues ?? NO_HOUSEHOLD_ISSUES),
+    const isViewingHistorical = useBelgianTaxProfile(
+        (state) => state.isViewingHistorical,
     );
+    const householdIssues = isViewingHistorical
+        ? NO_HOUSEHOLD_ISSUES
+        : (figures.householdResult?.issues ?? NO_HOUSEHOLD_ISSUES);
     const storedHouseholdUnreadable = useBelgianTaxProfile(
         (state) => state.storedHouseholdUnreadable,
     );
@@ -259,7 +261,15 @@ export default function TaxOverviewPage() {
 
                 {householdLoadFailed ? (
                     <PageError message={t("tax.household.loadFailed")} />
-                ) : isProfileLoading || (!hasProfile && stats.isLoading) ? (
+                ) : figures.error && figures.isPending ? (
+                    <PageError
+                        message={t("tax.page.computeError", {
+                            msg: figures.error.message,
+                        })}
+                    />
+                ) : isProfileLoading ||
+                  (!hasProfile && stats.isLoading) ||
+                  (hasProfile && figures.isPending) ? (
                     <SectionLoader />
                 ) : isEmpty ? (
                     <TaxNoProfileCard />
