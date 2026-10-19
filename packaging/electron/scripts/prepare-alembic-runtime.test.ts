@@ -14,7 +14,7 @@ import {
 } from "./prepare-alembic-runtime";
 
 test("Alembic packager pins its build tool and replacement target", () => {
-  assert.equal(ALEMBIC_VERSION, "1.19.1");
+  assert.equal(ALEMBIC_VERSION, "1.20.0");
   assert.equal(PYINSTALLER_VERSION, "6.22.2");
   assert.equal(
     assertSafeDestination("/private/tmp/vision-runtime/vision-alembic"),
