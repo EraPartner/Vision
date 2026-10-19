@@ -53,7 +53,6 @@ import {
     qualifyingDonations,
     type TaxReductionBreakdown,
     isChildcareDeducted,
-    type ForfaitCategory,
 } from "./personPit.ts";
 import { allocateOwnHomeCredit } from "./householdOwnHome.ts";
 import { computePropertyTaxEstimate } from "./propertyTax.ts";
@@ -62,6 +61,7 @@ import {
     evaluateCsssScale,
 } from "./socialSecurity.ts";
 import type { BelgianTaxCalculation, BracketTax } from "./types.ts";
+import { forfaitCategoryOf } from "./forfaitCategory.ts";
 import {
     FORFAIT_CATEGORIES,
     type ActivityKind,
@@ -77,24 +77,7 @@ import {
     type PartnerTaxResult,
 } from "./householdTypes.ts";
 
-/** Art. 51 forfait category of an activity kind. */
-export function forfaitCategoryOf(kind: ActivityKind): ForfaitCategory {
-    switch (kind) {
-        case "employee":
-        case "civil_servant":
-            return "remuneration";
-        case "director":
-            return "director";
-        case "self_employed_profits":
-            return "profits";
-        case "self_employed_fees":
-            return "fees";
-        case "helping_spouse":
-            return "helping_spouse";
-        default:
-            return "none";
-    }
-}
+export { forfaitCategoryOf };
 
 /** Activity kinds whose personal social contributions (art. 52, 7°) the user enters. */
 const SELF_EMPLOYED_CONTRIBUTION_KINDS: ReadonlySet<ActivityKind> = new Set([

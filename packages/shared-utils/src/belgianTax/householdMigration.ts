@@ -20,7 +20,7 @@
  */
 
 import { deriveAssessment } from "./assessment.ts";
-import { forfaitCategoryOf } from "./household.ts";
+import { forfaitCategoryOf } from "./forfaitCategory.ts";
 import type {
     ActivityKind,
     BelgianTaxHouseholdSnapshotsV2,
