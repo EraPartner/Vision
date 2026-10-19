@@ -61,8 +61,9 @@ when set, is the owner role that runs DDL.
 ### Fresh install and adoption
 
 An empty PostgreSQL 18 database receives the baseline. Its normalized catalog fingerprint
-(`db/schema-inventory.sql` through `schemaInventory.ts`, ignoring bookkeeping tables, column order
-and one equivalent CHECK spelling) must equal `BASELINE_SCHEMA_FINGERPRINT`, or the install rolls
+(`db/schema-inventory.sql` through `schemaInventory.ts`, ignoring bookkeeping tables, the
+`mv_monthly_summary` and `mv_category_totals` materialized views the backend creates after
+migrating, column order and one equivalent CHECK spelling) must equal `BASELINE_SCHEMA_FINGERPRINT`, or the install rolls
 back. A database with application objects but no migration marker is refused.
 
 A database still carrying `alembic_version` is adopted when it is at

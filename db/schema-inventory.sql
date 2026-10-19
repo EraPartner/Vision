@@ -1,21 +1,25 @@
 -- Catalog inventory of the Vision application schema (ADR-222).
 -- One row per object: kind, qualified name and a JSON definition. Excludes
--- object IDs, owners, grants, row data, sequence positions and the migration
--- bookkeeping tables, so a database and the baseline compare by shape only.
+-- object IDs, owners, grants, row data, sequence positions, the migration
+-- bookkeeping tables and the two materialized views the backend creates after
+-- migrating (materializedViewService), so a database and the baseline compare
+-- by shape only.
 -- Read by apps/node-backend/src/database/schemaInventory.ts.
 WITH bookkeeping AS (
   SELECT c.oid
     FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
    WHERE n.nspname = 'public'
      AND c.relname IN ('alembic_version', 'kysely_migration',
-                       'kysely_migration_lock')
+                       'kysely_migration_lock', 'mv_monthly_summary',
+                       'mv_category_totals')
   UNION ALL
   SELECT i.indexrelid
     FROM pg_index i JOIN pg_class c ON c.oid = i.indrelid
     JOIN pg_namespace n ON n.oid = c.relnamespace
    WHERE n.nspname = 'public'
      AND c.relname IN ('alembic_version', 'kysely_migration',
-                       'kysely_migration_lock')
+                       'kysely_migration_lock', 'mv_monthly_summary',
+                       'mv_category_totals')
 ),
 objects AS (
   SELECT 'schema' AS kind, n.nspname::text AS name,

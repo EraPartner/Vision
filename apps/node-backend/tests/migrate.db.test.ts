@@ -245,6 +245,16 @@ describe.skipIf(!hasTestDatabase() || !hasIsolatedTestDatabase())(
           DROP INDEX idx_transactions_bank_chronology;
           ALTER TABLE import_staging_rows DROP COLUMN bank_sequence;
           ALTER TABLE transactions DROP COLUMN bank_sequence;
+          -- A database that ever booted carries the backend's materialized views.
+          CREATE MATERIALIZED VIEW mv_monthly_summary AS
+            SELECT date_trunc('month', date)::date AS month_start, currency, count(*)
+              FROM transactions GROUP BY 1, 2;
+          CREATE UNIQUE INDEX idx_mv_monthly_summary
+            ON mv_monthly_summary (month_start, currency);
+          CREATE MATERIALIZED VIEW mv_category_totals AS
+            SELECT category_id, currency, count(*) FROM transactions GROUP BY 1, 2;
+          CREATE UNIQUE INDEX idx_mv_category_totals
+            ON mv_category_totals (category_id, currency);
         `),
       );
       const result = await withMigrationTarget(db.url, () =>
