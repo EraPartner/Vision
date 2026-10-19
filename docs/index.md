@@ -524,7 +524,7 @@ See [[docs/features/portfolio#offline-resilience-stale-price-indicators--empty-s
 - **AES-256-GCM AEAD encryption** — Replaces v1's CBC-only confidentiality with authenticated encryption (tampering detected on decryption)
 - **Per-backup random salt** — 16 random bytes per backup (v1 used static salt); eliminates salt-reuse collisions
 - **Stronger KDF** — Scrypt N=2^15 (doubled from v1's N=2^14) for 2x brute-force resistance
-- **Auto-detection** — Transparent format dispatch via magic header; v1 backups still readable indefinitely
+- **Auto-detection** — Transparent format dispatch via magic header. (v1 backups were later retired and are refused since 2026-10-19; see [[docs/adr/219-minimal-electron-shell-hardening|ADR-219]].)
 - **See:** [[docs/adr/040-backup-format-v2-aead-encryption|ADR-040]], [[docs/features/backup-coverage-audit|Backup Coverage Audit]]
 
 **Admin Bearer Token Security (2026-04-28):**

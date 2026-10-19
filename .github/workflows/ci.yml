@@ -295,6 +295,9 @@ jobs:
       - name: Type-check shared packages
         run: bun run typecheck:packages
 
+      - name: Test shared packages (Belgian tax engine, ADR-217)
+        run: bun run test:packages
+
   # ─────────────────────────────────────────────────────────────────────────────
   # Backend TypeScript — strict tsc over every src/**/*.ts file (ADR-186,
   # ADR-191). Required gate: catches type regressions before they reach main.

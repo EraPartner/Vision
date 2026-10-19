@@ -3,6 +3,7 @@ import {
   type PortfolioDashboardInvestment,
 } from "@vision/shared-utils/belgian-tax/portfolioDashboard";
 import { projectHouseholdToProfileV1 } from "@vision/shared-utils/belgian-tax/householdMigration";
+import { filesJointly } from "@vision/shared-utils/belgian-tax/assessment";
 import { investmentRepository } from "../../repositories/investmentRepository.ts";
 import { portfolioTransactionRepository } from "../../repositories/portfolioTransactionRepository.ts";
 import { getPortfolioSummary } from "../portfolio/portfolioSummaryService.ts";
@@ -21,10 +22,9 @@ export async function getPortfolioTaxDashboard(
   const [overview, holdings, metadata, rates, { settings, expected }] =
     await Promise.all([
       getTaxOverview(year),
-      getPortfolioSummary(target, {
-        activeInvestmentsOnly: false,
-        includeArchivedPresentation: true,
-      }),
+      // Archived holdings use the same dated-FX canonical summaries as the
+      // web portfolio (ADR-216), not the current-rate archive presentation.
+      getPortfolioSummary(target, { activeInvestmentsOnly: false }),
       investmentRepository.getAllWithCount({
         limit: 500,
         offset: 0,
@@ -40,10 +40,7 @@ export async function getPortfolioTaxDashboard(
       investmentIds: metadata.rows.map((inv) => inv.id),
       perInvestmentLimit: 1000,
     });
-  const active = new Map(holdings.summaries.map((inv) => [inv.id, inv]));
-  const archived = new Map(
-    (holdings.archivedPresentation ?? []).map((inv) => [inv.id, inv]),
-  );
+  const canonical = new Map(holdings.summaries.map((inv) => [inv.id, inv]));
   const byInvestment = new Map<number, typeof transactions>();
   for (const txn of transactions) {
     const bucket = byInvestment.get(txn.investment_id) ?? [];
@@ -51,7 +48,7 @@ export async function getPortfolioTaxDashboard(
     byInvestment.set(txn.investment_id, bucket);
   }
   const summaries = metadata.rows.flatMap((inv) => {
-    const summary = (inv.is_active ? active : archived).get(inv.id);
+    const summary = canonical.get(inv.id);
     if (!summary)
       throw new Error("Portfolio tax summary missing for listed investment");
     return [
@@ -90,8 +87,8 @@ export async function getPortfolioTaxDashboard(
     !Number.isFinite(calculation.totalPIT)
   )
     throw new Error("Portfolio tax overview has no valid PIT calculation");
-  const profile = projectHouseholdToProfileV1(overview.household);
-  const live = projectHouseholdToProfileV1(overview.liveHousehold);
+  const profile = projectHouseholdToProfileV1(overview.household, filesJointly);
+  const live = projectHouseholdToProfileV1(overview.liveHousehold, filesJointly);
   return {
     ...buildPortfolioTaxDashboard({
       summaries,

@@ -6262,8 +6262,7 @@ export interface components {
             /** Format: uri */
             html_url?: string;
             /** @enum {string} */
-            update_mode: "source" | "native" | "dev";
-            source_launcher_available?: boolean;
+            update_mode: "source" | "native";
             error?: string;
         };
         UpdateCheckEnvelope: components["schemas"]["Envelope"] & {

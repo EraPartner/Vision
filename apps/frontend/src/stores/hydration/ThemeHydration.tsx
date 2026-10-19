@@ -305,8 +305,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
             foreground: palette["primary-foreground"],
             surface: palette.background,
             text: palette.foreground,
+            // Native menus, dialogs and vibrancy follow macOS in system mode
+            // and the resolved theme otherwise (schedule included).
+            themeSource: mode === "system" ? "system" : theme,
         });
-    }, [variant, theme, isLoaded]);
+    }, [variant, theme, mode, isLoaded]);
 
     // Re-tint live when the user changes the accent in System Settings.
     useEffect(() => {

@@ -187,7 +187,7 @@ beforeEach(() => {
 });
 
 describe("Portfolio Tax authoritative dashboard", () => {
-  it("retains frozen PIT, all-time gains, ordinary current FX, archived presentation, and selected-year adjustments", async () => {
+  it("retains frozen PIT, all-time gains, ordinary current FX, canonical archived gains, and selected-year adjustments", async () => {
     const res = await api.get(path).query({ year: 2025, currency: "eur" });
     expect(res.status).toBe(200);
     expect(bodyAt(res, "data", "year")).toBe(2025);
@@ -202,8 +202,10 @@ describe("Portfolio Tax authoritative dashboard", () => {
       totalFees: 11.6,
       totalPIT: 1234,
       portfolioTaxesPlusPIT: 1284,
-      totalRealizedGain: 16000,
-      totalUnrealizedGain: 100,
+      // Archived holding comes from the dated-FX canonical summary (777), not
+      // the current-rate archivedPresentation (1000 / 60) the service ignores.
+      totalRealizedGain: 15777,
+      totalUnrealizedGain: 817,
     });
     expect(bodyAt(res, "data", "yearlyCostTrend")).toEqual([
       { period: "2025-01", taxes: 8, fees: 1.6 },
@@ -213,8 +215,8 @@ describe("Portfolio Tax authoritative dashboard", () => {
     expect(bodyAt(res, "data", "estimates")).toMatchObject({
       tobRecorded: 8,
       tobAutoEstimate: 2.8,
-      tacrEstimate: 3001.5,
-      reyndersEstimate: 75,
+      tacrEstimate: 3001.332,
+      reyndersEstimate: 58.275,
       cgtEstimate: 0,
     });
     expect(bodyAt(res, "data", "dividend")).toMatchObject({
@@ -225,7 +227,7 @@ describe("Portfolio Tax authoritative dashboard", () => {
     expect(bodyAt(res, "data", "investmentBreakdown", 0)).toMatchObject({
       id: 2,
       assetClass: "bond",
-      realizedGain: 1000,
+      realizedGain: 777,
       currency: "EUR",
     });
     expect(investmentRepository.getAllWithCount).toHaveBeenCalledWith({
@@ -238,7 +240,6 @@ describe("Portfolio Tax authoritative dashboard", () => {
     ).toHaveBeenCalledWith({ investmentIds: [1, 2], perInvestmentLimit: 1000 });
     expect(getPortfolioSummary).toHaveBeenCalledWith("EUR", {
       activeInvestmentsOnly: false,
-      includeArchivedPresentation: true,
     });
   });
   it("returns exact CAS baselines and preserves unknown settings properties", async () => {
@@ -260,7 +261,7 @@ describe("Portfolio Tax authoritative dashboard", () => {
     expect(res.status).toBe(200);
     expect(bodyAt(res, "data", "year")).toBe(2026);
     expect(bodyAt(res, "data", "totals", "totalManualCosts")).toBe(170);
-    expect(bodyAt(res, "data", "estimates", "cgtEstimate")).toBe(575);
+    expect(bodyAt(res, "data", "estimates", "cgtEstimate")).toBe(558.275);
     expect(bodyAt(res, "data", "taxTable", "badgePercent")).toEqual({
       securitiesAccountTaxRate: 0.15,
       capitalGainsTaxRate: 10,
@@ -325,10 +326,10 @@ describe("Portfolio Tax authoritative dashboard", () => {
     expect(res.status).toBe(500);
     expect(bodyAt(res, "ok")).toBe(false);
   });
-  it("rejects incomplete archived sources rather than replacing them with canonical P&L", async () => {
+  it("rejects a listed holding without a canonical summary rather than dropping it", async () => {
     vi.mocked(getPortfolioSummary).mockResolvedValue({
-      summaries: [],
-      archivedPresentation: [],
+      summaries: [rows[0]],
+      archivedPresentation: [{ ...rows[1], realizedGain: 1000 }],
     } as unknown as Holdings);
     expect((await api.get(path)).status).toBe(500);
   });

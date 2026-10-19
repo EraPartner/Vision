@@ -24,7 +24,7 @@ describe("loadHouseholdRuntime", () => {
 
     test("imports the runtime by default", async () => {
         await expect(loadHouseholdRuntime()).resolves.toHaveProperty(
-            "loadHouseholdSettings",
+            "applyHouseholdUpdate",
         );
     });
 });

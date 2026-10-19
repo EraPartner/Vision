@@ -15,24 +15,15 @@ export type {
     BracketTax,
     BelgianTaxCalculation,
 } from "./types";
-export type { BelgianTaxYearTable } from "./constants";
+export type { BelgianTaxYearTable } from "@vision/shared-utils/belgian-tax/constants";
 export {
     SUPPORTED_TAX_YEARS,
     LATEST_TAX_YEAR,
     EARLIEST_TAX_YEAR,
     DEFAULT_COMMUNAL_SURCHARGE,
-    getTaxTable,
-    isApproximatedTaxYear,
-} from "./constants";
+} from "@vision/shared-utils/belgian-tax/taxYears";
 export { DEDUCTION_TYPE_PROFILE_FIELDS } from "./deductionCandidateFields";
 export type { DeductionFieldMapping } from "./deductionCandidateFields";
-export { computeBelgianPIT } from "./pit";
-export { computePropertyTaxEstimate } from "./propertyTax";
-export {
-    computeEmployeeSocialSecurity,
-    computeSpecialSocialSecurityContribution,
-    estimateSelfEmployedContributions,
-} from "./socialSecurity";
 export type {
     PartnerId,
     ActivityKind,
@@ -72,20 +63,8 @@ export {
     PARTNER_IDS,
     RELATIONSHIP_EVENT_KINDS,
 } from "./householdTypes";
-export { deriveAssessment } from "./assessment";
-export { allocateExemptions, computeDependentSupplements } from "./exemptions";
-export { computeMaritalQuotient, resolveMaritalQuotientCap } from "./maritalQuotient";
-export {
-    computeHouseholdTax,
-    forfaitCategoryOf,
-    toBelgianTaxCalculation,
-} from "./household";
-export {
-    upgradeProfileV1ToHousehold,
-    upgradeSnapshotsV1ToV2,
-    projectHouseholdToProfileV1,
-    applyProfileV1PatchToHousehold,
-} from "./householdMigration";
-// `householdSchema.ts` is imported by path, not re-exported here: its module-level zod
-// schemas are not tree-shakeable, so a barrel export would pull them into the boot
-// bundle of every eager importer of this library (see scripts/check-bundle-size.ts).
+export { forfaitCategoryOf } from "./forfaitCategory";
+// The tax engine runs on the server (ADR-217) and is not part of this library. The household
+// shape helpers (`householdMigration.ts`, `householdSchema.ts`) are imported by path: the
+// provider loads them lazily through `householdRuntime.ts`, outside the boot bundle (see
+// scripts/check-bundle-size.ts).

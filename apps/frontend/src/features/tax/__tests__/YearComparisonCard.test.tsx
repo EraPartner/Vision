@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 
 vi.mock("@/stores/hydration/LanguageHydration", () => ({
@@ -28,11 +28,8 @@ vi.mock("@/stores/hydration/LanguageHydration", () => ({
 }));
 
 vi.mock("@/contexts/BelgianTaxProfileContext", () => ({
-    useBelgianTaxProfile: vi.fn(),
-}));
-
-vi.mock("@/hooks/useAvailableTaxYears", () => ({
-    useAvailableTaxYears: vi.fn(),
+    useBelgianTaxProfile: (selector: (state: object) => unknown) =>
+        selector({ viewedYear: 2026 }),
 }));
 
 vi.mock("@/hooks/useCurrencyFormatter", () => ({
@@ -51,55 +48,57 @@ vi.mock("@/hooks/useCurrencyFormatter", () => ({
         },
 }));
 
-import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
-import { useAvailableTaxYears } from "@/hooks/useAvailableTaxYears";
+import type { BelgianTaxDashboardYear } from "@/lib/api/belgianTax";
 import { YearComparisonCard } from "../YearComparisonCard";
 
-const mockedProfile = vi.mocked(useBelgianTaxProfile);
-const mockedYears = vi.mocked(useAvailableTaxYears);
+type Calculation = {
+    grossIncome: number;
+    totalPIT: number;
+    effectiveRate: number;
+    netTakeHome: number;
+};
+
+/** Dashboard `yearCalculations` for the live 2026 and frozen 2025 years. */
+function dashboardYears(
+    calculationForYear: (year: number) => Calculation,
+): BelgianTaxDashboardYear[] {
+    return [
+        {
+            year: 2026,
+            calculation: calculationForYear(2026),
+            isCurrent: true,
+            hasSnapshot: false,
+            hasTransactions: true,
+            isFiled: false,
+            hasFrozenCalculation: false,
+        },
+        {
+            year: 2025,
+            calculation: calculationForYear(2025),
+            isCurrent: false,
+            hasSnapshot: true,
+            hasTransactions: true,
+            isFiled: false,
+            hasFrozenCalculation: true,
+        },
+    ];
+}
+
+const calculationForYear = (year: number): Calculation => ({
+    grossIncome: year === 2026 ? 60_000 : 55_000,
+    totalPIT: year === 2026 ? 15_000 : 13_000,
+    effectiveRate: year === 2026 ? 25 : 23.6,
+    netTakeHome: year === 2026 ? 40_000 : 38_000,
+});
 
 describe("YearComparisonCard", () => {
-    beforeEach(() => {
-        vi.clearAllMocks();
-        const calculationForYear = (year: number) => ({
-            grossIncome: year === 2026 ? 60_000 : 55_000,
-            totalPIT: year === 2026 ? 15_000 : 13_000,
-            effectiveRate: year === 2026 ? 25 : 23.6,
-            netTakeHome: year === 2026 ? 40_000 : 38_000,
-        });
-        mockedProfile.mockImplementation((selector) =>
-            selector({
-                viewedYear: 2026,
-                profile: { taxYear: 2026 },
-                snapshots: { 2025: { taxYear: 2025 } },
-                snapshotMetas: {
-                    2025: { frozenCalculation: calculationForYear(2025) },
-                    2026: { frozenCalculation: calculationForYear(2026) },
-                },
-            } as never),
-        );
-        mockedYears.mockReturnValue([
-            {
-                year: 2026,
-                isCurrent: true,
-                hasSnapshot: false,
-                hasTransactions: true,
-                isFiled: false,
-                hasFrozenCalculation: false,
-            },
-            {
-                year: 2025,
-                isCurrent: false,
-                hasSnapshot: true,
-                hasTransactions: true,
-                isFiled: false,
-                hasFrozenCalculation: true,
-            },
-        ]);
-    });
-
     it("gives the comparison-year selector a localized accessible name", () => {
-        render(<YearComparisonCard />);
+        render(
+            <YearComparisonCard
+                years={dashboardYears(calculationForYear)}
+                viewedCalculation={calculationForYear(2026)}
+            />,
+        );
 
         expect(
             screen.getByRole("combobox", { name: "Compare with year" }),
@@ -107,7 +106,12 @@ describe("YearComparisonCard", () => {
     });
 
     it("uses gain/loss DeltaPill tones with inverted tax semantics", () => {
-        render(<YearComparisonCard />);
+        render(
+            <YearComparisonCard
+                years={dashboardYears(calculationForYear)}
+                viewedCalculation={calculationForYear(2026)}
+            />,
+        );
 
         const grossRow = screen.getByText("Gross income").closest("tr");
         const taxRow = screen.getByText("Total PIT").closest("tr");
@@ -125,28 +129,38 @@ describe("YearComparisonCard", () => {
     });
 
     it("keeps a negative sign on money deltas", () => {
-        const calculationForYear = (year: number) => ({
+        const lowerGross = (year: number): Calculation => ({
             grossIncome: year === 2026 ? 50_000 : 55_000,
             totalPIT: 13_000,
             effectiveRate: 23.6,
             netTakeHome: 38_000,
         });
-        mockedProfile.mockImplementation((selector) =>
-            selector({
-                viewedYear: 2026,
-                profile: { taxYear: 2026 },
-                snapshots: { 2025: { taxYear: 2025 } },
-                snapshotMetas: {
-                    2025: { frozenCalculation: calculationForYear(2025) },
-                    2026: { frozenCalculation: calculationForYear(2026) },
-                },
-            } as never),
-        );
 
-        render(<YearComparisonCard />);
+        render(
+            <YearComparisonCard
+                years={dashboardYears(lowerGross)}
+                viewedCalculation={lowerGross(2026)}
+            />,
+        );
         const grossRow = screen.getByText("Gross income").closest("tr");
         expect(within(grossRow!).getAllByRole("cell")[3]).toHaveTextContent(
             "-€5000",
+        );
+    });
+
+    it("compares the viewed year's display calculation when the dashboard lists no entry for it", () => {
+        render(
+            <YearComparisonCard
+                years={dashboardYears(calculationForYear).slice(1).concat({
+                    ...dashboardYears(calculationForYear)[1]!,
+                    year: 2024,
+                })}
+                viewedCalculation={calculationForYear(2026)}
+            />,
+        );
+        const grossRow = screen.getByText("Gross income").closest("tr");
+        expect(within(grossRow!).getAllByRole("cell")[1]).toHaveTextContent(
+            "€60000",
         );
     });
 });

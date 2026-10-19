@@ -137,10 +137,11 @@ unchanged.
    the frontend and its bundle limit, exercises native health and migration reversibility, and runs
    script, Electron, frontend coverage, backend coverage against a disposable PostgreSQL cluster,
    and live API contract tests.
-2. **Build mac .app + DMG** builds the ad-hoc signed native macOS artifacts and source-launcher
-   update bundle from the exact verified commit with pinned runtime inputs. It scans the packaged
-   app and source tree into separate CycloneDX software bills of materials (SBOMs), checks that
-   each contains components, and attests the artifacts and SBOMs through GitHub. The app does not
+2. **Build mac .app + DMG** builds the ad-hoc signed native macOS artifacts from the exact
+   verified commit with pinned runtime inputs. It scans the packaged app into a CycloneDX software
+   bill of materials (SBOM), checks that it contains components, and attests the artifacts and SBOM
+   through GitHub. The former source-launcher bundle and source SBOM were retired by
+   [[docs/adr/218-retire-source-launcher-update-channel|ADR-218]]. The app does not
    have Apple Developer ID signing or notarization.
 3. **Create GitHub Release** downloads the staged artifacts, verifies build provenance, and adds
    every asset to a release-environment-gated draft. It checks exact asset names, sizes, digests
@@ -151,11 +152,11 @@ unchanged.
    during that short public window. GitHub immutable releases must be read back live before
    claiming published asset and tag immutability.
 
-Release artifacts include checksums and the two SBOM files. To inspect one, download
-`Vision-app.cdx.json` or `Vision-source.cdx.json` from the release and view its `components` array.
+Release artifacts include checksums and the SBOM file. To inspect it, download
+`Vision-app.cdx.json` from the release and view its `components` array.
 To verify a downloaded artifact against GitHub's build attestation, run
 `gh attestation verify FILE --repo EraPartner/Vision --signer-workflow EraPartner/Vision/.github/workflows/release.yml`.
-The SBOM attestations use the same artifact subject and include the corresponding CycloneDX file.
+The SBOM attestation uses the same artifact subjects and includes the corresponding CycloneDX file.
 GitHub is the trusted publisher; the updater does not verify
 an independent signing key or attestation. The workflow does not publish an application image or
 image metadata. See [[docs/features/application-updates|Application Updates]],

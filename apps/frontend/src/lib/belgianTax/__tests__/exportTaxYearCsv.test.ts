@@ -1,14 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { computeBelgianPIT } from "../pit";
 import { buildTaxYearCsv } from "../exportTaxYearCsv";
 import { makeTaxProfile } from "./testProfile";
-import { computeHouseholdTax } from "../household";
+// Figures come from the server; the tests build them with the shared engine.
+import { computeBelgianPIT } from "@vision/shared-utils/belgian-tax/pit";
+import { computeHouseholdTax } from "@vision/shared-utils/belgian-tax/household";
 import { activity, household, married, partner } from "./testHousehold";
 
 function buildCsv(
     overrides: Partial<Parameters<typeof buildTaxYearCsv>[0]> = {},
 ) {
-    const profile = overrides.profile ?? makeTaxProfile();
+    // The browser projects a one-partner household as single.
+    const profile = overrides.profile ?? makeTaxProfile({ filingStatus: "single" });
     return buildTaxYearCsv({
         year: 2025,
         profile,
@@ -72,6 +74,26 @@ describe("buildTaxYearCsv", () => {
         expect(csv).toContain("Assessment mode,joint");
         expect(csv).toContain("Marital quotient applied,true");
         expect(csv).toMatch(/Marital quotient transfer,[\d.]+,You,Partner/);
+    });
+
+    it("takes the filing status from the server's assessment of the year", () => {
+        const h = married([activity("employee", 60_000)], [activity("employee", 10_000)]);
+        const { filingStatus: _filingStatus, ...projected } = makeTaxProfile();
+        expect(
+            buildCsv({ profile: projected, household: h, householdResult: computeHouseholdTax(h) }),
+        ).toContain("Filing status,married_joint");
+        const separated = married([activity("employee", 60_000)], [activity("employee", 10_000)], {
+            relationship: { events: [] },
+        });
+        expect(
+            buildCsv({
+                profile: projected,
+                household: separated,
+                householdResult: computeHouseholdTax(separated),
+            }),
+        ).toContain("Filing status,single");
+        // A year frozen before its household result was stored: the browser does not decide.
+        expect(buildCsv({ profile: projected })).toContain("Filing status,\n");
     });
 
     it("keeps a one-partner export unchanged", () => {

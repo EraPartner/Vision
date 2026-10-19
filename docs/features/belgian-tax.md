@@ -49,13 +49,14 @@ related_code:
   - packages/shared-utils/src/belgianTax/constants.ts
   - packages/shared-utils/src/belgianTax/socialSecurity.ts
   - packages/shared-utils/src/belgianTax/propertyTax.ts
-  - apps/frontend/src/lib/belgianTax/portfolioTax.ts
-  - apps/frontend/src/lib/belgianTax/costBreakdown.ts
+  - packages/shared-utils/src/belgianTax/portfolioTax.ts
+  - packages/shared-utils/src/belgianTax/costBreakdown.ts
+  - packages/shared-utils/src/belgianTax/taxYears.ts
   - apps/frontend/src/lib/belgianTax/exportTaxYearCsv.ts
   - apps/frontend/src/lib/belgianTax/partnerAttribution.ts
   - apps/frontend/src/features/tax/historySummary.ts
   - apps/frontend/src/features/reports/taxReportHousehold.ts
-  - apps/frontend/src/lib/belgianTax/__tests__/portfolioTax.test.ts
+  - packages/shared-utils/tests/belgianTax/portfolioTax.test.ts
   - apps/node-backend/src/services/belgianInflationService.ts
 ---
 
@@ -89,30 +90,52 @@ category matches remain suggestions requiring confirmation; category text does n
 ## Module layout
 
 The PIT and household calculation engine lives in `packages/shared-utils/src/belgianTax/`,
-exported through `@vision/shared-utils/belgian-tax/*`. The original frontend module paths are
-compatibility exports, so lazy loading, store behavior, and existing callers retain their behavior.
-The shared package also owns v1/v2 migration, settings validation/loading, and profile defaults.
-React provider/store orchestration and CSV helpers remain in the frontend. Portfolio tax
-and recorded-income attribution are shared TypeScript modules with frontend compatibility exports. `householdRuntime` still loads on demand and re-exports the shared hydration helpers.
+exported through `@vision/shared-utils/belgian-tax/*`, and runs only on the server
+([[docs/adr/217-belgian-tax-figures-on-the-server|ADR-217]]). None of it reaches the browser
+bundle: `apps/frontend/src/lib/belgianTax/` keeps only types, the household shape helpers, the
+supported tax years and default communal surcharges (`taxYears.ts`, kept apart from the year
+tables), the Art. 51 category map, the CSV export and the partner attribution of recorded
+amounts. The engine's unit, property and scenario tests live in
+`packages/shared-utils/tests/belgianTax/` and run with `bun run test:packages`. The shared
+package also owns v1/v2 migration, settings validation/loading, profile defaults and the overview
+builder (`overview.ts`). React provider/store orchestration and CSV helpers remain in the
+frontend. `householdRuntime` loads on demand and holds only shape helpers: the v1 projection and
+patch, the household diff and the zod check of edits. The browser's projection does not decide
+the assessment: with partner B it leaves `filingStatus` out, and the CSV export takes the filing
+status from the server's assessment of the year.
 
 `POST /api/belgian-tax/compute` exposes the same engine over HTTP. It accepts a
 complete v2 household and returns `result` (assessment, partner/activity breakdowns, quotient,
 CSSS, totals, and issues) plus `calculation` (the legacy-compatible PIT presentation). This is a
 stateless preview: it does not select a live or historical profile, persist edits, create snapshots,
-or mark a year filed. Callers must retain the existing frozen-result precedence. Existing report
-requests and frontend calculations are unchanged. See [[docs/api/belgian-tax|the API contract]].
+or mark a year filed. Callers must retain the existing frozen-result precedence. The web app
+computes every unfrozen figure through it (see below). See [[docs/api/belgian-tax|the API contract]].
 
 `GET /api/belgian-tax/overview` reads a normalized live or historical overview using those same
 hydration routines. It preserves frozen PIT and household results verbatim and returns original
 settings baselines. A fully frozen filing never calls the current engine. Legacy frozen PIT without
 a household breakdown retains its PIT while obtaining that missing breakdown from the engine,
-as the web store does. A read does not write an upgrade, create a snapshot, or file a year.
+although the web screen shows no household breakdown for such a year. A read does not write an upgrade, create a snapshot, or file a year.
 The `year` query accepts any four-digit year; a year outside the storable 1900–2200 snapshot range
 gets the year-pinned live estimate, for example for a custom report period.
 
 `GET /api/belgian-tax/dashboard` derives the chart, attribution, frozen scaling and fiscal display
-values on the server for API clients; the web `/tax` page computes them in the frontend with the
-same shared modules. See [[docs/api/belgian-tax|the API contract]].
+values on the server. The web `/tax` page reads its yearly and monthly charts, recorded portfolio
+taxes, recorded income per partner, per-year calculations (trend strip and year comparison) and
+deduction suggestions from it through `useTaxOverviewData`. The viewed year's profile stays on the
+household store, which the profile dialog edits live. Its figures (masthead, computation flow, PIT
+breakdown, current inputs, household breakdown, the two totals and the household step's
+assessment) come from `useTaxYearFigures` in `hooks/useBelgianTaxComputation.ts`: the frozen
+figures of a frozen year, else `POST /api/belgian-tax/compute` on the year's household, 300 ms
+after the last edit. Each household content is its own React Query entry, so a late response for
+an older edit never replaces newer figures and superseded requests are aborted; the previous
+figures of the same year stay on screen while an edit computes, and a failed computation shows
+`tax.page.computeError`. The dashboard reads the stored
+household, so `stores/taxPersistence.ts` notifies `onTaxSettingsSaved` listeners after each
+acknowledged save and the page refetches; transaction and investment mutations invalidate it
+through `invalidateTransactionData` / `invalidateInvestmentData`. `/portfolio/tax` likewise reads
+`GET /api/belgian-tax/portfolio-dashboard` through `usePortfolioTaxData`; saving manual
+adjustments or classifications refetches it. See [[docs/api/belgian-tax|the API contract]].
 
 Modules are split by concern:
 
@@ -120,6 +143,7 @@ Modules are split by concern:
 | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `types.ts`              | `BelgianTaxProfile`, `BelgianTaxCalculation`, region & employment unions                                                                                 |
 | `constants.ts`          | Year-keyed `BelgianTaxYearTable` (IY 2024, 2025, 2026) — brackets, caps, rates                                                                           |
+| `taxYears.ts`           | Supported income years and the latest default communal surcharges, apart from the tables so the browser can read them; `constants.ts` checks them at load |
 | `pit.ts`                | `computeBelgianPIT(profile)` — composes deductions, credits, surcharge                                                                                   |
 | `socialSecurity.ts`     | Employee SS + step-function special social security contribution (CSSS)                                                                                  |
 | `propertyTax.ts`        | Indexed cadastral × regional rate × centimes additionnels                                                                                                |
@@ -128,21 +152,23 @@ Modules are split by concern:
 | `exportTaxYearCsv.ts`   | Pure filed/frozen tax-year CSV serialization                                                                                                             |
 | `personPit.ts`          | Per-person building blocks: progressive tax, exemption valuation, forfait per category, reductions, own-home and service-voucher credits, breakdown rows |
 | `householdTypes.ts`     | `BelgianTaxHouseholdV2`, activities, relationship events, result and issue types                                                                         |
-| `assessment.ts`         | `deriveAssessment` — single / separate / joint per income year (art. 126)                                                                                |
+| `assessment.ts`         | `deriveAssessment` — single / separate / joint per income year (art. 126); `filesJointly` for the server's v1 projection                                |
 | `exemptions.ts`         | Dependent supplements and tax-free sum allocation between partners                                                                                       |
 | `maritalQuotient.ts`    | Arts 87-88 quotient on professional income, IY 2026 senior cap                                                                                           |
 | `household.ts`          | `computeHouseholdTax`, `toBelgianTaxCalculation`                                                                                                         |
 | `householdOwnHome.ts`   | Own-home credit of the household: one borrower, or a basket per borrower (ADR-202)                                                                       |
-| `householdMigration.ts` | v1 profile ↔ v2 household upgrade, projection and patching                                                                                               |
+| `householdMigration.ts` | v1 profile ↔ v2 household upgrade, projection and patching; the caller passes the joint-filing check (`filesJointly` on the server, none in the browser)  |
 | `settings.ts`           | Shared v1/v2 settings hydration and upgrade decisions                                                                                                    |
 | `profileDefaults.ts`    | Shared v1 defaults and meaningful-profile detection                                                                                                      |
 | `householdSchema.ts`    | zod schemas for the v2 setting values                                                                                                                    |
-| `householdRuntime.ts`   | Lazily loaded engine entry for the store: settings load/upgrade, projections, household diff                                                             |
+| `householdRuntime.ts`   | Frontend only, lazily loaded: v1 projection and patch, household diff, zod check of edits (no tax computation)                                            |
+| `forfaitCategory.ts`    | Art. 51 forfait category of an activity kind, without the engine                                                                                         |
+| `overview.ts`           | `buildTaxOverview` for `GET /api/belgian-tax/overview` (server and test stubs)                                                                           |
 | `index.ts`              | Explicit supported public re-exports; year-table internals stay private                                                                                  |
 
 ### `portfolioTax.ts` — Pure Portfolio-Tax Estimators (2026-05-29)
 
-`apps/frontend/src/lib/belgianTax/portfolioTax.ts` contains the portfolio-tax computation functions that were previously inlined in `PortfolioTaxPage.tsx`. Extracting them to a pure, side-effect-free module enables independent golden-fixture testing and de-duplication between pages.
+`packages/shared-utils/src/belgianTax/portfolioTax.ts` contains the portfolio-tax computation functions that were previously inlined in `PortfolioTaxPage.tsx`. Extracting them to a pure, side-effect-free module enables independent golden-fixture testing and de-duplication between pages.
 
 **Exported functions:**
 
@@ -165,15 +191,19 @@ Modules are split by concern:
 
 **De-duplication:** `recordedTaxesForYear` is now the single implementation shared by both `PortfolioTaxPage` and `TaxOverviewPage`. Each page's `useMemo` calls the shared function instead of duplicating the per-transaction accumulation loop.
 
-**Tests:** `apps/frontend/src/lib/belgianTax/__tests__/portfolioTax.test.ts` — 13 golden-output cases locking all estimators to 8 decimal places. Integrated into the frontend Vitest suite (94 tax-unit + 88 portfolio-integration tests pass; see [[docs/testing/test-inventory|Test Inventory]]).
+**Tests:** `packages/shared-utils/tests/belgianTax/portfolioTax.test.ts` — 13 golden-output cases locking all estimators to 8 decimal places. Run by `bun run test:packages` since ADR-217 (previously part of the frontend Vitest suite (94 tax-unit + 88 portfolio-integration tests pass; see [[docs/testing/test-inventory|Test Inventory]]).
 
 The Belgian-tax slice in [[apps/frontend/src/stores/belgianTaxStore]] owns household, snapshot,
-audit, viewed-year, and calculation state; `profile` and `snapshots` are v1 projections of the
-household (see [Household taxation](#household-taxation)). The compatibility provider in
-[[apps/frontend/src/contexts/BelgianTaxProfileContext]] only hydrates and persists that slice.
-Consumers use narrow selectors, and pure tax symbols come directly from `lib/belgianTax`.
-Boot-path modules import the library by file path, not through the barrel, so the household
-engine stays in the lazily loaded `householdRuntime.ts` chunk.
+audit and viewed-year state; `profile` and `snapshots` are v1 projections of the household (see
+[Household taxation](#household-taxation)). It holds no calculation: figures come from the server.
+The compatibility provider in [[apps/frontend/src/contexts/BelgianTaxProfileContext]] hydrates
+the slice from `GET /api/belgian-tax/overview` (which runs the v1→v2 upgrade), adopts the
+overview's CAS baselines for later saves, writes the v2 keys once when the overview reports a
+pending upgrade, and persists edits. Freezing, filing (`persistTaxFiling`), the year CSV and the
+PDF report's precomputed PIT and household blocks take the server's figures for the year
+(`computeTaxYearResults`, `resolveTaxYearFigures`); stored frozen metadata keeps its shape.
+Consumers use narrow selectors. The `lib/belgianTax` barrel exports types, the supported tax
+years, the default communal surcharges and the household constants; it re-exports no engine code.
 
 ## Sources of truth
 
@@ -311,7 +341,7 @@ The `BelgianTaxCalculation` result object includes:
 
 > **Compatibility cutoff (2026-09-11):** `federalPITTotal` is no longer emitted or accepted in frozen calculations. Migration 0106 removes it only when its numeric value equals `federalPITBeforeExemption`; alias-only, malformed, or divergent stored values stop the migration for operator review. The affected `user_settings` row is included in normal database backups. See [[docs/adr/135-compatibility-cutoff-for-september-retirements|ADR-135]].
 >
-> **Regression note (2026-04-26):** an earlier implementation added the communal surcharge twice into `totalTaxBurden`. Covered now by [`pit.test.ts`](apps/frontend/src/lib/belgianTax/__tests__/pit.test.ts).
+> **Regression note (2026-04-26):** an earlier implementation added the communal surcharge twice into `totalTaxBurden`. Covered now by [`pit.test.ts`](packages/shared-utils/tests/belgianTax/pit.test.ts).
 
 ## Portfolio Tax Page (`/portfolio/tax`)
 
@@ -394,8 +424,8 @@ The tax overview page includes a `SuggestedDeductionsCard` component that sugges
 ## Household taxation
 
 > [!info] Phase C1 (2026-10-11, [[docs/adr/200-belgian-tax-household-model|ADR-200]])
-> The store computes the live tax from the household, and the tax profile sheet edits the
-> household directly (see [[#Household editor and breakdown]]). The partner-to-account-owner
+> The server computes the live tax from the household (ADR-217), and the tax profile sheet edits
+> the household directly (see [[#Household editor and breakdown]]). The partner-to-account-owner
 > link and exports follow in phase C2.
 
 A household (`BelgianTaxHouseholdV2`) has one or two partners. Each partner has income
@@ -492,7 +522,7 @@ household totals. For one partner with one activity it equals `computeBelgianPIT
 `married_joint` v1 profile can differ after the upgrade where the household engine applies a rule
 the v1 engine omits (the spouse's own exemption, disability and reductions, the art. 134 balance
 transfer, the quotient on professional income only); the list is in
-`__tests__/householdParity.ts`.
+`packages/shared-utils/tests/belgianTax/householdParity.ts`.
 
 ### Storage and upgrade
 
@@ -505,14 +535,16 @@ to partner A and activity `act_A_1`; a `married_joint` profile adds partner B wi
 `net_professional_amount` activity `act_B_1` and is assumed joint until relationship dates are
 entered. Spouse fields on a single profile and unknown keys are kept under
 `migratedFrom.unmappedFields`. `projectHouseholdToProfileV1` and
-`applyProfileV1PatchToHousehold` serve v1-shaped editors during the transition. The projection
+`applyProfileV1PatchToHousehold` serve v1-shaped editors during the transition. With partner B,
+the projection's `filingStatus` comes from the caller's joint-filing check (`filesJointly` on the
+server); the browser passes none and gets no `filingStatus` (ADR-217). The projection
 reports `isSpouseDisabled: false` when there is no partner B (the household engine grants no
 spouse supplement then, and no step could clear the flag); removing partner B also drops a
 migrated `isSpouseDisabled` entry. Frozen
 snapshot meta may carry `frozenHouseholdResult`.
 
 **Load (phase B2).** `BelgianTaxProfileProvider` loads `lib/belgianTax/householdRuntime.ts` with a
-dynamic import, so the engine and its zod schemas stay out of the boot bundle, and resolves the
+dynamic import, so its zod schemas stay out of the boot bundle, and resolves the
 stored values with `loadHouseholdSettings`:
 
 - A v2 value that passes `parseHouseholdV2` / `parseHouseholdSnapshotsV2` is used as stored and
@@ -690,7 +722,7 @@ The Belgian Tax Overview and Portfolio Tax pages share a year switcher that lets
 | `viewedYear` / `setViewedYear` | Transient UI year. Defaults to the live profile's `taxYear`; never persisted.               |
 | `snapshots`                    | v1 projection of `householdSnapshots` (loaded from preload).                                |
 | `profileForYear(y)`            | Returns snapshot when present, else live profile with `taxYear` overridden (estimate mode). |
-| `calculationForYear(y)`        | Household engine on that year's household — live recompute.                                 |
+| `useTaxYearFigures(y)`         | Hook, not a store member: frozen figures, else the server's compute result (ADR-217).       |
 | `snapshotExistsForYear(y)`     | Boolean.                                                                                    |
 | `createSnapshotFromLive(y)`    | Seeds `snapshots[y]` from the live profile (no-op if one already exists).                   |
 | `updateSnapshot(y, updates)`   | Patches a snapshot; strips `taxYear` from patches so the year stays pinned.                 |
@@ -706,6 +738,9 @@ Sorted descending union of:
 - years with transactions in user-configured taxable-income categories.
 
 Each entry exposes `{ year, isCurrent, hasSnapshot, hasTransactions }` for the switcher chips.
+`TaxYearSwitcher` still derives this list in the browser. `MultiYearTrendStrip` and
+`YearComparisonCard` on `/tax` use the server dashboard's `yearCalculations`, which apply the same
+union and carry each year's frozen-first calculation.
 
 ### UI surfaces
 
@@ -789,7 +824,7 @@ and are included in the next grouped save. The filed year retains its confirmati
 
 ### UI surfaces
 
-- **`MultiYearTrendStrip`** — compact clickable year tiles (ghost `Button`s with `aria-pressed`) in the page header showing PIT, effective rate, and a normalized bar. Clicking switches `viewedYear`.
+- **`MultiYearTrendStrip`** — compact clickable year tiles (ghost `Button`s with `aria-pressed`) in the page header showing PIT, effective rate, and a normalized bar from the dashboard's `yearCalculations`. Clicking switches `viewedYear`.
 - **`YearComparisonCard`** — side-by-side delta table comparing the viewed year against another year (picker; defaults to the immediately preceding tracked year). Surfaces gross income, total PIT, effective rate, net take-home.
 - **`YearActionsMenu`** — visible Mark as filed (or Filed) and Export CSV buttons next to `TaxYearSwitcher`, plus the ••• menu for freeze/unfreeze, unmark filed and history. Pages pass their own items through `pageItems`: `/tax` adds Export PDF… and Customize…; `/portfolio/tax` adds Set up / Edit tax profile… and Customize…. On `/tax` the primary header button is _Set up tax profile_ or _Edit tax profile_; if the overview query errors, the header renders without these actions ([[docs/adr/187-completeness-sweep|ADR-187]]).
 - **`MarkAsFiledDialog`** — records an optional filing reference after confirmation. This records a filing in Vision; it does not submit a declaration to a tax authority. The household must be loaded and prepared for the selected year; otherwise the dialog explains the prerequisite and disables confirmation. Eligible years are the live year, a year with its own household snapshot, and a year with an explicitly frozen calculation. A past year that would only use a live estimate is not eligible. Filing the live year pins its household as that year's snapshot, so later edits do not change the filed inputs. A year that already has a `frozenCalculation` is not pinned, because the live household would disagree with the frozen figures. Filing stores `frozenHouseholdResult` next to `frozenCalculation` unless the year was already frozen. The household, household snapshots and snapshot metadata are saved in one settings request (`stores/taxPersistence.ts`) before the year shows as filed.

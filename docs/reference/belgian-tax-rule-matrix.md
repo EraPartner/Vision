@@ -2,8 +2,8 @@
 title: Belgian Tax Rule Coverage Matrix
 type: reference
 status: active
-date: 2026-10-12
-updated: 2026-10-12
+date: 2026-10-19
+updated: 2026-10-19
 tags: [reference, belgian-tax, tax-rules, sources, verification]
 description: One row per Belgian personal income tax rule the engine applies, including the household (two-partner) rules of ADR-200, with the legal basis, the primary source opened for each income year (2024-2026), the code location, the regression test and the verification status.
 aliases: [belgian tax rule matrix, tax rule coverage, tax sources]
@@ -13,7 +13,7 @@ aliases: [belgian tax rule matrix, tax rule coverage, tax sources]
 
 > [!abstract] Overview
 > This matrix is the audit trail for every rule in the Belgian personal income tax (PIT) engine
-> under `apps/frontend/src/lib/belgianTax/`. A value may only enter `constants.ts` when a row here
+> under `packages/shared-utils/src/belgianTax/` (server only, ADR-217). A value may only enter `constants.ts` when a row here
 > names the primary page it was read from. Rows marked **unverified** keep their previous value
 > and are listed in [[#Open items]]. Income year (IY) = the year the income is earned;
 > assessment year (AY) = IY + 1. The feature itself is described in
@@ -96,8 +96,8 @@ fin.belgium.be explain the rules; the laws give the rule text.
 - **Status**: `verified` = read on the named primary page; `derived` = computed from a verified
   rule and stated as such; `unverified` = value kept from before this audit, no primary page
   reached yet; `not modelled` = rule known, not in the engine.
-- **Code**: file under `apps/frontend/src/lib/belgianTax/` unless stated.
-- **Tests**: `pit.test.ts` under `apps/frontend/src/lib/belgianTax/__tests__/` unless stated.
+- **Code**: file under `packages/shared-utils/src/belgianTax/` unless stated.
+- **Tests**: `pit.test.ts` under `packages/shared-utils/tests/belgianTax/` unless stated.
 
 ## Progressive tax and exemptions
 
@@ -213,7 +213,8 @@ fin.belgium.be explain the rules; the laws give the rule text.
 ## Household taxation
 
 Rules of the household engine ([[docs/adr/200-belgian-tax-household-model|ADR-200]]). Code is
-under `apps/frontend/src/lib/belgianTax/`; tests are the named files in `__tests__/`. A rule
+under `packages/shared-utils/src/belgianTax/`; tests are the named files in
+`packages/shared-utils/tests/belgianTax/`. A rule
 marked `needs_source` is implemented with the stated default and returns an issue with that
 severity; each one is listed in [[#Open items]]. Amounts are those of the tables above.
 

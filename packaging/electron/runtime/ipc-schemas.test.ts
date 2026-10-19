@@ -281,6 +281,7 @@ test("theme:persist-splash accepts only HSL component strings", () => {
     foreground: "0 0% 100%",
     surface: "220 14.5% 8%",
     text: "0 0% 98%",
+    themeSource: "system",
   };
   assert.deepEqual(accept("theme:persist-splash", { ...colors, extra: 1 }), [
     colors,
@@ -297,6 +298,7 @@ test("theme:persist-splash accepts only HSL component strings", () => {
         foreground: "4 5% 6%",
         surface: undefined,
         text: undefined,
+        themeSource: undefined,
       },
     ],
   );
@@ -304,6 +306,7 @@ test("theme:persist-splash accepts only HSL component strings", () => {
     undefined,
     { ...colors, background: "red" },
     { ...colors, mode: "sepia" },
+    { ...colors, themeSource: "schedule" },
     { ...colors, text: "1 2% 3%;}</style><script>" },
   ]) {
     assert.deepEqual(reject("theme:persist-splash", [invalid]), {

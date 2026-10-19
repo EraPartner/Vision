@@ -138,7 +138,6 @@ export function ExportDialog({
         snapshots: state.snapshots,
         household: state.household,
         householdSnapshots: state.householdSnapshots,
-        householdResult: state.householdResult,
         snapshotMetas: state.snapshotMetas,
     }));
     const defaultCurrency = appSettings.defaultCurrency || "EUR";
@@ -245,13 +244,19 @@ export function ExportDialog({
                 // The figures of the tax year the period describes (the same year the backend
                 // puts in the section heading), so the PIT and household blocks match the
                 // report's tables. A frozen (or filed) year exports its frozen calculation and
-                // household result, never a live recompute (ADR-059). Annual figures need a
-                // full calendar year that is the live year, has its own saved snapshot, or has
-                // a frozen calculation (the same years that can be filed).
+                // household result, never a live recompute (ADR-059); the server computes the
+                // other years. Annual figures need a full calendar year that is the live year,
+                // has its own saved snapshot, or has a frozen calculation (the same years that
+                // can be filed).
                 const taxYear = reportTaxYear(period, todayYmd());
                 await downloadTaxReport({
                     ...baseOpts,
-                    ...taxReportContext(taxState, taxYear, t, period.kind === "year"),
+                    ...(await taxReportContext(
+                        taxState,
+                        taxYear,
+                        t,
+                        period.kind === "year",
+                    )),
                 });
             }
             toast.success(t("statsPage.report.downloadSuccess"));

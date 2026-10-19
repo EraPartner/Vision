@@ -10,11 +10,10 @@ import {
 import { apiClient } from "@/lib/api";
 import { MarkAsFiledDialog } from "../MarkAsFiledDialog";
 import { useSettingsStore } from "@/stores/settingsStore";
-import {
-    DEFAULT_BELGIAN_TAX_PROFILE,
-    resolveBelgianTaxCalculation,
-} from "@/stores/belgianTaxStore";
+import { DEFAULT_BELGIAN_TAX_PROFILE } from "@/stores/belgianTaxStore";
 import * as runtime from "@/lib/belgianTax/householdRuntime";
+import { upgradeProfileV1ToHousehold } from "@/lib/belgianTax/householdMigration";
+import { EMPTY_BELGIAN_TAX_CALCULATION } from "@/lib/belgianTax/emptyCalculation";
 
 vi.mock("@/contexts/BelgianTaxProfileContext", () => ({
     useBelgianTaxProfile: (selector: Parameters<typeof useSettingsStore>[0]) =>
@@ -31,7 +30,7 @@ describe("recording a filing", () => {
             .getState()
             ._hydrate(
                 runtime,
-                runtime.upgradeProfileV1ToHousehold(DEFAULT_BELGIAN_TAX_PROFILE),
+                upgradeProfileV1ToHousehold(DEFAULT_BELGIAN_TAX_PROFILE),
                 {},
                 {},
             );
@@ -82,6 +81,8 @@ describe("recording a filing", () => {
         expect(
             screen.getByRole("button", { name: "tax.markFiled.confirm" }),
         ).toBeDisabled();
+        // The save follows the server computation of the figures being frozen.
+        await waitFor(() => expect(apiClient.saveSettings).toHaveBeenCalled());
         await act(async () => resolveSave());
         expect(apiClient.saveSettings).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -111,7 +112,7 @@ describe("recording a filing", () => {
                 ...before.snapshotMetas,
                 [year]: {
                     frozenCalculation: {
-                        ...resolveBelgianTaxCalculation(before, year),
+                        ...EMPTY_BELGIAN_TAX_CALCULATION,
                         totalPIT: 12_345,
                     },
                     history: [],

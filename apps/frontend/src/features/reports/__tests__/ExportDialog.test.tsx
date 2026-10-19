@@ -8,14 +8,15 @@ import { http } from "msw";
 import { server } from "@/test/msw/server";
 import { ok, settingsWithBaselines } from "@/test/msw/handlers";
 import { DEFAULT_BELGIAN_TAX_PROFILE } from "@/stores/belgianTaxStore";
-import { computeBelgianPIT } from "@/lib/belgianTax";
+// Figures come from the server; the tests build them with the shared engine.
+import { computeBelgianPIT } from "@vision/shared-utils/belgian-tax/pit";
 import * as reportsApi from "@/lib/api/reports";
 import { useSettingsStore } from "@/stores/settingsStore";
-import { LATEST_TAX_YEAR } from "@/lib/belgianTax/constants";
+import { LATEST_TAX_YEAR } from "@/lib/belgianTax";
 import {
     computeHouseholdTax,
     toBelgianTaxCalculation,
-} from "@/lib/belgianTax/household";
+} from "@vision/shared-utils/belgian-tax/household";
 import {
     activity,
     household,

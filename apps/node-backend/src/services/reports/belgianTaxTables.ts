@@ -2,7 +2,7 @@
  * Belgian tax bracket data for PDF report generation.
  *
  * Static copy of the year-specific rates. Must remain in sync with
- * apps/frontend/src/lib/belgianTax/constants.ts. Add a new year entry
+ * packages/shared-utils/src/belgianTax/constants.ts. Add a new year entry
  * when the government publishes new rates; do not modify past entries.
  */
 

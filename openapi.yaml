@@ -3159,8 +3159,7 @@ components:
         html_url: { type: string, format: uri }
         update_mode:
           type: string
-          enum: [source, native, dev]
-        source_launcher_available: { type: boolean }
+          enum: [source, native]
         error: { type: string }
 
     UpdateCheckEnvelope:

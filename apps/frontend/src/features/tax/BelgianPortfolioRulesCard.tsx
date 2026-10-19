@@ -29,7 +29,10 @@ interface BelgianPortfolioRulesCardProps {
     tacrEstimate: number;
     cgtEstimate: number;
     reyndersEstimate: number;
-    taxTable: BelgianTaxYearTable;
+    taxTable: Pick<
+        BelgianTaxYearTable,
+        "securitiesAccountTaxRate" | "capitalGainsTaxRate" | "reyndersTaxRate"
+    >;
 }
 
 /** Belgian investment-tax rules + estimates section of the portfolio-tax page ("belgianRules" widget). */

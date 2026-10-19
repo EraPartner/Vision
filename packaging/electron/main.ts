@@ -10,11 +10,11 @@ import {
   ipcMain,
   session,
   systemPreferences,
-  nativeImage,
   safeStorage,
+  nativeTheme,
+  powerMonitor,
 } from "electron";
 import type {
-  BrowserWindowConstructorOptions,
   Event as ElectronEvent,
   Input,
   IpcMainInvokeEvent,
@@ -61,7 +61,6 @@ import {
   prepareNativeDemo,
   rollbackNativeDemo,
 } from "./runtime/native-demo";
-import { createBadgePngBuffer } from "./badge-image";
 import type {
   ElectronEventChannel,
   ElectronEventContract,
@@ -260,6 +259,13 @@ if (!gotSingleInstanceLock) {
   app.quit();
 }
 
+// Sandbox every renderer, including any webContents a future change creates,
+// and refuse <webview> attachment outright (ADR-155: no web views).
+app.enableSandbox();
+app.on("web-contents-created", (_event, contents) => {
+  contents.on("will-attach-webview", (event) => event.preventDefault());
+});
+
 // Persist main-process logs to a rotating file in userData. A double-clicked
 // .app discards stderr, so packaged-app startup failures (boot-phase timings,
 // corrupt-settings quarantine, port selection, the startup
@@ -391,6 +397,16 @@ const CSP_POLICY = [
 ].join("; ");
 
 function registerSecurityHeaders() {
+  // Permissions fail closed in every profile, Vision Development included.
+  session.defaultSession.setPermissionRequestHandler(
+    (_webContents, _permission, callback) => {
+      callback(false);
+    },
+  );
+  session.defaultSession.setPermissionCheckHandler(
+    (_webContents, permission, requestingOrigin) =>
+      isAllowedPermissionCheck(permission, requestingOrigin, appUrl()),
+  );
   if (!app.isPackaged) return;
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     callback({
@@ -403,15 +419,6 @@ function registerSecurityHeaders() {
       },
     });
   });
-  session.defaultSession.setPermissionRequestHandler(
-    (_webContents, _permission, callback) => {
-      callback(false);
-    },
-  );
-  session.defaultSession.setPermissionCheckHandler(
-    (_webContents, permission, requestingOrigin) =>
-      isAllowedPermissionCheck(permission, requestingOrigin, appUrl()),
-  );
 }
 
 // Resolved at launch by resolveAppPort() — a persisted random free port.
@@ -588,7 +595,6 @@ updater.init({
       throw error;
     }
   },
-  workDir: () => workDir,
   stopRuntime: async () => {
     if (nativeMaintenance) throw new Error("Native maintenance is in progress");
     if (activeRuntime?.mode === "native") {
@@ -1009,10 +1015,16 @@ function stopHealthWatchdog() {
   backendReportedLost = false;
 }
 
+// Probes are skipped while the Mac sleeps, and failures counted before sleep
+// are forgotten on wake, so a slow first probe after resume is not reported as
+// a lost backend.
+let systemSuspended = false;
+
 function startHealthWatchdog() {
   stopHealthWatchdog();
   startAuditClosureTimer();
   healthWatchdogTimer = setInterval(async () => {
+    if (systemSuspended) return;
     const healthy = await pingHealth(3000);
     if (healthy) {
       if (backendReportedLost && mainWindow && !mainWindow.isDestroyed()) {
@@ -1234,13 +1246,18 @@ function readSplashTheme(): SplashThemeColors | undefined {
     const data: unknown = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
     const theme = isRecord(data) ? data[SPLASH_THEME_KEY] : undefined;
     if (!isRecord(theme)) return undefined;
-    const { mode, background, foreground, surface, text } = theme;
+    const { mode, background, foreground, surface, text, themeSource } =
+      theme;
     if (
       !isValidHslComponents(background) ||
       !isValidHslComponents(foreground) ||
       (mode != null && mode !== "light" && mode !== "dark") ||
       (surface != null && !isValidHslComponents(surface)) ||
-      (text != null && !isValidHslComponents(text))
+      (text != null && !isValidHslComponents(text)) ||
+      (themeSource != null &&
+        themeSource !== "system" &&
+        themeSource !== "light" &&
+        themeSource !== "dark")
     ) {
       return undefined;
     }
@@ -1250,6 +1267,7 @@ function readSplashTheme(): SplashThemeColors | undefined {
       foreground,
       surface: surface ?? undefined,
       text: text ?? undefined,
+      themeSource: themeSource ?? undefined,
     };
   } catch {
     return undefined;
@@ -1411,8 +1429,7 @@ function clampBoundsToWorkArea(bounds: Rectangle): Rectangle {
 // Hex equivalent of the splash's base fill, used for the BrowserWindow
 // backgroundColor so frame 1 matches the splash instead of flashing the default
 // backdrop (white / vibrancy material) before the data-URL splash HTML paints —
-// visible in dark mode, and on Windows/Linux reload/navigation where the
-// darwin-only vibrancy mask doesn't apply. Falls back to the same slate the
+// visible in dark mode and on reload/navigation before vibrancy applies. Falls back to the same slate the
 // splash uses when no theme is persisted.
 function hslToHex(h: number, s: number, l: number): string {
   s /= 100;
@@ -1488,13 +1505,9 @@ function createWindow(): BrowserWindow {
     // electronAPI.platform === 'darwin' (see ElectronBridge in the frontend).
     // The renderer enables under-window vibrancy only for the effective
     // enhanced tier, keeping the common reduced/standard window opaque.
-    ...(process.platform === "darwin"
-      ? ({
-          titleBarStyle: "hiddenInset",
-          trafficLightPosition: { x: 20, y: 20 },
-          visualEffectState: "followWindow",
-        } satisfies BrowserWindowConstructorOptions)
-      : {}),
+    titleBarStyle: "hiddenInset",
+    trafficLightPosition: { x: 20, y: 20 },
+    visualEffectState: "followWindow",
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -1639,16 +1652,10 @@ function createWindow(): BrowserWindow {
   // macOS convention: the red close button HIDES the window instead of
   // destroying it, keeping the fully-booted renderer (route + scroll state) and
   // the warm backend/containers resident so reopening is ~instant. A real quit
-  // (⌘Q / menu Quit → before-quit sets isAppQuitting) closes for real. Only
-  // darwin hides — elsewhere close must destroy so window-all-closed → app.quit()
-  // still fires. `activate`/`second-instance` show() the hidden window.
+  // (⌘Q / menu Quit → before-quit sets isAppQuitting) closes for real.
+  // `activate`/`second-instance` show() the hidden window.
   win.on("close", (e) => {
-    if (
-      process.platform === "darwin" &&
-      !isAppQuitting &&
-      mainWindow &&
-      !mainWindow.isDestroyed()
-    ) {
+    if (!isAppQuitting && mainWindow && !mainWindow.isDestroyed()) {
       e.preventDefault();
       mainWindow.hide();
     }
@@ -2596,14 +2603,11 @@ const THEME_MENU_MODES = [
 // (AZERTY digits would otherwise need Shift); letters match on input.key.
 function handleMenuAccelerator(event: ElectronEvent, input: Input): void {
   if (input.type !== "keyDown" || input.isAutoRepeat) return;
-  const isMac = process.platform === "darwin";
-  const primary = isMac ? input.meta : input.control; // CmdOrCtrl
-  const crossMod = isMac ? input.control : input.meta; // the other platform's primary
-  if (!primary) return;
+  if (!input.meta) return;
 
   // Go menu: ⌘1 … ⌘9
   const digit = /^Digit([1-9])$/.exec(input.code || "");
-  if (digit && !input.shift && !input.alt && !crossMod) {
+  if (digit && !input.shift && !input.alt && !input.control) {
     const route = GO_MENU_ROUTES[Number(digit[1]) - 1];
     if (!route) return;
     event.preventDefault();
@@ -2613,22 +2617,19 @@ function handleMenuAccelerator(event: ElectronEvent, input: Input): void {
 
   const key = typeof input.key === "string" ? input.key.toLowerCase() : "";
   // File → New Transaction: ⌘N
-  if (key === "n" && !input.shift && !input.alt && !crossMod) {
+  if (key === "n" && !input.shift && !input.alt && !input.control) {
     event.preventDefault();
     menuAction("new-transaction");
     return;
   }
   // File → Import CSV…: ⇧⌘I
-  if (key === "i" && input.shift && !input.alt && !crossMod) {
+  if (key === "i" && input.shift && !input.alt && !input.control) {
     event.preventDefault();
     menuAction("navigate", "/import");
     return;
   }
-  // View → Toggle Sidebar: ⌃⌘S on macOS, Ctrl+Shift+S elsewhere
-  const sidebarChord = isMac
-    ? key === "s" && input.control && !input.shift && !input.alt
-    : key === "s" && input.shift && !input.alt && !input.meta;
-  if (sidebarChord) {
+  // View → Toggle Sidebar: ⌃⌘S
+  if (key === "s" && input.control && !input.shift && !input.alt) {
     event.preventDefault();
     menuAction("toggle-sidebar");
   }
@@ -2642,37 +2643,32 @@ function setupApplicationMenu(): void {
       applicationName: APP_NAME,
       applicationVersion: app.getVersion ? app.getVersion() : "",
       copyright: `© ${new Date().getFullYear()} Vision · AGPL-3.0`,
-      website: REPOSITORY_URL,
     });
   } catch {
     /* non-fatal — cosmetic */
   }
 
   const template: MenuItemConstructorOptions[] = [
-    ...(process.platform === "darwin"
-      ? ([
-          {
-            label: APP_NAME,
-            submenu: [
-              { role: "about" },
-              { type: "separator" },
-              {
-                label: t("menu.settings"),
-                accelerator: "CmdOrCtrl+,",
-                click: () => menuAction("open-settings"),
-              },
-              { type: "separator" },
-              { role: "services" },
-              { type: "separator" },
-              { role: "hide" },
-              { role: "hideOthers" },
-              { role: "unhide" },
-              { type: "separator" },
-              { role: "quit" },
-            ],
-          },
-        ] satisfies MenuItemConstructorOptions[])
-      : []),
+    {
+      label: APP_NAME,
+      submenu: [
+        { role: "about" },
+        { type: "separator" },
+        {
+          label: t("menu.settings"),
+          accelerator: "CmdOrCtrl+,",
+          click: () => menuAction("open-settings"),
+        },
+        { type: "separator" },
+        { role: "services" },
+        { type: "separator" },
+        { role: "hide" },
+        { role: "hideOthers" },
+        { role: "unhide" },
+        { type: "separator" },
+        { role: "quit" },
+      ],
+    },
     {
       label: t("menu.file"),
       submenu: [
@@ -2687,7 +2683,7 @@ function setupApplicationMenu(): void {
           click: () => menuAction("navigate", "/import"),
         },
         { type: "separator" },
-        { role: process.platform === "darwin" ? "close" : "quit" },
+        { role: "close" },
       ],
     },
     {
@@ -2708,8 +2704,7 @@ function setupApplicationMenu(): void {
         {
           label: t("menu.toggleSidebar"),
           // ⌃⌘S mirrors Finder/Mail "Show/Hide Sidebar" on macOS.
-          accelerator:
-            process.platform === "darwin" ? "Ctrl+Cmd+S" : "Ctrl+Shift+S",
+          accelerator: "Ctrl+Cmd+S",
           click: () => menuAction("toggle-sidebar"),
         },
         {
@@ -2748,15 +2743,6 @@ function setupApplicationMenu(): void {
     {
       role: "help",
       submenu: [
-        ...(process.platform === "darwin"
-          ? []
-          : ([
-              {
-                label: t("menu.about", { app: APP_NAME }, `About ${APP_NAME}`),
-                click: () => app.showAboutPanel(),
-              },
-              { type: "separator" },
-            ] satisfies MenuItemConstructorOptions[])),
         {
           label: t("menu.keyboardShortcuts"),
           click: () => menuAction("open-shortcuts"),
@@ -2781,7 +2767,7 @@ function setupApplicationMenu(): void {
 }
 
 function setupDockMenu(): void {
-  if (process.platform !== "darwin" || !app.dock) return;
+  if (!app.dock) return;
   app.dock.setMenu(
     Menu.buildFromTemplate([
       {
@@ -2796,40 +2782,15 @@ function setupDockMenu(): void {
   );
 }
 
-// Native dock/taskbar badge — count of planned payments due, pushed by the renderer (it owns
+// Native dock badge — count of planned payments due, pushed by the renderer (it owns
 // the query + the user's dismissals). Input is clamped server-side so a
 // compromised renderer can at most show a number.
-function windowsBadgeOverlay(count: number): void {
-  if (process.platform !== "win32" || !mainWindow || mainWindow.isDestroyed())
-    return;
-  if (count < 1) {
-    mainWindow.setOverlayIcon(null, "");
-    return;
-  }
-  const label = count > 99 ? "99+" : String(count);
-  const icon = nativeImage.createFromBuffer(createBadgePngBuffer(count), {
-    scaleFactor: 1,
-  });
-  const countKey = count === 1 ? "upcoming.count.one" : "upcoming.count.other";
-  mainWindow.setOverlayIcon(
-    icon,
-    t(countKey, { count: label }, `${label} planned payments due`),
-  );
-}
-
 registerHandler(
   "app:set-badge",
   (event, clamped) => {
-    if (process.platform === "win32") {
-      windowsBadgeOverlay(clamped);
-      return { success: true };
-    }
-    if (process.platform === "darwin" && app.dock) {
-      app.dock.setBadge(clamped > 0 ? String(clamped) : "");
-      return { success: true };
-    }
-    if (typeof app.setBadgeCount !== "function") return { success: false };
-    return { success: app.setBadgeCount(clamped) !== false };
+    if (!app.dock) return { success: false };
+    app.dock.setBadge(clamped > 0 ? String(clamped) : "");
+    return { success: true };
   },
   { senderFailure: { success: false } },
 );
@@ -2859,7 +2820,6 @@ registerHandler(
 registerHandler(
   "app:set-vibrancy",
   (event, enabled) => {
-    if (process.platform !== "darwin") return { success: false };
     if (!mainWindow || mainWindow.isDestroyed()) return { success: false };
     mainWindow.setVibrancy(enabled ? "under-window" : null);
     return { success: true };
@@ -2869,7 +2829,6 @@ registerHandler(
 
 // System accent color — RRGGBBAA hex from macOS, or null when unavailable.
 function readSystemAccentColor(): string | null {
-  if (process.platform !== "darwin") return null;
   try {
     const color = systemPreferences.getAccentColor();
     return typeof color === "string" && color ? color : null;
@@ -2893,6 +2852,7 @@ registerHandler(
   "theme:persist-splash",
   async (event, colors) => {
     try {
+      nativeTheme.themeSource = colors.themeSource ?? "system";
       await updateSettings((cur) => {
         cur[SPLASH_THEME_KEY] = colors;
       });
@@ -2909,7 +2869,6 @@ registerHandler(
 );
 
 function subscribeAccentColorChanges(): void {
-  if (process.platform !== "darwin") return;
   try {
     systemPreferences.subscribeNotification(
       "AppleColorPreferencesChangedNotification",
@@ -2965,6 +2924,10 @@ async function launch(): Promise<void> {
 
   // 0. Register prod CSP + security headers before any window loads.
   registerSecurityHeaders();
+  registerPowerHandlers();
+  // Native menus and dialogs follow the persisted Appearance before the
+  // renderer loads; the renderer refreshes it via theme:persist-splash.
+  nativeTheme.themeSource = readSplashTheme()?.themeSource ?? "system";
 
   // 0a. Load i18n asynchronously so dialog strings resolve. If this fails,
   //     t() falls back to the key itself — survivable for startup paths.
@@ -3085,6 +3048,24 @@ async function launch(): Promise<void> {
 }
 
 let isQuitting = false;
+// Set when macOS is shutting down, restarting or logging out: quit skips the
+// optional backup so Vision never holds up logout, but still stops PostgreSQL.
+let systemShuttingDown = false;
+
+function registerPowerHandlers(): void {
+  powerMonitor.on("suspend", () => {
+    systemSuspended = true;
+  });
+  powerMonitor.on("resume", () => {
+    systemSuspended = false;
+    watchdogFailureCount = 0;
+  });
+  // macOS posts this (NSWorkspaceWillPowerOff) for logout, restart and shut
+  // down before it asks Vision to quit, so the quit that follows sees the flag.
+  powerMonitor.on("shutdown", () => {
+    systemShuttingDown = true;
+  });
+}
 
 // Distinct from isQuitting (will-quit's re-entrancy guard): this flips on the
 // FIRST quit signal (⌘Q, menu Quit, app.quit()), before any window 'close'
@@ -3151,7 +3132,8 @@ app.on("will-quit", (e) => {
 
   resolveBackupSettings().then((s) => {
     const effective = resolveBackupSettingsWithDefaults(s);
-    const backupOnQuit = effective.backupOnQuit === true;
+    const backupOnQuit =
+      effective.backupOnQuit === true && !systemShuttingDown;
     const backupDir = effective.backupDir || "";
 
     const doBackup =
@@ -3214,7 +3196,7 @@ if (gotSingleInstanceLock) {
       mainWindow.focus();
       return;
     }
-    // Window was actually destroyed (non-darwin, or a first-run edge): the app +
+    // Window was actually destroyed (a first-run edge): the app +
     // containers may still be warm, but the SPA has to boot from scratch. Show the
     // splash and re-poll readiness (reusing the boot handoff) instead of a bare
     // loadURL(appUrl()) that would paint a blank window — or a connection error if
@@ -3227,6 +3209,6 @@ if (gotSingleInstanceLock) {
   });
 }
 
-app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") app.quit();
-});
+// Closing the last window keeps the app (and its warm backend) running, the
+// macOS convention; Quit is explicit.
+app.on("window-all-closed", () => {});

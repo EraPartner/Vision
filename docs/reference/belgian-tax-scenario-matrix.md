@@ -2,8 +2,8 @@
 title: Belgian Tax Scenario Matrix
 type: reference
 status: active
-date: 2026-10-12
-updated: 2026-10-12
+date: 2026-10-19
+updated: 2026-10-19
 tags: [reference, belgian-tax, tax-rules, verification, tests, household]
 description: Law-derived scenario tests for the Belgian household tax engine. Each scenario cites the WIB 92 articles and rule-matrix rows it rests on, carries hand-derived expected figures and is marked verified or needs_source.
 aliases: [belgian tax scenarios, tax scenario matrix]
@@ -21,10 +21,10 @@ aliases: [belgian tax scenarios, tax scenario matrix]
 
 ## How to read it
 
-- **Code**: `apps/frontend/src/lib/belgianTax/__tests__/scenarioMatrix.*.test.ts` run the
+- **Code**: `packages/shared-utils/tests/belgianTax/scenarioMatrix.*.test.ts` run the
   scenarios listed in `scenarioMatrix.<part>.ts` (single, joint, assessment, regions, and the
   invariant metadata); the shared `Scenario` type and runner are in `scenarioMatrix.ts`. Run them with
-  `bunx vitest run src/lib/belgianTax` from `apps/frontend`.
+  `bun run test:packages` from the repository root.
 - **Status**: `verified` = every asserted figure follows from verified rule-matrix rows.
   `needs_source` = the correct result depends on a rule the matrix does not carry, or on an
   input the household leaves empty (RG-15); the scenario asserts only the sourced parts (and the

@@ -10,13 +10,12 @@
  * status surfaces as inline indicators (lock / snowflake). The currently-viewed
  * year is visually emphasized. Clicking a tile sets `viewedYear`.
  *
- * Uses `displayCalculationForYear` so filed/frozen years render their "as-filed"
- * numbers rather than today's live recomputation (engine-drift protection — ADR-059).
+ * Years and calculations come from the server dashboard (`yearCalculations`), which
+ * resolves filed/frozen years to their "as-filed" numbers rather than today's live
+ * recomputation (engine-drift protection — ADR-059).
  */
 import { useMemo } from "react";
 import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
-import { useDebounce } from "@/hooks/useDebounce";
-import { useAvailableTaxYears } from "@/hooks/useAvailableTaxYears";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import {
     useCurrencyFormatter,
@@ -31,10 +30,12 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import type { BelgianTaxDashboardYear } from "@/lib/api/belgianTax";
 import { TaxYearStatusIcon } from "./TaxYearStatusIcon";
-import { resolveBelgianTaxCalculation } from "@/stores/belgianTaxStore";
 
 interface MultiYearTrendStripProps {
+    /** Per-year calculations from the tax dashboard, newest first. */
+    years: BelgianTaxDashboardYear[];
     className?: string;
     /**
      * Maximum number of years to render. Newest first. Defaults to 8 — beyond that the
@@ -47,74 +48,33 @@ interface MultiYearTrendStripProps {
 const DEFAULT_MAX_YEARS = 8;
 
 export function MultiYearTrendStrip({
+    years,
     className,
     maxYears = DEFAULT_MAX_YEARS,
 }: MultiYearTrendStripProps) {
     const formatPercent = usePercentFormatter();
     const { t } = useLanguage();
-    const {
-        viewedYear,
-        setViewedYear,
-        profile,
-        snapshots,
-        household,
-        householdSnapshots,
-        snapshotMetas,
-    } = useBelgianTaxProfile((state) => ({
+    const { viewedYear, setViewedYear } = useBelgianTaxProfile((state) => ({
         viewedYear: state.viewedYear,
         setViewedYear: state.setViewedYear,
-        profile: state.profile,
-        snapshots: state.snapshots,
-        household: state.household,
-        householdSnapshots: state.householdSnapshots,
-        snapshotMetas: state.snapshotMetas,
     }));
-    // Keep the active-year preview instant elsewhere, but coalesce wizard keystrokes
-    // before running the full household engine for every historical comparison tile.
-    const trendProfile = useDebounce(profile);
-    const trendHousehold = useDebounce(household);
-    const years = useAvailableTaxYears();
     // Shared cached currency formatter; whole-euro tiles (decimals pinned to 0,
     // same rendering as the old maximumFractionDigits: 0 formatter).
     const fmtBase = useCurrencyFormatter();
     const fmtCurrency = (val: number) => fmtBase(val, { decimals: 0 });
 
     const tiles = useMemo(() => {
-        const limited = years.slice(0, maxYears);
-        const rows = limited.map((entry) => {
-            // Same resolution as the overview: frozen calculation, else the household of
-            // that year (the v1 projection only before hydration).
-            const calc = resolveBelgianTaxCalculation(
-                {
-                    profile: trendProfile,
-                    snapshots,
-                    household: trendHousehold,
-                    householdSnapshots,
-                    snapshotMetas,
-                },
-                entry.year,
-            );
-            return {
-                ...entry,
-                totalPIT: calc.totalPIT,
-                effectiveRate: calc.effectiveRate,
-                netTakeHome: calc.netTakeHome,
-            };
-        });
+        const rows = years.slice(0, maxYears).map((entry) => ({
+            ...entry,
+            totalPIT: entry.calculation.totalPIT ?? 0,
+            effectiveRate: entry.calculation.effectiveRate ?? 0,
+        }));
         const maxPIT = rows.reduce((m, r) => Math.max(m, r.totalPIT), 0);
         return rows.map((r) => ({
             ...r,
             barRatio: maxPIT > 0 ? Math.max(0.04, r.totalPIT / maxPIT) : 0,
         }));
-    }, [
-        years,
-        maxYears,
-        snapshotMetas,
-        snapshots,
-        trendProfile,
-        trendHousehold,
-        householdSnapshots,
-    ]);
+    }, [years, maxYears]);
 
     if (tiles.length <= 1) return null;
 

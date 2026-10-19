@@ -3,8 +3,9 @@ import fs from "node:fs";
 import type { FileHandle } from "node:fs/promises";
 import type { Readable, Transform } from "node:stream";
 
-export const V1_IV_BYTES = 16;
 export const V2_SALT_BYTES = 16;
+export const RETIRED_V1_MESSAGE =
+  "This backup uses the retired v1 encryption format, which Vision no longer restores.";
 export const V2_IV_BYTES = 12;
 export const V2_TAG_BYTES = 16;
 const KDF_N = 1 << 15;
@@ -15,25 +16,18 @@ export interface DecryptFileOptions {
   encryptedPath: string;
   destinationPath: string;
   keyOrPassphrase: string | Buffer | null | undefined;
-  v1Magic: Buffer;
+  /** Magic of the retired v1 (AES-CBC, static salt) format, refused by name. */
+  retiredV1Magic: Buffer;
   v2Magic: Buffer;
-  v1Salt: string;
   requiredError: string;
   invalidError: string;
   invalidHeaderMessage: string;
   unsupportedFormatMessage: string;
+  retiredFormatMessage: string;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
-}
-
-export function deriveKeyV1(
-  passphrase: string | null | undefined,
-  salt: string,
-): Buffer | null {
-  if (!passphrase || typeof passphrase !== "string") return null;
-  return crypto.scryptSync(passphrase, salt, 32);
 }
 
 export function deriveKeyV2(
@@ -203,58 +197,25 @@ export async function decryptFile({
   encryptedPath,
   destinationPath,
   keyOrPassphrase,
-  v1Magic,
+  retiredV1Magic,
   v2Magic,
-  v1Salt,
   requiredError,
   invalidError,
   invalidHeaderMessage,
   unsupportedFormatMessage,
+  retiredFormatMessage,
 }: DecryptFileOptions): Promise<void> {
   if (!keyOrPassphrase) throw new Error(requiredError);
   const magic = await readMagic(
     encryptedPath,
-    v1Magic.length,
+    v2Magic.length,
     invalidHeaderMessage,
   );
-  if (!magic.equals(v1Magic) && !magic.equals(v2Magic)) {
-    throw new Error(unsupportedFormatMessage);
-  }
+  if (magic.equals(retiredV1Magic)) throw new Error(retiredFormatMessage);
+  if (!magic.equals(v2Magic)) throw new Error(unsupportedFormatMessage);
 
   let key: Buffer | null | undefined;
   try {
-    if (magic.equals(v1Magic)) {
-      key = Buffer.isBuffer(keyOrPassphrase)
-        ? keyOrPassphrase
-        : deriveKeyV1(keyOrPassphrase, v1Salt);
-      if (!key) throw new Error(requiredError);
-      const headerLength = v1Magic.length + V1_IV_BYTES;
-      const header = Buffer.alloc(headerLength);
-      let handle: FileHandle | undefined;
-      try {
-        handle = await fs.promises.open(encryptedPath, "r");
-        const result = await handle.read(header, 0, headerLength, 0);
-        if (result.bytesRead !== headerLength)
-          throw new Error(invalidHeaderMessage);
-      } finally {
-        if (handle) {
-          try {
-            await handle.close();
-          } catch {
-            /* ignore */
-          }
-        }
-      }
-      const iv = header.subarray(v1Magic.length);
-      await pipeCipher(
-        fs.createReadStream(encryptedPath, { start: headerLength }),
-        crypto.createDecipheriv("aes-256-cbc", key, iv),
-        fs.createWriteStream(destinationPath),
-        destinationPath,
-      );
-      return;
-    }
-
     const headerLength = v2Magic.length + V2_SALT_BYTES + V2_IV_BYTES;
     const header = Buffer.alloc(headerLength);
     const tag = Buffer.alloc(V2_TAG_BYTES);

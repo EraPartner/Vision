@@ -176,7 +176,7 @@ key = `${pt.id}:${pt.planned_date.slice(0, 10)}`
 
 #### Desktop badge
 
-The badge count is driven by `UpcomingPaymentsNotification` (non-dismissed due items count) and cleared on unmount. Electron presents it in the macOS Dock, the Linux launcher, or as a generated Windows taskbar overlay.
+The badge count is driven by `UpcomingPaymentsNotification` (non-dismissed due items count) and cleared on unmount. Electron presents it as the macOS Dock badge; the shell is macOS-only.
 
 The top-level upcoming-planned-payments notification is dismissible with persistence:
 

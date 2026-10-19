@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http } from "msw";
@@ -208,9 +208,10 @@ describe("PortfolioTaxAdjustmentsDialog", () => {
             ),
         );
         const user = userEvent.setup();
-        renderWithApp(
+        const { queryClient } = renderWithApp(
             <PortfolioTaxAdjustmentsDialog investments={[INVESTMENT_A]} />,
         );
+        const invalidate = vi.spyOn(queryClient, "invalidateQueries");
 
         // Act
         await user.click(
@@ -223,6 +224,10 @@ describe("PortfolioTaxAdjustmentsDialog", () => {
         await waitFor(() =>
             expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
         );
+        // The server portfolio dashboard reads the stored adjustments: refetch it.
+        expect(invalidate).toHaveBeenCalledWith({
+            queryKey: ["tax", "portfolio-dashboard"],
+        });
     });
 
     it("shows error toast on save failure and keeps dialog open", async () => {

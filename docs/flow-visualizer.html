@@ -3647,8 +3647,8 @@
               {
                 "from": "fe.stores",
                 "to": "pkg.shared-utils",
-                "payload": "computeHouseholdTax(h); toBelgianTaxCalculation(result, h) when unfrozen",
-                "annotation": "lib/belgianTax compatibility exports use the shared TypeScript engine; existing web calculations remain local."
+                "payload": "household shape helpers: v1 projection without the assessment, v1 patch, zod check",
+                "annotation": "lib/belgianTax/householdRuntime.ts loads only shape helpers; figures come from POST /api/belgian-tax/compute and the overview (ADR-217), so no engine code is in the browser bundle."
               },
               {
                 "from": "fe.pages",

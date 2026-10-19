@@ -116,7 +116,9 @@ history count; `summarySource` is `local`. Converted ordinary values retain web 
 > from the canonical `summaries` of the `active=false` response, with dated FX and the configured
 > cost-basis method, and keeps the default response for current totals
 > ([[docs/adr/216-server-owned-domain-calculations|ADR-216]]). The paragraph below describes the
-> earlier policy; the Belgian tax dashboard still reads `archivedPresentation`.
+> earlier policy. The Belgian tax portfolio dashboard reads the same canonical summaries
+> ([[docs/adr/217-belgian-tax-figures-on-the-server|ADR-217]]); no Vision screen reads
+> `archivedPresentation` any more, but the response still carries it.
 
 Archive views must use `archivedPresentation` for those ordinary figures, keeping the
 active response for current totals. They must not replace these display values with canonical

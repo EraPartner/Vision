@@ -226,6 +226,9 @@ jobs:
       - name: Run repository script tests
         run: bun run test:scripts
 
+      - name: Run shared package tests
+        run: bun run test:packages
+
       - name: Run backend tests with disposable PostgreSQL
         run: scripts/with-test-db.sh --coverage
 
@@ -347,52 +350,7 @@ jobs:
           sed "s/__VERSION__/${VER}/g" packaging/release/README.md \
             > "$OUT/README.md"
 
-      # The in-app shell updater (repo/source mode) installs from this ZIP.
-      # Its layout is dictated by packaging/electron/updater.ts, NOT by taste:
-      #   - the asset name must match /vision-source-launcher-.*-arm64\.zip$/i
-      #     (pickSourceLauncherZip, updater.ts)
-      #   - after `ditto -x -k` the extracted tree must contain
-      #     `unsigned/Vision/package.json` — that directory is rsynced over the
-      #     user's clone as the new source root (updater.ts)
-      #   - `unsigned/launch.command`, when present, is copied to the install
-      #     root as the double-clickable launcher (updater.ts)
-      #   - every entry must be a relative, non-traversing path (updater.ts)
-      # `git archive HEAD` gives exactly the tagged source tree — no node_modules,
-      # no packaging/electron/dist, none of the electron-builder output produced
-      # by the steps above. Generated locales are deliberately absent: the
-      # installed tree regenerates them via `electron:prod` → generate-locales.
-      - name: Build source-launcher bundle for the in-app updater
-        env:
-          TAG: ${{ github.event.inputs.tag || github.ref_name }}
-        run: |
-          set -euo pipefail
-          VER="${TAG#v}"
-          OUT="$GITHUB_WORKSPACE/dist/release"
-          ZIP="$OUT/vision-source-launcher-${VER}-arm64.zip"
-          STAGE="$RUNNER_TEMP/source-launcher"
-          rm -rf "$STAGE"
-          mkdir -p "$STAGE/unsigned/Vision"
-          git archive --format=tar HEAD | tar -x -C "$STAGE/unsigned/Vision"
-          cp packaging/electron/unsigned/launch.command "$STAGE/unsigned/launch.command"
-          chmod +x "$STAGE/unsigned/launch.command"
-          ( cd "$STAGE" && zip -r -q -X "$ZIP" unsigned )
-
-          # Guard the contract above — a silently malformed bundle would strand
-          # source-mode users exactly like the missing asset did.
-          unzip -Z1 "$ZIP" > "$STAGE/entries.txt"
-          for want in unsigned/Vision/package.json unsigned/launch.command; do
-            if ! grep -qxF "$want" "$STAGE/entries.txt"; then
-              echo "ERROR: source-launcher ZIP is missing required entry: $want"
-              exit 1
-            fi
-          done
-          if grep -qE '^/|(^|/)\.\.(/|$)' "$STAGE/entries.txt"; then
-            echo "ERROR: source-launcher ZIP contains an absolute or traversing path"
-            exit 1
-          fi
-          echo "Source-launcher bundle OK: $(basename "$ZIP") ($(wc -l < "$STAGE/entries.txt") entries)"
-
-      - name: Generate shipped application and source SBOMs
+      - name: Generate shipped application SBOM
         env:
           SYFT_VERSION: "1.52.0"
           SYFT_SHA256: 014d561b6d13059124155f74a6c5a9a99501f5e209313638dd884f39eb418ee6
@@ -415,24 +373,21 @@ jobs:
           fi
           SYFT_CHECK_FOR_APP_UPDATE=false "$RUNNER_TEMP/syft-bin/syft" \
             "dir:${APP_DIRS[0]}" -o "cyclonedx-json=dist/release/Vision-app.cdx.json"
-          SYFT_CHECK_FOR_APP_UPDATE=false "$RUNNER_TEMP/syft-bin/syft" \
-            "dir:$RUNNER_TEMP/source-launcher/unsigned/Vision" \
-            -o "cyclonedx-json=dist/release/Vision-source.cdx.json"
           python3 - <<'PY'
           import json
           from pathlib import Path
-          for name in ("Vision-app.cdx.json", "Vision-source.cdx.json"):
-              document = json.loads((Path("dist/release") / name).read_text())
-              if document.get("bomFormat") != "CycloneDX" or not document.get("components"):
-                  raise SystemExit(f"ERROR: {name} has no catalogued components")
-              print(f"{name}: {len(document['components'])} components")
+          name = "Vision-app.cdx.json"
+          document = json.loads((Path("dist/release") / name).read_text())
+          if document.get("bomFormat") != "CycloneDX" or not document.get("components"):
+              raise SystemExit(f"ERROR: {name} has no catalogued components")
+          print(f"{name}: {len(document['components'])} components")
           PY
 
       - name: Compute SHA256 checksums
         run: |
           set -euo pipefail
           cd dist/release
-          for f in Vision-*.dmg Vision-*.zip vision-source-launcher-*.zip Vision-*.cdx.json README.md; do
+          for f in Vision-*.dmg Vision-*.zip Vision-*.cdx.json README.md; do
             shasum -a 256 "$f" > "${f}.sha256"
             echo "--- ${f} ---"
             cat "${f}.sha256"
@@ -444,7 +399,6 @@ jobs:
           subject-path: |
             dist/release/Vision-*.dmg
             dist/release/Vision-*-arm64-mac.zip
-            dist/release/vision-source-launcher-*.zip
 
       - name: Attest packaged application SBOM
         uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
@@ -453,12 +407,6 @@ jobs:
             dist/release/Vision-*.dmg
             dist/release/Vision-*-arm64-mac.zip
           sbom-path: dist/release/Vision-app.cdx.json
-
-      - name: Attest source bundle SBOM
-        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
-        with:
-          subject-path: dist/release/vision-source-launcher-*.zip
-          sbom-path: dist/release/Vision-source.cdx.json
 
       - name: Upload mac release artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4
@@ -495,7 +443,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          for file in dist/mac/Vision-*.dmg dist/mac/Vision-*-arm64-mac.zip dist/mac/vision-source-launcher-*.zip; do
+          for file in dist/mac/Vision-*.dmg dist/mac/Vision-*-arm64-mac.zip; do
             gh attestation verify "$file" --repo "$GH_REPO" \
               --signer-workflow "$GH_REPO/.github/workflows/release.yml"
           done
@@ -513,7 +461,6 @@ jobs:
           files: |
             dist/mac/Vision-*.dmg
             dist/mac/Vision-*.zip
-            dist/mac/vision-source-launcher-*.zip
             dist/mac/README.md
             dist/mac/Vision-*.cdx.json
             dist/mac/*.sha256
@@ -555,9 +502,7 @@ jobs:
           originals = {
               f"Vision-{version}-arm64.dmg",
               f"Vision-{version}-arm64-mac.zip",
-              f"vision-source-launcher-{version}-arm64.zip",
               "Vision-app.cdx.json",
-              "Vision-source.cdx.json",
               "README.md",
           }
           expected = originals | {f"{name}.sha256" for name in originals}

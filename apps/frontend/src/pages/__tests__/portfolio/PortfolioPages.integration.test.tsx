@@ -13,6 +13,7 @@ import {
     PORTFOLIO_SUMMARY_ITEM_STUB,
     PORTFOLIO_SUMMARY_STUB,
     PORTFOLIO_TRANSACTION_STUB,
+    portfolioTaxDashboardStub,
 } from "@/test/msw/handlers";
 import StocksPage from "@/pages/portfolio/StocksPage";
 import CryptoPage from "@/pages/portfolio/CryptoPage";
@@ -719,6 +720,79 @@ describe("Portfolio pages (integration)", () => {
         ).toBeInTheDocument();
     });
 
+    it("PortfolioTaxPage renders the server-computed costs with localized labels", async () => {
+        const requests: URL[] = [];
+        server.use(
+            http.get(
+                `${API_BASE}/api/belgian-tax/portfolio-dashboard`,
+                ({ request }) => {
+                    const url = new URL(request.url);
+                    requests.push(url);
+                    const year = Number(url.searchParams.get("year"));
+                    const stub = portfolioTaxDashboardStub(year);
+                    return ok({
+                        ...stub,
+                        isEmpty: false,
+                        hasInKindIncomeUnclassified: true,
+                        totals: {
+                            ...stub.totals,
+                            totalTaxes: 42,
+                            totalTaxesAndFees: 42,
+                            totalRecordedTaxes: 42,
+                            portfolioTaxesPlusPIT: 42,
+                        },
+                        taxBreakdown: [
+                            { nameKey: "tax.dividendWithholding", value: 42 },
+                        ],
+                        taxByAssetClass: [
+                            { assetClass: "etf", taxes: 42, fees: 0, total: 42 },
+                        ],
+                        investmentBreakdown: [
+                            {
+                                id: 1,
+                                name: "Synthetic World ETF",
+                                symbol: "SWE",
+                                assetClass: "etf",
+                                recordedTaxes: 42,
+                                recordedFees: 0,
+                                manualTaxes: 0,
+                                manualFees: 0,
+                                taxes: 42,
+                                fees: 0,
+                                total: 42,
+                                realizedGain: 0,
+                                currency: "EUR",
+                            },
+                        ],
+                        summaries: [
+                            {
+                                id: 1,
+                                name: "Synthetic World ETF",
+                                symbol: "SWE",
+                                assetClass: "etf",
+                                currency: "EUR",
+                            },
+                        ],
+                    });
+                },
+            ),
+        );
+        renderWithApp(<PortfolioTaxPage />);
+        expect(
+            await screen.findByText("Synthetic World ETF"),
+        ).toBeInTheDocument();
+        expect(
+            screen.getAllByText("Dividend withholding tax").length,
+        ).toBeGreaterThan(0);
+        expect(screen.getAllByText("ETF").length).toBeGreaterThan(0);
+        expect(
+            screen.getByText(/income already included in acquired units/i),
+        ).toBeInTheDocument();
+        const url = requests.at(-1)!;
+        expect(url.searchParams.get("year")).toMatch(/^\d{4}$/);
+        expect(url.searchParams.get("currency")).toBe("EUR");
+    });
+
     it("PortfolioTaxPage shows empty state when no investment data", async () => {
         renderWithApp(<PortfolioTaxPage />);
         // Default MSW returns investments: [] → tax.noData = "No tax data"
@@ -1083,12 +1157,14 @@ describe("Portfolio pages (integration)", () => {
         consoleSpy.mockRestore();
     });
 
-    it("PortfolioTaxPage shows an explicit error when investment history is unavailable", async () => {
+    it("PortfolioTaxPage shows an explicit error when the portfolio tax dashboard is unavailable", async () => {
         const consoleSpy = vi
             .spyOn(console, "error")
             .mockImplementation(() => {});
         server.use(
-            http.get(`${API_BASE}/api/investments`, () => err(500, "db error")),
+            http.get(`${API_BASE}/api/belgian-tax/portfolio-dashboard`, () =>
+                err(500, "db error"),
+            ),
         );
         renderWithApp(<PortfolioTaxPage />);
         expect(

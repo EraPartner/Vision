@@ -1,4 +1,12 @@
 import { http, HttpResponse } from "msw";
+// Test-only: the MSW stand-ins for the tax overview and compute routes run the same shared
+// engine the backend serves; the application bundle never imports it.
+import { buildTaxOverview } from "@vision/shared-utils/belgian-tax/overview";
+import {
+    computeHouseholdTax,
+    toBelgianTaxCalculation,
+} from "@vision/shared-utils/belgian-tax/household";
+import type { BelgianTaxHouseholdV2 } from "@vision/shared-utils/belgian-tax/householdTypes";
 
 const API_BASE = "http://localhost:3002";
 
@@ -667,6 +675,186 @@ export const importCsvReviewRequiredHandlers = [
 ];
 
 /**
+ * GET /api/belgian-tax/dashboard for a user without a profile or taxable income:
+ * only the live year, computed on an empty household. Overrides patch fields.
+ */
+export function taxDashboardStub(
+    year: number,
+    overrides: Record<string, unknown> = {},
+) {
+    return {
+        year,
+        currency: "EUR",
+        isHistorical: false,
+        hasIncomeSources: false,
+        hasStatsData: false,
+        isEmpty: true,
+        portfolioTaxesForYear: 0,
+        totalTaxIncludingPortfolio: 0,
+        totalTaxIncludingPropertyEstimate: 0,
+        yearlyIncome: [],
+        monthlyIncomeTax: [],
+        recordedIncomeByPartner: null,
+        yearCalculations: [
+            {
+                year,
+                calculation: {
+                    grossIncome: 0,
+                    totalPIT: 0,
+                    effectiveRate: 0,
+                    netTakeHome: 0,
+                },
+                isFiled: false,
+                hasFrozenCalculation: false,
+                isCurrent: true,
+                hasSnapshot: false,
+                hasTransactions: false,
+            },
+        ],
+        currentInputs: {},
+        exportProfile: {},
+        suggestions: [],
+        householdBreakdownRows: [],
+        rules: [],
+        ...overrides,
+    };
+}
+
+/** GET /api/belgian-tax/portfolio-dashboard for a user without investments. */
+export function portfolioTaxDashboardStub(
+    year: number,
+    overrides: Record<string, unknown> = {},
+) {
+    return {
+        year,
+        currency: "EUR",
+        isEmpty: true,
+        hasProfile: false,
+        hasInKindIncomeUnclassified: false,
+        totals: {
+            totalTaxes: 0,
+            totalFees: 0,
+            totalTaxesAndFees: 0,
+            totalRecordedTaxes: 0,
+            totalRecordedFees: 0,
+            totalManualTaxes: 0,
+            totalManualFees: 0,
+            totalManualCosts: 0,
+            totalRealizedGain: 0,
+            totalUnrealizedGain: 0,
+            effectiveTaxRate: 0,
+            totalPIT: 0,
+            portfolioTaxesPlusPIT: 0,
+        },
+        taxBreakdown: [],
+        feeBreakdown: [],
+        taxByAssetClass: [],
+        investmentBreakdown: [],
+        yearlyCostTrend: [],
+        dividend: {
+            totalDividendIncome: 0,
+            dividendWhtRecorded: 0,
+            grossDividendWht: 0,
+            dividendExemption: 0,
+            grossDividendBase: 0,
+            dividendWhtReclaim: 0,
+            dividendWhtNetCost: 0,
+            unknownDividendConventionCount: 0,
+        },
+        estimates: {
+            tobRecorded: 0,
+            tobAutoEstimate: 0,
+            tacrEstimate: 0,
+            reyndersEstimate: 0,
+            cgtEstimate: 0,
+        },
+        taxTable: {
+            securitiesAccountTaxRate: 0.0015,
+            capitalGainsTaxRate: 0.1,
+            reyndersTaxRate: 0.3,
+            dividendWHTRate: 0.3,
+            securitiesAccountTaxThreshold: 1_000_000,
+            badgePercent: {
+                securitiesAccountTaxRate: 0.15,
+                capitalGainsTaxRate: 10,
+                reyndersTaxRate: 30,
+                dividendWHTRate: 30,
+            },
+        },
+        summaries: [],
+        records: [
+            {
+                key: "portfolio_tax_adjustments_v1",
+                value: null,
+                expected: { exists: false },
+            },
+            {
+                key: "portfolio_tax_classifications_v1",
+                value: null,
+                expected: { exists: false },
+            },
+        ],
+        ...overrides,
+    };
+}
+
+/** The requested `year` query parameter (the live year default when absent). */
+function requestedTaxYear(request: Request): number {
+    const year = Number(new URL(request.url).searchParams.get("year"));
+    return Number.isInteger(year) && year > 0 ? year : 2026;
+}
+
+/**
+ * GET /api/belgian-tax/overview body for the given stored settings, as the route answers it
+ * (same shared builder, JSON round-tripped).
+ */
+export function taxOverviewStub(
+    settings: Record<string, unknown> = {},
+    year?: number,
+) {
+    const { expected } = settingsWithBaselines(settings);
+    const overview = buildTaxOverview(settings, expected, year);
+    return JSON.parse(JSON.stringify(overview)) as typeof overview;
+}
+
+/**
+ * GET /api/belgian-tax/overview built from whatever the current GET /api/settings handler
+ * serves, so a test seeds the tax household through the settings it stores. `undefined` when
+ * that settings read fails: the route reads the same table, so it fails too.
+ */
+async function taxOverviewFromSettings(request: Request) {
+    const response = await fetch(`${API_BASE}/api/settings?withBaselines=true`);
+    if (!response.ok) return undefined;
+    const body = (await response.json()) as { data?: Record<string, unknown> };
+    const data = body.data ?? {};
+    const { settings, expected } =
+        data.settings && data.expected
+            ? (data as ReturnType<typeof settingsWithBaselines>)
+            : settingsWithBaselines(data);
+    const year = new URL(request.url).searchParams.get("year");
+    const overview = buildTaxOverview(
+        settings,
+        expected,
+        year ? Number(year) : undefined,
+    );
+    return JSON.parse(JSON.stringify(overview)) as typeof overview;
+}
+
+/** POST /api/belgian-tax/compute as the route answers it, from the shared engine. */
+export function computeTaxStub(household: BelgianTaxHouseholdV2) {
+    const result = computeHouseholdTax(household);
+    return JSON.parse(
+        JSON.stringify({
+            result,
+            calculation: toBelgianTaxCalculation(result, household),
+        }),
+    ) as {
+        result: ReturnType<typeof computeHouseholdTax>;
+        calculation: ReturnType<typeof toBelgianTaxCalculation>;
+    };
+}
+
+/**
  * Default handlers cover the chatty boot-time endpoints so any page can render
  * without crashing. Tests override per-flow handlers via `server.use(...)`.
  */
@@ -689,6 +877,24 @@ export const defaultHandlers = [
         ok({ version: "test", commit: "test", buildDate: "test" }),
     ),
     http.get(`${API_BASE}/api/info/health`, () => ok({ status: "ok" })),
+    http.get(`${API_BASE}/api/belgian-tax/dashboard`, ({ request }) =>
+        ok(taxDashboardStub(requestedTaxYear(request))),
+    ),
+    http.get(`${API_BASE}/api/belgian-tax/portfolio-dashboard`, ({ request }) =>
+        ok(portfolioTaxDashboardStub(requestedTaxYear(request))),
+    ),
+    http.get(`${API_BASE}/api/belgian-tax/overview`, async ({ request }) => {
+        const overview = await taxOverviewFromSettings(request);
+        return overview
+            ? ok(overview)
+            : err(500, "Failed to read the Belgian tax settings");
+    }),
+    http.post(`${API_BASE}/api/belgian-tax/compute`, async ({ request }) => {
+        const body = (await request.json()) as {
+            household: BelgianTaxHouseholdV2;
+        };
+        return ok(computeTaxStub(body.household));
+    }),
 
     http.get(`${API_BASE}/api/categories`, ({ request }) => {
         const params = new URL(request.url).searchParams;
