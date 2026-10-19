@@ -411,15 +411,13 @@ struct HomeCategoryChart: View {
                             return value < count
                         }?.id
                 }
-                // Native buttons preserve an accessible and keyboard-operable link for every slice.
-                HStack {
+                // Each slice stays reachable without a pointer as an accessibility action, as the
+                // web chart's keyboard-focusable sectors are; no visible link row (the web has none).
+                .accessibilityElement(children: .contain)
+                .accessibilityActions {
                     ForEach(slices) { slice in
                         Button(slice.name) { navigate(slice.route.string) }
-                            .buttonStyle(.visionLink).font(.caption)
                     }
-                }
-                if let selected {
-                    Button(selected.name) { navigate(selected.route.string) }.buttonStyle(.visionOutline)
                 }
             }
         }

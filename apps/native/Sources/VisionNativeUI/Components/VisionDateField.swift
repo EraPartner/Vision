@@ -115,17 +115,14 @@ struct VisionDatePopover: View {
             }
             .padding(12)
             Divider()
-            DatePicker(
-                "",
-                selection: Binding(
-                    get: { day?.date(calendar: calendar) ?? calendar.startOfDay(for: Date()) },
-                    set: { picked in select(PlannedDay(picked, calendar: calendar)) }),
-                displayedComponents: .date
+            // The web Calendar (react-day-picker): month caption with chevrons, weekday row,
+            // 32 pt day cells, primary fill for the chosen day, a tint for today. The system
+            // graphical DatePicker drew a small boxed grid that read as an AppKit control.
+            VisionCalendarGrid(
+                selected: day, calendar: calendar, locale: LanguageLocale.locale(strings.language),
+                previousLabel: strings.t("common.previous"), nextLabel: strings.t("common.next"),
+                onSelect: select
             )
-            .datePickerStyle(.graphical)
-            .labelsHidden()
-            .environment(\.calendar, calendar)
-            .environment(\.locale, LanguageLocale.locale(strings.language))
             .padding(12)
             if allowClear && day != nil {
                 Divider()
@@ -173,5 +170,127 @@ struct VisionDatePopover: View {
         draft = picked.text(format: format)
         onChange(picked)
         close()
+    }
+}
+
+/// A month grid of day buttons in the page theme, starting on `calendar.firstWeekday`.
+struct VisionCalendarGrid: View {
+    let selected: PlannedDay?
+    let calendar: Calendar
+    let locale: Locale
+    let previousLabel: String
+    let nextLabel: String
+    let onSelect: (PlannedDay) -> Void
+    @State private var month: Date
+    @Environment(\.visionTheme) private var theme
+
+    init(
+        selected: PlannedDay?, calendar: Calendar, locale: Locale, previousLabel: String, nextLabel: String,
+        onSelect: @escaping (PlannedDay) -> Void
+    ) {
+        self.selected = selected
+        self.calendar = calendar
+        self.locale = locale
+        self.previousLabel = previousLabel
+        self.nextLabel = nextLabel
+        self.onSelect = onSelect
+        let anchor = selected?.date(calendar: calendar) ?? Date()
+        let start = calendar.date(from: calendar.dateComponents([.year, .month], from: anchor)) ?? anchor
+        _month = State(initialValue: start)
+    }
+
+    private static let cell: CGFloat = 32
+
+    var body: some View {
+        let days = gridDays
+        let today = PlannedDay(Date(), calendar: calendar)
+        VStack(spacing: 6) {
+            HStack {
+                Text(monthTitle).font(.body.weight(.semibold)).foregroundStyle(theme.foreground)
+                Spacer()
+                stepButton("chevron.left", label: previousLabel, by: -1)
+                stepButton("chevron.right", label: nextLabel, by: 1)
+            }
+            .padding(.bottom, 4)
+            HStack(spacing: 0) {
+                ForEach(Array(weekdaySymbols.enumerated()), id: \.offset) { _, symbol in
+                    Text(symbol).font(.caption.weight(.medium)).foregroundStyle(theme.tertiaryLabel)
+                        .frame(width: Self.cell, height: 22)
+                }
+            }
+            ForEach(0..<(days.count / 7), id: \.self) { week in
+                HStack(spacing: 0) {
+                    ForEach(0..<7, id: \.self) { weekday in
+                        let date = days[week * 7 + weekday]
+                        dayButton(date, today: today)
+                    }
+                }
+            }
+        }
+        .fixedSize()
+    }
+
+    private func dayButton(_ date: Date, today: PlannedDay) -> some View {
+        let day = PlannedDay(date, calendar: calendar)
+        let isSelected = day == selected
+        let isToday = day == today
+        let inMonth = calendar.isDate(date, equalTo: month, toGranularity: .month)
+        return Button {
+            onSelect(day)
+        } label: {
+            Text(String(day.day))
+                .font(.callout.weight(isSelected || isToday ? .semibold : .regular))
+                .monospacedDigit()
+                .foregroundStyle(
+                    isSelected ? theme.primaryForeground : inMonth ? theme.foreground : theme.tertiaryLabel
+                )
+                .frame(width: Self.cell, height: Self.cell)
+                .background(
+                    RoundedRectangle(cornerRadius: DesignTokens.Radius.chip + 2, style: .continuous)
+                        .fill(isSelected ? theme.primary : isToday ? theme.primary.opacity(0.14) : .clear)
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(date.formatted(Date.FormatStyle(date: .complete, time: .omitted, locale: locale)))
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    private func stepButton(_ symbol: String, label: String, by months: Int) -> some View {
+        Button {
+            if let next = calendar.date(byAdding: .month, value: months, to: month) { month = next }
+        } label: {
+            Image(systemName: symbol).font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(theme.secondaryLabel)
+                .frame(width: 26, height: 26)
+                .background(
+                    RoundedRectangle(cornerRadius: DesignTokens.Radius.chip, style: .continuous)
+                        .strokeBorder(Color(token: theme.palette.input, opacity: 0.7), lineWidth: 1))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(label)
+        .accessibilityLabel(label)
+    }
+
+    private var monthTitle: String {
+        month.formatted(Date.FormatStyle(locale: locale).month(.wide).year())
+    }
+
+    /// Short weekday names rotated so the row starts on the calendar's first weekday.
+    private var weekdaySymbols: [String] {
+        var formatter = calendar
+        formatter.locale = locale
+        let symbols = formatter.shortWeekdaySymbols
+        let first = calendar.firstWeekday - 1
+        return Array(symbols[first...] + symbols[..<first]).map { String($0.prefix(2)) }
+    }
+
+    /// Six weeks from the first-weekday on or before the 1st, so the grid never jumps height.
+    private var gridDays: [Date] {
+        let weekday = calendar.component(.weekday, from: month)
+        let lead = (weekday - calendar.firstWeekday + 7) % 7
+        guard let start = calendar.date(byAdding: .day, value: -lead, to: month) else { return [] }
+        return (0..<42).compactMap { calendar.date(byAdding: .day, value: $0, to: start) }
     }
 }

@@ -60,10 +60,10 @@ struct NativeTopbar: View {
         // The strip drags the window like a titlebar; buttons above it take their own clicks.
         .background { WindowDragArea() }
         .background {
-            // The web topbar's `bg-background/80 backdrop-blur`: the page tint over a blur, so the
-            // strip reads as the page rather than the system's grey bar material.
+            // The web topbar's `bg-background/80 backdrop-blur`: the page background over a blur.
+            // The glass detail tint read greener than the page beneath it.
             Rectangle().fill(.ultraThinMaterial)
-                .overlay(Color(token: theme.glass.detailTint, opacity: 0.82))
+                .overlay(Color(token: theme.palette.background, opacity: 0.88))
                 .overlay(alignment: .bottom) {
                     Rectangle().fill(theme.border.opacity(0.6)).frame(height: 1)
                 }

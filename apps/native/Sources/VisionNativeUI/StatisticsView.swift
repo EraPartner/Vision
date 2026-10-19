@@ -710,24 +710,29 @@ public struct StatisticsView: View {
     private var flow: some View {
         card("statsPage.sankey.title", graph: "sankey") {
             if !isPrinting {
-                Picker(
-                    strings.t("statistics.selectYear"),
-                    selection: Binding(
-                        get: { model.flowYear },
-                        set: { value in
-                            model.flowYear = value
-                            Task { await model.loadFlow() }
-                        })
-                ) {
-                    ForEach(
-                        Array(
-                            Set(
-                                (model.filtered?.years.map(\.year) ?? []) + [
-                                    Calendar.current.component(.year, from: Date())
-                                ])
-                        ).sorted(by: >), id: \.self
-                    ) { Text(String($0)).tag($0) }
-                }.frame(maxWidth: 200)
+                HStack {
+                    Spacer()
+                    Picker(
+                        strings.t("statistics.selectYear"),
+                        selection: Binding(
+                            get: { model.flowYear },
+                            set: { value in
+                                model.flowYear = value
+                                Task { await model.loadFlow() }
+                            })
+                    ) {
+                        ForEach(
+                            Array(
+                                Set(
+                                    (model.filtered?.years.map(\.year) ?? []) + [
+                                        Calendar.current.component(.year, from: Date())
+                                    ])
+                            ).sorted(by: >), id: \.self
+                        ) { Text(String($0)).tag($0) }
+                    }
+                    .labelsHidden().pickerStyle(.menu).fixedSize()
+                    .accessibilityLabel(strings.t("statistics.selectYear"))
+                }
             } else {
                 Text(String(model.flowYear))
             }
@@ -737,7 +742,9 @@ public struct StatisticsView: View {
                 if flow.nodes.isEmpty {
                     Text(strings.t("statsPage.sankey.noData")).foregroundStyle(theme.secondaryLabel)
                 } else {
-                    horizontalContent {
+                    // No horizontal scroll view: inside one the flow took its 720 pt minimum
+                    // instead of the card's width.
+                    Group {
                         StatisticsFlowView(
                             flow: flow, settings: settings, currency: currency, strings: strings,
                             initialNode: model.printLocalState.selection["flowNode"],
@@ -750,7 +757,7 @@ public struct StatisticsView: View {
                             }
                         ).frame(
                             minWidth: isPrinting ? 0 : 720)
-                    }.frame(height: 380)
+                    }.frame(height: 440)
                 }
             } else if let error = model.flowError {
                 Text(error).foregroundStyle(theme.destructive)
