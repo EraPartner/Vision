@@ -89,6 +89,9 @@ Migrations auto-apply on the next boot of the app. Squawk (`bun run db:lint`, al
 dropping tables or columns and other unsafe operations in every file except the baseline. When a
 drop is genuinely safe, ask first: the code that stops reading the object must ship before the
 migration runs on Tor's machine. If it cannot, the drop does not belong in a migration yet.
+An intended destructive statement carries a `-- squawk-ignore <rule>` comment directly above it
+(rules and exclusions live in `config/squawk.toml`). Squawk has no rule for `DROP SCHEMA`, `DROP VIEW`,
+`DROP FUNCTION`, `DROP TYPE` or `DROP TRIGGER`, so review those statements by hand.
 
 ## Cost: migrations run inside the boot window
 

@@ -1356,7 +1356,6 @@ test("packaged backend environment pins native data, migration, browser, and loo
   assert.equal(env.PORT, "43123");
   assert.equal(env.VISION_RUNTIME_ROOT, runtimeRoot);
   assert.equal(env.VISION_DIST_DIR, path.join(runtimeRoot, "dist"));
-  assert.equal(env.VISION_SKIP_CONFIG_ENV_LOCAL, "true");
   assert.equal(env.OLLAMA_URL, "http://127.0.0.1:11434");
   assert.equal(env.ADMIN_ALLOW_TOKENLESS_NONLOOPBACK, "false");
   assert.equal(env.OPENAI_API_ENABLED, "true");

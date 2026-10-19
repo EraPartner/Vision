@@ -2,8 +2,8 @@
 title: Feature - Internal Transfers
 type: feature
 status: active
-date: 2026-10-11
-updated: 2026-10-08
+date: 2026-10-19
+updated: 2026-10-19
 tags: [feature, transfers, internal-transfer, cash-flow, reconciliation, detection, statistics, aggregations, adr-083, migration-0044, migration-0045, mark-transfer-validation, release-orphans-manual]
 description: "Automatic detection of transfers between a user's own accounts via a windowed cross-batch reconciliation pass, persisted as a transfer_peer_id pairing, and excluded from cash-flow aggregates by default with a global includeTransfers toggle. 2026-06-25: markTransfer() now validates both rows exist, are active, are on different accounts, and have opposite signs; releaseOrphans() now covers MANUAL transfers."
 aliases: [internal transfers, transfer detection, transfer exclusion]
@@ -22,7 +22,7 @@ aliases: [internal transfers, transfer detection, transfer exclusion]
 
 ## Data model
 
-Three columns on `transactions` (migration [[alembic/versions/0044_add_transfer_pairing.py|0044]]):
+Three columns on `transactions` (migration `0044_add_transfer_pairing`):
 
 | Field              | Type                                  | Meaning                                                         |
 | ------------------ | ------------------------------------- | --------------------------------------------------------------- |
@@ -73,7 +73,7 @@ Marked transfers are excluded from income/spending **everywhere by default**:
 
 - Materialized views `mv_monthly_summary` and `mv_category_totals`
   (`AND t.is_transfer = false`). Account balances are computed live and still reflect the real money movement of a transfer.
-- The `agg_recipient_totals` trigger (migration [[alembic/versions/0045_exclude_transfers_from_aggregations.py|0045]]) — a row counts only when `is_active AND NOT is_transfer`.
+- The `agg_recipient_totals` trigger (migration `0045_exclude_transfers_from_aggregations`) — a row counts only when `is_active AND NOT is_transfer`.
 - The base monthly / statistics / recipient queries.
 - The cash-flow forecast is **net-based**, so same-day transfer legs already net to zero — no change needed.
 

@@ -3,7 +3,7 @@ title: Watchlist Feature
 type: feature
 status: active
 date: 2026-10-19
-last_modified: 2026-10-09
+last_modified: 2026-10-19
 updated: 2026-10-19
 tags: [feature, watchlist, investments, tracking, alerts, phase-3.6, offline-resilience, online-status-detection, api-client-migration, validation, june-2026, backtest, added-price, adr-097, destructive-confirm]
 description: Investment watchlist for tracking securities not yet in the portfolio with target price alerts. June 2026: POST/PATCH return 400 ValidationError for invalid fields; what-if backtest shows return since add date using added_price (migration 0058, ADR-097).
@@ -208,7 +208,7 @@ return = (current_price − added_price) / added_price × 100
 
 ### Database column
 
-Migration 0058 (authored, not applied — `bun run db:upgrade`) adds `added_price NUMERIC(18,6) NULLABLE` to the `watchlist` table.
+Historical migration 0058 added `added_price NUMERIC(18,6) NULLABLE` to the `watchlist` table; the column is part of the `0001` migration baseline.
 
 ### API behavior
 

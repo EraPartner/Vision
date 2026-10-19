@@ -2,7 +2,7 @@
 title: Saved Charts Feature
 type: feature
 status: active
-date: 2026-10-08
+date: 2026-10-19
 tags:
   [
     feature,
@@ -30,11 +30,8 @@ related_code:
   - apps/node-backend/src/repositories/savedChartsRepository.ts
   - apps/node-backend/src/repositories/infoRepositoryTags.ts
   - apps/node-backend/src/services/calculations/aggregation/tagPivot.ts
-  - alembic/versions/0017_saved_charts_recipients_variants.py
-  - alembic/versions/0063_saved_charts_tag_ids.py
-  - alembic/versions/0064_saved_charts_all_source_flags.py
-  - alembic/versions/0096_normalize_saved_chart_filters.py
-updated: 2026-10-08
+  - db/migrations/0001_baseline.sql
+updated: 2026-10-19
 ---
 
 # Saved Charts Feature

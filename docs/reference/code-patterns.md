@@ -2144,7 +2144,7 @@ aggregationService.scheduleAggregationRefresh();
 
 ## Trigger-Maintained Aggregation Tables
 
-**Source:** [[alembic/versions/0035_add_recipient_aggregations.py|Migration 0035]] (consolidated baseline; originally introduced in legacy 0026)
+**Source:** `0035_add_recipient_aggregations` (consolidated baseline; originally introduced in legacy 0026)
 
 Two tables kept in sync via row-level PostgreSQL triggers. Never require refresh from application code.
 
@@ -3541,7 +3541,7 @@ profile transition, while multi-year comparison calculations use a debounced pro
 
 **Historical Reference:** The pattern documented runtime-toggleable feature flags via a `feature_flags` PostgreSQL table with admin endpoints to toggle flags. In practice, no flags were ever toggled off in production; the system added maintenance surface without delivering value.
 
-**Migration Path:** Alembic migration `0011_drop_feature_flags` drops the table while preserving the creation migration (`0002_feature_flags.py`) in the history for audit/compliance purposes.
+**Migration Path:** Historical Alembic migration `0011_drop_feature_flags` dropped the table; the creation migration (`0002_feature_flags`) remains in Git history. The `0001` baseline has no `feature_flags` table.
 
 **For New Features:** If you need to control feature availability, use environment variables or configuration instead of database-backed toggles. See [[docs/adr/035-remove-feature-flags|ADR-035]] for rationale.
 
@@ -4636,7 +4636,7 @@ tables when later changes must be operationally distinguishable from creation. S
 The exception is a trigger-maintained aggregate whose one refresh function writes both its values and
 timestamp. `agg_split_outstanding` follows that model; application code cannot update it directly.
 
-**Source of the rule:** migration [[alembic/versions/0092_updated_at_policy.py]] and
+**Source of the rule:** migration `0092_updated_at_policy` and
 [[docs/adr/119-trigger-owned-updated-at-policy|ADR-119]].
 
 ### Enum-like columns: TEXT + named CHECK

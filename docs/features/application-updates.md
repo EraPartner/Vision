@@ -90,7 +90,9 @@ release job verifies build provenance before publishing. No application image is
 ## Rollback boundaries
 
 Application rollback and database rollback are separate. Replacing the app does not downgrade the
-database. Alembic downgrades require explicit review and a backup. A failed native database switch
+database. A migration rollback (`bun run db:migrate:down`, only for migrations with a `.down.sql`) requires
+explicit review and a backup; below the `0001` baseline, recovery is a backup restore taken after
+the baseline switch. A failed native database switch
 keeps the previous database until validation succeeds.
 
 ## Security properties

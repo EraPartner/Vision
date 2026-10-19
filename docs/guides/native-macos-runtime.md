@@ -16,8 +16,8 @@ related_code:
 > [!tip] Desktop startup and readiness
 > [Open the journey](../flow-visualizer.html#native-startup). See [[docs/guides/visual-learning|Understand Vision Visually]] for the reading paths and conceptual diagrams.
 
-Vision for macOS bundles PostgreSQL 18.6, Bun, the Alembic migration executable, and Chrome Headless
-Shell. Electron owns their lifecycle. A host database service is neither used nor required.
+Vision for macOS bundles PostgreSQL 18.6, the compiled Bun backend with its `db/` migration files,
+and Chrome Headless Shell. Electron owns their lifecycle. A host database service is neither used nor required.
 
 > [!warning] Legacy installation
 > If this installation still has a saved marker from the retired runtime, use Vision 1.0.2 to
@@ -29,7 +29,6 @@ Shell. Electron owns their lifecycle. A host database service is neither used no
 The native payload builder requires:
 
 - the reviewed PostgreSQL 18.6 build source;
-- Python 3.12 and pinned migration dependencies;
 - the Puppeteer-pinned Chrome Headless Shell; and
 - the Bun runtime and production frontend.
 
@@ -79,14 +78,14 @@ backend on a random loopback port when appropriate, and waits for detailed readi
 the application. `runtime-state.json` records the active native database identity so a stale or
 partially switched database cannot become the writer by accident.
 
-An empty PostgreSQL 18 cluster installs the reviewed 0119 SQL baseline atomically, then follows the
-current migration chain. Older 0118 clusters stay there until the separately approved,
-restore-tested bridge. Existing profiles at the exact registered 0120–0126 revisions instead
-advance to the pinned additive 0126 target, preserving existing financial values, legacy objects
-and old receipt JSON. This does not run the deferred bridge or conversion; unknown successor
-revisions refuse automatic upgrade. The package includes the baseline SQL and historical
-migrations. See [[docs/guides/migrations|Database Migration Guide]] and
-[[docs/adr/165-reviewed-fresh-database-baseline|ADR-165]].
+The backend applies migrations in-process with Kysely's migrator; no separate migration executable
+is spawned. An empty PostgreSQL 18 cluster installs `db/migrations/0001_baseline.sql` atomically
+and verifies its catalog fingerprint, then applies later numbered files. A cluster still at the
+final Alembic revision `0128_category_path_on_legacy_rename` with the baseline fingerprint is
+adopted in one transaction; any other Alembic revision or schema drift fails closed and changes
+nothing. The package ships `db/migrations/` and `db/schema-inventory.sql`. See
+[[docs/guides/migrations|Database Migration Guide]] and
+[[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]].
 
 ## Native Vision Demo
 
@@ -135,14 +134,16 @@ native logs, runtime marker, payload manifest, and seed activation state first.
 The desktop backup path uses the native database transport. A `.visionbak` bundle contains the
 database dump, attachments, settings, metadata, and checksums. Restore extracts into staging,
 validates paths and checksums, restores into a fresh database, verifies it, and only then switches
-the active database.
+the active database. Only backups taken after the switch to the Kysely baseline restore; older
+Alembic-era dumps are refused with `BACKUP_PRE_BASELINE`. The schema revision a backup records is
+the highest name in `public.kysely_migration`.
 
 `bun run native:isolated-smoke` exercises that complete encrypted-bundle journey in a temporary
 application-data directory and disposable PostgreSQL 18 cluster. It verifies exact synthetic
 account, transaction, setting, and attachment values plus schema, frontend-state, API-readiness,
 and packaged-frontend restoration without reading or writing the user's Vision instance. The
-focused bundle suite retains an immutable sanitized encrypted bundle written by Vision 1.0.2
-alongside the current AES-256-GCM path, and fixed v1 AES-256-CBC vectors that must be refused.
+focused bundle suite retains an immutable sanitized encrypted bundle written by Vision 1.0.2 (read
+only; it is pre-baseline and not restorable) alongside the current AES-256-GCM path, and fixed v1 AES-256-CBC vectors that must be refused.
 
 Encrypted backup primitives live in `packaging/electron/backup/encrypted-file.ts`. Restore reads
 only AES-256-GCM files (`VISIONENC2` and `VISIONBAK2`), the format new encrypted files use. Retired

@@ -108,7 +108,7 @@ Verify database connection and initialization status.
 {
   "message": "Database connection verified successfully",
   "details": {
-    "note": "Tables are managed by Alembic migrations"
+    "note": "Tables are managed by database migrations (db/migrations)"
   },
   "links": []
 }
@@ -143,9 +143,9 @@ string-valued confirmations are rejected. A non-boolean `force` fails body valid
 
 ```json
 {
-  "message": "Database reset should be performed via Alembic migrations (Python backend)",
+  "message": "Database reset is not performed through the API",
   "details": {
-    "warning": "Use the Python backend for destructive database operations"
+    "warning": "Restore a backup or rebuild the database with the migration runner instead"
   },
   "links": []
 }
@@ -550,7 +550,7 @@ objects whose `op` is `insert`, `update`, or `delete`; `values`, `set`, and `pk`
 
 Constraint SQLSTATEs (`23502` NOT NULL, `23503` FK violation, `23505` UNIQUE, `23514` CHECK, `22P02` invalid type) are mapped to human-readable messages before the `400`/`409` response is sent.
 
-**Audit trail:** Every permitted committed statement is written to `db_editor_audit` (table `db_editor_audit(id, table_name, op, pk_json, before_json, after_json, statement, created_at)`; index `idx_db_editor_audit_table_time`) and linked to the hash chain in the same transaction. It is also emitted on the structured logger. Audit tables themselves are excluded from the generic editor. Migration: `alembic/versions/0059_db_editor_audit.py` and [[docs/adr/157-electron-local-audit-receipt|ADR-157]].
+**Audit trail:** Every permitted committed statement is written to `db_editor_audit` (table `db_editor_audit(id, table_name, op, pk_json, before_json, after_json, statement, created_at)`; index `idx_db_editor_audit_table_time`) and linked to the hash chain in the same transaction. It is also emitted on the structured logger. Audit tables themselves are excluded from the generic editor. Migration: `0059_db_editor_audit` and [[docs/adr/157-electron-local-audit-receipt|ADR-157]].
 
 See [[docs/features/database-maintenance|Database Maintenance Feature]] and [[docs/adr/101-db-data-editor|ADR-101]] for full safety model.
 

@@ -24,7 +24,7 @@ vi.mock("../src/services/plannedMatchService.ts", () => ({
 }));
 
 const describeDb =
-  hasTestDatabase() && process.env.VISION_TEST_DB_TASK === "adr088-contract"
+  hasTestDatabase()
     ? describe
     : describe.skip;
 const pool = getTestPool()!;

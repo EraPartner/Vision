@@ -32,10 +32,10 @@ scan, or publish a product container image. The required aggregate check remains
 | Area              | Jobs and evidence                                                             |
 | ----------------- | ----------------------------------------------------------------------------- |
 | Repository policy | cloud tooling, package/workflow supply-chain checks, commitlint, secrets scan |
-| Dependencies      | PR dependency review, Bun audit and pip-audit                                 |
-| Static checks     | frontend/backend lint, frontend/backend/Python type checks, generated checks  |
+| Dependencies      | PR dependency review and Bun audit                                            |
+| Static checks     | frontend/backend lint, migration lint (squawk), type checks, generated checks |
 | Builds and tests  | frontend build, frontend tests, Electron/runtime tests, backend tests         |
-| Database safety   | destructive-migration check against repository source                         |
+| Database safety   | squawk destructive-DDL lint and generated-type drift check                    |
 | Security          | Trivy filesystem scan with table and SARIF output                             |
 | Runtime           | native production-health and migration-reversibility smoke                    |
 | Contracts         | live API contract tests against a native backend and disposable PostgreSQL 18 |
@@ -52,10 +52,11 @@ and engine remain lazy as required by [[docs/adr/200-belgian-tax-household-model
 The checker reads the generated `index.html` and assets to catch new eager imports and total
 bundle growth.
 
-Python is checked by `mypy --strict` from `config/mypy.ini` (Alembic env and migrations,
-`scripts/`, the packaged Alembic wrapper) in the `Type Check (Python)` job, which installs the
-hash-pinned `config/requirements.txt` and `config/requirements-dev.txt` and also runs the Alembic
-audit callback test. See [[docs/adr/184-strict-python-type-checking|ADR-184]].
+The repository has no Python. The former `Deps Audit (Python)`, `Type Check (Python)` and
+`Verify Destructive Migrations` jobs were removed with Alembic
+([[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]]). The `Lint` job now also runs
+`bun run db:lint`, which lints `db/migrations/*.sql` with squawk and `config/squawk.toml`;
+destructive DDL fails unless a `-- squawk-ignore <rule>` comment marks it as intended.
 
 The backend source (`src/**/*.ts`) is checked by the strict `apps/node-backend/tsconfig.json` in
 the `Type Check (Backend)` job and in the release workflow; see
@@ -90,7 +91,7 @@ every pull request. GitHub does not currently list `bun.lock` as a supported dep
 format, so this check must not be treated as review of transitive Bun lockfile changes. The shared
 `scripts/audit-js.sh` audits both the root and Electron Bun lockfiles for known high or critical
 advisories. The package boundary check verifies their sources and integrity fields.
-`scripts/check-workflow-supply-chain.py` requires full commit SHA pins for external Actions,
+`scripts/check-workflow-supply-chain.ts` requires full commit SHA pins for external Actions,
 full commit SHA refs for external repository checkouts, `persist-credentials: false` on every
 checkout, and the frozen script-disabled shared install. Agent tooling checks use only the
 checked-in project scripts; no external agent-container repository is fetched.
@@ -108,23 +109,26 @@ needs to pass the release checks below before its artifacts are treated as verif
 
 Database-backed jobs install PostgreSQL 18 packages on the runner and use
 `scripts/with-test-db.sh` or the native runtime smoke harness. Each cluster is private, loopback
-only, migrated to the current Alembic head, and removed after the job. The test harness uses a
+only, migrated with the Kysely migrator to the latest `db/migrations/` file, and removed after the job. The test harness uses a
 generated password and SCRAM authentication so role-bootstrap password rejection is tested. It also
 enables the extensions required by production behavior. This is a real PostgreSQL check, not a
 mock and not a dependency on a pre-existing runner service.
 Direct `bun run test:db` runs also create a disposable cluster even if database URLs are exported;
 using a caller-managed test database requires `VISION_TEST_DB_USE_CALLER=1`.
 
-The backend CI job enables the audit and transaction performance probes, then runs migration
-fidelity, legacy retirement, ADR-088, ADR-090, and statement-scalar contract lifecycles in separate
-disposable clusters. Contract suites intentionally skip in the ordinary head-schema run because
-their fixtures require the guarded manual schema drop.
+The backend CI job enables the audit and transaction performance probes and sets
+`VISION_TEST_DB_VERIFY_CODEGEN=1`, so the run fails when
+`apps/node-backend/src/database/schema.generated.ts` differs from `kysely-codegen` output for the
+migrated schema. The former per-task lifecycle runs (migration fidelity, legacy retirement,
+ADR-088, ADR-090, statement-scalar contract) are gone; migrator and adoption behaviour is covered
+by the ordinary suite (`tests/migrate.db.test.ts`). The native runtime smoke round-trips the
+latest migration down and up only when it ships a `.down.sql`.
 
 ### Security scan
 
 Trivy scans the checked-out filesystem for vulnerable dependencies and known secrets. Results are
-uploaded to GitHub code scanning as SARIF when permitted. JavaScript and Python dependency audits
-remain separate gates so package-manager findings are visible even when the filesystem scan is
+uploaded to GitHub code scanning as SARIF when permitted. The Bun dependency audit remains a
+separate gate so package-manager findings are visible even when the filesystem scan is
 unchanged.
 
 ## Release workflow
@@ -195,7 +199,7 @@ bun run lint
 bun run lint:backend
 bun run typecheck
 bun run typecheck:electron
-bun run typecheck:python
+bun run db:lint
 bun run validate-locales
 bun run test:scripts
 bun run test

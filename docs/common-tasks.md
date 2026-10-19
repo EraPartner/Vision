@@ -2,8 +2,8 @@
 title: Common Tasks Quick Reference
 type: map-of-content
 status: active
-date: 2026-09-24
-updated: 2026-09-24
+date: 2026-10-19
+updated: 2026-10-19
 tags:
   [
     moc,
@@ -152,7 +152,7 @@ aliases:
 ```bash
 # Development
 bun run dev              # Start native Electron development
-bun run db:upgrade       # Run migrations
+bun run db:migrate       # Run migrations
 
 # Testing
 bun run check            # Run all local checks (lint, typecheck, locales, endpoint matrix, tests)

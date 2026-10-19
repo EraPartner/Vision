@@ -773,7 +773,6 @@ export function buildNativeBackendEnv({
     VISION_RUNTIME_ROOT: resolvedRuntimeRoot,
     VISION_NATIVE_ENV_FILE: paths.env,
     VISION_DIST_DIR: path.join(resolvedRuntimeRoot, "dist"),
-    VISION_SKIP_CONFIG_ENV_LOCAL: "true",
     PUPPETEER_EXECUTABLE_PATH: tools.chrome,
     OLLAMA_URL: "http://127.0.0.1:11434",
     ADMIN_ALLOW_TOKENLESS_NONLOOPBACK: "false",
@@ -2228,7 +2227,6 @@ export function createNativeRuntime(options: NativeRuntimeOptions) {
         env: safeChildEnv({
           ...runtimeEnv,
           VISION_RUNTIME_ROOT: runtimeRoot || repoRoot,
-          VISION_SKIP_CONFIG_ENV_LOCAL: "true",
         }),
       },
     );

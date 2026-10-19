@@ -4,7 +4,7 @@ type: feature
 status: active
 date: 2026-10-19
 updated: 2026-10-19
-last_modified: 2026-10-06
+last_modified: 2026-10-19
 tags: [feature, backup, restore, database, filesystem, localStorage, bundle, encryption, schema-migration, phase-1, phase-2, phase-7, passphrase-modal, ux, aead, aes-256-gcm, rolling-cache, concurrent-backup-guard, pre-restore-confirmation, watchdog-pause, safe-storage, keychain, lazy-safeStorage, settings-dialog-fix, backup-path-revert-fix]
 description: "Authoritative audit of every persistence surface in Vision and its backup/restore coverage status. Phase 1+2 implements .visionbak bundle format with optional AES-256-GCM encryption (v2, 2026-04-28; the AES-256-CBC v1 format was retired and is refused since 2026-10-19, ADR-219), schema-safe restore, and localStorage hydration. Phase 7 (May 2026) hardens restore with user confirmation, concurrent-backup guard, and health watchdog pause. safeStorage is now accessed lazily to avoid macOS Keychain prompts for users without a stored passphrase. 2026-06-11: fixes \"backup path keeps reverting to default\" — settings dialog now loads backup settings on open; Electron IPC handlers correctly unwrap the response envelope."
 aliases: [backup audit, coverage audit, backup coverage, visionbak, bundle format]
@@ -70,12 +70,12 @@ If transfer import is interrupted, the next start accepts only the local checkpo
 
 After one-year retention prunes an authenticated old prefix, a new backup contains the retained suffix and current head, not the deleted chain payloads. The matching external receipt signs the deleted predecessor sequence and hash, linked domain high-water IDs, and migration heads. Restore on the same Mac or via a protected device transfer must retain that receipt; a database bundle alone cannot verify its truncated prefix. Older backups may still contain those entries under the backup retention policy. Migration 0118 refuses downgrade after the first prune. See [[docs/adr/162-one-year-audit-retention|ADR-162]].
 
-Fresh installs start at revision `0119_squashed_baseline` with a single audit baseline event. Existing
-backups retain their original revision and audit entries; the 0118-to-0119 bridge never rebuilds
-their data. The operator bridge creates a new logical backup, restores it into disposable
-PostgreSQL 18, compares every table count and digest, and retains that backup for recovery. A
-backup from an uncontracted or divergent schema cannot be stamped into the new baseline. See
-[[docs/adr/165-reviewed-fresh-database-baseline|ADR-165]] and
+Fresh installs start at migration `0001_baseline` with a single `baseline_installed` audit event.
+The schema revision of a database, and the `schemaHead` a bundle records, is the highest name in
+`public.kysely_migration`. Restore refuses any backup taken before the switch to the Kysely
+baseline: a dump that has no `kysely_migration` rows or that carries Alembic's `alembic_version`
+table fails with `BACKUP_PRE_BASELINE`. See
+[[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]] and
 [[docs/guides/migrations|Database Migration Guide]].
 
 #### AI & Conversations
@@ -122,12 +122,12 @@ See [[docs/reference/data-model]] and
 | --------------------- | ----------- | ----------- | ------------- |
 | `asset_price_history` | Portfolio   | ✅ Included | Price cache   |
 | `attachments`         | Attachments | ✅ Included | Metadata rows |
+| `adr109_legacy_cleanup_marker` | Reference | ✅ Included | Reference row shipped by the `0001` baseline |
 
 #### Raw Bank Import Tables
 
 | Table                          | Domain         | Backup      | Notes                                        |
 | ------------------------------ | -------------- | ----------- | -------------------------------------------- |
-| `belfius_raw_transactions`     | Import         | ✅ Included |                                              |
 | `belgian_inflation_rates`      | Tax            | ✅ Included |                                              |
 | `cashflow_forecast_accuracy`   | Forecasting    | ✅ Included | Backtest metrics                             |
 | `cashflow_forecast_mc`         | Forecasting    | ✅ Included | Month-view Monte Carlo cache                 |
@@ -136,7 +136,6 @@ See [[docs/reference/data-model]] and
 | `category_merge_aliases`       | Categorisation | ✅ Included | Redirects merged legacy pairs                |
 | `category_root_aliases`        | Categorisation | ✅ Included | Redirects former legacy root names           |
 | `custom_parser_configs`        | Import         | ✅ Included | Custom bank parser configs                   |
-| `custom_raw_transactions`      | Import         | ✅ Included |                                              |
 | `exchange_rates`               | FX             | ✅ Included | Rate cache                                   |
 | `import_batches`               | Import         | ✅ Included | Import batch records                         |
 | `import_staging_rows`          | Import         | ✅ Included | Exact source records and import fingerprints |
@@ -144,8 +143,6 @@ See [[docs/reference/data-model]] and
 | `insight_digest_state`         | Insights       | ✅ Included | Versioned navigation badge count             |
 | `insight_dismissals`           | Insights       | ✅ Included | Server-visible user preferences              |
 | `investments`                  | Portfolio      | ✅ Included | Holdings                                     |
-| `kbc_raw_transactions`         | Import         | ✅ Included |                                              |
-| `manual_raw_transactions`      | Import         | ✅ Included |                                              |
 
 #### Planning & Recurring
 
@@ -168,32 +165,24 @@ See [[docs/reference/data-model]] and
 | `recipient_bank_accounts`    | Recipients   | ✅ Included |                                        |
 | `recipient_match_patterns`   | Recipients   | ✅ Included | Auto-match rules                       |
 | `recipients`                 | Recipients   | ✅ Included |                                        |
-| `revolut_raw_transactions`   | Import       | ✅ Included |                                        |
-| `sabb_raw_transactions`      | Import       | ✅ Included |                                        |
 | `saved_chart_categories`     | Charts       | ✅ Included | Category memberships                   |
 | `saved_chart_recipients`     | Charts       | ✅ Included | Recipient memberships                  |
 | `saved_chart_tags`           | Charts       | ✅ Included | Tag memberships                        |
 | `saved_charts`               | Charts       | ✅ Included | Chart configurations                   |
 | `split_payments`             | Splits       | ✅ Included |                                        |
 | `tags`                       | Tags         | ✅ Included |                                        |
-| `transaction_raw_references` | Import       | ✅ Included | Raw↔canonical links                    |
 | `transaction_splits`         | Splits       | ✅ Included |                                        |
 | `transaction_tags`           | Tags         | ✅ Included |                                        |
 | `transactions`               | Transactions | ✅ Included | Primary ledger and import fingerprints |
 | `user_settings`              | Settings     | ✅ Included | All app settings                       |
-| `vision_raw_transactions`    | Import       | ✅ Included |                                        |
 | `watchlist`                  | Portfolio    | ✅ Included |                                        |
-| `wise_raw_transactions`      | Import       | ✅ Included |                                        |
 
 #### Excluded Tables
 
 | Table                    | Reason                                                                         |
 | ------------------------ | ------------------------------------------------------------------------------ |
-| `alembic_version`        | Alembic internal — validated and advanced by Vision's guarded migration runner |
-| `agg_shadow_divergences` | Dropped in migration 0009 — no longer in schema                                |
-| `feature_flags`          | Dropped in migration 0011 — no longer in schema                                |
-| `bank_statements`        | Dropped in migration 0014 — bank reconciliation feature was removed            |
-| `reconciliation_entries` | Dropped in migration 0014 — bank reconciliation feature was removed            |
+| `kysely_migration`       | Migrator bookkeeping created by `database/migrate.ts`, not by a migration; the schema version it records travels with the dump |
+| `kysely_migration_lock`  | Migrator lock row created by `database/migrate.ts`, not by a migration       |
 
 ---
 
@@ -394,7 +383,7 @@ and [[docs/architecture/electron|Electron architecture]].
    - **v1 (retired):** Refuse with "This backup uses the retired v1 encryption format, which Vision no longer restores." before any decryption
    - **v2:** Extract salt + IV from header; derive key via Scrypt KDF with per-backup salt; decrypt GCM ciphertext; verify auth tag; throw `Error('INVALID_PASSPHRASE')` on tag failure (tampering detected)
    - Frontend catches invalid-passphrase error and re-prompts modal (up to 3 attempts typical)
-4. **Schema Validation** — Extract metadata.json from bundle; compare `metadata.schemaHead` against current `getSchemaHead()`. If bundle schema > current, throw `BUNDLE_SCHEMA_NEWER` error (user must upgrade Vision first).
+4. **Schema Validation** — Read the dump's own `kysely_migration` rows. A dump without them, or with an `alembic_version` table, is refused with `BACKUP_PRE_BASELINE`. The highest migration name must equal `metadata.schemaHead` when present (otherwise the bundle is reported corrupt), and is compared with the current `getSchemaHead()` (or the highest shipped `db/migrations/` file). If the bundle schema is newer, throw `BUNDLE_SCHEMA_NEWER` (user must upgrade Vision first).
 5. **Native Database Stage** — The runtime restores into a fresh staged database created from
    `template0`, uses version-matched PostgreSQL 18 tools, stops on the
    first error, and restores in one transaction. A no-owner restore leaves schema tables with the
@@ -402,8 +391,9 @@ and [[docs/architecture/electron|Electron architecture]].
    role so their create, index, refresh, and analyze lifecycle remains least-privilege. Runtime
    bootstrap grants restored ordinary tables and views individually and skips those app-owned
    materialized views.
-6. **Database Validation** — Confirm the exact Alembic head and required table inventory before the
-   live database name can change.
+6. **Database Validation** — Confirm the staged database's highest `kysely_migration` name equals
+   the expected schema head, that it has no `alembic_version`, and that it has public tables before
+   the live database name can change.
 7. **Attachment Stage** — Extract `attachments/` to a sibling staging directory, reject symbolic
    links, and compute the count and aggregate SHA-256 fingerprint.
 8. **Atomic Activation** — Stop the active writer, switch the staged database and attachment tree,
@@ -443,7 +433,7 @@ and [[docs/architecture/electron|Electron architecture]].
 
 `apps/node-backend/tests/backup-coverage.test.ts` runs in CI and:
 
-1. **Table coverage** — parses all `alembic/versions/*.py` files, computes net table set (created minus dropped), and asserts exact match against `BACKUP_COVERED_TABLES`. Fails if a new migration adds a table not in the registry.
+1. **Table coverage** — replays `db/migrations/0001_baseline.sql` and every later up migration (not `.down.sql`), computes the net table set (created minus dropped, following renames), and asserts exact match against `BACKUP_COVERED_TABLES`. Fails if a new migration adds a table not in the registry.
 2. **localStorage coverage** — asserts all keys in `LOCAL_STORAGE_KEYS` are referenced in the bundle snapshot logic.
 
 Adding a table or localStorage key without updating the registries causes a CI failure.
@@ -469,8 +459,9 @@ SQL, an attachment, metadata, and frontend state. This checks the current reader
 bytes from the older producer rather than a bundle created by the current writer. Vision 1.0.2
 already wrote the authenticated `VISIONBAK2` envelope. The fixed encrypted-byte tests in
 `packaging/electron/backup/encrypted-file.test.ts` decrypt the v2 vectors and check that the v1
-vectors are refused without writing plaintext. Newer-schema rejection and restore
-rollback remain covered by the focused Electron backup tests.
+vectors are refused without writing plaintext. Opening it does not make it restorable: its dump predates the Kysely baseline, so restore refuses
+it with `BACKUP_PRE_BASELINE`. Newer-schema and pre-baseline rejection and restore rollback remain
+covered by the focused Electron backup tests (`packaging/electron/backup/restore.test.ts`).
 
 ---
 

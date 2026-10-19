@@ -194,7 +194,7 @@ LIMIT 20
 | [[docs/reference/frontend-routes         | 🛣️ Frontend Routes]]                  | Complete route table                                             |
 | [[docs/reference/scripts                 | ⚙️ Scripts Reference]]                | All bun/npm commands                                             |
 | [[docs/reference/database-triggers       | 🗄️ Database Triggers]]                | All PostgreSQL triggers                                          |
-| [[docs/guides/migrations                 | 🔗 Migration Workflow]]               | Alembic workflow; use `bun run db:history` for the current chain |
+| [[docs/guides/migrations                 | 🔗 Migration Workflow]]               | Kysely migrator workflow; use `bun run db:status` for the chain   |
 | [[docs/reference/code-patterns           | 💻 Code Patterns]]                    | Standard code patterns for all layers                            |
 | [[docs/reference/error-codes             | ❌ Error Codes]]                      | All API error responses and status codes                         |
 | [[docs/reference/typescript-types        | 🔢 TypeScript Types]]                 | All frontend type definitions                                    |
@@ -216,6 +216,14 @@ WHERE date AND date >= date(today) - dur(7 days)
 SORT date DESC
 LIMIT 10
 ```
+
+### 2026-10-19 — TypeScript Migrations with Kysely (ADR-222)
+
+Alembic, its 128 revisions and all Python tooling are gone. `db/migrations/0001_baseline.sql` holds
+the full schema and Kysely's migrator applies numbered SQL files in-process at boot; squawk lints
+migration SQL (`bun run db:lint`) and `kysely-codegen` generates the database types. Only backups
+taken after the switch restore. See [[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]]
+and [[docs/guides/migrations|Database Migration Guide]].
 
 ### 2026-09-04 — Balance-Provenance Lateral Naming (ADR-118)
 
@@ -852,7 +860,7 @@ Vision is a comprehensive **financial transaction management application** suppo
 
 - **Frontend**: React 18 + TypeScript + Vite + Tailwind CSS + Radix UI
 - **Backend**: Node.js (Bun) + Express
-- **Database**: PostgreSQL with Alembic migrations
+- **Database**: PostgreSQL with Kysely migrations (`db/migrations/`, ADR-222)
 - **Desktop**: Electron
 - **Testing**: Vitest + React Testing Library
 

@@ -36,6 +36,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Database migrations moved to TypeScript** ([ADR-222]). Alembic and its 128 revisions are
+  replaced by Kysely's migrator and one squashed baseline, `db/migrations/0001_baseline.sql`;
+  migration SQL is linted with squawk (`bun run db:lint`). Python, the PyInstaller migration
+  runner, mypy and `pip-audit` are gone from development, CI and the macOS app. **Breaking:**
+  backups taken before the switch are refused on restore (`BACKUP_PRE_BASELINE`); take a fresh
+  backup after upgrading.
 - Upgraded to **React 19** ([ADR-076]).
 - Replaced hard-coded color literals with semantic design tokens across the UI.
 - Centralized dashboard/statistics exclusion resolution; numerous memoization and query
@@ -94,3 +100,4 @@ planned/recurring transactions, en/nl i18n, and an Electron desktop build.
 [ADR-075]: docs/adr/075-visual-effects-tiers-display-adaptation.md
 [ADR-076]: docs/adr/076-react-19-upgrade.md
 [ADR-077]: docs/adr/077-devcontainer-apple-container-runtime.md
+[ADR-222]: docs/adr/222-typescript-migrations-kysely-baseline.md

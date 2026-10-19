@@ -2,8 +2,8 @@
 title: AI Agent Codebase Navigation Map
 type: reference
 status: active
-date: 2026-10-08
-updated: 2026-10-08
+date: 2026-10-19
+updated: 2026-10-19
 tags:
   [
     ai-agent,
@@ -313,16 +313,17 @@ Full reference: [[docs/reference/service-layer|Service Layer Reference]]
 | ------------------------------------------------ | ------------------------------------------ |
 | [[apps/node-backend/src/database/connection.ts]] | Database connection setup                  |
 | [[apps/node-backend/src/main.ts]]                | DB readiness retry loop + server startup   |
-| [[apps/node-backend/src/database/migrate.ts]]    | Alembic migrations (schema initialization) |
+| [[apps/node-backend/src/database/migrate.ts]]    | Kysely migrator (schema initialization)    |
 
 ### Migrations
 
 Workflow: [[docs/guides/migrations|Migration Guide]]
 
-Current dependency order: `bun run db:history`
+Applied and pending migrations: `bun run db:status`
 
-Directory: `alembic/versions/` — active revisions; read each file's
-`down_revision` metadata rather than relying on a copied count.
+Directory: `db/migrations/` — `0001_baseline.sql` (full schema) plus numbered `NNNN_name.sql`
+files and optional `.down.sql` rollbacks, applied in name order. Generated types:
+[[apps/node-backend/src/database/schema.generated.ts]] (`bun run db:codegen`).
 
 ---
 
@@ -355,8 +356,8 @@ Directory: `alembic/versions/` — active revisions; read each file's
 ### "I need to add a database column"
 
 1. Read [[docs/guides/migrations|Migration Guide]]
-2. Create migration: `bun run db:revision -- "add column to table"`
-3. Run migration: `bun run db:upgrade`
+2. Create migration: `bun run db:new -- add_column_to_table`, plus a `.down.sql`
+3. Run migration: `bun run db:migrate`, then `bun run db:codegen` and `bun run db:lint`
 4. Update repository queries
 5. Update [[docs/adr/002-database-schema|Database Schema ADR]]
 
