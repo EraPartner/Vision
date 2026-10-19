@@ -417,8 +417,8 @@ describe.skipIf(!hasTestDatabase())(
       );
       expect(sources.map((row) => row.staging_row_id)).toEqual([yieldRow]);
       const adjustment = await assetAdjustments.insertAssetAdjustment({
-        investment_id: inv,
-        account_id: source,
+        investment_id: asInvestmentId(inv),
+        account_id: asAccountId(source),
         date: "2025-03-01",
         units: "0.5",
         adjustment_kind: "asset_fee",
@@ -446,9 +446,9 @@ describe.skipIf(!hasTestDatabase())(
       ).toHaveLength(1);
 
       const transfer = await assetTransfers.insertAssetTransfer({
-        investment_id: inv,
-        source_account_id: source,
-        destination_account_id: destination,
+        investment_id: asInvestmentId(inv),
+        source_account_id: asAccountId(source),
+        destination_account_id: asAccountId(destination),
         date: "2025-03-02",
         units: "1",
         fee_units: "0",

@@ -6,7 +6,8 @@ import { periodToDateRange } from "./reportPeriod.ts";
  * the export; empty successful results retain their ordinary no-data meaning.
  */
 
-import { queryRows } from "../../database/rowContracts.ts";
+import { sql } from "kysely";
+import { checkedRows } from "../../database/db.ts";
 import { dividendTxRowSchema } from "../../database/rows/info.ts";
 import {
   getSnapshots,
@@ -236,9 +237,9 @@ async function fetchDividends(
   startDate: string,
   endDate: string,
 ): Promise<DividendData> {
-  const dividendRows = await queryRows(
+  const dividendRows = await checkedRows(
     dividendTxRowSchema,
-    `
+    sql`
     SELECT
       pt.investment_id,
       i.name AS investment_name,
@@ -252,11 +253,10 @@ async function fetchDividends(
     FROM portfolio_transactions pt
     JOIN investments i ON i.id = pt.investment_id
     WHERE pt.type = 'dividend'
-      AND pt.date::date BETWEEN $1 AND $2
+      AND pt.date::date BETWEEN ${startDate} AND ${endDate}
     ORDER BY year, month
     LIMIT 100000
   `,
-    [startDate, endDate],
   );
 
   // Convert each row and aggregate

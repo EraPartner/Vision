@@ -2,7 +2,10 @@
  * Portfolio transaction repo — read operations (list, count, getById, summary).
  */
 
-import { queryOne, queryRows } from "../database/rowContracts.ts";
+import { sql } from "kysely";
+import type { SelectQueryBuilder } from "kysely";
+import { checkedRow, checkedRows, db } from "../database/db.ts";
+import type { DB } from "../database/schema.generated.ts";
 import { countRowSchema } from "../database/rowSchemas.ts";
 import {
   accountLabelRowSchema,
@@ -18,7 +21,6 @@ import type { PortfolioUnitEventDbRow } from "../database/rows/portfolio.ts";
 import { coerceNumericFields } from "../lib/money.ts";
 import { toYmd } from "../lib/dateFormat.ts";
 import { validateId } from "../lib/validation.ts";
-import { buildListWhereClause } from "./portfolioTxRepo.common.ts";
 import { hasPortfolioTransactionImportBatchIdColumn } from "./portfolioTxRepo.common.ts";
 
 import { asInvestmentId } from "@vision/types/brands";
@@ -46,10 +48,9 @@ export type PortfolioUnitEventRow = PortfolioUnitEventDbRow;
 export async function getAssetClassByInvestmentId(
   investmentId: InvestmentId,
 ): Promise<string | undefined> {
-  const row = await queryOne(
+  const row = await checkedRow(
     assetClassRowSchema,
-    "SELECT asset_class FROM investments WHERE id = $1",
-    [investmentId],
+    db.selectFrom("investments").select("asset_class").where("id", "=", investmentId),
   );
   return row?.asset_class;
 }
@@ -57,7 +58,9 @@ export async function getAssetClassByInvestmentId(
 export async function getUnitEventsForInvestment(
   investmentId: InvestmentId,
 ): Promise<PortfolioUnitEventRow[]> {
-  const sql = `
+  return checkedRows(
+    portfolioUnitEventRowSchema,
+    sql`
     SELECT id, type::text AS type, to_char(date, 'YYYY-MM-DD') AS date,
            COALESCE(units, 0) AS units, account_id, amount, fees, taxes,
            CASE WHEN COALESCE(currency,'EUR')='EUR' THEN 1 ELSE COALESCE(fx_rate_to_eur,
@@ -65,42 +68,45 @@ export async function getUnitEventsForInvestment(
            NULL::int AS destination_account_id, 0 AS fee_units, NULL::bigint AS transfer_id, currency,
            source_record_hash, NULL::text AS adjustment_kind, NULL::text AS basis_policy,
            NULL::text[] AS eligible_source_record_hashes, NULL::bigint AS adjustment_id, income_recognition_role
-    FROM portfolio_transactions WHERE investment_id = $1
+    FROM portfolio_transactions WHERE investment_id = ${investmentId}
     UNION ALL
     SELECT id, 'asset_transfer', to_char(date,'YYYY-MM-DD'), units, NULL::int,
            0,0,0,NULL::numeric,source_account_id,destination_account_id,fee_units,id,NULL::text,
            source_record_hash,NULL::text,NULL::text,NULL::text[],NULL::bigint,'standard'::text
-    FROM portfolio_asset_transfers WHERE investment_id = $1
+    FROM portfolio_asset_transfers WHERE investment_id = ${investmentId}
     UNION ALL
     SELECT id,'asset_adjustment',to_char(date,'YYYY-MM-DD'),units,account_id,
            0,0,0,NULL::numeric,NULL::int,NULL::int,0,NULL::bigint,NULL::text,
            source_record_hash,adjustment_kind,basis_policy,eligible_source_record_hashes,id,'standard'::text
-    FROM portfolio_asset_adjustments WHERE investment_id=$1
+    FROM portfolio_asset_adjustments WHERE investment_id=${investmentId}
     ORDER BY date ASC, id ASC
-  `;
-  return queryRows(portfolioUnitEventRowSchema, sql, [investmentId]);
+  `,
+  );
 }
 
 export async function getUnitEventIdsForImportBatch(
   batchId: number | string,
 ): Promise<{ id: PortfolioTransactionId; investment_id: InvestmentId }[]> {
   if (!(await hasPortfolioTransactionImportBatchIdColumn())) return [];
-  return queryRows(
+  return checkedRows(
     portfolioTransactionIdPairRowSchema,
-    `SELECT id, investment_id
-     FROM portfolio_transactions
-     WHERE import_batch_id = $1
-       AND type = ANY($2::portfolio_txn_type[])
-     ORDER BY investment_id ASC, id ASC`,
-    [batchId, ["buy", "gift", "sell", "split"]],
+    db
+      .selectFrom("portfolio_transactions")
+      .select(["id", "investment_id"])
+      .where("import_batch_id", "=", String(batchId))
+      .where("type", "in", ["buy", "gift", "sell", "split"])
+      .orderBy("investment_id", "asc")
+      .orderBy("id", "asc"),
   );
 }
 
 export async function getAccountLabel(accountId: AccountId): Promise<string> {
-  const row = await queryOne(
+  const row = await checkedRow(
     accountLabelRowSchema,
-    "SELECT display_name, name FROM accounts WHERE id = $1",
-    [accountId],
+    db
+      .selectFrom("accounts")
+      .select(["display_name", "name"])
+      .where("id", "=", accountId),
   );
   return row?.display_name || row?.name || `account #${accountId}`;
 }
@@ -144,6 +150,25 @@ export const mapPortfolioTxRow = (
   return mapped as PortfolioTransactionRow;
 };
 
+/** Narrow a `portfolio_transactions as pt` query to one investment and/or type. */
+function whereListFilters<O>(
+  builder: SelectQueryBuilder<
+    DB & { pt: DB["portfolio_transactions"] },
+    "pt",
+    O
+  >,
+  {
+    investmentId = null,
+    type = null,
+  }: { investmentId?: InvestmentId | null; type?: string | null },
+) {
+  let filtered = builder;
+  if (investmentId != null)
+    filtered = filtered.where("pt.investment_id", "=", investmentId);
+  if (type) filtered = filtered.where(sql<string>`pt.type`, "=", type);
+  return filtered;
+}
+
 type ListFilters = {
   investmentId?: InvestmentId | null;
   type?: string | null;
@@ -157,17 +182,17 @@ export async function getAll({
   limit = 200,
   offset = 0,
 }: ListFilters = {}): Promise<PortfolioTransactionRow[]> {
-  const { where, params, nextParam } = buildListWhereClause({
-    investmentId,
-    type,
-  });
-  let sql = `SELECT * FROM portfolio_transactions ${where}`;
-  const idx = nextParam;
-
-  sql += ` ORDER BY date DESC, id DESC LIMIT $${idx} OFFSET $${idx + 1}`;
-  params.push(limit, offset);
-
-  const rows = await queryRows(portfolioTransactionDbRowSchema, sql, params);
+  const rows = await checkedRows(
+    portfolioTransactionDbRowSchema,
+    whereListFilters(
+      db.selectFrom("portfolio_transactions as pt").selectAll("pt"),
+      { investmentId, type },
+    )
+      .orderBy("pt.date", "desc")
+      .orderBy("pt.id", "desc")
+      .limit(limit)
+      .offset(offset),
+  );
   return rows.map(mapPortfolioTxRow);
 }
 
@@ -180,25 +205,19 @@ export async function getAllWithCount({
   rows: PortfolioTransactionRow[];
   total: number;
 }> {
-  const { where, params, nextParam } = buildListWhereClause({
-    investmentId,
-    type,
-  });
-  const idx = nextParam;
-
-  const sql = `
-    SELECT pt.*, COUNT(*) OVER () AS total_count
-    FROM portfolio_transactions pt
-    ${where.replace(/\binvestment_id\b/g, "pt.investment_id").replace(/\btype\b/g, "pt.type")}
-    ORDER BY pt.date DESC, pt.id DESC
-    LIMIT $${idx} OFFSET $${idx + 1}
-  `;
-
-  const queryParams = [...params, limit, offset];
-  const countedRows = await queryRows(
+  const countedRows = await checkedRows(
     portfolioTransactionCountedRowSchema,
-    sql,
-    queryParams,
+    whereListFilters(
+      db
+        .selectFrom("portfolio_transactions as pt")
+        .selectAll("pt")
+        .select(sql<string>`COUNT(*) OVER ()`.as("total_count")),
+      { investmentId, type },
+    )
+      .orderBy("pt.date", "desc")
+      .orderBy("pt.id", "desc")
+      .limit(limit)
+      .offset(offset),
   );
   const [first] = countedRows;
   const total = first ? parseInt(first.total_count, 10) : 0;
@@ -270,44 +289,40 @@ export async function getAllByInvestmentIds({
           ),
         );
 
-  let sql = `
-    WITH ranked AS (
-      SELECT
-        pt.id,
-        ROW_NUMBER() OVER (PARTITION BY pt.investment_id ORDER BY pt.date DESC, pt.id DESC) AS rn
-      FROM portfolio_transactions pt
-      WHERE pt.investment_id = ANY($1::int[])
-  `;
-  const params: unknown[] = [normalizedIds, safePerInvestmentLimit];
-  let idx = 3;
+  let ranked = db
+    .selectFrom("portfolio_transactions as pt")
+    .select([
+      "pt.id",
+      sql<number>`ROW_NUMBER() OVER (PARTITION BY pt.investment_id ORDER BY pt.date DESC, pt.id DESC)`.as(
+        "rn",
+      ),
+    ])
+    .where(
+      "pt.investment_id",
+      "=",
+      sql<InvestmentId>`ANY(${normalizedIds}::int[])`,
+    );
+  if (type) ranked = ranked.where(sql<string>`pt.type`, "=", type);
 
-  if (type) {
-    sql += ` AND pt.type = $${idx++}`;
-    params.push(type);
-  }
-
-  sql += `
-    ),
-    limited AS (
-      SELECT id
-      FROM ranked
-      WHERE rn <= $2
+  let builder = db
+    .with("ranked", () => ranked)
+    .with("limited", (qb) =>
+      qb
+        .selectFrom("ranked")
+        .select("id")
+        .where("rn", "<=", safePerInvestmentLimit),
     )
-    SELECT pt.*
-    FROM portfolio_transactions pt
-    JOIN limited l ON l.id = pt.id
-    ORDER BY pt.date DESC, pt.id DESC
-  `;
+    .selectFrom("portfolio_transactions as pt")
+    .innerJoin("limited as l", "l.id", "pt.id")
+    .selectAll("pt")
+    .orderBy("pt.date", "desc")
+    .orderBy("pt.id", "desc");
+  if (safeLimit != null) builder = builder.limit(safeLimit);
 
-  if (safeLimit != null) {
-    sql += ` LIMIT $${idx++}`;
-    params.push(safeLimit);
-  }
-
-  sql += ` OFFSET $${idx}`;
-  params.push(safeOffset);
-
-  const rows = await queryRows(portfolioTransactionDbRowSchema, sql, params);
+  const rows = await checkedRows(
+    portfolioTransactionDbRowSchema,
+    builder.offset(safeOffset),
+  );
   return rows.map(mapPortfolioTxRow);
 }
 
@@ -320,36 +335,34 @@ export async function getCount({
   investmentIds?: Array<InvestmentId | string> | null;
   type?: string | null;
 } = {}): Promise<number> {
-  let sql = `SELECT count(*) FROM portfolio_transactions WHERE 1=1`;
-  const params: unknown[] = [];
-  let idx = 1;
+  let builder = db
+    .selectFrom("portfolio_transactions")
+    .select(sql<string>`count(*)`.as("count"));
 
   if (investmentId != null) {
-    sql += ` AND investment_id = $${idx++}`;
-    params.push(investmentId);
+    builder = builder.where("investment_id", "=", investmentId);
   } else if (Array.isArray(investmentIds) && investmentIds.length > 0) {
     const normalizedIds = normalizeInvestmentIds(investmentIds);
     if (normalizedIds.length > 0) {
-      sql += ` AND investment_id = ANY($${idx++}::int[])`;
-      params.push(normalizedIds);
+      builder = builder.where(
+        "investment_id",
+        "=",
+        sql<InvestmentId>`ANY(${normalizedIds}::int[])`,
+      );
     }
   }
-  if (type) {
-    sql += ` AND type = $${idx}`;
-    params.push(type);
-  }
+  if (type) builder = builder.where(sql<string>`type`, "=", type);
 
-  const row = await queryOne(countRowSchema, sql, params);
+  const row = await checkedRow(countRowSchema, builder);
   return parseInt(row!.count, 10);
 }
 
 export async function getById(
   id: PortfolioTransactionId,
 ): Promise<PortfolioTransactionRow | null> {
-  const row = await queryOne(
+  const row = await checkedRow(
     portfolioTransactionDbRowSchema,
-    "SELECT * FROM portfolio_transactions WHERE id = $1",
-    [id],
+    db.selectFrom("portfolio_transactions").selectAll().where("id", "=", id),
   );
   return row ? mapPortfolioTxRow(row) : null;
 }
@@ -388,28 +401,25 @@ export async function getRowsForPortfolioMath({
   dateTo?: string;
   sellsLastWithinDay?: boolean;
 } = {}): Promise<PortfolioMathTxRow[]> {
-  const conditions: string[] = [];
-  const params: string[] = [];
-
-  if (activeInvestmentsOnly) conditions.push("i.is_active = true");
-  if (dateFrom !== undefined) {
-    params.push(dateFrom);
-    conditions.push(`pt.date >= $${params.length}::date`);
-  }
-  if (dateTo !== undefined) {
-    params.push(dateTo);
-    conditions.push(`pt.date <= $${params.length}::date`);
-  }
-
-  const where =
-    conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+  // The same filters apply to each event table's `date` column.
+  const where = (dateColumn: string) => {
+    const date = sql.ref(dateColumn);
+    const conditions = [
+      ...(activeInvestmentsOnly ? [sql`i.is_active = true`] : []),
+      ...(dateFrom !== undefined ? [sql`${date} >= ${dateFrom}::date`] : []),
+      ...(dateTo !== undefined ? [sql`${date} <= ${dateTo}::date`] : []),
+    ];
+    return conditions.length > 0
+      ? sql`WHERE ${sql.join(conditions, sql` AND `)}`
+      : sql``;
+  };
   const orderBy = sellsLastWithinDay
-    ? `ORDER BY events.date, CASE WHEN events.type = 'sell' THEN 1 ELSE 0 END, events.id`
-    : "ORDER BY events.date, events.id";
+    ? sql`ORDER BY events.date, CASE WHEN events.type = 'sell' THEN 1 ELSE 0 END, events.id`
+    : sql`ORDER BY events.date, events.id`;
 
-  return queryRows(
+  return checkedRows(
     portfolioMathTxRowSchema,
-    `
+    sql`
     SELECT * FROM (
     SELECT pt.id, pt.investment_id, pt.type::text AS type,
            COALESCE(pt.amount, 0) AS amount,
@@ -426,7 +436,7 @@ export async function getRowsForPortfolioMath({
            NULL::text[] AS eligible_source_record_hashes, pt.income_recognition_role
     FROM portfolio_transactions pt
     JOIN investments i ON i.id = pt.investment_id
-    ${where}
+    ${where("pt.date")}
     UNION ALL
     SELECT at.id, at.investment_id, 'asset_transfer' AS type, 0 AS amount,
             at.units, 0 AS fees, 0 AS taxes, to_char(at.date,'YYYY-MM-DD') AS date,
@@ -435,16 +445,15 @@ export async function getRowsForPortfolioMath({
             at.source_account_id, at.destination_account_id, at.fee_units,
             at.source_record_hash,NULL::text,NULL::text,NULL::text[],'standard'::text
        FROM portfolio_asset_transfers at JOIN investments i ON i.id=at.investment_id
-       ${where.replace(/pt\.date/g, "at.date")}
+       ${where("at.date")}
     UNION ALL
     SELECT aa.id,aa.investment_id,'asset_adjustment',0,aa.units,0,0,
            to_char(aa.date,'YYYY-MM-DD'),to_char(aa.date,'YYYY-MM-DD'),COALESCE(i.currency,'EUR'),
            NULL::numeric,aa.account_id,NULL::int,NULL::int,0,aa.source_record_hash,
            aa.adjustment_kind,aa.basis_policy,aa.eligible_source_record_hashes,'standard'::text
       FROM portfolio_asset_adjustments aa JOIN investments i ON i.id=aa.investment_id
-      ${where.replace(/pt\.date/g, "aa.date")}
+      ${where("aa.date")}
     ) events ${orderBy}`,
-    params,
   );
 }
 
@@ -459,21 +468,21 @@ export async function getSummary(
   investmentId: InvestmentId,
 ): Promise<PortfolioTransactionSummaryRow[]> {
   // SUM(NUMERIC) and COUNT(*) both arrive from pg as strings.
-  const rows = await queryRows(
+  const rows = await checkedRows(
     portfolioTransactionSummaryDbRowSchema,
-    `
-    SELECT
-      type, income_recognition_role,
-      SUM(amount) as total_amount,
-      SUM(units) as total_units,
-      SUM(fees) as total_fees,
-      SUM(taxes) as total_taxes,
-      COUNT(*) as count
-    FROM portfolio_transactions
-    WHERE investment_id = $1
-    GROUP BY type, income_recognition_role
-  `,
-    [investmentId],
+    db
+      .selectFrom("portfolio_transactions")
+      .select((eb) => [
+        "type",
+        "income_recognition_role",
+        eb.fn.sum<string>("amount").as("total_amount"),
+        eb.fn.sum<string>("units").as("total_units"),
+        eb.fn.sum<string>("fees").as("total_fees"),
+        eb.fn.sum<string>("taxes").as("total_taxes"),
+        eb.fn.countAll<string>().as("count"),
+      ])
+      .where("investment_id", "=", investmentId)
+      .groupBy(["type", "income_recognition_role"]),
   );
   return rows.map(
     (row) =>

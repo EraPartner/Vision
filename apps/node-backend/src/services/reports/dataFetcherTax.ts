@@ -5,7 +5,8 @@
  * investment, and threads through optional Belgian tax profile data from the client.
  */
 
-import { queryRows } from "../../database/rowContracts.ts";
+import { sql } from "kysely";
+import { checkedRows } from "../../database/db.ts";
 import { taxTxnRowSchema } from "../../database/rows/info.ts";
 import {
   convertWithRates,
@@ -287,9 +288,9 @@ async function fetchTaxTransactions(
   startDate: string,
   endDate: string,
 ): Promise<TaxTransactionAggregates> {
-  const taxRows = await queryRows(
+  const taxRows = await checkedRows(
     taxTxnRowSchema,
-    `
+    sql`
     SELECT
       pt.id,
       pt.investment_id,
@@ -307,12 +308,11 @@ async function fetchTaxTransactions(
       EXTRACT(MONTH FROM pt.date::date)::int AS month
     FROM portfolio_transactions pt
     JOIN investments i ON i.id = pt.investment_id
-    WHERE pt.date::date BETWEEN $1 AND $2
+    WHERE pt.date::date BETWEEN ${startDate} AND ${endDate}
       AND (pt.taxes > 0 OR pt.fees > 0 OR pt.type IN ('dividend', 'tax', 'fee'))
     ORDER BY pt.date
     LIMIT 100000
   `,
-    [startDate, endDate],
   );
 
   // Aggregation accumulators

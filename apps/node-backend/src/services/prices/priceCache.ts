@@ -5,13 +5,14 @@
  * plus the DB read/write layer for asset_price_history.
  */
 
-import { query } from "../../database/connection.ts";
-import { queryRows } from "../../database/rowContracts.ts";
+import { sql } from "kysely";
+import { asInvestmentId } from "@vision/types/brands";
+import type { InvestmentId } from "@vision/types/brands";
+import { checkedRows, db } from "../../database/db.ts";
 import {
   latestPricePointDbRowSchema,
   pricePointDbRowSchema,
 } from "../../database/rows/portfolio.ts";
-import { logger } from "../../config/logger.ts";
 import {
   epochMsToUtcYmd,
   normalizeDateLikeToYmd,
@@ -268,16 +269,16 @@ export async function loadHistoricalPointsFromDatabase(
     : null;
 
   try {
-    const rows = await queryRows(
-      pricePointDbRowSchema,
-      `SELECT price_date, close_price
-       FROM asset_price_history
-       WHERE investment_id = $1
-         AND ($2::date IS NULL OR price_date >= $2::date)
-         AND ($3::date IS NULL OR price_date <= $3::date)
-       ORDER BY price_date ASC`,
-      [Number(investmentId), fromDate, toDateVal],
-    );
+    let builder = db
+      .selectFrom("asset_price_history")
+      .select(["price_date", "close_price"])
+      .where("investment_id", "=", asInvestmentId(Number(investmentId)))
+      .orderBy("price_date", "asc");
+    if (fromDate !== null)
+      builder = builder.where("price_date", ">=", sql<Date>`${fromDate}::date`);
+    if (toDateVal !== null)
+      builder = builder.where("price_date", "<=", sql<Date>`${toDateVal}::date`);
+    const rows = await checkedRows(pricePointDbRowSchema, builder);
 
     return normalizeHistoryPoints(
       rows.map((row) => ({
@@ -311,13 +312,15 @@ export async function loadLatestHistoricalPointByInvestmentIds(
   if (ids.length === 0) return new Map();
 
   try {
-    const rows = await queryRows(
+    const rows = await checkedRows(
       latestPricePointDbRowSchema,
-      `SELECT DISTINCT ON (investment_id) investment_id, price_date, close_price
-       FROM asset_price_history
-       WHERE investment_id = ANY($1::int[])
-       ORDER BY investment_id, price_date DESC`,
-      [ids],
+      db
+        .selectFrom("asset_price_history")
+        .distinctOn("investment_id")
+        .select(["investment_id", "price_date", "close_price"])
+        .where("investment_id", "=", sql<InvestmentId>`ANY(${ids}::int[])`)
+        .orderBy("investment_id")
+        .orderBy("price_date", "desc"),
     );
 
     const byId = new Map<number, LatestHistoricalPoint>();
@@ -331,32 +334,6 @@ export async function loadLatestHistoricalPointByInvestmentIds(
   } catch (error) {
     if (hasErrorCode(error, "42P01")) return new Map();
     throw error;
-  }
-}
-
-async function _dropForeignKey(): Promise<void> {
-  try {
-    await query(`
-      DO $$
-      BEGIN
-        IF EXISTS (
-          SELECT 1
-          FROM pg_constraint c
-          WHERE c.conname = 'fk_asset_price_history_investment'
-            AND c.conrelid = 'asset_price_history'::regclass
-        ) THEN
-          ALTER TABLE asset_price_history
-            DROP CONSTRAINT fk_asset_price_history_investment;
-        END IF;
-      END $$;
-    `);
-  } catch (error) {
-    logger.warn("Failed to drop asset price history FK constraint", {
-      error:
-        typeof error === "object" && error !== null && "message" in error
-          ? error.message
-          : undefined,
-    });
   }
 }
 
@@ -386,24 +363,16 @@ export async function saveHistoricalPointsToDatabase(
 
   if (priceDates.length === 0) return;
 
-  const upsertSql = `INSERT INTO asset_price_history (investment_id, price_date, close_price, source)
-     SELECT $1, p.price_date::date, p.close_price::numeric, $2
-     FROM UNNEST($3::date[], $4::numeric[]) AS p(price_date, close_price)
+  try {
+    await sql`INSERT INTO asset_price_history (investment_id, price_date, close_price, source)
+     SELECT ${Number(investmentId)}, p.price_date::date, p.close_price::numeric, ${source || "provider"}
+     FROM UNNEST(${priceDates}::date[], ${closePrices}::numeric[]) AS p(price_date, close_price)
      ON CONFLICT (investment_id, price_date)
      DO UPDATE SET
        close_price = EXCLUDED.close_price,
        source = EXCLUDED.source,
        fetched_at = NOW(),
-       updated_at = NOW()`;
-  const upsertArgs = [
-    Number(investmentId),
-    source || "provider",
-    priceDates,
-    closePrices,
-  ];
-
-  try {
-    await query(upsertSql, upsertArgs);
+       updated_at = NOW()`.execute(db);
   } catch (error) {
     if (hasErrorCode(error, "42P01")) return;
     if (hasErrorCode(error, "23503")) {

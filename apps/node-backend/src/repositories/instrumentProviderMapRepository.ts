@@ -6,16 +6,27 @@
  * provider). All mutations use parameterised queries.
  */
 
-import { query } from '../database/connection.ts';
-import { queryOne, queryRows } from '../database/rowContracts.ts';
+import { sql } from 'kysely';
+import { checkedRow, checkedRows, db } from '../database/db.ts';
 import { instrumentProviderMapRowSchema } from '../database/rows/portfolio.ts';
 import type { InstrumentProviderMapRow } from '../types/rows.ts';
 
 export type { InstrumentProviderMapRow };
 
-const COLUMNS = `id, instrument_key, key_type, provider, provider_symbol,
-                 resolved_name, exchange, currency, status, verified_at,
-                 created_at, updated_at`;
+const COLUMNS = [
+  'id',
+  'instrument_key',
+  'key_type',
+  'provider',
+  'provider_symbol',
+  'resolved_name',
+  'exchange',
+  'currency',
+  'status',
+  'verified_at',
+  'created_at',
+  'updated_at',
+] as const;
 
 /**
  * All mappings for an instrument, ordered by provider.
@@ -25,13 +36,14 @@ export async function listByInstrument(
   instrumentKey: string,
   keyType: string,
 ): Promise<InstrumentProviderMapRow[]> {
-  return queryRows(
+  return checkedRows(
     instrumentProviderMapRowSchema,
-    `SELECT ${COLUMNS}
-       FROM instrument_provider_map
-      WHERE instrument_key = $1 AND key_type = $2
-      ORDER BY provider ASC`,
-    [instrumentKey, keyType],
+    db
+      .selectFrom('instrument_provider_map')
+      .select(COLUMNS)
+      .where('instrument_key', '=', instrumentKey)
+      .where('key_type', '=', keyType)
+      .orderBy('provider', 'asc'),
   );
 }
 
@@ -50,29 +62,32 @@ export async function upsert(m: {
   currency?: string | null | undefined;
   status?: string | null | undefined;
 }): Promise<InstrumentProviderMapRow> {
-  const row = await queryOne(
+  const row = await checkedRow(
     instrumentProviderMapRowSchema,
-    `INSERT INTO instrument_provider_map
-        (instrument_key, key_type, provider, provider_symbol, resolved_name, exchange, currency, status, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
-     ON CONFLICT (instrument_key, key_type, provider) DO UPDATE
-        SET provider_symbol = EXCLUDED.provider_symbol,
-            resolved_name   = EXCLUDED.resolved_name,
-            exchange        = EXCLUDED.exchange,
-            currency        = EXCLUDED.currency,
-            status          = EXCLUDED.status,
-            updated_at      = NOW()
-     RETURNING ${COLUMNS}`,
-    [
-      m.instrumentKey,
-      m.keyType,
-      m.provider,
-      m.providerSymbol ?? undefined,
-      m.resolvedName ?? undefined,
-      m.exchange ?? undefined,
-      m.currency ?? undefined,
-      m.status ?? 'confirmed',
-    ],
+    db
+      .insertInto('instrument_provider_map')
+      .values({
+        instrument_key: m.instrumentKey,
+        key_type: m.keyType,
+        provider: m.provider,
+        provider_symbol: m.providerSymbol ?? null,
+        resolved_name: m.resolvedName ?? null,
+        exchange: m.exchange ?? null,
+        currency: m.currency ?? null,
+        status: m.status ?? 'confirmed',
+        updated_at: sql<Date>`NOW()`,
+      })
+      .onConflict((oc) =>
+        oc.columns(['instrument_key', 'key_type', 'provider']).doUpdateSet((eb) => ({
+          provider_symbol: eb.ref('excluded.provider_symbol'),
+          resolved_name: eb.ref('excluded.resolved_name'),
+          exchange: eb.ref('excluded.exchange'),
+          currency: eb.ref('excluded.currency'),
+          status: eb.ref('excluded.status'),
+          updated_at: sql<Date>`NOW()`,
+        })),
+      )
+      .returning(COLUMNS),
   );
   // An upsert without a DO UPDATE WHERE always returns its row or throws.
   if (!row) throw new Error('Instrument provider map upsert returned no row');
@@ -85,11 +100,11 @@ export async function upsert(m: {
  * @public Reached through the injectable repository in researchMappingService.
  */
 export async function deleteById(id: number): Promise<boolean> {
-  const result = await query(
-    `DELETE FROM instrument_provider_map WHERE id = $1`,
-    [id],
-  );
-  return (result.rowCount ?? 0) > 0;
+  const result = await db
+    .deleteFrom('instrument_provider_map')
+    .where('id', '=', id)
+    .executeTakeFirst();
+  return result.numDeletedRows > 0n;
 }
 
 /**
@@ -101,11 +116,11 @@ export async function markVerified(
   instrumentKey: string,
   keyType: string,
 ): Promise<number | null> {
-  const result = await query(
-    `UPDATE instrument_provider_map
-        SET verified_at = NOW()
-      WHERE instrument_key = $1 AND key_type = $2`,
-    [instrumentKey, keyType],
-  );
-  return result.rowCount;
+  const result = await db
+    .updateTable('instrument_provider_map')
+    .set({ verified_at: sql<Date>`NOW()` })
+    .where('instrument_key', '=', instrumentKey)
+    .where('key_type', '=', keyType)
+    .executeTakeFirst();
+  return Number(result.numUpdatedRows);
 }

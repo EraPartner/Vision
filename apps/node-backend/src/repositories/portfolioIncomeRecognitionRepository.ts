@@ -1,6 +1,8 @@
 /** Immutable in-kind income pairing and selected-only canonical writes. */
-import { query } from "../database/connection.ts";
-import { queryOne, queryRows } from "../database/rowContracts.ts";
+import { sql } from "kysely";
+import type { ExpressionBuilder } from "kysely";
+import { checkedRow, checkedRows, db } from "../database/db.ts";
+import type { DB } from "../database/schema.generated.ts";
 import {
   batchIdRowSchema,
   incomeRecognitionJournalRowSchema,
@@ -9,6 +11,8 @@ import {
 } from "../database/rows/portfolio.ts";
 import type { IncomeRecognitionJournalDbRow } from "../database/rows/portfolio.ts";
 import { ConflictError } from "../middleware/errorHandler.ts";
+import { asPortfolioTransactionId } from "@vision/types/brands";
+import type { CurrencyCode, InvestmentId } from "@vision/types/brands";
 import {
   readKinesisAdoptionContext,
   readReconciliationSources,
@@ -24,6 +28,23 @@ import type {
 } from "./portfolioImportReconciliationRepository.ts";
 
 type Id = number | string;
+
+/** Journal entry `r` has not been undone by a later restore entry. */
+function notRestored(
+  eb: ExpressionBuilder<
+    DB & { r: DB["portfolio_import_income_recognition_journal"] },
+    "r"
+  >,
+) {
+  return eb.not(
+    eb.exists(
+      eb
+        .selectFrom("portfolio_import_income_recognition_journal as undo")
+        .select(sql`1`.as("one"))
+        .whereRef("undo.previous_entry_id", "=", "r.id"),
+    ),
+  );
+}
 /**
  * A `portfolio_import_income_recognition_journal` row (BIGINT columns arrive as
  * strings from pg). Derived from the checked row schema.
@@ -63,12 +84,21 @@ export async function readIncomeRecognitionContext(
     .filter((row) => row.type === "dividend" || row.type === "gift")
     .map((row) => Number(row.id));
   if (ids.length === 0) return { receipts: [], sources: [], batches: [] };
-  const receipts = await queryRows(
+  const anyId = sql<number>`ANY(${ids}::integer[])`;
+  const receipts = await checkedRows(
     incomeRecognitionJournalRowSchema,
-    `SELECT r.* FROM portfolio_import_income_recognition_journal r WHERE r.action='record'
-    AND (r.unit_transaction_id=ANY($1::integer[]) OR r.income_transaction_id=ANY($1::integer[]))
-    AND NOT EXISTS(SELECT 1 FROM portfolio_import_income_recognition_journal undo WHERE undo.previous_entry_id=r.id) ORDER BY r.id`,
-    [ids],
+    db
+      .selectFrom("portfolio_import_income_recognition_journal as r")
+      .selectAll("r")
+      .where("r.action", "=", "record")
+      .where((eb) =>
+        eb.or([
+          eb("r.unit_transaction_id", "=", anyId),
+          eb("r.income_transaction_id", "=", anyId),
+        ]),
+      )
+      .where(notRestored)
+      .orderBy("r.id"),
   );
   const batchIds = [...new Set(receipts.map((row) => Number(row.batch_id)))];
   if (batchIds.length === 0) return { receipts, sources: [], batches: [] };
@@ -108,88 +138,116 @@ export async function recordPairedPortfolioIncome({
   unitSource,
   proof,
 }: PairedIncomeRecord): Promise<PortfolioTransactionSnapshot> {
-  const inserted = await queryOne(
+  const inserted = await checkedRow(
     portfolioIntIdRowSchema,
-    `INSERT INTO portfolio_transactions(investment_id,type,date,amount,units,price_per_unit,fees,taxes,currency,fx_rate_to_eur,note,account_id,import_batch_id,source_record_hash,dedup_fingerprint,dedup_fingerprint_version,income_recognition_role)
-    VALUES($1,'dividend',$2,$3,NULL,NULL,0,0,$4,NULL,$5,$6,$7,$8,$9,$10,'included_in_units') ON CONFLICT DO NOTHING RETURNING id`,
-    [
-      row.investment_id,
-      row.tx_date,
-      row.amount,
-      row.currency,
-      row.note,
-      row.account_id,
-      row.batch_id,
-      row.source_record_hash,
-      row.dedup_fingerprint,
-      row.dedup_fingerprint_version,
-    ],
+    db
+      .insertInto("portfolio_transactions")
+      .values({
+        // A matched source row has these; NOT NULL rejects a stale plan's null.
+        investment_id: sql<InvestmentId>`${row.investment_id}`,
+        type: "dividend",
+        date: sql<string>`${row.tx_date}`,
+        amount: sql<string>`${row.amount}`,
+        units: null,
+        price_per_unit: null,
+        fees: 0,
+        taxes: 0,
+        currency: sql<CurrencyCode>`${row.currency}`,
+        fx_rate_to_eur: null,
+        note: row.note,
+        account_id: row.account_id,
+        import_batch_id: row.batch_id,
+        source_record_hash: row.source_record_hash,
+        dedup_fingerprint: row.dedup_fingerprint,
+        dedup_fingerprint_version: row.dedup_fingerprint_version,
+        income_recognition_role: "included_in_units",
+      })
+      .onConflict((oc) => oc.doNothing())
+      .returning("id"),
   );
   if (!inserted)
     throw new ConflictError("Paired income identity changed", {
       details: { reason: "stale_reconciliation_plan" },
     });
-  const incomeRow = await queryOne(
+  const incomeRow = await checkedRow(
     portfolioTransactionSnapshotRowSchema,
-    `SELECT ${PORTFOLIO_TRANSACTION_SNAPSHOT_SQL} AS snapshot FROM portfolio_transactions pt WHERE id=$1`,
-    [inserted.id],
+    db
+      .selectFrom("portfolio_transactions as pt")
+      .select(
+        sql
+          .raw<PortfolioTransactionSnapshot>(PORTFOLIO_TRANSACTION_SNAPSHOT_SQL)
+          .as("snapshot"),
+      )
+      .where("pt.id", "=", asPortfolioTransactionId(inserted.id)),
   );
   // The row was inserted a statement ago in the same transaction.
   if (!incomeRow)
     throw new Error("Paired income transaction vanished after insert");
   const income: PortfolioTransactionSnapshot = incomeRow.snapshot;
-  const transitioned = await query(
-    "UPDATE portfolio_import_staging_rows SET status='committed',committed_txn_id=$2 WHERE id=$1 AND status='matched' RETURNING id",
-    [row.id, inserted.id],
-  );
-  if (transitioned.rows.length !== 1)
+  const transitioned = await db
+    .updateTable("portfolio_import_staging_rows")
+    .set({ status: "committed", committed_txn_id: inserted.id })
+    .where("id", "=", String(row.id))
+    .where("status", "=", "matched")
+    .returning("id")
+    .execute();
+  if (transitioned.length !== 1)
     throw new ConflictError("Paired income staging changed", {
       details: { reason: "stale_reconciliation_plan" },
     });
-  await query(
-    "INSERT INTO portfolio_import_income_recognition_journal(batch_id,staging_row_id,unit_staging_row_id,income_transaction_id,unit_transaction_id,action,income_data,unit_data,proof_data) VALUES($1,$2,$3,$4,$5,'record',$6,$7,$8)",
-    [
-      row.batch_id,
-      row.id,
-      unitSource.id,
-      inserted.id,
-      unit.id,
-      JSON.stringify(income),
-      JSON.stringify(unit),
-      JSON.stringify(proof),
-    ],
-  );
-  await query(
-    "UPDATE portfolio_import_batches SET rows_imported=rows_imported+1 WHERE id=$1",
-    [row.batch_id],
-  );
+  await db
+    .insertInto("portfolio_import_income_recognition_journal")
+    .values({
+      batch_id: row.batch_id,
+      staging_row_id: row.id,
+      unit_staging_row_id: unitSource.id,
+      income_transaction_id: inserted.id,
+      unit_transaction_id: Number(unit.id),
+      action: "record",
+      income_data: JSON.stringify(income),
+      unit_data: JSON.stringify(unit),
+      proof_data: JSON.stringify(proof),
+    })
+    .execute();
+  await db
+    .updateTable("portfolio_import_batches")
+    .set((eb) => ({ rows_imported: eb("rows_imported", "+", 1) }))
+    .where("id", "=", String(row.batch_id))
+    .execute();
   return income;
 }
+/** A batch's `record` journal entries that no restore has undone. */
+function selectActiveRecords(batchId: Id) {
+  return db
+    .selectFrom("portfolio_import_income_recognition_journal as r")
+    .where("r.batch_id", "=", String(batchId))
+    .where("r.action", "=", "record")
+    .where(notRestored);
+}
+
 export async function restorePairedPortfolioIncomeForBatch(
   batchId: Id,
 ): Promise<IncomeRecognitionJournalRow[]> {
-  const receipts = await queryRows(
+  const receipts = await checkedRows(
     incomeRecognitionJournalRowSchema,
-    `SELECT r.* FROM portfolio_import_income_recognition_journal r WHERE r.batch_id=$1 AND r.action='record'
-    AND NOT EXISTS(SELECT 1 FROM portfolio_import_income_recognition_journal undo WHERE undo.previous_entry_id=r.id) ORDER BY r.id`,
-    [batchId],
+    selectActiveRecords(batchId).selectAll("r").orderBy("r.id"),
   );
   for (const receipt of receipts)
-    await query(
-      `INSERT INTO portfolio_import_income_recognition_journal(batch_id,staging_row_id,unit_staging_row_id,income_transaction_id,unit_transaction_id,action,previous_entry_id,income_data,unit_data,proof_data)
-    VALUES($1,$2,$3,$4,$5,'restore',$6,$7,$8,$9)`,
-      [
-        receipt.batch_id,
-        receipt.staging_row_id,
-        receipt.unit_staging_row_id,
-        receipt.income_transaction_id,
-        receipt.unit_transaction_id,
-        receipt.id,
-        JSON.stringify(receipt.income_data),
-        JSON.stringify(receipt.unit_data),
-        JSON.stringify(receipt.proof_data),
-      ],
-    );
+    await db
+      .insertInto("portfolio_import_income_recognition_journal")
+      .values({
+        batch_id: receipt.batch_id,
+        staging_row_id: receipt.staging_row_id,
+        unit_staging_row_id: receipt.unit_staging_row_id,
+        income_transaction_id: receipt.income_transaction_id,
+        unit_transaction_id: receipt.unit_transaction_id,
+        action: "restore",
+        previous_entry_id: receipt.id,
+        income_data: JSON.stringify(receipt.income_data),
+        unit_data: JSON.stringify(receipt.unit_data),
+        proof_data: JSON.stringify(receipt.proof_data),
+      })
+      .execute();
   return receipts;
 }
 
@@ -197,12 +255,17 @@ export async function readPairedIncomeRollbackBatchIds(
   batchId: Id,
 ): Promise<number[]> {
   return (
-    await queryRows(
+    await checkedRows(
       batchIdRowSchema,
-      `SELECT DISTINCT source.batch_id FROM portfolio_import_income_recognition_journal r
-    JOIN portfolio_import_staging_rows source ON source.id=r.unit_staging_row_id WHERE r.batch_id=$1 AND r.action='record'
-    AND NOT EXISTS(SELECT 1 FROM portfolio_import_income_recognition_journal undo WHERE undo.previous_entry_id=r.id) ORDER BY source.batch_id`,
-      [batchId],
+      selectActiveRecords(batchId)
+        .innerJoin(
+          "portfolio_import_staging_rows as source",
+          "source.id",
+          "r.unit_staging_row_id",
+        )
+        .select("source.batch_id")
+        .distinct()
+        .orderBy("source.batch_id"),
     )
   ).map((row) => Number(row.batch_id));
 }

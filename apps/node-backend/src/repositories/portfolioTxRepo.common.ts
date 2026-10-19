@@ -1,8 +1,8 @@
 /** Shared SQL helpers for the split portfolio-transaction repository. */
 
-import { queryOne } from "../database/rowContracts.ts";
+import { sql } from "kysely";
+import { checkedRow } from "../database/db.ts";
 import { presentRowSchema } from "../database/rows/portfolio.ts";
-import type { InvestmentId } from "@vision/types/brands";
 
 let _hasPortfolioTransactionImportBatchIdColumn: boolean | undefined;
 
@@ -10,9 +10,9 @@ export async function hasPortfolioTransactionImportBatchIdColumn(): Promise<bool
   if (_hasPortfolioTransactionImportBatchIdColumn !== undefined) {
     return _hasPortfolioTransactionImportBatchIdColumn;
   }
-  const row = await queryOne(
+  const row = await checkedRow(
     presentRowSchema,
-    `SELECT EXISTS (
+    sql`SELECT EXISTS (
        SELECT 1 FROM pg_attribute
         WHERE attrelid = to_regclass('public.portfolio_transactions')
           AND attname = 'import_batch_id'
@@ -26,26 +26,4 @@ export async function hasPortfolioTransactionImportBatchIdColumn(): Promise<bool
 
 export function __resetPortfolioTransactionSchemaCache(): void {
   _hasPortfolioTransactionImportBatchIdColumn = undefined;
-}
-
-export function buildListWhereClause({
-  investmentId = null,
-  type = null,
-}: { investmentId?: InvestmentId | null; type?: string | null } = {}): {
-  where: string;
-  params: (number | string)[];
-  nextParam: number;
-} {
-  let where = "WHERE 1=1";
-  const params: (number | string)[] = [];
-  let idx = 1;
-  if (investmentId != null) {
-    where += ` AND investment_id = $${idx++}`;
-    params.push(investmentId);
-  }
-  if (type) {
-    where += ` AND type = $${idx++}`;
-    params.push(type);
-  }
-  return { where, params, nextParam: idx };
 }

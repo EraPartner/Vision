@@ -10,7 +10,8 @@
  * target currency to eliminate frontend FX drift across pages.
  */
 
-import { queryRows } from "../../database/rowContracts.ts";
+import { sql } from "kysely";
+import { checkedRows, db } from "../../database/db.ts";
 import {
   archivedIncomeDbRowSchema,
   brokerageCashFeeRowSchema,
@@ -167,17 +168,18 @@ export async function getPortfolioSummary(
 
   const [investmentRows, txnRows]: [RawInvestmentRow[], AnnotatedTxRow[]] =
     await Promise.all([
-      queryRows(
+      checkedRows(
         summaryInvestmentDbRowSchema,
-        `
-      SELECT i.*,
-             COALESCE(i.currency, 'EUR') AS currency,
-             COALESCE(i.current_price, 0) AS current_price,
-             COALESCE(i.interest_rate, 0) AS interest_rate
-      FROM investments i
-      ${activeInvestmentsOnly ? "WHERE i.is_active = true" : ""}
-      ORDER BY i.name
-    `,
+        db
+          .selectFrom("investments as i")
+          .selectAll("i")
+          .select([
+            sql<string>`COALESCE(i.currency, 'EUR')`.as("currency"),
+            sql<string>`COALESCE(i.current_price, 0)`.as("current_price"),
+            sql<string>`COALESCE(i.interest_rate, 0)`.as("interest_rate"),
+          ])
+          .$if(activeInvestmentsOnly, (qb) => qb.where("i.is_active", "=", true))
+          .orderBy("i.name"),
       ),
       portfolioTransactionRepository.getRowsForPortfolioMath({
         activeInvestmentsOnly,
@@ -281,19 +283,24 @@ export async function getPortfolioSummary(
   // The active holding totals keep their existing scope and replay behavior.
   let archivedInKindIncome: { id: number; totalInKindIncome: number }[];
   if (activeInvestmentsOnly) {
-    const archivedRows: ArchivedIncomeRow[] = await queryRows(
+    const archivedRows: ArchivedIncomeRow[] = await checkedRows(
       archivedIncomeDbRowSchema,
-      `
-        SELECT pt.investment_id, pt.amount, pt.currency,
-               to_char(pt.date, 'YYYY-MM-DD') AS date, pt.fx_rate_to_eur
-        FROM portfolio_transactions pt
-        JOIN investments i ON i.id = pt.investment_id
-        WHERE i.is_active = false
-          AND pt.income_recognition_role = 'included_in_units'
-          ${throughDate ? "AND pt.date <= $1::date" : ""}
-        ORDER BY pt.investment_id, pt.date, pt.id
-      `,
-      throughDate ? [throughDate] : [],
+      db
+        .selectFrom("portfolio_transactions as pt")
+        .innerJoin("investments as i", "i.id", "pt.investment_id")
+        .select([
+          "pt.investment_id",
+          "pt.amount",
+          "pt.currency",
+          sql<string>`to_char(pt.date, 'YYYY-MM-DD')`.as("date"),
+          "pt.fx_rate_to_eur",
+        ])
+        .where("i.is_active", "=", false)
+        .where("pt.income_recognition_role", "=", "included_in_units")
+        .$if(Boolean(throughDate), (qb) =>
+          qb.where("pt.date", "<=", sql<Date>`${throughDate}::date`),
+        )
+        .orderBy(["pt.investment_id", "pt.date", "pt.id"]),
     );
     const archiveCurrencies = [
       ...new Set(archivedRows.map((row) => currencyOrEur(row.currency))),
@@ -398,9 +405,9 @@ async function getBrokerageCashFees(
   throughDate: string,
   investmentGain: Parameters<typeof toDecimal>[0],
 ) {
-  const rows = await queryRows(
+  const rows = await checkedRows(
     brokerageCashFeeRowSchema,
-    `WITH owned_fee_ids AS (
+    sql`WITH owned_fee_ids AS (
         SELECT t.id
         FROM transactions t
         WHERE EXISTS (
@@ -480,14 +487,13 @@ async function getBrokerageCashFees(
         AND t.is_transfer = false
         AND t.balance IS NULL
         AND COALESCE(t.transfer_source, '') IN ('', 'brokerage')
-        AND t.date <= $1::date
+        AND t.date <= ${throughDate}::date
         AND NOT EXISTS (
           SELECT 1 FROM portfolio_transactions pt
           WHERE pt.source_record_hash = t.source_record_hash
             AND (COALESCE(pt.fees, 0) <> 0 OR pt.type = 'fee')
         )
       ORDER BY t.date, t.id`,
-    [throughDate],
   );
   const currencies = [...new Set(rows.map((row) => row.currency))];
   const historicalIndex = await loadHistoricalRateIndex(currencies, target);
@@ -677,13 +683,18 @@ async function loadHistoricalRateIndex(
     (c) => c !== "" && c !== "EUR",
   );
   if (relevant.length === 0) return new Map();
-  const rows = await queryRows(
+  const rows = await checkedRows(
     historicalRateRowSchema,
-    `SELECT currency_code, to_char(rate_date, 'YYYY-MM-DD') AS rate_date, rate_to_eur
-     FROM exchange_rates
-     WHERE currency_code = ANY($1::text[])
-     ORDER BY currency_code ASC, rate_date ASC`,
-    [relevant],
+    db
+      .selectFrom("exchange_rates")
+      .select([
+        "currency_code",
+        sql<string>`to_char(rate_date, 'YYYY-MM-DD')`.as("rate_date"),
+        "rate_to_eur",
+      ])
+      .where("currency_code", "=", sql<string>`ANY(${relevant}::text[])`)
+      .orderBy("currency_code", "asc")
+      .orderBy("rate_date", "asc"),
   );
   return buildHistoricalRateIndex(rows);
 }

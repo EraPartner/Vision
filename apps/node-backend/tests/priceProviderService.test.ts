@@ -946,10 +946,10 @@ describe("Price Provider Service", () => {
       // each point's historical rate. A 1:1 USD rate keeps the converted
       // values identical so the spike-sanitisation assertions stay meaningful.
       query.mockImplementation(async (sql) => {
-        if (typeof sql === "string" && sql.includes("is_latest = true")) {
+        if (typeof sql === "string" && /"?is_latest"? =/.test(sql)) {
           return { rows: [latestUsdRate("1")] };
         }
-        if (typeof sql === "string" && sql.includes("FROM exchange_rates")) {
+        if (typeof sql === "string" && /from "?exchange_rates/i.test(sql)) {
           return {
             rows: [
               "2023-05-19",
@@ -1008,10 +1008,10 @@ describe("Price Provider Service", () => {
     it("converts a Kinesis EUR symbol history series from USD at historical rates", async () => {
       // USD rate 2.0 → every converted EUR price is double the USD source.
       query.mockImplementation(async (sql) => {
-        if (typeof sql === "string" && sql.includes("is_latest = true")) {
+        if (typeof sql === "string" && /"?is_latest"? =/.test(sql)) {
           return { rows: [latestUsdRate("2")] };
         }
-        if (typeof sql === "string" && sql.includes("FROM exchange_rates")) {
+        if (typeof sql === "string" && /from "?exchange_rates/i.test(sql)) {
           return {
             rows: ["2023-05-19", "2023-05-20", "2023-05-21"].map(
               (rate_date) => ({

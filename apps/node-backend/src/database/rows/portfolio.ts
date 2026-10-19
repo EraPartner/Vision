@@ -635,7 +635,7 @@ export const latestPricePointDbRowSchema = assetPriceHistoryRowSchema
   .pick({ investment_id: true, price_date: true, close_price: true })
   .describe("latest price point row");
 
-/** `quoteBackfillService`'s HOLDING_WINDOW_SELECT. */
+/** `quoteBackfillService`'s selectHoldingWindowRows(). */
 export const holdingWindowRowSchema = z
   .object({
     id: pgInvestmentId,

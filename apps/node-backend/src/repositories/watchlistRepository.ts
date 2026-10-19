@@ -2,16 +2,18 @@
  * Watchlist Repository - data access for watchlist (prospective investments) table.
  */
 
-import { query } from '../database/connection.ts';
-import { queryOne, queryRows } from '../database/rowContracts.ts';
+import { sql } from 'kysely';
+import type { SelectQueryBuilder } from 'kysely';
+import { checkedRow, checkedRows, db } from '../database/db.ts';
+import type { AssetClass, DB } from '../database/schema.generated.ts';
 import { countRowSchema } from '../database/rowSchemas.ts';
 import {
   watchlistCountedRowSchema,
   watchlistRowSchema,
 } from '../database/rows/portfolio.ts';
 import { coerceNumericFields } from '../lib/money.ts';
-import { buildSetClauses } from '../lib/sqlClauses.ts';
 import type { FormattedWatchlistRow, WatchlistRow } from '../types/rows.ts';
+import type { CurrencyCode } from '@vision/types/brands';
 
 // target_price is NUMERIC (node-postgres returns it as a string); coerce on
 // emit so it matches the `number` API/TS type. current_price/price_change are
@@ -27,26 +29,17 @@ const mapWatchlistRow = (row: WatchlistRow): FormattedWatchlistRow =>
     WATCHLIST_NUMERIC_FIELDS,
   ) as FormattedWatchlistRow;
 
+/** Filter a `watchlist as w` query by asset class. */
+function whereAssetClass<O>(
+  builder: SelectQueryBuilder<DB & { w: DB['watchlist'] }, 'w', O>,
+  assetClass: string | null,
+) {
+  return assetClass
+    ? builder.where(sql<string>`w.asset_class`, '=', assetClass)
+    : builder;
+}
+
 export const watchlistRepository = {
-  buildWhereClause({
-    assetClass = null,
-  }: { assetClass?: string | null } = {}): {
-    where: string;
-    params: unknown[];
-    nextParam: number;
-  } {
-    let where = 'WHERE 1=1';
-    const params: unknown[] = [];
-    let idx = 1;
-
-    if (assetClass) {
-      where += ` AND asset_class = $${idx++}`;
-      params.push(assetClass);
-    }
-
-    return { where, params, nextParam: idx };
-  },
-
   async getAll({
     limit = 50,
     offset = 0,
@@ -56,14 +49,13 @@ export const watchlistRepository = {
     offset?: number;
     assetClass?: string | null;
   } = {}): Promise<FormattedWatchlistRow[]> {
-    const { where, params, nextParam } = this.buildWhereClause({ assetClass });
-    let sql = `SELECT * FROM watchlist ${where}`;
-    const idx = nextParam;
-
-    sql += ` ORDER BY created_at DESC LIMIT $${idx} OFFSET $${idx + 1}`;
-    params.push(limit, offset);
-
-    const rows = await queryRows(watchlistRowSchema, sql, params);
+    const rows = await checkedRows(
+      watchlistRowSchema,
+      whereAssetClass(db.selectFrom('watchlist as w').selectAll('w'), assetClass)
+        .orderBy('w.created_at', 'desc')
+        .limit(limit)
+        .offset(offset),
+    );
     return rows.map(mapWatchlistRow);
   },
 
@@ -76,20 +68,18 @@ export const watchlistRepository = {
     offset?: number | undefined;
     assetClass?: string | null | undefined;
   } = {}): Promise<{ rows: FormattedWatchlistRow[]; total: number }> {
-    const { where, params, nextParam } = this.buildWhereClause({ assetClass });
-    const idx = nextParam;
-    const sql = `
-      SELECT w.*, COUNT(*) OVER () AS total_count
-      FROM watchlist w
-      ${where.replace(/\basset_class\b/g, 'w.asset_class')}
-      ORDER BY w.created_at DESC
-      LIMIT $${idx} OFFSET $${idx + 1}
-    `;
-    const queryParams = [...params, limit, offset];
-    const countedRows = await queryRows(
+    const countedRows = await checkedRows(
       watchlistCountedRowSchema,
-      sql,
-      queryParams,
+      whereAssetClass(
+        db
+          .selectFrom('watchlist as w')
+          .selectAll('w')
+          .select(sql<string>`COUNT(*) OVER ()`.as('total_count')),
+        assetClass,
+      )
+        .orderBy('w.created_at', 'desc')
+        .limit(limit)
+        .offset(offset),
     );
     const [first] = countedRows;
     const total = first ? parseInt(first.total_count, 10) : 0;
@@ -102,15 +92,21 @@ export const watchlistRepository = {
   async getCount({
     assetClass = null,
   }: { assetClass?: string | null } = {}): Promise<number> {
-    const { where, params } = this.buildWhereClause({ assetClass });
-    const sql = `SELECT count(*) FROM watchlist ${where}`;
-
-    const row = await queryOne(countRowSchema, sql, params);
+    const row = await checkedRow(
+      countRowSchema,
+      whereAssetClass(
+        db.selectFrom('watchlist as w').select(sql<string>`count(*)`.as('count')),
+        assetClass,
+      ),
+    );
     return parseInt(row!.count, 10);
   },
 
   async getById(id: number): Promise<FormattedWatchlistRow | null> {
-    const row = await queryOne(watchlistRowSchema, 'SELECT * FROM watchlist WHERE id = $1', [id]);
+    const row = await checkedRow(
+      watchlistRowSchema,
+      db.selectFrom('watchlist').selectAll().where('id', '=', id),
+    );
     return row ? mapWatchlistRow(row) : null;
   },
 
@@ -133,11 +129,22 @@ export const watchlistRepository = {
     price_provider_id?: string | null | undefined;
     added_price?: number | string | null | undefined;
   }): Promise<FormattedWatchlistRow> {
-    const row = await queryOne(
+    const row = await checkedRow(
       watchlistRowSchema,
-      `INSERT INTO watchlist (name, symbol, asset_class, target_price, currency, notes, price_provider_id, added_price)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-      [name, symbol || null, asset_class, target_price, currency, notes || null, price_provider_id || null, added_price ?? null]
+      db
+        .insertInto('watchlist')
+        .values({
+          name,
+          symbol: symbol || null,
+          // The enum column rejects an unknown asset class.
+          asset_class: sql<AssetClass>`${asset_class}`,
+          target_price,
+          currency: sql<CurrencyCode>`${currency}`,
+          notes: notes || null,
+          price_provider_id: price_provider_id || null,
+          added_price: added_price ?? null,
+        })
+        .returningAll(),
     );
     // An INSERT ... RETURNING without ON CONFLICT returns its row or throws.
     if (!row) throw new Error('Watchlist insert returned no row');
@@ -150,20 +157,24 @@ export const watchlistRepository = {
     fields: Record<string, unknown>,
   ): Promise<FormattedWatchlistRow | null> {
     const allowed = ['name', 'symbol', 'asset_class', 'target_price', 'currency', 'notes', 'price_provider_id'];
-    const { clauses: setClauses, params, nextIdx: idx } = buildSetClauses(fields, { allowed });
+    // undefined fields are skipped; `allowed` whitelists the column names.
+    const setClauses = Object.entries(fields)
+      .filter(([key, value]) => value !== undefined && allowed.includes(key))
+      .map(([key, value]) => sql`${sql.ref(key)} = ${value}`);
 
     if (setClauses.length === 0) return this.getById(id);
 
-    params.push(id);
-    const sql = `UPDATE watchlist SET ${setClauses.join(', ')} WHERE id = $${idx} RETURNING *`;
-    const row = await queryOne(watchlistRowSchema, sql, params);
+    const row = await checkedRow(
+      watchlistRowSchema,
+      sql`UPDATE watchlist SET ${sql.join(setClauses)} WHERE id = ${id} RETURNING *`,
+    );
     return row ? mapWatchlistRow(row) : null;
   },
 
   /** @returns true if a row was removed */
   async delete(id: number): Promise<boolean> {
-    const result = await query('DELETE FROM watchlist WHERE id = $1', [id]);
-    return (result.rowCount ?? 0) > 0;
+    const result = await db.deleteFrom('watchlist').where('id', '=', id).executeTakeFirst();
+    return result.numDeletedRows > 0n;
   },
 };
 

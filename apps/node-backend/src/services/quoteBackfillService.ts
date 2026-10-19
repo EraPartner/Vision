@@ -14,8 +14,9 @@
  */
 
 import { logger } from "../config/logger.ts";
-import { query } from "../database/connection.ts";
-import { queryRows, RowContractError } from "../database/rowContracts.ts";
+import { sql } from "kysely";
+import { checkedRows, db } from "../database/db.ts";
+import { RowContractError } from "../database/rowContracts.ts";
 import {
   holdingWindowRowSchema,
   storedPriceDateRowSchema,
@@ -25,6 +26,7 @@ import { getDayKeyUtc } from "../lib/dateKeys.ts";
 import { madReturnStats, isRobustNeedle, nanToZero } from "../lib/math.ts";
 import { forEachConcurrent } from "../lib/concurrency.ts";
 import { differenceInCalendarDaysYmd } from "../lib/timezone.ts";
+import { asInvestmentId } from "@vision/types/brands";
 import type { CurrencyCode, InvestmentId } from "@vision/types/brands";
 import {
   fetchHistoricalPrices,
@@ -33,7 +35,7 @@ import {
 
 /**
  * Provider-config subset of `InvestmentRow` (types/rows.ts) this module reads
- * off `HOLDING_WINDOW_SELECT` — a bespoke projection, not `SELECT i.*`, so it
+ * off `selectHoldingWindowRows` — a bespoke projection, not `SELECT i.*`, so it
  * only lists the columns actually selected there. Matches
  * `fetchHistoricalPrices`'s own `investment` param shape (priceProviderService.js).
  */
@@ -54,7 +56,7 @@ export interface HoldingWindowInvestment {
 }
 
 /**
- * One buy/gift/sell leg, as `HOLDING_WINDOW_SELECT` projects it for
+ * One buy/gift/sell leg, as `selectHoldingWindowRows` projects it for
  * `computeHoldingWindows`.
  */
 export interface HoldingWindowTx {
@@ -67,7 +69,7 @@ export interface HoldingWindowTx {
 }
 
 /**
- * A raw `HOLDING_WINDOW_SELECT` row: `HoldingWindowInvestment`'s columns
+ * A raw `selectHoldingWindowRows` row: `HoldingWindowInvestment`'s columns
  * (unconverted — pg-raw) plus the `tx_*`-prefixed transaction columns.
  */
 export type HoldingWindowRow = HoldingWindowDbRow;
@@ -258,35 +260,42 @@ function sanitizeIsolatedSpikes<T extends PricePoint>(
 // all-investments and single-investment loaders select the identical columns and
 // only differ in their WHERE/ORDER BY, so keep the column list + asset-class
 // filter in one place (was duplicated verbatim across the two queries).
-const HOLDING_WINDOW_SELECT = `
-  SELECT
-    i.id,
-    i.asset_class,
-    i.currency,
-    i.price_provider,
-    i.price_provider_id,
-    i.symbol,
-    i.price_provider_url,
-    i.price_provider_latest_url,
-    i.price_provider_latest_path,
-    i.price_provider_history_url,
-    i.price_provider_history_path,
-    i.price_provider_history_ts_path,
-    i.price_provider_history_price_path,
-    pt.id   AS tx_id,
-    pt.type AS tx_type,
-    to_char(pt.date::date, 'YYYY-MM-DD') AS tx_date,
-    COALESCE(pt.units, 0) AS tx_units
-  FROM investments i
-  JOIN portfolio_transactions pt
-    ON pt.investment_id = i.id
-   AND pt.type IN ('buy', 'gift', 'sell')`;
-
-// Priceable asset classes — the only ones with a provider quote series to backfill.
-const HOLDING_ASSET_CLASS_FILTER = `i.asset_class IN ('stock', 'etf', 'crypto', 'metals')`;
+/**
+ * Each buy/gift/sell leg of a priceable investment (the only asset classes
+ * with a provider quote series to backfill), with its provider config.
+ */
+function selectHoldingWindowRows() {
+  return db
+    .selectFrom("investments as i")
+    .innerJoin("portfolio_transactions as pt", (join) =>
+      join
+        .onRef("pt.investment_id", "=", "i.id")
+        .on("pt.type", "in", ["buy", "gift", "sell"]),
+    )
+    .select([
+      "i.id",
+      "i.asset_class",
+      "i.currency",
+      "i.price_provider",
+      "i.price_provider_id",
+      "i.symbol",
+      "i.price_provider_url",
+      "i.price_provider_latest_url",
+      "i.price_provider_latest_path",
+      "i.price_provider_history_url",
+      "i.price_provider_history_path",
+      "i.price_provider_history_ts_path",
+      "i.price_provider_history_price_path",
+      "pt.id as tx_id",
+      "pt.type as tx_type",
+      sql<string>`to_char(pt.date::date, 'YYYY-MM-DD')`.as("tx_date"),
+      sql<string>`COALESCE(pt.units, 0)`.as("tx_units"),
+    ])
+    .where("i.asset_class", "in", ["stock", "etf", "crypto", "metals"]);
+}
 
 /**
- * Map a HOLDING_WINDOW_SELECT row's investment columns to the provider-config object.
+ * Map a selectHoldingWindowRows row's investment columns to the provider-config object.
  */
 function mapRowToInvestment(row: HoldingWindowRow): HoldingWindowInvestment {
   return {
@@ -307,7 +316,7 @@ function mapRowToInvestment(row: HoldingWindowRow): HoldingWindowInvestment {
 }
 
 /**
- * Map a HOLDING_WINDOW_SELECT row's transaction columns to a holding-window tx.
+ * Map a selectHoldingWindowRows row's transaction columns to a holding-window tx.
  */
 function mapRowToHoldingTx(row: HoldingWindowRow): HoldingWindowTx {
   return {
@@ -327,12 +336,9 @@ function mapRowToHoldingTx(row: HoldingWindowRow): HoldingWindowTx {
 async function getInvestmentsWithHoldingWindows(): Promise<
   Map<number, InvestmentHoldingWindows>
 > {
-  const rows = await queryRows(
+  const rows = await checkedRows(
     holdingWindowRowSchema,
-    `${HOLDING_WINDOW_SELECT}
-     WHERE ${HOLDING_ASSET_CLASS_FILTER}
-     ORDER BY i.id, pt.date, pt.id`,
-    [],
+    selectHoldingWindowRows().orderBy(["i.id", "pt.date", "pt.id"]),
   );
   const investmentMap = new Map<
     number,
@@ -372,13 +378,11 @@ async function getInvestmentsWithHoldingWindows(): Promise<
 async function getInvestmentWithHoldingWindows(
   investmentId: number,
 ): Promise<InvestmentHoldingWindows | null> {
-  const rows = await queryRows(
+  const rows = await checkedRows(
     holdingWindowRowSchema,
-    `${HOLDING_WINDOW_SELECT}
-     WHERE i.id = $1
-       AND ${HOLDING_ASSET_CLASS_FILTER}
-     ORDER BY pt.date, pt.id`,
-    [Number(investmentId)],
+    selectHoldingWindowRows()
+      .where("i.id", "=", asInvestmentId(Number(investmentId)))
+      .orderBy(["pt.date", "pt.id"]),
   );
 
   const [first] = rows;
@@ -397,13 +401,13 @@ async function getInvestmentWithHoldingWindows(
  * Load the sorted set of dates (YYYY-MM-DD) that already have a stored price row.
  */
 async function getStoredPriceDates(investmentId: number): Promise<string[]> {
-  const rows = await queryRows(
+  const rows = await checkedRows(
     storedPriceDateRowSchema,
-    `SELECT to_char(price_date, 'YYYY-MM-DD') AS d
-       FROM asset_price_history
-      WHERE investment_id = $1
-      ORDER BY price_date`,
-    [Number(investmentId)],
+    db
+      .selectFrom("asset_price_history")
+      .select(sql<string>`to_char(price_date, 'YYYY-MM-DD')`.as("d"))
+      .where("investment_id", "=", asInvestmentId(Number(investmentId)))
+      .orderBy("price_date"),
   );
   return rows.map((row) => row.d);
 }
@@ -696,9 +700,10 @@ export async function refreshQuotesForInvestment(
 
   if (!data) {
     // No holding windows — clean up any existing quotes for this investment
-    await query("DELETE FROM asset_price_history WHERE investment_id = $1", [
-      Number(investmentId),
-    ]);
+    await db
+      .deleteFrom("asset_price_history")
+      .where("investment_id", "=", asInvestmentId(Number(investmentId)))
+      .execute();
     return;
   }
 
@@ -762,17 +767,15 @@ async function cleanupStaleQuotes(
 
   let totalDeleted = 0;
   try {
-    const result = await query(
-      `DELETE FROM asset_price_history aph
-       WHERE aph.investment_id = ANY($1::int[])
+    const result = await sql`
+      DELETE FROM asset_price_history aph
+       WHERE aph.investment_id = ANY(${invIds}::int[])
          AND NOT EXISTS (
-           SELECT 1 FROM unnest($2::int[], $3::date[], $4::date[]) AS w(inv_id, from_date, to_date)
+           SELECT 1 FROM unnest(${windowInvIds}::int[], ${fromDates}::date[], ${toDates}::date[]) AS w(inv_id, from_date, to_date)
            WHERE w.inv_id = aph.investment_id
              AND aph.price_date >= w.from_date AND aph.price_date <= w.to_date
-         )`,
-      [invIds, windowInvIds, fromDates, toDates],
-    );
-    totalDeleted = result.rowCount ?? 0;
+         )`.execute(db);
+    totalDeleted = Number(result.numAffectedRows ?? 0n);
   } catch (error) {
     logger.warn("Failed to cleanup stale quotes", {
       investmentCount: invIds.length,

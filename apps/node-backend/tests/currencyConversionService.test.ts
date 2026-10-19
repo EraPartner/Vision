@@ -51,6 +51,12 @@ type QueryHandler =
 
 const originalFetch = global.fetch;
 
+/**
+ * SQL text lower-cased with identifier quotes removed, so the routing below
+ * matches hand-written and query-builder statements alike.
+ */
+const sqlText = (sql: unknown) => String(sql).toLowerCase().replace(/"/g, "");
+
 describe("Currency Conversion Service", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -343,12 +349,12 @@ describe("Currency Conversion Service", () => {
     expect(converted[0]!.amount_eur).toBeUndefined();
     expect(converted[1]!.amount_eur).toBeUndefined();
 
-    const sqlCalls = query.mock.calls.map(([sql]) => String(sql));
+    const sqlCalls = query.mock.calls.map(([sql]) => sqlText(sql));
     const exactLookups = sqlCalls.filter((sql) =>
-      sql.includes("WHERE currency_code = $1 AND rate_date = $2::date"),
+      sql.includes("where currency_code = $1 and rate_date = $2::date"),
     );
     const nearestLookups = sqlCalls.filter((sql) =>
-      sql.includes("ORDER BY ABS(rate_date - $2::date) ASC"),
+      sql.includes("order by abs(rate_date - $2::date) asc"),
     );
 
     expect(exactLookups).toHaveLength(0);
@@ -375,12 +381,12 @@ describe("Currency Conversion Service", () => {
     });
     expect(converted).toHaveLength(60);
 
-    const sqlCalls = query.mock.calls.map(([sql]) => String(sql));
+    const sqlCalls = query.mock.calls.map(([sql]) => sqlText(sql));
     const exactLookups = sqlCalls.filter((sql) =>
-      sql.includes("WHERE currency_code = $1 AND rate_date = $2::date"),
+      sql.includes("where currency_code = $1 and rate_date = $2::date"),
     );
     const nearestLookups = sqlCalls.filter((sql) =>
-      sql.includes("ORDER BY ABS(rate_date - $2::date) ASC"),
+      sql.includes("order by abs(rate_date - $2::date) asc"),
     );
     expect(exactLookups).toHaveLength(0);
     expect(nearestLookups).toHaveLength(0);
@@ -390,7 +396,7 @@ describe("Currency Conversion Service", () => {
   it("keeps historical fallback metadata as an internal diagnostic", async () => {
     // A latest stored rate exists, but no historical one on or before the day.
     query.mockImplementation(async (sql) =>
-      String(sql).includes("is_latest = true")
+      sqlText(sql).includes("is_latest =")
         ? { rows: [{ currency_code: "USD", rate_to_eur: "0.9" }] }
         : { rows: [] },
     );
@@ -463,7 +469,7 @@ describe("Currency Conversion Service", () => {
     // reversing the second request therefore performs no additional HTTP work.
     expect(global.fetch).toHaveBeenCalledTimes(1);
     const writes = query.mock.calls.filter(([sql]) =>
-      String(sql).includes("FROM UNNEST"),
+      sqlText(sql).includes("from unnest"),
     );
     expect(writes).toHaveLength(1);
   });
@@ -481,7 +487,7 @@ describe("Currency Conversion Service", () => {
     expect(converted[0]!.amount_eur).toBe(100);
     expect(global.fetch).not.toHaveBeenCalled();
     expect(
-      query.mock.calls.some(([sql]) => String(sql).includes("FROM UNNEST")),
+      query.mock.calls.some(([sql]) => sqlText(sql).includes("from unnest")),
     ).toBe(false);
   });
 
@@ -513,11 +519,11 @@ describe("Currency Conversion Service", () => {
     await conversion;
 
     const indexLoadsBefore = query.mock.calls.filter(([sql]) =>
-      String(sql).includes("to_char(rate_date, 'YYYY-MM-DD')"),
+      sqlText(sql).includes("to_char(rate_date, 'yyyy-mm-dd')"),
     ).length;
     await getHistoricalRateIndex(["USD"]);
     const indexLoadsAfter = query.mock.calls.filter(([sql]) =>
-      String(sql).includes("to_char(rate_date, 'YYYY-MM-DD')"),
+      sqlText(sql).includes("to_char(rate_date, 'yyyy-mm-dd')"),
     ).length;
     expect(indexLoadsAfter).toBe(indexLoadsBefore + 1);
   });
@@ -529,9 +535,9 @@ describe("Currency Conversion Service", () => {
    */
   function dispatchQueries(handlers: Array<[string, QueryHandler]>) {
     query.mockImplementation(async (sql, params) => {
-      const s = String(sql);
+      const s = sqlText(sql);
       for (const [pattern, result] of handlers) {
-        if (s.includes(pattern)) {
+        if (s.includes(sqlText(pattern))) {
           return typeof result === "function"
             ? result(params as readonly unknown[], s)
             : result;
@@ -568,7 +574,7 @@ describe("Currency Conversion Service", () => {
         },
       ],
       [
-        "SELECT rate_to_eur\n     FROM exchange_rates\n     WHERE currency_code = $1 AND rate_date = $2::date",
+        "where currency_code = $1 and rate_date = $2::date",
         { rows: [] },
       ],
       [
@@ -589,7 +595,7 @@ describe("Currency Conversion Service", () => {
       stamped: 0,
     });
     const inserts = query.mock.calls.filter(([sql]) =>
-      String(sql).includes("INSERT INTO exchange_rates"),
+      sqlText(sql).includes("insert into exchange_rates"),
     );
     expect(inserts).toHaveLength(0);
   });
@@ -631,7 +637,7 @@ describe("Currency Conversion Service", () => {
         },
       ],
       [
-        "SELECT rate_to_eur\n     FROM exchange_rates\n     WHERE currency_code = $1 AND rate_date = $2::date",
+        "where currency_code = $1 and rate_date = $2::date",
         { rows: [] },
       ],
       // Batched existence check (replaces the former per-row SELECT 1): returns
@@ -795,9 +801,9 @@ describe("Currency Conversion Service", () => {
     clearMemoryCache();
     query.mockReset();
     query.mockImplementation(async (sql) => {
-      const s = String(sql);
-      if (s.includes("is_latest = true")) return { rows: [] }; // getRates → fallback
-      if (s.includes("WHERE currency_code = ANY")) {
+      const s = sqlText(sql);
+      if (s.includes("is_latest =")) return { rows: [] }; // getRates → fallback
+      if (s.includes("where currency_code = any")) {
         return {
           rows: [
             {
@@ -822,7 +828,7 @@ describe("Currency Conversion Service", () => {
 
     // The full-history index load runs once; the second call reuses the cache.
     const indexLoads = query.mock.calls.filter(([sql]) =>
-      String(sql).includes("WHERE currency_code = ANY"),
+      sqlText(sql).includes("where currency_code = any"),
     );
     expect(indexLoads).toHaveLength(1);
   });
@@ -834,9 +840,10 @@ describe("Currency Conversion Service", () => {
       query.mockResolvedValue({
         rows: [{ currency_code: "AED", rate_to_eur: "0.3" }],
       });
-      const client = { query: vi.fn().mockResolvedValue({ rows: [] }) };
+      // Statements inside the transaction run through the ambient query(),
+      // not the client.
       withTransaction.mockImplementation(async (fn) =>
-        fn(partial<PgPoolClient>(client)),
+        fn(partial<PgPoolClient>({ query: vi.fn() })),
       );
       global.fetch = vi.fn().mockImplementation(async (url) =>
         String(url).includes("ecb")
@@ -860,9 +867,9 @@ describe("Currency Conversion Service", () => {
       // Neither provider nor the database knows SAR: it stays unavailable
       // instead of being filled from a built-in constant.
       expect((await loadCurrentRates()).SAR).toBeUndefined();
-      const written = client.query.mock.calls
-        .filter(([sql]) => String(sql).includes("INSERT INTO exchange_rates"))
-        .map(([, params]) => params[0]);
+      const written = query.mock.calls
+        .filter(([sql]) => sqlText(sql).includes("insert into exchange_rates"))
+        .map(([, params]) => params?.[0]);
       expect(written.sort()).toEqual(
         provider === "ecb" ? ["USD"] : ["GBP", "USD"],
       );

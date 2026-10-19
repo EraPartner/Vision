@@ -6,8 +6,8 @@
  * (ADR-109) before the backend starts listening, so no schema-shape probing is needed.
  */
 
-import { query } from "../database/connection.ts";
-import { queryOne, queryRows } from "../database/rowContracts.ts";
+import { sql } from "kysely";
+import { checkedRow, checkedRows, db } from "../database/db.ts";
 import { countRowSchema } from "../database/rowSchemas.ts";
 import {
   investmentCountedDbRowSchema,
@@ -20,7 +20,10 @@ import { VALID_ASSET_CLASSES } from "../lib/assetClasses.ts";
 import { toWireDate } from "../lib/dateFormat.ts";
 import { coerceNumericFields } from "../lib/money.ts";
 import { makeValidationError } from "../lib/repositoryErrors.ts";
-import { buildSetClauses } from "../lib/sqlClauses.ts";
+import type {
+  Investments,
+  PriceProvider,
+} from "../database/schema.generated.ts";
 
 import type { InvestmentRow } from "../types/rows.ts";
 import { EUR } from "../lib/currencyCode.ts";
@@ -30,7 +33,7 @@ export type { InvestmentRow };
 
 /**
  * The caller-facing create payload — one key per column in
- * INVESTMENT_INSERT_FIELDS. Every field except `name` / `asset_class` is
+ * INVESTMENT_CREATE_COLUMNS. Every field except `name` / `asset_class` is
  * optional and falls back to a per-column default.
  */
 export interface InvestmentCreateFields {
@@ -95,66 +98,70 @@ function blankOrZeroToNull(value: number | string | null | undefined) {
   return value === "" || value === 0 ? null : (value ?? null);
 }
 
-// Single source of truth for the investment INSERT column list and the
-// coalescing defaults each column applies. Order is load-bearing — it drives
-// placeholder numbering.
-const INVESTMENT_INSERT_FIELDS: Array<{
-  column: string;
-  value: (f: InvestmentCreateFields) => unknown;
-}> = [
-  { column: "name", value: (f) => f.name },
-  { column: "symbol", value: (f) => f.symbol || null },
-  { column: "asset_class", value: (f) => f.asset_class },
-  { column: "currency", value: (f) => f.currency },
-  { column: "current_price", value: (f) => blankOrZeroToNull(f.current_price) },
-  { column: "interest_rate", value: (f) => blankOrZeroToNull(f.interest_rate) },
-  { column: "maturity_date", value: (f) => f.maturity_date || null },
-  { column: "location", value: (f) => f.location || null },
-  { column: "municipality", value: (f) => f.municipality || null },
-  { column: "cadastral_income", value: (f) => f.cadastral_income ?? null },
-  {
-    column: "municipality_tax_rate",
-    value: (f) => f.municipality_tax_rate ?? null,
-  },
-  { column: "notes", value: (f) => f.notes || null },
-  { column: "price_provider", value: (f) => f.price_provider || "manual" },
-  { column: "price_provider_id", value: (f) => f.price_provider_id || null },
-  { column: "price_provider_url", value: (f) => f.price_provider_url || null },
-  {
-    column: "price_provider_latest_url",
-    value: (f) => f.price_provider_latest_url || null,
-  },
-  {
-    column: "price_provider_latest_path",
-    value: (f) => f.price_provider_latest_path || null,
-  },
-  {
-    column: "price_provider_history_url",
-    value: (f) => f.price_provider_history_url || null,
-  },
-  {
-    column: "price_provider_history_path",
-    value: (f) => f.price_provider_history_path || null,
-  },
-  {
-    column: "price_provider_history_ts_path",
-    value: (f) => f.price_provider_history_ts_path || null,
-  },
-  {
-    column: "price_provider_history_price_path",
-    value: (f) => f.price_provider_history_price_path || null,
-  },
-];
-
 /** Column names for a create() payload — the caller-facing field set. */
-const INVESTMENT_CREATE_COLUMNS = INVESTMENT_INSERT_FIELDS.map((f) => f.column);
+const INVESTMENT_CREATE_COLUMNS = [
+  "name",
+  "symbol",
+  "asset_class",
+  "currency",
+  "current_price",
+  "interest_rate",
+  "maturity_date",
+  "location",
+  "municipality",
+  "cadastral_income",
+  "municipality_tax_rate",
+  "notes",
+  "price_provider",
+  "price_provider_id",
+  "price_provider_url",
+  "price_provider_latest_url",
+  "price_provider_latest_path",
+  "price_provider_history_url",
+  "price_provider_history_path",
+  "price_provider_history_ts_path",
+  "price_provider_history_price_path",
+] as const satisfies ReadonlyArray<keyof InvestmentCreateFields>;
 
 // Widened to Set<string>: create() probes a raw payload value with .has()
 // (same idiom as UNIT_BASED_ASSET_CLASSES in portfolioTransactionRules.js).
 const SUPPORTED_ASSET_CLASSES = new Set<string>(VALID_ASSET_CLASSES);
 
-function investmentPlaceholders(count: number): string {
-  return Array.from({ length: count }, (_, i) => `$${i + 1}`).join(", ");
+function isSupportedAssetClass(
+  value: string,
+): value is Investments["asset_class"] {
+  return SUPPORTED_ASSET_CLASSES.has(value);
+}
+
+/** The INSERT row for a create() payload, with each column's default. */
+function investmentInsertValues(
+  f: InvestmentCreateFields & { asset_class: Investments["asset_class"] },
+) {
+  return {
+    name: f.name,
+    symbol: f.symbol || null,
+    asset_class: f.asset_class,
+    currency: f.currency,
+    current_price: blankOrZeroToNull(f.current_price),
+    interest_rate: blankOrZeroToNull(f.interest_rate),
+    maturity_date: f.maturity_date || null,
+    location: f.location || null,
+    municipality: f.municipality || null,
+    cadastral_income: f.cadastral_income ?? null,
+    municipality_tax_rate: f.municipality_tax_rate ?? null,
+    notes: f.notes || null,
+    // The price_provider enum column rejects an unknown provider.
+    price_provider: sql<PriceProvider>`${f.price_provider || "manual"}`,
+    price_provider_id: f.price_provider_id || null,
+    price_provider_url: f.price_provider_url || null,
+    price_provider_latest_url: f.price_provider_latest_url || null,
+    price_provider_latest_path: f.price_provider_latest_path || null,
+    price_provider_history_url: f.price_provider_history_url || null,
+    price_provider_history_path: f.price_provider_history_path || null,
+    price_provider_history_ts_path: f.price_provider_history_ts_path || null,
+    price_provider_history_price_path:
+      f.price_provider_history_price_path || null,
+  };
 }
 
 /**
@@ -187,12 +194,13 @@ async function ensureSymbolIsUnique(
   symbol: unknown,
   excludeId?: InvestmentId,
 ): Promise<void> {
-  const duplicate = await queryOne(
-    portfolioIntIdRowSchema,
-    "SELECT id FROM investments WHERE LOWER(symbol) = LOWER($1) AND id <> $2 LIMIT 1",
-    // 0 matches no row: ids start at 1.
-    [symbol, excludeId ?? 0],
-  );
+  let builder = db
+    .selectFrom("investments")
+    .select("id")
+    .where(sql<string>`LOWER(symbol)`, "=", sql<string>`LOWER(${symbol})`)
+    .limit(1);
+  if (excludeId !== undefined) builder = builder.where("id", "<>", excludeId);
+  const duplicate = await checkedRow(portfolioIntIdRowSchema, builder);
 
   if (duplicate) {
     throw makeValidationError("symbol must be unique");
@@ -202,21 +210,29 @@ async function ensureSymbolIsUnique(
 // Per-investment ticker visibility lives in a side table (migration 0061).
 // Reads LEFT JOIN it (absent row = visible); the toggle UPSERTs it via
 // update() below.
-const TICKER_PREF_SELECT =
-  "COALESCE(tp.show_in_ticker, true) AS show_in_ticker";
-const TICKER_PREF_JOIN =
-  "LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id";
+function selectInvestmentsWithTickerPref() {
+  return db
+    .selectFrom("investments as i")
+    .leftJoin("investment_ticker_prefs as tp", "tp.investment_id", "i.id")
+    .selectAll("i")
+    .select(sql<boolean>`COALESCE(tp.show_in_ticker, true)`.as("show_in_ticker"));
+}
 
 async function setTickerPreference(
   id: InvestmentId,
   show: boolean,
 ): Promise<void> {
-  await query(
-    `INSERT INTO investment_ticker_prefs (investment_id, show_in_ticker)
-       VALUES ($1, $2)
-       ON CONFLICT (investment_id) DO UPDATE SET show_in_ticker = EXCLUDED.show_in_ticker`,
-    [id, show],
-  );
+  await db
+    .insertInto("investment_ticker_prefs")
+    .values({ investment_id: id, show_in_ticker: show })
+    .onConflict((oc) =>
+      oc
+        .column("investment_id")
+        .doUpdateSet((eb) => ({
+          show_in_ticker: eb.ref("excluded.show_in_ticker"),
+        })),
+    )
+    .execute();
 }
 
 export const investmentRepository = {
@@ -226,20 +242,15 @@ export const investmentRepository = {
     assetClass = null,
     active = true,
   }: InvestmentListFilters = {}): Promise<InvestmentRow[]> {
-    let sql = `SELECT i.*, ${TICKER_PREF_SELECT} FROM investments i ${TICKER_PREF_JOIN} WHERE 1=1`;
-    const params: unknown[] = [];
-    let idx = 1;
+    let builder = selectInvestmentsWithTickerPref();
+    if (active) builder = builder.where("i.is_active", "=", true);
+    if (assetClass)
+      builder = builder.where(sql<string>`i.asset_class`, "=", assetClass);
 
-    if (active) sql += ` AND i.is_active = true`;
-    if (assetClass) {
-      sql += ` AND i.asset_class = $${idx++}`;
-      params.push(assetClass);
-    }
-
-    sql += ` ORDER BY i.name LIMIT $${idx} OFFSET $${idx + 1}`;
-    params.push(limit, offset);
-
-    const rows = await queryRows(investmentDbRowSchema, sql, params);
+    const rows = await checkedRows(
+      investmentDbRowSchema,
+      builder.orderBy("i.name").limit(limit).offset(offset),
+    );
     return rows.map(mapInvestmentRow);
   },
 
@@ -247,17 +258,14 @@ export const investmentRepository = {
     assetClass = null,
     active = true,
   }: Omit<InvestmentListFilters, "limit" | "offset"> = {}): Promise<number> {
-    let sql = `SELECT count(*) FROM investments WHERE 1=1`;
-    const params: unknown[] = [];
-    const idx = 1;
+    let builder = db
+      .selectFrom("investments")
+      .select(sql<string>`count(*)`.as("count"));
+    if (active) builder = builder.where("is_active", "=", true);
+    if (assetClass)
+      builder = builder.where(sql<string>`asset_class`, "=", assetClass);
 
-    if (active) sql += ` AND is_active = true`;
-    if (assetClass) {
-      sql += ` AND asset_class = $${idx}`;
-      params.push(assetClass);
-    }
-
-    const row = await queryOne(countRowSchema, sql, params);
+    const row = await checkedRow(countRowSchema, builder);
     return parseInt(row!.count, 10);
   },
 
@@ -270,28 +278,16 @@ export const investmentRepository = {
     rows: InvestmentRow[];
     total: number;
   }> {
-    let sql = `
-      SELECT i.*, ${TICKER_PREF_SELECT}, COUNT(*) OVER () AS total_count
-      FROM investments i
-      ${TICKER_PREF_JOIN}
-      WHERE 1=1
-    `;
-    const params: unknown[] = [];
-    let idx = 1;
+    let builder = selectInvestmentsWithTickerPref().select(
+      sql<string>`COUNT(*) OVER ()`.as("total_count"),
+    );
+    if (active) builder = builder.where("i.is_active", "=", true);
+    if (assetClass)
+      builder = builder.where(sql<string>`i.asset_class`, "=", assetClass);
 
-    if (active) sql += ` AND i.is_active = true`;
-    if (assetClass) {
-      sql += ` AND i.asset_class = $${idx++}`;
-      params.push(assetClass);
-    }
-
-    sql += ` ORDER BY i.name LIMIT $${idx} OFFSET $${idx + 1}`;
-    params.push(limit, offset);
-
-    const countedRows = await queryRows(
+    const countedRows = await checkedRows(
       investmentCountedDbRowSchema,
-      sql,
-      params,
+      builder.orderBy("i.name").limit(limit).offset(offset),
     );
     const [first] = countedRows;
     const total = first ? parseInt(first.total_count, 10) : 0;
@@ -302,10 +298,9 @@ export const investmentRepository = {
   },
 
   async getById(id: InvestmentId): Promise<InvestmentRow | null> {
-    const row = await queryOne(
+    const row = await checkedRow(
       investmentDbRowSchema,
-      `SELECT i.*, ${TICKER_PREF_SELECT} FROM investments i ${TICKER_PREF_JOIN} WHERE i.id = $1`,
-      [id],
+      selectInvestmentsWithTickerPref().where("i.id", "=", id),
     );
     return row ? mapInvestmentRow(row) : null;
   },
@@ -343,7 +338,7 @@ export const investmentRepository = {
     name = trimmedName;
     // Same 400 the legacy inheritance path raised — without this, an unknown
     // asset_class only fails at the DB enum cast (a raw 500).
-    if (!SUPPORTED_ASSET_CLASSES.has(asset_class)) {
+    if (!isSupportedAssetClass(asset_class)) {
       throw makeValidationError(`Unsupported asset_class: ${asset_class}`);
     }
     symbol = normalizeSymbol(symbol);
@@ -377,17 +372,12 @@ export const investmentRepository = {
       price_provider_history_price_path,
     };
 
-    const columns = INVESTMENT_CREATE_COLUMNS.join(", ");
-    const placeholders = investmentPlaceholders(
-      INVESTMENT_INSERT_FIELDS.length,
-    );
-    const values = INVESTMENT_INSERT_FIELDS.map((f) => f.value(payload));
-
-    const row = await queryOne(
+    const row = await checkedRow(
       investmentDbRowSchema,
-      `INSERT INTO investments (${columns})
-       VALUES (${placeholders}) RETURNING *`,
-      values,
+      db
+        .insertInto("investments")
+        .values(investmentInsertValues(payload))
+        .returningAll(),
     );
     // An INSERT ... RETURNING without ON CONFLICT returns its row or throws.
     return row ? mapInvestmentRow(row) : null;
@@ -450,20 +440,20 @@ export const investmentRepository = {
       await setTickerPreference(id, showInTicker);
     }
 
-    const {
-      clauses: setClauses,
-      params,
-      nextIdx: idx,
-    } = buildSetClauses(normalizedFields, { allowed });
+    // undefined fields are skipped; `allowed` whitelists the column names.
+    const setClauses = Object.entries(normalizedFields)
+      .filter(([key, value]) => value !== undefined && allowed.includes(key))
+      .map(([key, value]) => sql`${sql.ref(key)} = ${value}`);
 
     // Nothing else changed — re-read only if the ticker pref moved (to reflect it).
     if (setClauses.length === 0) {
       return showInTicker !== undefined ? this.getById(id) : existing;
     }
 
-    params.push(id);
-    const sql = `UPDATE investments SET ${setClauses.join(", ")} WHERE id = $${idx} RETURNING *`;
-    const row = await queryOne(investmentDbRowSchema, sql, params);
+    const row = await checkedRow(
+      investmentDbRowSchema,
+      sql`UPDATE investments SET ${sql.join(setClauses)} WHERE id = ${id} RETURNING *`,
+    );
     if (!row) return null;
     // Re-read when the ticker pref changed so the joined value is in the response.
     return showInTicker !== undefined
@@ -481,13 +471,13 @@ export const investmentRepository = {
       price_updated_at: string | Date | null;
     },
   ): Promise<InvestmentRow | null> {
-    const row = await queryOne(
+    const row = await checkedRow(
       investmentDbRowSchema,
-      `UPDATE investments
-          SET current_price = $1, price_updated_at = $2
-        WHERE id = $3
-      RETURNING *`,
-      [current_price, price_updated_at, id],
+      db
+        .updateTable("investments")
+        .set({ current_price, price_updated_at })
+        .where("id", "=", id)
+        .returningAll(),
     );
     return row ? mapInvestmentRow(row) : null;
   },
@@ -508,38 +498,38 @@ export const investmentRepository = {
   ): Promise<number> {
     if (!Array.isArray(updates) || updates.length === 0) return 0;
 
-    const result = await query(
-      `UPDATE investments i
-          SET current_price = u.current_price,
-              price_updated_at = u.price_updated_at
-         FROM UNNEST($1::int[], $2::numeric[], $3::timestamptz[])
-              AS u(id, current_price, price_updated_at)
-        WHERE i.id = u.id`,
-      [
-        updates.map((u) => u.id),
-        updates.map((u) => u.current_price),
-        updates.map((u) => u.price_updated_at),
-      ],
-    );
-    return result.rowCount ?? 0;
+    const result = await sql`
+      UPDATE investments i
+         SET current_price = u.current_price,
+             price_updated_at = u.price_updated_at
+        FROM UNNEST(${updates.map((u) => u.id)}::int[],
+                    ${updates.map((u) => u.current_price)}::numeric[],
+                    ${updates.map((u) => u.price_updated_at)}::timestamptz[])
+             AS u(id, current_price, price_updated_at)
+       WHERE i.id = u.id`.execute(db);
+    return Number(result.numAffectedRows ?? 0n);
   },
 
   /** @returns TIMESTAMPTZ — a `Date`, not a string. */
   async getLatestPriceUpdatedAt(): Promise<Date | null> {
-    const row = await queryOne(
+    const row = await checkedRow(
       latestPriceUpdatedAtRowSchema,
-      `SELECT MAX(price_updated_at) AS latest
-         FROM investments
-        WHERE is_active = true
-          AND price_provider IS NOT NULL
-          AND price_provider <> 'manual'`,
+      db
+        .selectFrom("investments")
+        .select((eb) => eb.fn.max("price_updated_at").as("latest"))
+        .where("is_active", "=", true)
+        .where("price_provider", "is not", null)
+        .where("price_provider", "<>", "manual"),
     );
     return row?.latest ?? null;
   },
 
   async hardDelete(id: InvestmentId): Promise<boolean> {
-    const result = await query("DELETE FROM investments WHERE id = $1", [id]);
-    return (result.rowCount ?? 0) > 0;
+    const result = await db
+      .deleteFrom("investments")
+      .where("id", "=", id)
+      .executeTakeFirst();
+    return result.numDeletedRows > 0n;
   },
 };
 

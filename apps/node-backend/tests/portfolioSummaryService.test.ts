@@ -1627,7 +1627,12 @@ it("converts archived included income at its own dated currency without changing
   expect(result.totals.totalIncome).toBe(0);
   expect(result.totals.totalInKindIncome).toBe(0);
   expect(result.summaries.map((row) => row.id)).toEqual([1]);
-  expect(
-    query.mock.calls.find(([sql]) => sql.includes("i.is_active = false"))![0],
-  ).toContain("income_recognition_role = 'included_in_units'");
+  // The archived read covers inactive investments' included income only.
+  const archivedRead = query.mock.calls.find(([sql]) =>
+    /join "?investments"? as "?i"?/i.test(String(sql)),
+  )!;
+  expect(String(archivedRead[0]).replace(/"/g, "")).toMatch(
+    /i\.is_active = \$1 and pt\.income_recognition_role = \$2/,
+  );
+  expect(archivedRead[1]).toEqual([false, "included_in_units"]);
 });

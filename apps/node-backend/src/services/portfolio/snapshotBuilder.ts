@@ -7,8 +7,10 @@
  * portfolio_performance_snapshots.
  */
 
-import { query, withTransaction } from "../../database/connection.ts";
-import { checkRows, queryOne, queryRows } from "../../database/rowContracts.ts";
+import { sql } from "kysely";
+import { withTransaction } from "../../database/connection.ts";
+import { checkedRow, checkedRows, db } from "../../database/db.ts";
+import { checkRows } from "../../database/rowContracts.ts";
 import {
   firstDataDateRowSchema,
   fxRateRowSchema,
@@ -200,9 +202,9 @@ function latestDayOnOrBefore(days: readonly string[], day: string): string {
 
 /** @returns the first data day (a pg DATE, local midnight) or null */
 export async function getFirstDataDate(): Promise<Date | null> {
-  const row = await queryOne(
+  const row = await checkedRow(
     firstDataDateRowSchema,
-    `
+    sql`
     SELECT MIN(first_date)::date AS first_data_date
     FROM (
       SELECT MIN(date)::date AS first_date
@@ -246,77 +248,96 @@ export async function computeDailySnapshots(
     fxResult,
     fxHistoryResult,
   ] = await Promise.all([
-    queryRows(
+    checkedRows(
       snapshotUnitInvestmentRowSchema,
-      `
-      SELECT i.id, COALESCE(i.currency, 'EUR') AS currency,
-             COALESCE(i.current_price, 0) AS current_price, i.asset_class
-      FROM investments i
-      WHERE i.is_active = true
-        AND i.asset_class IN ('stock', 'etf', 'crypto', 'metals')
-    `,
+      db
+        .selectFrom("investments as i")
+        .select([
+          "i.id",
+          sql<string>`COALESCE(i.currency, 'EUR')`.as("currency"),
+          sql<string>`COALESCE(i.current_price, 0)`.as("current_price"),
+          "i.asset_class",
+        ])
+        .where("i.is_active", "=", true)
+        .where("i.asset_class", "in", ["stock", "etf", "crypto", "metals"]),
     ),
     portfolioTransactionRepository.getRowsForPortfolioMath({
       dateFrom: firstDateYmd,
       dateTo: todayYmd,
       sellsLastWithinDay: true,
     }),
-    queryRows(
+    checkedRows(
       snapshotNonUnitInvestmentRowSchema,
-      `
-      SELECT id, COALESCE(currency, 'EUR') AS currency,
-             COALESCE(current_price, 0) AS current_price,
-             COALESCE(interest_rate, 0) AS interest_rate,
-             asset_class,
-             COALESCE(created_at::date, $1::date)::text AS active_from
-      FROM investments
-      WHERE is_active = true
-        AND asset_class::text = ANY($2::text[])
-    `,
-      [firstDateYmd, NON_UNIT_ASSET_CLASSES],
+      db
+        .selectFrom("investments")
+        .select([
+          "id",
+          sql<string>`COALESCE(currency, 'EUR')`.as("currency"),
+          sql<string>`COALESCE(current_price, 0)`.as("current_price"),
+          sql<string>`COALESCE(interest_rate, 0)`.as("interest_rate"),
+          "asset_class",
+          sql<string>`COALESCE(created_at::date, ${firstDateYmd}::date)::text`.as(
+            "active_from",
+          ),
+        ])
+        .where("is_active", "=", true)
+        .where(
+          sql<string>`asset_class::text`,
+          "=",
+          sql<string>`ANY(${NON_UNIT_ASSET_CLASSES}::text[])`,
+        ),
     ),
-    queryRows(
+    checkedRows(
       snapshotPriceHistoryRowSchema,
-      `
-      SELECT investment_id, to_char(price_date, 'YYYY-MM-DD') AS day, close_price
-      FROM asset_price_history
-      WHERE price_date >= $1::date AND price_date <= $2::date
-      ORDER BY investment_id, price_date
-    `,
-      [firstDateYmd, todayYmd],
+      db
+        .selectFrom("asset_price_history")
+        .select([
+          "investment_id",
+          sql<string>`to_char(price_date, 'YYYY-MM-DD')`.as("day"),
+          "close_price",
+        ])
+        .where("price_date", ">=", sql<Date>`${firstDateYmd}::date`)
+        .where("price_date", "<=", sql<Date>`${todayYmd}::date`)
+        .orderBy(["investment_id", "price_date"]),
     ),
-    queryRows(
+    checkedRows(
       snapshotInflationRowSchema,
-      `
-      SELECT to_char(month_date, 'YYYY-MM') AS month, monthly_rate
-      FROM belgian_inflation_rates
-      WHERE month_date >= $1::date
-      ORDER BY month_date
-    `,
-      [firstDateYmd],
+      db
+        .selectFrom("belgian_inflation_rates")
+        .select([
+          sql<string>`to_char(month_date, 'YYYY-MM')`.as("month"),
+          "monthly_rate",
+        ])
+        .where("month_date", ">=", sql<Date>`${firstDateYmd}::date`)
+        .orderBy("month_date"),
     ),
     // A failed FX read degrades to "no rates" (the .catch), but a row that
     // breaks its contract must still surface, so the check runs after it.
-    query(
-      `SELECT currency_code, rate_to_eur FROM exchange_rates WHERE is_latest = true`,
-    ).catch(() => ({ rows: [] as unknown[] })),
+    db
+      .selectFrom("exchange_rates")
+      .select(["currency_code", "rate_to_eur"])
+      .where("is_latest", "=", true)
+      .execute()
+      .catch((): unknown[] => []),
     // Historical FX so each day of the walk converts at the rate that applied
     // then, not today's. Sparse/empty is fine — convertAmount falls back to the
     // latest (is_latest) rate when no historical row precedes the day.
-    query(
-      `
-      SELECT currency_code, to_char(rate_date, 'YYYY-MM-DD') AS day, rate_to_eur
-      FROM exchange_rates
-      WHERE rate_date >= $1::date
-      ORDER BY currency_code, rate_date
-    `,
-      [firstDateYmd],
-    ).catch(() => ({ rows: [] as unknown[] })),
+    db
+      .selectFrom("exchange_rates")
+      .select([
+        "currency_code",
+        sql<string>`to_char(rate_date, 'YYYY-MM-DD')`.as("day"),
+        "rate_to_eur",
+      ])
+      .where("rate_date", ">=", sql<Date>`${firstDateYmd}::date`)
+      .orderBy(["currency_code", "rate_date"])
+      .execute()
+      .catch((): unknown[] => []),
   ]);
-  const fxRows: FxLatestRow[] = checkRows(fxRateRowSchema, fxResult.rows);
+  const fxRows: FxLatestRow[] = checkRows(fxRateRowSchema, fxResult);
   const fxHistoryRows: FxHistoryRow[] = checkRows(
     snapshotFxHistoryRowSchema,
-    fxHistoryResult.rows,
+    fxHistoryResult,
   );
 
   // --- Build lookup maps ---
@@ -1065,14 +1086,14 @@ const BATCH_SIZE = 500;
  * that haven't run it yet — the FX-neutral series is simply not persisted.
  */
 async function hasFxNeutralColumn(): Promise<boolean> {
-  const result = await query(`
+  const result = await sql`
     SELECT 1
     FROM information_schema.columns
     WHERE table_schema = current_schema()
       AND table_name = 'portfolio_performance_snapshots'
       AND column_name = 'value_fx_neutral'
     LIMIT 1
-  `);
+  `.execute(db);
   return result.rows.length > 0;
 }
 
@@ -1135,38 +1156,29 @@ export async function computeAndStoreSnapshots(
   ];
   const updateSet = columns
     .filter((c) => c !== "snapshot_date" && c !== "currency")
-    .map((c) => `${c} = EXCLUDED.${c}`)
-    .concat("computed_at = NOW()")
-    .join(", ");
+    .map((c) => sql`${sql.id(c)} = EXCLUDED.${sql.id(c)}`)
+    .concat(sql`computed_at = NOW()`);
 
   // Atomic replace: DELETE + INSERTs in one transaction so concurrent readers
   // (e.g. /api/info/net-worth during startup warmup) see either fully-old or
   // fully-new state via Postgres MVCC — never an empty/partial table.
-  await withTransaction(async (client) => {
-    await client.query(
-      "DELETE FROM portfolio_performance_snapshots WHERE currency = $1",
-      [targetCurrency],
-    );
+  await withTransaction(async () => {
+    await db
+      .deleteFrom("portfolio_performance_snapshots")
+      .where(sql<string>`currency`, "=", targetCurrency)
+      .execute();
 
     for (let i = 0; i < snapshots.length; i += BATCH_SIZE) {
       const batch = snapshots.slice(i, i + BATCH_SIZE);
-      const values: string[] = [];
-      const params: unknown[] = [];
-      let p = 1;
-
-      for (const snap of batch) {
-        values.push(`(${columns.map(() => `$${p++}`).join(",")},NOW())`);
-        params.push(...snapParams(snap));
-      }
-
-      await client.query(
-        `
-        INSERT INTO portfolio_performance_snapshots (${columns.join(", ")}, computed_at)
-        VALUES ${values.join(", ")}
-        ON CONFLICT (snapshot_date, currency) DO UPDATE SET ${updateSet}
-      `,
-        params,
+      const values = batch.map(
+        (snap) => sql`(${sql.join(snapParams(snap))}, NOW())`,
       );
+
+      await sql`
+        INSERT INTO portfolio_performance_snapshots (${sql.join(columns.map((c) => sql.id(c)))}, computed_at)
+        VALUES ${sql.join(values)}
+        ON CONFLICT (snapshot_date, currency) DO UPDATE SET ${sql.join(updateSet)}
+      `.execute(db);
     }
   });
 

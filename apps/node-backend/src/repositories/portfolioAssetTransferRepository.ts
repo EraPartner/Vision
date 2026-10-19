@@ -1,12 +1,13 @@
 /** Single canonical custody event, with no editable transaction legs. */
-import { query } from "../database/connection.ts";
-import { queryOne, queryRows } from "../database/rowContracts.ts";
+import { sql } from "kysely";
+import { checkedRow, checkedRows, db } from "../database/db.ts";
 import {
   portfolioAssetTransferRowSchema,
   portfolioBigintIdRowSchema,
   presentRowSchema,
 } from "../database/rows/portfolio.ts";
 import type { PortfolioAssetTransferDbRow } from "../database/rows/portfolio.ts";
+import type { AccountId, InvestmentId } from "@vision/types/brands";
 
 /**
  * BIGINT ids and NUMERIC units arrive from pg as strings. Derived from the
@@ -15,9 +16,9 @@ import type { PortfolioAssetTransferDbRow } from "../database/rows/portfolio.ts"
 export type PortfolioAssetTransferRow = PortfolioAssetTransferDbRow;
 
 export type PortfolioAssetTransferInsert = {
-  investment_id: number;
-  source_account_id: number;
-  destination_account_id: number;
+  investment_id: InvestmentId;
+  source_account_id: AccountId;
+  destination_account_id: AccountId;
   date: string;
   units: string;
   fee_units: string;
@@ -32,51 +33,60 @@ export type PortfolioAssetTransferInsert = {
 export async function hasAssetTransfersForInvestment(
   investmentId: number,
 ): Promise<boolean> {
-  const row = await queryOne(
+  const row = await checkedRow(
     presentRowSchema,
-    "SELECT EXISTS (SELECT 1 FROM portfolio_asset_transfers WHERE investment_id=$1 UNION ALL SELECT 1 FROM portfolio_asset_adjustments WHERE investment_id=$1) AS present",
-    [investmentId],
+    sql`SELECT EXISTS (
+          SELECT 1 FROM portfolio_asset_transfers WHERE investment_id=${investmentId}
+          UNION ALL
+          SELECT 1 FROM portfolio_asset_adjustments WHERE investment_id=${investmentId}
+        ) AS present`,
   );
   // SELECT EXISTS always returns exactly one row.
   if (!row) throw new Error("EXISTS query returned no row");
   return row.present;
 }
 
+function selectTransfers() {
+  return db
+    .selectFrom("portfolio_asset_transfers as at")
+    .selectAll("at")
+    .select(sql<string>`to_char(at.date,'YYYY-MM-DD')`.as("date"));
+}
+
 export async function findAssetTransferFingerprint(
   fingerprint: string,
   version: number,
 ): Promise<PortfolioAssetTransferRow | undefined> {
-  return queryOne(
+  return checkedRow(
     portfolioAssetTransferRowSchema,
-    `SELECT *, to_char(date,'YYYY-MM-DD') AS date FROM portfolio_asset_transfers
-    WHERE dedup_fingerprint=$1 AND dedup_fingerprint_version=$2`,
-    [fingerprint, version],
+    selectTransfers()
+      .where("at.dedup_fingerprint", "=", fingerprint)
+      .where("at.dedup_fingerprint_version", "=", version),
   );
 }
 
 export async function insertAssetTransfer(
   event: PortfolioAssetTransferInsert,
 ): Promise<{ id: string }> {
-  const row = await queryOne(
+  const row = await checkedRow(
     portfolioBigintIdRowSchema,
-    `INSERT INTO portfolio_asset_transfers
-    (investment_id,source_account_id,destination_account_id,date,units,fee_units,
-     import_batch_id,staging_row_id,source_record_hash,dedup_fingerprint,dedup_fingerprint_version,fee_basis_allocations)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb) RETURNING id`,
-    [
-      event.investment_id,
-      event.source_account_id,
-      event.destination_account_id,
-      event.date,
-      event.units,
-      event.fee_units,
-      event.import_batch_id,
-      event.staging_row_id,
-      event.source_record_hash,
-      event.dedup_fingerprint,
-      event.dedup_fingerprint_version,
-      JSON.stringify(event.fee_basis_allocations),
-    ],
+    db
+      .insertInto("portfolio_asset_transfers")
+      .values({
+        investment_id: event.investment_id,
+        source_account_id: event.source_account_id,
+        destination_account_id: event.destination_account_id,
+        date: event.date,
+        units: event.units,
+        fee_units: event.fee_units,
+        import_batch_id: event.import_batch_id,
+        staging_row_id: event.staging_row_id,
+        source_record_hash: event.source_record_hash,
+        dedup_fingerprint: event.dedup_fingerprint,
+        dedup_fingerprint_version: event.dedup_fingerprint_version,
+        fee_basis_allocations: sql`${JSON.stringify(event.fee_basis_allocations)}::jsonb`,
+      })
+      .returning("id"),
   );
   // An INSERT ... RETURNING without ON CONFLICT returns its row or throws.
   if (!row) throw new Error("Asset transfer insert returned no row");
@@ -86,20 +96,20 @@ export async function insertAssetTransfer(
 export async function getAssetTransfersForBatch(
   batchId: string | number,
 ): Promise<PortfolioAssetTransferRow[]> {
-  return queryRows(
+  return checkedRows(
     portfolioAssetTransferRowSchema,
-    `SELECT at.*, to_char(at.date,'YYYY-MM-DD') AS date FROM portfolio_asset_transfers at WHERE import_batch_id=$1 ORDER BY at.investment_id,at.date,at.id`,
-    [batchId],
+    selectTransfers()
+      .where("at.import_batch_id", "=", String(batchId))
+      .orderBy(["at.investment_id", "at.date", "at.id"]),
   );
 }
 
 export async function deleteAssetTransfersForBatch(
   batchId: string | number,
 ): Promise<number | null> {
-  return (
-    await query(
-      "DELETE FROM portfolio_asset_transfers WHERE import_batch_id=$1",
-      [batchId],
-    )
-  ).rowCount;
+  const result = await db
+    .deleteFrom("portfolio_asset_transfers")
+    .where("import_batch_id", "=", String(batchId))
+    .executeTakeFirst();
+  return Number(result.numDeletedRows);
 }

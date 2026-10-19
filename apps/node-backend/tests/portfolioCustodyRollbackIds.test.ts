@@ -12,7 +12,11 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("../src/database/connection.ts", () =>
-  mockConnection({ withTransaction: (fn: () => unknown) => fn() }),
+  mockConnection({
+    // The LOCK TABLE statement; it returns no rows.
+    query: async () => ({ rows: [] }),
+    withTransaction: (fn: () => unknown) => fn(),
+  }),
 );
 vi.mock("../src/repositories/portfolioTxRepo.reads.ts", async (importOriginal) => ({
   ...(await importOriginal()),
