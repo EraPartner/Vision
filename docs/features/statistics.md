@@ -206,25 +206,24 @@ without changing the selected date window.
 
 ## Data Processing Pipeline
 
-### processTransactions()
+### mapToStatisticsData()
 
-Located in `[[apps/frontend/src/features/statistics/statisticsUtils.ts]]`, this pure function processes transaction arrays into a `StatisticsData` object:
+Located in `[[apps/frontend/src/hooks/useStatistics.ts]]`, this pure function maps the server's
+aggregation payloads into a `StatisticsData` object. It performs no currency conversion and no
+transaction scan; the endpoints return figures already converted to the requested currency
+([[docs/adr/216-server-owned-domain-calculations|ADR-216]]):
 
 ```typescript
-processTransactions(
-  transactions: Transaction[],
-  categories: Category[],
-  excludedCategoryIds: Set<number>,
-  excludedRecipientIds: Set<number>,
+mapToStatisticsData(
+  monthlySummary: MonthlySummaryPayload,        // GET /api/aggregations/monthly-summary
+  categoryPivotPayload: CategoryPivotPayload,   // GET /api/aggregations/category-pivot
+  recipientInsights: RecipientInsightsPayload,  // GET /api/aggregations/recipient-insights
+  recipientByYear: RecipientByYearPayload,      // GET /api/aggregations/recipient-by-year
 ): StatisticsData
 ```
 
-**Algorithm**: Single-pass O(n) iteration over transactions with 4 parallel aggregation maps:
-
-1. **Monthly aggregation** (`monthlyMap`): Groups by `YYYY-MM` period, tracking income, spending, net, and transaction count per month.
-2. **Category pivot** (`categoryMonthlyMap`): Groups by category ID, tracking absolute/income/expense/net values per month and total.
-3. **Recipient spending** (`recipientMap`): Aggregates spending (expenses only) by recipient name, with per-year breakdowns.
-4. **Yearly comparison** (`yearlyMap`): Groups by year, tracking income, spending, net, and transaction count.
+Monthly rows come from the monthly summary; the yearly comparison is grouped from those monthly
+rows; the category pivot and recipient lists are mapped from their payloads.
 
 ### StatisticsData Interface
 
@@ -241,6 +240,7 @@ interface StatisticsData {
   totalSpending: number;
   averageMonthlySpending: number;
   averageMonthlyIncome: number;
+  unconvertedCount: number; // Transactions left out for want of a stored rate (ADR-216)
 }
 ```
 
@@ -251,7 +251,7 @@ The exclusion system is one of the most sophisticated features:
 1. **Global exclusions**: Defined in `SettingsHydration` (`excludedCategoryIds`, `excludedRecipientIds`, `excludeHiddenCategories`).
 2. **Exclusion scope**: Controlled by `settings.exclusionScope` — can be `'everywhere'`, `'statistics'`, or `'nowhere'`.
 3. **Per-graph override**: Each chart has an independent toggle (`graphExclusions[graphKey]`) to show/hide exclusions for that specific chart.
-4. **Dual computation**: When exclusions apply globally, both filtered and unfiltered stats are computed. `getGraphData(key)` returns the appropriate view based on per-graph toggle state.
+4. **Dual payloads**: When exclusions apply globally, both filtered and unfiltered aggregation payloads are fetched and mapped. `getGraphData(key)` returns the appropriate view based on per-graph toggle state.
 
 ## Widget System
 
@@ -409,15 +409,15 @@ This prevents `ChartCard` children from re-rendering when parent scope functions
 
 ### Data Fetching Strategy
 
-- **Pagination**: Transactions are fetched in pages of 1000 until all are retrieved
-- **Currency normalization**: Uses `normalize_to_eur: true` and `target_currency` params
-- **Stale time**: 60 seconds for both transactions and categories queries
-- **Client-side processing**: All aggregation happens in `useMemo`, re-computed only when dependencies change
+- **Server aggregation**: `useStatistics(window)` reads the aggregation endpoints with the display
+  currency and a 24-month or all-time date range; no transaction list is fetched
+- **Stale time**: 60 seconds (`QUERY_STALE_TIME_MS.STANDARD`) for the aggregation queries
+- **Client-side mapping**: `mapToStatisticsData` runs in `useMemo` and only reshapes payloads
 
 ### Memory Efficiency
 
 - **No object spread in loops**: The net worth page (which shares data patterns) avoids spread on large arrays
-- **Map-based aggregation**: Uses `Map` objects for O(1) lookups during aggregation
+- **Map-based mapping**: Uses `Map` objects for O(1) lookups while grouping payload rows
 - **Deferred data**: Uses `useDeferredValue` for search filtering to avoid blocking renders
 
 ## Backend Dependencies
@@ -426,14 +426,14 @@ The statistics feature relies on these backend endpoints:
 
 | Endpoint                                   | Purpose                                                                                                            | Location                                         |
 | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------ |
-| `GET /api/transactions`                    | Fetch all transactions (paginated, with currency conversion)                                                       | [[apps/node-backend/src/routes/transactions.ts]] |
-| `GET /api/categories`                      | Fetch all categories                                                                                               | [[apps/node-backend/src/routes/categories.ts]]   |
+| `GET /api/aggregations/monthly-summary`    | Converted monthly income, spending, net and counts                                                                 | [[apps/node-backend/src/routes/aggregations.ts]] |
+| `GET /api/aggregations/category-pivot`     | Converted per-category monthly breakdown                                                                           | [[apps/node-backend/src/routes/aggregations.ts]] |
+| `GET /api/aggregations/recipient-by-year`  | Converted per-year top recipients                                                                                  | [[apps/node-backend/src/routes/aggregations.ts]] |
 | `GET /api/info/recurring-patterns`         | Recurring pattern detection (used in Planned Payments)                                                             | [[apps/node-backend/src/routes/info.ts]]         |
 | `GET /api/info/insights-digest`            | Server-filtered Smart Insights findings, including zero-based month-end net cash flow                              | [[apps/node-backend/src/routes/info.ts]]         |
 | `GET /api/info/insights-count`             | Cheap versioned undismissed-count projection for navigation                                                        | [[apps/node-backend/src/routes/info.ts]]         |
 | `PUT /api/info/insight-dismissals`         | Persist a strict subscription or category-outlier dismissal                                                        | [[apps/node-backend/src/routes/info.ts]]         |
 | `GET /api/aggregations/recipient-insights` | Merchant spending insights; now accepts `excluded_category_ids[]` / `excluded_recipient_ids[]` (June 2026 bug fix) | [[apps/node-backend/src/routes/aggregations.ts]] |
-| `GET /api/info/exchange-rates`             | Exchange rates for currency normalization                                                                          | [[apps/node-backend/src/routes/info.ts]]         |
 
 **Phase G Migration (April 2026):** Recipient insights now use the aggregations endpoint. The apiClient method `getRecipientInsights()` transparently unwraps the aggregation envelope to maintain compatibility.
 

@@ -6,7 +6,7 @@ date: {YYYY-MM-DD}
 tags: [endpoint, api, {domain}, backend]
 description: {Brief description of what this endpoint does}
 aliases: [api, endpoint, {resource}]
-related_code: ["apps/node-backend/src/routes/{route-file}.js"]
+related_code: ["apps/node-backend/src/routes/{route-file}.ts"]
 ---
 
 # {Endpoint Name}
@@ -62,11 +62,9 @@ Authorization: Bearer {token}  # if required
 
 ```json
 {
-  "items": [],
-  "total": 0,
-  "limit": 50,
-  "offset": 0,
-  "links": []
+  "ok": true,
+  "data": [],
+  "meta": {}
 }
 ```
 
@@ -74,8 +72,8 @@ Authorization: Bearer {token}  # if required
 
 ```json
 {
-  "id": 1,
-  "field1": "value1"
+  "ok": true,
+  "data": { "id": 1, "field1": "value1" }
 }
 ```
 
@@ -89,7 +87,8 @@ Authorization: Bearer {token}  # if required
 
 ```json
 {
-  "detail": "Error message"
+  "ok": false,
+  "error": { "code": "VALIDATION_ERROR", "message": "Error message" }
 }
 ```
 

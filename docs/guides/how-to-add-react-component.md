@@ -2,7 +2,7 @@
 title: How to Add a New React Component
 type: guide
 status: active
-date: 2026-03-31
+date: 2026-10-19
 tags: [guide, frontend, react, component, how-to, tutorial]
 description: Step-by-step guide for adding a new React component to the Vision frontend
 aliases: [add component, new component, create component, react tutorial, frontend tutorial]
@@ -163,14 +163,18 @@ export function <Feature>Page() {
 
 ### 7. Add Routing
 
-Add to `apps/frontend/src/App.tsx`:
+For a new page, add one record to `appRouteManifest` in `apps/frontend/src/lib/routePreload.ts`;
+`App.tsx` derives the lazy route from it:
 
 ```tsx
-import { <Feature>Page } from './pages/<Feature>Page';
-
-// In the router:
-<Route path="/<feature>" element=<<Feature>Page />} />
+{
+  path: '/<feature>',
+  loader: () => import('@/pages/<Feature>Page'),
+  admin: false,
+}
 ```
+
+See [[docs/guides/how-to-add-new-page|How to Add a New Page]] for the navigation entry.
 
 ### 8. Write Tests
 

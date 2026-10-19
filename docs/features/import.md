@@ -2,8 +2,8 @@
 title: Feature - CSV Import, Export, Attachments & Deduplication
 type: feature
 status: active
-date: 2026-10-18
-updated: 2026-10-18
+date: 2026-10-19
+updated: 2026-10-19
 last_modified: 2026-10-11
 tags:
   [
@@ -610,7 +610,8 @@ provided bank-specific duplicate detection:
 > versioned fingerprint fields (above); it never inserts into the `*_raw_transactions` tables. Their
 > repository (`repositories/rawTransactionRepository.js`) has **zero importers** in `src/`, and only
 > historical rows remain in the tables that still exist. `custom_raw_transactions` was dropped by
-> migration `0008_drop_custom_raw_transactions.py`.
+> the historical Alembic migration `0008_drop_custom_raw_transactions.py` (now folded into
+> `db/migrations/0001_baseline.sql`).
 
 ### Field-based Matching
 
@@ -972,7 +973,7 @@ Vision supports receipt and document attachments for transactions via the attach
 - [[apps/node-backend/src/services/attachmentService.ts]]: Content verification, file storage, path resolution, and removal
 - [[apps/node-backend/src/repositories/attachmentRepository.ts]]: Database operations (CRUD)
 - [[apps/node-backend/src/routes/attachments.ts]]: Four REST endpoints for attachment management
-- Database migration `0004_attachments.py`: Schema with transaction FK, stored_path, mime_type, size_bytes
+- Historical Alembic migration `0004_attachments.py` (now part of `db/migrations/0001_baseline.sql`): Schema with transaction FK, stored_path, mime_type, size_bytes
 
 ### Frontend Components
 

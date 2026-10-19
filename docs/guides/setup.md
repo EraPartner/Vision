@@ -57,8 +57,9 @@ bun run dev
 ```
 
 `bun run dev` compiles the TypeScript Electron shell into `packaging/electron/out/`
-([[docs/adr/196-electron-shell-typescript|ADR-196]]), then starts Electron, a private PostgreSQL 18
-cluster, the backend, and the frontend. The cluster is stored under the `Vision Development` application-data directory. Startup creates
+([[docs/adr/196-electron-shell-typescript|ADR-196]]), then starts a private PostgreSQL 18 cluster,
+the watched backend, and the Vite frontend (`packaging/electron/scripts/native-development.ts`).
+It does not open an Electron window; use `bun run electron:dev` for the desktop shell. The cluster is stored under the `Vision Development` application-data directory. Startup creates
 separate administrator, migration-owner, and application roles, installs required extensions, runs the
 Kysely migrator (`db/migrations/`), and waits for detailed readiness.
 

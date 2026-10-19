@@ -46,7 +46,7 @@ SORT title ASC
 ### Deployment & Release
 
 - [[docs/guides/deployment\|Deployment Guide]] - Native macOS and custom source deployment
-- [[docs/guides/cicd-pipelines\|CI/CD Pipelines]] - GitHub Actions workflows for testing, building, and releasing (April 2026)
+- [[docs/guides/cicd-pipelines\|CI/CD Pipelines]] - The seven-job CI workflow and the macOS release workflow
 
 ## Troubleshooting
 

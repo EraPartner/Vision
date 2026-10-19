@@ -156,6 +156,8 @@ aliases: [agent navigation, codebase map, file map, navigation guide]
 | Frontend Page       | [[apps/frontend/src/pages/TaxOverviewPage.tsx]]                                                                                |
 | Components          | [[apps/frontend/src/features/tax/TaxProfileDialog.tsx]], [[apps/frontend/src/features/tax/SuggestedDeductionsCard.tsx]]        |
 | State and hydration | [[apps/frontend/src/stores/belgianTaxStore.ts]], [[apps/frontend/src/contexts/BelgianTaxProfileContext.tsx]]                   |
+| Backend Route       | [[apps/node-backend/src/routes/belgianTax.ts]] (`/api/belgian-tax/overview`, `/compute`)                                       |
+| Tax Engine          | `packages/shared-utils/src/belgianTax/` (server-run, ADR-217; tests `bun run test:packages`)                                   |
 | Backend Service     | [[apps/node-backend/src/services/belgianInflationService.ts]], [[apps/node-backend/src/services/calculations/loanSchedule.ts]] |
 | Feature Doc         | [[docs/features/belgian-tax]]                                                                                                  |
 | Integration Doc     | [[docs/integrations/belgian-inflation]], [[docs/integrations/loan-repayment-service]]                                          |
@@ -311,7 +313,8 @@ Full reference: [[docs/reference/service-layer|Service Layer Reference]]
 
 | File                                             | Purpose                                    |
 | ------------------------------------------------ | ------------------------------------------ |
-| [[apps/node-backend/src/database/connection.ts]] | Database connection setup                  |
+| [[apps/node-backend/src/database/connection.ts]] | Pool, `query()`, `withTransaction()`       |
+| [[apps/node-backend/src/database/db.ts]]         | Kysely query builder (ADR-226)             |
 | [[apps/node-backend/src/main.ts]]                | DB readiness retry loop + server startup   |
 | [[apps/node-backend/src/database/migrate.ts]]    | Kysely migrator (schema initialization)    |
 

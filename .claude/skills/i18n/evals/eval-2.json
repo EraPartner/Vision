@@ -1,6 +1,6 @@
 {
   "skills": ["i18n"],
-  "query": "I just hand-edited apps/frontend/src/locales/nl/common.json to fix a typo in the Dutch translation for 'Total balance'. Is that okay, or should I do something else?",
+  "query": "I just hand-edited apps/frontend/src/locales/nl.ts to fix a typo in the Dutch translation for 'Total balance'. Is that okay, or should I do something else?",
   "files": [],
   "expected_behavior": [
     "Flags that apps/frontend/src/locales/ is generated output, not the source of truth",

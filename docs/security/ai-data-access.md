@@ -2,8 +2,8 @@
 title: AI Data Access Policy
 type: security
 status: active
-date: 2026-10-08
-updated: 2026-10-08
+date: 2026-10-19
+updated: 2026-10-19
 tags:
   [
     security,
@@ -51,7 +51,7 @@ Security policies governing the AI chat feature introduced by [[docs/adr/024-loc
    Code capability does not establish live synthetic release acceptance; see
    [[docs/adr/171-packaged-openai-explicit-configuration|ADR-171]].
 2. **No raw SQL from LLM output.** The LLM cannot emit SQL. It selects from a fixed tool registry; every tool is backed by existing parameterized repository queries.
-3. **Parameterized queries only.** All tool dispatch goes through `query(text, params)` / `queryPrepared()` in [apps/node-backend/src/database/connection.ts](apps/node-backend/src/database/connection.ts). No string concatenation.
+3. **Parameterized queries only.** Tools call repository and service methods only. Their SQL runs through `query(text, params)` / `queryPrepared()` in [apps/node-backend/src/database/connection.ts](apps/node-backend/src/database/connection.ts), including Kysely-built queries, whose driver routes through `query()` ([[docs/adr/226-kysely-query-builder|ADR-226]]). No string concatenation.
 4. **Audit trail.** Every `tool_call` and `tool_result` persists in `ai_messages` (role `tool`, with `tool_name`, `tool_args`, `tool_result` JSONB columns). Forensic review is possible per-conversation.
 5. **Local mode stays local.** Data flows from repository → tool → local persistence → Ollama →
    browser. Only a separately previewed and granted typed payload can cross the optional egress path.
@@ -169,7 +169,7 @@ The registry contains **30 read-only tools** across **6 domains**: Expenses (11)
 - **Explicit schema.** Each tool declares JSON Schema for model-facing arguments. The dispatcher applies the shared hand-written date, enum, and bounded-integer validators before repository or service calls.
 - **Result shape contract.** Every tool returns `{ok, data, meta}`. Optional `meta.renderAs` drives UI rendering only; the LLM receives the same payload.
 - **Row cap.** Default 500 rows per call. Tools exceeding the cap return with `meta.truncated = true`.
-- **Denylist check (implemented).** A CI check verifies that no tool file calls write methods (`create(`, `update(`, `delete(`, `bulk(`, `upsert(`, `insert(`) or imports the Postgres pool directly. See `describe('tool write-method denylist')` in `apps/node-backend/tests/aiChatTools.test.ts` (lines 741–778). Ten test cases: 5 tool files × 2 assertions each (banned call patterns + pg pool import guard).
+- **Denylist check (implemented).** A CI check verifies that no tool file calls write methods (`create(`, `update(`, `delete(`, `bulk(`, `upsert(`, `insert(`) or imports the Postgres pool directly. See `describe('tool write-method denylist')` in `apps/node-backend/tests/aiChatTools.test.ts`. Ten test cases: 5 tool files × 2 assertions each (banned call patterns + pg pool import guard).
 
 ### Tool Domains and Purposes
 

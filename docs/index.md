@@ -882,10 +882,11 @@ Vision is a comprehensive **financial transaction management application** suppo
 
 ### Tech Stack
 
-- **Frontend**: React 18 + TypeScript + Vite + Tailwind CSS + Radix UI
+- **Frontend**: React 19 + TypeScript + Vite + Tailwind CSS + Radix UI
 - **Backend**: Node.js (Bun) + Express
-- **Database**: PostgreSQL with Kysely migrations (`db/migrations/`, ADR-222)
-- **Desktop**: Electron
+- **Database**: PostgreSQL 18 with Kysely migrations (`db/migrations/`, ADR-222) and Kysely-built
+  backend queries (ADR-226)
+- **Desktop**: Electron, macOS on Apple Silicon only (ADR-219)
 - **Testing**: Vitest + React Testing Library
 
 ## Key Concepts

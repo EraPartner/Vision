@@ -7,12 +7,19 @@ skinparam nodesep 60
 skinparam ranksep 80
 
 package "Database" {
-  class "connection.ts" as DB {
+  class "db.ts (Kysely builder, ADR-226)" as DB {
+    +db: Kysely<DB>
+    +checkedRows(schema, builder): Promise
+    +checkedRow(schema, builder): Promise
+    +compileQuery(builder): CompiledQuery
+  }
+  class "connection.ts" as Conn {
     +query(sql, params): Promise
-    +getClient(): Promise
+    +withTransaction(fn): Promise
     +checkConnection(): Promise<boolean>
     +closePool(): Promise
   }
+  DB --> Conn : compiled SQL through query()
 }
 
 package "Repositories" {
@@ -99,7 +106,7 @@ package "Repositories" {
     +insert(data): Promise<PortfolioTransaction>
     +updateFields(id, fields): Promise<PortfolioTransaction>
     +hardDelete(id): Promise<boolean>
-    note bottom: Parameterized SQL only;\ntransaction policy lives in services/portfolio/.
+    note bottom: Kysely-built, bound parameters only;\ntransaction policy lives in services/portfolio/.
   }
 
   class PortfolioImportReconciliationRepository <<ADR-177>> {

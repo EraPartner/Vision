@@ -125,7 +125,7 @@ backup. Source deployments are operator-managed. See
 ## Monitoring
 
 - Probe `GET /health` for liveness and database reachability.
-- Probe `GET /api/health/detailed` during startup and before switching a staged database live.
+- Probe `GET /health/detailed` during startup and before switching a staged database live.
 - Keep backend and PostgreSQL logs under the deployment supervisor.
 - Alert on migration failure, repeated restarts, backup failure, and low disk space.
 

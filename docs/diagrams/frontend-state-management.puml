@@ -36,11 +36,12 @@ package "Frontend State Providers and Hooks" {
   }
 
   class BelgianTaxProfileContext {
-    +taxProfile: TaxProfile
-    +taxYear: number
-    +calculations: TaxCalculations
-    +updateProfile(updates): Promise<void>
-    +setTaxYear(year): void
+    +profile / household: stored inputs
+    +viewedYear: number
+    +hydratedComputation: server overview figures (ADR-217)
+    +updateProfile(updates) / updateHousehold(updates)
+    +setViewedYear(year): void
+    +freezeCalculation(year) / getFrozenCalculation(year)
     +isLoading: boolean
   }
 

@@ -836,6 +836,9 @@ were not included.
 
 ## Migrations
 
+Historical Alembic revisions, kept as history. Their combined result is `db/migrations/0001_baseline.sql`
+([[docs/adr/222-typescript-migrations-kysely-baseline|ADR-222]]); the `.py` files exist only in Git history.
+
 - `0002_add_url_to_planned_transactions.py` — Added `url` field for linking to billing portals
 - `0011_planned_loans.py` — Added loan support fields (`is_loan`, `loan_type`, `loan_principal`, `loan_annual_interest_rate`, `loan_term_months`, `loan_start_date`, `loan_payment_day`, `loan_regular_payment_amount`, `loan_first_payment_date`) and `planned_transaction_loan_schedule` table
 

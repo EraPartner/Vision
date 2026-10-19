@@ -141,13 +141,18 @@ Run `VACUUM ANALYZE` on one or all tables.
 
 The VACUUM operation uses a **raw database client** (not the connection pool) because PostgreSQL does not allow VACUUM inside a transaction:
 
-```javascript
+```typescript
 // apps/node-backend/src/routes/admin.ts
 const client = await getClient(); // Raw client, not pool
 try {
-  await client.query("VACUUM ANALYZE " + (tableName ? `"${tableName}"` : ""));
+  await client.query("SET statement_timeout = 120000");
+  // `table` is checked against pg_stat_user_tables first and quoted as an identifier.
+  const vacuum = compileQuery(
+    table ? sql`VACUUM ANALYZE ${sql.id(table)}` : sql`VACUUM ANALYZE`,
+  );
+  await client.query(vacuum.sql);
 } finally {
-  await client.release();
+  client.release();
 }
 ```
 

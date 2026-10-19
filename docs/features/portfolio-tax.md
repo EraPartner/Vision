@@ -54,9 +54,9 @@ All portfolio-tax math previously inlined in `PortfolioTaxPage.tsx` has been ext
 - **Pure** — no React context imports, no side effects. Currency conversion is injected via a `ConvertFn` parameter.
 - **Tested** — 12 golden-output cases in `packages/shared-utils/tests/belgianTax/portfolioTax.test.ts` (run by `bun run test:packages`) lock all estimator outputs to 8 decimal places.
 - **Decimal-accumulating** — monetary sums and products run through `decimal.js` internally to eliminate float-accumulation drift across many transactions; the public surface returns `number`.
-- **De-duplicated** — `recordedTaxesForYear` is now shared between `PortfolioTaxPage` and `TaxOverviewPage`. Both pages call the same function rather than each maintaining a separate per-transaction accumulation loop.
+- **Server-only** — `buildPortfolioTaxDashboard` (`packages/shared-utils/src/belgianTax/portfolioDashboard.ts`) calls the estimators for `GET /api/belgian-tax/portfolio-dashboard`, and the tax overview's `buildTaxDashboard` (`apps/node-backend/src/services/tax/dashboardService.ts`) calls `recordedTaxesForYear`.
 
-`PortfolioTaxPage` calls these pure functions inside its `useMemo` hooks. The page itself is now responsible only for fetching, filtering by `taxYear`, and passing `convert` — all math lives in the library.
+`PortfolioTaxPage` renders the server's figures; it runs none of these functions in the browser.
 
 See [[docs/features/belgian-tax#portfoliotaxts--pure-portfolio-tax-estimators-2026-05-29|Belgian Tax: portfolioTax.ts]] for the full function reference.
 
@@ -213,34 +213,24 @@ The cap is a function of the rate, not the instrument. A €1M share buy at 0.35
 
 ## Currency Handling
 
-All amounts are converted to the target currency (`appSettings.defaultCurrency`) using exchange rates fetched from the Exchange Rates API:
-
-```typescript
-function convertToTarget(amount: number, fromCurrency?: string) {
-  const rateFrom = ratesToEur[from];
-  const rateTo = ratesToEur[to];
-  return (amount * rateFrom) / rateTo;
-}
-```
+All amounts are converted to the target currency (`appSettings.defaultCurrency`) on the server
+(ADR-216): `getPortfolioTaxDashboard` (`apps/node-backend/src/services/tax/portfolioDashboardService.ts`)
+converts with `convertCodeAtLatestRates` at the latest stored rates and returns figures already in
+the requested currency, so the page's `convertToTarget` is the identity.
 
 **Missing rates (2026-10-19):** the server converts at the latest stored rates. An amount without
 one is left out (the converter reports it), never added 1:1 or at a fallback constant. The
 dashboard lists the currency in `unconvertedCurrencies` and the fields that miss it in
 `incompleteFigures`, and the page shows an "Incomplete" warning.
 
-**Conversion coverage (2026-04-26 fix):** the per-investment summary, tax/fee type breakdown, monthly tax/fee trend, total realized & unrealized gain, total dividend income, and TOB total all run through `convertToTarget`. An earlier implementation skipped conversion in the monthly trend chart and on `realizedGain`, which mixed native transaction currencies into the displayed totals.
+**Conversion coverage (2026-04-26 fix):** the per-investment summary, tax/fee type breakdown, monthly tax/fee trend, total realized & unrealized gain, total dividend income, and TOB total are all converted (today by the server). An earlier implementation skipped conversion in the monthly trend chart and on `realizedGain`, which mixed native transaction currencies into the displayed totals.
 
 ## Query Configuration
 
-```typescript
-useQuery({
-  queryKey: ["exchange-rates", targetCurrency],
-  queryFn: () => apiClient.request("/api/info/exchange-rates"),
-  staleTime: 60_000,
-});
-```
-
-The page relies on `usePortfolio()` for investment summaries rather than a dedicated API endpoint.
+`usePortfolioTaxData` (`apps/frontend/src/hooks/usePortfolioTaxData.ts`) reads
+`GET /api/belgian-tax/portfolio-dashboard?year=&currency=` through `usePortfolioTaxDashboardQuery`
+(`apps/frontend/src/hooks/useBelgianTaxDashboards.ts`, key `taxKeys.portfolioDashboard(year,
+currency)`), which refetches after Belgian-tax settings saves.
 
 ## Related Features
 

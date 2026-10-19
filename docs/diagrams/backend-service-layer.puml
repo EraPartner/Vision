@@ -23,7 +23,7 @@ package "Belgian Tax" {
   TaxDashboardService --> SharedBelgianTaxEngine : server-owned fiscal derivation
   TaxDashboardService --> PortfolioTransactionRepository : recorded costs, active + inactive
   TaxDashboardService --> InfoRepository : through monthly/category aggregation services
-  TaxDashboardService --> CurrencyConversionService : latest stored rates + fallback
+  TaxDashboardService --> CurrencyConversionService : latest stored rates; missing rate reported
 }
 
 package "Import Pipeline" {
