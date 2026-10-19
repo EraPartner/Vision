@@ -54,6 +54,7 @@ import {
     type TransactionKind,
 } from "@/features/transactions/addTransactionForm";
 import type { Transaction, TransactionCreate } from "@/types/api";
+import { asCategoryId, asRecipientId } from "@vision/types/brands";
 
 export interface AddTransactionSheetProps {
     open: boolean;
@@ -137,7 +138,9 @@ export function AddTransactionSheet({
             : undefined;
 
     // A recipient's usual category fills the field until the user chooses.
-    const recipientId = form.recipient_id ? Number(form.recipient_id) : null;
+    const recipientId = form.recipient_id
+        ? asRecipientId(Number(form.recipient_id))
+        : null;
     const { data: recipient } = useRecipient(recipientId);
     useEffect(() => {
         if (!recipient || recipient.id !== recipientId) return;
@@ -225,13 +228,13 @@ export function AddTransactionSheet({
         return {
             transaction_date: form.transaction_date,
             account_id: parsed.data.account_id,
-            recipient_id: Number(form.recipient_id),
+            recipient_id: asRecipientId(Number(form.recipient_id)),
             category_id: form.category_id
-                ? Number(form.category_id)
+                ? asCategoryId(Number(form.category_id))
                 : undefined,
             memo: form.memo.trim() || undefined,
             amount: signedAmount(form.kind, parsed.data.amount),
-            currency: form.currency || appSettings.defaultCurrency,
+            currency: parsed.data.currency ?? appSettings.defaultCurrency,
             comment: form.comment.trim() || undefined,
         };
     };
@@ -250,7 +253,8 @@ export function AddTransactionSheet({
                     to_account_id: toAccount,
                     to_account_name: form.to_bank_account,
                     amount: Math.abs(parsed.data.amount),
-                    currency: form.currency || appSettings.defaultCurrency,
+                    currency:
+                        parsed.data.currency ?? appSettings.defaultCurrency,
                     memo: form.memo.trim() || undefined,
                     comment: form.comment.trim() || undefined,
                 },
@@ -411,11 +415,20 @@ export function AddTransactionSheet({
                                         }))
                                     }
                                     className="h-8 w-[5.5ch] border-0 bg-transparent px-0 text-center type-title-3 text-label-secondary shadow-none"
+                                    {...fieldErrorProps(
+                                        "tx_currency",
+                                        visibleErrors.tx_currency,
+                                    )}
                                 />
                             </div>
                             <FieldError
                                 field="tx_amount"
                                 message={visibleErrors.tx_amount}
+                                className="text-center"
+                            />
+                            <FieldError
+                                field="tx_currency"
+                                message={visibleErrors.tx_currency}
                                 className="text-center"
                             />
                         </div>
@@ -534,7 +547,11 @@ export function AddTransactionSheet({
                                             id="tx_category"
                                             value={
                                                 form.category_id
-                                                    ? Number(form.category_id)
+                                                    ? asCategoryId(
+                                                          Number(
+                                                              form.category_id,
+                                                          ),
+                                                      )
                                                     : null
                                             }
                                             onSelect={(id) => {

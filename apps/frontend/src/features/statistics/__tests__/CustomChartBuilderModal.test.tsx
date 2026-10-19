@@ -11,6 +11,7 @@ import { CustomChart } from "@/features/statistics/CustomChart";
 import { CustomChartBuilderModal } from "@/features/statistics/CustomChartBuilderModal";
 import type { StatisticsData } from "@/hooks/useStatistics";
 import type { SavedChart } from "@/types/apiClient";
+import { asCategoryId } from "@vision/types/brands";
 
 const API_BASE = "http://localhost:3002";
 
@@ -21,7 +22,7 @@ const STATS_DATA: StatisticsData = {
     categoryPivot: [
         {
             categoryName: "FOOD:GROCERIES",
-            categoryId: 1,
+            categoryId: asCategoryId(1),
             months: {},
             incomeMonths: {},
             expenseMonths: {},
@@ -33,7 +34,7 @@ const STATS_DATA: StatisticsData = {
         },
         {
             categoryName: "TRANSPORT:CAR",
-            categoryId: 2,
+            categoryId: asCategoryId(2),
             months: {},
             incomeMonths: {},
             expenseMonths: {},
@@ -61,7 +62,7 @@ const SAVED_CHART: SavedChart = {
     chart_type: "bar",
     chart_variant: "default",
     time_bucket: "monthly",
-    category_ids: [1],
+    category_ids: [asCategoryId(1)],
     recipient_ids: [],
     tag_ids: [],
     all_categories: false,

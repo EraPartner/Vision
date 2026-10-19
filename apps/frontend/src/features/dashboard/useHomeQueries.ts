@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { dashboardKeys } from "@/lib/queryKeys";
 import { QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
+import type { CurrencyCode } from "@vision/types/brands";
 
 /**
  * Month-to-date spending pace for the Home hero (ADR-181): what was spent
@@ -12,7 +13,7 @@ import { QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
  * category/recipient exclusions do not apply here; the charts below the hero
  * still honour them.
  */
-export function useMonthToDate(currency: string) {
+export function useMonthToDate(currency: CurrencyCode) {
     return useQuery({
         queryKey: dashboardKeys.monthToDate(currency),
         queryFn: () =>

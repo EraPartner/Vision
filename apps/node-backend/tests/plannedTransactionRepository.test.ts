@@ -3,6 +3,12 @@ import type { Mock } from "vitest";
 
 import { mockPooledTxConnection } from "./helpers/repoMocks.ts";
 import { plannedExecutionRow, plannedRow } from "./helpers/pgRows.ts";
+import {
+  asAccountId,
+  asPlannedTransactionId,
+  asTagId,
+  asTransactionId,
+} from "@vision/types/brands";
 vi.mock("../src/database/connection.ts", () => mockPooledTxConnection());
 
 vi.mock("../src/middleware/validation.ts", () => ({
@@ -137,7 +143,7 @@ describe("plannedTransactionRepository.getAll", () => {
       .mockResolvedValueOnce({ rows: [{ count: "0" }] });
 
     await plannedTransactionRepository.getAll({
-      accountId: 7,
+      accountId: asAccountId(7),
       bankAccount: "Cash",
     });
 
@@ -153,20 +159,20 @@ describe("plannedTransactionRepository.getAll", () => {
     query
       .mockResolvedValueOnce({
         rows: [
-          { ...plannedRow({ id: 1, is_loan: false }), total_count: "2" },
-          { ...plannedRow({ id: 2, is_loan: true }), total_count: "2" },
+          { ...plannedRow({ id: asPlannedTransactionId(1), is_loan: false }), total_count: "2" },
+          { ...plannedRow({ id: asPlannedTransactionId(2), is_loan: true }), total_count: "2" },
         ],
       })
       .mockResolvedValueOnce({
         rows: [
           plannedExecutionRow({
-            planned_transaction_id: 1,
-            executed_transaction_id: 90,
+            planned_transaction_id: asPlannedTransactionId(1),
+            executed_transaction_id: asTransactionId(90),
             execution_date: new Date(2026, 1, 1),
           }),
           plannedExecutionRow({
-            planned_transaction_id: 2,
-            executed_transaction_id: 91,
+            planned_transaction_id: asPlannedTransactionId(2),
+            executed_transaction_id: asTransactionId(91),
             execution_date: new Date(2026, 1, 3),
           }),
         ],
@@ -242,7 +248,7 @@ describe("plannedTransactionRepository.getById", () => {
   it("returns null when planned transaction does not exist", async () => {
     query.mockResolvedValueOnce({ rows: [] });
 
-    const result = await plannedTransactionRepository.getById(404);
+    const result = await plannedTransactionRepository.getById(asPlannedTransactionId(404));
 
     expect(result).toBeNull();
     expect(query).toHaveBeenCalledTimes(1);
@@ -261,7 +267,7 @@ describe("plannedTransactionRepository.getById", () => {
       .mockResolvedValueOnce({
         rows: [
           plannedRow({
-            id: 12,
+            id: asPlannedTransactionId(12),
             is_loan: true,
             recipient_name: "Bank",
             category_name: "LOAN:MORTGAGE",
@@ -271,8 +277,8 @@ describe("plannedTransactionRepository.getById", () => {
       .mockResolvedValueOnce({
         rows: [
           plannedExecutionRow({
-            planned_transaction_id: 12,
-            executed_transaction_id: 77,
+            planned_transaction_id: asPlannedTransactionId(12),
+            executed_transaction_id: asTransactionId(77),
             execution_date: new Date(2026, 2, 1),
           }),
         ],
@@ -291,7 +297,7 @@ describe("plannedTransactionRepository.getById", () => {
       })
       .mockResolvedValueOnce({ rows: [] });
 
-    const result = await plannedTransactionRepository.getById(12);
+    const result = await plannedTransactionRepository.getById(asPlannedTransactionId(12));
 
     expect(query).toHaveBeenCalledTimes(4);
     expect(result!.execution_count).toBe(1);
@@ -326,7 +332,7 @@ describe("plannedTransactionService.create", () => {
       .mockResolvedValueOnce({
         rows: [
           plannedRow({
-            id: 51,
+            id: asPlannedTransactionId(51),
             is_loan: true,
             recipient_name: "Bank",
             category_name: "LOAN:MORTGAGE",
@@ -492,7 +498,7 @@ describe("plannedTransactionService.create", () => {
       .mockResolvedValueOnce({
         rows: [
           plannedRow({
-            id: 52,
+            id: asPlannedTransactionId(52),
             is_loan: false,
             recipient_name: "Employer",
             category_name: "INCOME:SALARY",
@@ -567,7 +573,7 @@ describe("plannedTransactionService.update", () => {
       .mockResolvedValueOnce({
         rows: [
           plannedRow({
-            id: 33,
+            id: asPlannedTransactionId(33),
             is_loan: false,
             recipient_name: "Shop",
             category_name: "FOOD:GROCERIES",
@@ -577,7 +583,7 @@ describe("plannedTransactionService.update", () => {
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [] });
 
-    const result = await plannedTransactionRepository.update(33, {
+    const result = await plannedTransactionRepository.update(asPlannedTransactionId(33), {
       unsafe_field: undefined,
     });
 
@@ -611,7 +617,7 @@ describe("plannedTransactionService.update", () => {
     const release = vi.fn();
     getClient.mockResolvedValue({ query: clientQuery, release });
 
-    const result = await plannedTransactionRepository.update(999, {
+    const result = await plannedTransactionRepository.update(asPlannedTransactionId(999), {
       memo: "updated",
     });
 
@@ -637,7 +643,7 @@ describe("plannedTransactionService.update", () => {
       .mockResolvedValueOnce({
         rows: [
           plannedRow({
-            id: 70,
+            id: asPlannedTransactionId(70),
             is_loan: true,
             recipient_name: "Bank",
             category_name: "LOAN:CAR",
@@ -647,8 +653,8 @@ describe("plannedTransactionService.update", () => {
       .mockResolvedValueOnce({
         rows: [
           plannedExecutionRow({
-            planned_transaction_id: 70,
-            executed_transaction_id: 701,
+            planned_transaction_id: asPlannedTransactionId(70),
+            executed_transaction_id: asTransactionId(701),
             execution_date: new Date(2026, 5, 2),
           }),
         ],
@@ -667,7 +673,7 @@ describe("plannedTransactionService.update", () => {
       })
       .mockResolvedValueOnce({ rows: [] });
 
-    const result = await plannedTransactionRepository.update(70, {
+    const result = await plannedTransactionRepository.update(asPlannedTransactionId(70), {
       memo: "updated memo",
     });
 
@@ -697,7 +703,7 @@ describe("plannedTransactionRepository.small mutations", () => {
   it("returns true from hardDelete when a row is deleted", async () => {
     query.mockResolvedValueOnce({ rowCount: 1 });
 
-    const deleted = await plannedTransactionRepository.hardDelete(7);
+    const deleted = await plannedTransactionRepository.hardDelete(asPlannedTransactionId(7));
 
     expect(query).toHaveBeenCalledWith(
       "DELETE FROM planned_transactions WHERE id = $1",
@@ -709,7 +715,7 @@ describe("plannedTransactionRepository.small mutations", () => {
   it("returns false from hardDelete when no rows are deleted", async () => {
     query.mockResolvedValueOnce({ rowCount: 0 });
 
-    const deleted = await plannedTransactionRepository.hardDelete(777);
+    const deleted = await plannedTransactionRepository.hardDelete(asPlannedTransactionId(777));
 
     expect(query).toHaveBeenCalledWith(
       "DELETE FROM planned_transactions WHERE id = $1",
@@ -721,7 +727,7 @@ describe("plannedTransactionRepository.small mutations", () => {
   it("adds execution with provided execution date", async () => {
     query.mockResolvedValueOnce({});
 
-    await plannedTransactionRepository.addExecution(10, 99, "2026-08-09");
+    await plannedTransactionRepository.addExecution(asPlannedTransactionId(10), asTransactionId(99), "2026-08-09");
 
     expect(query).toHaveBeenCalledWith(
       expect.stringContaining("INSERT INTO planned_transaction_executions"),
@@ -735,7 +741,7 @@ describe("plannedTransactionRepository.small mutations", () => {
       vi.setSystemTime(new Date("2026-09-10T12:30:00.000Z"));
       query.mockResolvedValueOnce({});
 
-      await plannedTransactionRepository.addExecution(11, 101);
+      await plannedTransactionRepository.addExecution(asPlannedTransactionId(11), asTransactionId(101));
 
       expect(query).toHaveBeenCalledWith(
         expect.stringContaining("INSERT INTO planned_transaction_executions"),
@@ -756,7 +762,7 @@ describe("plannedTransactionRepository.small mutations", () => {
     const release = vi.fn();
     getClient.mockResolvedValue({ query: clientQuery, release });
 
-    await plannedTransactionRepository.replaceLoanSchedule(12, [
+    await plannedTransactionRepository.replaceLoanSchedule(asPlannedTransactionId(12), [
       {
         installment_number: 1,
         due_date: "2026-10-01",
@@ -793,7 +799,7 @@ describe("plannedTransactionRepository.small mutations", () => {
     getClient.mockResolvedValue({ query: clientQuery, release });
 
     await expect(
-      plannedTransactionRepository.replaceLoanSchedule(13, []),
+      plannedTransactionRepository.replaceLoanSchedule(asPlannedTransactionId(13), []),
     ).rejects.toThrow("delete failed");
 
     expect(clientQuery).toHaveBeenNthCalledWith(1, "BEGIN");
@@ -820,7 +826,7 @@ describe("plannedTransactionService.updateWithLoanSchedule", () => {
       .mockResolvedValueOnce({
         rows: [
           plannedRow({
-            id: 70,
+            id: asPlannedTransactionId(70),
             is_loan: true,
             recipient_name: "Bank",
             category_name: "LOAN:CAR",
@@ -843,7 +849,7 @@ describe("plannedTransactionService.updateWithLoanSchedule", () => {
       .mockResolvedValueOnce({ rows: [] });
 
     const result = await plannedTransactionRepository.updateWithLoanSchedule(
-      70,
+      asPlannedTransactionId(70),
       {
         loan_regular_payment_amount: 300,
         loan_first_payment_date: "2026-10-01",
@@ -893,7 +899,7 @@ describe("plannedTransactionService.updateWithLoanSchedule", () => {
     getClient.mockResolvedValue({ query: clientQuery, release });
 
     const result = await plannedTransactionRepository.updateWithLoanSchedule(
-      999,
+      asPlannedTransactionId(999),
       { memo: "x" },
       [],
     );
@@ -921,8 +927,8 @@ describe("plannedTransactionService.executeAndAdvance", () => {
     getClient.mockResolvedValue({ query: clientQuery, release });
 
     const result = await plannedTransactionRepository.executeAndAdvance(
-      1,
-      10,
+      asPlannedTransactionId(1),
+      asTransactionId(10),
       "2025-01-15",
     );
 
@@ -941,8 +947,8 @@ describe("plannedTransactionService.executeAndAdvance", () => {
     getClient.mockResolvedValue({ query: clientQuery, release });
 
     const result = await plannedTransactionRepository.executeAndAdvance(
-      1,
-      10,
+      asPlannedTransactionId(1),
+      asTransactionId(10),
       "2025-01-15",
     );
 
@@ -962,11 +968,11 @@ describe("plannedTransactionService.executeAndAdvance", () => {
     getClient.mockResolvedValue({ query: clientQuery, release });
 
     await plannedTransactionRepository.executeAndAdvance(
-      1,
-      10,
+      asPlannedTransactionId(1),
+      asTransactionId(10),
       "2025-01-15",
       {},
-      [7, 8],
+      [asTagId(7), asTagId(8)],
     );
 
     const tagInsertCall = clientQuery.mock.calls.find(
@@ -987,8 +993,8 @@ describe("plannedTransactionService.executeAndAdvance", () => {
     getClient.mockResolvedValue({ query: clientQuery, release });
 
     await plannedTransactionRepository.executeAndAdvance(
-      1,
-      10,
+      asPlannedTransactionId(1),
+      asTransactionId(10),
       "2025-01-15",
       {},
       null,
@@ -1010,8 +1016,8 @@ describe("plannedTransactionService.executeAndAdvance", () => {
     getClient.mockResolvedValue({ query: clientQuery, release });
 
     await plannedTransactionRepository.executeAndAdvance(
-      1,
-      10,
+      asPlannedTransactionId(1),
+      asTransactionId(10),
       "2025-01-15",
       {},
       [],
@@ -1033,7 +1039,7 @@ describe("plannedTransactionService.executeAndAdvance", () => {
     getClient.mockResolvedValue({ query: clientQuery, release });
 
     await expect(
-      plannedTransactionRepository.executeAndAdvance(1, 10, "2025-01-15"),
+      plannedTransactionRepository.executeAndAdvance(asPlannedTransactionId(1), asTransactionId(10), "2025-01-15"),
     ).rejects.toThrow("db failure");
 
     const rollbackCall = clientQuery.mock.calls.find(

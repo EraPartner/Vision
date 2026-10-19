@@ -40,9 +40,17 @@ import {
 } from "../lib/zodInput.ts";
 import {
   booleanQueryFlag,
-  idParamsSchema,
+  entityIdParamsSchema,
   singleQueryValue,
 } from "./_inputBridges.ts";
+import {
+  asAccountId,
+  asCategoryId,
+  asRecipientId,
+  asTransactionId,
+  TransactionIdSchema,
+} from "@vision/types/brands";
+import type { TransactionId } from "@vision/types/brands";
 import { toDecimal, toNumber } from "../lib/money.ts";
 import { parseAmountFilter } from "../lib/filterBuilder.ts";
 import {
@@ -67,8 +75,10 @@ type FormattableTransactionRow = EnrichedTransactionRow & {
   amount_eur?: number | string;
 };
 
-function parseRouteId(req: { params: unknown }): number {
-  return parseInput(idParamsSchema, req.params).id;
+const transactionIdParams = entityIdParamsSchema(TransactionIdSchema);
+
+function parseRouteId(req: { params: unknown }): TransactionId {
+  return parseInput(transactionIdParams, req.params).id;
 }
 
 const isJsonObject = (value: unknown): value is Record<string, unknown> =>
@@ -120,7 +130,10 @@ const currencyField = ({ rejectEmpty = false } = {}) =>
 // as 1000, '0x10' as 16, true as 1 and [7] as 7, so the PATCH re-pointed the
 // transaction at a recipient/category the caller never named — a silent
 // mis-attribution in the ledger rather than a 400.
-const nullableFkField = (field: string) =>
+const nullableFkField = <T extends number>(
+  field: string,
+  brand: (id: number) => T,
+) =>
   z
     .unknown()
     .transform((value, ctx) => {
@@ -133,7 +146,7 @@ const nullableFkField = (field: string) =>
         });
         return z.NEVER;
       }
-      return parsed.value;
+      return brand(parsed.value);
     })
     .optional();
 
@@ -156,8 +169,8 @@ const createTransactionSchema = z
     tags: tagsField,
     currency: currencyField(),
     bank_account: z.never().optional(),
-    account_id: nullableFkField("account_id"),
-    category_id: nullableFkField("category_id"),
+    account_id: nullableFkField("account_id", asAccountId),
+    category_id: nullableFkField("category_id", asCategoryId),
     allow_duplicate: z.boolean().optional(),
   })
   .superRefine((data, ctx) => {
@@ -233,9 +246,9 @@ const patchTransactionSchema = z.looseObject({
     .optional(),
   currency: currencyField({ rejectEmpty: true }),
   bank_account: z.never().optional(),
-  account_id: nullableFkField("account_id"),
-  recipient_id: nullableFkField("recipient_id"),
-  category_id: nullableFkField("category_id"),
+  account_id: nullableFkField("account_id", asAccountId),
+  recipient_id: nullableFkField("recipient_id", asRecipientId),
+  category_id: nullableFkField("category_id", asCategoryId),
 });
 
 const bulkTagSchema = z
@@ -320,7 +333,7 @@ const transferPairBodySchema = z.unknown().transform((body, ctx) => {
     });
     return z.NEVER;
   }
-  return { aId: a.value, bId: b.value };
+  return { aId: asTransactionId(a.value), bId: asTransactionId(b.value) };
 });
 
 // Bulk bodies select rows by `ids` or `filter`; transactionBulkService
@@ -443,16 +456,17 @@ const bulkExportBodySchema = bulkBody(
  *
  * Returns undefined when the param is absent/empty.
  */
-function parseIdListQueryParam(
+function parseIdListQueryParam<T extends number>(
   raw: unknown,
   field: string,
-): number[] | undefined {
+  brand: (id: number) => T,
+): T[] | undefined {
   if (raw == null) return undefined;
   const joined = String(raw);
   if (joined === "") return undefined;
   const result = validateIntArray(joined.split(","), field);
   if (!result.valid) throw new ValidationError(result.error);
-  return result.value;
+  return result.value.map(brand);
 }
 
 // Shared list/export filter fields. Values that reach SQL as free-text strings
@@ -468,19 +482,19 @@ const transactionFilterQueryShape = {
   // as ids no row can have, and a NaN (which is what the Transactions page
   // sends for a hand-edited URL) passed the `!= null` guard and reached
   // Postgres as a 22P02 500.
-  transaction_id: optionalIdQuery("transaction_id"),
+  transaction_id: optionalIdQuery("transaction_id", asTransactionId),
   start_date: guardField((value) => assertYmd(value, "start_date")),
   end_date: guardField((value) => assertYmd(value, "end_date")),
   // account_id is the preferred account filter (ADR-088 — reads key on the
   // FK); bank_account stays as a substring escape hatch.
-  account_id: optionalIdQuery("account_id"),
+  account_id: optionalIdQuery("account_id", asAccountId),
   bank_account: singleQueryValue("bank_account"),
-  category_id: optionalIdQuery("category_id"),
+  category_id: optionalIdQuery("category_id", asCategoryId),
   category_ids: guardField((value) =>
-    parseIdListQueryParam(value, "category_ids"),
+    parseIdListQueryParam(value, "category_ids", asCategoryId),
   ),
-  recipient_id: optionalIdQuery("recipient_id"),
-  recipient_group_id: optionalIdQuery("recipient_group_id"),
+  recipient_id: optionalIdQuery("recipient_id", asRecipientId),
+  recipient_group_id: optionalIdQuery("recipient_group_id", asRecipientId),
   recipient_name: singleQueryValue("recipient_name"),
   search: singleQueryValue("search"),
   active: booleanQueryFlag(true),
@@ -515,8 +529,14 @@ const transactionFilterQueryShape = {
     }),
 };
 
-function optionalIdQuery(field: string) {
-  return guardField((value) => assertOptionalId(value, field));
+function optionalIdQuery<T extends number>(
+  field: string,
+  brand: (id: number) => T,
+) {
+  return guardField((value) => {
+    const id = assertOptionalId(value, field);
+    return id === undefined ? undefined : brand(id);
+  });
 }
 
 type TransactionFilterQuery = z.output<
@@ -600,7 +620,7 @@ const transactionExportQuerySchema = bareMessages(
     // The cap itself is unchanged (it silently truncates an over-long list —
     // a separate, pre-existing narrowing, shared with bank_accounts below).
     account_ids: guardField((value) =>
-      parseIdListQueryParam(value, "account_ids")?.slice(
+      parseIdListQueryParam(value, "account_ids", asAccountId)?.slice(
         0,
         EXPORT_MAX_LIST_SIZE,
       ),

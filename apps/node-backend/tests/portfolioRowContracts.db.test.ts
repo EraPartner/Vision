@@ -24,6 +24,12 @@ import {
   hasTestDatabase,
   releaseDbSuiteLock,
 } from "./setup/db.ts";
+import {
+  asAccountId,
+  asCurrencyCode,
+  asInvestmentId,
+  asPortfolioTransactionId,
+} from "@vision/types/brands";
 
 // The quote paths would otherwise ask a live provider for history.
 vi.mock("../src/services/priceProviderService.ts", async () => ({
@@ -194,7 +200,7 @@ describe.skipIf(!hasTestDatabase())(
       const created = await investmentRepository.create({
         name: tag("Row contract created"),
         asset_class: "etf",
-        currency: "EUR",
+        currency: asCurrencyCode("EUR"),
         current_price: 12.5,
       });
       expect(created).not.toBeNull();
@@ -205,7 +211,7 @@ describe.skipIf(!hasTestDatabase())(
       );
       onCleanup("DELETE FROM investments WHERE id=$1", id);
 
-      expect(await investmentRepository.getById(id)).toMatchObject({ id });
+      expect(await investmentRepository.getById(asInvestmentId(id))).toMatchObject({ id });
       expect(
         (await investmentRepository.getAll({ limit: 500, offset: 0 })).map(
           (row) => row.id,
@@ -218,10 +224,10 @@ describe.skipIf(!hasTestDatabase())(
       });
       expect(page.total).toBeGreaterThanOrEqual(1);
       expect(
-        await investmentRepository.update(id, { notes: "synthetic" }),
+        await investmentRepository.update(asInvestmentId(id), { notes: "synthetic" }),
       ).toMatchObject({ id });
       expect(
-        await investmentRepository.updatePrice(id, {
+        await investmentRepository.updatePrice(asInvestmentId(id), {
           current_price: 13,
           price_updated_at: new Date(),
         }),
@@ -309,53 +315,53 @@ describe.skipIf(!hasTestDatabase())(
       expect(await hasPortfolioTransactionImportBatchIdColumn()).toBe(true);
 
       const buy = await portfolioTransactionService.create({
-        investment_id: inv,
+        investment_id: asInvestmentId(inv),
         type: "buy",
         date: "2025-01-02",
         amount: 100,
         units: 10,
-        currency: "EUR",
-        account_id: broker,
+        currency: asCurrencyCode("EUR"),
+        account_id: asAccountId(broker),
       });
       const sell = await portfolioTransactionService.create({
-        investment_id: inv,
+        investment_id: asInvestmentId(inv),
         type: "sell",
         date: "2025-02-03",
         amount: 40,
         units: 4,
-        currency: "USD",
+        currency: asCurrencyCode("USD"),
         fx_rate_to_eur: 0.9,
-        account_id: broker,
+        account_id: asAccountId(broker),
       });
       const buyId = Number(buy?.id);
       const sellId = Number(sell?.id);
 
-      expect(await portfolioTransactionRepository.getById(buyId)).toMatchObject(
+      expect(await portfolioTransactionRepository.getById(asPortfolioTransactionId(buyId))).toMatchObject(
         { id: buyId, date: "2025-01-02" },
       );
       expect(
         (
           await portfolioTransactionRepository.getAll({
-            investmentId: inv,
+            investmentId: asInvestmentId(inv),
           })
         ).map((row) => row.id),
       ).toEqual([sellId, buyId]);
       expect(
         (
           await portfolioTransactionRepository.getAllWithCount({
-            investmentId: inv,
+            investmentId: asInvestmentId(inv),
           })
         ).total,
       ).toBe(2);
       expect(
         await portfolioTransactionRepository.getAllByInvestmentIds({
-          investmentIds: [inv],
+          investmentIds: [asInvestmentId(inv)],
         }),
       ).toHaveLength(2);
       expect(
-        await portfolioTransactionRepository.getCount({ investmentId: inv }),
+        await portfolioTransactionRepository.getCount({ investmentId: asInvestmentId(inv) }),
       ).toBe(2);
-      expect(await portfolioTransactionRepository.getSummary(inv)).toHaveLength(
+      expect(await portfolioTransactionRepository.getSummary(asInvestmentId(inv))).toHaveLength(
         2,
       );
       expect(
@@ -363,14 +369,14 @@ describe.skipIf(!hasTestDatabase())(
           (row) => row.investment_id === inv,
         ),
       ).toHaveLength(2);
-      expect(await getUnitEventsForInvestment(inv)).toHaveLength(2);
-      expect(await getAssetClassByInvestmentId(inv)).toBe("stock");
-      expect(await getAccountLabel(broker)).toMatch(/^Row contract broker/);
+      expect(await getUnitEventsForInvestment(asInvestmentId(inv))).toHaveLength(2);
+      expect(await getAssetClassByInvestmentId(asInvestmentId(inv))).toBe("stock");
+      expect(await getAccountLabel(asAccountId(broker))).toMatch(/^Row contract broker/);
 
       expect(
-        await portfolioTransactionService.update(sellId, { note: "synthetic" }),
+        await portfolioTransactionService.update(asPortfolioTransactionId(sellId), { note: "synthetic" }),
       ).toMatchObject({ id: sellId });
-      await expect(portfolioTransactionService.remove(sellId)).resolves.toBe(
+      await expect(portfolioTransactionService.remove(asPortfolioTransactionId(sellId))).resolves.toBe(
         true,
       );
     });
@@ -465,7 +471,7 @@ describe.skipIf(!hasTestDatabase())(
       expect(await assetTransfers.hasAssetTransfersForInvestment(inv)).toBe(
         true,
       );
-      expect(await getUnitEventsForInvestment(inv)).toHaveLength(2);
+      expect(await getUnitEventsForInvestment(asInvestmentId(inv))).toHaveLength(2);
       expect(
         (await portfolioTransactionRepository.getRowsForPortfolioMath()).filter(
           (row) => row.investment_id === inv,
@@ -525,12 +531,12 @@ describe.skipIf(!hasTestDatabase())(
           row: {
             id: incomeRow,
             batch_id: importBatch,
-            investment_id: inv,
+            investment_id: asInvestmentId(inv),
             tx_date: "2025-03-03",
             amount: "1.50",
-            currency: "EUR",
+            currency: asCurrencyCode("EUR"),
             note: null,
-            account_id: source,
+            account_id: asAccountId(source),
             source_record_hash: hex("income"),
             dedup_fingerprint: hex("income fingerprint"),
             dedup_fingerprint_version: 1,
@@ -637,13 +643,13 @@ describe.skipIf(!hasTestDatabase())(
       const broker = await account();
       const inv = await investment("crypto");
       await portfolioTransactionService.create({
-        investment_id: inv,
+        investment_id: asInvestmentId(inv),
         type: "buy",
         date: "2025-01-02",
         amount: 100,
         units: 1,
-        currency: "EUR",
-        account_id: broker,
+        currency: asCurrencyCode("EUR"),
+        account_id: asAccountId(broker),
       });
       await saveHistoricalPointsToDatabase(
         inv,
@@ -703,21 +709,21 @@ describe.skipIf(!hasTestDatabase())(
         [usd],
       );
       await portfolioTransactionService.create({
-        investment_id: unitInv,
+        investment_id: asInvestmentId(unitInv),
         type: "buy",
         date: "2025-01-02",
         amount: 100,
         units: 10,
-        currency: "USD",
-        account_id: broker,
+        currency: asCurrencyCode("USD"),
+        account_id: asAccountId(broker),
       });
       await portfolioTransactionService.create({
-        investment_id: savings,
+        investment_id: asInvestmentId(savings),
         type: "buy",
         date: "2025-01-02",
         amount: 1000,
-        currency: "EUR",
-        account_id: broker,
+        currency: asCurrencyCode("EUR"),
+        account_id: asAccountId(broker),
       });
       await pool.query(
         `INSERT INTO portfolio_transactions(investment_id,type,date,amount,currency,account_id)
@@ -770,14 +776,14 @@ describe.skipIf(!hasTestDatabase())(
          VALUES('USD',0.9,'2025-01-06',false) ON CONFLICT DO NOTHING`,
       );
       await portfolioTransactionService.create({
-        investment_id: inv,
+        investment_id: asInvestmentId(inv),
         type: "buy",
         date: "2025-01-06",
         amount: 10,
         units: 1,
-        currency: "USD",
+        currency: asCurrencyCode("USD"),
         fx_rate_to_eur: 0.9,
-        account_id: broker,
+        account_id: asAccountId(broker),
       });
       // Only the one-time full-history repair feed answers, so the repair's
       // stored-rate read runs too; every other fetch still fails.

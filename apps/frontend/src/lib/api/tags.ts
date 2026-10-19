@@ -2,6 +2,7 @@ import type { Tag, TagCreate, TagListResponse, TagUpdate, BulkTagRequest, BulkTa
 import { TagListSchema } from '@vision/types/contracts';
 import { apiRequest } from '@/lib/api/client';
 import { requestWithQuery } from '@/lib/api/helpers';
+import type { TagId } from "@vision/types/brands";
 
 /**
  * `is_active` filters on the tag's own flag; GET /api/tags reads it as
@@ -23,14 +24,14 @@ export function createTag(tag: TagCreate): Promise<Tag> {
     });
 }
 
-export function updateTag(id: number, data: TagUpdate): Promise<Tag> {
+export function updateTag(id: TagId, data: TagUpdate): Promise<Tag> {
     return apiRequest<Tag>(`/api/tags/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(data),
     });
 }
 
-export async function deleteTag(id: number): Promise<void> {
+export async function deleteTag(id: TagId): Promise<void> {
     await apiRequest<void>(`/api/tags/${id}`, { method: 'DELETE' });
 }
 

@@ -49,6 +49,7 @@ import { undoToast } from "@/lib/undoToast";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import type { CategoryNode } from "@/types/api";
+import type { CategoryId } from "@vision/types/brands";
 
 interface TreeRow {
     node: CategoryNode;
@@ -89,7 +90,7 @@ export default function CategoriesPage() {
     // Status flips are reversible, so they skip the hook's "Category updated"
     // toast and announce themselves through undoToast instead (ADR-179).
     const toggleStatus = useMutation({
-        mutationFn: ({ id, is_active }: { id: number; is_active: boolean }) =>
+        mutationFn: ({ id, is_active }: { id: CategoryId; is_active: boolean }) =>
             apiClient.updateCategoryNode(id, { is_active }),
         onSuccess: () =>
             queryClient.invalidateQueries({ queryKey: categoryKeys.all }),
@@ -135,7 +136,7 @@ export default function CategoriesPage() {
             },
             { replace: true },
         );
-    const toggleExpanded = (id: number) => {
+    const toggleExpanded = (id: CategoryId) => {
         const next = new Set(expanded);
         if (next.has(id)) next.delete(id);
         else next.add(id);

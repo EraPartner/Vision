@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import type { Account, PortfolioTransaction } from "@/types/api";
 import { isPortfolioType } from "@/features/accounts/groupAccounts";
 import { useAccounts } from "@/hooks/useAccounts";
+import type { InvestmentId } from "@vision/types/brands";
 
 export function activeBrokerAccounts(accounts: readonly Account[]): Account[] {
     return accounts.filter(
@@ -52,7 +53,7 @@ export function resolveManualTradeBrokerId({
     transactions,
     accounts,
 }: {
-    investmentId?: number | undefined;
+    investmentId?: InvestmentId | undefined;
     transactions: readonly PortfolioTransaction[];
     accounts: readonly Account[];
 }): number | undefined {
@@ -75,7 +76,7 @@ export function resolveManualTradeBrokerId({
 
 export function useManualTradeBrokerOptions(
     transactions: readonly PortfolioTransaction[],
-    investmentId?: number,
+    investmentId?: InvestmentId,
 ) {
     const { data } = useAccounts({ active: "true" });
     const accounts = useMemo(

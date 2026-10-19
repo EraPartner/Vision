@@ -1,6 +1,11 @@
 import { z } from "zod";
 
-import { IdSchema } from "./common.ts";
+import {
+  AccountIdSchema,
+  CategoryIdSchema,
+  RecipientIdSchema,
+} from "../brands.ts";
+import { WireCurrencySchema } from "./common.ts";
 
 /*
  * Wire contracts for the /api/info reads that are not portfolio-specific
@@ -32,7 +37,7 @@ export const InfoTransactionCountSchema = z.looseObject({
 export const RecurringPatternListSchema = z.looseObject({
   patterns: z.array(
     z.looseObject({
-      recipientId: IdSchema.nullable(),
+      recipientId: RecipientIdSchema.nullable(),
       recipientName: z.string(),
       direction: z.enum(["income", "expense"]),
       detectedPattern: z.string(),
@@ -41,11 +46,11 @@ export const RecurringPatternListSchema = z.looseObject({
       occurrences: CountSchema,
       averageAmount: z.number(),
       latestAmount: z.number(),
-      currency: z.string(),
-      categoryId: IdSchema.nullable(),
+      currency: WireCurrencySchema,
+      categoryId: CategoryIdSchema.nullable(),
       categoryName: z.string().nullable(),
       bankAccount: z.string().nullable(),
-      accountId: IdSchema.nullable(),
+      accountId: AccountIdSchema.nullable(),
       firstSeen: z.string().nullable(),
       lastSeen: z.string().nullable(),
       predictedNext: z.string(),
@@ -70,11 +75,11 @@ export const InsightsDigestSchema = z.looseObject({
   subscriptionCreep: z.looseObject({
     new: z.array(
       z.looseObject({
-        recipientId: IdSchema.nullable(),
+        recipientId: RecipientIdSchema.nullable(),
         recipientName: z.string(),
         findingType: z.literal("new"),
         latestAmount: z.number(),
-        currency: z.string(),
+        currency: WireCurrencySchema,
         detectedPattern: z.string(),
         intervalDays: z.number(),
         predictedNext: z.string(),
@@ -83,21 +88,21 @@ export const InsightsDigestSchema = z.looseObject({
     ),
     priceChanges: z.array(
       z.looseObject({
-        recipientId: IdSchema.nullable(),
+        recipientId: RecipientIdSchema.nullable(),
         recipientName: z.string(),
         findingType: z.literal("priceChange"),
         previousAmount: z.number(),
         newAmount: z.number(),
         percentChange: z.number(),
         direction: z.string(),
-        currency: z.string(),
+        currency: WireCurrencySchema,
         confidence: z.number(),
       }),
     ),
   }),
   categoryOutliers: z.array(
     z.looseObject({
-      categoryId: IdSchema,
+      categoryId: CategoryIdSchema,
       categoryName: z.string().nullable(),
       monthKey: z.string(),
       comparisonEndDay: z.number(),
@@ -110,7 +115,7 @@ export const InsightsDigestSchema = z.looseObject({
   cashForecast: z
     .looseObject({
       month: z.string(),
-      currency: z.string(),
+      currency: WireCurrencySchema,
       monthEndNetCashflow: z.number(),
       monthEndNetCashflowLow: z.number().nullable(),
       monthEndNetCashflowHigh: z.number().nullable(),
@@ -133,7 +138,7 @@ export const DeductionCandidatesSchema = z.looseObject({
   year: z.number().int(),
   from: DayStringSchema,
   to: DayStringSchema,
-  currency: z.string(),
+  currency: WireCurrencySchema,
   byDeductionType: z.array(
     z.looseObject({
       deductionType: z.string(),
@@ -174,13 +179,13 @@ export const NetWorthSchema = z.looseObject({
 
 /** `GET /api/info/net-worth/by-account` — services/info/netWorthByAccount.ts. */
 export const NetWorthByAccountSchema = z.looseObject({
-  currency: z.string(),
+  currency: WireCurrencySchema,
   rows: z.array(
     z.looseObject({
-      accountId: IdSchema.nullable(),
+      accountId: AccountIdSchema.nullable(),
       name: z.string().nullable(),
       type: z.string().nullable(),
-      cashCurrency: z.string().nullable(),
+      cashCurrency: WireCurrencySchema.nullable(),
       cash: z.number().nullable(),
       holdings: z.number(),
       total: z.number().nullable(),
@@ -188,7 +193,7 @@ export const NetWorthByAccountSchema = z.looseObject({
     }),
   ),
   total: z.number().nullable(),
-  unconvertedAccountIds: z.array(IdSchema),
+  unconvertedAccountIds: z.array(AccountIdSchema),
 });
 
 /** `GET /api/info/exchange-rates` (routes/info/rates.ts). */
@@ -196,7 +201,7 @@ export const ExchangeRatesSchema = z.looseObject({
   total_rates: CountSchema,
   rates: z.array(
     z.looseObject({
-      currency: z.string(),
+      currency: WireCurrencySchema,
       rate_to_eur: z.number(),
       rate_date: z.string(),
       fetched_at: z.string(),

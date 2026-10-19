@@ -42,15 +42,23 @@ import {
 } from "../../database/rows/imports.ts";
 import type { CommitStagingRow as CommitStagingDbRow } from "../../database/rows/imports.ts";
 import type { ImportBatchId, ImportProgressCallback } from "./index.ts";
+import { trimmedCurrencyCode } from "../../lib/currencyCode.ts";
+import type {
+  AccountId,
+  CategoryId,
+  CurrencyCode,
+  RecipientId,
+  TransactionId,
+} from "@vision/types/brands";
 
 /**
  * A row that has been committed by this run and is therefore a candidate for
  * planned-payment auto-linking.
  */
 export type InsertedRow = {
-  id: number;
-  currency: string;
-  recipient_id: number | null;
+  id: TransactionId;
+  currency: CurrencyCode;
+  recipient_id: RecipientId | null;
   amount: string;
   transaction_date: string;
 };
@@ -72,7 +80,7 @@ export type ChunkResult = {
  * commits.
  */
 type CommitStagingRow = CommitStagingDbRow & {
-  resolved_account_id?: number | null | undefined;
+  resolved_account_id?: AccountId | null | undefined;
 };
 
 /** The values the commit path derives from one staging row. */
@@ -85,17 +93,17 @@ interface DerivedRow {
    * INSERT's NOT NULL constraint rejects the row inside its savepoint.
    */
   amount: string;
-  recipientId: number | null;
+  recipientId: RecipientId | null;
   memoNorm: string;
-  accountId: number | null;
-  currencyKey: string;
+  accountId: AccountId | null;
+  currencyKey: CurrencyCode;
   sourceRecordHash: string | null;
   dedupFingerprint: string | null;
   fingerprintVersion: number | null;
   dedupOccurrence: number | null;
   idStr: string;
   idValid: boolean;
-  categoryId: number | null;
+  categoryId: CategoryId | null;
   patternId: number | null;
 }
 
@@ -136,8 +144,10 @@ const UNRESOLVED_RECIPIENT_MESSAGE =
  *
  * @param currency `import_staging_rows.currency`
  */
-function currencyKeyOf(currency: string | null | undefined): string {
-  return (currency ?? "").trim() || "EUR";
+function currencyKeyOf(
+  currency: CurrencyCode | null | undefined,
+): CurrencyCode {
+  return trimmedCurrencyCode(currency);
 }
 
 /**
@@ -378,7 +388,7 @@ async function resolveChunkAccounts(
   // disagree with it on edge-case code points. Case variants of one label
   // therefore each hit the DB once — and converge on the same id via the
   // ON CONFLICT arbiter — rather than sharing a possibly-wrong cache slot.
-  const idByLabel = new Map<string, number | null>();
+  const idByLabel = new Map<string, AccountId | null>();
   for (const row of rows) {
     const label = row.bank_account == null ? "" : String(row.bank_account);
     const key = label.replace(/^ +| +$/g, ""); // SQL btrim — U+0020 only
@@ -397,7 +407,7 @@ async function resolveChunkAccounts(
   }
   const accountIds = [
     ...new Set(
-      [...idByLabel.values()].filter((id): id is number => id != null),
+      [...idByLabel.values()].filter((id): id is AccountId => id != null),
     ),
   ].sort((a, b) => a - b);
   if (accountIds.length) {

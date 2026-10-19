@@ -1,12 +1,22 @@
 import { z } from "zod";
 
+import {
+  AccountIdSchema,
+  InvestmentIdSchema,
+  PortfolioTransactionIdSchema,
+} from "../brands.ts";
 import { ASSET_CLASSES } from "../assetClasses.ts";
 import {
   PORTFOLIO_INCOME_RECOGNITION_ROLES,
   PORTFOLIO_TXN_TYPES,
 } from "../portfolioTxnTypes.ts";
 import { PORTFOLIO_RECURRENCE_INTERVALS } from "../recurrence.ts";
-import { IdSchema, NumericSchema, WireLinkSchema } from "./common.ts";
+import {
+  IdSchema,
+  NumericSchema,
+  WireCurrencySchema,
+  WireLinkSchema,
+} from "./common.ts";
 
 /*
  * Wire contracts for the portfolio reads: /api/investments (holdings,
@@ -29,11 +39,11 @@ const TimestampSchema = z.string();
  * (create, plain update) omits it.
  */
 export const InvestmentSchema = z.looseObject({
-  id: IdSchema,
+  id: InvestmentIdSchema,
   name: z.string(),
   symbol: z.string().nullable(),
   asset_class: z.enum(ASSET_CLASSES),
-  currency: z.string(),
+  currency: WireCurrencySchema,
   current_price: z.number().nullable(),
   interest_rate: z.number().nullable(),
   maturity_date: DayStringSchema.nullable(),
@@ -98,7 +108,7 @@ export const RefreshPricesResultSchema = z.looseObject({
 
 /** `GET /api/investments/:id/price-history`. */
 export const InvestmentPriceHistorySchema = z.looseObject({
-  investment_id: IdSchema,
+  investment_id: InvestmentIdSchema,
   provider: z.string(),
   points: z.array(
     z.looseObject({ timestampMs: z.number(), price: z.number() }),
@@ -111,8 +121,8 @@ export const InvestmentPriceHistorySchema = z.looseObject({
  * stays a string. `income_recognition_role` defaults to "standard".
  */
 export const PortfolioTransactionSchema = z.looseObject({
-  id: IdSchema,
-  investment_id: IdSchema,
+  id: PortfolioTransactionIdSchema,
+  investment_id: InvestmentIdSchema,
   type: z.enum(PORTFOLIO_TXN_TYPES),
   date: DayStringSchema,
   amount: z.number(),
@@ -122,13 +132,13 @@ export const PortfolioTransactionSchema = z.looseObject({
   taxes: z.number().nullable(),
   dividend_amount_convention: z.enum(["gross", "net", "unknown"]),
   income_recognition_role: z.enum(PORTFOLIO_INCOME_RECOGNITION_ROLES),
-  currency: z.string(),
+  currency: WireCurrencySchema,
   fx_rate_to_eur: z.number().nullable(),
   note: z.string().nullable(),
   is_recurring: z.boolean(),
   recurrence_interval: z.enum(PORTFOLIO_RECURRENCE_INTERVALS).nullable(),
   recurrence_end_date: DayStringSchema.nullable(),
-  account_id: IdSchema.nullable(),
+  account_id: AccountIdSchema.nullable(),
   import_batch_id: z.string().regex(/^\d+$/).nullable(),
   created_at: TimestampSchema,
   updated_at: TimestampSchema,
@@ -151,13 +161,13 @@ export const PortfolioTransactionListSchema = z.looseObject({
 export const PortfolioBrokerRetagReceiptSchema = z.looseObject({
   receipt_id: IdSchema,
   idempotency_key: z.string(),
-  from_account_id: IdSchema.nullable(),
-  to_account_id: IdSchema.nullable(),
-  transaction_ids: z.array(IdSchema),
+  from_account_id: AccountIdSchema.nullable(),
+  to_account_id: AccountIdSchema.nullable(),
+  transaction_ids: z.array(PortfolioTransactionIdSchema),
   previous_assignments: z.array(
     z.looseObject({
-      transaction_id: IdSchema,
-      account_id: IdSchema.nullable(),
+      transaction_id: PortfolioTransactionIdSchema,
+      account_id: AccountIdSchema.nullable(),
     }),
   ),
   selected_count: CountSchema,
@@ -168,7 +178,7 @@ export const PortfolioBrokerRetagReceiptSchema = z.looseObject({
 
 const ExposureContributionSchema = z.looseObject({
   sourceType: z.enum(["direct", "fund"]),
-  investmentId: IdSchema,
+  investmentId: InvestmentIdSchema,
   investmentName: z.string(),
   sourceFundName: z.string().nullable(),
   amount: z.number(),
@@ -194,7 +204,7 @@ const ExposureDimensionSchema = z.looseObject({
 
 /** `GET /api/investments/exposure` — portfolioExposureService.aggregatePortfolioExposure. */
 export const PortfolioExposureSchema = z.looseObject({
-  currency: z.string(),
+  currency: WireCurrencySchema,
   computedAt: z.string(),
   totalValue: z.number(),
   uncoveredValue: z.number(),
@@ -203,7 +213,7 @@ export const PortfolioExposureSchema = z.looseObject({
   coveredCashWeightPercent: z.number(),
   fundSources: z.array(
     z.looseObject({
-      investmentId: IdSchema,
+      investmentId: InvestmentIdSchema,
       investmentName: z.string(),
       asOfDate: z.string(),
       evaluatedAt: z.string(),
@@ -243,7 +253,7 @@ export const PortfolioSummaryTotalsSchema = z.looseObject({
 
 /** portfolioSummaryService.aggregateByAccount — one rounded partition row. */
 export const PortfolioSummaryByAccountSchema = z.looseObject({
-  account_id: IdSchema.nullable(),
+  account_id: AccountIdSchema.nullable(),
   assignment: z.enum(["account", "unassigned"]),
   contribution_kind: z.enum(["position", "non_position"]),
   oversold: z.boolean(),
@@ -261,7 +271,7 @@ export const PortfolioSummaryByAccountSchema = z.looseObject({
  * strings and `maturity_date` is a serialized `Date` (an ISO timestamp).
  */
 export const PortfolioSummaryItemSchema = z.looseObject({
-  id: IdSchema,
+  id: InvestmentIdSchema,
   name: z.string(),
   symbol: z.string().nullable(),
   asset_class: z.string(),
@@ -279,7 +289,7 @@ export const PortfolioSummaryItemSchema = z.looseObject({
   price_provider: z.string(),
   price_provider_id: z.string().nullable(),
   price_updated_at: TimestampSchema.nullable(),
-  currency: z.string(),
+  currency: WireCurrencySchema,
   originalCurrency: z.string(),
   totalUnits: z.number(),
   currentPrice: z.number(),
@@ -360,7 +370,7 @@ export const PortfolioAssetGroupTotalsSchema =
 
 /** `GET /api/info/portfolio-summary` — portfolioSummaryService.getPortfolioSummary. */
 export const PortfolioSummarySchema = z.looseObject({
-  currency: z.string(),
+  currency: WireCurrencySchema,
   computed_at: z.string(),
   totals: PortfolioSummaryTotalsSchema,
   summaries: z.array(PortfolioSummaryItemSchema),
@@ -368,14 +378,14 @@ export const PortfolioSummarySchema = z.looseObject({
   byAssetClass: z.array(PortfolioAssetClassTotalsSchema),
   byAssetGroup: z.array(PortfolioAssetGroupTotalsSchema),
   archivedInKindIncome: z.array(
-    z.looseObject({ id: IdSchema, totalInKindIncome: z.number() }),
+    z.looseObject({ id: InvestmentIdSchema, totalInKindIncome: z.number() }),
   ),
   brokerageCashFees: z.looseObject({
     total: z.number(),
     gainAfterFees: z.number(),
     usedFallbackRate: z.boolean(),
     byAccount: z.array(
-      z.looseObject({ account_id: IdSchema, total: z.number() }),
+      z.looseObject({ account_id: AccountIdSchema, total: z.number() }),
     ),
   }),
 });
@@ -402,7 +412,7 @@ const PerformanceSnapshotSchema = z.looseObject({
 
 /** `GET /api/info/portfolio-performance` — buildPortfolioPerformancePayload. */
 export const PortfolioPerformanceSchema = z.looseObject({
-  currency: z.string(),
+  currency: WireCurrencySchema,
   start_date: DayStringSchema,
   end_date: DayStringSchema,
   snapshots: z.array(PerformanceSnapshotSchema),
@@ -424,11 +434,11 @@ export const PortfolioPerformanceSchema = z.looseObject({
   }),
   breakdownSummary: z.array(
     z.looseObject({
-      id: IdSchema,
+      id: InvestmentIdSchema,
       name: z.string(),
       symbol: z.string().nullable(),
       assetClass: z.string(),
-      currency: z.string(),
+      currency: WireCurrencySchema,
       currentValue: z.number(),
       totalInvested: z.number(),
       gainLoss: z.number(),
@@ -444,14 +454,14 @@ export const PortfolioPerformanceSchema = z.looseObject({
 
 const BrokerSeriesSchema = z.looseObject({
   accountKey: z.string(),
-  accountId: IdSchema.nullable(),
+  accountId: AccountIdSchema.nullable(),
   accountName: z.string(),
   assignment: z.enum(["account", "unassigned"]),
 });
 
 /** `GET /api/info/portfolio-performance/by-broker` (routes/info/performance.ts). */
 export const BrokerPortfolioPerformanceSchema = z.looseObject({
-  currency: z.string(),
+  currency: WireCurrencySchema,
   startDate: DayStringSchema,
   endDate: DayStringSchema,
   dates: z.array(DayStringSchema),
@@ -459,7 +469,7 @@ export const BrokerPortfolioPerformanceSchema = z.looseObject({
   rows: z.array(
     BrokerSeriesSchema.extend({
       date: DayStringSchema,
-      currency: z.string(),
+      currency: WireCurrencySchema,
       value: z.number(),
       invested: z.number(),
       gainLoss: z.number(),

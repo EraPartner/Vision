@@ -18,6 +18,17 @@ import type {
 } from "@vision/types/portfolioTxnTypes";
 import type { RecurrenceInterval } from "@vision/types/recurrence";
 import type { operations } from "./generated";
+import type {
+    AccountId,
+    CategoryId,
+    CurrencyCode,
+    InvestmentId,
+    PlannedTransactionId,
+    PortfolioTransactionId,
+    RecipientId,
+    TagId,
+    TransactionId,
+} from "@vision/types/brands";
 
 export interface Link {
     rel: string;
@@ -29,7 +40,7 @@ export interface Link {
 // ==================== Category Types ====================
 
 export interface Category {
-    id: number;
+    id: CategoryId;
     general: string;
     detail: string;
     description?: string;
@@ -41,10 +52,10 @@ export interface Category {
 
 /** Canonical category tree node. The path arrays, not general/detail, define ancestry. */
 export interface CategoryNode {
-    id: number;
+    id: CategoryId;
     name: string;
-    parentId: number | null;
-    pathIds: number[];
+    parentId: CategoryId | null;
+    pathIds: CategoryId[];
     path: string[];
     category_name: string;
     depth: number;
@@ -56,13 +67,13 @@ export interface CategoryNode {
 
 export interface CategoryNodeCreate {
     name: string;
-    parentId: number | null;
+    parentId: CategoryId | null;
     description?: string | null;
 }
 
 export interface CategoryNodeUpdate {
     name?: string;
-    parentId?: number | null;
+    parentId?: CategoryId | null;
     description?: string | null;
     is_active?: boolean;
 }
@@ -104,11 +115,11 @@ export type AccountTaxWrapper = "none" | "pension" | "tax_advantaged";
 export type AccountOwner = "me" | "partner" | "joint";
 
 export interface Account {
-    id: number;
+    id: AccountId;
     name: string;
     display_name?: string | undefined;
     institution?: string | undefined;
-    currency: string;
+    currency: CurrencyCode;
     type: AccountType;
     liquidity_class: AccountLiquidityClass;
     spendable: boolean;
@@ -117,11 +128,11 @@ export interface Account {
     owner: AccountOwner;
     multi_currency_cash: boolean;
     has_cash_sleeve: boolean;
-    funding_account_id?: number | undefined;
+    funding_account_id?: AccountId | undefined;
     /** Authoritative statement readings, one per native currency (ADR-089 D2). */
     statement_balances?:
         | Array<{
-              currency: string;
+              currency: CurrencyCode;
               balance: number;
               balance_date: string;
           }>
@@ -133,11 +144,11 @@ export interface Account {
      */
     computed_balance?: number | undefined;
     /** Native per-currency ledger partitions returned by the list endpoint. */
-    balance_parts?: Array<{ currency: string; balance: number }> | undefined;
+    balance_parts?: Array<{ currency: CurrencyCode; balance: number }> | undefined;
     /** True when computed_balance excludes one or more partitions with no rate. */
     balance_incomplete?: boolean | undefined;
     /** Currency codes excluded from computed_balance because no conversion rate exists. */
-    unconverted_currencies?: string[] | undefined;
+    unconverted_currencies?: CurrencyCode[] | undefined;
     /**
      * The reconciliation base: the computed balance of the ONE currency
      * partition the selected collection reading is a statement for, in
@@ -148,7 +159,7 @@ export interface Account {
      */
     reconcilable_balance?: number | undefined;
     /** Currency of `reconcilable_balance` and `drift`. List endpoint only. */
-    reconcilable_currency?: string | undefined;
+    reconcilable_currency?: CurrencyCode | undefined;
     /**
      * selected statement balance − reconcilable_balance, in `reconcilable_currency`;
      * null when no statement balance (ADR-094). Native-currency by design, so
@@ -178,7 +189,7 @@ export interface AccountCreate {
     name: string;
     display_name?: string;
     institution?: string;
-    currency?: string | null;
+    currency?: CurrencyCode | null;
     type?: AccountType;
     liquidity_class?: AccountLiquidityClass;
     spendable?: boolean;
@@ -187,7 +198,7 @@ export interface AccountCreate {
     owner?: AccountOwner;
     multi_currency_cash?: boolean;
     has_cash_sleeve?: boolean;
-    funding_account_id?: number;
+    funding_account_id?: AccountId;
 }
 
 // On PATCH, explicit null clears the field (the backend maps it to SQL NULL);
@@ -198,18 +209,18 @@ export interface AccountUpdate extends Partial<
     is_active?: boolean;
     display_name?: string | null;
     institution?: string | null;
-    funding_account_id?: number | null;
+    funding_account_id?: AccountId | null;
 }
 
 // ==================== Recipient Types ====================
 
 export interface Recipient {
-    id: number;
+    id: RecipientId;
     name: string;
     primary_bank_account?: string;
-    default_category_id?: number;
+    default_category_id?: CategoryId;
     default_category_name?: string;
-    primary_recipient_id?: number | null;
+    primary_recipient_id?: RecipientId | null;
     primary_recipient_name?: string | null;
     alias_count?: number;
     notes?: string;
@@ -229,13 +240,13 @@ export interface RecipientsListResponse {
 
 export interface RecipientCreate {
     name: string;
-    default_category_id?: number;
+    default_category_id?: CategoryId;
     notes?: string | undefined;
 }
 
 export interface RecipientUpdate {
     name?: string;
-    default_category_id?: number | null;
+    default_category_id?: CategoryId | null;
     notes?: string | undefined;
     is_active?: boolean;
 }
@@ -243,14 +254,14 @@ export interface RecipientUpdate {
 // ==================== Transaction Types ====================
 
 export interface Transaction {
-    id: number;
+    id: TransactionId;
     transaction_date: string;
     // Nullable on the wire: rows without a label exist (e.g. ADR-090 trade
     // cash legs), and a PATCH null-to-clear leaves NULL behind.
     bank_account: string | null;
-    account_id?: number | null | undefined;
+    account_id?: AccountId | null | undefined;
     is_transfer?: boolean | undefined;
-    transfer_peer_id?: number | null | undefined;
+    transfer_peer_id?: TransactionId | null | undefined;
     transfer_source?:
         | "auto"
         | "manual"
@@ -259,16 +270,16 @@ export interface Transaction {
         | "brokerage"
         | null
         | undefined;
-    recipient_id?: number | null | undefined;
+    recipient_id?: RecipientId | null | undefined;
     recipient_name?: string | undefined; // Recipient name
     memo?: string | null | undefined;
     amount: number;
     amount_eur?: number | undefined;
-    currency?: string | undefined;
+    currency?: CurrencyCode | undefined;
     balance?: number | undefined;
     /** Per-account, per-currency running balance; present when include_balance=true. */
     running_balance?: number | undefined;
-    category_id?: number | null | undefined;
+    category_id?: CategoryId | null | undefined;
     category_name?: string | undefined; // Category name in 'General:Detail' format (e.g., 'FOOD:GROCERIES')
     comment?: string | null | undefined;
     tags?: Tag[] | undefined;
@@ -287,13 +298,13 @@ export interface TransactionsListResponse {
 
 export interface TransactionCreate {
     transaction_date: string; // YYYY-MM-DD format
-    account_id: number;
-    recipient_id: number;
+    account_id: AccountId;
+    recipient_id: RecipientId;
     memo?: string | undefined;
     amount: number;
-    currency?: string | undefined;
+    currency?: CurrencyCode | undefined;
     balance?: number | undefined;
-    category_id?: number | undefined;
+    category_id?: CategoryId | undefined;
     comment?: string | undefined;
     tags?: string[] | undefined;
     /** Explicit user confirmation that an otherwise matching manual row is intentional. */
@@ -308,13 +319,13 @@ export interface TransactionCreate {
 // silent no-op that made the field look editable.
 export interface TransactionUpdate {
     transaction_date?: string;
-    account_id?: number | null;
-    recipient_id?: number | null;
+    account_id?: AccountId | null;
+    recipient_id?: RecipientId | null;
     recipient_name?: string;
     memo?: string | null;
     amount?: number;
-    currency?: string | undefined;
-    category_id?: number | null;
+    currency?: CurrencyCode | undefined;
+    category_id?: CategoryId | null;
     category_name?: string;
     comment?: string | null | undefined;
     is_active?: boolean;
@@ -327,7 +338,7 @@ export interface TransactionUpdate {
 
 export interface PlannedTransactionExecution {
     id: number;
-    executed_transaction_id: number;
+    executed_transaction_id: TransactionId;
     execution_date: string; // YYYY-MM-DD format
     created_at: string;
 }
@@ -345,18 +356,18 @@ export interface PlannedLoanScheduleEntry {
 }
 
 export interface PlannedTransaction {
-    id: number;
+    id: PlannedTransactionId;
     planned_date: string; // YYYY-MM-DD format
     recurrence_end_date?: string | null | undefined;
     max_occurrences?: number | null | undefined;
     bank_account: string;
-    account_id?: number | null | undefined;
-    recipient_id?: number | undefined;
+    account_id?: AccountId | null | undefined;
+    recipient_id?: RecipientId | undefined;
     recipient_name?: string | undefined;
     memo?: string | undefined;
     amount: number;
-    currency?: string | undefined;
-    category_id?: number | undefined;
+    currency?: CurrencyCode | undefined;
+    category_id?: CategoryId | undefined;
     category_name?: string | undefined; // Category name in 'GENERAL:DETAIL' format
     comment?: string | undefined;
     url?: string | undefined; // Optional URL associated with planned expense
@@ -374,7 +385,7 @@ export interface PlannedTransaction {
     loan_schedule?: PlannedLoanScheduleEntry[] | undefined;
     is_executed: boolean;
     last_executed_date?: string | undefined; // YYYY-MM-DD format
-    executed_transaction_id?: number | undefined;
+    executed_transaction_id?: TransactionId | undefined;
     execution_count: number;
     executions?: PlannedTransactionExecution[] | undefined;
     tags?: Tag[] | undefined;
@@ -397,12 +408,12 @@ export interface PlannedTransactionCreate {
     /** Recurrence bounds: the series completes past this date / at this count. */
     recurrence_end_date?: string | undefined;
     max_occurrences?: number | undefined;
-    account_id: number;
-    recipient_id?: number | undefined;
+    account_id: AccountId;
+    recipient_id?: RecipientId | undefined;
     memo?: string | undefined;
     amount: number;
-    currency?: string | undefined;
-    category_id?: number | undefined;
+    currency?: CurrencyCode | undefined;
+    category_id?: CategoryId | undefined;
     comment?: string | undefined;
     url?: string | undefined;
     is_recurring?: boolean | undefined;
@@ -421,13 +432,13 @@ export interface PlannedTransactionUpdate {
     planned_date?: string;
     recurrence_end_date?: string | null;
     max_occurrences?: number | null;
-    account_id?: number | null;
-    recipient_id?: number;
+    account_id?: AccountId | null;
+    recipient_id?: RecipientId;
     recipient_name?: string;
     memo?: string;
     amount?: number;
-    currency?: string;
-    category_id?: number;
+    currency?: CurrencyCode;
+    category_id?: CategoryId;
     category_name?: string;
     comment?: string;
     url?: string;
@@ -446,7 +457,7 @@ export interface PlannedTransactionUpdate {
 }
 
 export interface PlannedTransactionExecuteRequest {
-    executed_transaction_id: number;
+    executed_transaction_id: TransactionId;
     execution_date?: string | undefined; // YYYY-MM-DD format, defaults to today
 }
 
@@ -460,11 +471,11 @@ export type PriceProvider =
     "manual" | "binance" | "yahoo" | "custom" | "kinesis";
 
 export interface Investment {
-    id: number;
+    id: InvestmentId;
     name: string;
     symbol?: string;
     asset_class: AssetClass;
-    currency: string;
+    currency: CurrencyCode;
     current_price?: number;
     interest_rate?: number;
     maturity_date?: string;
@@ -502,7 +513,7 @@ export interface InvestmentCreate {
     name: string;
     symbol?: string | undefined;
     asset_class: AssetClass;
-    currency?: string | undefined;
+    currency?: CurrencyCode | undefined;
     current_price?: number | undefined;
     interest_rate?: number | undefined;
     maturity_date?: string | undefined;
@@ -525,7 +536,7 @@ export interface InvestmentCreate {
 export interface InvestmentUpdate {
     name?: string | undefined;
     symbol?: string | undefined;
-    currency?: string | undefined;
+    currency?: CurrencyCode | undefined;
     current_price?: number | undefined;
     interest_rate?: number | undefined;
     maturity_date?: string | undefined;
@@ -553,8 +564,8 @@ export interface InvestmentPricePoint {
 }
 
 export interface PortfolioTransaction {
-    id: number;
-    investment_id: number;
+    id: PortfolioTransactionId;
+    investment_id: InvestmentId;
     type: PortfolioTxnType;
     date: string;
     amount: number;
@@ -566,9 +577,9 @@ export interface PortfolioTransaction {
     /** Absent in older responses means standard; assigned only by proved import. */
     readonly income_recognition_role?:
         PortfolioIncomeRecognitionRole | undefined;
-    currency: string;
+    currency: CurrencyCode;
     fx_rate_to_eur?: number | undefined;
-    account_id?: number | null | undefined;
+    account_id?: AccountId | null | undefined;
     import_batch_id?: string | null | undefined;
     note?: string | undefined;
     is_recurring: boolean;
@@ -587,21 +598,21 @@ export interface PortfolioTransactionsListResponse {
 }
 
 export interface PortfolioBrokerRetagRequest {
-    transaction_ids: number[];
-    from_account_id: number | null;
-    to_account_id: number | null;
+    transaction_ids: PortfolioTransactionId[];
+    from_account_id: AccountId | null;
+    to_account_id: AccountId | null;
     idempotency_key: string;
 }
 
 export interface PortfolioBrokerRetagReceipt {
     receipt_id: number;
     idempotency_key: string;
-    from_account_id: number | null;
-    to_account_id: number | null;
-    transaction_ids: number[];
+    from_account_id: AccountId | null;
+    to_account_id: AccountId | null;
+    transaction_ids: PortfolioTransactionId[];
     previous_assignments: Array<{
-        transaction_id: number;
-        account_id: number | null;
+        transaction_id: PortfolioTransactionId;
+        account_id: AccountId | null;
     }>;
     selected_count: number;
     changed_count: number;
@@ -618,11 +629,11 @@ export interface PortfolioTransactionCreate {
     fees?: number | undefined;
     taxes?: number | undefined;
     dividend_amount_convention?: DividendAmountConvention | undefined;
-    currency?: string | undefined;
+    currency?: CurrencyCode | undefined;
     fx_rate_to_eur?: number | undefined;
-    account_id?: number | undefined;
+    account_id?: AccountId | undefined;
     /** Cash account whose sleeve the trade's cash leg posts to (ADR-090); create-only. */
-    cash_account_id?: number | undefined;
+    cash_account_id?: AccountId | undefined;
     note?: string | undefined;
     is_recurring?: boolean | undefined;
     recurrence_interval?: RecurrenceInterval | undefined;
@@ -637,7 +648,7 @@ export type PortfolioTransactionUpdate =
 // ==================== Tag Types ====================
 
 export interface Tag {
-    id: number;
+    id: TagId;
     slug: string;
     color: string | null;
     is_active: boolean;
@@ -664,7 +675,7 @@ export interface TagUpdate {
 }
 
 export interface BulkTagRequest {
-    transaction_ids: number[];
+    transaction_ids: TransactionId[];
     add_slugs?: string[];
     remove_slugs?: string[];
 }
@@ -678,18 +689,18 @@ export interface BulkTagResult {
 // ==================== Bulk Action Types ====================
 
 export interface BulkTransactionFilter {
-    transaction_id?: number | undefined;
+    transaction_id?: TransactionId | undefined;
     start_date?: string | undefined;
     end_date?: string | undefined;
     /** Preferred account filter (exact FK match, ADR-088). */
-    account_id?: number | undefined;
+    account_id?: AccountId | undefined;
     bank_account?: string | undefined;
     bank_accounts?: string[] | undefined;
-    category_id?: number | undefined;
-    category_ids?: number[] | undefined;
+    category_id?: CategoryId | undefined;
+    category_ids?: CategoryId[] | undefined;
     uncategorised?: boolean | undefined;
-    recipient_id?: number | undefined;
-    recipient_group_id?: number | undefined;
+    recipient_id?: RecipientId | undefined;
+    recipient_group_id?: RecipientId | undefined;
     recipient_name?: string | undefined;
     search?: string | undefined;
     active?: boolean | undefined;
@@ -709,8 +720,8 @@ export type BulkSelectionRequest =
       };
 
 export interface BulkUpdateFields {
-    category_id?: number | null;
-    recipient_id?: number;
+    category_id?: CategoryId | null;
+    recipient_id?: RecipientId;
     is_active?: boolean;
 }
 

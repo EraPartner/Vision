@@ -16,7 +16,7 @@ import {
 import { NotFoundError } from "../middleware/errorHandler.ts";
 import {
   validateIdParam,
-  assertIdParam,
+  assertEntityIdParam,
   validateIntArray,
 } from "../middleware/validation.ts";
 import { parseInput } from "../lib/zodInput.ts";
@@ -31,23 +31,24 @@ import {
 // refresh — otherwise renamed/reassigned categories serve stale until an
 // unrelated transaction mutation happens to refresh the views.
 import { scheduleRefresh } from "../services/materializedViewService.ts";
+import { CategoryIdSchema, RecipientIdSchema } from "@vision/types/brands";
 
 const router = Router();
 
 const hierarchyName = z.string().trim().min(1).max(100);
 const hierarchyCreate = z.strictObject({
   name: hierarchyName,
-  parentId: z.number().int().positive().nullable().default(null),
+  parentId: z.number().int().positive().pipe(CategoryIdSchema).nullable().default(null),
   description: z.string().max(500).nullable().optional(),
 });
 const hierarchyUpdate = z.strictObject({
   name: hierarchyName.optional(),
-  parentId: z.number().int().positive().nullable().optional(),
+  parentId: z.number().int().positive().pipe(CategoryIdSchema).nullable().optional(),
   description: z.string().max(500).nullable().optional(),
   is_active: z.boolean().optional(),
 });
 const hierarchyMerge = z.strictObject({
-  targetId: z.number().int().positive(),
+  targetId: z.number().int().positive().pipe(CategoryIdSchema),
 });
 
 // Legacy flat-category bodies. The repository upper-cases general/detail, so a
@@ -91,7 +92,8 @@ const assignBody = z
       return z.NEVER;
     }
     return result.value;
-  });
+  })
+  .pipe(z.array(RecipientIdSchema));
 
 // The hierarchy contract is additive. Legacy /categories list, create and CSV
 // import retain their general/detail inputs and stable category IDs.
@@ -109,14 +111,14 @@ router.post("/tree", async (req, res) => {
 });
 
 router.get("/tree/:id", validateIdParam, async (req, res) => {
-  const node = await getCategoryNode(assertIdParam(req));
+  const node = await getCategoryNode(assertEntityIdParam(req, CategoryIdSchema));
   if (!node) throw new NotFoundError(`Category ${req.params.id} not found`);
   res.ok(node);
 });
 
 router.patch("/tree/:id", validateIdParam, async (req, res) => {
   const node = await updateCategoryNode(
-    assertIdParam(req),
+    assertEntityIdParam(req, CategoryIdSchema),
     parseInput(hierarchyUpdate, req.body),
   );
   if (!node) throw new NotFoundError(`Category ${req.params.id} not found`);
@@ -125,14 +127,14 @@ router.patch("/tree/:id", validateIdParam, async (req, res) => {
 });
 
 router.delete("/tree/:id", validateIdParam, async (req, res) => {
-  if (!(await deleteCategoryNode(assertIdParam(req))))
+  if (!(await deleteCategoryNode(assertEntityIdParam(req, CategoryIdSchema))))
     throw new NotFoundError(`Category ${req.params.id} not found`);
   scheduleRefresh();
   res.status(204).send();
 });
 
 router.post("/tree/:id/merge", validateIdParam, async (req, res) => {
-  const sourceId = assertIdParam(req);
+  const sourceId = assertEntityIdParam(req, CategoryIdSchema);
   const { targetId } = parseInput(hierarchyMerge, req.body);
   const node = await mergeCategoryNodes(sourceId, targetId);
   if (!node) throw new NotFoundError("Source or target category not found");
@@ -184,13 +186,13 @@ router.post("/", async (req, res) => {
 });
 
 router.get("/:id", validateIdParam, async (req, res) => {
-  const category = await categoryService.getById(assertIdParam(req));
+  const category = await categoryService.getById(assertEntityIdParam(req, CategoryIdSchema));
   if (!category) throw new NotFoundError(`Category ${req.params.id} not found`);
   res.ok({ ...category, links: [] });
 });
 
 router.patch("/:id", validateIdParam, async (req, res) => {
-  const id = assertIdParam(req);
+  const id = assertEntityIdParam(req, CategoryIdSchema);
   const updated = await categoryService.update(
     id,
     parseInput(legacyUpdate, req.body),
@@ -201,7 +203,7 @@ router.patch("/:id", validateIdParam, async (req, res) => {
 });
 
 router.delete("/:id", validateIdParam, async (req, res) => {
-  const id = assertIdParam(req);
+  const id = assertEntityIdParam(req, CategoryIdSchema);
   const deleted = await categoryService.hardDelete(id);
   if (!deleted) throw new NotFoundError(`Category ${id} not found`);
   scheduleRefresh();
@@ -210,7 +212,7 @@ router.delete("/:id", validateIdParam, async (req, res) => {
 });
 
 router.post("/:id/assign", validateIdParam, async (req, res) => {
-  const categoryId = assertIdParam(req);
+  const categoryId = assertEntityIdParam(req, CategoryIdSchema);
   const recipientIds = parseInput(assignBody, req.body ?? {});
   const updated = await categoryService.assignToRecipients(
     categoryId,

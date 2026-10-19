@@ -17,14 +17,15 @@ import {
 } from "@/components/ui/popover";
 import { useCategoryTree } from "@/hooks/useCategories";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import type { CategoryId } from "@vision/types/brands";
 
 interface CategoryComboboxProps {
     /** Put on the trigger, so a <Label htmlFor> can reach it. */
     id?: string;
     /** Accessible name for uses without a visible associated label. */
     "aria-label"?: string;
-    value?: number | null;
-    onSelect: (categoryId: number | null, categoryName: string | null) => void;
+    value?: CategoryId | null;
+    onSelect: (categoryId: CategoryId | null, categoryName: string | null) => void;
     disabled?: boolean;
     className?: string;
     portalContainer?: HTMLElement | null;

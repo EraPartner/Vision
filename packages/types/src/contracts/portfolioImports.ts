@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { AccountIdSchema, InvestmentIdSchema } from "../brands.ts";
 import { IdSchema } from "./common.ts";
 import { InvestmentSchema } from "./portfolio.ts";
 
@@ -60,19 +61,19 @@ export const PortfolioPreviewRowSchema = z.looseObject({
   note: z.string().nullable(),
   match_source: z.string().nullable(),
   error_message: z.string().nullable(),
-  user_override_investment_id: IdSchema.nullable(),
+  user_override_investment_id: InvestmentIdSchema.nullable(),
 });
 
 /** `GET /api/portfolio/import/batches/:id/preview`. */
 export const PortfolioPreviewSchema = z.looseObject({
   batch_id: IdSchema,
-  account_id: IdSchema.nullable(),
+  account_id: AccountIdSchema.nullable(),
   account_name: z.string().nullable(),
   account_valid: z.boolean(),
   groups: z.array(
     z.looseObject({
       is_cash: z.boolean(),
-      investment_id: IdSchema.nullable(),
+      investment_id: InvestmentIdSchema.nullable(),
       investment_name: z.string().nullable(),
       investment_symbol: z.string().nullable(),
       investment_asset_class: z.string().nullable(),
@@ -102,19 +103,19 @@ export const PortfolioPreviewSchema = z.looseObject({
 export const PortfolioRowOverrideResultSchema = z.union([
   z.looseObject({
     row_id: IdSchema,
-    investment_id: IdSchema,
+    investment_id: InvestmentIdSchema,
     created: z.literal(true),
     investment: InvestmentSchema,
   }),
   z.looseObject({
     row_id: IdSchema,
-    user_override_investment_id: IdSchema.nullable(),
+    user_override_investment_id: InvestmentIdSchema.nullable(),
   }),
 ]);
 
 /** `POST /api/portfolio/import/batches/:id/rows/investment-override`. */
 export const PortfolioRowsOverrideResultSchema = z.looseObject({
-  investment_id: IdSchema,
+  investment_id: InvestmentIdSchema,
   created: z.boolean(),
   resolved: CountSchema,
   investment: InvestmentSchema.optional(),

@@ -21,6 +21,8 @@ import {
 import { useMergeCategoryNode } from "@/hooks/useCategories";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import type { CategoryNode } from "@/types/api";
+import { asCategoryId } from "@vision/types/brands";
+import type { CategoryId } from "@vision/types/brands";
 
 interface CategoryMergeDialogProps {
     source: CategoryNode;
@@ -38,7 +40,7 @@ export function CategoryMergeDialog({
     onOpenChange,
 }: CategoryMergeDialogProps) {
     const { t } = useLanguage();
-    const [targetId, setTargetId] = useState<number | null>(null);
+    const [targetId, setTargetId] = useState<CategoryId | null>(null);
     const merge = useMergeCategoryNode();
     const targets = nodes.filter(
         (node) =>
@@ -94,7 +96,7 @@ export function CategoryMergeDialog({
                                 ? {}
                                 : { value: String(targetId) })}
                             onValueChange={(value) =>
-                                setTargetId(Number(value))
+                                setTargetId(asCategoryId(Number(value)))
                             }
                         >
                             <SelectTrigger id="category-merge-target">

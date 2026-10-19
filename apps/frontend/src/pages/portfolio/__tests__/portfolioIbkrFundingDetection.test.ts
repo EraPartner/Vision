@@ -6,6 +6,7 @@ import {
     detectPortfolioImportFile,
     resolveDetectedPortfolioAccount,
 } from "../portfolioImportDetection";
+import { asAccountId } from "@vision/types/brands";
 
 const headers = [
     "Request Date",
@@ -92,7 +93,7 @@ describe("IBKR native funding workbook detection", () => {
             expect(
                 resolveDetectedPortfolioAccount(detected!, [
                     account,
-                    { ...account, id: 2 },
+                    { ...account, id: asAccountId(2) },
                 ]),
             ).toBeUndefined();
         },

@@ -46,7 +46,7 @@ import {
     useCurrencyFormatter,
     usePercentFormatter,
 } from "@/hooks/useCurrencyFormatter";
-import { numberFormatToLocale } from "@/utils/currency";
+import { numberFormatToLocale, DEFAULT_CURRENCY } from "@/utils/currency";
 import { formatDateStringWithAppSettings } from "@/lib/dateUtils";
 import type { InvestmentSummary, PortfolioTxnType } from "@/types/portfolio";
 import { getAssetClassLabel, getTxnTypeLabel } from "@/types/portfolio";
@@ -477,7 +477,7 @@ export function InvestmentDetailDialog({
     // is the display/target currency (all amounts are converted to it) — the
     // holding's NATIVE currency lives in `originalCurrency`, which is what decides
     // foreign-ness.
-    const targetCurrency = appSettings.defaultCurrency || "EUR";
+    const targetCurrency = appSettings.defaultCurrency || DEFAULT_CURRENCY;
     const nativeCurrency = (
         investment.originalCurrency ||
         investment.currency ||

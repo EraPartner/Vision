@@ -10,10 +10,11 @@ import {
 } from "@/components/ui/collapsible";
 import type { InvestmentSummary } from "@/types/portfolio";
 import { InvestmentDetailDialog } from "./InvestmentDetailDialog";
+import type { InvestmentId } from "@vision/types/brands";
 
 interface Props {
     investments: readonly InvestmentSummary[];
-    onRestore: (id: number) => Promise<unknown>;
+    onRestore: (id: InvestmentId) => Promise<unknown>;
     t: (key: string, params?: Record<string, string | number>) => string;
 }
 

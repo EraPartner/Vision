@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mockConnection } from "./helpers/repoMocks.ts";
+import {
+  asRecipientId,
+  asSplitId,
+  asTransactionId,
+} from "@vision/types/brands";
 
 const { mockClient, mockWithTransaction, mockRepository, mockPrimitives } =
   vi.hoisted(() => {
@@ -79,8 +84,8 @@ describe("splitService transaction orchestration", () => {
     });
 
     await createSplitAtomic({
-      transaction_id: 1,
-      recipient_id: 2,
+      transaction_id: asTransactionId(1),
+      recipient_id: asRecipientId(2),
       amount: "20",
       actor: "test",
     });
@@ -115,7 +120,7 @@ describe("splitService transaction orchestration", () => {
     });
     mockPrimitives.getPaidAmountInTransaction.mockResolvedValue("25.0000");
 
-    await expect(addPayment({ split_id: 7, amount: 6 })).rejects.toThrow(
+    await expect(addPayment({ split_id: asSplitId(7), amount: 6 })).rejects.toThrow(
       /exceed split outstanding balance/,
     );
     expect(mockPrimitives.insertPaymentInTransaction).not.toHaveBeenCalled();
@@ -126,7 +131,7 @@ describe("splitService transaction orchestration", () => {
   it("settles and audits with the same transaction client", async () => {
     mockRepository.settleSplit.mockResolvedValue({ id: 7 });
 
-    await expect(settleSplit(7, "test")).resolves.toEqual({ id: 7 });
+    await expect(settleSplit(asSplitId(7), "test")).resolves.toEqual({ id: 7 });
     expect(mockRepository.settleSplit).toHaveBeenCalledWith(7, mockClient);
     expect(mockRepository.writeAudit).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -147,7 +152,7 @@ describe("splitService transaction orchestration", () => {
     });
     mockRepository.deleteSplit.mockResolvedValue(true);
 
-    await expect(deleteSplit(7, "test")).resolves.toBe(true);
+    await expect(deleteSplit(asSplitId(7), "test")).resolves.toBe(true);
     expect(mockRepository.getSplitById).toHaveBeenCalledWith(7, mockClient);
     expect(mockRepository.deleteSplit).toHaveBeenCalledWith(7, mockClient);
     expect(mockRepository.writeAudit).toHaveBeenCalledWith(
@@ -185,8 +190,8 @@ describe("splitService.createBulkSplitsAtomic", () => {
     );
 
     const result = await createBulkSplitsAtomic({
-      transaction_ids: [5, 1, 2, 1],
-      recipient_id: 3,
+      transaction_ids: [asTransactionId(5), asTransactionId(1), asTransactionId(2), asTransactionId(1)],
+      recipient_id: asRecipientId(3),
       mode: "equal",
       actor: "tor",
     });
@@ -233,8 +238,8 @@ describe("splitService.createBulkSplitsAtomic", () => {
     });
 
     await createBulkSplitsAtomic({
-      transaction_ids: [1],
-      recipient_id: 3,
+      transaction_ids: [asTransactionId(1)],
+      recipient_id: asRecipientId(3),
       mode: "full",
     });
 
@@ -258,8 +263,8 @@ describe("splitService.createBulkSplitsAtomic", () => {
     );
 
     const result = await createBulkSplitsAtomic({
-      transaction_ids: [1, 2, 3, 4],
-      recipient_id: 3,
+      transaction_ids: [asTransactionId(1), asTransactionId(2), asTransactionId(3), asTransactionId(4)],
+      recipient_id: asRecipientId(3),
       mode: "full",
     });
 
@@ -282,8 +287,8 @@ describe("splitService.createBulkSplitsAtomic", () => {
 
     await expect(
       createBulkSplitsAtomic({
-        transaction_ids: [1],
-        recipient_id: 999,
+        transaction_ids: [asTransactionId(1)],
+        recipient_id: asRecipientId(999),
         mode: "equal",
       }),
     ).rejects.toThrow(/Recipient not found/);

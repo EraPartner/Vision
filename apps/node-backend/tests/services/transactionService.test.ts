@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mockConnection } from "../helpers/repoMocks.ts";
+import {
+  asAccountId,
+  asCategoryId,
+  asRecipientId,
+  asTransactionId,
+} from "@vision/types/brands";
 
 const mocks = vi.hoisted(() => ({
   create: vi.fn(),
@@ -77,8 +83,8 @@ describe("transactionService route orchestration", () => {
     await expect(
       transactionService.createManualTransaction({
         transaction_date: "2026-09-03",
-        account_id: 5,
-        recipient_id: 7,
+        account_id: asAccountId(5),
+        recipient_id: asRecipientId(7),
         amount: -12.5,
       }),
     ).rejects.toThrow("Duplicate transaction detected");
@@ -103,8 +109,8 @@ describe("transactionService route orchestration", () => {
     await expect(
       transactionService.createManualTransaction({
         transaction_date: "2026-09-03",
-        account_id: 5,
-        recipient_id: 7,
+        account_id: asAccountId(5),
+        recipient_id: asRecipientId(7),
         amount: -12.5,
         allow_duplicate: true,
       }),
@@ -130,7 +136,7 @@ describe("transactionService route orchestration", () => {
     mocks.update.mockResolvedValue({ id: 7 });
 
     await expect(
-      transactionService.update(7, {
+      transactionService.update(asTransactionId(7), {
         recipient_name: "Shop",
         category_name: "FOOD:GROCERIES",
         memo: "weekly",
@@ -152,9 +158,9 @@ describe("transactionService route orchestration", () => {
   it("preserves explicit nullable ids without name lookups", async () => {
     mocks.update.mockResolvedValue({ id: 7 });
 
-    await transactionService.update(7, {
+    await transactionService.update(asTransactionId(7), {
       recipient_id: null,
-      category_id: 9,
+      category_id: asCategoryId(9),
     });
 
     expect(mocks.resolveRecipientIdByName).not.toHaveBeenCalled();
@@ -169,15 +175,15 @@ describe("transactionService route orchestration", () => {
     mocks.update.mockResolvedValue(null);
 
     await expect(
-      transactionService.update(99, { memo: "missing" }),
+      transactionService.update(asTransactionId(99), { memo: "missing" }),
     ).resolves.toBeNull();
 
     expect(mocks.scheduleReconcile).not.toHaveBeenCalled();
   });
 
   it("owns transfer marking side effects", async () => {
-    await transactionService.markTransfer(1, 2);
-    await transactionService.unmarkTransfer(1);
+    await transactionService.markTransfer(asTransactionId(1), asTransactionId(2));
+    await transactionService.unmarkTransfer(asTransactionId(1));
 
     expect(mocks.markTransfer).toHaveBeenCalledWith(1, 2);
     expect(mocks.unmarkTransfer).toHaveBeenCalledWith(1);

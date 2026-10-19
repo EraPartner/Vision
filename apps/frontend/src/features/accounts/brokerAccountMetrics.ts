@@ -3,6 +3,7 @@ import type {
     PortfolioSummaryByAccountItem,
     PortfolioSummaryResponse,
 } from "@/lib/api/info";
+import type { AccountId } from "@vision/types/brands";
 
 export interface BrokerAccountMetrics {
     holdingsValue: number;
@@ -13,7 +14,7 @@ export interface BrokerAccountMetrics {
 
 export function getBrokerAccountMetrics(
     summary: PortfolioSummaryResponse | undefined,
-    accountId: number,
+    accountId: AccountId,
 ): BrokerAccountMetrics | undefined {
     if (!summary) return undefined;
     const rows = summary.byAccount.filter(

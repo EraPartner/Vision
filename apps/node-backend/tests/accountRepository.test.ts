@@ -8,6 +8,10 @@ import type { Mock } from "vitest";
 import { mockCurrencyConversion } from "./helpers/mockCurrencyConversion.ts";
 import { mockTxConnection } from "./helpers/repoMocks.ts";
 import { accountBalanceRow, accountRow } from "./helpers/pgRows.ts";
+import {
+  asAccountId,
+  asCurrencyCode,
+} from "@vision/types/brands";
 
 const { mockConvertWithRates, mockLoadCurrentRates } = vi.hoisted(() => ({
   mockConvertWithRates: vi.fn((amount, from, to) => {
@@ -65,8 +69,8 @@ describe("accountRepository", () => {
   describe("getAll", () => {
     it("returns database rows unchanged for service-layer shaping", async () => {
       const raw = accountBalanceRow({
-        id: 1,
-        balance_parts: [{ currency: "USD", balance: "12.3400" }],
+        id: asAccountId(1),
+        balance_parts: [{ currency: asCurrencyCode("USD"), balance: "12.3400" }],
         statement_balances: [],
         anchor_date: null,
       });
@@ -76,14 +80,14 @@ describe("accountRepository", () => {
 
     it("lists all accounts without an active filter", async () => {
       query.mockResolvedValueOnce({
-        rows: [accountBalanceRow({ id: 1, name: "Checking" })],
+        rows: [accountBalanceRow({ id: asAccountId(1), name: "Checking" })],
       });
       const rows = await listAccounts();
       // No partitions at all (an account with no active rows) → a 0 balance and
       // no drift, with the provenance fields absent rather than null.
       expect(rows).toEqual([
         {
-          ...accountRow({ id: 1, name: "Checking" }),
+          ...accountRow({ id: asAccountId(1), name: "Checking" }),
           has_transactions: false,
           computed_balance: 0,
           balance_parts: [],
@@ -107,13 +111,13 @@ describe("accountRepository", () => {
       query.mockResolvedValueOnce({
         rows: [
           accountBalanceRow({
-            id: 1,
+            id: asAccountId(1),
             name: "Wise",
-            currency: "EUR",
+            currency: asCurrencyCode("EUR"),
             statement_balances: [],
             balance_parts: [
-              { currency: "EUR", balance: "100.0000" },
-              { currency: "USD", balance: "100.0000" },
+              { currency: asCurrencyCode("EUR"), balance: "100.0000" },
+              { currency: asCurrencyCode("USD"), balance: "100.0000" },
             ],
           }),
         ],
@@ -135,19 +139,19 @@ describe("accountRepository", () => {
       query.mockResolvedValueOnce({
         rows: [
           accountBalanceRow({
-            id: 1,
+            id: asAccountId(1),
             name: "Wise",
-            currency: "EUR",
+            currency: asCurrencyCode("EUR"),
             statement_balances: [
               {
-                currency: "EUR",
+                currency: asCurrencyCode("EUR"),
                 balance: 120,
                 balance_date: "2026-07-01",
               },
             ],
             balance_parts: [
-              { currency: "EUR", balance: "100.0000" },
-              { currency: "USD", balance: "100.0000" },
+              { currency: asCurrencyCode("EUR"), balance: "100.0000" },
+              { currency: asCurrencyCode("USD"), balance: "100.0000" },
             ],
           }),
         ],
@@ -169,12 +173,12 @@ describe("accountRepository", () => {
       query.mockResolvedValueOnce({
         rows: [
           accountBalanceRow({
-            id: 1,
+            id: asAccountId(1),
             name: "Unsupported currency",
-            currency: "EUR",
+            currency: asCurrencyCode("EUR"),
             balance_parts: [
-              { currency: "EUR", balance: "100.0000" },
-              { currency: "ZZZ", balance: "40.0000" },
+              { currency: asCurrencyCode("EUR"), balance: "100.0000" },
+              { currency: asCurrencyCode("ZZZ"), balance: "40.0000" },
             ],
           }),
         ],
@@ -199,12 +203,12 @@ describe("accountRepository", () => {
       query.mockResolvedValueOnce({
         rows: [
           accountBalanceRow({
-            id: 1,
+            id: asAccountId(1),
             name: "Wise",
-            currency: "EUR",
+            currency: asCurrencyCode("EUR"),
             statement_balances: [
               {
-                currency: "EUR",
+                currency: asCurrencyCode("EUR"),
                 balance: 100.01,
                 balance_date: "2026-07-01",
               },
@@ -213,8 +217,8 @@ describe("accountRepository", () => {
               // NUMERIC(18,4) sums can carry a 4-dp tail; the wire rounds the
               // base to cents, and drift must be differenced against the SAME
               // rounded figure or the on-screen identity breaks by a cent.
-              { currency: "EUR", balance: "100.0150" },
-              { currency: "USD", balance: "50.0000" },
+              { currency: asCurrencyCode("EUR"), balance: "100.0150" },
+              { currency: asCurrencyCode("USD"), balance: "50.0000" },
             ],
           }),
         ],
@@ -233,13 +237,13 @@ describe("accountRepository", () => {
       query.mockResolvedValueOnce({
         rows: [
           accountBalanceRow({
-            id: 1,
+            id: asAccountId(1),
             name: "KBC",
-            currency: "EUR",
+            currency: asCurrencyCode("EUR"),
             statement_balances: [
-              { currency: "EUR", balance: 90, balance_date: "2026-07-01" },
+              { currency: asCurrencyCode("EUR"), balance: 90, balance_date: "2026-07-01" },
             ],
-            balance_parts: [{ currency: "EUR", balance: "100.0000" }],
+            balance_parts: [{ currency: asCurrencyCode("EUR"), balance: "100.0000" }],
           }),
         ],
       });
@@ -257,15 +261,15 @@ describe("accountRepository", () => {
       query.mockResolvedValueOnce({
         rows: [
           accountBalanceRow({
-            id: 1,
+            id: asAccountId(1),
             name: "GBP shell",
-            currency: "GBP",
+            currency: asCurrencyCode("GBP"),
             statement_balances: [
-              { currency: "GBP", balance: 50, balance_date: "2026-07-01" },
+              { currency: asCurrencyCode("GBP"), balance: 50, balance_date: "2026-07-01" },
             ],
             balance_parts: [
-              { currency: "EUR", balance: "100.0000" },
-              { currency: "USD", balance: "100.0000" },
+              { currency: asCurrencyCode("EUR"), balance: "100.0000" },
+              { currency: asCurrencyCode("USD"), balance: "100.0000" },
             ],
           }),
         ],
@@ -282,13 +286,13 @@ describe("accountRepository", () => {
       query.mockResolvedValueOnce({
         rows: [
           accountBalanceRow({
-            id: 1,
+            id: asAccountId(1),
             name: "Wise USD",
-            currency: "EUR",
+            currency: asCurrencyCode("EUR"),
             statement_balances: [
-              { currency: "USD", balance: 90, balance_date: "2026-07-01" },
+              { currency: asCurrencyCode("USD"), balance: 90, balance_date: "2026-07-01" },
             ],
-            balance_parts: [{ currency: "USD", balance: "100.0000" }],
+            balance_parts: [{ currency: asCurrencyCode("USD"), balance: "100.0000" }],
           }),
         ],
       });
@@ -308,19 +312,19 @@ describe("accountRepository", () => {
       query.mockResolvedValueOnce({
         rows: [
           accountBalanceRow({
-            id: 1,
+            id: asAccountId(1),
             name: "Noisy",
-            currency: "EUR",
+            currency: asCurrencyCode("EUR"),
             statement_balances: [
               {
-                currency: "USD",
+                currency: asCurrencyCode("USD"),
                 balance: 100,
                 balance_date: "2026-07-01",
               },
             ],
             balance_parts: [
-              { currency: "GBP", balance: "0.0000" }, // offsetting pair, net 0
-              { currency: "USD", balance: "100.0000" },
+              { currency: asCurrencyCode("GBP"), balance: "0.0000" }, // offsetting pair, net 0
+              { currency: asCurrencyCode("USD"), balance: "100.0000" },
             ],
           }),
         ],
@@ -336,14 +340,14 @@ describe("accountRepository", () => {
         rows: [
           // (a) stamped anchor + entries since — count arrives as a pg bigint string
           accountBalanceRow({
-            id: 1,
+            id: asAccountId(1),
             name: "KBC",
             anchor_date: "2026-06-30",
             post_anchor_count: "2",
           }),
           // (b) nothing stamped — SQL NULL anchor, count = all active rows
           accountBalanceRow({
-            id: 2,
+            id: asAccountId(2),
             name: "Cash",
             anchor_date: null,
             post_anchor_count: "3",
@@ -362,7 +366,7 @@ describe("accountRepository", () => {
   describe("getById / getByName", () => {
     it("returns undefined when not found", async () => {
       query.mockResolvedValueOnce({ rows: [] });
-      expect(await accountRepository.getById(99)).toBeUndefined();
+      expect(await accountRepository.getById(asAccountId(99))).toBeUndefined();
     });
   });
 
@@ -370,7 +374,7 @@ describe("accountRepository", () => {
     it("returns undefined when the update affects no row", async () => {
       query.mockResolvedValueOnce({ rows: [] });
       expect(
-        await accountRepository.update(1, { currency: "USD" }),
+        await accountRepository.update(asAccountId(1), { currency: "USD" }),
       ).toBeUndefined();
     });
   });
@@ -378,12 +382,12 @@ describe("accountRepository", () => {
   describe("remove", () => {
     it("returns the deleted id", async () => {
       query.mockResolvedValueOnce({ rows: [{ id: 8 }] });
-      expect(await accountRepository.remove(8)).toBe(8);
+      expect(await accountRepository.remove(asAccountId(8))).toBe(8);
     });
 
     it("returns undefined when nothing was deleted", async () => {
       query.mockResolvedValueOnce({ rows: [] });
-      expect(await accountRepository.remove(8)).toBeUndefined();
+      expect(await accountRepository.remove(asAccountId(8))).toBeUndefined();
     });
   });
 });

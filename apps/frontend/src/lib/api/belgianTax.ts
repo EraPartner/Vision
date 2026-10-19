@@ -16,6 +16,11 @@ import type {
     BelgianTaxHouseholdV2,
     HouseholdTaxResult,
 } from "@/lib/belgianTax/householdTypes";
+import type {
+    CategoryId,
+    CurrencyCode,
+    RecipientId,
+} from "@vision/types/brands";
 
 /** Server-computed tax overview charts and widget data (GET /api/belgian-tax/dashboard). */
 export type BelgianTaxDashboard = components["schemas"]["BelgianTaxDashboard"];
@@ -30,11 +35,11 @@ export type BelgianPortfolioTaxDashboard =
 
 export interface BelgianTaxDashboardParams {
     year: number;
-    currency: string;
+    currency: CurrencyCode;
     start_date?: string | undefined;
     end_date?: string | undefined;
-    excluded_category_ids?: number[] | undefined;
-    excluded_recipient_ids?: number[] | undefined;
+    excluded_category_ids?: CategoryId[] | undefined;
+    excluded_recipient_ids?: RecipientId[] | undefined;
 }
 
 export function getBelgianTaxDashboard(
@@ -50,7 +55,7 @@ export function getBelgianTaxDashboard(
 }
 
 export function getBelgianPortfolioTaxDashboard(
-    params: { year: number; currency: string },
+    params: { year: number; currency: CurrencyCode },
     signal?: AbortSignal,
 ): Promise<BelgianPortfolioTaxDashboard> {
     const query = new URLSearchParams({

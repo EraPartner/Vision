@@ -10,9 +10,12 @@
 import { z } from "zod";
 import {
   pgBigint,
+  pgCategoryId,
+  pgCurrency,
   pgDate,
   pgInt,
   pgNumeric,
+  pgRecipientId,
   pgTimestamptz,
 } from "../rowSchemas.ts";
 
@@ -128,7 +131,7 @@ export const importStagingRowSchema = z
     memo: z.string().nullable(),
     /** NUMERIC(20,4) */
     amount: pgNumeric.nullable(),
-    currency: z.string().nullable(),
+    currency: pgCurrency.nullable(),
     /** NUMERIC(20,4) */
     balance: pgNumeric.nullable(),
     bank_sequence: pgNumeric.nullable().optional(),
@@ -146,14 +149,14 @@ export const importStagingRowSchema = z
     /** SMALLINT */
     dedup_fingerprint_version: pgInt.nullable().optional(),
     dedup_occurrence: pgInt.nullable().optional(),
-    resolved_recipient_id: pgInt.nullable(),
+    resolved_recipient_id: pgRecipientId.nullable(),
     error_message: z.string().nullable(),
     match_source: importMatchSourceSchema.nullable().optional(),
     matched_pattern_id: pgInt.nullable().optional(),
     /** REAL */
     match_similarity: z.number().nullable().optional(),
-    user_override_recipient_id: pgInt.nullable().optional(),
-    override_category_id: pgInt.nullable().optional(),
+    user_override_recipient_id: pgRecipientId.nullable().optional(),
+    override_category_id: pgCategoryId.nullable().optional(),
     created_at: pgTimestamptz,
     updated_at: pgTimestamptz.optional(),
   })
@@ -217,11 +220,11 @@ export const commitStagingRowSchema = importStagingRowSchema
     dedup_fingerprint: z.string().nullable(),
     dedup_fingerprint_version: pgInt.nullable(),
     dedup_occurrence: pgInt.nullable(),
-    user_override_recipient_id: pgInt.nullable(),
+    user_override_recipient_id: pgRecipientId.nullable(),
     matched_pattern_id: pgInt.nullable(),
-    override_category_id: pgInt.nullable(),
+    override_category_id: pgCategoryId.nullable(),
     /** LEFT JOIN recipients */
-    recipient_default_category_id: pgInt.nullable(),
+    recipient_default_category_id: pgCategoryId.nullable(),
   })
   .describe("commit staging row");
 export type CommitStagingRow = z.output<typeof commitStagingRowSchema>;
@@ -247,11 +250,11 @@ export const importPreviewRowSchema = importStagingRowSchema
     match_source: importMatchSourceSchema.nullable(),
     match_similarity: z.number().nullable(),
     matched_pattern_id: pgInt.nullable(),
-    user_override_recipient_id: pgInt.nullable(),
-    override_category_id: pgInt.nullable(),
-    effective_recipient_id: pgInt.nullable(),
+    user_override_recipient_id: pgRecipientId.nullable(),
+    override_category_id: pgCategoryId.nullable(),
+    effective_recipient_id: pgRecipientId.nullable(),
     recipient_name: z.string().nullable(),
-    recipient_default_category_id: pgInt.nullable(),
+    recipient_default_category_id: pgCategoryId.nullable(),
     recipient_default_category_general: z.string().nullable(),
     recipient_default_category_detail: z.string().nullable(),
     recipient_default_category_path: z.string().nullable(),
@@ -270,19 +273,19 @@ export type ImportPreviewRow = z.output<typeof importPreviewRowSchema>;
 
 /** `SELECT r.id` / `RETURNING id` over the INTEGER `recipients.id`. */
 export const recipientIdOnlyRowSchema = z
-  .object({ id: pgInt })
+  .object({ id: pgRecipientId })
   .describe("recipient id row");
 
 /** `recipients` `id, normalized_name` (SELECT or INSERT ... RETURNING). */
 export const recipientIdentityRowSchema = z
-  .object({ id: pgInt, normalized_name: z.string() })
+  .object({ id: pgRecipientId, normalized_name: z.string() })
   .describe("recipient identity row");
 
 /** `selectRecipients` in the CSV data importer. */
 export const recipientResolutionRowSchema = recipientIdentityRowSchema
   .extend({
     notes: z.string().nullable(),
-    default_category_id: pgInt.nullable(),
+    default_category_id: pgCategoryId.nullable(),
   })
   .describe("recipient resolution row");
 
@@ -292,7 +295,7 @@ export const recipientResolutionRowSchema = recipientIdentityRowSchema
  * them) and the INSERT ... RETURNING.
  */
 export const categoryPairIdRowSchema = z
-  .object({ id: pgInt, general: z.string(), detail: z.string() })
+  .object({ id: pgCategoryId, general: z.string(), detail: z.string() })
   .describe("category pair id row");
 
 // ---------------------------------------------------------------------------

@@ -32,6 +32,11 @@ import { buildTransactionWhere } from "../src/lib/filterBuilder.ts";
 import { closePool } from "../src/database/connection.ts";
 import type { ExpressResponse } from "../src/types/express.ts";
 import { loose } from "./helpers/partial.ts";
+import {
+  asPlannedTransactionId,
+  asRecipientId,
+  asTransactionId,
+} from "@vision/types/brands";
 
 const describeDb = hasTestDatabase() ? describe : describe.skip;
 const plannedTransactionRepository = {
@@ -188,7 +193,7 @@ describeDb(
         expect(byId[fx.plannedKbc]!.bank_account).toBe("KBC Renamed");
         expect(byId[fx.plannedWise]!.bank_account).toBe("Wise USD");
         expect(
-          (await plannedTransactionRepository.getById(fx.plannedKbc))!
+          (await plannedTransactionRepository.getById(asPlannedTransactionId(fx.plannedKbc)))!
             .bank_account,
         ).toBe("KBC Renamed");
         // Both rows are in the future relative to 2026-02 fixtures only when
@@ -202,7 +207,7 @@ describeDb(
 
       it("update() and create() project the selected account's name", async () => {
         const updated = await plannedTransactionRepository.update(
-          fx.plannedKbc,
+          asPlannedTransactionId(fx.plannedKbc),
           { memo: "RENT FEB (EDITED)" },
         );
         expect(updated!.bank_account).toBe("KBC Current");
@@ -227,7 +232,7 @@ describeDb(
 
     describe("UPDATE-path FK integrity", () => {
       it("transaction update repoints the FK and exposes the target account's label", async () => {
-        const updated = await transactionRepository.update(fx.txnKbc, {
+        const updated = await transactionRepository.update(asTransactionId(fx.txnKbc), {
           account_id: fx["Wise USD"],
         });
         expect(updated!.account_id).toBe(fx["Wise USD"]);
@@ -241,7 +246,7 @@ describeDb(
         expect(rows[0].account_id).toBe(fx["Wise USD"]);
         expect(rows[0].name).toBe("Wise USD");
         expect(
-          (await transactionRepository.getById(fx.txnKbc))!.bank_account,
+          (await transactionRepository.getById(asTransactionId(fx.txnKbc)))!.bank_account,
         ).toBe("Wise USD");
         const filtered = await transactionRepository.getAll({
           bankAccount: "wise usd",
@@ -255,7 +260,7 @@ describeDb(
         const { rows: before } = await getTestPool()!.query(
           "SELECT count(*)::int AS n FROM accounts",
         );
-        const updated = await transactionRepository.update(fx.txnKbc, {
+        const updated = await transactionRepository.update(asTransactionId(fx.txnKbc), {
           account_id: fx["Wise USD"],
         });
         expect(updated!.account_id).toBe(fx["Wise USD"]);
@@ -268,7 +273,7 @@ describeDb(
 
       it("planned update and updateWithLoanSchedule repoint by account_id", async () => {
         const updated = await plannedTransactionRepository.update(
-          fx.plannedKbc,
+          asPlannedTransactionId(fx.plannedKbc),
           { account_id: fx["Wise USD"] },
         );
         const { rows } = await getTestPool()!.query(
@@ -288,7 +293,7 @@ describeDb(
 
         const viaSchedule =
           await plannedTransactionRepository.updateWithLoanSchedule(
-            fx.plannedWise,
+            asPlannedTransactionId(fx.plannedWise),
             { account_id: fx["KBC Current"] },
             [],
           );
@@ -303,10 +308,10 @@ describeDb(
       });
 
       it("a legacy label-only repository update cannot change canonical identity", async () => {
-        await transactionRepository.update(fx.txnKbc, {
+        await transactionRepository.update(asTransactionId(fx.txnKbc), {
           bank_account: "Ignored Label",
         });
-        await plannedTransactionRepository.update(fx.plannedKbc, {
+        await plannedTransactionRepository.update(asPlannedTransactionId(fx.plannedKbc), {
           bank_account: "Ignored Label",
         });
         const { rows } = await getTestPool()!.query(
@@ -326,12 +331,12 @@ describeDb(
     describe("splitRepository owed views", () => {
       it("getOwedByRecipient / export rows read the label via the FK", async () => {
         await renameKbc("KBC Renamed");
-        const owed = await splitRepository.getOwedByRecipient(fx.recipientId);
+        const owed = await splitRepository.getOwedByRecipient(asRecipientId(fx.recipientId));
         expect(owed).toHaveLength(1);
         expect(owed[0]!.bank_account).toBe("KBC Renamed");
 
         const exportRows = await splitRepository.getOwedExportRowsByRecipient(
-          fx.recipientId,
+          asRecipientId(fx.recipientId),
         );
         expect(exportRows).toHaveLength(1);
         expect(exportRows[0]!.bank_account).toBe("KBC Renamed");

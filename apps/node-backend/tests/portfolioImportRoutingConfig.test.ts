@@ -1,4 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  asAccountId,
+} from "@vision/types/brands";
 
 vi.mock("../src/services/accountService.ts", () => ({
   default: { get: vi.fn() },
@@ -47,7 +50,7 @@ describe("portfolio parser broker routing", () => {
         is_active: true,
       }),
     );
-    await expect(assertPortfolioImportAccount(7)).resolves.toMatchObject({
+    await expect(assertPortfolioImportAccount(asAccountId(7))).resolves.toMatchObject({
       id: 7,
     });
 
@@ -56,7 +59,7 @@ describe("portfolio parser broker routing", () => {
       { id: 9, type: "wallet", is_active: false },
     ]) {
       accountService.get.mockResolvedValueOnce(partial<AccountRow>(account));
-      await expect(assertPortfolioImportAccount(account.id)).rejects.toThrow(
+      await expect(assertPortfolioImportAccount(asAccountId(account.id))).rejects.toThrow(
         "account_id must reference an active portfolio account",
       );
     }
@@ -105,11 +108,11 @@ describe("portfolio parser broker routing", () => {
       Object.assign(new Error("missing"), { code: "NOT_FOUND" }),
     );
     await expect(
-      getPortfolioImportAccountForPreview(99),
+      getPortfolioImportAccountForPreview(asAccountId(99)),
     ).resolves.toBeUndefined();
 
     accountService.get.mockRejectedValueOnce(new Error("database offline"));
-    await expect(getPortfolioImportAccountForPreview(99)).rejects.toThrow(
+    await expect(getPortfolioImportAccountForPreview(asAccountId(99))).rejects.toThrow(
       "database offline",
     );
   });

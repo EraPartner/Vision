@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { CategoryIdSchema, RecipientIdSchema } from "../brands.ts";
 import {
   IdSchema,
   WireLinkSchema,
@@ -15,11 +16,11 @@ import {
  * detail, create, update, merge and unmerge reads all use this projection.
  */
 const recipientFields = {
-  id: IdSchema,
+  id: RecipientIdSchema,
   name: z.string(),
   normalized_name: z.string(),
-  default_category_id: IdSchema.nullable(),
-  primary_recipient_id: IdSchema.nullable(),
+  default_category_id: CategoryIdSchema.nullable(),
+  primary_recipient_id: RecipientIdSchema.nullable(),
   notes: z.string().nullable(),
   is_active: z.boolean(),
   created_at: WireTimestampSchema.nullable(),
@@ -54,14 +55,14 @@ export const RecipientPatternKindSchema = z.enum([
 /** `POST /api/recipients/:id/merge`. */
 export const RecipientMergeResultSchema = z.looseObject({
   primary: RecipientSchema,
-  merged_ids: z.array(IdSchema),
+  merged_ids: z.array(RecipientIdSchema),
   reassigned: z.looseObject({
     transactions: z.number().int().nonnegative(),
     splits: z.number().int().nonnegative(),
     planned: z.number().int().nonnegative(),
     bankAccounts: z.number().int().nonnegative(),
   }),
-  aliases: z.array(z.looseObject({ id: IdSchema, name: z.string() })),
+  aliases: z.array(z.looseObject({ id: RecipientIdSchema, name: z.string() })),
   patternSuggestion: z
     .looseObject({
       pattern: z.string(),
@@ -100,6 +101,6 @@ export const RecipientPatternListSchema = wireCollectionOf(
  */
 export const RecipientPatternPreviewSchema = z.looseObject({
   matchCount: z.number().int().nonnegative(),
-  recipientIds: z.array(IdSchema),
+  recipientIds: z.array(RecipientIdSchema),
   truncated: z.boolean().optional(),
 });

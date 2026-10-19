@@ -23,6 +23,8 @@ import { makeValidationError } from "../lib/repositoryErrors.ts";
 import { buildSetClauses } from "../lib/sqlClauses.ts";
 
 import type { InvestmentRow } from "../types/rows.ts";
+import { EUR } from "../lib/currencyCode.ts";
+import type { CurrencyCode, InvestmentId } from "@vision/types/brands";
 
 export type { InvestmentRow };
 
@@ -35,7 +37,7 @@ export interface InvestmentCreateFields {
   name: string;
   asset_class: string;
   symbol?: string | null | undefined;
-  currency?: string | undefined;
+  currency?: CurrencyCode | undefined;
   current_price?: number | string | null | undefined;
   interest_rate?: number | string | null | undefined;
   /** 'YYYY-MM-DD' */
@@ -178,12 +180,13 @@ function normalizeSymbol<T>(value: T): T | string {
 
 async function ensureSymbolIsUnique(
   symbol: unknown,
-  excludeId: number,
+  excludeId?: InvestmentId,
 ): Promise<void> {
   const duplicate = await queryOne(
     portfolioIntIdRowSchema,
     "SELECT id FROM investments WHERE LOWER(symbol) = LOWER($1) AND id <> $2 LIMIT 1",
-    [symbol, excludeId],
+    // 0 matches no row: ids start at 1.
+    [symbol, excludeId ?? 0],
   );
 
   if (duplicate) {
@@ -199,7 +202,10 @@ const TICKER_PREF_SELECT =
 const TICKER_PREF_JOIN =
   "LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id";
 
-async function setTickerPreference(id: number, show: boolean): Promise<void> {
+async function setTickerPreference(
+  id: InvestmentId,
+  show: boolean,
+): Promise<void> {
   await query(
     `INSERT INTO investment_ticker_prefs (investment_id, show_in_ticker)
        VALUES ($1, $2)
@@ -290,7 +296,7 @@ export const investmentRepository = {
     return { rows, total };
   },
 
-  async getById(id: number): Promise<InvestmentRow | null> {
+  async getById(id: InvestmentId): Promise<InvestmentRow | null> {
     const row = await queryOne(
       investmentDbRowSchema,
       `SELECT i.*, ${TICKER_PREF_SELECT} FROM investments i ${TICKER_PREF_JOIN} WHERE i.id = $1`,
@@ -303,7 +309,7 @@ export const investmentRepository = {
     name,
     symbol,
     asset_class,
-    currency = "EUR",
+    currency = EUR,
     current_price,
     interest_rate,
     maturity_date,
@@ -338,9 +344,9 @@ export const investmentRepository = {
     symbol = normalizeSymbol(symbol);
     // Same uniqueness rule as update() (there is no DB unique index on symbol,
     // so create was the one path that could still insert a duplicate — e.g. a
-    // duplicate-on-retry). excludeId 0 matches no row: ids start at 1.
+    // duplicate-on-retry).
     if (typeof symbol === "string" && symbol !== "") {
-      await ensureSymbolIsUnique(symbol, 0);
+      await ensureSymbolIsUnique(symbol);
     }
     const payload = {
       name,
@@ -383,7 +389,7 @@ export const investmentRepository = {
   },
 
   async update(
-    id: number,
+    id: InvestmentId,
     fields: Record<string, unknown> & { show_in_ticker?: boolean },
   ): Promise<InvestmentRow | null> {
     const allowed = [
@@ -461,7 +467,7 @@ export const investmentRepository = {
   },
 
   async updatePrice(
-    id: number,
+    id: InvestmentId,
     {
       current_price,
       price_updated_at,
@@ -490,7 +496,7 @@ export const investmentRepository = {
    */
   async updatePricesBulk(
     updates: Array<{
-      id: number;
+      id: InvestmentId;
       current_price: number;
       price_updated_at: string;
     }>,
@@ -526,7 +532,7 @@ export const investmentRepository = {
     return row?.latest ?? null;
   },
 
-  async hardDelete(id: number): Promise<boolean> {
+  async hardDelete(id: InvestmentId): Promise<boolean> {
     const result = await query("DELETE FROM investments WHERE id = $1", [id]);
     return (result.rowCount ?? 0) > 0;
   },

@@ -5,16 +5,17 @@ import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { invalidateTransactionData, recipientKeys } from "@/lib/queryKeys";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import type { Transaction } from "@/types/api";
+import type { AccountId, CurrencyCode } from "@vision/types/brands";
 
 export interface CreateTransferInput {
     transaction_date: string;
-    from_account_id: number;
+    from_account_id: AccountId;
     from_account_name: string;
-    to_account_id: number;
+    to_account_id: AccountId;
     to_account_name: string;
     /** Magnitude; the hook signs each leg. */
     amount: number;
-    currency: string;
+    currency: CurrencyCode;
     memo?: string | undefined;
     comment?: string | undefined;
 }

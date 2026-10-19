@@ -10,6 +10,10 @@ import { closePool } from "../src/database/connection.ts";
 import transactionRepository from "../src/repositories/transactionRepository.ts";
 import { bulkDeleteTransactions } from "../src/services/transactionBulkService.ts";
 import { executePlanned } from "../src/services/plannedExecutionService.ts";
+import {
+  asPlannedTransactionId,
+  asTransactionId,
+} from "@vision/types/brands";
 
 type ExecutePlannedResult = Awaited<ReturnType<typeof executePlanned>>;
 
@@ -90,8 +94,8 @@ describe.skipIf(!hasTestDatabase())(
         outcomes = Promise.allSettled(
           ids.map((executedTransactionId: number) =>
             executePlanned({
-              id,
-              executedTransactionId,
+              id: asPlannedTransactionId(id),
+              executedTransactionId: asTransactionId(executedTransactionId),
               executionDate: "2026-07-01",
               expectedOccurrence,
             }),
@@ -136,7 +140,7 @@ describe.skipIf(!hasTestDatabase())(
         await expect(
           executePlanned({
             id,
-            executedTransactionId: ids[0]!,
+            executedTransactionId: asTransactionId(ids[0]!),
             expectedOccurrence,
           }),
         ).rejects.toMatchObject({ status: 409 });
@@ -150,14 +154,14 @@ describe.skipIf(!hasTestDatabase())(
 
     it("replays an existing execution even if its ledger row was later deactivated", async () => {
       const { id, ids } = await fixture();
-      await executePlanned({ id, executedTransactionId: ids[0]! });
+      await executePlanned({ id, executedTransactionId: asTransactionId(ids[0]!) });
       const before = await persisted(id);
       await getTestPool()!.query(
         "UPDATE transactions SET is_active = false WHERE id = $1",
         [ids[0]],
       );
       await expect(
-        executePlanned({ id, executedTransactionId: ids[0]! }),
+        executePlanned({ id, executedTransactionId: asTransactionId(ids[0]!) }),
       ).resolves.toMatchObject({ duplicate: true });
       expect(await persisted(id)).toEqual(before);
     });
@@ -169,7 +173,7 @@ describe.skipIf(!hasTestDatabase())(
         [ids[0]],
       );
       await expect(
-        executePlanned({ id, executedTransactionId: ids[0]! }),
+        executePlanned({ id, executedTransactionId: asTransactionId(ids[0]!) }),
       ).rejects.toMatchObject({ status: 409 });
       expect(await persisted(id)).toEqual({
         day: "2026-07-01",
@@ -220,14 +224,14 @@ describe.skipIf(!hasTestDatabase())(
       );
       await executePlanned({
         id,
-        executedTransactionId: ids[0]!,
+        executedTransactionId: asTransactionId(ids[0]!),
         expectedOccurrence: "2026-07-01",
         hydrateResult: false,
       });
       await expect(
         executePlanned({
           id,
-          executedTransactionId: ids[1]!,
+          executedTransactionId: asTransactionId(ids[1]!),
           expectedOccurrence: "2026-07-01",
           hydrateResult: false,
         }),
@@ -241,13 +245,13 @@ describe.skipIf(!hasTestDatabase())(
 
     it("preserves earlier and latest executions when single or bulk deletion is rejected", async () => {
       const { id, ids } = await fixture();
-      await executePlanned({ id, executedTransactionId: ids[0]! });
-      await executePlanned({ id, executedTransactionId: ids[1]! });
+      await executePlanned({ id, executedTransactionId: asTransactionId(ids[0]!) });
+      await executePlanned({ id, executedTransactionId: asTransactionId(ids[1]!) });
       await expect(
-        transactionRepository.hardDelete(ids[0]!),
+        transactionRepository.hardDelete(asTransactionId(ids[0]!)),
       ).rejects.toMatchObject({ status: 409 });
       await expect(
-        transactionRepository.hardDelete(ids[1]!),
+        transactionRepository.hardDelete(asTransactionId(ids[1]!)),
       ).rejects.toMatchObject({ status: 409 });
       await expect(bulkDeleteTransactions({ ids })).rejects.toMatchObject({
         status: 409,
@@ -334,11 +338,11 @@ describe.skipIf(!hasTestDatabase())(
       const { id, ids } = await fixture({ end: "2026-07-15" });
       await executePlanned({
         id,
-        executedTransactionId: ids[0]!,
+        executedTransactionId: asTransactionId(ids[0]!),
         executionDate: "2026-07-01",
       });
       await expect(
-        executePlanned({ id, executedTransactionId: ids[1]! }),
+        executePlanned({ id, executedTransactionId: asTransactionId(ids[1]!) }),
       ).rejects.toMatchObject({ status: 409 });
       expect(await persisted(id)).toEqual({
         day: "2026-07-01",
@@ -346,7 +350,7 @@ describe.skipIf(!hasTestDatabase())(
         is_executed: true,
       });
       await expect(
-        executePlanned({ id, executedTransactionId: ids[0]! }),
+        executePlanned({ id, executedTransactionId: asTransactionId(ids[0]!) }),
       ).resolves.toMatchObject({ duplicate: true });
     });
   },

@@ -8,10 +8,11 @@ import {
     SavedAnalysisVersionListSchema,
 } from "@vision/types/contracts";
 import { apiRequest } from "@/lib/api/client";
+import type { CurrencyCode } from "@vision/types/brands";
 
 export interface AnalysisUnit {
     kind: string;
-    currency?: string;
+    currency?: CurrencyCode;
     currencyColumn?: string;
     instrumentColumn?: string;
     instrumentId?: string;
@@ -103,7 +104,7 @@ export interface VisualAnalysisPlan {
     joins: string[];
     orderBy: Array<{ id: string; direction: "asc" | "desc" }>;
     limit: number;
-    reportingCurrency?: string;
+    reportingCurrency?: CurrencyCode;
     from?: string;
     to?: string;
     symbol?: string;

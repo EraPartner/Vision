@@ -19,12 +19,14 @@ import {
 } from "@/utils/currency";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import type { ReactNode } from "react";
+import { asCurrencyCode } from "@vision/types/brands";
+import type { CurrencyCode } from "@vision/types/brands";
 
 export interface InvestmentForm {
     assetClass: string;
     name: string;
     symbol: string;
-    currency: string;
+    currency: CurrencyCode;
     currentPrice: string;
     interestRate: string;
     maturityDate: string;
@@ -127,7 +129,10 @@ export function InvestmentFormFields({
                         <Select
                             value={form.currency}
                             onValueChange={(v) =>
-                                setForm((f) => ({ ...f, currency: v }))
+                                setForm((f) => ({
+                                    ...f,
+                                    currency: asCurrencyCode(v),
+                                }))
                             }
                         >
                             <SelectTrigger id="inv-currency">

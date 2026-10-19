@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { asCategoryId } from "@vision/types/brands";
 import { describe, expect, it, vi } from "vitest";
 import { screen, within } from "@testing-library/react";
 import { renderWithApp } from "@/test/renderWithApp";
@@ -9,8 +10,8 @@ const period = "2026-01";
 function category(id: number, names: string[], ids: number[], amount: number) {
     return {
         categoryName: names.join(":"),
-        categoryId: id,
-        categoryPathIds: ids,
+        categoryId: asCategoryId(id),
+        categoryPathIds: ids.map(asCategoryId),
         categoryPathSegments: names,
         months: { [period]: amount },
         incomeMonths: {},

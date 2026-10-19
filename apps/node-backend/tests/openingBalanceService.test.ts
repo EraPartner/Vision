@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { mockTxConnection } from "./helpers/repoMocks.ts";
+import {
+  asAccountId,
+  asCurrencyCode,
+  type CurrencyCode,
+} from "@vision/types/brands";
+
 const { mockClient } = vi.hoisted(() => ({ mockClient: { query: vi.fn() } }));
 // Transaction shim: runs the callback directly; a throw propagates (= rollback).
 vi.mock("../src/database/connection.ts", () => mockTxConnection(mockClient));
@@ -43,7 +49,7 @@ beforeEach(() => {
 });
 
 describe("normalizeOpeningBalance (ADR-094 D4)", () => {
-  const account = { currency: "EUR" };
+  const account = { currency: asCurrencyCode("EUR") };
 
   it("accepts a numeric balance + ISO date and defaults currency to the account", () => {
     expect(
@@ -151,7 +157,7 @@ describe("normalizeOpeningBalance (ADR-094 D4)", () => {
     expect(
       normalizeOpeningBalance(
         { balance: 1, date: "2024-01-01" },
-        { currency: "usd" },
+        { currency: loose<CurrencyCode>("usd") },
       ).currency,
     ).toBe("USD");
   });
@@ -170,7 +176,7 @@ describe("setOpeningBalance (ADR-094 D4)", () => {
       loose<AccountRow | undefined>(null),
     );
     await expect(
-      setOpeningBalance(99, { balance: 1, date: "2024-01-01" }),
+      setOpeningBalance(asAccountId(99), { balance: 1, date: "2024-01-01" }),
     ).rejects.toThrow(/not found/i);
     expect(query).not.toHaveBeenCalled();
   });
@@ -184,7 +190,7 @@ describe("setOpeningBalance (ADR-094 D4)", () => {
         rows: [anchorRow(42, "1000.0000")],
       });
 
-    const result = await setOpeningBalance(5, {
+    const result = await setOpeningBalance(asAccountId(5), {
       balance: 1000,
       date: "2024-01-01",
     });
@@ -231,7 +237,7 @@ describe("setOpeningBalance (ADR-094 D4)", () => {
       .mockResolvedValueOnce({ rows: [{ id: 900 }] }) // system recipient (SELECT-first hit)
       .mockResolvedValueOnce({ rows: [anchorRow(7, "500.0000")] });
 
-    const result = await setOpeningBalance(5, {
+    const result = await setOpeningBalance(asAccountId(5), {
       balance: 500,
       date: "2024-01-01",
     });
@@ -249,7 +255,7 @@ describe("setOpeningBalance (ADR-094 D4)", () => {
       .mockResolvedValueOnce({ rows: [{ id: 900 }] }) // system recipient (SELECT-first hit)
       .mockResolvedValueOnce({ rows: [anchorRow(8, "500.0000")] });
 
-    const result = await setOpeningBalance(5, {
+    const result = await setOpeningBalance(asAccountId(5), {
       balance: 500,
       date: "2024-01-01",
     });
@@ -263,7 +269,7 @@ describe("setOpeningBalance (ADR-094 D4)", () => {
       .mockResolvedValueOnce({ rows: [{ id: 900 }] }) // system recipient (SELECT-first hit)
       .mockResolvedValueOnce({ rows: [anchorRow(9, "500.0000")] });
 
-    const result = await setOpeningBalance(5, {
+    const result = await setOpeningBalance(asAccountId(5), {
       balance: 500,
       date: "2024-01-01",
     });

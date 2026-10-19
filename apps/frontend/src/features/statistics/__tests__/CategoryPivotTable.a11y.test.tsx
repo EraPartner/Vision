@@ -6,6 +6,7 @@ import { useLocation } from "react-router";
 import { renderWithApp } from "@/test/renderWithApp";
 import { CategoryPivotTable } from "@/features/statistics/CategoryPivotTable";
 import type { StatisticsData } from "@/hooks/useStatistics";
+import { asCategoryId } from "@vision/types/brands";
 
 function LocationProbe() {
     const loc = useLocation();
@@ -16,7 +17,7 @@ function LocationProbe() {
 // 2026-02 — the zero cell must NOT be keyboard-focusable.
 const GROCERIES: StatisticsData["categoryPivot"][number] = {
     categoryName: "FOOD:GROCERIES",
-    categoryId: 5,
+    categoryId: asCategoryId(5),
     months: { "2026-01": 100 },
     incomeMonths: {},
     expenseMonths: {},
@@ -163,7 +164,7 @@ describe("CategoryPivotTable keyboard drill-down", () => {
                 {
                     ...GROCERIES,
                     categoryName: "FOOD:DINING",
-                    categoryId: 6,
+                    categoryId: asCategoryId(6),
                     months: { "2026-01": 50 },
                     netMonths: { "2026-01": -50 },
                     total: 50,

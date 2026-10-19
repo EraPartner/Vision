@@ -1,12 +1,12 @@
 import { z } from "zod";
 
-import { WireDateSchema } from "./common.ts";
+import { WireCurrencySchema, WireDateSchema } from "./common.ts";
 
 const NumberRecordSchema = z.record(z.string(), z.number());
 
 /** `POST /api/cross-workspace/rebalance` (routes/crossWorkspace.ts). */
 export const RebalanceResponseSchema = z.looseObject({
-  currency: z.string(),
+  currency: WireCurrencySchema,
   targetWeights: NumberRecordSchema,
   actualValues: NumberRecordSchema,
   availableCash: z.number(),
@@ -24,7 +24,7 @@ export const RebalanceResponseSchema = z.looseObject({
 
 /** `computeCommitmentAwareCash` (services/commitmentAwareCashService.ts). */
 export const CommitmentAwareCashResponseSchema = z.looseObject({
-  currency: z.string(),
+  currency: WireCurrencySchema,
   today: WireDateSchema,
   horizonEnd: WireDateSchema,
   horizonDays: z.number().int().positive(),

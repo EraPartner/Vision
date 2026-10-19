@@ -21,6 +21,11 @@ import {
   mergeCategoryNodes,
   updateCategoryNode,
 } from "../src/repositories/categoryHierarchyRepository.ts";
+import {
+  asCategoryId,
+  asRecipientId,
+} from "@vision/types/brands";
+import type { CategoryId } from "@vision/types/brands";
 
 const SUFFIX = `CB${process.pid}`;
 const created = {
@@ -40,7 +45,7 @@ async function legacy(general: string, detail: string, description?: string) {
   return result.category!;
 }
 
-async function node(name: string, parentId?: number) {
+async function node(name: string, parentId?: CategoryId) {
   const createdNode = (await createCategoryNode({
     name,
     ...(parentId === undefined ? {} : { parentId }),
@@ -138,7 +143,7 @@ describe.skipIf(!hasTestDatabase())("categories (real DB)", () => {
     expect(
       (await categoryRepository.update(first.category!.id, {}))?.detail,
     ).toBe("WATER");
-    expect(await categoryRepository.getById(-1)).toBeNull();
+    expect(await categoryRepository.getById(asCategoryId(-1))).toBeNull();
   });
 
   it("filters, counts and pages legacy categories case-insensitively", async () => {
@@ -202,7 +207,7 @@ describe.skipIf(!hasTestDatabase())("categories (real DB)", () => {
     created.recipientIds.push(...recipientIds);
 
     expect(
-      await categoryRepository.assignToRecipients(category.id, recipientIds),
+      await categoryRepository.assignToRecipients(category.id, recipientIds.map(asRecipientId)),
     ).toBe(2);
     const { rows: after } = await db.query(
       "SELECT default_category_id FROM recipients WHERE id = ANY($1::int[])",
@@ -226,7 +231,7 @@ describe.skipIf(!hasTestDatabase())("categories (real DB)", () => {
       depth: 1,
     });
     await expect(
-      createCategoryNode({ name: "solar", parentId: -1 }),
+      createCategoryNode({ name: "solar", parentId: asCategoryId(-1) }),
     ).rejects.toThrow("Parent category does not exist");
 
     const child = await node("CHILD", root.id);

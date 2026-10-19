@@ -4,6 +4,9 @@ import {
   __assertPortfolioFormatBrokerage,
   __buildPortfolioConfig,
 } from "../src/routes/portfolioImportRoutes.ts";
+import {
+  asAccountId,
+} from "@vision/types/brands";
 
 const minimal = {
   date_column: "Date",
@@ -93,7 +96,7 @@ describe("portfolio import format contract", () => {
     expect(() =>
       __assertPortfolioFormatBrokerage(config, {
         isBrokerage: true,
-        accountId: 7,
+        accountId: asAccountId(7),
       }),
     ).not.toThrow();
   });
@@ -110,7 +113,7 @@ describe("portfolio import format contract", () => {
     expect(() =>
       __assertPortfolioFormatBrokerage(config, {
         isBrokerage: true,
-        accountId: 7,
+        accountId: asAccountId(7),
       }),
     ).not.toThrow();
   });
@@ -131,7 +134,7 @@ describe("portfolio import format contract", () => {
     expect(() =>
       __assertPortfolioFormatBrokerage(config, {
         isBrokerage: true,
-        accountId: 7,
+        accountId: asAccountId(7),
       }),
     ).not.toThrow();
   });

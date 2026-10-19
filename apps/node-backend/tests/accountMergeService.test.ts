@@ -3,6 +3,13 @@ import type { Mock } from "vitest";
 
 import { mockTxConnection } from "./helpers/repoMocks.ts";
 import { accountRow } from "./helpers/pgRows.ts";
+import {
+  asAccountId,
+  asCurrencyCode,
+  type CurrencyCode,
+} from "@vision/types/brands";
+import { loose } from "./helpers/partial.ts";
+
 const { mockClient } = vi.hoisted(() => ({ mockClient: { query: vi.fn() } }));
 
 vi.mock("../src/database/connection.ts", () => mockTxConnection(mockClient));
@@ -103,9 +110,9 @@ beforeEach(() => {
 
 describe("mergeAccounts (ADR-088)", () => {
   it("rejects an empty source set or any self-reference before opening a transaction", async () => {
-    await expect(mergeAccounts(2, [])).rejects.toThrow(ValidationError);
-    await expect(mergeAccounts(2, [2])).rejects.toThrow(ValidationError);
-    await expect(mergeAccounts(2, [1, 2])).rejects.toThrow(
+    await expect(mergeAccounts(asAccountId(2), [])).rejects.toThrow(ValidationError);
+    await expect(mergeAccounts(asAccountId(2), [asAccountId(2)])).rejects.toThrow(ValidationError);
+    await expect(mergeAccounts(asAccountId(2), [asAccountId(1), asAccountId(2)])).rejects.toThrow(
       /must not include the survivor/,
     );
     expect(mockClient.query).not.toHaveBeenCalled();
@@ -114,8 +121,8 @@ describe("mergeAccounts (ADR-088)", () => {
   it("rejects more than 500 sources before opening a transaction", async () => {
     await expect(
       mergeAccounts(
-        2,
-        Array.from({ length: 501 }, (_, index) => index + 3),
+        asAccountId(2),
+        Array.from({ length: 501 }, (_, index) => asAccountId(index + 3)),
       ),
     ).rejects.toThrow(/at most 500/);
     expect(mockClient.query).not.toHaveBeenCalled();
@@ -125,7 +132,7 @@ describe("mergeAccounts (ADR-088)", () => {
     mockClient.query.mockImplementation(async (sql) =>
       sql.includes("WHERE id = $1") ? { rows: [] } : { rows: [], rowCount: 0 },
     );
-    await expect(mergeAccounts(2, [1])).rejects.toThrow(NotFoundError);
+    await expect(mergeAccounts(asAccountId(2), [asAccountId(1)])).rejects.toThrow(NotFoundError);
   });
 
   it("throws NotFound when a source is missing", async () => {
@@ -135,12 +142,12 @@ describe("mergeAccounts (ADR-088)", () => {
       if (sql.includes("ANY")) return { rows: [] }; // no sources found
       return { rows: [], rowCount: 0 };
     });
-    await expect(mergeAccounts(2, [1])).rejects.toThrow(NotFoundError);
+    await expect(mergeAccounts(asAccountId(2), [asAccountId(1)])).rejects.toThrow(NotFoundError);
   });
 
   it("repoints every reference to the survivor, deletes the source, returns counts", async () => {
     happyPath();
-    const result = await mergeAccounts(2, [1]);
+    const result = await mergeAccounts(asAccountId(2), [asAccountId(1)]);
 
     expect(result).toEqual({
       into: 2,
@@ -199,11 +206,11 @@ describe("mergeAccounts (ADR-088)", () => {
   it("rejects a merge that would turn the survivor's source reference into a self-cycle", async () => {
     happyPath({
       fundingAccounts: {
-        2: accountRow({ id: 2, funding_account_id: 1 }),
+        2: accountRow({ id: asAccountId(2), funding_account_id: asAccountId(1) }),
       },
     });
 
-    await expect(mergeAccounts(2, [1])).rejects.toThrow(
+    await expect(mergeAccounts(asAccountId(2), [asAccountId(1)])).rejects.toThrow(
       /would create a funding-account cycle/,
     );
 
@@ -216,12 +223,12 @@ describe("mergeAccounts (ADR-088)", () => {
   it("rejects a longer cycle introduced by the projected funding repoint", async () => {
     happyPath({
       fundingAccounts: {
-        2: accountRow({ id: 2, funding_account_id: 3 }),
-        3: accountRow({ id: 3, funding_account_id: 1 }),
+        2: accountRow({ id: asAccountId(2), funding_account_id: asAccountId(3) }),
+        3: accountRow({ id: asAccountId(3), funding_account_id: asAccountId(1) }),
       },
     });
 
-    await expect(mergeAccounts(2, [1])).rejects.toThrow(
+    await expect(mergeAccounts(asAccountId(2), [asAccountId(1)])).rejects.toThrow(
       /would create a funding-account cycle/,
     );
 
@@ -239,13 +246,13 @@ describe("mergeAccounts (ADR-088)", () => {
   it("does not make an unrelated pre-existing funding cycle a merge blocker", async () => {
     happyPath({
       fundingAccounts: {
-        2: accountRow({ id: 2, funding_account_id: 3 }),
-        3: accountRow({ id: 3, funding_account_id: 4 }),
-        4: accountRow({ id: 4, funding_account_id: 3 }),
+        2: accountRow({ id: asAccountId(2), funding_account_id: asAccountId(3) }),
+        3: accountRow({ id: asAccountId(3), funding_account_id: asAccountId(4) }),
+        4: accountRow({ id: asAccountId(4), funding_account_id: asAccountId(3) }),
       },
     });
 
-    await expect(mergeAccounts(2, [1])).resolves.toMatchObject({ into: 2 });
+    await expect(mergeAccounts(asAccountId(2), [asAccountId(1)])).resolves.toMatchObject({ into: 2 });
   });
 
   it("filters invalid direct-call ids and duplicates without coercing strings", async () => {
@@ -271,7 +278,7 @@ describe("mergeAccounts (ADR-088)", () => {
         { account_id: 1, min_date: "2026-03-01", max_date: "2026-07-05" }, // source (Belfius)
       ],
     });
-    const result = await mergeAccounts(2, [1]);
+    const result = await mergeAccounts(asAccountId(2), [asAccountId(1)]);
 
     expect(result.stampsInterleaved).toBe(true);
     const clear = clearAnchorCall();
@@ -294,7 +301,7 @@ describe("mergeAccounts (ADR-088)", () => {
         { account_id: 1, min_date: "2025-02-01", max_date: "2026-07-01" }, // successor
       ],
     });
-    const result = await mergeAccounts(2, [1]);
+    const result = await mergeAccounts(asAccountId(2), [asAccountId(1)]);
     expect(result.stampsInterleaved).toBe(false);
     expect(clearAnchorCall()).toBeUndefined();
   });
@@ -305,7 +312,7 @@ describe("mergeAccounts (ADR-088)", () => {
         { account_id: 1, min_date: "2026-01-01", max_date: "2026-07-01" },
       ],
     });
-    const result = await mergeAccounts(2, [1]);
+    const result = await mergeAccounts(asAccountId(2), [asAccountId(1)]);
     expect(result.stampsInterleaved).toBe(false);
     expect(clearAnchorCall()).toBeUndefined();
   });
@@ -317,7 +324,7 @@ describe("mergeAccounts (ADR-088)", () => {
         { account_id: 1, min_date: "2026-03-01", max_date: "2026-07-05" },
       ],
     });
-    await mergeAccounts(2, [1]);
+    await mergeAccounts(asAccountId(2), [asAccountId(1)]);
     const calls = mockClient.query.mock.calls.map(([sql]) => sql);
     const rangeIdx = calls.findIndex((s) => s.includes("GROUP BY account_id"));
     const repointIdx = calls.findIndex((s) =>
@@ -338,8 +345,8 @@ describe("mergeAccounts (ADR-088)", () => {
       ],
     });
 
-    await expect(mergeAccounts(2, [1])).rejects.toThrow(ValidationError);
-    await expect(mergeAccounts(2, [1])).rejects.toThrow(
+    await expect(mergeAccounts(asAccountId(2), [asAccountId(1)])).rejects.toThrow(ValidationError);
+    await expect(mergeAccounts(asAccountId(2), [asAccountId(1)])).rejects.toThrow(
       /opening balance in EUR/,
     );
 
@@ -358,13 +365,13 @@ describe("mergeAccounts (ADR-088)", () => {
         { account_id: 1, currency: "USD" },
       ],
     });
-    const result = await mergeAccounts(2, [1]);
+    const result = await mergeAccounts(asAccountId(2), [asAccountId(1)]);
     expect(result.into).toBe(2);
   });
 
   it("reads the opening anchors BEFORE the repoint (which is what would collide)", async () => {
     happyPath({ openingAnchors: [{ account_id: 1, currency: "EUR" }] });
-    await mergeAccounts(2, [1]);
+    await mergeAccounts(asAccountId(2), [asAccountId(1)]);
     const calls = mockClient.query.mock.calls.map(([sql]) => sql);
     const anchorIdx = calls.findIndex((s) =>
       s.includes("transfer_source = 'opening'"),
@@ -382,24 +389,24 @@ describe("stampRangesOverlap (§1 F2 predicate)", () => {
     expect(stampRangesOverlap([])).toBe(false);
     expect(
       stampRangesOverlap([
-        { account_id: 1, min_date: "2026-01-01", max_date: "2026-07-01" },
+        { account_id: asAccountId(1), min_date: "2026-01-01", max_date: "2026-07-01" },
       ]),
     ).toBe(false);
   });
 
   it("detects overlap in either nesting order and on shared boundary days", () => {
-    const a = { account_id: 1, min_date: "2026-01-01", max_date: "2026-06-30" };
-    const b = { account_id: 2, min_date: "2026-06-30", max_date: "2026-12-01" }; // touches a.max
-    const c = { account_id: 3, min_date: "2026-02-01", max_date: "2026-03-01" }; // nested inside a
+    const a = { account_id: asAccountId(1), min_date: "2026-01-01", max_date: "2026-06-30" };
+    const b = { account_id: asAccountId(2), min_date: "2026-06-30", max_date: "2026-12-01" }; // touches a.max
+    const c = { account_id: asAccountId(3), min_date: "2026-02-01", max_date: "2026-03-01" }; // nested inside a
     expect(stampRangesOverlap([a, b])).toBe(true);
     expect(stampRangesOverlap([b, a])).toBe(true);
     expect(stampRangesOverlap([a, c])).toBe(true);
   });
 
   it("is false for strictly sequential ranges, true when ANY pair among three overlaps", () => {
-    const a = { account_id: 1, min_date: "2024-01-01", max_date: "2024-12-31" };
-    const b = { account_id: 2, min_date: "2025-01-01", max_date: "2025-12-31" };
-    const c = { account_id: 3, min_date: "2025-06-01", max_date: "2026-06-01" };
+    const a = { account_id: asAccountId(1), min_date: "2024-01-01", max_date: "2024-12-31" };
+    const b = { account_id: asAccountId(2), min_date: "2025-01-01", max_date: "2025-12-31" };
+    const c = { account_id: asAccountId(3), min_date: "2025-06-01", max_date: "2026-06-01" };
     expect(stampRangesOverlap([a, b])).toBe(false);
     expect(stampRangesOverlap([a, b, c])).toBe(true); // b × c overlap
   });
@@ -410,15 +417,15 @@ describe("collidingAnchorCurrencies (opening-anchor merge guard)", () => {
     expect(collidingAnchorCurrencies([])).toEqual([]);
     expect(
       collidingAnchorCurrencies([
-        { account_id: 1, currency: "EUR" },
-        { account_id: 2, currency: "USD" },
+        { account_id: asAccountId(1), currency: asCurrencyCode("EUR") },
+        { account_id: asAccountId(2), currency: asCurrencyCode("USD") },
       ]),
     ).toEqual([]);
     // Two anchors on the SAME account (one per currency) is the normal shape.
     expect(
       collidingAnchorCurrencies([
-        { account_id: 1, currency: "EUR" },
-        { account_id: 1, currency: "USD" },
+        { account_id: asAccountId(1), currency: asCurrencyCode("EUR") },
+        { account_id: asAccountId(1), currency: asCurrencyCode("USD") },
       ]),
     ).toEqual([]);
   });
@@ -426,11 +433,11 @@ describe("collidingAnchorCurrencies (opening-anchor merge guard)", () => {
   it("reports every currency held by more than one account, ordered and deduped", () => {
     expect(
       collidingAnchorCurrencies([
-        { account_id: 1, currency: "USD" },
-        { account_id: 2, currency: "USD" },
-        { account_id: 1, currency: "EUR" },
-        { account_id: 2, currency: "EUR" },
-        { account_id: 3, currency: "GBP" },
+        { account_id: asAccountId(1), currency: asCurrencyCode("USD") },
+        { account_id: asAccountId(2), currency: asCurrencyCode("USD") },
+        { account_id: asAccountId(1), currency: asCurrencyCode("EUR") },
+        { account_id: asAccountId(2), currency: asCurrencyCode("EUR") },
+        { account_id: asAccountId(3), currency: asCurrencyCode("GBP") },
       ]),
     ).toEqual(["EUR", "USD"]);
   });
@@ -440,15 +447,15 @@ describe("collidingAnchorCurrencies (opening-anchor merge guard)", () => {
     // NOT NULL + upper-cased in practice, so this is belt-and-braces.
     expect(
       collidingAnchorCurrencies([
-        { account_id: 1, currency: "eur" },
-        { account_id: 2, currency: "EUR" },
+        { account_id: asAccountId(1), currency: loose<CurrencyCode>("eur") },
+        { account_id: asAccountId(2), currency: asCurrencyCode("EUR") },
       ]),
     ).toEqual(["EUR"]);
     expect(
       collidingAnchorCurrencies([
         // @ts-expect-error -- a NULL currency must default to EUR at runtime
         { account_id: 1, currency: null },
-        { account_id: 2, currency: "EUR" },
+        { account_id: asAccountId(2), currency: asCurrencyCode("EUR") },
       ]),
     ).toEqual(["EUR"]);
   });
@@ -494,19 +501,19 @@ describe("previewMerge (GET /api/accounts/:id/merge-preview)", () => {
   }
 
   it("rejects a non-integer / non-positive into and self-merge with 400", async () => {
-    await expect(previewMerge(1, NaN)).rejects.toThrow(ValidationError); // ?into= missing
-    await expect(previewMerge(1, 0)).rejects.toThrow(ValidationError);
-    await expect(previewMerge(1, 2.5)).rejects.toThrow(ValidationError);
-    await expect(previewMerge(1, 1)).rejects.toThrow(ValidationError); // into === :id
+    await expect(previewMerge(asAccountId(1), asAccountId(NaN))).rejects.toThrow(ValidationError); // ?into= missing
+    await expect(previewMerge(asAccountId(1), asAccountId(0))).rejects.toThrow(ValidationError);
+    await expect(previewMerge(asAccountId(1), asAccountId(2.5))).rejects.toThrow(ValidationError);
+    await expect(previewMerge(asAccountId(1), asAccountId(1))).rejects.toThrow(ValidationError); // into === :id
     expect(query).not.toHaveBeenCalled();
   });
 
   it("404s when the survivor or the source is missing", async () => {
     primePreview({ accounts: [{ id: 1, currency: "EUR" }] }); // survivor #2 missing
-    await expect(previewMerge(1, 2)).rejects.toThrow(NotFoundError);
+    await expect(previewMerge(asAccountId(1), asAccountId(2))).rejects.toThrow(NotFoundError);
 
     primePreview({ accounts: [{ id: 2, currency: "EUR" }] }); // source #1 missing
-    await expect(previewMerge(1, 2)).rejects.toThrow(NotFoundError);
+    await expect(previewMerge(asAccountId(1), asAccountId(2))).rejects.toThrow(NotFoundError);
   });
 
   it("returns counts, projected union balance (survivor currency), and stampsInterleaved", async () => {
@@ -516,7 +523,7 @@ describe("previewMerge (GET /api/accounts/:id/merge-preview)", () => {
         { account_id: 1, min_date: "2026-03-01", max_date: "2026-07-05" },
       ],
     });
-    const result = await previewMerge(1, 2);
+    const result = await previewMerge(asAccountId(1), asAccountId(2));
 
     expect(result).toEqual({
       into: 2,
@@ -539,13 +546,13 @@ describe("previewMerge (GET /api/accounts/:id/merge-preview)", () => {
         { account_id: 1, min_date: "2025-02-01", max_date: "2026-07-01" },
       ],
     });
-    const result = await previewMerge(1, 2);
+    const result = await previewMerge(asAccountId(1), asAccountId(2));
     expect(result.stampsInterleaved).toBe(false);
   });
 
   it("is strictly read-only: only SELECTs, and never opens a transaction", async () => {
     primePreview();
-    await previewMerge(1, 2);
+    await previewMerge(asAccountId(1), asAccountId(2));
     const sqls = query.mock.calls.map(([sql]) => sql);
     expect(sqls.length).toBeGreaterThan(0);
     for (const sql of sqls) {
@@ -556,7 +563,7 @@ describe("previewMerge (GET /api/accounts/:id/merge-preview)", () => {
 
   it("evaluates the projected balance per currency over the UNION of both accounts", async () => {
     primePreview();
-    await previewMerge(1, 2);
+    await previewMerge(asAccountId(1), asAccountId(2));
     const projectedCall = query.mock.calls.find(([sql]) =>
       sql.includes("balance_parts"),
     );
@@ -593,7 +600,7 @@ describe("previewMerge (GET /api/accounts/:id/merge-preview)", () => {
         { currency: "USD", balance: "100" },
       ],
     });
-    const result = await previewMerge(1, 2);
+    const result = await previewMerge(asAccountId(1), asAccountId(2));
     expect(result.projectedBalance).toBe(150);
     expect(result.projectedBalanceCurrency).toBe("EUR");
   });
@@ -605,7 +612,7 @@ describe("previewMerge (GET /api/accounts/:id/merge-preview)", () => {
         { currency: "ZZZ", balance: "40" },
       ],
     });
-    const result = await previewMerge(1, 2);
+    const result = await previewMerge(asAccountId(1), asAccountId(2));
     expect(result.projectedBalance).toBe(100);
     expect(result.projectedBalanceIncomplete).toBe(true);
     expect(result.unconvertedCurrencies).toEqual(["ZZZ"]);
@@ -622,7 +629,7 @@ describe("previewMerge (GET /api/accounts/:id/merge-preview)", () => {
         { account_id: 1, currency: "EUR" },
       ],
     });
-    const result = await previewMerge(1, 2);
+    const result = await previewMerge(asAccountId(1), asAccountId(2));
     // Reported alongside the balance, not instead of it: the dialog warns, and
     // the figure still describes what the merge WOULD produce.
     expect(result.openingAnchorCollision).toBe(true);
@@ -636,13 +643,13 @@ describe("previewMerge (GET /api/accounts/:id/merge-preview)", () => {
         { account_id: 1, currency: "USD" },
       ],
     });
-    expect((await previewMerge(1, 2)).openingAnchorCollision).toBe(false);
+    expect((await previewMerge(asAccountId(1), asAccountId(2))).openingAnchorCollision).toBe(false);
   });
 
   it("reports 0 when neither account has any active rows", async () => {
     // The aggregated lateral is a LEFT JOIN: no rows ⇒ balance_parts is SQL NULL.
     primePreview({ parts: null });
-    const result = await previewMerge(1, 2);
+    const result = await previewMerge(asAccountId(1), asAccountId(2));
     expect(result.projectedBalance).toBe(0);
   });
 
@@ -650,7 +657,7 @@ describe("previewMerge (GET /api/accounts/:id/merge-preview)", () => {
     primePreview({
       counts: { transactions: "0", planned: "0", portfolio: "7", funding: "0" },
     });
-    const result = await previewMerge(1, 2);
+    const result = await previewMerge(asAccountId(1), asAccountId(2));
     expect(result.reassigned.portfolio).toBe(7);
     const portfolioSql = query.mock.calls
       .map(([sql]) => sql)

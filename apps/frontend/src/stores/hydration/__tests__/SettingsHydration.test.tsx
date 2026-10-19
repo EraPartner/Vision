@@ -22,6 +22,8 @@ import {
 } from "@/stores/hydration/SettingsHydration";
 import { useTheme } from "@/stores/hydration/ThemeHydration";
 import { SettingsPreloadProvider } from "@/contexts/SettingsPreloadContext";
+import { asCategoryId, asCurrencyCode } from "@vision/types/brands";
+import type { CurrencyCode } from "@vision/types/brands";
 
 const API_BASE = "http://localhost:3002";
 
@@ -51,7 +53,7 @@ describe("useAppSettings", () => {
 
     it("updateAppSettings merges partial changes", () => {
         const { result } = renderHook(() => useAppSettings());
-        act(() => result.current.updateAppSettings({ defaultCurrency: "USD" }));
+        act(() => result.current.updateAppSettings({ defaultCurrency: asCurrencyCode("USD") }));
         expect(result.current.appSettings.defaultCurrency).toBe("USD");
         expect(result.current.appSettings.dateFormat).toBe(
             DEFAULT_APP_SETTINGS.dateFormat,
@@ -62,7 +64,8 @@ describe("useAppSettings", () => {
         const { result } = renderHook(() => useAppSettings());
         act(() =>
             result.current.updateAppSettings({
-                defaultCurrency: "US",
+                // Deliberately invalid injected state: bypass the ISO constructor.
+                defaultCurrency: "US" as CurrencyCode,
                 showDecimalPlaces: Number.NaN,
             }),
         );
@@ -72,7 +75,7 @@ describe("useAppSettings", () => {
 
     it("resetAppSettings restores defaults", () => {
         const { result } = renderHook(() => useAppSettings());
-        act(() => result.current.updateAppSettings({ defaultCurrency: "USD" }));
+        act(() => result.current.updateAppSettings({ defaultCurrency: asCurrencyCode("USD") }));
         act(() => result.current.resetAppSettings());
         expect(result.current.appSettings.defaultCurrency).toBe("EUR");
     });
@@ -92,7 +95,7 @@ describe("useSettings", () => {
     it("updateSettings merges partial changes", () => {
         const { result } = renderHook(() => useSettings());
         act(() =>
-            result.current.updateSettings({ excludedCategoryIds: [1, 2] }),
+            result.current.updateSettings({ excludedCategoryIds: [asCategoryId(1), asCategoryId(2)] }),
         );
         expect(result.current.settings.excludedCategoryIds).toEqual([1, 2]);
         expect(result.current.settings.excludeHiddenCategories).toBe(
@@ -102,7 +105,7 @@ describe("useSettings", () => {
 
     it("resetSettings restores defaults", () => {
         const { result } = renderHook(() => useSettings());
-        act(() => result.current.updateSettings({ excludedCategoryIds: [5] }));
+        act(() => result.current.updateSettings({ excludedCategoryIds: [asCategoryId(5)] }));
         act(() => result.current.resetSettings());
         expect(result.current.settings.excludedCategoryIds).toEqual([]);
     });
@@ -217,7 +220,7 @@ describe("AppSettingsHydration — edge cases", () => {
             useSettingsStore.setState({ isAppSettingsLoading: false });
         });
         // Mutate
-        act(() => result.current.updateAppSettings({ defaultCurrency: "USD" }));
+        act(() => result.current.updateAppSettings({ defaultCurrency: asCurrencyCode("USD") }));
         // Flush debounce
         await act(async () => {
             await vi.advanceTimersByTimeAsync(600);
@@ -250,7 +253,7 @@ describe("AppSettingsHydration — edge cases", () => {
             useSettingsStore.setState({ isAppSettingsLoading: false });
         });
         const before = saveSpy.mock.calls.length;
-        act(() => result.current.updateAppSettings({ defaultCurrency: "GBP" }));
+        act(() => result.current.updateAppSettings({ defaultCurrency: asCurrencyCode("GBP") }));
         await act(async () => {
             await vi.advanceTimersByTimeAsync(600);
         });
@@ -378,7 +381,7 @@ describe("SettingsHydration — edge cases", () => {
         act(() => {
             useSettingsStore.setState({ isDashboardSettingsLoading: false });
         });
-        act(() => result.current.updateSettings({ excludedCategoryIds: [99] }));
+        act(() => result.current.updateSettings({ excludedCategoryIds: [asCategoryId(99)] }));
         await act(async () => {
             await vi.advanceTimersByTimeAsync(600);
         });

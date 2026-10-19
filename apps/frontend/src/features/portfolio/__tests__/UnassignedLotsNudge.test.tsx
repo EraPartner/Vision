@@ -61,16 +61,22 @@ vi.mock("@/stores/hydration/LanguageHydration", () => ({
 }));
 
 import { UnassignedLotsNudge } from "../UnassignedLotsNudge";
+import {
+    asAccountId,
+    asCurrencyCode,
+    asInvestmentId,
+    asPortfolioTransactionId,
+} from "@vision/types/brands";
 
 const transaction = (id: number, accountId: number | null, investmentId = 4) =>
     ({
-        id,
-        investment_id: investmentId,
-        account_id: accountId,
+        id: asPortfolioTransactionId(id),
+        investment_id: asInvestmentId(investmentId),
+        account_id: accountId === null ? null : asAccountId(accountId),
         type: "buy",
         date: "2026-01-01",
         amount: 10,
-        currency: "EUR",
+        currency: asCurrencyCode("EUR"),
         is_recurring: false,
         created_at: "2026-01-01T00:00:00Z",
         updated_at: "2026-01-01T00:00:00Z",
@@ -95,7 +101,7 @@ describe("UnassignedLotsNudge", () => {
         ];
         renderWithApp(
             <UnassignedLotsNudge
-                investmentId={4}
+                investmentId={asInvestmentId(4)}
                 investmentName="Example ETF"
                 transactions={[
                     transaction(12, null),
@@ -129,7 +135,7 @@ describe("UnassignedLotsNudge", () => {
         mocks.completeHistory = [transaction(11, 7)];
         const { container } = renderWithApp(
             <UnassignedLotsNudge
-                investmentId={4}
+                investmentId={asInvestmentId(4)}
                 investmentName="Example ETF"
                 transactions={[transaction(11, 7)]}
             />,
@@ -144,7 +150,7 @@ describe("UnassignedLotsNudge", () => {
         ];
         const { container } = renderWithApp(
             <UnassignedLotsNudge
-                investmentId={4}
+                investmentId={asInvestmentId(4)}
                 investmentName="Example ETF"
                 transactions={[
                     { ...transaction(11, null), type: "dividend" },
@@ -163,7 +169,7 @@ describe("UnassignedLotsNudge", () => {
             .mockResolvedValueOnce({ changed_count: 1 });
         renderWithApp(
             <UnassignedLotsNudge
-                investmentId={4}
+                investmentId={asInvestmentId(4)}
                 investmentName="Example ETF"
                 transactions={[transaction(11, null)]}
             />,
@@ -198,7 +204,7 @@ describe("UnassignedLotsNudge", () => {
         );
         renderWithApp(
             <UnassignedLotsNudge
-                investmentId={4}
+                investmentId={asInvestmentId(4)}
                 investmentName="Large ETF"
                 transactions={Array.from({ length: 501 }, (_, index) =>
                     transaction(index + 1, null),

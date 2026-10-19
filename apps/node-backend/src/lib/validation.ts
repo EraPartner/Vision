@@ -7,6 +7,8 @@
  */
 
 import { ValidationError } from "../middleware/errorHandler.ts";
+import { isCurrencyCode } from "@vision/types/brands";
+import type { CurrencyCode } from "@vision/types/brands";
 
 /**
  * Outcome of a value-level check. Both members declare both keys so callers
@@ -125,12 +127,23 @@ export function validateId(
 
 export function assertOptionalId(
   value: unknown,
+  fieldName?: string,
+): number | undefined;
+/** `brand` turns the validated id into an entity's branded id. */
+export function assertOptionalId<T extends number>(
+  value: unknown,
+  fieldName: string,
+  brand: (id: number) => T,
+): T | undefined;
+export function assertOptionalId(
+  value: unknown,
   fieldName = "id",
+  brand: (id: number) => number = (id) => id,
 ): number | undefined {
   if (value == null || value === "") return undefined;
   const result = validateId(value, fieldName);
   if (!result.valid) throw new ValidationError(result.error);
-  return result.value;
+  return brand(result.value);
 }
 
 export const MAX_MONEY_VALUE = 1e12;
@@ -174,10 +187,10 @@ export function assertMaxLength<T>(
 export function assertCurrency(
   value: unknown,
   fieldName = "currency",
-): string | undefined {
+): CurrencyCode | undefined {
   if (value == null || value === "") return undefined;
   const currency = String(value).toUpperCase().trim();
-  if (!/^[A-Z]{3}$/.test(currency)) {
+  if (!isCurrencyCode(currency)) {
     throw new ValidationError(`${fieldName} must be a 3-letter ISO code`);
   }
   return currency;
@@ -228,6 +241,10 @@ export function validateIntArray(
   return { valid: true, value: result };
 }
 
+export function filterValidatedIdNumbers<T extends number>(
+  values: readonly T[],
+): T[];
+export function filterValidatedIdNumbers(values: unknown): number[];
 export function filterValidatedIdNumbers(values: unknown): number[] {
   if (!Array.isArray(values)) return [];
   return values.filter(

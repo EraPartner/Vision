@@ -28,9 +28,10 @@ import {
     type Attachment,
 } from "@/lib/api/attachments";
 import { attachmentKeys, useAttachments } from "@/hooks/useAttachments";
+import type { TransactionId } from "@vision/types/brands";
 
 interface AttachmentPanelProps {
-    transactionId: number;
+    transactionId: TransactionId;
 }
 
 const ALLOWED_MIME = "image/*,application/pdf";

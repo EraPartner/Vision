@@ -21,6 +21,10 @@ import type {
 import { toast } from "sonner";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import type {
+    InvestmentId,
+    PortfolioTransactionId,
+} from "@vision/types/brands";
 
 /** Stop rather than publish a partial collection if a page disappears mid-read. */
 async function collectPages<T>(
@@ -75,7 +79,7 @@ export function useInvestmentsQuery() {
 /** Recent activity only. Calculations and detail views must request complete history. */
 export const RECENT_TRANSACTIONS_PER_INVESTMENT = 50;
 export function usePortfolioTransactionsQuery(
-    investmentIds: number[],
+    investmentIds: InvestmentId[],
     complete = false,
 ) {
     return useQuery({
@@ -150,7 +154,7 @@ export function usePortfolioTransactionsQuery(
 }
 
 export function useAllPortfolioTransactionsQuery(
-    investmentId: number,
+    investmentId: InvestmentId,
     enabled = true,
 ) {
     return useQuery({
@@ -193,7 +197,7 @@ export function useInvestmentMutations() {
     });
 
     const updateInvestmentMutation = useMutation({
-        mutationFn: ({ id, data }: { id: number; data: InvestmentUpdate }) =>
+        mutationFn: ({ id, data }: { id: InvestmentId; data: InvestmentUpdate }) =>
             apiClient.updateInvestment(id, data),
         onSuccess: invalidateAll,
         onError: (err: Error) =>
@@ -203,7 +207,7 @@ export function useInvestmentMutations() {
     });
 
     const deleteInvestmentMutation = useMutation({
-        mutationFn: (id: number) => apiClient.deleteInvestment(id),
+        mutationFn: (id: InvestmentId) => apiClient.deleteInvestment(id),
         onSuccess: invalidateAll,
         onError: (err: Error) =>
             toast.error(t("portfolio.deleteInvestmentFailedTitle"), {
@@ -216,7 +220,7 @@ export function useInvestmentMutations() {
             investmentId,
             data,
         }: {
-            investmentId: number;
+            investmentId: InvestmentId;
             data: PortfolioTransactionCreate;
         }) => apiClient.createPortfolioTransaction(investmentId, data),
         onSuccess: invalidateAll,
@@ -227,7 +231,7 @@ export function useInvestmentMutations() {
     });
 
     const deleteTxnMutation = useMutation({
-        mutationFn: (id: number) => apiClient.deletePortfolioTransaction(id),
+        mutationFn: (id: PortfolioTransactionId) => apiClient.deletePortfolioTransaction(id),
         onSuccess: invalidateAll,
         onError: (err: Error) =>
             toast.error(t("portfolio.deleteTxnFailedTitle"), {
@@ -240,7 +244,7 @@ export function useInvestmentMutations() {
             id,
             data,
         }: {
-            id: number;
+            id: PortfolioTransactionId;
             data: PortfolioTransactionUpdate;
         }) => apiClient.updatePortfolioTransaction(id, data),
         onSuccess: invalidateAll,
@@ -309,18 +313,18 @@ export function useInvestmentMutations() {
     );
 
     const updateInvestment = useCallback(
-        (id: number, data: InvestmentUpdate) =>
+        (id: InvestmentId, data: InvestmentUpdate) =>
             updateInvestmentMutation.mutateAsync({ id, data }),
         [updateInvestmentMutation],
     );
 
     const deleteInvestment = useCallback(
-        (id: number) => deleteInvestmentMutation.mutate(id),
+        (id: InvestmentId) => deleteInvestmentMutation.mutate(id),
         [deleteInvestmentMutation],
     );
 
     const addTransaction = useCallback(
-        (data: { investmentId: number } & PortfolioTransactionCreate) => {
+        (data: { investmentId: InvestmentId } & PortfolioTransactionCreate) => {
             const { investmentId, ...txnData } = data;
             return addTxnMutation.mutateAsync({ investmentId, data: txnData });
         },
@@ -328,12 +332,12 @@ export function useInvestmentMutations() {
     );
 
     const deleteTransaction = useCallback(
-        (id: number) => deleteTxnMutation.mutate(id),
+        (id: PortfolioTransactionId) => deleteTxnMutation.mutate(id),
         [deleteTxnMutation],
     );
 
     const updateTransaction = useCallback(
-        (id: number, data: PortfolioTransactionUpdate) =>
+        (id: PortfolioTransactionId, data: PortfolioTransactionUpdate) =>
             updateTxnMutation.mutateAsync({ id, data }),
         [updateTxnMutation],
     );

@@ -7,6 +7,7 @@ import {
     RebalanceResponseSchema,
 } from "@vision/types/contracts";
 import { apiRequest } from "@/lib/api/client";
+import type { AccountId, CurrencyCode } from "@vision/types/brands";
 
 export type ModelPortfolio =
     "sixty_forty" | "all_weather" | "three_fund" | "awesome";
@@ -25,7 +26,7 @@ export interface RebalancePlan {
 
 export interface RebalanceRequest {
     /** Display/computation currency. Defaults to EUR server-side. */
-    currency?: string;
+    currency?: CurrencyCode;
     /** Convenience preset; ignored when `targetWeights` is provided. */
     model?: ModelPortfolio;
     /** Explicit target weights keyed by asset class (need not sum to 1). */
@@ -35,7 +36,7 @@ export interface RebalanceRequest {
 }
 
 export interface RebalanceResponse {
-    currency: string;
+    currency: CurrencyCode;
     targetWeights: Record<string, number>;
     actualValues: Record<string, number>;
     availableCash: number;
@@ -46,18 +47,18 @@ export interface RebalanceResponse {
      * account's own declared code and must never be used to format `balance`.
      */
     cashAccounts: Array<{
-        id: number;
+        id: AccountId;
         name: string;
-        accountCurrency: string;
+        accountCurrency: CurrencyCode;
         balance: number;
-        balanceCurrency: string;
+        balanceCurrency: CurrencyCode;
     }>;
     /** Per-sleeve cash to deploy (only underweight sleeves appear). */
     deployment: Record<string, number>;
 }
 
 export interface CommitmentAwareCashResponse {
-    currency: string;
+    currency: CurrencyCode;
     today: string;
     horizonEnd: string;
     horizonDays: number;
@@ -77,7 +78,7 @@ export interface CommitmentAwareCashResponse {
 }
 
 export function computeCommitmentAwareCash(req: {
-    currency?: string | undefined;
+    currency?: CurrencyCode | undefined;
     reserveFloor: number;
 }): Promise<CommitmentAwareCashResponse> {
     return apiRequest("/api/cross-workspace/commitment-aware-cash", {

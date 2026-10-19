@@ -21,6 +21,9 @@ import splitService from "../src/services/splitService.ts";
 import splitsRouter from "../src/routes/splits.ts";
 import { routeAgent } from "./helpers/routeApp.ts";
 import { bodyAt } from "./helpers/responseBody.ts";
+import {
+  asRecipientId,
+} from "@vision/types/brands";
 
 const describeDb = hasTestDatabase() ? describe : describe.skip;
 const MARK = `owed_totals_${process.pid}`;
@@ -47,7 +50,7 @@ async function insertSplit(
   );
   const split = await splitService.createSplitAtomic({
     transaction_id: rows[0].id,
-    recipient_id: owedBy,
+    recipient_id: asRecipientId(owedBy),
     amount,
     note: null,
   });

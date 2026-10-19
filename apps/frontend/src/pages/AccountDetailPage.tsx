@@ -102,6 +102,7 @@ import { usePortfolioSummaryQuery } from "@/hooks/portfolio/usePortfolioSummary"
 import { getBrokerAccountMetrics } from "@/features/accounts/brokerAccountMetrics";
 import { PortfolioOversoldBadge } from "@/features/portfolio/PortfolioOversoldBadge";
 import { amountClass } from "@/features/transactions/amountClass";
+import { DEFAULT_CURRENCY } from "@/utils/currency";
 
 // Same trend-color rule the AccountDetailSheet used.
 const SPARK_COLOR_POSITIVE = "hsl(var(--gain))";
@@ -126,7 +127,7 @@ export default function AccountDetailPage() {
     // Shared drift chip content + tone (§3 F1) — identical to the hub card.
     const driftBadge = useDriftBadge();
     const { appSettings } = useAppSettings();
-    const displayCurrency = appSettings.defaultCurrency || "EUR";
+    const displayCurrency = appSettings.defaultCurrency || DEFAULT_CURRENCY;
     const { confirm, ConfirmDialog } = useConfirmDialog();
 
     // The hub's cached population (active + archived) — the simplest source for

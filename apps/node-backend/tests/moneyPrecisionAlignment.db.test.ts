@@ -51,6 +51,9 @@ import {
 import splitPersistence from "../src/repositories/splitRepository.ts";
 import splitService from "../src/services/splitService.ts";
 import { closePool } from "../src/database/connection.ts";
+import {
+  asRecipientId,
+} from "@vision/types/brands";
 
 const pool = getTestPool()!;
 const describeDb = hasTestDatabase() ? describe : describe.skip;
@@ -319,7 +322,7 @@ describeDb("migration 0088: money columns aligned to NUMERIC(18,4)", () => {
       const txId = await insertTx("-100.0000");
       await splitRepository.createSplitAtomic({
         transaction_id: txId,
-        recipient_id: recipientId,
+        recipient_id: asRecipientId(recipientId),
         amount: 50.0,
         note: null,
       });
@@ -329,7 +332,7 @@ describeDb("migration 0088: money columns aligned to NUMERIC(18,4)", () => {
       await expect(
         splitRepository.createSplitAtomic({
           transaction_id: txId,
-          recipient_id: recipientId,
+          recipient_id: asRecipientId(recipientId),
           amount: 50.0049,
           note: null,
         }),
@@ -347,8 +350,8 @@ describeDb("migration 0088: money columns aligned to NUMERIC(18,4)", () => {
       const created = await splitRepository.createSplitsBatchAtomic({
         transaction_id: txId,
         splits: [
-          { recipient_id: recipientId, amount: 50.0 },
-          { recipient_id: recipientId, amount: 50.0001 },
+          { recipient_id: asRecipientId(recipientId), amount: 50.0 },
+          { recipient_id: asRecipientId(recipientId), amount: 50.0001 },
         ],
       });
       expect(created.map((s) => s.amount)).toEqual([50, 50.0001]);

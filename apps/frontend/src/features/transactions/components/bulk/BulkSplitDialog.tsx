@@ -16,12 +16,13 @@ import {
 import { RecipientCombobox } from "@/components/shared/RecipientCombobox";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import type { BulkSplitMode } from "@/lib/api/splits";
+import type { RecipientId } from "@vision/types/brands";
 
 interface BulkSplitDialogProps {
     open: boolean;
     selectedCount: number;
     onOpenChange: (open: boolean) => void;
-    onApply: (recipientId: number, mode: BulkSplitMode) => void;
+    onApply: (recipientId: RecipientId, mode: BulkSplitMode) => void;
     pending?: boolean;
 }
 
@@ -38,7 +39,7 @@ export function BulkSplitDialog({
     pending,
 }: BulkSplitDialogProps) {
     const { t } = useLanguage();
-    const [recipientId, setRecipientId] = useState<number | null>(null);
+    const [recipientId, setRecipientId] = useState<RecipientId | null>(null);
     const [mode, setMode] = useState<BulkSplitMode>("equal");
 
     function handleApply(e: React.FormEvent) {

@@ -17,6 +17,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Mock } from "vitest";
 import { accountRow } from "../helpers/pgRows.ts";
+import {
+  asAccountId,
+  asRecipientId,
+  asTransactionId,
+} from "@vision/types/brands";
 
 /**
  * Load the real connection module against a mocked pg pool, so `withTransaction`
@@ -93,7 +98,7 @@ describe("account merge atomicity (ADR-088)", () => {
 
     const { accountService } =
       await import("../../src/services/accountService.ts");
-    await expect(accountService.remove(7)).resolves.toBe(7);
+    await expect(accountService.remove(asAccountId(7))).resolves.toBe(7);
 
     const sqls = client.query.mock.calls.map(([sql]) => sql);
     expect(sqls[0]).toBe("BEGIN");
@@ -111,7 +116,7 @@ describe("account merge atomicity (ADR-088)", () => {
         return { rows: [] };
       }
       if (sql.includes("FROM accounts WHERE id = $1")) {
-        return { rows: [accountRow({ id: 2, funding_account_id: null })] };
+        return { rows: [accountRow({ id: asAccountId(2), funding_account_id: null })] };
       }
       if (sql.startsWith("UPDATE accounts SET")) {
         throw new Error("late account update failure");
@@ -122,7 +127,7 @@ describe("account merge atomicity (ADR-088)", () => {
     const { accountService } =
       await import("../../src/services/accountService.ts");
     await expect(
-      accountService.update(1, { funding_account_id: 2 }),
+      accountService.update(asAccountId(1), { funding_account_id: 2 }),
     ).rejects.toThrow("late account update failure");
 
     const sqls = expectRolledBackOnOneConnection(client, pool);
@@ -160,7 +165,7 @@ describe("account merge atomicity (ADR-088)", () => {
 
     const { mergeAccounts } =
       await import("../../src/services/accountMergeService.ts");
-    await expect(mergeAccounts(2, [1])).rejects.toThrow(
+    await expect(mergeAccounts(asAccountId(2), [asAccountId(1)])).rejects.toThrow(
       "23503 foreign key violation",
     );
 
@@ -213,7 +218,7 @@ describe("recipient merge atomicity (ADR-014)", () => {
 
     const { mergeRecipients } =
       await import("../../src/services/recipientMergeService.ts");
-    await expect(mergeRecipients(1, [3])).rejects.toThrow("deadlock detected");
+    await expect(mergeRecipients(asRecipientId(1), [asRecipientId(3)])).rejects.toThrow("deadlock detected");
 
     const sqls = expectRolledBackOnOneConnection(client, pool);
     // Every money-bearing reassignment ran inside the rolled-back transaction.
@@ -285,7 +290,7 @@ describe("transfer mark atomicity (ADR-083)", () => {
 
     const { markTransfer } =
       await import("../../src/services/transferReconciliationService.ts");
-    await expect(markTransfer(10, 20)).rejects.toThrow("serialization failure");
+    await expect(markTransfer(asTransactionId(10), asTransactionId(20))).rejects.toThrow("serialization failure");
 
     const sqls = expectRolledBackOnOneConnection(client, pool);
     // The peer release and the first leg are undone together — without one

@@ -14,6 +14,7 @@ import {
     createTestQueryClient,
 } from "@/test/queryWrapper";
 import type { Transaction } from "@/types/api";
+import { asTransactionId } from "@vision/types/brands";
 
 vi.mock("sonner", () => ({
     toast: {
@@ -69,7 +70,7 @@ describe("transaction mutation Insights invalidation", () => {
         });
 
         await expectDigestInvalidated(
-            () => result.current.mutate({ id: 10, data: { amount: -6 } }),
+            () => result.current.mutate({ id: asTransactionId(10), data: { amount: -6 } }),
             () => result.current.isSuccess,
             invalidateSpy,
         );
@@ -84,7 +85,7 @@ describe("transaction mutation Insights invalidation", () => {
         });
 
         await expectDigestInvalidated(
-            () => result.current.mutate(10),
+            () => result.current.mutate(asTransactionId(10)),
             () => result.current.isSuccess,
             invalidateSpy,
         );

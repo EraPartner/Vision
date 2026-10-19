@@ -6,6 +6,9 @@ import { accountService } from "../src/services/accountService.ts";
 import { transactionRepository } from "../src/repositories/transactionRepository.ts";
 import { reconcileAccount } from "../src/services/reconcileService.ts";
 import { closeTestPool, getTestPool, hasTestDatabase } from "./setup/db.ts";
+import {
+  asCurrencyCode,
+} from "@vision/types/brands";
 
 const describeDb =
   hasTestDatabase() && process.env.VISION_TEST_DB_TASK === "statement-contract"
@@ -54,7 +57,7 @@ describeDb("account statement scalar contract schema", () => {
       account_id: account.id,
       recipient_id: recipients[0].id,
       amount: 100,
-      currency: "EUR",
+      currency: asCurrencyCode("EUR"),
       memo: "STATEMENT CONTRACT",
     });
     await accountService.setStatementBalance(account.id, "EUR", {

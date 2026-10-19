@@ -16,6 +16,9 @@ import {
 } from './setup/db.ts';
 import { closePool } from '../src/database/connection.ts';
 import { resolveInvestmentRows } from '../src/services/portfolioImportBatchService.ts';
+import {
+  asInvestmentId,
+} from "@vision/types/brands";
 
 const pool = getTestPool()!;
 const describeDb = hasTestDatabase() ? describe : describe.skip;
@@ -71,7 +74,7 @@ describeDb('portfolio import group resolution (real Postgres)', () => {
     );
     const investmentId = Number(investments[0].id);
 
-    await expect(resolveInvestmentRows({ batchId, rowIds, investmentId }))
+    await expect(resolveInvestmentRows({ batchId, rowIds, investmentId: asInvestmentId(investmentId) }))
       .resolves.toMatchObject({ investmentId, created: false, resolved: 2_000 });
 
     const { rows } = await pool.query(

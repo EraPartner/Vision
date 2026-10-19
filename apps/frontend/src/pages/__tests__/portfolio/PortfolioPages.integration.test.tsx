@@ -28,16 +28,21 @@ import MarketLookupPage from "@/pages/research/MarketLookupPage";
 import { AddPortfolioTxnDialog } from "@/features/portfolio/AddPortfolioTxnDialog";
 import { InvestmentDetailDialog } from "@/features/portfolio/InvestmentDetailDialog";
 import type { InvestmentSummary } from "@/types/portfolio";
+import {
+    asCurrencyCode,
+    asInvestmentId,
+    asPortfolioTransactionId,
+} from "@vision/types/brands";
 
 const API_BASE = "http://localhost:3002";
 
 const PORTFOLIO_INVESTMENT: InvestmentSummary = {
-    id: 1,
+    id: asInvestmentId(1),
     name: "Test Fund",
     symbol: "IWDA",
     assetClass: "etf",
     asset_class: "etf",
-    currency: "EUR",
+    currency: asCurrencyCode("EUR"),
     is_active: true,
     created_at: "2025-01-01T00:00:00.000Z",
     updated_at: "2025-01-01T00:00:00.000Z",
@@ -1697,14 +1702,14 @@ describe("Portfolio pages (integration)", () => {
                 ...PORTFOLIO_INVESTMENT,
                 transactions: [
                     {
-                        id: 1,
-                        investment_id: 1,
+                        id: asPortfolioTransactionId(1),
+                        investment_id: asInvestmentId(1),
                         type: "buy" as const,
                         date: "2025-01-15",
                         amount: 1000,
                         units: 10,
                         price_per_unit: 100,
-                        currency: "EUR",
+                        currency: asCurrencyCode("EUR"),
                         is_recurring: false,
                         created_at: "2025-01-15T10:00:00.000Z",
                         updated_at: "2025-01-15T10:00:00.000Z",

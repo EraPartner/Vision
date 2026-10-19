@@ -13,6 +13,7 @@ import {
     taxKeys,
 } from "@/lib/queryKeys";
 import { useBackgroundQueryCue } from "@/components/shared/BackgroundQueryIndicator";
+import type { AccountId, CurrencyCode } from "@vision/types/brands";
 
 export function useAccounts(params?: { active?: "true" | "false" | "all" }) {
     const query = useQuery({
@@ -29,7 +30,7 @@ export function useAccounts(params?: { active?: "true" | "false" | "all" }) {
  * Accounts hub totals computed on the server in `currency` (ADR-216):
  * converted balances, group subtotals and net cash.
  */
-export function useAccountTotals(currency: string) {
+export function useAccountTotals(currency: CurrencyCode) {
     return useQuery({
         queryKey: accountKeys.totals(currency),
         queryFn: () => apiClient.getAccountTotals(currency),
@@ -37,7 +38,7 @@ export function useAccountTotals(currency: string) {
     });
 }
 
-export function useAccountMergePreview(sourceId: number, targetId?: number) {
+export function useAccountMergePreview(sourceId: AccountId, targetId?: AccountId) {
     return useQuery({
         queryKey: accountKeys.mergePreview(sourceId, targetId ?? 0),
         queryFn: () => apiClient.previewMerge(sourceId, targetId!),
@@ -70,7 +71,7 @@ export function useUpdateAccount() {
     const { t } = useLanguage();
 
     return useMutation({
-        mutationFn: ({ id, data }: { id: number; data: AccountUpdate }) =>
+        mutationFn: ({ id, data }: { id: AccountId; data: AccountUpdate }) =>
             apiClient.updateAccount(id, data),
         onSuccess: (_result, { data }) => {
             invalidateAccountDerived(queryClient);
@@ -104,8 +105,8 @@ export function useMergeAccounts() {
             targetId,
             sourceIds,
         }: {
-            targetId: number;
-            sourceIds: number[];
+            targetId: AccountId;
+            sourceIds: AccountId[];
         }) => apiClient.mergeAccounts(targetId, sourceIds),
         onSuccess: (result) => {
             // A merge repoints transactions / planned / holdings / funding across accounts, so it
@@ -133,7 +134,7 @@ export function useDeleteAccount() {
     const { t } = useLanguage();
 
     return useMutation({
-        mutationFn: (id: number) => apiClient.deleteAccount(id),
+        mutationFn: (id: AccountId) => apiClient.deleteAccount(id),
         onSuccess: () => {
             invalidateAccountDerived(queryClient);
             toast.success(t("accounts.deleted"));

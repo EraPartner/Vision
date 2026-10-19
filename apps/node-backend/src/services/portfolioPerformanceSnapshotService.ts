@@ -27,6 +27,7 @@ import {
 import { addAll, toDecimal } from "../lib/money.ts";
 import type { Decimal } from "../lib/money.ts";
 import type { PortfolioPerformanceSnapshotRow } from "../types/rows.ts";
+import type { CurrencyCode } from "@vision/types/brands";
 
 export type { PortfolioPerformanceSnapshotRow };
 
@@ -45,7 +46,7 @@ export type PortfolioPerformanceSnapshot = {
   stocks_etfs_invested: string;
   crypto_invested: string;
   metals_invested: string;
-  currency: string;
+  currency: CurrencyCode;
   value_fx_neutral: string | undefined;
 };
 interface BrokerSnapshotPartition {

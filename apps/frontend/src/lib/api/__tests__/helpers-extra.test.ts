@@ -11,6 +11,11 @@ import {
 } from "@/lib/api/helpers";
 import { bulkExportTransactions } from "@/lib/api/transactions";
 import { exportOwedByRecipientCsv } from "@/lib/api/splits";
+import {
+    asCategoryId,
+    asCurrencyCode,
+    asRecipientId,
+} from "@vision/types/brands";
 
 const API_BASE = "http://localhost:3002";
 
@@ -49,9 +54,9 @@ describe("buildExclusionQuery", () => {
     it("appends repeated ids and a currency", () => {
         const q = new URLSearchParams(
             buildExclusionQuery({
-                excluded_category_ids: [1, 2],
-                excluded_recipient_ids: [3],
-                currency: "EUR",
+                excluded_category_ids: [asCategoryId(1), asCategoryId(2)],
+                excluded_recipient_ids: [asRecipientId(3)],
+                currency: asCurrencyCode("EUR"),
             }),
         );
         expect(q.getAll("excluded_category_ids")).toEqual(["1", "2"]);
@@ -189,7 +194,7 @@ describe("blob export endpoints", () => {
                 }),
             ),
         );
-        const blob = await exportOwedByRecipientCsv(4);
+        const blob = await exportOwedByRecipientCsv(asRecipientId(4));
         expect(await blob.text()).toBe("owed,csv");
     });
 });

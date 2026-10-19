@@ -3,14 +3,20 @@
 import { query } from "../database/connection.ts";
 import { queryOne, queryRows } from "../database/rowContracts.ts";
 import {
-  portfolioIntIdRowSchema,
   portfolioTransactionDbRowSchema,
+  portfolioTransactionKeyRowSchema,
 } from "../database/rows/portfolio.ts";
 import { buildSetClauses } from "../lib/sqlClauses.ts";
 import { mapPortfolioTxRow } from "./portfolioTxRepo.reads.ts";
 import { hasPortfolioTransactionImportBatchIdColumn } from "./portfolioTxRepo.common.ts";
 
 import type { PortfolioTransactionRow } from "../types/rows.ts";
+import type {
+  AccountId,
+  CurrencyCode,
+  InvestmentId,
+  PortfolioTransactionId,
+} from "@vision/types/brands";
 
 export type { PortfolioTransactionRow };
 
@@ -19,7 +25,7 @@ export type { PortfolioTransactionRow };
  * `PortfolioTransactionInput` typedef of services/portfolio/portfolioTransactionRules.js).
  */
 export interface PortfolioTransactionInput {
-  investment_id: number;
+  investment_id: InvestmentId;
   type: string;
   /** 'YYYY-MM-DD' */
   date: string;
@@ -29,13 +35,13 @@ export interface PortfolioTransactionInput {
   fees?: number | string | null | undefined;
   taxes?: number | string | null | undefined;
   dividend_amount_convention?: "gross" | "net" | "unknown" | undefined;
-  currency?: string | undefined;
+  currency?: CurrencyCode | undefined;
   note?: string | null | undefined;
   is_recurring?: boolean | undefined;
   recurrence_interval?: string | null | undefined;
   recurrence_end_date?: string | null | undefined;
   fx_rate_to_eur?: number | string | null | undefined;
-  account_id?: number | null | undefined;
+  account_id?: AccountId | null | undefined;
   /** Set only by the import commit path; NULL for manual entry. */
   import_batch_id?: number | string | null | undefined;
   source_record_hash?: string | null | undefined;
@@ -114,7 +120,7 @@ export async function insert(
 }
 
 export async function updateFields(
-  id: number,
+  id: PortfolioTransactionId,
   fields: Record<string, unknown>,
   unchanged: PortfolioTransactionRow | null = null,
 ): Promise<PortfolioTransactionRow | null> {
@@ -145,7 +151,9 @@ export async function updateFields(
   return row ? mapPortfolioTxRow(row) : null;
 }
 
-export async function hardDelete(id: number): Promise<boolean> {
+export async function hardDelete(
+  id: PortfolioTransactionId,
+): Promise<boolean> {
   const result = await query(
     "DELETE FROM portfolio_transactions WHERE id = $1",
     [id],
@@ -155,10 +163,10 @@ export async function hardDelete(id: number): Promise<boolean> {
 
 export async function hardDeleteByImportBatch(
   batchId: number | string,
-): Promise<Array<number | string>> {
+): Promise<PortfolioTransactionId[]> {
   if (!(await hasPortfolioTransactionImportBatchIdColumn())) return [];
   const rows = await queryRows(
-    portfolioIntIdRowSchema,
+    portfolioTransactionKeyRowSchema,
     "DELETE FROM portfolio_transactions WHERE import_batch_id = $1 RETURNING id",
     [batchId],
   );
@@ -166,8 +174,8 @@ export async function hardDeleteByImportBatch(
 }
 
 export async function repointAccount(
-  targetId: number,
-  sourceIds: number[],
+  targetId: AccountId,
+  sourceIds: AccountId[],
 ): Promise<number> {
   const result = await query(
     "UPDATE portfolio_transactions SET account_id = $1 WHERE account_id = ANY($2::int[])",

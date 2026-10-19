@@ -126,6 +126,11 @@ import {
     getCashflowForecastRolling,
     getSankeyFlow,
 } from "@/lib/api/aggregations";
+import {
+    asCurrencyCode,
+    asInvestmentId,
+    asPortfolioTransactionId,
+} from "@vision/types/brands";
 
 afterEach(() => server.resetHandlers());
 
@@ -395,7 +400,7 @@ const ROWS: Row[] = [
         method: "patch",
         path: "/api/investments/1",
         body: { ...INVESTMENT_STUB, show_in_ticker: true },
-        call: () => updateInvestment(1, {}),
+        call: () => updateInvestment(asInvestmentId(1), {}),
     },
     {
         route: "GET /api/investments/providers",
@@ -427,7 +432,7 @@ const ROWS: Row[] = [
             provider: "yahoo",
             points: [{ timestampMs: 1735689600000, price: 95.5 }],
         },
-        call: () => getInvestmentPriceHistory(1),
+        call: () => getInvestmentPriceHistory(asInvestmentId(1)),
     },
     {
         route: "GET /api/investments/:id/transactions",
@@ -440,7 +445,7 @@ const ROWS: Row[] = [
             offset: 0,
             links: [],
         },
-        call: () => getPortfolioTransactions(1),
+        call: () => getPortfolioTransactions(asInvestmentId(1)),
     },
     {
         route: "GET /api/investments/transactions",
@@ -461,14 +466,14 @@ const ROWS: Row[] = [
         path: "/api/investments/1/transactions",
         status: 201,
         body: PORTFOLIO_TRANSACTION_STUB,
-        call: () => createPortfolioTransaction(1, {} as never),
+        call: () => createPortfolioTransaction(asInvestmentId(1), {} as never),
     },
     {
         route: "PATCH /api/investments/transactions/:id",
         method: "patch",
         path: "/api/investments/transactions/1",
         body: PORTFOLIO_TRANSACTION_STUB,
-        call: () => updatePortfolioTransaction(1, {}),
+        call: () => updatePortfolioTransaction(asPortfolioTransactionId(1), {}),
     },
     {
         route: "PUT /api/investments/transactions/broker",
@@ -509,7 +514,7 @@ const ROWS: Row[] = [
             ],
             scopeNotes: [],
         },
-        call: () => getPortfolioExposure("EUR"),
+        call: () => getPortfolioExposure(asCurrencyCode("EUR")),
     },
     // ── Portfolio imports ───────────────────────────────────────────────────
     {
@@ -588,14 +593,14 @@ const ROWS: Row[] = [
         method: "post",
         path: "/api/portfolio/import/batches/1/rows/2/investment-override",
         body: { row_id: 2, user_override_investment_id: 1 },
-        call: () => overridePortfolioImportRow(1, 2, { investmentId: 1 }),
+        call: () => overridePortfolioImportRow(1, 2, { investmentId: asInvestmentId(1) }),
     },
     {
         route: "POST /api/portfolio/import/batches/:id/rows/investment-override",
         method: "post",
         path: "/api/portfolio/import/batches/1/rows/investment-override",
         body: { investment_id: 1, created: false, resolved: 2 },
-        call: () => overridePortfolioImportRows(1, [2, 3], { investmentId: 1 }),
+        call: () => overridePortfolioImportRows(1, [2, 3], { investmentId: asInvestmentId(1) }),
     },
     {
         route: "POST /api/portfolio/import/batches/:id/commit",

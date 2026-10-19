@@ -5,6 +5,8 @@ import { dashboardKeys, monthlySummaryKeys } from "@/lib/queryKeys";
 import { QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { useExcludedIds } from "@/hooks/useExcludedIds";
+import { DEFAULT_CURRENCY } from "@/utils/currency";
+import type { CategoryId, RecipientId } from "@vision/types/brands";
 
 export interface NetHistoryPoint {
     year: number;
@@ -22,11 +24,12 @@ interface FilteredDashboardStats {
 }
 
 const NET_HISTORY_MONTHS = 12;
-const EMPTY_IDS: number[] = [];
+const EMPTY_CATEGORY_IDS: CategoryId[] = [];
+const EMPTY_RECIPIENT_IDS: RecipientId[] = [];
 
 export interface UseMonthlySummaryOptions {
-    excludedCategoryIds?: number[];
-    excludedRecipientIds?: number[];
+    excludedCategoryIds?: CategoryId[];
+    excludedRecipientIds?: RecipientId[];
     enabled?: boolean;
 }
 
@@ -46,12 +49,12 @@ export interface UseMonthlySummaryOptions {
  * (lib/queryKeys) invalidates after mutations — keep it.
  */
 export function useMonthlySummary({
-    excludedCategoryIds = EMPTY_IDS,
-    excludedRecipientIds = EMPTY_IDS,
+    excludedCategoryIds = EMPTY_CATEGORY_IDS,
+    excludedRecipientIds = EMPTY_RECIPIENT_IDS,
     enabled = true,
 }: UseMonthlySummaryOptions = {}) {
     const { appSettings } = useAppSettings();
-    const targetCurrency = appSettings.defaultCurrency || "EUR";
+    const targetCurrency = appSettings.defaultCurrency || DEFAULT_CURRENCY;
 
     return useQuery({
         queryKey: monthlySummaryKeys.summary(

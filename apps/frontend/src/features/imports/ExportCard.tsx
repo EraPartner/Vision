@@ -19,12 +19,13 @@ import { CategoryMultiCombobox } from "@/components/shared/CategoryMultiCombobox
 import { BankAccountMultiCombobox } from "@/components/shared/BankAccountMultiCombobox";
 import { toast } from "sonner";
 import { CheckCircle2, Download, Loader2 } from "lucide-react";
+import type { CategoryId } from "@vision/types/brands";
 
 interface ExportFilters {
     startDate: string;
     endDate: string;
     bankAccounts: string[];
-    categoryIds: number[];
+    categoryIds: CategoryId[];
 }
 
 const DEFAULT_FILTERS: ExportFilters = {

@@ -30,7 +30,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { StateBlock } from "@/components/shared/StateBlock";
 import { getChartColor } from "@/components/charts/palette";
-import { numberFormatToLocale } from "@/utils/currency";
+import { numberFormatToLocale, DEFAULT_CURRENCY } from "@/utils/currency";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { formatMonthYearWithAppSettings } from "@/lib/dateUtils";
@@ -40,13 +40,19 @@ import { CashFlowForecastDiagnostics } from "./CashFlowForecastDiagnostics";
 import { ForecastInner } from "./ForecastInner";
 import { ForecastInnerRolling } from "./ForecastInnerRolling";
 import { useCashflowForecastQueries } from "./useDashboardQueries";
+import type {
+    CategoryId,
+    CurrencyCode,
+    RecipientId,
+} from "@vision/types/brands";
 
 type ForecastMode = "month" | "rolling";
 type RollingDays = 30 | 60 | 90 | 180;
 const ROLLING_PRESETS: ReadonlyArray<RollingDays> = [30, 60, 90, 180];
 
 const BORDER_COLOR = "hsl(var(--border))";
-const EMPTY_IDS: number[] = [];
+const EMPTY_CATEGORY_IDS: CategoryId[] = [];
+const EMPTY_RECIPIENT_IDS: RecipientId[] = [];
 
 function methodToggleStyle(color: string, active: boolean) {
     return {
@@ -60,16 +66,16 @@ function swatchStyle(color: string) {
 }
 
 export interface CashFlowForecastChartProps {
-    readonly excludedCategoryIds?: number[];
-    readonly excludedRecipientIds?: number[];
-    readonly currency?: string;
+    readonly excludedCategoryIds?: CategoryId[];
+    readonly excludedRecipientIds?: RecipientId[];
+    readonly currency?: CurrencyCode;
     readonly embedded?: boolean;
 }
 
 export function CashFlowForecastChart({
-    excludedCategoryIds = EMPTY_IDS,
-    excludedRecipientIds = EMPTY_IDS,
-    currency = "EUR",
+    excludedCategoryIds = EMPTY_CATEGORY_IDS,
+    excludedRecipientIds = EMPTY_RECIPIENT_IDS,
+    currency = DEFAULT_CURRENCY,
     embedded = false,
 }: CashFlowForecastChartProps) {
     const { t } = useLanguage();

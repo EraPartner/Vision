@@ -4,6 +4,7 @@ import { screen } from "@testing-library/react";
 import { renderWithApp } from "@/test/renderWithApp";
 import type { Account } from "@/types/api";
 import { AccountsList } from "../AccountsList";
+import { asAccountId, asCurrencyCode } from "@vision/types/brands";
 
 const state = vi.hoisted(() => ({ items: [] as Account[], usdRate: 0.5 }));
 
@@ -34,10 +35,10 @@ vi.mock("@/hooks/useAccounts", () => ({
 
 function account(id: number, balance?: number, currency = "EUR"): Account {
     return {
-        id,
+        id: asAccountId(id),
         name: `Account ${id}`,
         type: "checking",
-        currency,
+        currency: asCurrencyCode(currency),
         liquidity_class: "liquid",
         spendable: true,
         in_net_worth: true,

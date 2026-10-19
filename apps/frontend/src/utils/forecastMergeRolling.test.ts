@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { mergeForViewRolling } from "./forecastMerge";
 import type { CashflowForecastRollingData } from "@/lib/api/aggregations";
+import { asCurrencyCode } from "@vision/types/brands";
 
 function buildData(
     daysBack: number,
@@ -33,7 +34,7 @@ function buildData(
         window_start: isoAt(-daysBack),
         window_end: isoAt(daysForward),
         today: isoAt(0),
-        currency: "EUR",
+        currency: asCurrencyCode("EUR"),
         days_back: daysBack,
         days_forward: daysForward,
         actual,

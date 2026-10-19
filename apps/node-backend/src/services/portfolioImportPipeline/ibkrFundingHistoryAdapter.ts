@@ -6,6 +6,8 @@ import { Decimal, toDecimal } from "../../lib/money.ts";
 import type { DecimalInput } from "../../lib/money.ts";
 import { ValidationError } from "../../middleware/errorHandler.ts";
 import type { IbkrFundingEvidence } from "../../repositories/portfolioImportCashRepository.ts";
+import { asCurrencyCode } from "@vision/types/brands";
+import type { CurrencyCode } from "@vision/types/brands";
 import type { ParsedPortfolioRows } from "./portfolioGenericAdapter.ts";
 
 type FundingSheet = "Deposit" | "Withdrawal";
@@ -124,7 +126,7 @@ function date(value: string | undefined): string {
 }
 
 function nativeAmount(value: string | undefined): {
-  currency: string;
+  currency: CurrencyCode;
   amount: string;
 } {
   const match =
@@ -140,7 +142,7 @@ function nativeAmount(value: string | undefined): {
     amount.gt("999999999999")
   )
     fail("contains an unsupported funding amount");
-  return { currency: match[1]!, amount: amount.toFixed(2) };
+  return { currency: asCurrencyCode(match[1]!), amount: amount.toFixed(2) };
 }
 
 function recordEvidence(envelope: IbkrFundingEnvelope): FundingRecordEvidence {

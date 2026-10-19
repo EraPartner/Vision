@@ -16,7 +16,7 @@ import tagService from "../services/tagService.ts";
 import { listBody, parseOptionalPagination } from "../lib/pagination.ts";
 import { withCreateOutcome } from "../lib/createOutcome.ts";
 import { parseInput } from "../lib/zodInput.ts";
-import { activeOrAllQuery, idParams, pageFields } from "./_requestSchemas.ts";
+import { activeOrAllQuery, pageFields, tagIdParams } from "./_requestSchemas.ts";
 
 const router = Router();
 
@@ -71,7 +71,7 @@ router.post("/", async (req, res) => {
 });
 
 router.patch("/:id", async (req, res) => {
-  const { id } = parseInput(idParams, req.params);
+  const { id } = parseInput(tagIdParams, req.params);
   const updated = await tagService.update(id, parseInput(updateBody, req.body));
   res.ok({ ...updated, links: [] });
 });
@@ -80,7 +80,7 @@ router.patch("/:id", async (req, res) => {
 // this returns the deactivated entity rather than 204 (docs/reference/code-patterns.md,
 // "DELETE responses").
 router.delete("/:id", async (req, res) => {
-  const { id } = parseInput(idParams, req.params);
+  const { id } = parseInput(tagIdParams, req.params);
   const deactivated = await tagService.softDelete(id);
   res.ok({ ...deactivated, links: [] });
 });

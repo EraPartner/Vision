@@ -44,6 +44,8 @@ import {
     type FieldErrorMap,
 } from "@/hooks/useFieldErrors";
 import { useUnsavedChanges } from "@/contexts/UnsavedChangesContext";
+import { asCurrencyCode } from "@vision/types/brands";
+import type { CategoryId, RecipientId } from "@vision/types/brands";
 
 type Frequency = NonNullable<PlannedPayment["frequency"]>;
 type LoanType = NonNullable<PlannedPayment["loan_type"]>;
@@ -160,10 +162,10 @@ export default function PlannedPaymentForm({
     const [maxOccurrences, setMaxOccurrences] = useState(
         initial?.max_occurrences?.toString() ?? "",
     );
-    const [recipientId, setRecipientId] = useState<number | undefined>(
+    const [recipientId, setRecipientId] = useState<RecipientId | undefined>(
         initial?.recipient_id,
     );
-    const [categoryId, setCategoryId] = useState<number | undefined>(
+    const [categoryId, setCategoryId] = useState<CategoryId | undefined>(
         initial?.category_id,
     );
     const [bankAccount, setBankAccount] = useState(initial?.bank_account ?? "");
@@ -465,7 +467,9 @@ export default function PlannedPaymentForm({
                                 </Label>
                                 <Select
                                     value={currency}
-                                    onValueChange={setCurrency}
+                                    onValueChange={(value) =>
+                                        setCurrency(asCurrencyCode(value))
+                                    }
                                 >
                                     <SelectTrigger id="pp-currency">
                                         <SelectValue />

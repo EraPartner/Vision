@@ -3,6 +3,10 @@ import {
   mockCurrencyConversion,
   mockedConvertRowsToEur,
 } from "../helpers/mockCurrencyConversion.ts";
+import {
+  asCategoryId,
+  asCurrencyCode,
+} from "@vision/types/brands";
 
 vi.mock("../../src/repositories/infoRepositorySankey.ts", () => ({
   getSankeyAggregates: vi.fn(),
@@ -27,30 +31,30 @@ describe("computeSankeyFlow (SQL-grouped rows)", () => {
     // SQL now returns one row per (category, currency, is_income) with SUM(ABS).
     getSankeyAggregates.mockResolvedValueOnce([
       {
-        category_id: 1,
+        category_id: asCategoryId(1),
         category_name: "Income: Salary",
-        currency: "EUR",
+        currency: asCurrencyCode("EUR"),
         is_income: true,
         amount: "1000",
       },
       {
-        category_id: 1,
+        category_id: asCategoryId(1),
         category_name: "Income: Salary",
-        currency: "USD",
+        currency: asCurrencyCode("USD"),
         is_income: true,
         amount: "100",
       },
       {
-        category_id: 2,
+        category_id: asCategoryId(2),
         category_name: "Food: Groceries",
-        currency: "EUR",
+        currency: asCurrencyCode("EUR"),
         is_income: false,
         amount: "300",
       },
       {
-        category_id: 3,
+        category_id: asCategoryId(3),
         category_name: "Housing: Rent",
-        currency: "EUR",
+        currency: asCurrencyCode("EUR"),
         is_income: false,
         amount: "400",
       },
@@ -111,30 +115,30 @@ describe("computeSankeyFlow (SQL-grouped rows)", () => {
   it("keeps NULL and same-named real categories as distinct nodes", async () => {
     getSankeyAggregates.mockResolvedValueOnce([
       {
-        category_id: 1,
+        category_id: asCategoryId(1),
         category_name: "Income: Salary",
-        currency: "EUR",
+        currency: asCurrencyCode("EUR"),
         is_income: true,
         amount: "1000",
       },
       {
         category_id: null,
         category_name: null,
-        currency: "EUR",
+        currency: asCurrencyCode("EUR"),
         is_income: false,
         amount: "100",
       },
       {
-        category_id: 7,
+        category_id: asCategoryId(7),
         category_name: "Uncategorised",
-        currency: "EUR",
+        currency: asCurrencyCode("EUR"),
         is_income: false,
         amount: "200",
       },
       {
-        category_id: 8,
+        category_id: asCategoryId(8),
         category_name: "Uncategorised",
-        currency: "EUR",
+        currency: asCurrencyCode("EUR"),
         is_income: false,
         amount: "50",
       },
@@ -194,16 +198,16 @@ describe("computeSankeyFlow (SQL-grouped rows)", () => {
   it("balances an overspent year with an explicit funding-gap source", async () => {
     getSankeyAggregates.mockResolvedValueOnce([
       {
-        category_id: 1,
+        category_id: asCategoryId(1),
         category_name: "Income: Salary",
-        currency: "EUR",
+        currency: asCurrencyCode("EUR"),
         is_income: true,
         amount: "100",
       },
       {
-        category_id: 2,
+        category_id: asCategoryId(2),
         category_name: "Food",
-        currency: "EUR",
+        currency: asCurrencyCode("EUR"),
         is_income: false,
         amount: "150",
       },
@@ -246,16 +250,16 @@ describe("computeSankeyFlow (SQL-grouped rows)", () => {
   it("conserves every internal flow after cent rounding, including sub-euro gaps", async () => {
     getSankeyAggregates.mockResolvedValueOnce([
       {
-        category_id: 1,
+        category_id: asCategoryId(1),
         category_name: "Income",
-        currency: "EUR",
+        currency: asCurrencyCode("EUR"),
         is_income: true,
         amount: "1.005",
       },
       ...[2, 3, 4].map((category_id) => ({
-        category_id,
+        category_id: asCategoryId(category_id),
         category_name: `Category ${category_id}`,
-        currency: "EUR",
+        currency: asCurrencyCode("EUR"),
         is_income: false,
         amount: "0.335",
       })),

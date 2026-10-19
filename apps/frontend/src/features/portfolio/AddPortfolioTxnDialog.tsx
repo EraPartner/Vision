@@ -47,6 +47,7 @@ import { PortfolioTxnFormFields } from "./PortfolioTxnFormFields";
 import { PortfolioBrokerField } from "./PortfolioBrokerField";
 import { useManualTradeBrokerOptions } from "./manualTradeBroker";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
+import { asAccountId } from "@vision/types/brands";
 
 /** Visual order — decides which field gets focus on a blocked submit. */
 const FIELD_ORDER = [
@@ -220,7 +221,7 @@ export function AddPortfolioTxnDialog({
                 currency: investment.currency,
                 note: form.note.trim() || undefined,
                 account_id: effectiveBrokerId
-                    ? Number(effectiveBrokerId)
+                    ? asAccountId(Number(effectiveBrokerId))
                     : undefined,
                 is_recurring: form.isRecurring,
                 recurrence_interval: form.isRecurring

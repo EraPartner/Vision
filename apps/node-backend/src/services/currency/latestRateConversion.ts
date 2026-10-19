@@ -10,6 +10,7 @@
 import { divide, multiply, toDecimal } from "../../lib/money.ts";
 import type { Decimal, DecimalInput } from "../../lib/money.ts";
 import { listLatestStoredRates } from "./currencyConversionService.ts";
+import { storedCurrencyCode } from "../../lib/currencyCode.ts";
 
 /** rate_to_eur per upper-cased currency code; EUR is always 1. */
 export type LatestRatesToEur = ReadonlyMap<string, Decimal>;
@@ -42,6 +43,4 @@ export function convertAtLatestRates(
 }
 
 /** Upper-cased ISO code of a stored currency column; empty means EUR. */
-export function currencyCode(value: string | null | undefined): string {
-  return (value || "EUR").toUpperCase();
-}
+export const currencyCode = storedCurrencyCode;

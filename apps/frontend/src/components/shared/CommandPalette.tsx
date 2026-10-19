@@ -25,7 +25,7 @@ import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { useDebounce, SEARCH_DEBOUNCE_MS } from "@/hooks/useDebounce";
 import { Keyboard, Calculator, Clock, MonitorSmartphone, Plus } from "lucide-react";
 import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
-import { numberFormatToLocale } from "@/utils/currency";
+import { numberFormatToLocale, DEFAULT_CURRENCY } from "@/utils/currency";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
@@ -94,7 +94,7 @@ export function CommandPalette({
         () => parseFxQuery(query.trim(), appSettings.numberFormat),
         [appSettings.numberFormat, query],
     );
-    const fxTarget = fxParsed?.to ?? appSettings.defaultCurrency ?? "EUR";
+    const fxTarget = fxParsed?.to ?? appSettings.defaultCurrency ?? DEFAULT_CURRENCY;
     // Preview of typed input; no result when either stored rate is missing.
     const { convertToTargetIfAvailable } = useCurrencyConverter(fxTarget);
     // User-typed/provider currency codes share the canonical guarded formatter.

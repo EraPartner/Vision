@@ -29,6 +29,8 @@
  */
 
 import { withTransaction } from "../database/connection.ts";
+import { storedCurrencyCode } from "../lib/currencyCode.ts";
+import type { AccountId, CurrencyCode } from "@vision/types/brands";
 import { queryOne, queryRows } from "../database/rowContracts.ts";
 import {
   accountCurrencyRowSchema,
@@ -61,21 +63,21 @@ export interface AccountMergeReassigned {
 }
 
 export interface AccountMergeResult {
-  into: number;
-  merged: number[];
+  into: AccountId;
+  merged: AccountId[];
   reassigned: AccountMergeReassigned;
   stampsInterleaved: boolean;
 }
 
 export interface AccountMergePreview {
-  into: number;
-  source: number;
+  into: AccountId;
+  source: AccountId;
   reassigned: AccountMergeReassigned;
   projectedBalance: number;
-  projectedBalanceCurrency: string;
-  balanceParts: Array<{ currency: string; balance: number }>;
+  projectedBalanceCurrency: CurrencyCode;
+  balanceParts: Array<{ currency: CurrencyCode; balance: number }>;
   projectedBalanceIncomplete: boolean;
-  unconvertedCurrencies: string[];
+  unconvertedCurrencies: CurrencyCode[];
   stampsInterleaved: boolean;
   openingAnchorCollision: boolean;
 }
@@ -95,7 +97,7 @@ async function countOf(sql: string, params: unknown[]): Promise<number> {
  * of accounts — O(n²) is fine and keeps the predicate pure/testable.
  */
 function stampRangesOverlap(
-  ranges: { account_id: number; min_date: string; max_date: string }[],
+  ranges: { account_id: AccountId; min_date: string; max_date: string }[],
 ): boolean {
   for (const [i, a] of ranges.entries()) {
     for (const b of ranges.slice(i + 1)) {
@@ -130,11 +132,11 @@ function stampRangesOverlap(
  * @returns colliding currency codes, ordered, no duplicates
  */
 function collidingAnchorCurrencies(
-  anchors: { account_id: number; currency: string }[] | null | undefined,
-): string[] {
-  const accountsByCurrency = new Map<string, Set<number>>();
+  anchors: { account_id: AccountId; currency: CurrencyCode }[] | null | undefined,
+): CurrencyCode[] {
+  const accountsByCurrency = new Map<CurrencyCode, Set<AccountId>>();
   for (const { account_id: accountId, currency } of anchors || []) {
-    const code = (currency || "EUR").toUpperCase();
+    const code = storedCurrencyCode(currency);
     let accountIds = accountsByCurrency.get(code);
     if (!accountIds) {
       accountIds = new Set();
@@ -156,11 +158,11 @@ function collidingAnchorCurrencies(
  * workflow; this merge must not make them worse.
  */
 async function assertMergeFundingCycleSafe(
-  targetId: number,
-  sourceIds: number[],
+  targetId: AccountId,
+  sourceIds: AccountId[],
 ) {
   const sources = new Set(sourceIds);
-  const visited = new Set<number>();
+  const visited = new Set<AccountId>();
   let currentId = targetId;
   let traversedRepointedEdge = false;
 
@@ -169,7 +171,7 @@ async function assertMergeFundingCycleSafe(
     const account = await accountRepository.getById(currentId);
     if (!account || account.funding_account_id == null) return;
 
-    const rawParentId = Number(account.funding_account_id);
+    const rawParentId = account.funding_account_id;
     const parentId = sources.has(rawParentId) ? targetId : rawParentId;
     traversedRepointedEdge ||= parentId !== rawParentId;
     currentId = parentId;
@@ -195,8 +197,8 @@ export {
  *   oversized lists are rejected rather than silently narrowed.
  */
 export async function mergeAccounts(
-  targetId: number,
-  sourceIds: number[],
+  targetId: AccountId,
+  sourceIds: AccountId[],
 ): Promise<AccountMergeResult> {
   if (!Number.isInteger(targetId))
     throw new ValidationError("target account id must be an integer");
@@ -354,8 +356,8 @@ export async function mergeAccounts(
  * @param targetId  the survivor (`?into=`)
  */
 export async function previewMerge(
-  sourceId: number,
-  targetId: number,
+  sourceId: AccountId,
+  targetId: AccountId,
 ): Promise<AccountMergePreview> {
   if (!Number.isInteger(sourceId) || sourceId <= 0) {
     throw new ValidationError("source account id must be a positive integer");
@@ -425,12 +427,12 @@ export async function previewMerge(
     transactionRepository.getOpeningAnchorsByAccount(unionIds),
   ]);
 
-  const targetCurrency = (target.currency || "EUR").toUpperCase();
+  const targetCurrency = storedCurrencyCode(target.currency);
   const partitions = projected?.balance_parts ?? [];
   let total = toDecimal(0);
-  const unconvertedCurrencies: string[] = [];
+  const unconvertedCurrencies: CurrencyCode[] = [];
   for (const part of partitions) {
-    const partCurrency = (part.currency || "EUR").toUpperCase();
+    const partCurrency = storedCurrencyCode(part.currency);
     if (!hasConversionRate(partCurrency, targetCurrency, rates)) {
       unconvertedCurrencies.push(partCurrency);
       continue;
@@ -461,7 +463,7 @@ export async function previewMerge(
     projectedBalance: toNumber(roundToCents(total)),
     projectedBalanceCurrency: targetCurrency,
     balanceParts: partitions.map((part) => ({
-      currency: (part.currency || "EUR").toUpperCase(),
+      currency: storedCurrencyCode(part.currency),
       balance: toNumber(toDecimal(part.balance)),
     })),
     projectedBalanceIncomplete: unconvertedCurrencies.length > 0,

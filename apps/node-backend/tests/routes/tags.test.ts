@@ -7,6 +7,9 @@
 import { bodyAt } from "../helpers/responseBody.ts";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { routeAgent, errEnvelope } from "../helpers/routeApp.ts";
+import {
+  asTagId,
+} from "@vision/types/brands";
 
 vi.mock("../../src/repositories/tagRepository.ts", () => ({
   default: {
@@ -36,7 +39,7 @@ describe("GET /api/tags", () => {
 
   it("returns active tags by default", async () => {
     repo.getAll.mockResolvedValue([
-      tag({ id: 1, slug: "rome-2020", is_active: true }),
+      tag({ id: asTagId(1), slug: "rome-2020", is_active: true }),
     ]);
     repo.getCount.mockResolvedValue(1);
     const res = await api.get(BASE).expect(200);
@@ -75,7 +78,7 @@ describe("GET /api/tags — pagination is opt-in", () => {
   it("returns the full list (more than 50 rows) and no limit/offset when neither param is sent", async () => {
     const rows = Array.from({ length: 60 }, (_, i) =>
       tag({
-        id: i + 1,
+        id: asTagId(i + 1),
         slug: `tag-${i + 1}`,
         is_active: true,
       }),
@@ -96,7 +99,7 @@ describe("GET /api/tags — pagination is opt-in", () => {
   });
 
   it("treats an empty limit param as absent", async () => {
-    repo.getAll.mockResolvedValue([tag({ id: 1, slug: "a", is_active: true })]);
+    repo.getAll.mockResolvedValue([tag({ id: asTagId(1), slug: "a", is_active: true })]);
     const res = await api.get(`${BASE}?limit=`).expect(200);
 
     expect(tagRepository.getAll).toHaveBeenCalledWith({
@@ -108,7 +111,7 @@ describe("GET /api/tags — pagination is opt-in", () => {
   });
 
   it("pages and reports the full total when limit/offset are supplied", async () => {
-    repo.getAll.mockResolvedValue([tag({ id: 3, slug: "c", is_active: true })]);
+    repo.getAll.mockResolvedValue([tag({ id: asTagId(3), slug: "c", is_active: true })]);
     repo.getCount.mockResolvedValue(12);
     const res = await api.get(`${BASE}?limit=1&offset=2`).expect(200);
 
@@ -145,7 +148,7 @@ describe("POST /api/tags", () => {
   it("creates new tag, slugifies input, returns 201", async () => {
     repo.getBySlug.mockResolvedValue(null);
     repo.findOrCreateBySlug.mockResolvedValue({
-      tag: tag({ id: 1, slug: "rome-2020", color: null, is_active: true }),
+      tag: tag({ id: asTagId(1), slug: "rome-2020", color: null, is_active: true }),
       reactivated: false,
     });
     const res = await api.post(BASE).send({ slug: "Rome 2020" }).expect(201);
@@ -161,14 +164,14 @@ describe("POST /api/tags", () => {
   it("reactivates inactive tag, returns 201 with junction count", async () => {
     repo.getBySlug.mockResolvedValue(
       tag({
-        id: 5,
+        id: asTagId(5),
         slug: "old",
         is_active: false,
       }),
     );
     repo.countTransactionReferences.mockResolvedValue(3);
     repo.findOrCreateBySlug.mockResolvedValue({
-      tag: tag({ id: 5, slug: "old", is_active: true }),
+      tag: tag({ id: asTagId(5), slug: "old", is_active: true }),
       reactivated: true,
     });
     const res = await api.post(BASE).send({ slug: "old" }).expect(201);
@@ -180,13 +183,13 @@ describe("POST /api/tags", () => {
   it("returns 200 when slug matches an active tag (conflict update path)", async () => {
     repo.getBySlug.mockResolvedValue(
       tag({
-        id: 6,
+        id: asTagId(6),
         slug: "active",
         is_active: true,
       }),
     );
     repo.findOrCreateBySlug.mockResolvedValue({
-      tag: tag({ id: 6, slug: "active", is_active: true }),
+      tag: tag({ id: asTagId(6), slug: "active", is_active: true }),
       reactivated: true,
     });
     const res = await api.post(BASE).send({ slug: "active" }).expect(200);
@@ -215,7 +218,7 @@ describe("POST /api/tags", () => {
   it("accepts null color", async () => {
     repo.getBySlug.mockResolvedValue(null);
     repo.findOrCreateBySlug.mockResolvedValue({
-      tag: tag({ id: 1, slug: "x", color: null, is_active: true }),
+      tag: tag({ id: asTagId(1), slug: "x", color: null, is_active: true }),
       reactivated: false,
     });
     await api.post(BASE).send({ slug: "x", color: null }).expect(201);
@@ -229,7 +232,7 @@ describe("PATCH /api/tags/:id", () => {
   it("updates color and returns the tag", async () => {
     repo.update.mockResolvedValue(
       tag({
-        id: 1,
+        id: asTagId(1),
         slug: "rome",
         color: "#f00",
         is_active: true,
@@ -284,7 +287,7 @@ describe("DELETE /api/tags/:id", () => {
   it("soft-deletes and returns 200 with the deactivated tag", async () => {
     repo.softDelete.mockResolvedValue(
       tag({
-        id: 1,
+        id: asTagId(1),
         slug: "rome",
         is_active: false,
       }),
@@ -318,7 +321,7 @@ describe("tag request schemas (zod)", () => {
   );
 
   it("PATCH without a body stays a no-op update", async () => {
-    repo.update.mockResolvedValue(tag({ id: 1 }));
+    repo.update.mockResolvedValue(tag({ id: asTagId(1) }));
     await api.patch(`${BASE}/1`).expect(200);
     expect(repo.update).toHaveBeenCalledWith(1, {
       color: undefined,

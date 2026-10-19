@@ -31,6 +31,7 @@ import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useDebounce, SEARCH_DEBOUNCE_MS } from "@/hooks/useDebounce";
 import type { Recipient } from "@/types/api";
 import type { FieldErrorAria } from "@/hooks/useFieldErrors";
+import type { RecipientId } from "@vision/types/brands";
 
 /**
  * The unsearched page a closed combobox resolves its label against. Kept as one
@@ -50,9 +51,9 @@ interface RecipientComboboxProps extends FieldErrorAria {
      * say) is nameless to assistive tech unless this is set.
      */
     "aria-label"?: string | undefined;
-    value?: number | null | undefined;
+    value?: RecipientId | null | undefined;
     onSelect: (
-        recipientId: number | null,
+        recipientId: RecipientId | null,
         recipientName: string | null,
     ) => void;
     disabled?: boolean | undefined;
@@ -95,12 +96,12 @@ const RecipientComboboxTrigger = forwardRef<
 RecipientComboboxTrigger.displayName = "RecipientComboboxTrigger";
 
 interface RecipientComboboxItemsProps {
-    value?: number | null | undefined;
+    value?: RecipientId | null | undefined;
     recipients: Recipient[];
     search: string;
     onSearchChange: (next: string) => void;
     /** Fires for both a recipient row and the "no recipient" row (null, null). */
-    onPick: (recipientId: number | null, recipientName: string | null) => void;
+    onPick: (recipientId: RecipientId | null, recipientName: string | null) => void;
     /** When set, a typed name with no exact match offers to be created. */
     onCreate?: ((name: string) => void) | undefined;
 }
@@ -236,7 +237,7 @@ export function RecipientCombobox({
         [recipients, value],
     );
     const [pickedLabel, setPickedLabel] = useState<{
-        id: number;
+        id: RecipientId;
         name: string;
     }>();
     const displayLabel =
@@ -325,7 +326,7 @@ export function RecipientCombobox({
  * any row's popover shows its recipients from cache with no empty flash.
  */
 // eslint-disable-next-line react-refresh/only-export-components
-export function useRecipientComboboxLabel(): (value?: number | null) => string {
+export function useRecipientComboboxLabel(): (value?: RecipientId | null) => string {
     const { t } = useLanguage();
     const { data } = useRecipients(BASE_PAGE);
     const placeholder = t("combobox.recipient.placeholder");
@@ -338,7 +339,7 @@ export function useRecipientComboboxLabel(): (value?: number | null) => string {
     }, [data?.items]);
 
     return useCallback(
-        (value?: number | null) =>
+        (value?: RecipientId | null) =>
             (value == null ? undefined : namesById.get(value)) ?? placeholder,
         [namesById, placeholder],
     );

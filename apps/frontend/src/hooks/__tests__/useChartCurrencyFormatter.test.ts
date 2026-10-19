@@ -3,6 +3,8 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { renderHook } from "@testing-library/react";
 import { useSettingsStore, DEFAULT_APP_SETTINGS } from "@/stores/settingsStore";
 import { useChartCurrencyFormatter } from "@/hooks/useChartCurrencyFormatter";
+import { asCurrencyCode } from "@vision/types/brands";
+import type { CurrencyCode } from "@vision/types/brands";
 
 beforeEach(() => {
     useSettingsStore.setState({ appSettings: DEFAULT_APP_SETTINGS, isAppSettingsLoading: false });
@@ -43,7 +45,7 @@ describe("useChartCurrencyFormatter", () => {
 
     it("keeps US currency ordering and decimal separator on axis labels", () => {
         useSettingsStore.setState({
-            appSettings: { ...DEFAULT_APP_SETTINGS, numberFormat: "us", defaultCurrency: "USD" },
+            appSettings: { ...DEFAULT_APP_SETTINGS, numberFormat: "us", defaultCurrency: asCurrencyCode("USD") },
         });
         const { result } = renderHook(() => useChartCurrencyFormatter());
         expect(result.current.formatAxisCompact(1_500)).toBe("$1.5k");
@@ -52,7 +54,7 @@ describe("useChartCurrencyFormatter", () => {
 
     it("reflects currency change in store", () => {
         useSettingsStore.setState({
-            appSettings: { ...DEFAULT_APP_SETTINGS, defaultCurrency: "USD" },
+            appSettings: { ...DEFAULT_APP_SETTINGS, defaultCurrency: asCurrencyCode("USD") },
         });
         const { result } = renderHook(() => useChartCurrencyFormatter());
         expect(result.current.currency).toBe("USD");
@@ -63,7 +65,8 @@ describe("useChartCurrencyFormatter", () => {
         useSettingsStore.setState({
             appSettings: {
                 ...DEFAULT_APP_SETTINGS,
-                defaultCurrency: "US",
+                // Deliberately invalid injected state: bypass the ISO constructor.
+                defaultCurrency: "US" as CurrencyCode,
                 showDecimalPlaces: -1,
             },
         });

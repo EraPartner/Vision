@@ -6,11 +6,16 @@ import { getCashflowForecastAccuracy } from "@/lib/api/aggregations";
 import { cashflowKeys } from "@/lib/queryKeys";
 import { dashboardKeys } from "@/lib/queryKeys";
 import { fetchRecentDashboardTransactions } from "./recentTransactions";
+import type {
+    CategoryId,
+    CurrencyCode,
+    RecipientId,
+} from "@vision/types/brands";
 
 interface ForecastQueryOptions {
-    currency: string;
-    excludedCategoryIds: number[];
-    excludedRecipientIds: number[];
+    currency: CurrencyCode;
+    excludedCategoryIds: CategoryId[];
+    excludedRecipientIds: RecipientId[];
     includePlanned: boolean;
     mode: "month" | "rolling";
     rollingDays: 30 | 60 | 90 | 180;
@@ -108,7 +113,7 @@ export function useCashflowForecastAccuracy(enabled: boolean) {
     });
 }
 
-export function useBankBalances(currency: string) {
+export function useBankBalances(currency: CurrencyCode) {
     return useQuery({
         queryKey: cashflowKeys.bankBalances(currency),
         queryFn: () => apiClient.getBankBalances({ currency }),
@@ -117,8 +122,8 @@ export function useBankBalances(currency: string) {
 }
 
 export function useDashboardRecentTransactions(
-    excludedCategoryIds: number[],
-    excludedRecipientIds: number[],
+    excludedCategoryIds: CategoryId[],
+    excludedRecipientIds: RecipientId[],
     exclusionsReady: boolean,
     exclusionsApply: boolean,
 ) {

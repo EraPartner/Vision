@@ -13,6 +13,7 @@ import {
     invalidateTransactionData,
     plannedKeys,
 } from "@/lib/queryKeys";
+import type { CategoryId, RecipientId } from "@vision/types/brands";
 
 export function useImportPreview(batchId: number) {
     return useQuery({
@@ -78,7 +79,7 @@ export function useImportReviewMutations(
             recipientId,
         }: {
             rowId: string;
-            recipientId: number | null;
+            recipientId: RecipientId | null;
         }) => apiClient.overrideImportRow(batchId, rowId, recipientId),
         meta: { suppressErrorToast: true },
     });
@@ -89,7 +90,7 @@ export function useImportReviewMutations(
             categoryId,
         }: {
             rowId: string;
-            categoryId: number | null;
+            categoryId: CategoryId | null;
         }) => apiClient.overrideImportRowCategory(batchId, rowId, categoryId),
         meta: { suppressErrorToast: true },
     });
@@ -99,8 +100,8 @@ export function useImportReviewMutations(
             recipientId,
             categoryId,
         }: {
-            recipientId: number;
-            categoryId: number | null;
+            recipientId: RecipientId;
+            categoryId: CategoryId | null;
         }) =>
             apiClient.updateRecipient(recipientId, {
                 default_category_id: categoryId,
@@ -194,7 +195,7 @@ export function useImportReviewMutations(
     });
 
     return {
-        overrideRows: (rowIds: string[], recipientId: number | null) =>
+        overrideRows: (rowIds: string[], recipientId: RecipientId | null) =>
             edit(`recipient:${rowIds.join(",")}`, () =>
                 updateRows(
                     rowIds.map((rowId) =>
@@ -202,7 +203,7 @@ export function useImportReviewMutations(
                     ),
                 ),
             ),
-        overrideCategories: (rowIds: string[], categoryId: number | null) =>
+        overrideCategories: (rowIds: string[], categoryId: CategoryId | null) =>
             edit(`category:${rowIds.join(",")}`, () =>
                 updateRows(
                     rowIds.map((rowId) =>
@@ -211,8 +212,8 @@ export function useImportReviewMutations(
                 ),
             ),
         persistDefaultCategory: (
-            recipientId: number,
-            categoryId: number | null,
+            recipientId: RecipientId,
+            categoryId: CategoryId | null,
         ) =>
             edit(`default:${recipientId}`, () =>
                 persistDefault.mutateAsync({ recipientId, categoryId }),

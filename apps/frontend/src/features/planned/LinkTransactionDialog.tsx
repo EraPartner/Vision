@@ -29,14 +29,20 @@ import { getRecipient } from "@/lib/api/recipients";
 import { cn } from "@/lib/utils";
 import type { PlannedPayment } from "@/hooks/usePlannedPayments";
 import { useLinkTransactionCandidates } from "@/hooks/usePlannedMatchSuggestions";
+import { asTransactionId } from "@vision/types/brands";
+import type {
+    PlannedTransactionId,
+    RecipientId,
+    TransactionId,
+} from "@vision/types/brands";
 
 interface LinkTransactionDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     payment: PlannedPayment | null;
     onExecute: (
-        paymentId: number,
-        txId: number,
+        paymentId: PlannedTransactionId,
+        txId: TransactionId,
         executionDate?: string,
     ) => Promise<void>;
 }
@@ -53,13 +59,15 @@ export function LinkTransactionDialog({
     const [txSearchQuery, setTxSearchQuery] = useState("");
     const [amountToleranceInput, setAmountToleranceInput] = useState("5");
     const [actionLoading, setActionLoading] = useState(false);
-    const [selectedTxId, setSelectedTxId] = useState<number | null>(null);
+    const [selectedTxId, setSelectedTxId] = useState<TransactionId | null>(
+        null,
+    );
     const [txFilters, setTxFilters] = useState({
         start_date: "",
         end_date: "",
         bank_account: "",
         recipient_name: "",
-        recipient_id: null as number | null,
+        recipient_id: null as RecipientId | null,
         uncategorised: false,
         active: true,
         matchAmount: true,
@@ -485,7 +493,9 @@ export function LinkTransactionDialog({
                                         : ""
                                 }
                                 onValueChange={(value) =>
-                                    setSelectedTxId(Number(value))
+                                    setSelectedTxId(
+                                        asTransactionId(Number(value)),
+                                    )
                                 }
                                 className="block"
                             >

@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { mockTxConnection } from "../helpers/repoMocks.ts";
+import {
+  asTransactionId,
+} from "@vision/types/brands";
 const { mockClient } = vi.hoisted(() => ({ mockClient: { query: vi.fn() } }));
 
 vi.mock("../../src/database/connection.ts", () =>
@@ -28,7 +31,7 @@ describe("unmarkTransfer — sticky per-pair dismissal (ADR-083, migration 0070)
     mockClient.query
       .mockResolvedValueOnce({ rows: [{ transfer_peer_id: 20 }] }) // discover target 10 → peer 20
       .mockResolvedValueOnce({ rows: [{ id: 10, transfer_peer_id: 20 }, { id: 20, transfer_peer_id: 10 }] }); // lock the complete pair, which still points back
-    await unmarkTransfer(10);
+    await unmarkTransfer(asTransactionId(10));
 
     const sqls = mockClient.query.mock.calls.map(([sql]) => sql);
     // Both the target and its peer are locked FOR UPDATE before any mutation
@@ -57,7 +60,7 @@ describe("unmarkTransfer — sticky per-pair dismissal (ADR-083, migration 0070)
     mockClient.query
       .mockResolvedValueOnce({ rows: [{ transfer_peer_id: 20 }] }) // discover target 10 → peer 20
       .mockResolvedValueOnce({ rows: [{ id: 10, transfer_peer_id: 20 }, { id: 20, transfer_peer_id: 99 }] }); // lock known pair: peer 20 now points at 99
-    await unmarkTransfer(10);
+    await unmarkTransfer(asTransactionId(10));
 
     const sqls = mockClient.query.mock.calls.map(([sql]) => sql);
     // Both rows were locked in one sorted FOR UPDATE query.
@@ -75,7 +78,7 @@ describe("unmarkTransfer — sticky per-pair dismissal (ADR-083, migration 0070)
     mockClient.query.mockResolvedValueOnce({
       rows: [{ transfer_peer_id: null }],
     }).mockResolvedValueOnce({ rows: [{ id: 10, transfer_peer_id: null }] });
-    await unmarkTransfer(10);
+    await unmarkTransfer(asTransactionId(10));
     const sqls = mockClient.query.mock.calls.map(([sql]) => sql);
     expect(sqls.find((s) => s.includes("transfer_dismissals"))).toBeUndefined();
     const updates = sqls.filter((s) => s.includes("UPDATE transactions"));
@@ -87,7 +90,7 @@ describe("unmarkTransfer — sticky per-pair dismissal (ADR-083, migration 0070)
 it("rejects changed discovery rather than locking a new peer out of order", async () => {
   mockClient.query.mockResolvedValueOnce({ rows: [{ transfer_peer_id: 20 }] })
     .mockResolvedValueOnce({ rows: [{ id: 10, transfer_peer_id: 30 }, { id: 20, transfer_peer_id: null }] });
-  await expect(unmarkTransfer(10)).rejects.toMatchObject({ status: 409 });
+  await expect(unmarkTransfer(asTransactionId(10))).rejects.toMatchObject({ status: 409 });
   expect(mockClient.query.mock.calls.some(([sql]) => sql.startsWith("UPDATE transactions"))).toBe(false);
 });
 
@@ -172,6 +175,6 @@ it("rejects new inbound peers discovered after sorted graph locking", async () =
   const rows = [{ id: 10, amount: "-10", account_id: 1, is_active: true, transfer_peer_id: null }, { id: 20, amount: "10", account_id: 2, is_active: true, transfer_peer_id: null }];
   mockClient.query.mockResolvedValueOnce({ rows }).mockResolvedValueOnce({ rows })
     .mockResolvedValueOnce({ rows: [...rows, { id: 30, amount: "10", account_id: 3, is_active: true, transfer_peer_id: 10 }] });
-  await expect(markTransfer(10, 20)).rejects.toMatchObject({ status: 409 });
+  await expect(markTransfer(asTransactionId(10), asTransactionId(20))).rejects.toMatchObject({ status: 409 });
   expect(mockClient.query.mock.calls.some(([sql]) => sql.startsWith("UPDATE transactions"))).toBe(false);
 });

@@ -3,6 +3,7 @@ import {
     PRODUCT_ANALYSIS_PREFERENCES,
     resolveAnalysisPreferences,
 } from "@/lib/analysisPreferences";
+import { asCurrencyCode } from "@vision/types/brands";
 
 describe("resolveAnalysisPreferences", () => {
     it("applies run, saved, application, then product precedence per field", () => {
@@ -14,7 +15,7 @@ describe("resolveAnalysisPreferences", () => {
                     answerDepth: "detailed",
                     benchmark: "vwce.de",
                 },
-                appSettings: { language: "nl", defaultCurrency: "CHF" },
+                appSettings: { language: "nl", defaultCurrency: asCurrencyCode("CHF") },
             }),
         ).toEqual({
             currency: "USD",
@@ -38,7 +39,7 @@ describe("resolveAnalysisPreferences", () => {
             resolveAnalysisPreferences({
                 saved: {},
                 appSettings: {
-                    defaultCurrency: "CAD",
+                    defaultCurrency: asCurrencyCode("CAD"),
                     language: "nl",
                     aiAnswerDepth: "detailed",
                     analysisBenchmark: "SPY",

@@ -8,12 +8,13 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import type { AccountId } from "@vision/types/brands";
 
 export const KEEP_PORTFOLIO_LOTS = "keep";
 export const UNASSIGNED_PORTFOLIO_LOTS = "unassigned";
 
 interface Props {
-    sourceAccountId: number;
+    sourceAccountId: AccountId;
     accounts: readonly Account[];
     eligibleCount: number;
     value: string;

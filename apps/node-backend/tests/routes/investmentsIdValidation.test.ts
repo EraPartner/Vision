@@ -28,6 +28,11 @@ import { bodyAt } from "../helpers/responseBody.ts";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mockLogger } from "../helpers/mockLogger.ts";
 import { routeAgent, errEnvelope } from "../helpers/routeApp.ts";
+import {
+  asCurrencyCode,
+  asInvestmentId,
+  asPortfolioTransactionId,
+} from "@vision/types/brands";
 
 vi.mock("../../src/repositories/investmentRepository.ts", () => ({
   default: {
@@ -114,28 +119,28 @@ beforeEach(() => {
   vi.clearAllMocks();
   investmentRepository.getById.mockResolvedValue(
     partial({
-      id: 1,
-      currency: "EUR",
+      id: asInvestmentId(1),
+      currency: asCurrencyCode("EUR"),
       asset_class: "stock",
     }),
   );
   portfolioTransactionRepository.getById.mockResolvedValue(
     partial({
-      id: 12,
-      investment_id: 1,
+      id: asPortfolioTransactionId(12),
+      investment_id: asInvestmentId(1),
     }),
   );
   portfolioTransactionService.remove.mockResolvedValue(true);
   portfolioTransactionRepository.create.mockResolvedValue(
     partial({
-      id: 1,
-      investment_id: 1,
+      id: asPortfolioTransactionId(1),
+      investment_id: asInvestmentId(1),
     }),
   );
   portfolioTransactionRepository.update.mockResolvedValue(
     partial({
-      id: 12,
-      investment_id: 1,
+      id: asPortfolioTransactionId(12),
+      investment_id: asInvestmentId(1),
     }),
   );
 });

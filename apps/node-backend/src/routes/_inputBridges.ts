@@ -34,6 +34,16 @@ export function idField(field: string) {
 export const idParamsSchema = bareMessages(z.object({ id: idField("id") }));
 
 /**
+ * `/:id` params of one entity: {@link idParamsSchema}'s accept set and
+ * message, then the entity's branded id schema.
+ */
+export function entityIdParamsSchema<S extends z.ZodType<number, number>>(
+  brand: S,
+) {
+  return bareMessages(z.object({ id: idField("id").pipe(brand) }));
+}
+
+/**
  * One optional single-valued query parameter — `optionalQueryString`'s rule: a
  * repeated (`?a=1&a=2`) or bracketed (`?a[b]=1`) key is a 400. Wrap the
  * enclosing object in `bareMessages` to keep the `<name> must be a single

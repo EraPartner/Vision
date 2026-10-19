@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { mockLogger } from "./helpers/mockLogger.ts";
+import {
+  asRecipientId,
+  asTransactionId,
+} from "@vision/types/brands";
 const mockListActiveUnexecuted = vi.fn();
 const mockListRecentUnlinked = vi.fn();
 const mockGetClusterRootMap = vi.fn();
@@ -59,8 +63,8 @@ const planned = (over = {}) => ({
 });
 
 const tx = (over = {}) => ({
-  id: 1000,
-  recipient_id: 42,
+  id: asTransactionId(1000),
+  recipient_id: asRecipientId(42),
   recipient_cluster_id: 42,
   amount: "-100.00",
   transaction_date: "2026-07-01",
@@ -191,8 +195,8 @@ describe("autoLinkTransactions", () => {
     mockListActiveUnexecuted.mockResolvedValue([planned({ id: 1 })]);
     const res = await autoLinkTransactions([
       {
-        id: 1000,
-        recipient_id: 42,
+        id: asTransactionId(1000),
+        recipient_id: asRecipientId(42),
         currency: "EUR",
         amount: "-100.00",
         transaction_date: "2026-07-01",
@@ -218,8 +222,8 @@ describe("autoLinkTransactions", () => {
     ]);
     const res = await autoLinkTransactions([
       {
-        id: 1000,
-        recipient_id: 42,
+        id: asTransactionId(1000),
+        recipient_id: asRecipientId(42),
         currency: "EUR",
         amount: "-100.00",
         transaction_date: "2026-07-01",
@@ -233,15 +237,15 @@ describe("autoLinkTransactions", () => {
     mockListActiveUnexecuted.mockResolvedValue([planned({ id: 1 })]);
     const res = await autoLinkTransactions([
       {
-        id: 1000,
-        recipient_id: 42,
+        id: asTransactionId(1000),
+        recipient_id: asRecipientId(42),
         currency: "EUR",
         amount: "-100.00",
         transaction_date: "2026-07-01",
       },
       {
-        id: 1001,
-        recipient_id: 42,
+        id: asTransactionId(1001),
+        recipient_id: asRecipientId(42),
         currency: "EUR",
         amount: "-100.00",
         transaction_date: "2026-07-02",
@@ -256,8 +260,8 @@ describe("autoLinkTransactions", () => {
     mockListActiveUnexecuted.mockResolvedValue([planned({ id: 1 })]);
     const res = await autoLinkTransactions([
       {
-        id: 1000,
-        recipient_id: 42,
+        id: asTransactionId(1000),
+        recipient_id: asRecipientId(42),
         currency: "EUR",
         amount: "-100.00",
         transaction_date: "2026-07-01",
@@ -273,8 +277,8 @@ describe("autoLinkTransactions", () => {
     mockExecutePlanned.mockResolvedValue({ duplicate: true, current: {} });
     const res = await autoLinkTransactions([
       {
-        id: 1000,
-        recipient_id: 42,
+        id: asTransactionId(1000),
+        recipient_id: asRecipientId(42),
         currency: "EUR",
         amount: "-100.00",
         transaction_date: "2026-07-01",
@@ -288,8 +292,8 @@ describe("autoLinkTransactions", () => {
     mockListActiveUnexecuted.mockResolvedValue([]);
     const res = await autoLinkTransactions([
       {
-        id: 1000,
-        recipient_id: 42,
+        id: asTransactionId(1000),
+        recipient_id: asRecipientId(42),
         currency: "EUR",
         amount: "-100.00",
         transaction_date: "2026-07-01",

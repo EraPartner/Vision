@@ -57,6 +57,7 @@ import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { CustomChart } from "./CustomChart";
 import { getChartColor } from "@/components/charts/palette";
+import type { CategoryId, RecipientId, TagId } from "@vision/types/brands";
 
 type ChartCombo = { type: ChartType; variant: ChartVariant; label: string };
 
@@ -79,9 +80,9 @@ interface BuilderState {
     chartType: ChartType;
     chartVariant: ChartVariant;
     timeBucket: TimeBucket;
-    categoryIds: number[];
-    recipientIds: number[];
-    tagIds: number[];
+    categoryIds: CategoryId[];
+    recipientIds: RecipientId[];
+    tagIds: TagId[];
     allCategories: boolean;
     allRecipients: boolean;
     allTags: boolean;
@@ -161,13 +162,11 @@ export function CustomChartBuilderModal({
     const allTags = tagsQuery.data?.items ?? [];
 
     const availableCategories = useMemo(() => {
-        return data.categoryPivot
-            .filter((c) => c.categoryId !== null)
-            .map((c) => ({
-                id: c.categoryId as number,
-                name: c.categoryName,
-                total: c.total,
-            }));
+        return data.categoryPivot.flatMap((c) =>
+            c.categoryId === null
+                ? []
+                : [{ id: c.categoryId, name: c.categoryName, total: c.total }],
+        );
     }, [data.categoryPivot]);
 
     const selectedCats = availableCategories.filter((c) =>
@@ -185,7 +184,7 @@ export function CustomChartBuilderModal({
         setState((prev) => ({ ...prev, [key]: value }));
     };
 
-    const toggleCategory = (id: number) => {
+    const toggleCategory = (id: CategoryId) => {
         setState((prev) => ({
             ...prev,
             categoryIds: prev.categoryIds.includes(id)
@@ -194,7 +193,7 @@ export function CustomChartBuilderModal({
         }));
     };
 
-    const toggleRecipient = (id: number) => {
+    const toggleRecipient = (id: RecipientId) => {
         setState((prev) => ({
             ...prev,
             recipientIds: prev.recipientIds.includes(id)
@@ -203,7 +202,7 @@ export function CustomChartBuilderModal({
         }));
     };
 
-    const toggleTag = (id: number) => {
+    const toggleTag = (id: TagId) => {
         setState((prev) => ({
             ...prev,
             tagIds: prev.tagIds.includes(id)

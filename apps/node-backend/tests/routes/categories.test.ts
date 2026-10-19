@@ -9,6 +9,9 @@ import { bodyAt } from "../helpers/responseBody.ts";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mockLogger } from "../helpers/mockLogger.ts";
 import { routeAgent, okEnvelope, errEnvelope } from "../helpers/routeApp.ts";
+import {
+  asCategoryId,
+} from "@vision/types/brands";
 
 // The route imports its repository through services/categoryService.js, which
 // re-exports the default from this module (`export { default } from
@@ -68,8 +71,8 @@ describe("Category Routes", () => {
 
     it("should return categories with data", async () => {
       const categories = [
-        category({ id: 1, general: "GROCERIES", detail: "FOOD" }),
-        category({ id: 2, general: "TRANSPORT", detail: "FUEL" }),
+        category({ id: asCategoryId(1), general: "GROCERIES", detail: "FOOD" }),
+        category({ id: asCategoryId(2), general: "TRANSPORT", detail: "FUEL" }),
       ];
       categoryRepository.getAll.mockResolvedValue(categories);
 
@@ -95,7 +98,7 @@ describe("Category Routes", () => {
     it("returns the full list (more than 50 rows) and no limit/offset when neither param is sent", async () => {
       const rows = Array.from({ length: 60 }, (_, i) =>
         category({
-          id: i + 1,
+          id: asCategoryId(i + 1),
           general: "G",
           detail: `D${i + 1}`,
         }),
@@ -125,7 +128,7 @@ describe("Category Routes", () => {
 
     it("pages and reports the full total when limit/offset are supplied", async () => {
       categoryRepository.getAll.mockResolvedValue([
-        category({ id: 3, general: "G", detail: "D" }),
+        category({ id: asCategoryId(3), general: "G", detail: "D" }),
       ]);
       categoryRepository.getCount.mockResolvedValue(12);
 
@@ -154,7 +157,7 @@ describe("Category Routes", () => {
   describe("POST /", () => {
     it("should create new category with 201", async () => {
       categoryRepository.createOrGet.mockResolvedValue({
-        category: category({ id: 1, general: "GROCERIES", detail: "FOOD" }),
+        category: category({ id: asCategoryId(1), general: "GROCERIES", detail: "FOOD" }),
         created: true,
       });
 
@@ -167,7 +170,7 @@ describe("Category Routes", () => {
 
     it("should return 200 for duplicate", async () => {
       categoryRepository.createOrGet.mockResolvedValue({
-        category: category({ id: 1, general: "GROCERIES", detail: "FOOD" }),
+        category: category({ id: asCategoryId(1), general: "GROCERIES", detail: "FOOD" }),
         created: false,
       });
 
@@ -191,7 +194,7 @@ describe("Category Routes", () => {
     it("should return category by id", async () => {
       categoryRepository.getById.mockResolvedValue(
         category({
-          id: 1,
+          id: asCategoryId(1),
           general: "GROCERIES",
           detail: "FOOD",
         }),
@@ -221,7 +224,7 @@ describe("Category Routes", () => {
     it("should update category", async () => {
       categoryRepository.update.mockResolvedValue(
         category({
-          id: 1,
+          id: asCategoryId(1),
           general: "UPDATED",
         }),
       );
@@ -389,7 +392,7 @@ describe("Category request schemas (ADR-193)", () => {
   );
 
   it("PATCH /:id forwards only the documented fields", async () => {
-    categoryRepository.update.mockResolvedValue(category({ id: 1 }));
+    categoryRepository.update.mockResolvedValue(category({ id: asCategoryId(1) }));
     await api
       .patch(`${BASE}/1`)
       .send({ general: "g", is_active: false, id: 99 })

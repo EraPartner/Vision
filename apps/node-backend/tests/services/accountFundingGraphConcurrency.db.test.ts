@@ -21,6 +21,9 @@ import {
   __ACCOUNT_FUNDING_GRAPH_LOCK_PARAMS as ACCOUNT_FUNDING_GRAPH_LOCK_PARAMS,
   __ACCOUNT_FUNDING_GRAPH_LOCK_SQL as ACCOUNT_FUNDING_GRAPH_LOCK_SQL,
 } from "../../src/lib/accountFundingGraphLock.ts";
+import {
+  asAccountId,
+} from "@vision/types/brands";
 
 async function insertAccount(
   name: string,
@@ -150,8 +153,8 @@ describe.skipIf(!hasTestDatabase())(
       const b = await insertAccount("Funding race B");
       const releaseLock = await holdFundingGraphLock();
       const outcomesPromise = Promise.allSettled([
-        accountService.update(a, { funding_account_id: b }),
-        accountService.update(b, { funding_account_id: a }),
+        accountService.update(asAccountId(a), { funding_account_id: b }),
+        accountService.update(asAccountId(b), { funding_account_id: a }),
       ]);
       const outcomes = await releaseLockAndCollect(
         releaseLock,
@@ -176,8 +179,8 @@ describe.skipIf(!hasTestDatabase())(
       const source = await insertAccount("Funding merge source");
       const releaseLock = await holdFundingGraphLock();
       const outcomesPromise = Promise.allSettled([
-        accountService.update(dependent, { funding_account_id: source }),
-        mergeAccounts(survivor, [source]),
+        accountService.update(asAccountId(dependent), { funding_account_id: source }),
+        mergeAccounts(asAccountId(survivor), [asAccountId(source)]),
       ]);
       const outcomes = await releaseLockAndCollect(
         releaseLock,
@@ -194,8 +197,8 @@ describe.skipIf(!hasTestDatabase())(
       const dependent = await insertAccount("Funding delete dependent");
       const releaseLock = await holdFundingGraphLock();
       const outcomesPromise = Promise.allSettled([
-        accountService.remove(parent),
-        accountService.update(dependent, { funding_account_id: parent }),
+        accountService.remove(asAccountId(parent)),
+        accountService.update(asAccountId(dependent), { funding_account_id: parent }),
       ]);
       const outcomes = await releaseLockAndCollect(
         releaseLock,

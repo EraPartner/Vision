@@ -27,6 +27,11 @@ import type { IRoute } from "express";
 import { mockConnection } from "../helpers/repoMocks.ts";
 import { mockLogger } from "../helpers/mockLogger.ts";
 import { routeAgent, okEnvelope, errEnvelope } from "../helpers/routeApp.ts";
+import {
+  asCategoryId,
+  asCurrencyCode,
+  asRecipientId,
+} from "@vision/types/brands";
 
 /** The slice of multer's `req.file` the import routes read. */
 interface UploadedFile {
@@ -1100,18 +1105,18 @@ describe("Import Routes", () => {
           override_category_path: null,
           recipient_raw: "SUPERMARKET",
           amount: "-12.50",
-          currency: "EUR",
+          currency: asCurrencyCode("EUR"),
           tx_date: "2026-04-01",
           memo: "",
           match_source: "exact",
           match_similarity: null,
           matched_pattern_id: null,
-          resolved_recipient_id: 7,
+          resolved_recipient_id: asRecipientId(7),
           user_override_recipient_id: null,
           override_category_id: null,
-          effective_recipient_id: 7,
+          effective_recipient_id: asRecipientId(7),
           recipient_name: "SUPERMARKET ABC",
-          recipient_default_category_id: 12,
+          recipient_default_category_id: asCategoryId(12),
           recipient_default_category_general: "Groceries",
           recipient_default_category_detail: "Food",
           override_category_general: null,
@@ -1145,18 +1150,18 @@ describe("Import Routes", () => {
           override_category_path: null,
           recipient_raw: "SUPERMARKET",
           amount: "-99.99",
-          currency: "EUR",
+          currency: asCurrencyCode("EUR"),
           tx_date: "2026-04-01",
           memo: "",
           match_source: "exact",
           match_similarity: null,
           matched_pattern_id: null,
-          resolved_recipient_id: 7,
+          resolved_recipient_id: asRecipientId(7),
           user_override_recipient_id: null,
-          override_category_id: 22,
-          effective_recipient_id: 7,
+          override_category_id: asCategoryId(22),
+          effective_recipient_id: asRecipientId(7),
           recipient_name: "SUPERMARKET ABC",
-          recipient_default_category_id: 12,
+          recipient_default_category_id: asCategoryId(12),
           recipient_default_category_general: "Groceries",
           recipient_default_category_detail: "Food",
           override_category_general: "Hardware",

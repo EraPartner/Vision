@@ -13,6 +13,7 @@
  */
 
 import Decimal from "decimal.js";
+import type { CurrencyCode } from "@vision/types/brands";
 
 export type DecimalInput = number | string | Decimal | null | undefined;
 
@@ -108,6 +109,50 @@ export function coerceNumericFields<T extends object>(
     if (field in out) out[field] = numericColumn(out[field] as DecimalInput);
   }
   return out as T;
+}
+
+/**
+ * An amount together with its currency (ADR-220). Totals that may span
+ * currencies take `Money`, not bare decimals, so a caller has to say which
+ * currency every figure is in; `sumMoney` refuses a mix instead of adding,
+ * for example, USD to EUR.
+ */
+export interface Money {
+  readonly amount: Decimal;
+  readonly currency: CurrencyCode;
+}
+
+export class CurrencyMismatchError extends Error {
+  constructor(expected: CurrencyCode, actual: CurrencyCode) {
+    super(`Cannot combine ${actual} with ${expected} without converting`);
+    this.name = "CurrencyMismatchError";
+  }
+}
+
+export function money(amount: DecimalInput, currency: CurrencyCode): Money {
+  return { amount: toDecimal(amount), currency };
+}
+
+/**
+ * Sum of `items`, all of which must already be in `currency`. Throws
+ * {@link CurrencyMismatchError} on any other currency: convert first.
+ */
+export function sumMoney(
+  items: readonly Money[],
+  currency: CurrencyCode,
+): Money {
+  let acc = new Decimal(0);
+  for (const item of items) {
+    if (item.currency !== currency) {
+      throw new CurrencyMismatchError(currency, item.currency);
+    }
+    acc = acc.plus(item.amount);
+  }
+  return { amount: acc, currency };
+}
+
+export function addMoney(a: Money, b: Money): Money {
+  return sumMoney([a, b], a.currency);
 }
 
 export { Decimal };

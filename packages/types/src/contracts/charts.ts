@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { CategoryIdSchema, RecipientIdSchema, TagIdSchema } from "../brands.ts";
 import { IdSchema, wireListOf } from "./common.ts";
 
 /*
@@ -13,9 +14,9 @@ export const SavedChartSchema = z.looseObject({
   id: IdSchema,
   name: z.string(),
   chart_type: z.string(),
-  category_ids: z.array(IdSchema),
-  recipient_ids: z.array(IdSchema),
-  tag_ids: z.array(IdSchema),
+  category_ids: z.array(CategoryIdSchema),
+  recipient_ids: z.array(RecipientIdSchema),
+  tag_ids: z.array(TagIdSchema),
   all_categories: z.boolean(),
   all_recipients: z.boolean(),
   all_tags: z.boolean(),

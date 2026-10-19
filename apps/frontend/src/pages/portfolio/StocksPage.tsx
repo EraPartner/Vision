@@ -1,4 +1,4 @@
-import { numberFormatToLocale } from "@/utils/currency";
+import { numberFormatToLocale, DEFAULT_CURRENCY } from "@/utils/currency";
 import {
     DropdownMenu,
     DropdownMenuTrigger,
@@ -156,7 +156,7 @@ export default function StocksPage({
         [byAssetClass, assetClasses],
     );
     const priceFreshnessLabel = usePriceFreshnessLabel(holdings);
-    const targetCurrency = appSettings.defaultCurrency || "EUR";
+    const targetCurrency = appSettings.defaultCurrency || DEFAULT_CURRENCY;
 
     // Per-investment FX attribution and the page totals come from the backend
     // summary; every holding figure is already in the display currency.

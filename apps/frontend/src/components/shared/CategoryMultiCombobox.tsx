@@ -2,10 +2,11 @@ import { MultiCombobox } from "@/components/shared/MultiCombobox";
 import { useCategoryTree } from "@/hooks/useCategories";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import type { CategoryNode } from "@/types/api";
+import type { CategoryId } from "@vision/types/brands";
 
 interface CategoryMultiComboboxProps {
-    value: number[];
-    onChange: (ids: number[]) => void;
+    value: CategoryId[];
+    onChange: (ids: CategoryId[]) => void;
     disabled?: boolean;
     className?: string;
     id?: string;
@@ -28,7 +29,7 @@ export function CategoryMultiCombobox({
     const { t } = useLanguage();
     const { data } = useCategoryTree();
     const nodes = data?.items ?? [];
-    const selectWithDescendants = (selectedIds: number[]) => {
+    const selectWithDescendants = (selectedIds: CategoryId[]) => {
         const expanded = new Set(selectedIds);
         for (const node of nodes) {
             if (node.pathIds.some((ancestorId) => expanded.has(ancestorId)))

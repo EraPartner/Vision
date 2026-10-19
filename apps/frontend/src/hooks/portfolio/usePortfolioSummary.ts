@@ -13,8 +13,9 @@ import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { portfolioKeys } from "@/lib/queryKeys";
 import type { PortfolioSummaryResponse } from "@/lib/api/info";
+import type { CurrencyCode } from "@vision/types/brands";
 
-export function usePortfolioSummaryQuery(currency: string, enabled = true) {
+export function usePortfolioSummaryQuery(currency: CurrencyCode, enabled = true) {
     return useQuery<PortfolioSummaryResponse>({
         queryKey: portfolioKeys.summary(currency),
         queryFn: () => apiClient.getPortfolioSummary({ currency }),
@@ -29,7 +30,7 @@ export function usePortfolioSummaryQuery(currency: string, enabled = true) {
  * gains come from the same engine (dated FX, configured cost-basis method) as
  * active ones. Only fetched when there is an archived holding to show.
  */
-export function useAllHoldingsSummaryQuery(currency: string, enabled = true) {
+export function useAllHoldingsSummaryQuery(currency: CurrencyCode, enabled = true) {
     return useQuery<PortfolioSummaryResponse>({
         queryKey: portfolioKeys.summaryAllHoldings(currency),
         queryFn: () => apiClient.getPortfolioSummary({ currency, active: false }),

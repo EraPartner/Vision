@@ -5,6 +5,7 @@ import { server } from "@/test/msw/server";
 import { API_BASE, ok } from "./clientTestHarness";
 
 import { listCustomParserConfigs, createCustomParserConfig, updateCustomParserConfig, deleteCustomParserConfig, listImportBatches, rollbackImportBatch, getImportPreview, overrideImportRow, overrideImportRowCategory, commitImportBatch } from "@/lib/api/imports";
+import { asCategoryId, asRecipientId } from "@vision/types/brands";
 
 afterEach(() => server.resetHandlers());
 
@@ -115,7 +116,7 @@ describe("imports API client", () => {
         return ok({ row_id: 3, user_override_recipient_id: 9 });
       }),
     );
-    const res = await overrideImportRow(7, 3, 9);
+    const res = await overrideImportRow(7, 3, asRecipientId(9));
     expect(body).toMatchObject({ recipient_id: 9 });
     expect(res.user_override_recipient_id).toBe(9);
   });
@@ -128,7 +129,7 @@ describe("imports API client", () => {
         return ok({ row_id: 3, override_category_id: 12 });
       }),
     );
-    const res = await overrideImportRowCategory(7, 3, 12);
+    const res = await overrideImportRowCategory(7, 3, asCategoryId(12));
     expect(body).toMatchObject({ category_id: 12 });
     expect(res.override_category_id).toBe(12);
   });

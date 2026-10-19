@@ -17,12 +17,13 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useAccounts } from "@/hooks/useAccounts";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import type { AccountId } from "@vision/types/brands";
 
 interface AccountFilterComboboxProps {
     /** The active account_id filter, if any. */
-    value?: number | undefined;
+    value?: AccountId | undefined;
     /** Called with the picked account (id + display label), or null to clear. */
-    onChange: (selection: { id: number; label: string } | null) => void;
+    onChange: (selection: { id: AccountId; label: string } | null) => void;
     /** Toolbar chip styling (ADR-181) instead of the plain outline button. */
     chip?: boolean;
 }
@@ -40,7 +41,7 @@ export function AccountFilterCombobox({ value, onChange, chip = false }: Account
         ? (selected.display_name || selected.name)
         : t(chip ? "txPage.filter.allAccounts" : "txPage.filter.account");
 
-    const pick = (selection: { id: number; label: string } | null) => {
+    const pick = (selection: { id: AccountId; label: string } | null) => {
         onChange(selection);
         setOpen(false);
     };

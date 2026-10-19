@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { getBrokerAccountMetrics } from "../brokerAccountMetrics";
+import { asAccountId, asCurrencyCode } from "@vision/types/brands";
 
 describe("getBrokerAccountMetrics", () => {
     it("separates position value from total broker profit and loss", () => {
         const metrics = getBrokerAccountMetrics(
             {
-                currency: "EUR",
+                currency: asCurrencyCode("EUR"),
                 computed_at: "2026-09-08T00:00:00Z",
                 totals: {} as never,
                 summaries: [],
@@ -13,7 +14,7 @@ describe("getBrokerAccountMetrics", () => {
                 byAssetGroup: [],
                 byAccount: [
                     {
-                        account_id: 4,
+                        account_id: asAccountId(4),
                         assignment: "account",
                         contribution_kind: "position",
                         oversold: false,
@@ -24,7 +25,7 @@ describe("getBrokerAccountMetrics", () => {
                         gainLoss: 250,
                     },
                     {
-                        account_id: 4,
+                        account_id: asAccountId(4),
                         assignment: "account",
                         contribution_kind: "non_position",
                         oversold: false,
@@ -35,7 +36,7 @@ describe("getBrokerAccountMetrics", () => {
                         gainLoss: 25,
                     },
                     {
-                        account_id: 8,
+                        account_id: asAccountId(8),
                         assignment: "account",
                         contribution_kind: "position",
                         oversold: true,
@@ -47,7 +48,7 @@ describe("getBrokerAccountMetrics", () => {
                     },
                 ],
             },
-            4,
+            asAccountId(4),
         );
         expect(metrics).toEqual({
             holdingsValue: 1200,
@@ -58,11 +59,11 @@ describe("getBrokerAccountMetrics", () => {
     });
 
     it("distinguishes a loaded account with no position from loading", () => {
-        expect(getBrokerAccountMetrics(undefined, 4)).toBeUndefined();
+        expect(getBrokerAccountMetrics(undefined, asAccountId(4))).toBeUndefined();
         expect(
             getBrokerAccountMetrics(
                 {
-                    currency: "EUR",
+                    currency: asCurrencyCode("EUR"),
                     computed_at: "2026-09-08T00:00:00Z",
                     totals: {} as never,
                     summaries: [],
@@ -70,7 +71,7 @@ describe("getBrokerAccountMetrics", () => {
                     byAssetGroup: [],
                     byAccount: [],
                 },
-                4,
+                asAccountId(4),
             ),
         ).toEqual({
             holdingsValue: 0,

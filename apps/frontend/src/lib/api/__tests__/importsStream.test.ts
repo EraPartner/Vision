@@ -14,6 +14,7 @@ import {
     type PortfolioCustomConfig,
 } from "@/lib/api/portfolioImports";
 import type { ImportProgress } from "@/types/apiClient";
+import { asAccountId } from "@vision/types/brands";
 
 /** Build a Response whose body streams `text` as a single chunk. */
 function sseResponse(text: string): Response {
@@ -108,7 +109,7 @@ describe("importCSVWithProgress SSE handling", () => {
             portfolioConfig,
             "saved-parser",
             vi.fn(),
-            { isBrokerage: true, accountId: 7 },
+            { isBrokerage: true, accountId: asAccountId(7) },
         );
         await result;
 

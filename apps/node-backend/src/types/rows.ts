@@ -50,6 +50,15 @@
 
 import type { z } from "zod";
 import type {
+  AccountId,
+  CurrencyCode,
+  InvestmentId,
+  PortfolioTransactionId,
+  RecipientId,
+  SplitId,
+  TransactionId,
+} from "@vision/types/brands";
+import type {
   accountBalanceQueryRowSchema,
   accountRowSchema,
   enrichedTransactionDbRowSchema,
@@ -150,7 +159,7 @@ export type HydratedPlannedTransactionRow = PlannedTransactionRow & {
   category_name: string | null;
   executions: PlannedExecutionRow[];
   execution_count: number;
-  executed_transaction_id: number | null;
+  executed_transaction_id: TransactionId | null;
   loan_schedule: LoanScheduleRow[];
   tags: TransactionTagRef[];
 };
@@ -232,14 +241,14 @@ export type AccountBalanceQueryRow = z.output<
  */
 export type AccountWithBalanceRow = AccountRow & {
   computed_balance: number;
-  balance_parts: Array<{ currency: string; balance: number }>;
+  balance_parts: Array<{ currency: CurrencyCode; balance: number }>;
   balance_incomplete: boolean;
-  unconverted_currencies: string[];
+  unconverted_currencies: CurrencyCode[];
   reconcilable_balance: number;
-  reconcilable_currency: string;
+  reconcilable_currency: CurrencyCode;
   drift: number | null;
   statement_balances: Array<{
-    currency: string;
+    currency: CurrencyCode;
     balance: number;
     balance_date: string;
   }>;
@@ -263,9 +272,9 @@ export type TransactionSplitRow = z.output<typeof transactionSplitRowSchema>;
  * `amount_paid` are coerced to numbers; the timestamps stay `Date`.
  */
 export type FormattedSplit = {
-  id: number;
-  transaction_id: number;
-  recipient_id: number;
+  id: SplitId;
+  transaction_id: TransactionId;
+  recipient_id: RecipientId;
   recipient_name: string | null;
   amount: number;
   amount_paid: number;
@@ -283,7 +292,7 @@ export type OwedSplitDetailRow = FormattedSplit & {
   transaction_date: Date;
   transaction_memo: string | null;
   transaction_amount: number;
-  transaction_currency: string | null;
+  transaction_currency: CurrencyCode | null;
   bank_account: string | null;
   transaction_recipient_name: string | null;
   remaining: number;
@@ -298,7 +307,7 @@ export type SplitPaymentRow = z.output<typeof splitPaymentRowSchema>;
  */
 export type FormattedSplitPayment = {
   id: number;
-  split_id: number;
+  split_id: SplitId;
   amount: number;
   /** 'YYYY-MM-DD' */
   paid_at: string | null;
@@ -328,12 +337,12 @@ export type SplitTotals = {
  * inheritance installs were converted by migration 0087).
  */
 export type InvestmentRow = {
-  id: number;
+  id: InvestmentId;
   name: string;
   symbol: string | null;
   /** `asset_class` enum: stock|etf|crypto|metals|real_estate|savings|bond. */
   asset_class: string;
-  currency: string;
+  currency: CurrencyCode;
   /** Coerced from NUMERIC(18,6). */
   current_price: number | null;
   /** Coerced from NUMERIC(8,4). */
@@ -373,8 +382,8 @@ export type InvestmentRow = {
 export type PortfolioTransactionRow = {
   /** Read-only accounting role. */
   income_recognition_role?: "standard" | "included_in_units";
-  id: number;
-  investment_id: number;
+  id: PortfolioTransactionId;
+  investment_id: InvestmentId;
   /** `portfolio_txn_type` enum — see `@vision/types/portfolioTxnTypes`. */
   type: string;
   /** 'YYYY-MM-DD' — coerced from a DATE by `mapPortfolioTxRow`. */
@@ -389,7 +398,7 @@ export type PortfolioTransactionRow = {
   taxes: number | null;
   /** Whether a dividend amount is gross or net; unknown for legacy or unclassified rows. */
   dividend_amount_convention: "gross" | "net" | "unknown";
-  currency: string;
+  currency: CurrencyCode;
   /** Coerced from NUMERIC(20,10). */
   fx_rate_to_eur: number | null;
   note: string | null;
@@ -399,7 +408,7 @@ export type PortfolioTransactionRow = {
   /** 'YYYY-MM-DD' */
   recurrence_end_date: string | null;
   /** Owning account for the lot (ADR-091). */
-  account_id?: number | null;
+  account_id?: AccountId | null;
   /**
    * The portfolio import batch that created
    *           this lot (migration 0086); NULL for manual entry and for lots committed
@@ -467,7 +476,7 @@ export type FormattedWatchlistRow = {
   symbol: string | null;
   asset_class: string;
   target_price: number;
-  currency: string;
+  currency: CurrencyCode;
   notes: string | null;
   price_provider_id: string | null;
   added_price: number | null;
@@ -514,7 +523,7 @@ export type { AttachmentRow } from "../database/rows/catalog.ts";
  */
 export type FormattedAttachment = {
   id: string;
-  transaction_id: number;
+  transaction_id: TransactionId;
   filename: string;
   stored_path: string;
   mime_type: string;

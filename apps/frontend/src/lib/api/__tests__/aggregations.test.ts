@@ -15,6 +15,11 @@ import {
     getAggregationRecipientByYear,
     getAggregationRecipientPivot,
 } from "@/lib/api/aggregations";
+import {
+    asCategoryId,
+    asCurrencyCode,
+    asRecipientId,
+} from "@vision/types/brands";
 
 const API_BASE = "http://localhost:3002";
 
@@ -88,12 +93,12 @@ describe("aggregations — monthly summary branch coverage", () => {
         const ref = { url: "" };
         captureUrl("/api/aggregations/monthly-summary", ref);
         await getAggregationMonthlySummary({
-            currency: "EUR",
+            currency: asCurrencyCode("EUR"),
             all_time: true,
             start_date: "2024-10-01",
             end_date: "2026-09-07",
-            excluded_category_ids: [1, 2],
-            excluded_recipient_ids: [3],
+            excluded_category_ids: [asCategoryId(1), asCategoryId(2)],
+            excluded_recipient_ids: [asRecipientId(3)],
         });
         const p = new URL(ref.url).searchParams;
         expect(p.get("currency")).toBe("EUR");
@@ -139,7 +144,7 @@ describe("aggregations — simple wrappers", () => {
             }),
         );
         await getAggregationRecipientInsights({
-            excluded_category_ids: [9],
+            excluded_category_ids: [asCategoryId(9)],
             start_date: "2024-10-01",
             end_date: "2026-09-07",
         });
@@ -176,7 +181,7 @@ describe("aggregations — simple wrappers", () => {
                 total_history: [],
             }),
         );
-        await getAggregationBankBalances({ currency: "EUR" });
+        await getAggregationBankBalances({ currency: asCurrencyCode("EUR") });
         expect(ref.url).toContain("currency=EUR");
     });
 
@@ -224,14 +229,14 @@ describe("aggregations — cashflow forecast branch coverage", () => {
         const ref = { url: "" };
         captureUrl("/api/aggregations/cashflow-forecast-methods", ref);
         await getCashflowForecastMethods({
-            currency: "EUR",
+            currency: asCurrencyCode("EUR"),
             history_months: 12,
             mc_paths: 500,
             mc_percentiles: [10, 90],
             include_planned: true,
             include_backtest: false,
-            excluded_category_ids: [1],
-            excluded_recipient_ids: [2],
+            excluded_category_ids: [asCategoryId(1)],
+            excluded_recipient_ids: [asRecipientId(2)],
         });
         const p = new URL(ref.url).searchParams;
         expect(p.get("history_months")).toBe("12");
@@ -256,7 +261,7 @@ describe("aggregations — cashflow forecast branch coverage", () => {
         const ref = { url: "" };
         captureUrl("/api/aggregations/cashflow-forecast-rolling", ref);
         await getCashflowForecastRolling({
-            currency: "EUR",
+            currency: asCurrencyCode("EUR"),
             history_months: 6,
             days_back: 30,
             days_forward: 60,
@@ -264,8 +269,8 @@ describe("aggregations — cashflow forecast branch coverage", () => {
             mc_percentiles: [25, 75],
             include_planned: false,
             include_backtest: true,
-            excluded_category_ids: [5],
-            excluded_recipient_ids: [6],
+            excluded_category_ids: [asCategoryId(5)],
+            excluded_recipient_ids: [asRecipientId(6)],
         });
         const p = new URL(ref.url).searchParams;
         expect(p.get("days_back")).toBe("30");
@@ -316,10 +321,10 @@ describe("aggregations — cashflow forecast branch coverage", () => {
             }),
         );
         await getSankeyFlow({
-            currency: "EUR",
+            currency: asCurrencyCode("EUR"),
             year: 2025,
-            excluded_category_ids: [1],
-            excluded_recipient_ids: [2],
+            excluded_category_ids: [asCategoryId(1)],
+            excluded_recipient_ids: [asRecipientId(2)],
         });
         const p = new URL(ref.url).searchParams;
         expect(p.get("year")).toBe("2025");
@@ -356,11 +361,11 @@ describe("aggregations exclusion query building", () => {
         );
 
         await getAggregationCategoryPivot({
-            currency: "EUR",
+            currency: asCurrencyCode("EUR"),
             start_date: "2024-10-01",
             end_date: "2026-09-07",
-            excluded_category_ids: [1, 2],
-            excluded_recipient_ids: [3],
+            excluded_category_ids: [asCategoryId(1), asCategoryId(2)],
+            excluded_recipient_ids: [asRecipientId(3)],
         });
 
         const parsed = new URL(url);
@@ -405,8 +410,8 @@ describe("aggregations exclusion query building", () => {
         await getAggregationRecipientByYear({
             start_date: "2024-10-01",
             end_date: "2026-09-07",
-            excluded_recipient_ids: [5],
-            excluded_category_ids: [6, 7],
+            excluded_recipient_ids: [asRecipientId(5)],
+            excluded_category_ids: [asCategoryId(6), asCategoryId(7)],
         });
         const parsed = new URL(url);
         expect(parsed.searchParams.getAll("excluded_recipient_ids")).toEqual([
@@ -440,11 +445,11 @@ describe("aggregations exclusion query building", () => {
             ),
         );
         await getAggregationRecipientPivot({
-            currency: "USD",
+            currency: asCurrencyCode("USD"),
             bucket: "yearly",
             start_date: "2025-01-01",
             end_date: "2025-12-31",
-            recipient_ids: [10, 11],
+            recipient_ids: [asRecipientId(10), asRecipientId(11)],
         });
         const parsed = new URL(url);
         expect(parsed.searchParams.get("bucket")).toBe("yearly");

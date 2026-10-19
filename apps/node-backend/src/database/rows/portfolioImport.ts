@@ -22,12 +22,18 @@
  */
 import { z } from "zod";
 import {
+  pgAccountId,
   pgBigint,
+  pgCategoryId,
+  pgCurrency,
   pgDate,
   pgDayString,
   pgInt,
+  pgInvestmentId,
   pgNumeric,
+  pgRecipientId,
   pgTimestamptz,
+  pgTransactionId,
 } from "../rowSchemas.ts";
 import {
   portfolioAssetAdjustmentRowSchema,
@@ -211,7 +217,7 @@ export const portfolioImportBatchRowSchema = z
     error_summary: z.string().nullable(),
     started_at: pgTimestamptz,
     completed_at: pgTimestamptz.nullable(),
-    account_id: pgInt.nullable(),
+    account_id: pgAccountId.nullable(),
     is_brokerage: z.boolean(),
   })
   .describe("portfolio_import_batches row");
@@ -373,7 +379,7 @@ export const portfolioImportStagingRowSchema = z
     amount: pgNumeric.nullable(),
     fees: pgNumeric.nullable(),
     taxes: pgNumeric.nullable(),
-    currency: z.string().nullable(),
+    currency: pgCurrency.nullable(),
     fx_rate_to_eur: pgNumeric.nullable(),
     note: z.string().nullable(),
     raw_data: z.string().nullable(),
@@ -384,8 +390,8 @@ export const portfolioImportStagingRowSchema = z
     /** SMALLINT */
     dedup_fingerprint_version: pgInt.nullable().optional(),
     dedup_occurrence: pgInt.nullable().optional(),
-    resolved_investment_id: pgInt.nullable(),
-    user_override_investment_id: pgInt.nullable(),
+    resolved_investment_id: pgInvestmentId.nullable(),
+    user_override_investment_id: pgInvestmentId.nullable(),
     match_source: z.enum(["symbol", "name_exact"]).nullable(),
     /** REAL: a number, not a string. */
     match_similarity: z.number().nullable(),
@@ -424,14 +430,14 @@ export const portfolioImportPreviewRowSchema = z
     amount: pgNumeric.nullable(),
     fees: pgNumeric.nullable(),
     taxes: pgNumeric.nullable(),
-    currency: z.string().nullable(),
+    currency: pgCurrency.nullable(),
     fx_rate_to_eur: pgNumeric.nullable(),
     note: z.string().nullable(),
     match_source: z.string().nullable(),
     error_message: z.string().nullable(),
-    resolved_investment_id: pgInt.nullable(),
-    user_override_investment_id: pgInt.nullable(),
-    effective_investment_id: pgInt.nullable(),
+    resolved_investment_id: pgInvestmentId.nullable(),
+    user_override_investment_id: pgInvestmentId.nullable(),
+    effective_investment_id: pgInvestmentId.nullable(),
     /** LEFT JOIN investments */
     investment_name: z.string().nullable(),
     investment_symbol: z.string().nullable(),
@@ -459,7 +465,7 @@ export const investmentResolutionRowSchema = z
     status: z.string(),
     route: z.string().nullable(),
     error_message: z.string().nullable(),
-    user_override_investment_id: pgInt.nullable(),
+    user_override_investment_id: pgInvestmentId.nullable(),
   })
   .describe("portfolio import investment resolution row");
 export type InvestmentResolutionRow = z.output<
@@ -481,7 +487,7 @@ export const investmentCreationRowSchema = z
   .object({
     symbol_raw: z.string().nullable(),
     name_raw: z.string().nullable(),
-    currency: z.string().nullable(),
+    currency: pgCurrency.nullable(),
     default_asset_class: z.string().nullable(),
     custom_config: storedBatchConfigSchema.nullable(),
   })
@@ -496,7 +502,7 @@ export const committedStagingRowSchema = z
     id: pgInt,
     route: z.string().nullable(),
     /** LEFT JOIN portfolio_transactions: NULL for cash rows. */
-    investment_id: pgInt.nullable(),
+    investment_id: pgInvestmentId.nullable(),
   })
   .describe("portfolio import committed row");
 export type CommittedStagingRow = z.output<typeof committedStagingRowSchema>;
@@ -529,10 +535,10 @@ export const matchedPortfolioStagingRowSchema = portfolioImportStagingRowSchema
     /** `to_char(tx_date, 'YYYY-MM-DD')` */
     tx_date: pgDayString.nullable(),
     /** COALESCE(user_override_investment_id, resolved_investment_id) */
-    investment_id: pgInt.nullable(),
+    investment_id: pgInvestmentId.nullable(),
     /** LEFT JOIN investments */
     asset_class: z.string().nullable(),
-    investment_currency: z.string().nullable(),
+    investment_currency: pgCurrency.nullable(),
   })
   .describe("portfolio import matched staging row");
 export type MatchedPortfolioStagingRow = z.output<
@@ -582,7 +588,7 @@ export const investmentMatchKeyRowSchema = z
   .object({
     match_key: z.string(),
     /** MIN over INTEGER ids of a non-empty group. */
-    id: pgInt,
+    id: pgInvestmentId,
     count: pgInt,
   })
   .describe("investment match key row");
@@ -590,7 +596,7 @@ export const investmentMatchKeyRowSchema = z
 /** Active crypto/Kinesis holdings the provider-alias match considers. */
 export const aliasInvestmentRowSchema = z
   .object({
-    id: pgInt,
+    id: pgInvestmentId,
     symbol: z.string().nullable(),
     name: z.string(),
     /** `asset_class` enum */
@@ -622,10 +628,10 @@ export const reconciliationSourceRowSchema = portfolioImportStagingRowSchema
     dedup_occurrence: pgInt.nullable(),
     asset_transfer_details: stagedAssetTransferDetailsSchema.nullable(),
     asset_adjustment_details: stagedAssetAdjustmentDetailsSchema.nullable(),
-    investment_id: pgInt.nullable(),
+    investment_id: pgInvestmentId.nullable(),
     asset_class: z.string().nullable(),
-    investment_currency: z.string().nullable(),
-    account_id: pgInt.nullable(),
+    investment_currency: pgCurrency.nullable(),
+    account_id: pgAccountId.nullable(),
     custom_config: storedBatchConfigSchema.nullable(),
     adapter_name: z.string(),
     batch_status: z.string(),
@@ -718,17 +724,17 @@ export const intIdRowSchema = z
  * number).
  */
 export const cashTransactionSnapshotSchema = z.object({
-  id: z.number(),
+  id: pgTransactionId,
   date: z.string(),
   amount: z.string(),
-  currency: z.string(),
+  currency: pgCurrency,
   memo: z.string().nullable(),
   comment: z.string().nullable(),
   balance: z.string().nullable(),
-  account_id: z.number().nullable(),
-  recipient_id: z.number(),
+  account_id: pgAccountId.nullable(),
+  recipient_id: pgRecipientId,
   recipient_bank_account_id: z.number().nullable(),
-  category_id: z.number().nullable(),
+  category_id: pgCategoryId.nullable(),
   is_active: z.boolean(),
   import_batch_id: z.number().nullable(),
   source_record_hash: z.string().nullable(),
@@ -736,7 +742,7 @@ export const cashTransactionSnapshotSchema = z.object({
   dedup_fingerprint_version: z.number().nullable(),
   is_transfer: z.boolean(),
   transfer_source: z.string().nullable(),
-  transfer_peer_id: z.number().nullable(),
+  transfer_peer_id: pgTransactionId.nullable(),
 });
 export type CashTransactionSnapshot = z.output<
   typeof cashTransactionSnapshotSchema
@@ -761,8 +767,8 @@ export const ibkrCashSnapshotRowSchema = z
 
 /** `to_jsonb(s)` of `account_statement_balances` (NUMERIC as a JSON number). */
 export const statementBalanceSnapshotSchema = z.object({
-  account_id: z.number(),
-  currency: z.string(),
+  account_id: pgAccountId,
+  currency: pgCurrency,
   balance: z.number(),
   /** DATE in JSON: 'YYYY-MM-DD' */
   balance_date: z.string(),
@@ -812,7 +818,7 @@ export const repairStagingSnapshotSchema = z.object({
   amount: z.string().nullable(),
   fees: z.string().nullable(),
   taxes: z.string().nullable(),
-  currency: z.string().nullable(),
+  currency: pgCurrency.nullable(),
   fx_rate_to_eur: z.string().nullable(),
   note: z.string().nullable(),
   raw_data: z.string().nullable(),
@@ -822,8 +828,8 @@ export const repairStagingSnapshotSchema = z.object({
   dedup_fingerprint: z.string().nullable(),
   dedup_fingerprint_version: z.number().nullable(),
   dedup_occurrence: z.number().nullable(),
-  resolved_investment_id: z.number().nullable(),
-  user_override_investment_id: z.number().nullable(),
+  resolved_investment_id: pgInvestmentId.nullable(),
+  user_override_investment_id: pgInvestmentId.nullable(),
   match_source: z.string().nullable(),
   match_similarity: z.number().nullable(),
   committed_txn_id: z.number().nullable(),
@@ -856,7 +862,7 @@ export const repairBatchSnapshotSchema = z.object({
   /** TIMESTAMPTZ in JSON: ISO text */
   started_at: z.string(),
   completed_at: z.string().nullable(),
-  account_id: z.number().nullable(),
+  account_id: pgAccountId.nullable(),
   is_brokerage: z.boolean(),
 });
 export type RepairBatchSnapshot = z.output<typeof repairBatchSnapshotSchema>;

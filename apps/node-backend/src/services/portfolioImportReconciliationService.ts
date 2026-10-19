@@ -1,6 +1,7 @@
 /** One-to-one, reviewable adoption of existing portfolio history. */
 import { createHash } from "node:crypto";
 import { partitionOversellDeficits } from "@vision/shared-utils/portfolio";
+import { asPortfolioTransactionId } from "@vision/types/brands";
 import { ConflictError, ValidationError } from "../middleware/errorHandler.ts";
 import { withTransaction } from "../database/connection.ts";
 import { toDecimal } from "../lib/money.ts";
@@ -3784,7 +3785,12 @@ export async function applyPortfolioImportReconciliation({
         after,
         // A repair is planned only under an explicit source policy.
         policy: policy as AdoptPolicy,
-        imported,
+        // History mixes custody events in; a repaired duplicate is a
+        // portfolio transaction.
+        imported: {
+          id: asPortfolioTransactionId(imported.id),
+          import_batch_id: imported.import_batch_id,
+        },
       });
       repairedByBatch.set(
         Number(row.batch_id),

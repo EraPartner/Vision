@@ -36,6 +36,8 @@ import {
     portfolioImportPreviewKey,
     usePortfolioImportPreview,
 } from "@/features/portfolio/usePortfolioQueries";
+import { asAccountId } from "@vision/types/brands";
+import type { AccountId, InvestmentId } from "@vision/types/brands";
 
 const PageIcon = PAGE_ICONS["/portfolio/import"];
 
@@ -188,7 +190,7 @@ export function PortfolioImportReviewPage() {
     const { batchId: batchIdParam } = useParams<{ batchId: string }>();
     const batchId = Number(batchIdParam);
     const [busyGroup, setBusyGroup] = useState<string | null>(null);
-    const [repairAccountId, setRepairAccountId] = useState<number>();
+    const [repairAccountId, setRepairAccountId] = useState<AccountId>();
     const { data: accountsData } = useAccounts({ active: "true" });
     const brokerAccounts = activeBrokerAccounts(accountsData?.items ?? []);
 
@@ -197,7 +199,7 @@ export function PortfolioImportReviewPage() {
         usePortfolioImportPreview(batchId);
 
     const commit = useMutation({
-        mutationFn: (accountId?: number) =>
+        mutationFn: (accountId?: AccountId) =>
             apiClient.commitPortfolioImportBatch(batchId, accountId),
         onSuccess: (res) => {
             toast.success(
@@ -228,7 +230,7 @@ export function PortfolioImportReviewPage() {
 
     const pickInvestment = async (
         g: PortfolioPreviewGroup,
-        investmentId: number | null,
+        investmentId: InvestmentId | null,
     ) => {
         if (investmentId == null) return;
         const rowIds = g.rows.filter(isHoldingResolvable).map((row) => row.id);
@@ -471,7 +473,9 @@ export function PortfolioImportReviewPage() {
                                 }
                                 onChange={(value) =>
                                     setRepairAccountId(
-                                        value ? Number(value) : undefined,
+                                        value
+                                            ? asAccountId(Number(value))
+                                            : undefined,
                                     )
                                 }
                                 t={t}

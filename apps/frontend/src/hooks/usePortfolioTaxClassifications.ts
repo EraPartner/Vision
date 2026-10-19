@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiClient } from '@/lib/api';
 import { usePreloadedSetting } from '@/contexts/SettingsPreloadContext';
 import logger from '@/lib/logger';
+import { asInvestmentId } from "@vision/types/brands";
+import type { InvestmentId } from "@vision/types/brands";
 
 const SETTINGS_KEY = 'portfolio_tax_classifications_v1';
 
@@ -28,7 +30,7 @@ export interface TaxClassificationEntry {
 
 export type PortfolioTaxClassificationMap = Record<string, TaxClassificationEntry>;
 
-function keyFor(investmentId: number): string {
+function keyFor(investmentId: InvestmentId): string {
     return String(investmentId);
 }
 
@@ -42,7 +44,7 @@ export function usePortfolioTaxClassifications() {
     }, [preloaded, isLoading]);
 
     const getClassification = useCallback(
-        (investmentId: number): TaxClassificationEntry => {
+        (investmentId: InvestmentId): TaxClassificationEntry => {
             return classifications[keyFor(investmentId)] ?? {};
         },
         [classifications],
@@ -60,7 +62,7 @@ export function usePortfolioTaxClassifications() {
     const setMany = useCallback(async (values: Record<number, TaxClassificationEntry>) => {
         const next: PortfolioTaxClassificationMap = { ...classifications };
         Object.entries(values).forEach(([investmentId, entry]) => {
-            const key = keyFor(Number(investmentId));
+            const key = keyFor(asInvestmentId(Number(investmentId)));
             // Strip empty entries to keep storage tidy.
             const stripped: TaxClassificationEntry = {};
             if (entry.etfStructure) stripped.etfStructure = entry.etfStructure;

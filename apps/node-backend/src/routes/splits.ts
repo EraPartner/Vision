@@ -23,10 +23,21 @@ import { optionalQueryString } from "../lib/httpParams.ts";
 import { listBody } from "../lib/pagination.ts";
 import { formatZodIssues, parseInput } from "../lib/zodInput.ts";
 import {
+  entityIdParamsSchema,
   idField,
-  idParamsSchema,
   optionalPaginationQuery,
 } from "./_inputBridges.ts";
+import {
+  asTransactionId,
+  RecipientIdSchema,
+  SplitIdSchema,
+  TransactionIdSchema,
+} from "@vision/types/brands";
+import type {
+  RecipientId,
+  SplitId,
+  TransactionId,
+} from "@vision/types/brands";
 
 /** The row shape yielded by splitService.getOwedExportRowsByRecipient. */
 type OwedExportRow = Awaited<
@@ -38,8 +49,16 @@ const router = Router();
 const OWED_EXPORT_HEADER =
   "Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment";
 
-function parseRouteId(req: { params: unknown }): number {
-  return parseInput(idParamsSchema, req.params).id;
+const recipientIdParams = entityIdParamsSchema(RecipientIdSchema);
+const splitIdParams = entityIdParamsSchema(SplitIdSchema);
+const transactionIdParams = entityIdParamsSchema(TransactionIdSchema);
+
+function parseRecipientId(req: { params: unknown }): RecipientId {
+  return parseInput(recipientIdParams, req.params).id;
+}
+
+function parseSplitId(req: { params: unknown }): SplitId {
+  return parseInput(splitIdParams, req.params).id;
 }
 
 // Pagination is opt-in on every list below: without limit/offset the whole
@@ -65,7 +84,7 @@ function buildOwedExportCsv(rows: OwedExportRow[]): string {
   return [OWED_EXPORT_HEADER, ...csvRows].join("\n");
 }
 
-function buildOwedExportFilename(recipientId: number): string {
+function buildOwedExportFilename(recipientId: RecipientId): string {
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
   return `owed_transactions_recipient_${recipientId}_${timestamp}.csv`;
 }
@@ -80,7 +99,7 @@ function buildOwedExportFilename(recipientId: number): string {
 const batchSplitRowSchema = z.object({
   // idField reuses validateId, so the accepted id shapes stay identical to the
   // route layer's; the coerced integer replaces the raw input.
-  recipient_id: idField("recipient_id"),
+  recipient_id: idField("recipient_id").pipe(RecipientIdSchema),
   amount: z.unknown().transform((value, ctx) => {
     const num = Number(value);
     if (value == null || !Number.isFinite(num)) {
@@ -160,8 +179,7 @@ const batchSplitsSchema = z.looseObject({}).transform((data, ctx) => {
     });
     return z.NEVER;
   }
-  // transaction_id is forwarded raw (validated above), like the POST body.
-  return { transaction_id: data.transaction_id as number, splits };
+  return { transaction_id: asTransactionId(txIdCheck.value), splits };
 });
 
 // POST /bulk: one recipient, one preset, many transactions. Ids reuse
@@ -182,11 +200,11 @@ const bulkSplitSchema = z.object({
       error: `transaction_ids must be a non-empty array of up to ${BULK_SPLIT_MAX_IDS} IDs`,
     })
     .transform((ids, ctx) => {
-      const prepared: number[] = [];
+      const prepared: TransactionId[] = [];
       const rejected: string[] = [];
       ids.forEach((id, index) => {
         const check = validateId(id, `transaction_ids[${index}]`);
-        if (check.valid) prepared.push(check.value);
+        if (check.valid) prepared.push(asTransactionId(check.value));
         else rejected.push(check.error);
       });
       if (rejected.length > 0) {
@@ -195,7 +213,7 @@ const bulkSplitSchema = z.object({
       }
       return prepared;
     }),
-  recipient_id: idField("recipient_id"),
+  recipient_id: idField("recipient_id").pipe(RecipientIdSchema),
   mode: z.unknown().transform((value, ctx) => {
     if (
       typeof value !== "string" ||
@@ -230,8 +248,8 @@ const payBodySchema = z.looseObject({}).superRefine((data, ctx) => {
 // reads them (validated ids may still be digit strings, forwarded unchanged).
 interface CreateSplitBody {
   [key: string]: unknown;
-  transaction_id: number;
-  recipient_id: number;
+  transaction_id: TransactionId;
+  recipient_id: RecipientId;
   amount: number | string;
   note?: string | null;
 }
@@ -268,7 +286,7 @@ router.get("/owed", async (req, res) => {
 });
 
 router.get("/owed/:id", async (req, res) => {
-  const recipientId = parseRouteId(req);
+  const recipientId = parseRecipientId(req);
   const currency = owedCurrency(req.query);
   const page = parseInput(listPageQuerySchema, req.query);
   const [splits, summary] = await Promise.all([
@@ -282,7 +300,7 @@ router.get("/owed/:id", async (req, res) => {
 });
 
 router.get("/owed/:id/export/csv", async (req, res) => {
-  const recipientId = parseRouteId(req);
+  const recipientId = parseRecipientId(req);
   const rows = await splitService.getOwedExportRowsByRecipient(recipientId);
   if (rows.length === 0)
     throw new NotFoundError(
@@ -300,7 +318,7 @@ router.get("/owed/:id/export/csv", async (req, res) => {
 });
 
 router.get("/transaction/:id", async (req, res) => {
-  const transactionId = parseRouteId(req);
+  const transactionId = parseInput(transactionIdParams, req.params).id;
   const page = parseInput(listPageQuerySchema, req.query);
   const splits = await splitService.getSplitsByTransaction(
     transactionId,
@@ -380,7 +398,7 @@ router.post(
 );
 
 router.post("/:id/pay", async (req, res) => {
-  const splitId = parseRouteId(req);
+  const splitId = parseSplitId(req);
   // payBodySchema is `z.looseObject({})` — amount is validated by superRefine
   // but zod's inferred type is still `unknown` (raw values forwarded
   // unchanged, see module doc). Cast documents what's actually been checked.
@@ -402,7 +420,7 @@ router.post("/:id/pay", async (req, res) => {
 });
 
 router.get("/:id/payments", async (req, res) => {
-  const splitId = parseRouteId(req);
+  const splitId = parseSplitId(req);
   const page = parseInput(listPageQuerySchema, req.query);
   const payments = await splitService.getPayments(splitId, page ?? {});
   const total = page
@@ -412,14 +430,14 @@ router.get("/:id/payments", async (req, res) => {
 });
 
 router.post("/:id/settle", async (req, res) => {
-  const splitId = parseRouteId(req);
+  const splitId = parseSplitId(req);
   const split = await splitService.settleSplit(splitId, resolveActor(req));
   if (!split) throw new NotFoundError("Split not found");
   res.ok(split);
 });
 
 router.post("/owed/:id/settle-all", async (req, res) => {
-  const recipientId = parseRouteId(req);
+  const recipientId = parseRecipientId(req);
   const result = await splitService.settleAllByRecipient(
     recipientId,
     resolveActor(req),
@@ -428,7 +446,7 @@ router.post("/owed/:id/settle-all", async (req, res) => {
 });
 
 router.delete("/:id", async (req, res) => {
-  const splitId = parseRouteId(req);
+  const splitId = parseSplitId(req);
   const deleted = await splitService.deleteSplit(splitId, resolveActor(req));
   if (!deleted) throw new NotFoundError("Split not found");
   // Hard delete → 204 No Content (docs/reference/code-patterns.md, "DELETE responses").

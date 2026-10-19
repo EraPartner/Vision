@@ -1,3 +1,4 @@
+import { asCurrencyCode, asPlannedTransactionId } from "@vision/types/brands";
 import { describe, expect, it } from "vitest";
 import { bucketNextSevenDays, WINDOW_DAYS } from "@/features/planned/nextSevenDays";
 import type { PlannedPayment } from "@/hooks/usePlannedPayments";
@@ -12,15 +13,18 @@ import type { PlannedPayment } from "@/hooks/usePlannedPayments";
 
 const TODAY = new Date(2026, 7, 14, 13, 45, 0, 0); // 14 Aug 2026, mid-afternoon local
 
-function payment(overrides: Partial<PlannedPayment> & { id: number; due_date: string }): PlannedPayment {
+function payment(
+    overrides: Omit<Partial<PlannedPayment>, "id"> & { id: number; due_date: string },
+): PlannedPayment {
     return {
         name: `Payment ${overrides.id}`,
         amount: -100,
-        currency: "EUR",
+        currency: asCurrencyCode("EUR"),
         is_recurring: false,
         is_active: true,
         created_at: "2026-01-01T00:00:00Z",
         ...overrides,
+        id: asPlannedTransactionId(overrides.id),
     } as PlannedPayment;
 }
 

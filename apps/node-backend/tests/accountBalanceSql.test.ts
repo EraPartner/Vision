@@ -20,6 +20,12 @@ import {
   statementPartition,
   computedBalanceSeriesCtes,
 } from "../src/repositories/accountBalanceSql.ts";
+import {
+  asCurrencyCode,
+  type CurrencyCode,
+} from "@vision/types/brands";
+import { loose } from "./helpers/partial.ts";
+
 
 const BALANCE_PROVENANCE_LATERAL = balanceProvenanceLateral();
 
@@ -195,20 +201,20 @@ describe("statementPartition", () => {
   // stamps — they agree by construction because all three read this one helper.
   it("picks the partition matching the account currency", () => {
     const parts = [
-      { currency: "EUR", balance: "100" },
-      { currency: "USD", balance: "100" },
+      { currency: asCurrencyCode("EUR"), balance: "100" },
+      { currency: asCurrencyCode("USD"), balance: "100" },
     ];
-    expect(statementPartition(parts, "EUR")).toEqual({
+    expect(statementPartition(parts, asCurrencyCode("EUR"))).toEqual({
       currency: "EUR",
       balance: "100",
     });
     expect(
       statementPartition(
         [
-          { currency: "EUR", balance: "100" },
-          { currency: "USD", balance: "250" },
+          { currency: asCurrencyCode("EUR"), balance: "100" },
+          { currency: asCurrencyCode("USD"), balance: "250" },
         ],
-        "USD",
+        asCurrencyCode("USD"),
       ),
     ).toEqual({ currency: "USD", balance: "250" });
   });
@@ -220,10 +226,10 @@ describe("statementPartition", () => {
     expect(
       statementPartition(
         [
-          { currency: "EUR", balance: "0" },
-          { currency: "USD", balance: "100" },
+          { currency: asCurrencyCode("EUR"), balance: "0" },
+          { currency: asCurrencyCode("USD"), balance: "100" },
         ],
-        "EUR",
+        asCurrencyCode("EUR"),
       ),
     ).toEqual({ currency: "EUR", balance: "0" });
   });
@@ -235,7 +241,7 @@ describe("statementPartition", () => {
     // The currency comes back so callers can label the figure (and so the
     // adjustment row lands in the partition the drift was measured against).
     expect(
-      statementPartition([{ currency: "USD", balance: "100" }], "EUR"),
+      statementPartition([{ currency: asCurrencyCode("USD"), balance: "100" }], asCurrencyCode("EUR")),
     ).toEqual({ currency: "USD", balance: "100" });
   });
 
@@ -246,17 +252,17 @@ describe("statementPartition", () => {
     // entire balance. A partition summing to 0 carries no reconciliation
     // information, so it is dropped before the lone-partition rule applies.
     const withNoise = [
-      { currency: "GBP", balance: "0" },
-      { currency: "USD", balance: "100" },
+      { currency: asCurrencyCode("GBP"), balance: "0" },
+      { currency: asCurrencyCode("USD"), balance: "100" },
     ];
-    expect(statementPartition(withNoise, "EUR")).toEqual({
+    expect(statementPartition(withNoise, asCurrencyCode("EUR"))).toEqual({
       currency: "USD",
       balance: "100",
     });
     // …i.e. exactly what it resolves to without the noise partition.
     expect(
-      statementPartition([{ currency: "USD", balance: "100" }], "EUR"),
-    ).toEqual(statementPartition(withNoise, "EUR"));
+      statementPartition([{ currency: asCurrencyCode("USD"), balance: "100" }], asCurrencyCode("EUR")),
+    ).toEqual(statementPartition(withNoise, asCurrencyCode("EUR")));
   });
 
   it("drops a sub-cent residue partition exactly like a true zero", () => {
@@ -266,34 +272,34 @@ describe("statementPartition", () => {
     // rounds to 0.00 carries no more reconciliation information than a true
     // zero — it must not knock the base off the lone funded partition.
     const withResidue = [
-      { currency: "GBP", balance: "0.0001" },
-      { currency: "USD", balance: "100" },
+      { currency: asCurrencyCode("GBP"), balance: "0.0001" },
+      { currency: asCurrencyCode("USD"), balance: "100" },
     ];
-    expect(statementPartition(withResidue, "EUR")).toEqual({
+    expect(statementPartition(withResidue, asCurrencyCode("EUR"))).toEqual({
       currency: "USD",
       balance: "100",
     });
     // …byte-identical to the true-zero and no-noise resolutions.
-    expect(statementPartition(withResidue, "EUR")).toEqual(
+    expect(statementPartition(withResidue, asCurrencyCode("EUR"))).toEqual(
       statementPartition(
         [
-          { currency: "GBP", balance: "0" },
-          { currency: "USD", balance: "100" },
+          { currency: asCurrencyCode("GBP"), balance: "0" },
+          { currency: asCurrencyCode("USD"), balance: "100" },
         ],
-        "EUR",
+        asCurrencyCode("EUR"),
       ),
     );
-    expect(statementPartition(withResidue, "EUR")).toEqual(
-      statementPartition([{ currency: "USD", balance: "100" }], "EUR"),
+    expect(statementPartition(withResidue, asCurrencyCode("EUR"))).toEqual(
+      statementPartition([{ currency: asCurrencyCode("USD"), balance: "100" }], asCurrencyCode("EUR")),
     );
     // A negative residue is the same noise.
     expect(
       statementPartition(
         [
-          { currency: "GBP", balance: "-0.0049" },
-          { currency: "USD", balance: "100" },
+          { currency: asCurrencyCode("GBP"), balance: "-0.0049" },
+          { currency: asCurrencyCode("USD"), balance: "100" },
         ],
-        "EUR",
+        asCurrencyCode("EUR"),
       ),
     ).toEqual({ currency: "USD", balance: "100" });
   });
@@ -304,24 +310,24 @@ describe("statementPartition", () => {
     expect(
       statementPartition(
         [
-          { currency: "GBP", balance: "0.01" },
-          { currency: "USD", balance: "100" },
+          { currency: asCurrencyCode("GBP"), balance: "0.01" },
+          { currency: asCurrencyCode("USD"), balance: "100" },
         ],
-        "EUR",
+        asCurrencyCode("EUR"),
       ),
     ).toEqual({ currency: "EUR", balance: "0" });
     // …and a lone 0.01 partition is still elected, not dropped to the 0 fallback.
     expect(
-      statementPartition([{ currency: "USD", balance: "0.01" }], "EUR"),
+      statementPartition([{ currency: asCurrencyCode("USD"), balance: "0.01" }], asCurrencyCode("EUR")),
     ).toEqual({ currency: "USD", balance: "0.01" });
   });
 
   it("returns 0 in the account currency when it holds no partition in it", () => {
-    expect(statementPartition([], "EUR")).toEqual({
+    expect(statementPartition([], asCurrencyCode("EUR"))).toEqual({
       currency: "EUR",
       balance: "0",
     });
-    expect(statementPartition(null, "GBP")).toEqual({
+    expect(statementPartition(null, asCurrencyCode("GBP"))).toEqual({
       currency: "GBP",
       balance: "0",
     });
@@ -329,24 +335,24 @@ describe("statementPartition", () => {
     expect(
       statementPartition(
         [
-          { currency: "USD", balance: "100" },
-          { currency: "GBP", balance: "50" },
+          { currency: asCurrencyCode("USD"), balance: "100" },
+          { currency: asCurrencyCode("GBP"), balance: "50" },
         ],
-        "EUR",
+        asCurrencyCode("EUR"),
       ),
     ).toEqual({ currency: "EUR", balance: "0" });
   });
 
   it("defaults a missing account currency to EUR and compares case-insensitively", () => {
     const parts = [
-      { currency: "EUR", balance: "7" },
-      { currency: "usd", balance: "9" },
+      { currency: asCurrencyCode("EUR"), balance: "7" },
+      { currency: loose<CurrencyCode>("usd"), balance: "9" },
     ];
     expect(statementPartition(parts, null)).toEqual({
       currency: "EUR",
       balance: "7",
     });
-    expect(statementPartition(parts, "usd")).toEqual({
+    expect(statementPartition(parts, loose<CurrencyCode>("usd"))).toEqual({
       currency: "USD",
       balance: "9",
     });

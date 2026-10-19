@@ -3,6 +3,8 @@
  */
 
 import type { Decimal } from "decimal.js";
+import type { CurrencyCode } from "@vision/types/brands";
+import { EUR } from "../lib/currencyCode.ts";
 import { queryRows } from "../database/rowContracts.ts";
 import {
   bankBalanceRowSchema,
@@ -224,7 +226,7 @@ export const banksRepository = {
           latestBalanceRows.map((r) => ({
             ...r,
             amount: toNumber(toDecimal(r.balance)),
-            currency: r.currency || "EUR",
+            currency: r.currency || EUR,
           })),
           // History rows carry no `date`: the conversion helper falls back to
           // `day` (see resolveDateFromRow), which is the right FX anchor for an
@@ -235,7 +237,7 @@ export const banksRepository = {
             .map((r) => ({
               ...r,
               amount: toNumber(toDecimal(r.balance)),
-              currency: r.currency || "EUR",
+              currency: r.currency || EUR,
             })),
         ],
         targetCurrency,
@@ -252,9 +254,9 @@ export const banksRepository = {
       {
         account: BankAccountBalance;
         balance: Decimal;
-        parts: Array<{ currency: string; balance: string }>;
+        parts: Array<{ currency: CurrencyCode; balance: string }>;
         statementBalances: StatementBalanceReading[];
-        accountCurrency: string;
+        accountCurrency: CurrencyCode;
       }
     >();
     for (const row of currentBalancesConverted) {

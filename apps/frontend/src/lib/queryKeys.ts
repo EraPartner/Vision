@@ -18,6 +18,13 @@
  */
 
 import type { QueryClient } from "@tanstack/react-query";
+import type {
+    AccountId,
+    CategoryId,
+    InvestmentId,
+    RecipientId,
+    TransactionId,
+} from "@vision/types/brands";
 
 // ── Transactions ────────────────────────────────────────────────────────────
 
@@ -28,10 +35,10 @@ export const transactionKeys = {
     list: (params?: object) => ["transactions", params] as const,
     /** /accounts/:id running-balance ledger (WP-B4, replaced the detail
      *  sheet's 'account-detail' family); `limit` grows via Load more. */
-    accountLedger: (accountId: number | undefined, limit: number) =>
+    accountLedger: (accountId: AccountId | undefined, limit: number) =>
         ["transactions", "account-ledger", accountId, limit] as const,
     /** Owes page: per-recipient settlement group. */
-    owesRecipientGroup: (recipientId: number) =>
+    owesRecipientGroup: (recipientId: RecipientId) =>
         ["transactions", "owes-recipient-group", recipientId] as const,
     /** Invalidation prefix for the virtualised transaction table. */
     virtualAll: ["transactions-virtual"] as const,
@@ -44,7 +51,7 @@ export const transactionKeys = {
 export const recipientKeys = {
     all: ["recipients"] as const,
     list: (params?: object) => ["recipients", params] as const,
-    detail: (id: number | null | undefined) =>
+    detail: (id: RecipientId | null | undefined) =>
         ["recipients", "detail", id] as const,
     /** Settings → Statistics exclusion picker (full list snapshot). */
     allList: ["recipients", "all"] as const,
@@ -98,9 +105,9 @@ export const splitKeys = {
     all: ["splits"] as const,
     owedSummary: (currency: string) =>
         ["splits", "owed", "summary", currency] as const,
-    owedByRecipient: (recipientId: number | null, currency: string) =>
+    owedByRecipient: (recipientId: RecipientId | null, currency: string) =>
         ["splits", "owed", recipientId, currency] as const,
-    byTransaction: (transactionId: number | null) =>
+    byTransaction: (transactionId: TransactionId | null) =>
         ["splits", "transaction", transactionId] as const,
 };
 
@@ -111,8 +118,8 @@ export const monthlySummaryKeys = {
     all: ["monthlySummary"] as const,
     summary: (
         currency: string,
-        excludedCategoryIds: number[],
-        excludedRecipientIds: number[],
+        excludedCategoryIds: CategoryId[],
+        excludedRecipientIds: RecipientId[],
     ) =>
         [
             "monthlySummary",
@@ -133,8 +140,8 @@ export const dashboardKeys = {
     /** Invalidation prefix for the recent-transactions widget. */
     recentTransactionsAll: ["dashboardRecentTransactions"] as const,
     recentTransactions: (
-        excludedCategoryIds: number[],
-        excludedRecipientIds: number[],
+        excludedCategoryIds: CategoryId[],
+        excludedRecipientIds: RecipientId[],
         exclusionsApply: boolean,
     ) =>
         [
@@ -160,8 +167,8 @@ export const aggregationKeys = {
         ] as const,
     monthlySummaryFiltered: (
         currency: string,
-        excludedCategoryIds: number[],
-        excludedRecipientIds: number[],
+        excludedCategoryIds: CategoryId[],
+        excludedRecipientIds: RecipientId[],
         window: string,
     ) =>
         [
@@ -183,8 +190,8 @@ export const aggregationKeys = {
         ] as const,
     categoryPivotFiltered: (
         currency: string,
-        excludedCategoryIds: number[],
-        excludedRecipientIds: number[],
+        excludedCategoryIds: CategoryId[],
+        excludedRecipientIds: RecipientId[],
         window: string,
     ) =>
         [
@@ -200,8 +207,8 @@ export const aggregationKeys = {
         ["aggregations", "recipient-insights", currency, window] as const,
     recipientInsightsFiltered: (
         currency: string,
-        excludedCategoryIds: number[],
-        excludedRecipientIds: number[],
+        excludedCategoryIds: CategoryId[],
+        excludedRecipientIds: RecipientId[],
         window: string,
     ) =>
         [
@@ -219,8 +226,8 @@ export const aggregationKeys = {
      */
     recipientInsightsWithExclusions: (
         currency: string,
-        excludedCategoryIds: number[],
-        excludedRecipientIds: number[],
+        excludedCategoryIds: CategoryId[],
+        excludedRecipientIds: RecipientId[],
         window: string,
     ) =>
         [
@@ -241,8 +248,8 @@ export const aggregationKeys = {
         ] as const,
     recipientByYearFiltered: (
         currency: string,
-        excludedCategoryIds: number[],
-        excludedRecipientIds: number[],
+        excludedCategoryIds: CategoryId[],
+        excludedRecipientIds: RecipientId[],
         window: string,
     ) =>
         [
@@ -257,8 +264,8 @@ export const aggregationKeys = {
     sankey: (
         year: number,
         currency: string,
-        excludedCategoryIds: number[],
-        excludedRecipientIds: number[],
+        excludedCategoryIds: CategoryId[],
+        excludedRecipientIds: RecipientId[],
     ) =>
         [
             "aggregations",
@@ -311,7 +318,7 @@ export const plannedKeys = {
      */
     transactionsAll: ["plannedTransactions"] as const,
     accountTransactionsAll: ["account-planned-transactions"] as const,
-    accountTransactions: (accountId: number | undefined) =>
+    accountTransactions: (accountId: AccountId | undefined) =>
         ["account-planned-transactions", accountId] as const,
     recurringPatterns: ["recurringPatterns"] as const,
 };
@@ -338,8 +345,8 @@ export const taxKeys = {
         currency: string,
         startDate: string | undefined,
         endDate: string | undefined,
-        excludedCategoryIds: number[],
-        excludedRecipientIds: number[],
+        excludedCategoryIds: CategoryId[],
+        excludedRecipientIds: RecipientId[],
     ) =>
         [
             "tax",
@@ -370,8 +377,8 @@ export const cashflowKeys = {
     forecastMethodsAll: ["cashflowForecastMethods"] as const,
     forecastMethods: (
         currency: string,
-        excludedCategoryIds: number[],
-        excludedRecipientIds: number[],
+        excludedCategoryIds: CategoryId[],
+        excludedRecipientIds: RecipientId[],
         includePlanned: boolean,
     ) =>
         [
@@ -384,8 +391,8 @@ export const cashflowKeys = {
     forecastRollingAll: ["cashflowForecastRolling"] as const,
     forecastRolling: (
         currency: string,
-        excludedCategoryIds: number[],
-        excludedRecipientIds: number[],
+        excludedCategoryIds: CategoryId[],
+        excludedRecipientIds: RecipientId[],
         includePlanned: boolean,
         rollingDays: number,
     ) =>
@@ -402,8 +409,8 @@ export const cashflowKeys = {
     ] as const,
     forecastRollingDiagnostics: (
         currency: string,
-        excludedCategoryIds: number[],
-        excludedRecipientIds: number[],
+        excludedCategoryIds: CategoryId[],
+        excludedRecipientIds: RecipientId[],
         includePlanned: boolean,
         rollingDays: number,
     ) =>
@@ -436,7 +443,7 @@ export const portfolioKeys = {
     transactionsAll: ["portfolio-transactions"] as const,
     transactions: (investmentIdsCsv: string) =>
         ["portfolio-transactions", investmentIdsCsv] as const,
-    allTransactionsForInvestment: (investmentId: number) =>
+    allTransactionsForInvestment: (investmentId: InvestmentId) =>
         ["portfolio-transactions", "all", investmentId] as const,
     summaryAll: ["portfolio-summary"] as const,
     summary: (currency: string) => ["portfolio-summary", currency] as const,
@@ -510,7 +517,7 @@ export const marketKeys = {
     quote: (symbol: string | null) => ["market-quote", symbol] as const,
     chart: (symbol: string | null, range: string, interval: string) =>
         ["market-chart", symbol, range, interval] as const,
-    providerChart: (investmentId: number | undefined, range: string) =>
+    providerChart: (investmentId: InvestmentId | undefined, range: string) =>
         ["provider-chart", investmentId, range] as const,
 };
 

@@ -32,6 +32,14 @@ import { removeAttachmentFilesBestEffort } from "./attachmentCleanup.ts";
 import { ConflictError, ValidationError } from "../middleware/errorHandler.ts";
 import { logger } from "../config/logger.ts";
 import type { EnrichedTransactionRow } from "../types/rows.ts";
+import type {
+  AccountId,
+  CategoryId,
+  CurrencyCode,
+  PlannedTransactionId,
+  RecipientId,
+  TransactionId,
+} from "@vision/types/brands";
 
 /**
  * The zod-validated manual-create POST body — loose passthrough (see
@@ -41,12 +49,12 @@ import type { EnrichedTransactionRow } from "../types/rows.ts";
 export type ManualTransactionInput = {
   transaction_date?: string;
   date?: string;
-  account_id?: number | null | undefined;
-  recipient_id?: number | null;
+  account_id?: AccountId | null | undefined;
+  recipient_id?: RecipientId | null;
   amount: number | string;
   memo?: string | null;
-  currency?: string | null;
-  category_id?: number | null;
+  currency?: CurrencyCode | null;
+  category_id?: CategoryId | null;
   comment?: string | null;
   tags?: string[] | null;
   allow_duplicate?: boolean;
@@ -54,7 +62,10 @@ export type ManualTransactionInput = {
 
 export interface ManualAutoLinkResult {
   autoLinkedCount: number;
-  links: Array<{ plannedTransactionId?: number; transactionId?: number }>;
+  links: Array<{
+    plannedTransactionId?: PlannedTransactionId;
+    transactionId?: TransactionId;
+  }>;
 }
 
 /**
@@ -171,7 +182,7 @@ async function createManualTransaction(data: ManualTransactionInput): Promise<{
  *
  * @returns whether a row was deleted
  */
-async function hardDeleteWithCleanup(id: number): Promise<boolean> {
+async function hardDeleteWithCleanup(id: TransactionId): Promise<boolean> {
   const attachmentPaths = await attachmentRepository.listPathsByTransactionIds([
     id,
   ]);
@@ -188,13 +199,13 @@ async function hardDeleteWithCleanup(id: number): Promise<boolean> {
  * convenience name fields and resolves them in parallel before persistence.
  */
 async function update(
-  id: number,
+  id: TransactionId,
   fields: Record<string, unknown> & {
     tags?: string[];
     recipient_name?: string;
-    recipient_id?: number | null;
+    recipient_id?: RecipientId | null;
     category_name?: string;
-    category_id?: number | null;
+    category_id?: CategoryId | null;
   },
 ): Promise<EnrichedTransactionRow | null> {
   const [recipientId, categoryId] = await Promise.all([
@@ -223,12 +234,12 @@ function listTransferSuggestions(options: Parameters<typeof getTransferSuggestio
   return getTransferSuggestions(options);
 }
 
-async function markTransfer(aId: number, bId: number) {
+async function markTransfer(aId: TransactionId, bId: TransactionId) {
   await markTransferRecord(aId, bId);
   scheduleReconcile();
 }
 
-async function unmarkTransfer(id: number) {
+async function unmarkTransfer(id: TransactionId) {
   await unmarkTransferRecord(id);
   scheduleReconcile();
 }

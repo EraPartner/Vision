@@ -389,7 +389,11 @@ export function ReconcileDialog({
                                         value={selectedCurrency}
                                         disabled={busy}
                                         onValueChange={(value) => {
-                                            setSelectedCurrency(value);
+                                            const next =
+                                                availableCurrencies.find(
+                                                    (code) => code === value,
+                                                );
+                                            if (next) setSelectedCurrency(next);
                                             setReading("");
                                         }}
                                     >

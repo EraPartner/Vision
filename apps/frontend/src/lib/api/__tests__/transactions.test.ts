@@ -14,6 +14,7 @@ import {
     bulkDeleteTransactions,
     bulkUpdateTransactions,
 } from "@/lib/api/transactions";
+import { asCategoryId, asTransactionId } from "@vision/types/brands";
 
 afterEach(() => server.resetHandlers());
 
@@ -36,7 +37,7 @@ describe("transactions API client", () => {
         );
 
         const res = await getTransactions({
-            category_ids: [4, 5],
+            category_ids: [asCategoryId(4), asCategoryId(5)],
             search: "x",
         });
 
@@ -147,7 +148,7 @@ describe("transactions API client", () => {
         server.use(
             http.patch(`${API_BASE}/api/transactions/10`, () => ok({ id: 10 })),
         );
-        expect((await updateTransaction(10, {} as never)).id).toBe(10);
+        expect((await updateTransaction(asTransactionId(10), {} as never)).id).toBe(10);
     });
 
     it("deleteTransaction resolves on void", async () => {
@@ -157,7 +158,7 @@ describe("transactions API client", () => {
                 () => new HttpResponse(null, { status: 204 }),
             ),
         );
-        await expect(deleteTransaction(10)).resolves.toBeUndefined();
+        await expect(deleteTransaction(asTransactionId(10))).resolves.toBeUndefined();
     });
 
     it("bulkDeleteTransactions posts the selection", async () => {

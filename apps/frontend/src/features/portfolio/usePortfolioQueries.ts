@@ -7,6 +7,7 @@ import { listPortfolioImportBatches } from "@/lib/api/portfolioImports";
 import { getMarketQuotes, searchMarket } from "@/lib/api/market";
 import { netWorthKeys, portfolioKeys } from "@/lib/queryKeys";
 import { useBackgroundQueryCue } from "@/components/shared/BackgroundQueryIndicator";
+import type { AccountId, CurrencyCode } from "@vision/types/brands";
 
 export function useMarketSearchQuery(query: string, enabled: boolean) {
     return useQuery({
@@ -123,7 +124,7 @@ export function usePortfolioTickerQuotes<T>(
     });
 }
 
-export function usePerformanceQueries(currency: string, period: ChartPeriod) {
+export function usePerformanceQueries(currency: CurrencyCode, period: ChartPeriod) {
     const performance = useQuery({
         queryKey: portfolioKeys.performance(currency, period),
         queryFn: () => apiClient.getPortfolioPerformance({ currency, period }),
@@ -150,7 +151,7 @@ export function usePerformanceQueries(currency: string, period: ChartPeriod) {
     return { performance, sparkline1m, brokerPerformance };
 }
 
-export function useRebalanceInputs(currency: string) {
+export function useRebalanceInputs(currency: CurrencyCode) {
     return useQuery({
         queryKey: ["rebalance-inputs", currency],
         queryFn: () =>
@@ -181,7 +182,7 @@ export function usePortfolioImportPreview(batchId: number) {
 }
 
 export function useAccountPortfolioLotRetagPreview(
-    accountId: number,
+    accountId: AccountId,
     enabled: boolean,
 ) {
     return useQuery({
@@ -191,7 +192,7 @@ export function useAccountPortfolioLotRetagPreview(
     });
 }
 
-export function useNetWorthSummary(currency: string) {
+export function useNetWorthSummary(currency: CurrencyCode) {
     return useQuery({
         queryKey: netWorthKeys.byCurrency(currency),
         queryFn: () => apiClient.getNetWorth({ currency }),
@@ -200,7 +201,7 @@ export function useNetWorthSummary(currency: string) {
 }
 
 /** Current net worth per account, computed on the server (ADR-216). */
-export function useNetWorthByAccount(currency: string) {
+export function useNetWorthByAccount(currency: CurrencyCode) {
     return useQuery({
         queryKey: netWorthKeys.byAccount(currency),
         queryFn: () => apiClient.getNetWorthByAccount({ currency }),

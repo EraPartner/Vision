@@ -18,6 +18,13 @@ import {
     RecurringPatternListSchema,
     SupportedAdapterListSchema,
 } from "@vision/types/contracts";
+import type {
+    AccountId,
+    CategoryId,
+    CurrencyCode,
+    InvestmentId,
+    RecipientId,
+} from "@vision/types/brands";
 
 // (Removed getStatistics — legacy GET /api/info was deleted in the Phase 9
 // cutover; it had no callers. Use the aggregations endpoints instead.)
@@ -57,7 +64,7 @@ export function getTransactionCount(): Promise<{ total_transactions: number }> {
 
 export async function getRecurringPatterns(): Promise<{
     patterns: Array<{
-        recipientId: number;
+        recipientId: RecipientId;
         recipientName: string;
         /** Flow direction — a recipient can yield one pattern per direction. */
         direction: "income" | "expense";
@@ -67,11 +74,11 @@ export async function getRecurringPatterns(): Promise<{
         occurrences: number;
         averageAmount: number;
         latestAmount: number;
-        currency: string;
-        categoryId: number | null;
+        currency: CurrencyCode;
+        categoryId: CategoryId | null;
         categoryName: string | null;
         bankAccount: string | null;
-        accountId: number | null;
+        accountId: AccountId | null;
         firstSeen: string;
         lastSeen: string;
         predictedNext: string;
@@ -102,11 +109,11 @@ export async function getRecurringPatterns(): Promise<{
 
 /** New-subscription finding from the subscription-creep detector. */
 export interface SubscriptionCreepNew {
-    recipientId: number;
+    recipientId: RecipientId;
     recipientName: string;
     findingType: "new";
     latestAmount: number;
-    currency: string;
+    currency: CurrencyCode;
     detectedPattern: string;
     intervalDays: number;
     predictedNext: string;
@@ -115,20 +122,20 @@ export interface SubscriptionCreepNew {
 
 /** Price-change finding from the subscription-creep detector. */
 export interface SubscriptionCreepPriceChange {
-    recipientId: number;
+    recipientId: RecipientId;
     recipientName: string;
     findingType: "priceChange";
     previousAmount: number;
     newAmount: number;
     percentChange: number;
     direction: string;
-    currency: string;
+    currency: CurrencyCode;
     confidence: number;
 }
 
 /** Current-month category overspend outlier vs the trailing baseline median. */
 export interface CategoryOutlier {
-    categoryId: number;
+    categoryId: CategoryId;
     categoryName: string;
     monthKey: string;
     comparisonEndDay: number;
@@ -141,7 +148,7 @@ export interface CategoryOutlier {
 /** Zero-based month-end net-cashflow insight (not an account balance). */
 export interface CashForecast {
     month: string;
-    currency: string;
+    currency: CurrencyCode;
     monthEndNetCashflow: number;
     monthEndNetCashflowLow: number | null;
     monthEndNetCashflowHigh: number | null;
@@ -193,9 +200,9 @@ export function getInsightsCount(): Promise<InsightsCountResponse> {
 export type InsightDismissalRequest =
     | {
           kind: "subscription_new" | "subscription_price_change";
-          recipient_id: number;
+          recipient_id: RecipientId;
       }
-    | { kind: "category_outlier"; category_id: number; month_key: string };
+    | { kind: "category_outlier"; category_id: CategoryId; month_key: string };
 
 export function dismissInsight(
     request: InsightDismissalRequest,
@@ -231,7 +238,7 @@ export interface DeductionCandidatesResponse {
     year: number;
     from: string;
     to: string;
-    currency: string;
+    currency: CurrencyCode;
     /** Sorted by total desc; empty when nothing classifies. */
     byDeductionType: DeductionTypeGroup[];
 }
@@ -246,10 +253,10 @@ export function getDeductionCandidates(
 }
 
 export function getPortfolioPerformance(params?: {
-    currency?: string | undefined;
+    currency?: CurrencyCode | undefined;
     period?: string | undefined;
 }): Promise<{
-    currency: string;
+    currency: CurrencyCode;
     start_date: string;
     end_date: string;
     snapshots: Array<{
@@ -285,11 +292,11 @@ export function getPortfolioPerformance(params?: {
         maxAbsPct: number;
     };
     breakdownSummary: Array<{
-        id: number;
+        id: InvestmentId;
         name: string;
         symbol: string;
         assetClass: string;
-        currency: string;
+        currency: CurrencyCode;
         currentValue: number;
         totalInvested: number;
         gainLoss: number;
@@ -308,9 +315,9 @@ export function getPortfolioPerformance(params?: {
 
 export interface BrokerPerformanceRow {
     date: string;
-    currency: string;
+    currency: CurrencyCode;
     accountKey: string;
-    accountId: number | null;
+    accountId: AccountId | null;
     accountName: string;
     assignment: "account" | "unassigned";
     value: number;
@@ -320,11 +327,11 @@ export interface BrokerPerformanceRow {
 }
 
 export function getBrokerPortfolioPerformance(params?: {
-    currency?: string | undefined;
+    currency?: CurrencyCode | undefined;
     from?: string | undefined;
     to?: string | undefined;
 }): Promise<{
-    currency: string;
+    currency: CurrencyCode;
     startDate: string;
     endDate: string;
     dates: string[];
@@ -365,7 +372,7 @@ export interface PortfolioSummaryTotals {
 }
 
 export interface PortfolioSummaryItem {
-    id: number;
+    id: InvestmentId;
     name: string;
     symbol?: string;
     asset_class: string;
@@ -388,9 +395,9 @@ export interface PortfolioSummaryItem {
     price_provider_id?: string;
     price_updated_at?: string;
     /** Display currency — every monetary field on this object is in this currency. */
-    currency: string;
+    currency: CurrencyCode;
     /** The investment's native currency (for label display only). */
-    originalCurrency: string;
+    originalCurrency: CurrencyCode;
     totalUnits: number;
     currentPrice: number;
     current_price: number;
@@ -477,7 +484,7 @@ export interface PortfolioAssetGroupTotals extends PortfolioHoldingTotals {
 }
 
 export interface PortfolioSummaryByAccountItem {
-    account_id: number | null;
+    account_id: AccountId | null;
     /** Machine-readable identity; clients localize `unassigned` for display. */
     assignment: "account" | "unassigned";
     /** Lot-bearing position row or standalone income/adjustment row. */
@@ -491,7 +498,7 @@ export interface PortfolioSummaryByAccountItem {
 }
 
 export interface PortfolioSummaryResponse {
-    currency: string;
+    currency: CurrencyCode;
     computed_at: string;
     totals: PortfolioSummaryTotals;
     summaries: PortfolioSummaryItem[];
@@ -505,14 +512,14 @@ export interface PortfolioSummaryResponse {
         total: number;
         gainAfterFees: number;
         usedFallbackRate: boolean;
-        byAccount: Array<{ account_id: number; total: number }>;
+        byAccount: Array<{ account_id: AccountId; total: number }>;
     };
     /** Dated, target-currency in-kind income of archived holdings. */
-    archivedInKindIncome?: Array<{ id: number; totalInKindIncome: number }>;
+    archivedInKindIncome?: Array<{ id: InvestmentId; totalInKindIncome: number }>;
 }
 
 export function getPortfolioSummary(params?: {
-    currency?: string | undefined;
+    currency?: CurrencyCode | undefined;
     /** false: summaries for every holding, archived ones included. */
     active?: boolean | undefined;
 }): Promise<PortfolioSummaryResponse> {
@@ -522,7 +529,7 @@ export function getPortfolioSummary(params?: {
 }
 
 export function getNetWorth(params?: {
-    currency?: string | undefined;
+    currency?: CurrencyCode | undefined;
     limit?: number | undefined;
     offset?: number | undefined;
 }): Promise<NetWorthResponse> {
@@ -533,11 +540,11 @@ export function getNetWorth(params?: {
 
 export interface NetWorthByAccountRow {
     /** null for holdings not assigned to an account. */
-    accountId: number | null;
+    accountId: AccountId | null;
     /** display_name or name; null for the unassigned row or an unknown account. */
     name: string | null;
     type: string | null;
-    cashCurrency: string | null;
+    cashCurrency: CurrencyCode | null;
     /** Cash at the latest stored rate; null when the currency has no rate. */
     cash: number | null;
     holdings: number;
@@ -546,7 +553,7 @@ export interface NetWorthByAccountRow {
 }
 
 export interface NetWorthByAccountResponse {
-    currency: string;
+    currency: CurrencyCode;
     rows: NetWorthByAccountRow[];
     /** Σ row totals; null while any cash balance is unconverted. */
     total: number | null;
@@ -554,7 +561,7 @@ export interface NetWorthByAccountResponse {
 }
 
 export function getNetWorthByAccount(params?: {
-    currency?: string | undefined;
+    currency?: CurrencyCode | undefined;
 }): Promise<NetWorthByAccountResponse> {
     return requestWithQuery("/api/info/net-worth/by-account", params, {
         schema: NetWorthByAccountSchema,
@@ -562,7 +569,7 @@ export function getNetWorthByAccount(params?: {
 }
 
 export interface ExchangeRate {
-    currency: string;
+    currency: CurrencyCode;
     rate_to_eur: number;
     rate_date: string;
     fetched_at: string;

@@ -5,10 +5,11 @@ import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { transactionKeys } from "@/lib/queryKeys";
 import type { Transaction } from "@/types/api";
+import type { RecipientId } from "@vision/types/brands";
 
 const RECIPIENT_TRANSACTION_PAGE_SIZE = 10;
 
-export function useRecentRecipientTransactions(recipientId: number) {
+export function useRecentRecipientTransactions(recipientId: RecipientId) {
     const [items, setItems] = useState<Transaction[]>([]);
     const [totalItems, setTotalItems] = useState(0);
     const [isFetchingMore, setIsFetchingMore] = useState(false);

@@ -8,6 +8,11 @@ import { server } from "@/test/msw/server";
 import { ok, settingsWithBaselines } from "@/test/msw/handlers";
 import { InsightsDigestPanel } from "@/features/statistics/InsightsDigestPanel";
 import type { InsightsDigestResponse } from "@/lib/api/info";
+import {
+    asCategoryId,
+    asCurrencyCode,
+    asRecipientId,
+} from "@vision/types/brands";
 
 const API_BASE = "http://localhost:3002";
 
@@ -15,11 +20,11 @@ const DIGEST: InsightsDigestResponse = {
     subscriptionCreep: {
         new: [
             {
-                recipientId: 1,
+                recipientId: asRecipientId(1),
                 recipientName: "Netflix",
                 findingType: "new",
                 latestAmount: 12.99,
-                currency: "EUR",
+                currency: asCurrencyCode("EUR"),
                 detectedPattern: "monthly",
                 intervalDays: 30,
                 predictedNext: "2026-08-01",
@@ -28,21 +33,21 @@ const DIGEST: InsightsDigestResponse = {
         ],
         priceChanges: [
             {
-                recipientId: 2,
+                recipientId: asRecipientId(2),
                 recipientName: "Spotify",
                 findingType: "priceChange",
                 previousAmount: 9.99,
                 newAmount: 11.99,
                 percentChange: 20,
                 direction: "increased",
-                currency: "EUR",
+                currency: asCurrencyCode("EUR"),
                 confidence: 85,
             },
         ],
     },
     categoryOutliers: [
         {
-            categoryId: 5,
+            categoryId: asCategoryId(5),
             categoryName: "Groceries",
             monthKey: "2026-07",
             comparisonEndDay: 15,
@@ -54,7 +59,7 @@ const DIGEST: InsightsDigestResponse = {
     ],
     cashForecast: {
         month: "2026-07",
-        currency: "EUR",
+        currency: asCurrencyCode("EUR"),
         monthEndNetCashflow: -150,
         monthEndNetCashflowLow: -400,
         monthEndNetCashflowHigh: 100,

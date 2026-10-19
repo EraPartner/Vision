@@ -21,6 +21,12 @@ import { validateId } from "../lib/validation.ts";
 import { buildListWhereClause } from "./portfolioTxRepo.common.ts";
 import { hasPortfolioTransactionImportBatchIdColumn } from "./portfolioTxRepo.common.ts";
 
+import { asInvestmentId } from "@vision/types/brands";
+import type {
+  AccountId,
+  InvestmentId,
+  PortfolioTransactionId,
+} from "@vision/types/brands";
 import type {
   PortfolioMathTxRow,
   PortfolioTransactionRow,
@@ -37,7 +43,7 @@ export type { PortfolioTransactionRow, PortfolioTransactionSummaryRow };
 export type PortfolioUnitEventRow = PortfolioUnitEventDbRow;
 
 export async function getAssetClassByInvestmentId(
-  investmentId: number,
+  investmentId: InvestmentId,
 ): Promise<string | undefined> {
   const row = await queryOne(
     assetClassRowSchema,
@@ -48,7 +54,7 @@ export async function getAssetClassByInvestmentId(
 }
 
 export async function getUnitEventsForInvestment(
-  investmentId: number,
+  investmentId: InvestmentId,
 ): Promise<PortfolioUnitEventRow[]> {
   const sql = `
     SELECT id, type::text AS type, to_char(date, 'YYYY-MM-DD') AS date,
@@ -76,7 +82,7 @@ export async function getUnitEventsForInvestment(
 
 export async function getUnitEventIdsForImportBatch(
   batchId: number | string,
-): Promise<{ id: number; investment_id: number }[]> {
+): Promise<{ id: PortfolioTransactionId; investment_id: InvestmentId }[]> {
   if (!(await hasPortfolioTransactionImportBatchIdColumn())) return [];
   return queryRows(
     portfolioTransactionIdPairRowSchema,
@@ -89,7 +95,7 @@ export async function getUnitEventIdsForImportBatch(
   );
 }
 
-export async function getAccountLabel(accountId: number): Promise<string> {
+export async function getAccountLabel(accountId: AccountId): Promise<string> {
   const row = await queryOne(
     accountLabelRowSchema,
     "SELECT display_name, name FROM accounts WHERE id = $1",
@@ -138,7 +144,7 @@ export const mapPortfolioTxRow = (
 };
 
 type ListFilters = {
-  investmentId?: number | null;
+  investmentId?: InvestmentId | null;
   type?: string | null;
   limit?: number;
   offset?: number;
@@ -217,12 +223,12 @@ export async function getAllWithCount({
  * at the route where a 400 can reach the caller.
  */
 function normalizeInvestmentIds(
-  investmentIds: ReadonlyArray<number | string> | null | undefined,
-): number[] {
-  const ids: number[] = [];
+  investmentIds: ReadonlyArray<InvestmentId | string> | null | undefined,
+): InvestmentId[] {
+  const ids: InvestmentId[] = [];
   for (const id of investmentIds || []) {
     const result = validateId(id, "investment_id");
-    if (result.valid) ids.push(result.value);
+    if (result.valid) ids.push(asInvestmentId(result.value));
   }
   return Array.from(new Set(ids));
 }
@@ -234,7 +240,7 @@ export async function getAllByInvestmentIds({
   limit = null,
   offset = 0,
 }: {
-  investmentIds?: Array<number | string>;
+  investmentIds?: Array<InvestmentId | string>;
   type?: string | null;
   perInvestmentLimit?: number;
   limit?: number | null;
@@ -307,8 +313,8 @@ export async function getCount({
   investmentIds = null,
   type = null,
 }: {
-  investmentId?: number | null;
-  investmentIds?: Array<number | string> | null;
+  investmentId?: InvestmentId | null;
+  investmentIds?: Array<InvestmentId | string> | null;
   type?: string | null;
 } = {}): Promise<number> {
   let sql = `SELECT count(*) FROM portfolio_transactions WHERE 1=1`;
@@ -335,7 +341,7 @@ export async function getCount({
 }
 
 export async function getById(
-  id: number,
+  id: PortfolioTransactionId,
 ): Promise<PortfolioTransactionRow | null> {
   const row = await queryOne(
     portfolioTransactionDbRowSchema,
@@ -447,7 +453,7 @@ const PORTFOLIO_SUMMARY_NUMERIC_FIELDS = [
 ];
 
 export async function getSummary(
-  investmentId: number,
+  investmentId: InvestmentId,
 ): Promise<PortfolioTransactionSummaryRow[]> {
   // SUM(NUMERIC) and COUNT(*) both arrive from pg as strings.
   const rows = await queryRows(

@@ -40,16 +40,21 @@ import type {
     AccountLiquidityClass,
     AccountTaxWrapper,
 } from "@/types/api";
-import { SUPPORTED_CURRENCIES as CURRENCIES } from "@/utils/currency";
+import {
+    DEFAULT_CURRENCY,
+    SUPPORTED_CURRENCIES as CURRENCIES,
+} from "@/utils/currency";
 import { toAccountPayload } from "./accountFormMapping";
 import { accountFormSchema } from "./accountFormSchema";
 import { isHoldingsOnlyPortfolioType } from "./groupAccounts";
+import { asCurrencyCode } from "@vision/types/brands";
+import type { AccountId, CurrencyCode } from "@vision/types/brands";
 
 export type AccountFormValues = {
     name: string;
     display_name: string;
     institution: string;
-    currency: string;
+    currency: CurrencyCode;
     type: AccountType;
     owner: AccountOwner;
     liquidity_class: AccountLiquidityClass;
@@ -94,7 +99,7 @@ const EMPTY: AccountFormValues = {
     name: "",
     display_name: "",
     institution: "",
-    currency: "EUR",
+    currency: DEFAULT_CURRENCY,
     type: "checking",
     owner: "me",
     liquidity_class: "liquid",
@@ -227,10 +232,10 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
 
     const stampOpeningBalance = useMutation({
         mutationFn: (input: {
-            id: number;
+            id: AccountId;
             balance: number;
             date: string;
-            currency: string;
+            currency: CurrencyCode;
         }) =>
             apiClient.setOpeningBalance(input.id, {
                 balance: input.balance,
@@ -287,7 +292,10 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
     };
 
     const onCurrencyChange = (currency: string) => {
-        setForm((current) => ({ ...current, currency }));
+        setForm((current) => ({
+            ...current,
+            currency: asCurrencyCode(currency),
+        }));
     };
 
     const onTypeChange = (type: AccountType) => {

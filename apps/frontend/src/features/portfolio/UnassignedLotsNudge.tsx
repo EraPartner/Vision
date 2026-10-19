@@ -19,9 +19,11 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { asAccountId } from "@vision/types/brands";
+import type { InvestmentId } from "@vision/types/brands";
 
 interface Props {
-    investmentId: number;
+    investmentId: InvestmentId;
     investmentName: string;
     transactions: readonly PortfolioTransaction[];
 }
@@ -115,7 +117,7 @@ export function UnassignedLotsNudge({
             receipt = await bulkRetagTransactions({
                 transaction_ids: unassignedIds,
                 from_account_id: null,
-                to_account_id: Number(effectiveBroker),
+                to_account_id: asAccountId(Number(effectiveBroker)),
                 idempotency_key: idempotencyRef.current.key,
             });
         } catch {

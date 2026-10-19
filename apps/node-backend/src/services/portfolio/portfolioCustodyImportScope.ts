@@ -9,6 +9,7 @@ import { getUnitEventsForInvestment } from "../../repositories/portfolioTxRepo.r
 import type { PortfolioUnitEventRow } from "../../repositories/portfolioTxRepo.reads.ts";
 import { findAssetTransferFingerprint } from "../../repositories/portfolioAssetTransferRepository.ts";
 import { findAssetAdjustmentFingerprint } from "../../repositories/portfolioAssetAdjustmentRepository.ts";
+import { asInvestmentId } from "@vision/types/brands";
 
 /**
  * A custody event (asset transfer or asset adjustment) as previewed for
@@ -133,7 +134,7 @@ export async function withPortfolioCustodyImportScope<T>(
       try {
         const result = await work();
         for (const investmentId of new Set(
-          events.map((event) => Number(event.investment_id)),
+          events.map((event) => asInvestmentId(Number(event.investment_id))),
         ))
           await validateHistory(await getUnitEventsForInvestment(investmentId));
         for (const event of events) {

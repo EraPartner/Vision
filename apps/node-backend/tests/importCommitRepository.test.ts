@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mockConnection } from "./helpers/repoMocks.ts";
+import {
+  asAccountId,
+  asCurrencyCode,
+  asRecipientId,
+} from "@vision/types/brands";
 vi.mock("../src/database/connection.ts", () => mockConnection());
 import { query } from "../src/database/connection.ts";
 import {
@@ -10,13 +15,13 @@ const queryMock = vi.mocked(query);
 const row = (stagingId: string, fingerprint = stagingId): BulkImportRow => ({
   stagingId,
   date: "2026-07-01",
-  accountId: 1,
-  recipientId: 2,
+  accountId: asAccountId(1),
+  recipientId: asRecipientId(2),
   categoryId: null,
   amount: "-10",
   memo: "fixture",
   memoNormalized: "fixture",
-  currency: "EUR",
+  currency: asCurrencyCode("EUR"),
   balance: null,
   comment: null,
   importBatchId: 1,

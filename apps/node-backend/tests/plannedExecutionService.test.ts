@@ -2,6 +2,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { makePlannedTransactionRow } from "./builders/domainRows.ts";
 import { loose } from "./helpers/partial.ts";
 import { mockTxConnection } from "./helpers/repoMocks.ts";
+import {
+  asPlannedTransactionId,
+  asTransactionId,
+} from "@vision/types/brands";
 
 vi.mock("../src/services/plannedTransactionService.ts", () => ({
   default: {
@@ -69,7 +73,7 @@ describe("executePlanned — recurrence bounds (migration 0071)", () => {
         rowCount: 1,
       });
       await expect(
-        executePlanned({ id: 1, executedTransactionId: 9, expectedOccurrence }),
+        executePlanned({ id: asPlannedTransactionId(1), executedTransactionId: asTransactionId(9), expectedOccurrence }),
       ).rejects.toMatchObject({ status: 409 });
       expect(
         plannedTransactionService.executeAndAdvance,
@@ -82,7 +86,7 @@ describe("executePlanned — recurrence bounds (migration 0071)", () => {
       planned({ max_occurrences: 1, execution_count: 1, is_executed: true }),
     );
     await expect(
-      executePlanned({ id: 1, executedTransactionId: 9 }),
+      executePlanned({ id: asPlannedTransactionId(1), executedTransactionId: asTransactionId(9) }),
     ).rejects.toMatchObject({ status: 409 });
     expect(
       plannedTransactionService.lockForExecution.mock.invocationCallOrder[0],
@@ -101,7 +105,7 @@ describe("executePlanned — recurrence bounds (migration 0071)", () => {
     });
     plannedTransactionService.getExecutionState.mockResolvedValue(existing);
     await expect(
-      executePlanned({ id: 1, executedTransactionId: 9 }),
+      executePlanned({ id: asPlannedTransactionId(1), executedTransactionId: asTransactionId(9) }),
     ).resolves.toMatchObject({ duplicate: true });
     expect(plannedTransactionService.executeAndAdvance).not.toHaveBeenCalled();
   });
@@ -115,15 +119,15 @@ describe("executePlanned — recurrence bounds (migration 0071)", () => {
       }),
     );
     await expect(
-      executePlanned({ id: 1, executedTransactionId: 9 }),
+      executePlanned({ id: asPlannedTransactionId(1), executedTransactionId: asTransactionId(9) }),
     ).rejects.toMatchObject({ status: 409 });
     expect(plannedTransactionService.executeAndAdvance).not.toHaveBeenCalled();
   });
   it("an unbounded recurrence advances to the next date", async () => {
     plannedTransactionService.getExecutionState.mockResolvedValue(planned());
     await executePlanned({
-      id: 1,
-      executedTransactionId: 9,
+      id: asPlannedTransactionId(1),
+      executedTransactionId: asTransactionId(9),
       executionDate: "2026-07-01",
     });
 
@@ -145,8 +149,8 @@ describe("executePlanned — recurrence bounds (migration 0071)", () => {
         planned({ planned_date: base }),
       );
       await executePlanned({
-        id: 1,
-        executedTransactionId: 9,
+        id: asPlannedTransactionId(1),
+        executedTransactionId: asTransactionId(9),
         executionDate: "2026-07-01",
       });
       expect(advancedFields()).toMatchObject({
@@ -164,8 +168,8 @@ describe("executePlanned — recurrence bounds (migration 0071)", () => {
       }),
     );
     await executePlanned({
-      id: 1,
-      executedTransactionId: 9,
+      id: asPlannedTransactionId(1),
+      executedTransactionId: asTransactionId(9),
       executionDate: "2026-07-01",
     });
     expect(advancedFields()).toMatchObject({
@@ -180,8 +184,8 @@ describe("executePlanned — recurrence bounds (migration 0071)", () => {
       planned({ max_occurrences: 12, execution_count: 11 }),
     );
     await executePlanned({
-      id: 1,
-      executedTransactionId: 9,
+      id: asPlannedTransactionId(1),
+      executedTransactionId: asTransactionId(9),
       executionDate: "2026-07-01",
     });
 
@@ -195,8 +199,8 @@ describe("executePlanned — recurrence bounds (migration 0071)", () => {
       planned({ max_occurrences: 12, execution_count: 3 }),
     );
     await executePlanned({
-      id: 1,
-      executedTransactionId: 9,
+      id: asPlannedTransactionId(1),
+      executedTransactionId: asTransactionId(9),
       executionDate: "2026-07-01",
     });
 
@@ -212,8 +216,8 @@ describe("executePlanned — recurrence bounds (migration 0071)", () => {
       planned({ recurrence_end_date: "2026-07-15" }),
     );
     await executePlanned({
-      id: 1,
-      executedTransactionId: 9,
+      id: asPlannedTransactionId(1),
+      executedTransactionId: asTransactionId(9),
       executionDate: "2026-07-01",
     });
 
@@ -227,8 +231,8 @@ describe("executePlanned — recurrence bounds (migration 0071)", () => {
       planned({ recurrence_end_date: new Date(2026, 11, 31) }), // Dec 31 local midnight
     );
     await executePlanned({
-      id: 1,
-      executedTransactionId: 9,
+      id: asPlannedTransactionId(1),
+      executedTransactionId: asTransactionId(9),
       executionDate: "2026-07-01",
     });
 

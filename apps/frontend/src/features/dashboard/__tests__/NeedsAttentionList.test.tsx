@@ -6,6 +6,7 @@ import { useLocation } from "react-router";
 import { renderWithApp } from "@/test/renderWithApp";
 import { LOCAL_STORAGE_KEYS } from "@/lib/localStorage-keys";
 import { NeedsAttentionList } from "../NeedsAttentionList";
+import { asCurrencyCode } from "@vision/types/brands";
 
 const state = vi.hoisted(() => ({
     accounts: [] as Array<{
@@ -34,7 +35,7 @@ function Harness() {
     return (
         <>
             <output data-testid="location">{location.pathname}</output>
-            <NeedsAttentionList currency="EUR" />
+            <NeedsAttentionList currency={asCurrencyCode("EUR")} />
         </>
     );
 }

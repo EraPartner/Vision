@@ -26,6 +26,8 @@ import {
 } from "../middleware/validation.ts";
 import { researchAggregator } from "../services/research/researchAggregator.ts";
 import { researchMappingService } from "../services/research/researchMappingService.ts";
+import { asInvestmentId } from "@vision/types/brands";
+import type { InvestmentId } from "@vision/types/brands";
 import * as researchProviderKeyService from "../services/research/researchProviderKeyService.ts";
 import { runPortfolioForecast } from "../services/research/projection/portfolioProjection.ts";
 import type { PortfolioForecastInput } from "../services/research/projection/portfolioProjection.ts";
@@ -405,8 +407,8 @@ const requireInstrumentKey = (value: unknown) =>
  * cannot tell from a correct one. `assertOptionalId` keeps absent meaning
  * absent and rejects the rest, matching every other id in the codebase.
  */
-function optionalInvestmentId(value: unknown): number | undefined {
-  return assertOptionalId(value, "investment_id") ?? undefined;
+function optionalInvestmentId(value: unknown): InvestmentId | undefined {
+  return assertOptionalId(value, "investment_id", asInvestmentId);
 }
 
 // GET /api/research/mappings?instrument_key=US0378331005&key_type=isin

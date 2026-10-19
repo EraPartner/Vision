@@ -15,12 +15,17 @@ import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { RecipientOwesDetail } from "@/features/splits/owes/RecipientOwesDetail";
 import { useOwedSummary } from "@/hooks/useSplits";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
-import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
+import {
+    formatCurrency,
+    numberFormatToLocale,
+    DEFAULT_CURRENCY,
+} from "@/utils/currency";
 import { PageShell } from "@/components/shared/PageShell";
+import type { RecipientId } from "@vision/types/brands";
 
 export default function OwesPage() {
     const { appSettings } = useAppSettings();
-    const defaultCurrency = appSettings.defaultCurrency || "EUR";
+    const defaultCurrency = appSettings.defaultCurrency || DEFAULT_CURRENCY;
     // Amounts arrive converted to the display currency on the server.
     const {
         data: summary,
@@ -29,7 +34,7 @@ export default function OwesPage() {
         refetch,
     } = useOwedSummary(defaultCurrency);
     const [selectedRecipient, setSelectedRecipient] = useState<{
-        id: number;
+        id: RecipientId;
         name: string;
     } | null>(null);
     const { t, tc } = useLanguage();

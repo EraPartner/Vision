@@ -21,6 +21,11 @@ import {
 } from "../helpers/transactionsRouteMocks.ts";
 import { mockLogger } from "../helpers/mockLogger.ts";
 import { routeAgent, okEnvelope, errEnvelope } from "../helpers/routeApp.ts";
+import {
+  asCurrencyCode,
+  asRecipientId,
+  asTransactionId,
+} from "@vision/types/brands";
 
 vi.mock("../../src/repositories/transactionRepository.ts", () =>
   mockTransactionRepository(),
@@ -153,11 +158,11 @@ describe("Transaction Routes", () => {
       transactionRepository.getAllWithCount.mockResolvedValue({
         rows: [
           txnRow({
-            id: 1,
+            id: asTransactionId(1),
             date: "2026-01-15",
             bank_account: "Chase",
             amount: "25.50",
-            recipient_id: 1,
+            recipient_id: asRecipientId(1),
           }),
         ],
         total: 1,
@@ -201,11 +206,11 @@ describe("Transaction Routes", () => {
       transactionRepository.getAllWithCount.mockResolvedValue({
         rows: [
           txnRow({
-            id: 42,
+            id: asTransactionId(42),
             date: "2026-01-15",
             bank_account: "Chase",
             amount: "25.50",
-            recipient_id: 1,
+            recipient_id: asRecipientId(1),
           }),
         ],
         total: 1,
@@ -223,7 +228,7 @@ describe("Transaction Routes", () => {
 
     it("should normalize rows when normalize_to_eur is true", async () => {
       transactionRepository.getAllWithCount.mockResolvedValue({
-        rows: [txnRow({ id: 1, date: "2026-01-15", amount: "10", currency: "USD" })],
+        rows: [txnRow({ id: asTransactionId(1), date: "2026-01-15", amount: "10", currency: asCurrencyCode("USD") })],
         total: 1,
       });
       const converted: ConvertedRow<ConvertibleRow & { id: number }>[] = [
@@ -252,11 +257,11 @@ describe("Transaction Routes", () => {
       transactionRepository.getAllWithCount.mockResolvedValue({
         rows: [
           txnRow({
-            id: 1,
+            id: asTransactionId(1),
             date: "2026-01-15",
             bank_account: "Chase",
             amount: "-25.50",
-            recipient_id: 1,
+            recipient_id: asRecipientId(1),
             running_balance: "974.50",
           }),
         ],
@@ -277,11 +282,11 @@ describe("Transaction Routes", () => {
       transactionRepository.getAllWithCount.mockResolvedValue({
         rows: [
           txnRow({
-            id: 1,
+            id: asTransactionId(1),
             date: "2026-01-15",
             bank_account: "Chase",
             amount: "25.50",
-            recipient_id: 1,
+            recipient_id: asRecipientId(1),
           }),
         ],
         total: 1,
@@ -317,7 +322,7 @@ describe("Transaction Routes", () => {
   describe("GET /:id", () => {
     it("should return transaction by id", async () => {
       transactionRepository.getById.mockResolvedValue(txnRow({
-        id: 1,
+        id: asTransactionId(1),
         date: "2026-01-15",
         amount: "50.00",
         bank_account: "Chase",
@@ -596,11 +601,11 @@ describe("Transaction Routes", () => {
   describe("POST /", () => {
     it("should create transaction with 201", async () => {
       transactionRepository.create.mockResolvedValue(txnRow({
-        id: 1,
+        id: asTransactionId(1),
         date: "2026-01-15",
         amount: "-50.00",
         bank_account: "Chase",
-        recipient_id: 1,
+        recipient_id: asRecipientId(1),
       }));
 
       const res = await api
@@ -752,7 +757,7 @@ describe("Transaction Routes", () => {
   describe("PATCH /:id", () => {
     it("should update transaction", async () => {
       transactionRepository.update.mockResolvedValue(txnRow({
-        id: 1,
+        id: asTransactionId(1),
         date: "2026-01-15",
         amount: "-75.00",
         bank_account: "Chase",

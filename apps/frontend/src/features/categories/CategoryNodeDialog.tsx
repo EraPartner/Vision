@@ -26,6 +26,8 @@ import {
     useUpdateCategoryNode,
 } from "@/hooks/useCategories";
 import type { CategoryNode } from "@/types/api";
+import { asCategoryId } from "@vision/types/brands";
+import type { CategoryId } from "@vision/types/brands";
 
 const ROOT_VALUE = "root";
 
@@ -33,7 +35,7 @@ interface CategoryNodeDialogProps {
     nodes: CategoryNode[];
     onCloseAutoFocus?: () => void;
     editNode?: CategoryNode;
-    initialParentId?: number | null;
+    initialParentId?: CategoryId | null;
     open?: boolean;
     onOpenChange?: (open: boolean) => void;
 }
@@ -51,7 +53,7 @@ export function CategoryNodeDialog({
     const nameRef = useRef<HTMLInputElement>(null);
     const [nameError, setNameError] = useState(false);
     const [name, setName] = useState(editNode?.name ?? "");
-    const [parentId, setParentId] = useState<number | null>(
+    const [parentId, setParentId] = useState<CategoryId | null>(
         editNode?.parentId ?? initialParentId,
     );
     const [description, setDescription] = useState(editNode?.description ?? "");
@@ -155,7 +157,9 @@ export function CategoryNodeDialog({
                         value={parentId == null ? ROOT_VALUE : String(parentId)}
                         onValueChange={(value) =>
                             setParentId(
-                                value === ROOT_VALUE ? null : Number(value),
+                                value === ROOT_VALUE
+                                    ? null
+                                    : asCategoryId(Number(value)),
                             )
                         }
                     >

@@ -16,6 +16,9 @@ import {
 } from "../src/services/transactionBulkService.ts";
 import { rollbackBatch } from "../src/repositories/importBatchRepository.ts";
 import { commitBatch } from "../src/services/importPipeline/commit.ts";
+import {
+  asTransactionId,
+} from "@vision/types/brands";
 
 const deferred = () => {
   let resolve!: () => void;
@@ -109,7 +112,7 @@ describe.skipIf(!hasTestDatabase())(
         await release.promise;
       });
       await Promise.race([closed.promise, closing]);
-      const editing = transactionRepository.update(transactionId, {
+      const editing = transactionRepository.update(asTransactionId(transactionId), {
         amount: 150,
       });
       const outcome = editing.then(

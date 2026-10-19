@@ -11,6 +11,7 @@ import {
     AddAccountDialog,
     type AccountFormValues,
 } from "@/features/accounts/AddAccountDialog";
+import { asCurrencyCode } from "@vision/types/brands";
 
 vi.mock("sonner", () => ({
     toast: {
@@ -319,7 +320,7 @@ describe("AddAccountDialog (integration, WP-B5 §3 F4+F7)", () => {
                     name: "KBC Checking",
                     display_name: "KBC Checking",
                     institution: "KBC",
-                    currency: "EUR",
+                    currency: asCurrencyCode("EUR"),
                     type: "checking",
                     owner: "me",
                     liquidity_class: "liquid",
@@ -361,7 +362,7 @@ describe("AddAccountDialog (integration, WP-B5 §3 F4+F7)", () => {
                     name: "Exchange",
                     display_name: "Exchange",
                     institution: "",
-                    currency: "EUR",
+                    currency: asCurrencyCode("EUR"),
                     type: "crypto_exchange",
                     owner: "me",
                     liquidity_class: "liquid",

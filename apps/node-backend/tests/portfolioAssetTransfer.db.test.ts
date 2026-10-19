@@ -28,6 +28,9 @@ import type { PortfolioParserConfig } from "../src/services/portfolioImportPipel
 import { stageBatch } from "../src/services/portfolioImportPipeline/stage.ts";
 import { validateBatch } from "../src/services/portfolioImportPipeline/validate.ts";
 import { matchBatch } from "../src/services/portfolioImportPipeline/matchInvestments.ts";
+import {
+  asCurrencyCode,
+} from "@vision/types/brands";
 
 const pool = getTestPool()!;
 const ids: { investments: number[]; accounts: number[]; batches: number[] } = {
@@ -60,7 +63,7 @@ async function seed() {
     price_per_unit: 10,
     fees: 0,
     taxes: 0,
-    currency: "EUR",
+    currency: asCurrencyCode("EUR"),
   }))!;
   return {
     source: accounts[0],
@@ -450,7 +453,7 @@ describe.skipIf(!hasTestDatabase())(
             units: 1,
             amount: 10,
             price_per_unit: 10,
-            currency: "EUR",
+            currency: asCurrencyCode("EUR"),
           }),
         ).rejects.toThrow(/must name their custody account/);
       await expect(
@@ -495,7 +498,7 @@ describe.skipIf(!hasTestDatabase())(
         units: 4,
         amount: 80,
         price_per_unit: 20,
-        currency: "EUR",
+        currency: asCurrencyCode("EUR"),
       });
       await expect(
         rollbackPortfolioAssetTransfersForBatch(input.batch.id),
@@ -540,7 +543,7 @@ describe.skipIf(!hasTestDatabase())(
           units: 2,
           amount: 20,
           price_per_unit: 10,
-          currency: "EUR",
+          currency: asCurrencyCode("EUR"),
         })
         .then(
           (value) => ({ value }),

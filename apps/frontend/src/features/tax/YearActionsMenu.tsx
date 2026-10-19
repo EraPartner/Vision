@@ -30,6 +30,7 @@ import {
 } from "@/stores/belgianTaxStore";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import logger from "@/lib/logger";
+import { DEFAULT_CURRENCY } from "@/utils/currency";
 
 interface YearActionsMenuProps {
     /** The year the menu operates on. Typically the page's `viewedYear`. */
@@ -88,7 +89,7 @@ export function YearActionsMenu({ year, pageItems }: YearActionsMenuProps) {
                 year,
                 profile: profileForYear(year),
                 calculation: figures.calculation,
-                currency: appSettings.defaultCurrency || "EUR",
+                currency: appSettings.defaultCurrency || DEFAULT_CURRENCY,
                 isFiled: filed,
                 hasFrozenCalculation: hasFrozen,
                 // Friendly stamp for the file header.

@@ -12,11 +12,12 @@ import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { cn } from "@/lib/utils";
 import type { AccountType } from "@/types/api";
 import { roundMoney, subtract } from "@vision/shared-utils/money";
+import type { AccountId } from "@vision/types/brands";
 
 /** One displayed row: server figures plus its localized label. */
 export interface NetWorthAccountRow {
     key: string;
-    accountId: number | null;
+    accountId: AccountId | null;
     label: string;
     /** Account type for the row subtitle; undefined for the unassigned row. */
     type?: AccountType | undefined;

@@ -9,6 +9,10 @@ import { z } from "zod";
 import { mockConnection } from "./helpers/repoMocks.ts";
 import { mockLogger } from "./helpers/mockLogger.ts";
 import { accountBalanceRow, txRow } from "./helpers/pgRows.ts";
+import {
+  asCurrencyCode,
+  asTransactionId,
+} from "@vision/types/brands";
 
 vi.mock("../src/database/connection.ts", () => mockConnection());
 vi.mock("../src/config/logger.ts", () => ({ logger: mockLogger() }));
@@ -43,7 +47,7 @@ const SECRET_AMOUNT = 4321.98;
 
 /** A row whose NUMERIC and DATE columns came back with the wrong JS type. */
 const brokenRow = () => ({
-  ...txRow({ id: 2, memo: SECRET_MEMO }),
+  ...txRow({ id: asTransactionId(2), memo: SECRET_MEMO }),
   amount: SECRET_AMOUNT,
   date: "2026-01-15",
 });
@@ -54,7 +58,7 @@ beforeEach(() => {
 
 describe("checkRows in throw mode", () => {
   it("throws RowContractError naming the row, the columns and the types", () => {
-    const rows = [txRow({ id: 1 }), brokenRow(), txRow({ id: 3 })];
+    const rows = [txRow({ id: asTransactionId(1) }), brokenRow(), txRow({ id: asTransactionId(3) })];
     let caught: unknown;
     try {
       checkRows(transactionRowSchema, rows, { mode: "throw" });
@@ -106,7 +110,7 @@ describe("checkRows in throw mode", () => {
             statement_balances: [
               // json_build_object emits NUMERIC as a JSON number, never a string
               {
-                currency: "EUR",
+                currency: asCurrencyCode("EUR"),
                 balance: "12.34" as unknown as number,
                 balance_date: "2026-07-01",
               },
@@ -127,7 +131,7 @@ describe("checkRows in throw mode", () => {
 
 describe("checkRows in log mode (production default)", () => {
   it("warns with paths only and passes the very same rows through", () => {
-    const rows = [txRow({ id: 1 }), brokenRow()];
+    const rows = [txRow({ id: asTransactionId(1) }), brokenRow()];
     const result = checkRows(transactionRowSchema, rows, { mode: "log" });
 
     expect(result).toBe(rows);
@@ -152,7 +156,7 @@ describe("checkRows in log mode (production default)", () => {
 
 describe("checkRows on valid rows", () => {
   it("returns pg's own objects, extra columns included, and logs nothing", () => {
-    const row = { ...txRow({ id: 5 }), tx_hash: "legacy column" };
+    const row = { ...txRow({ id: asTransactionId(5) }), tx_hash: "legacy column" };
     const result = checkRows(transactionRowSchema, [row], { mode: "throw" });
     expect(result[0]).toBe(row);
     expect(result[0]).toHaveProperty("tx_hash", "legacy column");

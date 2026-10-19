@@ -4,13 +4,14 @@ import type {
     CashflowForecastMethod,
     CashflowForecastMethodsData,
 } from "@/lib/api/aggregations";
+import { asCurrencyCode } from "@vision/types/brands";
 
 function baseData(
     methods: CashflowForecastMethod[],
 ): CashflowForecastMethodsData {
     return {
         month: "2026-01",
-        currency: "EUR",
+        currency: asCurrencyCode("EUR"),
         days_in_month: 31,
         current_day: 2,
         actual: [

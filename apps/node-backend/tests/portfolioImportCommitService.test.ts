@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mockConnection } from "./helpers/repoMocks.ts";
+import {
+  asAccountId,
+} from "@vision/types/brands";
 
 const mocks = vi.hoisted(() => ({
   withTransaction: vi.fn(async (fn) => fn()),
@@ -52,7 +55,7 @@ beforeEach(() => {
 
 describe("commitReviewedPortfolioImport", () => {
   it("locks the batch before setting and reading its commit account", async () => {
-    await commitReviewedPortfolioImport({ batchId: 5, accountId: 77 });
+    await commitReviewedPortfolioImport({ batchId: 5, accountId: asAccountId(77) });
 
     expect(mocks.withTransaction).toHaveBeenCalledTimes(1);
     expect(mocks.lockBatchForUpdate).toHaveBeenCalledWith(5);
@@ -98,7 +101,7 @@ describe("commitReviewedPortfolioImport", () => {
     mocks.lockBatchForUpdate.mockResolvedValue({ status: "complete" });
 
     await expect(
-      commitReviewedPortfolioImport({ batchId: 5, accountId: 77 }),
+      commitReviewedPortfolioImport({ batchId: 5, accountId: asAccountId(77) }),
     ).rejects.toThrow("not in a reviewable state");
 
     expect(mocks.setBatchAccount).not.toHaveBeenCalled();
@@ -112,7 +115,7 @@ describe("commitReviewedPortfolioImport", () => {
     ]) {
       mocks.getAccount.mockResolvedValueOnce(account);
       await expect(
-        commitReviewedPortfolioImport({ batchId: 5, accountId: 77 }),
+        commitReviewedPortfolioImport({ batchId: 5, accountId: asAccountId(77) }),
       ).rejects.toThrow("active portfolio account");
       expect(mocks.setBatchAccount).not.toHaveBeenCalled();
       expect(mocks.commitPortfolioImport).not.toHaveBeenCalled();

@@ -6,9 +6,10 @@ import { Money } from "@/components/shared/Money";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useNetWorthSummary } from "@/features/portfolio/usePortfolioQueries";
 import { cn } from "@/lib/utils";
+import type { CurrencyCode } from "@vision/types/brands";
 
 interface NetWorthCardProps {
-    currency: string;
+    currency: CurrencyCode;
 }
 
 /** Home net-worth card (ADR-181): the number, this month's change, assets against debt. */

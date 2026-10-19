@@ -1,10 +1,13 @@
 import type { AppSettings } from "@/stores/settingsStore";
+import { DEFAULT_CURRENCY } from "@/utils/currency";
+import { isCurrencyCode } from "@vision/types/brands";
+import type { CurrencyCode } from "@vision/types/brands";
 
 export type AnalysisAnswerDepth = "quick" | "detailed";
 export type AnalysisLanguage = "en" | "nl";
 
 export interface EffectiveAnalysisPreferences {
-    currency: string;
+    currency: CurrencyCode;
     benchmark: string | null;
     answerDepth: AnalysisAnswerDepth;
     language: AnalysisLanguage;
@@ -18,14 +21,14 @@ export interface AnalysisPreferenceLayer {
 }
 
 export const PRODUCT_ANALYSIS_PREFERENCES: EffectiveAnalysisPreferences = {
-    currency: "EUR",
+    currency: DEFAULT_CURRENCY,
     benchmark: null,
     answerDepth: "quick",
     language: "en",
 };
 
-const currency = (value: unknown): string | undefined =>
-    typeof value === "string" && /^[A-Z]{3}$/.test(value) ? value : undefined;
+const currency = (value: unknown): CurrencyCode | undefined =>
+    isCurrencyCode(value) ? value : undefined;
 const benchmark = (value: unknown): string | null | undefined => {
     if (value === null) return null;
     if (typeof value !== "string") return undefined;

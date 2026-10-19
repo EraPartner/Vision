@@ -19,6 +19,7 @@ import {
     accountListItem,
     accountsBody,
 } from "@/test/msw/rowFixtures";
+import { asAccountId } from "@vision/types/brands";
 
 const API_BASE = "http://localhost:3002";
 
@@ -776,7 +777,7 @@ describe("PortfolioPage (integration)", () => {
             total: 10,
             gainAfterFees: 110,
             usedFallbackRate: false,
-            byAccount: [{ account_id: 10, total: 10 }],
+            byAccount: [{ account_id: asAccountId(10), total: 10 }],
         } });
         renderWithApp(<PortfolioPage />);
         const card = (await screen.findByRole("heading", { name: "Gains, income and costs" })).closest(

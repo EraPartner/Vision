@@ -8,7 +8,11 @@ import {
 } from "lucide-react";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
-import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
+import {
+    formatCurrency,
+    numberFormatToLocale,
+    DEFAULT_CURRENCY,
+} from "@/utils/currency";
 import {
     formatDateWithAppSettings,
     parseLocalDateFromYmd,
@@ -75,7 +79,7 @@ export default function PortfolioForecastPage() {
     const loadingSurfaceProps = useLoadingSurfaceProps();
     const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings.numberFormat);
-    const currency = appSettings.defaultCurrency || "EUR";
+    const currency = appSettings.defaultCurrency || DEFAULT_CURRENCY;
     const formatPercent = usePercentFormatter();
 
     const [horizonMonths, setHorizonMonths] = useState(60);

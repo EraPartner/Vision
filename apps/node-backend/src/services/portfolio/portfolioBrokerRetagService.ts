@@ -20,12 +20,36 @@ import {
   ConflictError,
   ValidationError,
 } from "../../middleware/errorHandler.ts";
+import type {
+  AccountId,
+  InvestmentId,
+  PortfolioTransactionId,
+} from "@vision/types/brands";
 
 const EPSILON = 1e-8;
 const COST_BASIS_METHODS = new Set(["weighted_avg", "fifo", "lifo"]);
 
 /** One investment-history row the re-tag guards replay. */
 type RetagHistoryRow = RetagTransactionEventRow | RetagCustodyEventRow;
+
+const CUSTODY_EVENT_TYPES = new Set(["asset_transfer", "asset_adjustment"]);
+
+function isTransactionEvent(
+  row: RetagHistoryRow,
+): row is RetagTransactionEventRow {
+  return !CUSTODY_EVENT_TYPES.has(row.type);
+}
+
+/**
+ * Whether a history row is a selected portfolio transaction. Custody events
+ * carry ids from their own tables, so a matching number is not a selection.
+ */
+function isSelected(
+  row: RetagHistoryRow,
+  selectedIds: Set<PortfolioTransactionId>,
+): boolean {
+  return isTransactionEvent(row) && selectedIds.has(row.id);
+}
 
 /** A stored historical FX rate ('YYYY-MM-DD' day, NUMERIC as pg text). */
 type HistoricalRateRow = {
@@ -38,9 +62,9 @@ type RateIndex = Map<string, { date: string; rate: number }[]>;
 
 /** A broker re-tag request (validated by the route). */
 export interface RetagRequest {
-  transaction_ids: number[];
-  from_account_id: number | null;
-  to_account_id: number | null;
+  transaction_ids: PortfolioTransactionId[];
+  from_account_id: AccountId | null;
+  to_account_id: AccountId | null;
   idempotency_key: string;
 }
 
@@ -94,20 +118,19 @@ function fingerprintRetagRequest(
  */
 function assertRetagPreservesPartitionUnits(
   rows: readonly RetagHistoryRow[],
-  selectedIds: Set<number>,
-  toAccountId: number | null,
+  selectedIds: Set<PortfolioTransactionId>,
+  toAccountId: AccountId | null,
 ): void {
-  const byInvestment = new Map<number, RetagHistoryRow[]>();
+  const byInvestment = new Map<InvestmentId, RetagHistoryRow[]>();
   for (const row of rows) {
-    const investmentId = Number(row.investment_id);
-    const group = byInvestment.get(investmentId) ?? [];
+    const group = byInvestment.get(row.investment_id) ?? [];
     group.push(row);
-    byInvestment.set(investmentId, group);
+    byInvestment.set(row.investment_id, group);
   }
 
   for (const [investmentId, beforeRows] of byInvestment) {
     const afterRows = beforeRows.map((row) =>
-      selectedIds.has(Number(row.id))
+      isSelected(row, selectedIds)
         ? { ...row, account_id: toAccountId }
         : row,
     );
@@ -131,25 +154,24 @@ function assertRetagPreservesPartitionUnits(
  */
 function assertRetagPreservesPortfolioEconomics(
   rows: readonly RetagHistoryRow[],
-  selectedIds: Set<number>,
-  toAccountId: number | null,
+  selectedIds: Set<PortfolioTransactionId>,
+  toAccountId: AccountId | null,
   costBasisMethod: CostBasisMethod,
   todayYmd: string,
   historicalRates: readonly HistoricalRateRow[] = [],
 ): void {
   const rateIndex = buildRateIndex(historicalRates);
   const targets = new Set(["EUR", ...rateIndex.keys()]);
-  const byInvestment = new Map<number, RetagHistoryRow[]>();
+  const byInvestment = new Map<InvestmentId, RetagHistoryRow[]>();
   for (const row of rows) {
-    const investmentId = Number(row.investment_id);
-    const group = byInvestment.get(investmentId) ?? [];
+    const group = byInvestment.get(row.investment_id) ?? [];
     group.push(row);
-    byInvestment.set(investmentId, group);
+    byInvestment.set(row.investment_id, group);
   }
 
   for (const [investmentId, beforeRows] of byInvestment) {
     const afterRows = beforeRows.map((row) =>
-      selectedIds.has(Number(row.id))
+      isSelected(row, selectedIds)
         ? { ...row, account_id: toAccountId }
         : row,
     );
@@ -306,14 +328,10 @@ async function retagPortfolioTransactions(request: RetagRequest) {
     }
 
     const selected = await repository.lockTransactions(transactionIds);
-    const selectedById = new Map(selected.map((row) => [Number(row.id), row]));
+    const selectedById = new Map(selected.map((row) => [row.id, row]));
     const stale = transactionIds.filter((id) => {
       const row = selectedById.get(id);
-      return (
-        !row ||
-        (row.account_id == null ? null : Number(row.account_id)) !==
-          request.from_account_id
-      );
+      return !row || (row.account_id ?? null) !== request.from_account_id;
     });
     if (stale.length > 0) {
       throw new ConflictError(
@@ -323,7 +341,7 @@ async function retagPortfolioTransactions(request: RetagRequest) {
     }
 
     const investmentIds = Array.from(
-      new Set(selected.map((row) => Number(row.investment_id))),
+      new Set(selected.map((row) => row.investment_id)),
     );
     const [histories, historicalRates] = await Promise.all([
       repository.getUnitEventsForInvestments(investmentIds),

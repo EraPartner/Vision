@@ -8,6 +8,7 @@ import { server } from "@/test/msw/server";
 import { ok, ACCOUNT_STUB } from "@/test/msw/handlers";
 import { OpeningBalanceDialog } from "@/features/accounts/OpeningBalanceDialog";
 import type { Account } from "@/types/api";
+import { asCurrencyCode } from "@vision/types/brands";
 
 vi.mock("sonner", () => ({
     toast: {
@@ -179,7 +180,7 @@ describe("OpeningBalanceDialog (integration) — anchors in the partition's own 
             ...MULTI_CURRENCY,
             statement_balances: [
                 {
-                    currency: "EUR",
+                    currency: asCurrencyCode("EUR"),
                     balance: 135,
                     balance_date: "2026-09-10",
                 },

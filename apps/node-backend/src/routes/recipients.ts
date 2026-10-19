@@ -21,14 +21,16 @@ import { withCreateOutcome } from "../lib/createOutcome.ts";
 import { nullAsAbsent, parseInput } from "../lib/zodInput.ts";
 import {
   booleanQuery,
-  idParams,
   idSchema,
-  nullableId,
-  optionalIdFilter,
+  nullableEntityId,
+  optionalEntityIdFilter,
   pageFields,
+  recipientIdParams,
+  recipientIdSchema,
   requiredString,
   singleQueryString,
 } from "./_requestSchemas.ts";
+import { CategoryIdSchema } from "@vision/types/brands";
 // The MVs attribute transactions to categories via a 3-level resolution
 // (COALESCE(t.category_id, r.default_category_id, pr.default_category_id),
 // where pr is the recipient's PRIMARY recipient), so recipient edits/merges/
@@ -40,7 +42,10 @@ const router = Router();
 
 // ── Request schemas ──────────────────────────────────────────────────────────
 
-const patternParams = z.object({ id: idSchema(), patternId: idSchema() });
+const patternParams = z.object({
+  id: recipientIdSchema(),
+  patternId: idSchema(),
+});
 
 const clustersQuery = z.object({
   min_count: singleQueryString.transform((raw) =>
@@ -60,7 +65,7 @@ const listQuery = z
     // filter" (undefined, 200), malformed is a 400. `parseInt` truncated
     // instead — ?default_category_id=12abc listed the recipients defaulting to
     // category 12 — and a NaN reached Postgres as a 22P02 500.
-    default_category_id: optionalIdFilter,
+    default_category_id: optionalEntityIdFilter(CategoryIdSchema),
     active: booleanQuery(true),
     uncategorized: booleanQuery(false),
   })
@@ -79,21 +84,21 @@ const optionalText = z.string().nullable().optional();
 
 const createBody = z.object({
   name: requiredString,
-  default_category_id: nullableId,
+  default_category_id: nullableEntityId(CategoryIdSchema),
   notes: optionalText,
 });
 
 // null name / is_active mean "leave unchanged" in recipientRepository.update.
 const updateBody = z.object({
   name: optionalText,
-  default_category_id: nullableId,
+  default_category_id: nullableEntityId(CategoryIdSchema),
   notes: optionalText,
   is_active: z.boolean().nullable().optional(),
 });
 
 const mergeBody = z.object({
   alias_ids: z
-    .array(idSchema(), {
+    .array(recipientIdSchema(), {
       error: "Missing required field: alias_ids (array of recipient IDs)",
     })
     .min(1, "Missing required field: alias_ids (array of recipient IDs)"),
@@ -180,14 +185,14 @@ router.post("/", async (req, res) => {
 });
 
 router.get("/:id", async (req, res) => {
-  const { id } = parseInput(idParams, req.params);
+  const { id } = parseInput(recipientIdParams, req.params);
   const recipient = await recipientService.getById(id);
   if (!recipient) throw new NotFoundError("Recipient not found");
   res.ok({ ...recipient, links: [] });
 });
 
 router.patch("/:id", async (req, res) => {
-  const { id } = parseInput(idParams, req.params);
+  const { id } = parseInput(recipientIdParams, req.params);
   const updated = await recipientService.update(
     id,
     parseInput(updateBody, req.body),
@@ -198,7 +203,7 @@ router.patch("/:id", async (req, res) => {
 });
 
 router.delete("/:id", async (req, res) => {
-  const { id } = parseInput(idParams, req.params);
+  const { id } = parseInput(recipientIdParams, req.params);
   const deleted = await recipientService.hardDelete(id);
   if (!deleted) throw new NotFoundError("Recipient not found");
   scheduleRefresh();
@@ -207,7 +212,7 @@ router.delete("/:id", async (req, res) => {
 });
 
 router.post("/:id/merge", async (req, res) => {
-  const { id: primaryId } = parseInput(idParams, req.params);
+  const { id: primaryId } = parseInput(recipientIdParams, req.params);
   const { alias_ids: aliasIds } = parseInput(mergeBody, req.body);
 
   const primary = await recipientService.getById(primaryId);
@@ -263,7 +268,7 @@ router.post("/:id/merge", async (req, res) => {
 });
 
 router.post("/:id/unmerge", async (req, res) => {
-  const { id } = parseInput(idParams, req.params);
+  const { id } = parseInput(recipientIdParams, req.params);
   const success = await recipientService.unmergeRecipient(id);
   if (!success) throw new NotFoundError("Recipient not found");
   const recipient = await recipientService.getById(id);
@@ -272,7 +277,7 @@ router.post("/:id/unmerge", async (req, res) => {
 });
 
 router.get("/:id/aliases", async (req, res) => {
-  const { id } = parseInput(idParams, req.params);
+  const { id } = parseInput(recipientIdParams, req.params);
   const aliases = await recipientService.getAliases(id);
   res.ok({
     items: aliases.map((a) => ({
@@ -286,13 +291,13 @@ router.get("/:id/aliases", async (req, res) => {
 // ── Pattern sub-routes ───────────────────────────────────────────────────────
 
 router.get("/:id/patterns", async (req, res) => {
-  const { id } = parseInput(idParams, req.params);
+  const { id } = parseInput(recipientIdParams, req.params);
   const patterns = await listPatternsForRecipient(id);
   res.ok({ items: patterns, total: patterns.length });
 });
 
 router.post("/:id/patterns", async (req, res) => {
-  const { id: recipientId } = parseInput(idParams, req.params);
+  const { id: recipientId } = parseInput(recipientIdParams, req.params);
   const { pattern, pattern_kind, case_sensitive, priority, notes } = parseInput(
     createPatternBody,
     req.body,
@@ -310,7 +315,7 @@ router.post("/:id/patterns", async (req, res) => {
 });
 
 router.post("/:id/patterns/preview", async (req, res) => {
-  parseInput(idParams, req.params);
+  parseInput(recipientIdParams, req.params);
   const { pattern, pattern_kind, case_sensitive } = parseInput(
     previewPatternBody,
     req.body,

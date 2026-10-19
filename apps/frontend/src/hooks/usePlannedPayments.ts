@@ -11,6 +11,7 @@ import {
 import type { PlannedTransactionExecuteRequest } from "@/types/api";
 import { useCurrencyFormatSettings } from "@/hooks/useCurrencyFormatter";
 import { plannedKeys } from "@/lib/queryKeys";
+import type { PlannedTransactionId, TransactionId } from "@vision/types/brands";
 
 // The PlannedPayment view model and its wire-shape mappers live in
 // lib/plannedPaymentMapper.ts (pure, unit-tested); re-export the type so
@@ -87,7 +88,7 @@ export function usePlannedPayments(showInactive: boolean = false) {
             id,
             updates,
         }: {
-            id: number;
+            id: PlannedTransactionId;
             updates: Partial<PlannedPayment>;
         }) => apiClient.updatePlannedTransaction(id, mapToUpdateAPI(updates)),
         onSuccess: (updated, { id }) => {
@@ -100,7 +101,7 @@ export function usePlannedPayments(showInactive: boolean = false) {
     });
 
     const deleteMutation = useMutation({
-        mutationFn: (id: number) => apiClient.deletePlannedTransaction(id),
+        mutationFn: (id: PlannedTransactionId) => apiClient.deletePlannedTransaction(id),
         onSuccess: (_res, id) => {
             setList((prev) => prev.filter((p) => p.id !== id));
             invalidateUpcoming();
@@ -109,7 +110,7 @@ export function usePlannedPayments(showInactive: boolean = false) {
     });
 
     const toggleMutation = useMutation({
-        mutationFn: (id: number) => {
+        mutationFn: (id: PlannedTransactionId) => {
             const current = queryClient
                 .getQueryData<PlannedPayment[]>(queryKey)
                 ?.find((p) => p.id === id);
@@ -135,8 +136,8 @@ export function usePlannedPayments(showInactive: boolean = false) {
             transactionId,
             executionDate,
         }: {
-            id: number;
-            transactionId: number;
+            id: PlannedTransactionId;
+            transactionId: TransactionId;
             executionDate?: string | undefined;
         }) => {
             const executeRequest: PlannedTransactionExecuteRequest = {
@@ -162,28 +163,28 @@ export function usePlannedPayments(showInactive: boolean = false) {
     );
 
     const updatePayment = useCallback(
-        async (id: number, updates: Partial<PlannedPayment>) => {
+        async (id: PlannedTransactionId, updates: Partial<PlannedPayment>) => {
             await updateMutation.mutateAsync({ id, updates });
         },
         [updateMutation],
     );
 
     const deletePayment = useCallback(
-        async (id: number) => {
+        async (id: PlannedTransactionId) => {
             await deleteMutation.mutateAsync(id);
         },
         [deleteMutation],
     );
 
     const toggleActive = useCallback(
-        async (id: number) => {
+        async (id: PlannedTransactionId) => {
             await toggleMutation.mutateAsync(id);
         },
         [toggleMutation],
     );
 
     const executePayment = useCallback(
-        async (id: number, transactionId: number, executionDate?: string) => {
+        async (id: PlannedTransactionId, transactionId: TransactionId, executionDate?: string) => {
             await executeMutation.mutateAsync({
                 id,
                 transactionId,

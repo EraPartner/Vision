@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { asCategoryId } from "@vision/types/brands";
 import { describe, expect, it, vi } from "vitest";
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -18,7 +19,7 @@ function buildLongHistoryData(periods: string[]): StatisticsData {
     const months = Object.fromEntries(periods.map((period) => [period, 1]));
     const category = (categoryName: string, categoryId: number) => ({
         categoryName,
-        categoryId,
+        categoryId: asCategoryId(categoryId),
         months,
         incomeMonths: {},
         expenseMonths: months,

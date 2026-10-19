@@ -5,6 +5,7 @@ import { createTestQueryClient, createLanguageQueryWrapper } from "@/test/queryW
 import { apiClient } from "@/lib/api";
 import type { Transaction, TransactionsListResponse } from "@/types/api";
 import { useUpdateTransaction, useDeleteTransaction, useCreateTransaction } from "@/hooks/useTransactions";
+import { asTransactionId } from "@vision/types/brands";
 
 // gcTime must outlive the test: seeded caches have no observers and would be
 // garbage-collected instantly with gcTime 0.
@@ -40,7 +41,7 @@ describe("useUpdateTransaction (optimistic)", () => {
 
         const { result } = renderHook(() => useUpdateTransaction(), { wrapper: makeWrapper(qc) });
         act(() => {
-            result.current.mutate({ id: 1, data: { amount: -42 } });
+            result.current.mutate({ id: asTransactionId(1), data: { amount: -42 } });
         });
 
         await waitFor(() => {
@@ -64,7 +65,7 @@ describe("useUpdateTransaction (optimistic)", () => {
 
         const { result } = renderHook(() => useUpdateTransaction(), { wrapper: makeWrapper(qc) });
         act(() => {
-            result.current.mutate({ id: 1, data: { amount: -42 } });
+            result.current.mutate({ id: asTransactionId(1), data: { amount: -42 } });
         });
 
         await waitFor(() => expect(result.current.isError).toBe(true));
@@ -86,7 +87,7 @@ describe("useDeleteTransaction (optimistic)", () => {
 
         const { result } = renderHook(() => useDeleteTransaction(), { wrapper: makeWrapper(qc) });
         act(() => {
-            result.current.mutate(1);
+            result.current.mutate(asTransactionId(1));
         });
 
         await waitFor(() => {
@@ -108,7 +109,7 @@ describe("useDeleteTransaction (optimistic)", () => {
 
         const { result } = renderHook(() => useDeleteTransaction(), { wrapper: makeWrapper(qc) });
         act(() => {
-            result.current.mutate(1);
+            result.current.mutate(asTransactionId(1));
         });
 
         await waitFor(() => expect(result.current.isError).toBe(true));
@@ -124,7 +125,7 @@ describe("useDeleteTransaction (optimistic)", () => {
         vi.spyOn(apiClient, "deleteTransaction").mockResolvedValue(undefined as unknown as void);
 
         const { result } = renderHook(() => useDeleteTransaction(), { wrapper: makeWrapper(qc) });
-        act(() => { result.current.mutate(1); });
+        act(() => { result.current.mutate(asTransactionId(1)); });
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
         const invalidatedKeys = invalidateSpy.mock.calls.map((c) => (c[0] as { queryKey: unknown[] })?.queryKey?.[0]);

@@ -1,8 +1,9 @@
 import { z } from "zod";
 
+import { AccountIdSchema, PortfolioTransactionIdSchema } from "../brands.ts";
 import {
   CurrencyCodeSchema,
-  IdSchema,
+  WireCurrencySchema,
   WireDateSchema,
   WireLinkSchema,
   WireTimestampSchema,
@@ -32,7 +33,7 @@ export const AccountOwnerSchema = z.enum(["me", "partner", "joint"]);
 
 /** accountRepository's `COLUMNS` list: every account read projects these. */
 const accountColumns = {
-  id: IdSchema,
+  id: AccountIdSchema,
   name: z.string(),
   display_name: z.string().nullable(),
   institution: z.string().nullable(),
@@ -45,7 +46,7 @@ const accountColumns = {
   owner: AccountOwnerSchema,
   multi_currency_cash: z.boolean(),
   has_cash_sleeve: z.boolean(),
-  funding_account_id: IdSchema.nullable(),
+  funding_account_id: AccountIdSchema.nullable(),
   is_active: z.boolean(),
   closed_at: WireTimestampSchema.nullable(),
   created_at: WireTimestampSchema,
@@ -62,7 +63,7 @@ export const AccountSchema = z.looseObject({
 });
 
 const balancePartSchema = z.looseObject({
-  currency: z.string(),
+  currency: WireCurrencySchema,
   balance: z.number(),
 });
 
@@ -77,7 +78,7 @@ export const AccountListItemSchema = z.looseObject({
   has_transactions: z.boolean(),
   statement_balances: z.array(
     z.looseObject({
-      currency: z.string(),
+      currency: WireCurrencySchema,
       balance: z.number(),
       balance_date: WireDateSchema,
     }),
@@ -85,9 +86,9 @@ export const AccountListItemSchema = z.looseObject({
   computed_balance: z.number(),
   balance_parts: z.array(balancePartSchema),
   balance_incomplete: z.boolean(),
-  unconverted_currencies: z.array(z.string()),
+  unconverted_currencies: z.array(WireCurrencySchema),
   reconcilable_balance: z.number(),
-  reconcilable_currency: z.string(),
+  reconcilable_currency: WireCurrencySchema,
   drift: z.number().nullable(),
   anchor_date: WireDateSchema.optional(),
   post_anchor_count: z.number().int().nonnegative().optional(),
@@ -104,7 +105,7 @@ export const AccountGroupIdSchema = z.enum([
 const accountUnconvertedFields = {
   /** Accounts with a balance partition left out for want of a stored rate. */
   unconverted_count: z.number().int().nonnegative(),
-  unconverted_currencies: z.array(z.string()),
+  unconverted_currencies: z.array(WireCurrencySchema),
 };
 
 const AccountGroupTotalSchema = z.looseObject({
@@ -124,7 +125,7 @@ const AccountGroupTotalSchema = z.looseObject({
  * subtotals and net cash, at the latest stored exchange rates.
  */
 export const AccountTotalsSchema = z.looseObject({
-  currency: z.string(),
+  currency: WireCurrencySchema,
   /** Active, in_net_worth, non-portfolio accounts. */
   net_cash: z.looseObject({ total: z.number(), ...accountUnconvertedFields }),
   groups: z.looseObject({
@@ -135,11 +136,11 @@ export const AccountTotalsSchema = z.looseObject({
   }),
   accounts: z.array(
     z.looseObject({
-      id: IdSchema,
+      id: AccountIdSchema,
       group: AccountGroupIdSchema,
       /** Convertible partitions only; see `unconverted_currencies`. */
       converted_balance: z.number(),
-      unconverted_currencies: z.array(z.string()),
+      unconverted_currencies: z.array(WireCurrencySchema),
     }),
   ),
 });
@@ -163,17 +164,17 @@ const mergeReassignedSchema = z.looseObject({
 
 /** `GET /api/accounts/:id/portfolio-lot-retag-preview`. */
 export const AccountPortfolioLotRetagPreviewSchema = z.looseObject({
-  account_id: IdSchema,
+  account_id: AccountIdSchema,
   eligible_count: z.number().int().nonnegative(),
-  transaction_ids: z.array(IdSchema),
+  transaction_ids: z.array(PortfolioTransactionIdSchema),
   limit: z.number().int().positive(),
   links: z.array(WireLinkSchema),
 });
 
 /** `POST /api/accounts/:id/merge` — `mergeAccounts`. */
 export const AccountMergeResultSchema = z.looseObject({
-  into: IdSchema,
-  merged: z.array(IdSchema),
+  into: AccountIdSchema,
+  merged: z.array(AccountIdSchema),
   reassigned: mergeReassignedSchema,
   stampsInterleaved: z.boolean(),
   links: z.array(WireLinkSchema),
@@ -181,14 +182,14 @@ export const AccountMergeResultSchema = z.looseObject({
 
 /** `GET /api/accounts/:id/merge-preview` — `previewMerge`. */
 export const AccountMergePreviewSchema = z.looseObject({
-  into: IdSchema,
-  source: IdSchema,
+  into: AccountIdSchema,
+  source: AccountIdSchema,
   reassigned: mergeReassignedSchema,
   projectedBalance: z.number(),
-  projectedBalanceCurrency: z.string(),
+  projectedBalanceCurrency: WireCurrencySchema,
   balanceParts: z.array(balancePartSchema),
   projectedBalanceIncomplete: z.boolean(),
-  unconvertedCurrencies: z.array(z.string()),
+  unconvertedCurrencies: z.array(WireCurrencySchema),
   stampsInterleaved: z.boolean(),
   openingAnchorCollision: z.boolean(),
   links: z.array(WireLinkSchema),
@@ -202,7 +203,7 @@ export const AccountMergePreviewSchema = z.looseObject({
 export const OpeningBalanceResultSchema = z.looseObject({
   transaction: z
     .looseObject({
-      id: IdSchema,
+      id: AccountIdSchema,
       balance: z.string().regex(/^-?\d+(\.\d+)?$/),
       transfer_source: z.literal("opening"),
     })

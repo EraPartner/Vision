@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useBackgroundQueryCue } from "@/components/shared/BackgroundQueryIndicator";
+import type { CategoryId } from "@vision/types/brands";
 
 export function useCategories(params?: {
     limit?: number;
@@ -101,7 +102,7 @@ export function useUpdateCategoryNode() {
     const queryClient = useQueryClient();
     const { t } = useLanguage();
     return useMutation({
-        mutationFn: ({ id, data }: { id: number; data: CategoryNodeUpdate }) =>
+        mutationFn: ({ id, data }: { id: CategoryId; data: CategoryNodeUpdate }) =>
             apiClient.updateCategoryNode(id, data),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: categoryKeys.all });
@@ -118,7 +119,7 @@ export function useDeleteCategoryNode() {
     const queryClient = useQueryClient();
     const { t } = useLanguage();
     return useMutation({
-        mutationFn: (id: number) => apiClient.deleteCategoryNode(id),
+        mutationFn: (id: CategoryId) => apiClient.deleteCategoryNode(id),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: categoryKeys.all });
             toast.success(t("categories.deleted"));
@@ -138,8 +139,8 @@ export function useMergeCategoryNode() {
             sourceId,
             targetId,
         }: {
-            sourceId: number;
-            targetId: number;
+            sourceId: CategoryId;
+            targetId: CategoryId;
         }) => apiClient.mergeCategoryNode(sourceId, targetId),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: categoryKeys.all });
@@ -183,7 +184,7 @@ export function useUpdateCategory() {
     const { t } = useLanguage();
 
     return useMutation({
-        mutationFn: ({ id, data }: { id: number; data: CategoryUpdate }) =>
+        mutationFn: ({ id, data }: { id: CategoryId; data: CategoryUpdate }) =>
             apiClient.updateCategory(id, data),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: categoryKeys.all });
@@ -202,7 +203,7 @@ export function useDeleteCategory() {
     const { t } = useLanguage();
 
     return useMutation({
-        mutationFn: (id: number) => apiClient.deleteCategory(id),
+        mutationFn: (id: CategoryId) => apiClient.deleteCategory(id),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: categoryKeys.all });
         },

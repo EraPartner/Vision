@@ -56,6 +56,7 @@ import { Money } from "@/components/shared/Money";
 import { PageShell } from "@/components/shared/PageShell";
 import { usePortfolioSummaryQuery } from "@/hooks/portfolio/usePortfolioSummary";
 import { getBrokerAccountMetrics } from "@/features/accounts/brokerAccountMetrics";
+import { DEFAULT_CURRENCY } from "@/utils/currency";
 
 const TYPE_ICON: Record<AccountType, LucideIcon> = {
     checking: Landmark,
@@ -92,7 +93,7 @@ export default function AccountsPage() {
     // dashboard widget so wording and the stale threshold can't diverge.
     const driftBadge = useDriftBadge();
     const { appSettings } = useAppSettings();
-    const displayCurrency = appSettings.defaultCurrency || "EUR";
+    const displayCurrency = appSettings.defaultCurrency || DEFAULT_CURRENCY;
     // Net cash and the group subtotals are computed on the server (ADR-216).
     const totalsQuery = useAccountTotals(displayCurrency);
     const totals = totalsQuery.data;

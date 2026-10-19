@@ -55,6 +55,7 @@ import type {
     MacroSearchResponse,
     MacroSeriesResponse,
 } from '@/types/research';
+import type { InvestmentId } from "@vision/types/brands";
 
 interface RawEnvelope<T> {
     ok?: boolean;
@@ -247,7 +248,7 @@ export function resolveResearchMappings(input: {
     asset_class?: ResearchAssetClass | undefined;
     query: string;
     /** When set, the held investment's configured provider is pre-seeded as confirmed. */
-    investment_id?: number | undefined;
+    investment_id?: InvestmentId | undefined;
 }): Promise<ResearchResult<MappingResolveResponse>> {
     return researchSend<MappingResolveResponse>(
         '/api/research/mappings/resolve',

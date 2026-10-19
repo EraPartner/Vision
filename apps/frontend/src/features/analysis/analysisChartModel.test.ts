@@ -4,6 +4,7 @@ import {
     analysisChartData,
     normalizeAnalysisChartSpec,
 } from "./analysisChartModel";
+import { asCurrencyCode } from "@vision/types/brands";
 const fixture = {
     columns: [{ id: "amount", type: "decimal" }],
     rows: [
@@ -75,12 +76,12 @@ it("compares dimensional unit values and rejects missing currency provenance", (
             {
                 id: "a",
                 type: "decimal",
-                unit: { kind: "money", currency: "EUR" },
+                unit: { kind: "money", currency: asCurrencyCode("EUR") },
             },
             {
                 id: "b",
                 type: "decimal",
-                unit: { kind: "money", currency: "EUR" },
+                unit: { kind: "money", currency: asCurrencyCode("EUR") },
             },
         ],
         rows: [{ month: "Jan", a: "1", b: "2" }],
@@ -115,7 +116,7 @@ it("matches fixed and column-resolved currency scope and withholds missing instr
             {
                 id: "a",
                 type: "decimal",
-                unit: { kind: "money", currency: "EUR" },
+                unit: { kind: "money", currency: asCurrencyCode("EUR") },
             },
             {
                 id: "b",

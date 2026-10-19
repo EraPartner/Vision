@@ -22,6 +22,7 @@ import {
 import { useAccounts } from "@/hooks/useAccounts";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import type { FieldErrorAria } from "@/hooks/useFieldErrors";
+import type { AccountId } from "@vision/types/brands";
 
 interface AccountComboboxProps extends FieldErrorAria {
     id?: string;
@@ -29,7 +30,7 @@ interface AccountComboboxProps extends FieldErrorAria {
     value: string;
     onChange: (name: string) => void;
     /** Canonical identity of the selected existing account. */
-    onAccountIdChange: (id: number) => void;
+    onAccountIdChange: (id: AccountId) => void;
     placeholder?: string;
     disabled?: boolean;
     className?: string;
@@ -64,7 +65,7 @@ export function AccountCombobox({
         ? selected.display_name || selected.name
         : value || placeholder || t("combobox.account.placeholder");
 
-    const pick = (name: string, accountId: number) => {
+    const pick = (name: string, accountId: AccountId) => {
         onChange(name);
         onAccountIdChange(accountId);
         setSearch("");

@@ -6,23 +6,31 @@ import {
     type PlannedPayment,
 } from "./plannedPaymentMapper";
 import type { PlannedTransaction } from "@/types/api";
+import {
+    asAccountId,
+    asCategoryId,
+    asCurrencyCode,
+    asPlannedTransactionId,
+    asRecipientId,
+    asTagId,
+} from "@vision/types/brands";
 
 const mapFromAPI = (payment: PlannedTransaction) =>
-    mapFromAPIWithCurrency(payment, "EUR");
+    mapFromAPIWithCurrency(payment, asCurrencyCode("EUR"));
 
 // Minimal valid backend row; individual tests override the fields under test.
 function makePT(
     overrides: Partial<PlannedTransaction> = {},
 ): PlannedTransaction {
     return {
-        id: 1,
+        id: asPlannedTransactionId(1),
         planned_date: "2025-02-01",
         bank_account: "BE12345678901234",
-        recipient_id: 7,
+        recipient_id: asRecipientId(7),
         recipient_name: "Landlord",
         memo: "Monthly rent",
         amount: 1200,
-        currency: "EUR",
+        currency: asCurrencyCode("EUR"),
         is_recurring: true,
         recurrence_pattern: "monthly",
         is_executed: false,
@@ -38,7 +46,7 @@ describe("mapFromAPI", () => {
     it("maps core wire fields to the frontend view model", () => {
         const p = mapFromAPI(
             makePT({
-                category_id: 3,
+                category_id: asCategoryId(3),
                 category_name: "HOUSING:RENT",
                 comment: "pay by the 1st",
                 url: "https://example.com",
@@ -73,7 +81,7 @@ describe("mapFromAPI", () => {
 
     it("falls back a missing currency to the explicit app default", () => {
         expect(
-            mapFromAPIWithCurrency(makePT({ currency: undefined }), "CHF")
+            mapFromAPIWithCurrency(makePT({ currency: undefined }), asCurrencyCode("CHF"))
                 .currency,
         ).toBe("CHF");
     });
@@ -203,7 +211,7 @@ describe("mapFromAPI", () => {
 
     it("flattens tags to slugs and defaults executions/tags/count", () => {
         const tag = {
-            id: 1,
+            id: asTagId(1),
             slug: "rent",
             color: null,
             is_active: true,
@@ -224,14 +232,14 @@ describe("mapFromAPI", () => {
 const BASE_PAYMENT: Omit<PlannedPayment, "id" | "created_at"> = {
     name: "Monthly rent",
     amount: 1200,
-    currency: "EUR",
+    currency: asCurrencyCode("EUR"),
     due_date: "2025-02-01",
     is_recurring: true,
     frequency: "monthly",
     bank_account: "BE12345678901234",
-    account_id: 4,
-    recipient_id: 7,
-    category_id: 3,
+    account_id: asAccountId(4),
+    recipient_id: asRecipientId(7),
+    category_id: asCategoryId(3),
     notes: "pay by the 1st",
     is_active: true,
 };

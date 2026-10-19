@@ -27,6 +27,7 @@ import type {
   ReconciliationBatchScopeRow,
   ReconciliationSourceRow,
 } from "./portfolioImportReconciliationRepository.ts";
+import type { CurrencyCode } from "@vision/types/brands";
 
 export type {
   CashTransactionSnapshot,
@@ -289,7 +290,7 @@ export interface IbkrFundingEvidence {
   direction: "in" | "out";
   date: string;
   completedDate: string;
-  currency: string;
+  currency: CurrencyCode;
   amount: string;
   sourceAccount: string;
   sourceId: string;

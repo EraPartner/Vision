@@ -3,6 +3,7 @@ import { screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { renderWithApp } from "@/test/renderWithApp";
 import { TagChip } from "@/components/shared/TagInput";
+import { asTagId } from "@vision/types/brands";
 
 describe("TagChip", () => {
     it("expands the remove control hit area without changing the visible icon", async () => {
@@ -11,7 +12,7 @@ describe("TagChip", () => {
         renderWithApp(
             <TagChip
                 tag={{
-                    id: 1,
+                    id: asTagId(1),
                     slug: "travel",
                     color: null,
                     is_active: true,

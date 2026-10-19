@@ -12,6 +12,9 @@ import {
 } from '../../src/services/research/researchMappingService.ts';
 
 import type { upsert as repoUpsert } from '../../src/repositories/instrumentProviderMapRepository.ts';
+import {
+  asInvestmentId,
+} from "@vision/types/brands";
 
 type ServiceDeps = NonNullable<Parameters<typeof createResearchMappingService>[0]>;
 type UpsertInput = Parameters<typeof repoUpsert>[0];
@@ -147,7 +150,7 @@ describe('researchMappingService.resolve', () => {
     const svc = build({ repo: makeRepo(), adapters, investments, governor: governorAllow(), isKeyed: () => true });
 
     const { proposals } = await svc.resolve({
-      instrumentKey: KEY, keyType: TYPE, assetClass: 'stock', query: 'apple', investmentId: 42,
+      instrumentKey: KEY, keyType: TYPE, assetClass: 'stock', query: 'apple', investmentId: asInvestmentId(42),
     });
 
     const yahoo = proposals.find((p) => p.provider === 'yahoo');
@@ -175,7 +178,7 @@ describe('researchMappingService.resolve', () => {
     const svc = build({ repo, adapters, investments, governor: governorAllow(), isKeyed: () => true });
 
     const { proposals } = await svc.resolve({
-      instrumentKey: KEY, keyType: TYPE, assetClass: 'stock', query: 'apple', investmentId: 7,
+      instrumentKey: KEY, keyType: TYPE, assetClass: 'stock', query: 'apple', investmentId: asInvestmentId(7),
     });
 
     const yahoo = proposals.find((p) => p.provider === 'yahoo');

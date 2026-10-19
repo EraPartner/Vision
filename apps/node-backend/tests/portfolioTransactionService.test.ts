@@ -1,4 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  asPortfolioTransactionId,
+} from "@vision/types/brands";
 
 const reads = vi.hoisted(() => ({
   getAssetClassByInvestmentId: vi.fn(),
@@ -47,7 +50,7 @@ describe("portfolioTransactionService recurrence compatibility", () => {
 
   it("rejects the retired recurrence spelling before persistence", async () => {
     await expect(
-      update(7, { recurrence_interval: "bi-weekly" }),
+      update(asPortfolioTransactionId(7), { recurrence_interval: "bi-weekly" }),
     ).rejects.toThrow(/Invalid recurrence_interval/);
     expect(writes.updateFields).not.toHaveBeenCalled();
   });

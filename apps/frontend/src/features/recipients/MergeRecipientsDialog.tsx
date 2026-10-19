@@ -29,6 +29,7 @@ import {
 } from "@/hooks/useRecipients";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useUnsavedChanges } from "@/contexts/UnsavedChangesContext";
+import type { RecipientId } from "@vision/types/brands";
 
 interface MergeRecipientsDialogProps {
     open: boolean;
@@ -42,8 +43,8 @@ export function MergeRecipientsDialog({
     const { t, tc } = useLanguage();
     const primarySearchId = useId();
     const aliasSearchId = useId();
-    const [primaryId, setPrimaryId] = useState<number | null>(null);
-    const [aliasIds, setAliasIds] = useState<number[]>([]);
+    const [primaryId, setPrimaryId] = useState<RecipientId | null>(null);
+    const [aliasIds, setAliasIds] = useState<RecipientId[]>([]);
     useUnsavedChanges(primaryId !== null || aliasIds.length > 0);
     const mergeMutation = useMergeRecipients();
 
@@ -61,7 +62,7 @@ export function MergeRecipientsDialog({
     );
     const primary = availableRecipients.find((r) => r.id === primaryId);
 
-    const toggleAlias = (id: number) => {
+    const toggleAlias = (id: RecipientId) => {
         if (id === primaryId) return;
         setAliasIds((prev) =>
             prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],

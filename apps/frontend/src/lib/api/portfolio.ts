@@ -24,6 +24,10 @@ import {
     PriceProviderListSchema,
     RefreshPricesResultSchema,
 } from "@vision/types/contracts";
+import type {
+    InvestmentId,
+    PortfolioTransactionId,
+} from "@vision/types/brands";
 
 const incomeRoleSchema = z
     .enum(PORTFOLIO_INCOME_RECOGNITION_ROLES)
@@ -115,7 +119,7 @@ export function refreshInvestmentPrices(): Promise<{
 }
 
 export function updateInvestment(
-    id: number,
+    id: InvestmentId,
     data: InvestmentUpdate,
 ): Promise<Investment> {
     return apiRequest<Investment>(`/api/investments/${id}`, {
@@ -125,15 +129,15 @@ export function updateInvestment(
     });
 }
 
-export async function deleteInvestment(id: number): Promise<void> {
+export async function deleteInvestment(id: InvestmentId): Promise<void> {
     await apiRequest<void>(`/api/investments/${id}`, { method: "DELETE" });
 }
 
 export function getInvestmentPriceHistory(
-    investmentId: number,
+    investmentId: InvestmentId,
     params?: { from_ms?: number; to_ms?: number; db_only?: boolean },
 ): Promise<{
-    investment_id: number;
+    investment_id: InvestmentId;
     provider: string;
     points: Array<{ timestampMs: number; price: number }>;
 }> {
@@ -145,7 +149,7 @@ export function getInvestmentPriceHistory(
 }
 
 export async function getPortfolioTransactions(
-    investmentId: number,
+    investmentId: InvestmentId,
     params?: { type?: string; limit?: number; offset?: number },
     signal?: AbortSignal,
 ): Promise<PortfolioTransactionsListResponse> {
@@ -188,7 +192,7 @@ export async function getPortfolioTransactionsBulk(
 }
 
 export async function createPortfolioTransaction(
-    investmentId: number,
+    investmentId: InvestmentId,
     data: PortfolioTransactionCreate,
 ): Promise<PortfolioTransaction> {
     rejectManualIncomeRole(data);
@@ -205,7 +209,7 @@ export async function createPortfolioTransaction(
 }
 
 export async function updatePortfolioTransaction(
-    txnId: number,
+    txnId: PortfolioTransactionId,
     data: PortfolioTransactionUpdate,
 ): Promise<PortfolioTransaction> {
     rejectManualIncomeRole(data);
@@ -221,7 +225,7 @@ export async function updatePortfolioTransaction(
     );
 }
 
-export async function deletePortfolioTransaction(txnId: number): Promise<void> {
+export async function deletePortfolioTransaction(txnId: PortfolioTransactionId): Promise<void> {
     await apiRequest<void>(`/api/investments/transactions/${txnId}`, {
         method: "DELETE",
     });

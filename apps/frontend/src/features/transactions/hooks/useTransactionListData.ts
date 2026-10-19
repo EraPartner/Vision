@@ -9,6 +9,12 @@ import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import logger from "@/lib/logger";
 import type { RawApiTransaction } from "../types";
 import { useBackgroundQueryCue } from "@/components/shared/BackgroundQueryIndicator";
+import type {
+    AccountId,
+    CategoryId,
+    RecipientId,
+    TransactionId,
+} from "@vision/types/brands";
 
 type SortDir = "asc" | "desc" | null;
 
@@ -16,10 +22,10 @@ export interface UseTransactionListDataOptions {
     showAll: boolean;
     search: string;
     pageSize: number;
-    transactionIdFilter?: number | undefined;
-    recipientIdFilter?: number | undefined;
-    categoryIdFilter?: number | undefined;
-    categoryIdsFilter?: number[] | undefined;
+    transactionIdFilter?: TransactionId | undefined;
+    recipientIdFilter?: RecipientId | undefined;
+    categoryIdFilter?: CategoryId | undefined;
+    categoryIdsFilter?: CategoryId[] | undefined;
     uncategorisedFilter?: boolean | undefined;
     startDateFilter?: string | undefined;
     endDateFilter?: string | undefined;
@@ -29,7 +35,7 @@ export interface UseTransactionListDataOptions {
     amountSignedFilter?: boolean | undefined;
     tagsFilter?: string[] | undefined;
     /** Preferred account filter (exact FK match, ADR-088). */
-    accountIdFilter?: number | undefined;
+    accountIdFilter?: AccountId | undefined;
     bankAccountFilter?: string | undefined;
 }
 

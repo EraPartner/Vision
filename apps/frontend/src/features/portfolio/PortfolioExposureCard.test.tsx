@@ -5,6 +5,7 @@ import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PortfolioExposureCard } from "./PortfolioExposureCard";
+import { asCurrencyCode } from "@vision/types/brands";
 
 vi.mock("@/stores/hydration/LanguageHydration", async (importOriginal) => {
     const actual =
@@ -80,7 +81,7 @@ describe("PortfolioExposureCard", () => {
     it("uses the selected number format for exposure percentages", () => {
         const { container } = render(
             <QueryClientProvider client={new QueryClient()}>
-                <PortfolioExposureCard currency="EUR" />
+                <PortfolioExposureCard currency={asCurrencyCode("EUR")} />
             </QueryClientProvider>,
         );
         expect(screen.getByText("99,94%")).toBeInTheDocument();
@@ -101,7 +102,7 @@ describe("PortfolioExposureCard", () => {
     it("keeps stale-source warnings visible and source details expandable", async () => {
         render(
             <QueryClientProvider client={new QueryClient()}>
-                <PortfolioExposureCard currency="EUR" />
+                <PortfolioExposureCard currency={asCurrencyCode("EUR")} />
             </QueryClientProvider>,
         );
 
@@ -120,7 +121,7 @@ describe("PortfolioExposureCard", () => {
     it("announces the selected dimension and allows changing it", async () => {
         render(
             <QueryClientProvider client={new QueryClient()}>
-                <PortfolioExposureCard currency="EUR" />
+                <PortfolioExposureCard currency={asCurrencyCode("EUR")} />
             </QueryClientProvider>,
         );
         expect(
@@ -140,7 +141,7 @@ describe("PortfolioExposureCard", () => {
     it("rejects oversized source bundles without replacing the current coverage", async () => {
         render(
             <QueryClientProvider client={new QueryClient()}>
-                <PortfolioExposureCard currency="EUR" />
+                <PortfolioExposureCard currency={asCurrencyCode("EUR")} />
             </QueryClientProvider>,
         );
         await userEvent.click(screen.getByText("Sources and import"));

@@ -9,12 +9,13 @@ import {
 } from '@vision/types/contracts';
 import { apiRequest, checkResponseContract } from '@/lib/api/client';
 import { requestWithQuery, createWithStatus } from '@/lib/api/helpers';
+import type { CategoryId, RecipientId } from "@vision/types/brands";
 
 export function getRecipients(params?: {
     limit?: number | undefined;
     offset?: number | undefined;
     name?: string | undefined;
-    default_category_id?: number | undefined;
+    default_category_id?: CategoryId | undefined;
     active?: boolean | undefined;
     search?: string | undefined;
     uncategorized?: boolean | undefined;
@@ -26,7 +27,7 @@ export function getRecipients(params?: {
     });
 }
 
-export function getRecipient(id: number): Promise<Recipient> {
+export function getRecipient(id: RecipientId): Promise<Recipient> {
     return apiRequest<Recipient>(`/api/recipients/${id}`, { schema: RecipientSchema });
 }
 
@@ -42,14 +43,14 @@ export async function createRecipient(
     return { recipient: data, wasCreated };
 }
 
-export function updateRecipient(id: number, recipient: RecipientUpdate): Promise<Recipient> {
+export function updateRecipient(id: RecipientId, recipient: RecipientUpdate): Promise<Recipient> {
     return apiRequest<Recipient>(`/api/recipients/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(recipient),
     });
 }
 
-export async function deleteRecipient(id: number): Promise<void> {
+export async function deleteRecipient(id: RecipientId): Promise<void> {
     await apiRequest<void>(`/api/recipients/${id}`, { method: 'DELETE' });
 }
 
@@ -61,9 +62,9 @@ export interface PatternSuggestion {
 }
 
 export function mergeRecipients(
-    primaryId: number,
+    primaryId: RecipientId,
     aliasIds: number[],
-): Promise<{ primary: Recipient; merged_ids: number[]; aliases: Array<{ id: number; name: string }>; patternSuggestion: PatternSuggestion | null }> {
+): Promise<{ primary: Recipient; merged_ids: RecipientId[]; aliases: Array<{ id: RecipientId; name: string }>; patternSuggestion: PatternSuggestion | null }> {
     return apiRequest(`/api/recipients/${primaryId}/merge`, {
         method: 'POST',
         body: JSON.stringify({ alias_ids: aliasIds }),
@@ -71,7 +72,7 @@ export function mergeRecipients(
     });
 }
 
-export function unmergeRecipient(id: number): Promise<Recipient> {
+export function unmergeRecipient(id: RecipientId): Promise<Recipient> {
     return apiRequest<Recipient>(`/api/recipients/${id}/unmerge`, { method: 'POST' });
 }
 
@@ -105,18 +106,18 @@ export interface RecipientPatternUpdate {
     notes?: string | null | undefined;
 }
 
-export function listRecipientPatterns(recipientId: number): Promise<{ items: RecipientPattern[]; total: number }> {
+export function listRecipientPatterns(recipientId: RecipientId): Promise<{ items: RecipientPattern[]; total: number }> {
     return apiRequest(`/api/recipients/${recipientId}/patterns`, { schema: RecipientPatternListSchema });
 }
 
-export function createRecipientPattern(recipientId: number, data: RecipientPatternCreate): Promise<{ id: number }> {
+export function createRecipientPattern(recipientId: RecipientId, data: RecipientPatternCreate): Promise<{ id: number }> {
     return apiRequest(`/api/recipients/${recipientId}/patterns`, {
         method: 'POST',
         body: JSON.stringify(data),
     });
 }
 
-export function updateRecipientPattern(recipientId: number, patternId: number, data: RecipientPatternUpdate): Promise<{ patternId: number }> {
+export function updateRecipientPattern(recipientId: RecipientId, patternId: number, data: RecipientPatternUpdate): Promise<{ patternId: number }> {
     return apiRequest(`/api/recipients/${recipientId}/patterns/${patternId}`, {
         method: 'PATCH',
         body: JSON.stringify(data),
@@ -124,11 +125,11 @@ export function updateRecipientPattern(recipientId: number, patternId: number, d
 }
 
 /** Delete a pattern. Responds 204 No Content — nothing to unwrap. */
-export async function deleteRecipientPattern(recipientId: number, patternId: number): Promise<void> {
+export async function deleteRecipientPattern(recipientId: RecipientId, patternId: number): Promise<void> {
     await apiRequest<void>(`/api/recipients/${recipientId}/patterns/${patternId}`, { method: 'DELETE' });
 }
 
-export function previewRecipientPattern(recipientId: number, data: Pick<RecipientPatternCreate, 'pattern' | 'pattern_kind' | 'case_sensitive'>): Promise<{ matchCount: number; recipientIds: number[] }> {
+export function previewRecipientPattern(recipientId: RecipientId, data: Pick<RecipientPatternCreate, 'pattern' | 'pattern_kind' | 'case_sensitive'>): Promise<{ matchCount: number; recipientIds: RecipientId[] }> {
     return apiRequest(`/api/recipients/${recipientId}/patterns/preview`, {
         method: 'POST',
         body: JSON.stringify(data),

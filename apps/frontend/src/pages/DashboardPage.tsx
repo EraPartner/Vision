@@ -44,7 +44,11 @@ import {
 } from "@/hooks/useFilteredDashboardStats";
 import { useExcludedIds } from "@/hooks/useExcludedIds";
 import { useDashboardRecentTransactions } from "@/features/dashboard/useDashboardQueries";
-import { formatCurrencyCompact, numberFormatToLocale } from "@/utils/currency";
+import {
+    formatCurrencyCompact,
+    numberFormatToLocale,
+    DEFAULT_CURRENCY,
+} from "@/utils/currency";
 import { ChartSyncProvider } from "@/components/charts/ChartSyncContext";
 import { ChartSkeleton } from "@/components/charts/ChartSkeleton";
 import { WidgetVisibilityDialog } from "@/components/shared/WidgetVisibilityDialog";
@@ -63,6 +67,7 @@ import {
 } from "@/utils/dashboardArrival";
 import { PageShell } from "@/components/shared/PageShell";
 import { buildTransactionDrillUrl } from "@/lib/transactionDrillUrl";
+import type { CategoryId } from "@vision/types/brands";
 
 type GraphExclusions = Record<string, boolean>;
 
@@ -72,7 +77,7 @@ export default function DashboardPage() {
     const loadingSurfaceProps = useLoadingSurfaceProps();
     const [customizeOpen, setCustomizeOpen] = useState(false);
     const { appSettings } = useAppSettings();
-    const targetCurrency = appSettings.defaultCurrency || "EUR";
+    const targetCurrency = appSettings.defaultCurrency || DEFAULT_CURRENCY;
     const locale = numberFormatToLocale(appSettings.numberFormat);
     const integerLocaleFormatter = useMemo(
         () => new Intl.NumberFormat(locale),
@@ -347,7 +352,7 @@ export default function DashboardPage() {
             {
                 name: string;
                 count: number;
-                categoryId?: number | undefined;
+                categoryId?: CategoryId | undefined;
                 uncategorised?: boolean;
             }
         >();
@@ -426,7 +431,7 @@ export default function DashboardPage() {
                 to: buildTransactionDrillUrl({
                     categoryIds: otherCategories
                         .map((cat) => cat.categoryId)
-                        .filter((id): id is number => id != null),
+                        .filter((id): id is CategoryId => id != null),
                     label,
                 }),
             });

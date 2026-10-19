@@ -34,6 +34,8 @@ import { NotFoundError, ValidationError } from "../middleware/errorHandler.ts";
 import { assertCurrency, assertYmd } from "../lib/validation.ts";
 import { toWireDate } from "../lib/dateFormat.ts";
 import type { TransactionRow } from "../types/rows.ts";
+import { storedCurrencyCode } from "../lib/currencyCode.ts";
+import type { AccountId, CurrencyCode } from "@vision/types/brands";
 
 const OPENING_MEMO = "OPENING BALANCE";
 
@@ -100,8 +102,8 @@ const openingBalanceBodySchema = z.looseObject({
  */
 function normalizeOpeningBalance(
   body: unknown,
-  account: { currency?: string | null } | null | undefined,
-): { balance: number; date: string; currency: string } {
+  account: { currency?: CurrencyCode | null } | null | undefined,
+): { balance: number; date: string; currency: CurrencyCode } {
   const result = openingBalanceBodySchema.safeParse(body ?? {});
   if (!result.success) {
     const msg = result.error.issues.map((issue) => issue.message).join("; ");
@@ -111,7 +113,7 @@ function normalizeOpeningBalance(
   return {
     balance,
     date,
-    currency: currency ?? (account?.currency || "EUR").toUpperCase(),
+    currency: currency ?? storedCurrencyCode(account?.currency),
   };
 }
 
@@ -123,7 +125,7 @@ export { normalizeOpeningBalance as __normalizeOpeningBalance };
  * @param body unvalidated wire payload `{ balance, date, currency? }`.
  */
 export async function setOpeningBalance(
-  accountId: number,
+  accountId: AccountId,
   body: unknown,
 ): Promise<{ transaction: TransactionRow | null; warning: string | null }> {
   const account = await accountRepository.getById(accountId);

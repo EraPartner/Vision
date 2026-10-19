@@ -14,14 +14,15 @@ import { amountClass } from "@/features/transactions/amountClass";
 import { cn } from "@/lib/utils";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { HandCoins } from "lucide-react";
+import type { RecipientId, TransactionId } from "@vision/types/brands";
 
 interface RecentRecipientTransactionsTableProps {
-    recipientId: number;
+    recipientId: RecipientId;
     recipientName: string;
 }
 
 type RecentRecipientTransactionRow = {
-    id: number;
+    id: TransactionId;
     date: string;
     description: string;
     category: string;
