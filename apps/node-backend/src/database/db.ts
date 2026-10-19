@@ -18,11 +18,13 @@ import type {
   Dialect,
   Driver,
   QueryResult,
+  RawBuilder,
 } from "kysely";
 import { query } from "./connection.ts";
 import { queryOne, queryRows } from "./rowContracts.ts";
 import type { RowSchema } from "./rowContracts.ts";
 import type { DB } from "./schema.generated.ts";
+import type { QueryRunner } from "../types/rows.ts";
 
 const connection: DatabaseConnection = {
   async executeQuery<R>(compiled: CompiledQuery): Promise<QueryResult<R>> {
@@ -65,23 +67,34 @@ interface Compilable {
   compile(): CompiledQuery;
 }
 
+/** A query builder, or a `sql` template built with Kysely's `sql` tag. */
+export type BuiltQuery = Compilable | RawBuilder<unknown>;
+
+/** Compile a built query to SQL text and bound parameters. */
+export function compileQuery(builder: BuiltQuery): CompiledQuery {
+  return "isRawBuilder" in builder ? builder.compile(db) : builder.compile();
+}
+
 /**
  * Run a built query and check its rows against a row schema (ADR-193). Use it
- * where the rows already have a schema in rowSchemas.ts or rows/.
+ * where the rows already have a schema in rowSchemas.ts or rows/. Pass
+ * `client` only for a connection outside `withTransaction()`.
  */
 export async function checkedRows<T>(
   schema: RowSchema<T>,
-  builder: Compilable,
+  builder: BuiltQuery,
+  client?: QueryRunner,
 ): Promise<T[]> {
-  const { sql, parameters } = builder.compile();
-  return queryRows(schema, sql, parameters);
+  const { sql, parameters } = compileQuery(builder);
+  return queryRows(schema, sql, parameters, client);
 }
 
 /** {@link checkedRows} for at most one row: the first row, or `undefined`. */
 export async function checkedRow<T>(
   schema: RowSchema<T>,
-  builder: Compilable,
+  builder: BuiltQuery,
+  client?: QueryRunner,
 ): Promise<T | undefined> {
-  const { sql, parameters } = builder.compile();
-  return queryOne(schema, sql, parameters);
+  const { sql, parameters } = compileQuery(builder);
+  return queryOne(schema, sql, parameters, client);
 }
