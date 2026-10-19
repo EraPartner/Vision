@@ -2,7 +2,7 @@
   "generatedOn": "2026-10-13",
   "scope": "Tracked and nonignored test/spec files in apps, packages, packaging/electron, scripts and .github; helpers and ignored build outputs excluded",
   "interpretation": "Automated boundary classification only; no execution, pass count, coverage percentage, or independent expected-value correctness is inferred",
-  "totalFiles": 941,
+  "totalFiles": 940,
   "counts": {
     "simulated-dom": 255,
     "unit-script-or-contract-needs-review": 294,
@@ -11,7 +11,7 @@
     "property-test": 10,
     "live-http-contract": 2,
     "database-test": 82,
-    "native-runtime-or-filesystem-test": 35,
+    "native-runtime-or-filesystem-test": 34,
     "real-browser-and-database-authored": 1,
     "controlled-provider-protocol-test": 1
   },
@@ -4993,11 +4993,6 @@
     },
     {
       "path": "packaging/electron/backup/restore.test.ts",
-      "inferredBoundary": "native-runtime-or-filesystem-test",
-      "decision": "retain unless detailed reviewed ledger says otherwise"
-    },
-    {
-      "path": "packaging/electron/badge-image.test.ts",
       "inferredBoundary": "native-runtime-or-filesystem-test",
       "decision": "retain unless detailed reviewed ledger says otherwise"
     },

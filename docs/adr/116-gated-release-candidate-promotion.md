@@ -3,6 +3,7 @@ title: Gated Release Candidate Promotion and Artifact Attestation
 type: adr
 status: Accepted
 date: 2026-08-31
+updated: 2026-10-19
 tags: [adr, release, supply-chain, trivy, sbom, provenance, attestations]
 description: Release images are pushed without tags, scanned and migration-tested by digest, then promoted; macOS artifacts receive GitHub attestations before publication.
 aliases: [ADR-116, gated release promotion, release attestations]
@@ -11,6 +12,11 @@ aliases: [ADR-116, gated release promotion, release attestations]
 # ADR-116: Gated Release Candidate Promotion and Artifact Attestation
 
 ## Status
+
+> [!warning] Partially superseded
+> [[docs/adr/218-retire-source-launcher-update-channel|ADR-218]] retired the source-launcher
+> update channel on 2026-10-19. Releases no longer build or attest a
+> source-launcher ZIP; the DMG and native app ZIP attestations remain.
 
 Accepted
 

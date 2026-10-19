@@ -1,7 +1,9 @@
 // ── Manual shell updater (.zip-only, no blockmaps) ───────────────────────────
 // Extracted verbatim from main.js (TODO.md Wave W6). We intentionally avoid
-// electron-updater metadata (latest-mac.yml / blockmaps) and install from the
-// unsigned GitHub release ZIP. Mutable main.js state plus the localized
+// electron-updater metadata (latest-mac.yml / blockmaps) and install the
+// packaged Vision.app from the GitHub release ZIP. A development (unpackaged)
+// run has no in-app installer (ADR-218): it reports update_mode "source" and
+// sends the user to the release page. Mutable main.js state plus the localized
 // dialog/notification seams (t, notify) are
 // threaded in via init() so the live values are observed at call time, exactly
 // as when this code lived in main.js.
@@ -16,7 +18,7 @@ import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { appRoot } from "./paths";
 
-export type UpdateMode = "dev" | "native";
+export type UpdateMode = "native" | "source";
 
 export type UpdateDecision =
   | "checksum_failed"
@@ -26,14 +28,14 @@ export type UpdateDecision =
 
 export interface UpdateDecisionEvent {
   decision: UpdateDecision;
-  mode: UpdateMode;
+  mode: "native";
   version: string;
 }
 
 type TranslationVars = Record<string, string | undefined>;
 
 // Context threaded from main.js via init():
-//   { APP_NAME, IS_DEMO, t, notify, workDir(), markQuitting(), recordAuditUpdateDecision() }
+//   { APP_NAME, IS_DEMO, t, notify, markQuitting(), recordAuditUpdateDecision() }
 // markQuitting flips main.js's isQuitting flag so the will-quit handler knows
 // the installer-driven quit is already underway.
 export interface UpdaterContext {
@@ -41,7 +43,6 @@ export interface UpdaterContext {
   IS_DEMO: boolean;
   t(key: string, vars?: TranslationVars): string;
   notify(body: string): void;
-  workDir(): string | null | undefined;
   markQuitting(): void;
   recordAuditUpdateDecision(event: UpdateDecisionEvent): Promise<unknown>;
   stopRuntime(): Promise<unknown>;
@@ -67,11 +68,6 @@ function t(key: string, vars?: TranslationVars): string {
 function notify(body: string): void {
   if (!ctx.notify) throw missingContext("notify");
   ctx.notify(body);
-}
-
-function contextWorkDir(): string | null | undefined {
-  if (!ctx.workDir) throw missingContext("workDir");
-  return ctx.workDir();
 }
 
 function markQuitting(): void {
@@ -109,19 +105,15 @@ interface ReleaseInfo {
   html_url: unknown;
   release_notes: unknown;
   published_at: unknown;
-  source_launcher_available?: boolean;
 }
 
 type ReadyUpdate = ReleaseInfo & {
   up_to_date: false;
   installerPath: string;
-} & (
-    | { nativeInstaller?: undefined }
-    | { nativeInstaller: true; installerArgs: string[] }
-  );
+  installerArgs: string[];
+};
 
 type PreparedUpdate =
-  | { up_to_date: true; error: string }
   | (ReleaseInfo & { up_to_date: true })
   | (ReleaseInfo & { up_to_date: false; manual_download: true })
   | ReadyUpdate;
@@ -133,7 +125,6 @@ export interface ShellUpdateCheck {
   html_url?: unknown;
   release_notes?: unknown;
   published_at?: unknown;
-  source_launcher_available?: boolean;
   update_mode: UpdateMode;
   error?: string;
 }
@@ -144,14 +135,6 @@ export interface ShellUpdateInstallResult {
   manual_download?: boolean;
   html_url?: string;
   version?: string;
-}
-
-interface InstallerScriptOptions {
-  scriptPath: string;
-  sourceRootPath: string;
-  sourceLaunchPath?: string;
-  destRootPath: string;
-  hostPid: number;
 }
 
 /** The part of a spawned child process the native installer launch uses. */
@@ -368,176 +351,45 @@ function getCurrentVersionTag(): string {
   return normalizeVersionTag(app.getVersion());
 }
 
-function shellEscape(value: unknown): string {
-  return `'${String(value).replace(/'/g, `'"'"'`)}'`;
-}
-
+// Only the packaged app installs updates; a development run updates from its
+// own checkout like any other source deployment.
 export function getUpdateMode(): UpdateMode {
-  if (!app.isPackaged) return "dev";
-  return "native";
+  return app.isPackaged ? "native" : "source";
 }
 
 export async function recordUpdateDecision(
   decision: UpdateDecision,
   version: string,
-  mode: UpdateMode = getUpdateMode(),
 ): Promise<void> {
   if (typeof ctx.recordAuditUpdateDecision !== "function") {
-    if (mode === "native") {
-      throw new Error("Native update audit bridge is unavailable");
-    }
-    return;
+    throw new Error("Native update audit bridge is unavailable");
   }
-  await ctx.recordAuditUpdateDecision({ decision, mode, version });
+  await ctx.recordAuditUpdateDecision({ decision, mode: "native", version });
 }
 
 export async function verifyUpdateChecksum(
   expected: string | null | undefined,
   actual: string | null | undefined,
   version: string,
-  mode: UpdateMode,
 ): Promise<void> {
   if (!expected || !actual || actual.toLowerCase() !== expected.toLowerCase()) {
-    await recordUpdateDecision("checksum_failed", version, mode);
+    await recordUpdateDecision("checksum_failed", version);
     throw new Error("Checksum mismatch — update was not installed");
   }
-  await recordUpdateDecision("checksum_verified", version, mode);
+  await recordUpdateDecision("checksum_verified", version);
 }
 
 export async function launchAuditedInstaller(
   version: string,
-  mode: UpdateMode,
   launch: () => Promise<unknown>,
 ): Promise<void> {
-  await recordUpdateDecision("install_requested", version, mode);
+  await recordUpdateDecision("install_requested", version);
   try {
     await launch();
   } catch (error) {
-    await recordUpdateDecision("install_failed", version, mode);
+    await recordUpdateDecision("install_failed", version);
     throw error;
   }
-}
-
-export function writeInstallerScript({
-  scriptPath,
-  sourceRootPath,
-  sourceLaunchPath,
-  destRootPath,
-  hostPid,
-}: InstallerScriptOptions): void {
-  const script = [
-    "#!/bin/bash",
-    "set -euo pipefail",
-    `SRC_ROOT=${shellEscape(sourceRootPath)}`,
-    `SRC_LAUNCH=${shellEscape(sourceLaunchPath || "")}`,
-    `DEST_ROOT=${shellEscape(destRootPath)}`,
-    `HOST_PID=${hostPid}`,
-    'BAK_DIR="$(dirname "$DEST_ROOT")/.vision_update_bak_$$"',
-    'PROTECT_FILE="${BAK_DIR}.protect"',
-    'BUN_VERSION="1.4.2"',
-    'DEPENDENCY_DIRS=("node_modules" "apps/frontend/node_modules" "apps/node-backend/node_modules" "packages/shared-utils/node_modules" "packages/types/node_modules" "packaging/electron/node_modules")',
-    "INSTALL_STARTED=0",
-    "",
-    "# Wait until the running app exits before replacing source files.",
-    "for _ in {1..120}; do",
-    '  if ! kill -0 "$HOST_PID" 2>/dev/null; then break; fi',
-    "  sleep 0.5",
-    "done",
-    "",
-    "# Check the existing toolchain before changing the installation.",
-    'if ! command -v bun >/dev/null 2>&1 && [ -x "$HOME/.bun/bin/bun" ]; then',
-    '  export PATH="$HOME/.bun/bin:$PATH"',
-    "fi",
-    'if ! command -v bun >/dev/null 2>&1 || [ "$(bun --version 2>/dev/null)" != "$BUN_VERSION" ]; then',
-    '  echo "ERROR: source updates require installed Bun $BUN_VERSION" >&2',
-    "  exit 1",
-    "fi",
-    "",
-    'mkdir -p "$DEST_ROOT"',
-    ': > "$PROTECT_FILE"',
-    'if [ -d "$DEST_ROOT/.git" ]; then',
-    '  git -C "$DEST_ROOT" -c core.quotepath=false ls-files --others --ignored --exclude-standard --directory | sort -u | sed "s#^#P /#" > "$PROTECT_FILE"',
-    "fi",
-    "",
-    "# Snapshot current install for rollback on failure.",
-    'rsync -a --exclude ".git" --exclude "node_modules" --exclude "postgres_data" --exclude "packaging/electron/native-runtime" "$DEST_ROOT/" "$BAK_DIR/"',
-    "",
-    "# Keep the snapshot until dependency installation succeeds too.",
-    "rollback_source() {",
-    "  status=$?",
-    "  trap - EXIT",
-    '  if [ "$status" -ne 0 ]; then',
-    '    echo "ERROR: source update failed — restoring the previous source" >&2',
-    '    if ! rsync -a --delete --filter="merge $PROTECT_FILE" --exclude ".env" --exclude "postgres_data" --exclude ".git" --exclude "node_modules" --exclude "packaging/electron/native-runtime" "$BAK_DIR/" "$DEST_ROOT/"; then',
-    '      echo "ERROR: source rollback failed; backup remains at $BAK_DIR" >&2',
-    "    else",
-    '      for dep in "${DEPENDENCY_DIRS[@]}"; do',
-    '        if [ -e "$BAK_DIR/$dep" ] || [ -L "$BAK_DIR/$dep" ]; then',
-    '          rm -rf "${DEST_ROOT:?}/${dep:?}"',
-    '          mkdir -p "$DEST_ROOT/$(dirname "$dep")"',
-    '          mv "$BAK_DIR/$dep" "$DEST_ROOT/$dep"',
-    '        elif [ "$INSTALL_STARTED" -eq 1 ]; then',
-    '          rm -rf "${DEST_ROOT:?}/${dep:?}"',
-    "        fi",
-    "      done",
-    '      rm -rf "$BAK_DIR"',
-    "    fi",
-    "  else",
-    '    rm -rf "$BAK_DIR"',
-    "  fi",
-    '  rm -f "$PROTECT_FILE"',
-    '  exit "$status"',
-    "}",
-    "trap rollback_source EXIT",
-    'rsync -a --delete --filter="merge $PROTECT_FILE" --exclude ".env" --exclude "postgres_data" --exclude ".git" --exclude "node_modules" --exclude "packaging/electron/native-runtime" "$SRC_ROOT/" "$DEST_ROOT/"',
-    'for dep in "${DEPENDENCY_DIRS[@]}"; do',
-    '  if [ -e "$DEST_ROOT/$dep" ] || [ -L "$DEST_ROOT/$dep" ]; then',
-    '    mkdir -p "$BAK_DIR/$(dirname "$dep")"',
-    '    mv "$DEST_ROOT/$dep" "$BAK_DIR/$dep"',
-    "  fi",
-    "done",
-    "INSTALL_STARTED=1",
-    "",
-    "# Strip macOS quarantine from the updated source tree so launch.command",
-    "# can be opened without Gatekeeper blocking it (macOS 12+).",
-    'xattr -rd com.apple.quarantine "$DEST_ROOT" 2>/dev/null || true',
-    "",
-    'cd "$DEST_ROOT"',
-    "bun install --frozen-lockfile --ignore-scripts",
-    'cd "$DEST_ROOT/packaging/electron"',
-    "bun install --frozen-lockfile --ignore-scripts",
-    'if [ ! -x "$DEST_ROOT/packaging/electron/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron" ]; then',
-    '  bun "$DEST_ROOT/packaging/electron/node_modules/electron/install.js"',
-    "fi",
-    'if [ ! -x "$DEST_ROOT/packaging/electron/node_modules/.bin/electron" ] || [ ! -x "$DEST_ROOT/packaging/electron/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron" ]; then',
-    '  echo "ERROR: pinned Electron binary is missing after installation" >&2',
-    "  exit 1",
-    "fi",
-    "",
-    'if [ -n "$SRC_LAUNCH" ] && [ -f "$SRC_LAUNCH" ]; then',
-    '  cp "$SRC_LAUNCH" "$DEST_ROOT/launch.command" 2>/dev/null || true',
-    '  chmod +x "$DEST_ROOT/launch.command" 2>/dev/null || true',
-    "fi",
-    "",
-    "# Strip quarantine from the launcher scripts specifically before opening.",
-    'xattr -d com.apple.quarantine "$DEST_ROOT/packaging/electron/unsigned/launch.command" 2>/dev/null || true',
-    'xattr -d com.apple.quarantine "$DEST_ROOT/launch.command" 2>/dev/null || true',
-    "",
-    'if [ -f "$DEST_ROOT/packaging/electron/unsigned/launch.command" ]; then',
-    '  open "$DEST_ROOT/packaging/electron/unsigned/launch.command"',
-    "  exit 0",
-    "fi",
-    "",
-    'if [ -f "$DEST_ROOT/launch.command" ]; then',
-    '  open "$DEST_ROOT/launch.command"',
-    "  exit 0",
-    "fi",
-    "",
-    'cd "$DEST_ROOT"',
-    "exec bun run electron:prod",
-  ].join("\n");
-
-  fs.writeFileSync(scriptPath, `${script}\n`, { mode: 0o755 });
 }
 
 async function readGitHubRelease(): Promise<unknown> {
@@ -562,14 +414,6 @@ function releaseAssets(release: unknown): JsonRecord[] {
   return entries.flatMap<JsonRecord>((asset) => fieldsOf(asset) ?? []);
 }
 
-function pickSourceLauncherZip(release: unknown): JsonRecord | null {
-  return (
-    releaseAssets(release).find((a) =>
-      /vision-source-launcher-.*-arm64\.zip$/i.test(String(a.name || "")),
-    ) || null
-  );
-}
-
 export function pickNativeAppZip(release: unknown): JsonRecord | null {
   return (
     releaseAssets(release).find((asset) =>
@@ -578,10 +422,9 @@ export function pickNativeAppZip(release: unknown): JsonRecord | null {
   );
 }
 
-// Fallback for releases that carry no source-launcher ZIP: send the user to the
-// release page so they can update by hand. Every release published before the
-// pipeline started building that asset is in this bucket permanently, so this
-// path is not hypothetical. Only https://github.com/ URLs from the API response
+// Fallback for a release that carries no packaged app ZIP, and for development
+// runs, which have no in-app installer: send the user to the release page so
+// they can update by hand. Only https://github.com/ URLs from the API response
 // are honoured — anything else falls back to the canonical releases page rather
 // than handing an unexpected scheme to the OS.
 function openReleasePage(htmlUrl: unknown): string {
@@ -656,126 +499,6 @@ async function downloadToFile(url: string, filePath: string): Promise<void> {
   );
 }
 
-async function prepareShellUpdateInstaller(): Promise<PreparedUpdate> {
-  const release = await readGitHubRelease();
-  const releaseFields = fieldsOf(release);
-  const latestVersion = normalizeVersionTag(releaseFields?.tag_name);
-  const currentVersion = getCurrentVersionTag();
-  const sourceLauncherAsset = pickSourceLauncherZip(release);
-
-  if (!latestVersion) {
-    return {
-      up_to_date: true,
-      error: "Could not determine the latest release version.",
-    };
-  }
-
-  const releaseInfo: ReleaseInfo = {
-    current_version: currentVersion,
-    latest_version: latestVersion,
-    html_url: releaseFields?.html_url,
-    release_notes: releaseFields?.body || "",
-    published_at: releaseFields?.published_at,
-    source_launcher_available: Boolean(
-      sourceLauncherAsset?.browser_download_url,
-    ),
-  };
-
-  if (compareVersions(latestVersion, currentVersion) <= 0) {
-    return { up_to_date: true, ...releaseInfo };
-  }
-
-  // Newer release, but it ships no source-launcher ZIP for us to install from.
-  // This used to return up_to_date:true, which made the startup prompt reappear
-  // every launch and dead-ended both the Settings and notification Install
-  // buttons. Tell the caller to send the user to the release page instead.
-  if (!sourceLauncherAsset?.browser_download_url) {
-    return { up_to_date: false, manual_download: true, ...releaseInfo };
-  }
-
-  const assetName = String(sourceLauncherAsset.name);
-  const tempRoot = path.join(
-    app.getPath("temp"),
-    `vision_shell_update_${Date.now()}_${process.pid}`,
-  );
-  const zipPath = path.join(tempRoot, assetName);
-  const extractDir = path.join(tempRoot, "extract");
-  fs.mkdirSync(extractDir, { recursive: true });
-
-  try {
-    // fetch (unlike the previous bare https.get) follows the 302 GitHub
-    // serves for browser_download_url before handing out the CDN asset.
-    await downloadToFile(
-      String(sourceLauncherAsset.browser_download_url),
-      zipPath,
-    );
-
-    const checksumAsset = pickChecksumAsset(release, assetName);
-    if (!checksumAsset?.browser_download_url) {
-      await recordUpdateDecision("checksum_failed", latestVersion, "dev");
-      throw new Error(
-        "No checksum asset found for this release — aborting update to prevent running an unverified installer",
-      );
-    }
-    const body = await fetchUrlBody(String(checksumAsset.browser_download_url));
-    const expected = parseSha256Body(body, assetName);
-    if (!expected) {
-      await recordUpdateDecision("checksum_failed", latestVersion, "dev");
-      throw new Error("Checksum file present but could not parse SHA256 hash");
-    }
-    const actual = await computeFileSha256(zipPath);
-    await verifyUpdateChecksum(expected, actual, latestVersion, "dev");
-
-    // Validate ZIP entry paths before extraction to prevent path traversal attacks.
-    // zipinfo -1 lists one path per line; any entry escaping extractDir is rejected.
-    const zipEntries = await runCommand("zipinfo", ["-1", zipPath], tempRoot);
-    for (const entry of zipEntries.split("\n")) {
-      const trimmed = entry.trim();
-      if (!trimmed) continue;
-      const normalized = path.normalize(trimmed);
-      if (normalized.startsWith("..") || path.isAbsolute(normalized)) {
-        throw new Error(`Unsafe path in update ZIP: ${trimmed}`);
-      }
-    }
-
-    await runCommand("ditto", ["-x", "-k", zipPath, extractDir], tempRoot);
-
-    const sourceDir = path.join(extractDir, "unsigned", "Vision");
-    const sourceLaunchPath = path.join(
-      extractDir,
-      "unsigned",
-      "launch.command",
-    );
-    const sourcePackageJson = path.join(sourceDir, "package.json");
-    if (!fs.existsSync(sourcePackageJson)) {
-      throw new Error(
-        "Downloaded update ZIP does not contain Vision source files",
-      );
-    }
-
-    // In a source checkout appRoot is packaging/electron, two levels below
-    // the repository root that the source updater replaces.
-    const destRootPath = contextWorkDir() || path.resolve(appRoot, "..", "..");
-    const installerPath = path.join(tempRoot, "install-update.command");
-    writeInstallerScript({
-      scriptPath: installerPath,
-      sourceRootPath: sourceDir,
-      sourceLaunchPath: fs.existsSync(sourceLaunchPath) ? sourceLaunchPath : "",
-      destRootPath,
-      hostPid: process.pid,
-    });
-
-    return { up_to_date: false, ...releaseInfo, installerPath };
-  } catch (err) {
-    // Clean up temp dir on any error — on success tempRoot is intentionally kept
-    // because installerPath lives inside it and must remain until the user runs it.
-    try {
-      fs.rmSync(tempRoot, { recursive: true, force: true });
-    } catch {}
-    throw err;
-  }
-}
-
 function findVisionApp(root: string): string | null {
   return (
     [
@@ -801,7 +524,7 @@ async function prepareNativeUpdateInstaller(): Promise<PreparedUpdate> {
   };
   if (!latestVersion || compareVersions(latestVersion, currentVersion) <= 0)
     return { up_to_date: true, ...releaseInfo };
-  if (!asset?.browser_download_url)
+  if (!app.isPackaged || !asset?.browser_download_url)
     return { up_to_date: false, manual_download: true, ...releaseInfo };
 
   const assetName = String(asset.name);
@@ -817,7 +540,7 @@ async function prepareNativeUpdateInstaller(): Promise<PreparedUpdate> {
 
     const checksumAsset = pickChecksumAsset(release, assetName);
     if (!checksumAsset?.browser_download_url) {
-      await recordUpdateDecision("checksum_failed", latestVersion, "native");
+      await recordUpdateDecision("checksum_failed", latestVersion);
       throw new Error("No checksum asset found for the native update");
     }
     const expected = parseSha256Body(
@@ -825,11 +548,11 @@ async function prepareNativeUpdateInstaller(): Promise<PreparedUpdate> {
       assetName,
     );
     if (!expected) {
-      await recordUpdateDecision("checksum_failed", latestVersion, "native");
+      await recordUpdateDecision("checksum_failed", latestVersion);
       throw new Error("Native update checksum is invalid");
     }
     const actual = await computeFileSha256(zipPath);
-    await verifyUpdateChecksum(expected, actual, latestVersion, "native");
+    await verifyUpdateChecksum(expected, actual, latestVersion);
 
     const zipEntries = await runCommand("zipinfo", ["-1", zipPath], tempRoot);
     for (const entry of zipEntries.split("\n")) {
@@ -869,7 +592,6 @@ async function prepareNativeUpdateInstaller(): Promise<PreparedUpdate> {
         "--host-pid",
         String(process.pid),
       ],
-      nativeInstaller: true,
     };
   } catch (error) {
     try {
@@ -897,7 +619,6 @@ export async function checkForShellUpdate(): Promise<ShellUpdateCheck> {
   const releaseFields = fieldsOf(release);
   const latestVersion = normalizeVersionTag(releaseFields?.tag_name);
   const currentVersion = getCurrentVersionTag();
-  const sourceLauncherAsset = pickSourceLauncherZip(release);
   const mode = getUpdateMode();
 
   if (!latestVersion) {
@@ -917,9 +638,6 @@ export async function checkForShellUpdate(): Promise<ShellUpdateCheck> {
     html_url: releaseFields?.html_url,
     release_notes: releaseFields?.body || "",
     published_at: releaseFields?.published_at,
-    source_launcher_available: Boolean(
-      sourceLauncherAsset?.browser_download_url,
-    ),
     update_mode: mode,
   };
 }
@@ -941,10 +659,7 @@ export async function installPreparedShellUpdate(): Promise<ShellUpdateInstallRe
     }
     shellUpdateCheckInFlight = true;
     try {
-      const prepared =
-        getUpdateMode() === "native"
-          ? await prepareNativeUpdateInstaller()
-          : await prepareShellUpdateInstaller();
+      const prepared = await prepareNativeUpdateInstaller();
       if ("manual_download" in prepared) {
         const url = openReleasePage(prepared.html_url);
         return {
@@ -977,7 +692,6 @@ export async function installPreparedShellUpdate(): Promise<ShellUpdateInstallRe
     const pending = currentPendingUpdate();
     const installerPath = pending.installerPath;
     const latestVersion = pending.latest_version || "";
-    const mode = pending.nativeInstaller ? "native" : "dev";
     // Revalidate before committing to quit: the bundle may have been prepared
     // arbitrarily long ago. If the OS purged the temp dir, the old flow set
     // isQuitting and quit anyway — the spawn failed silently and the app
@@ -1008,22 +722,14 @@ export async function installPreparedShellUpdate(): Promise<ShellUpdateInstallRe
     } catch {
       /* offline — proceed with the prepared bundle */
     }
-    await launchAuditedInstaller(latestVersion, mode, async () => {
+    await launchAuditedInstaller(latestVersion, async () => {
       // Read the live pending update, as before, after the recheck awaits.
-      const current = currentPendingUpdate();
-      if (current.nativeInstaller) {
-        await launchPreparedNativeInstaller({
-          installerPath,
-          installerArgs: current.installerArgs,
-          stopRuntime: ctx.stopRuntime,
-          startRuntime: ctx.startRuntime,
-        });
-      } else {
-        spawn("open", [installerPath], {
-          detached: true,
-          stdio: "ignore",
-        }).unref();
-      }
+      await launchPreparedNativeInstaller({
+        installerPath,
+        installerArgs: currentPendingUpdate().installerArgs,
+        stopRuntime: ctx.stopRuntime,
+        startRuntime: ctx.startRuntime,
+      });
     });
     markQuitting();
     setImmediate(() => app.quit());
@@ -1034,6 +740,8 @@ export async function installPreparedShellUpdate(): Promise<ShellUpdateInstallRe
 }
 
 export function setupManualShellUpdater(): void {
+  // A development run has nothing to install; it updates from its checkout.
+  if (!app.isPackaged) return;
   setTimeout(async () => {
     try {
       const update = await checkForShellUpdate();
@@ -1054,10 +762,7 @@ export function setupManualShellUpdater(): void {
       if (response !== 0) return;
 
       notify(t("update.downloading"));
-      const prepared =
-        getUpdateMode() === "native"
-          ? await prepareNativeUpdateInstaller()
-          : await prepareShellUpdateInstaller();
+      const prepared = await prepareNativeUpdateInstaller();
       if ("manual_download" in prepared) {
         openReleasePage(prepared.html_url);
         notify(t("update.manualDownload"));

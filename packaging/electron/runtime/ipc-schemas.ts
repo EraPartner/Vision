@@ -295,6 +295,10 @@ function splashThemeArguments(args: IpcArguments) {
     (colors.mode != null &&
       colors.mode !== "light" &&
       colors.mode !== "dark") ||
+    (colors.themeSource != null &&
+      colors.themeSource !== "system" &&
+      colors.themeSource !== "light" &&
+      colors.themeSource !== "dark") ||
     (colors.surface != null && !isValidHslComponents(colors.surface)) ||
     (colors.text != null && !isValidHslComponents(colors.text))
   ) {
@@ -307,6 +311,7 @@ function splashThemeArguments(args: IpcArguments) {
       foreground: colors.foreground,
       surface: colors.surface,
       text: colors.text,
+      themeSource: colors.themeSource,
     },
   ];
 }

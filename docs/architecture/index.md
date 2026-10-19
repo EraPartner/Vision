@@ -337,8 +337,9 @@ vision_backup_{deviceId}_{timestamp}.visionbak  ← .zip archive
 └── frontend-state.json  # localStorage snapshot (theme, preferences)
 ```
 
-**Optional Encryption:** AES-256-GCM with scrypt key derivation for current bundles. The restore
-reader retains AES-256-CBC compatibility for legacy encrypted `.visionbak` files.
+**Optional Encryption:** AES-256-GCM with scrypt key derivation. Restore reads only this v2
+format; retired AES-256-CBC v1 files are refused by name
+([[docs/adr/219-minimal-electron-shell-hardening|ADR-219]]).
 
 **Backup IPC handlers (9 total):** Handlers in `packaging/electron/main.ts`:
 

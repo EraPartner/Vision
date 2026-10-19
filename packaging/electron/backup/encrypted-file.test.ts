@@ -32,13 +32,13 @@ const FIXTURES: Record<FixtureKind, string> = {
 function configuration(kind: FixtureKind) {
   const bundle = kind.startsWith("bundle");
   return {
-    v1Magic: bundle ? BUNDLE_V1 : RAW_V1,
+    retiredV1Magic: bundle ? BUNDLE_V1 : RAW_V1,
     v2Magic: bundle ? BUNDLE_V2 : RAW_V2,
-    v1Salt: "vision-backup-v1",
     requiredError: "PASSPHRASE_REQUIRED",
     invalidError: "INVALID_PASSPHRASE",
     invalidHeaderMessage: "INVALID_HEADER",
     unsupportedFormatMessage: "UNSUPPORTED_FORMAT",
+    retiredFormatMessage: "RETIRED_V1_FORMAT",
   };
 }
 
@@ -53,7 +53,7 @@ async function withTempDir(run: (directory: string) => Promise<void>) {
   }
 }
 
-for (const kind of FIXTURE_KINDS) {
+for (const kind of ["rawV2", "bundleV2"] as const) {
   const hex = FIXTURES[kind];
   test(`decrypts the fixed ${kind} fixture`, async () => {
     await withTempDir(async (directory) => {
@@ -69,6 +69,32 @@ for (const kind of FIXTURE_KINDS) {
       });
 
       assert.deepEqual(await fs.promises.readFile(destinationPath), PLAINTEXT);
+    });
+  });
+}
+
+// The v1 (AES-CBC, static salt) format is retired: a released v1 file is
+// refused by name and no plaintext is written.
+for (const kind of ["rawV1", "bundleV1"] as const) {
+  test(`refuses the retired ${kind} fixture`, async () => {
+    await withTempDir(async (directory) => {
+      const encryptedPath = path.join(directory, `${kind}.enc`);
+      const destinationPath = path.join(directory, `${kind}.out`);
+      await fs.promises.writeFile(
+        encryptedPath,
+        Buffer.from(FIXTURES[kind], "hex"),
+      );
+
+      await assert.rejects(
+        decryptFile({
+          encryptedPath,
+          destinationPath,
+          keyOrPassphrase: PASSPHRASE,
+          ...configuration(kind),
+        }),
+        /RETIRED_V1_FORMAT/,
+      );
+      assert.equal(fs.existsSync(destinationPath), false);
     });
   });
 }

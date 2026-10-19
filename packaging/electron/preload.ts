@@ -81,7 +81,7 @@ window.addEventListener("unhandledrejection", (event) => {
 const electronUpdater: ElectronUpdaterBridge = {
   /**
    * Query and (if needed) pre-download the latest shell update from GitHub.
-   * Response includes `update_mode: 'native' | 'dev'`.
+   * Response includes `update_mode: 'native' | 'source'`.
    */
   checkRelease: () => ipcRenderer.invoke("update:check-github"),
 
