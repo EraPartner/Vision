@@ -23,6 +23,11 @@ import {
   statementPartition,
 } from "./accountBalanceSql.ts";
 import { batchConvertGroupsWithHistoricalRateFallback } from "./infoRepositoryHelpers.ts";
+import {
+  createUnconvertedTally,
+  noteUnconverted,
+  unconvertedFields,
+} from "../lib/unconvertedTally.ts";
 
 // Wallets and crypto exchanges expose holdings only (ADR-108), even when their
 // imported movement history contains ledger rows.
@@ -42,6 +47,11 @@ export interface BankAccountBalance {
   first_transaction: string | null;
   last_transaction: string | null;
   drift?: number | undefined;
+  /**
+   * Currency partitions left out of `balance` for want of a stored rate (empty
+   * when the balance is complete), like an account's `unconverted_currencies`.
+   */
+  unconverted_currencies: string[];
 }
 
 export const banksRepository = {
@@ -218,6 +228,8 @@ export const banksRepository = {
       ),
     ]);
 
+    // Rows without a stored rate are left out of the balances and the history
+    // (never added 1:1); the current partitions left out are counted below.
     const [currentBalancesConverted, historyConverted] =
       await batchConvertGroupsWithHistoricalRateFallback(
         [
@@ -257,7 +269,15 @@ export const banksRepository = {
         accountCurrency: string;
       }
     >();
-    for (const row of currentBalancesConverted) {
+    const unconverted = createUnconvertedTally();
+    const convertedRows = new Set(
+      currentBalancesConverted.map(
+        (row) => `${row.account_id}|${row.currency}`,
+      ),
+    );
+    // Every partition keeps its account in the list; only converted
+    // partitions add to the balance.
+    for (const row of latestBalanceRows) {
       let entry = accountsByName.get(row.bank_account);
       if (!entry) {
         entry = {
@@ -279,6 +299,7 @@ export const banksRepository = {
             // day east of UTC (lib/dateFormat.ts).
             first_transaction: toWireDate(row.first_transaction),
             last_transaction: toWireDate(row.last_transaction),
+            unconverted_currencies: [],
           },
           balance: toDecimal(0),
           parts: [],
@@ -288,8 +309,17 @@ export const banksRepository = {
         accountsByName.set(row.bank_account, entry);
         accounts.push(entry.account);
       }
-      entry.balance = entry.balance.plus(toDecimal(row.amount_eur));
       entry.parts.push({ currency: row.currency, balance: row.balance });
+      if (!convertedRows.has(`${row.account_id}|${row.currency}`)) {
+        noteUnconverted(unconverted, row.currency);
+        entry.account.unconverted_currencies.push(
+          (row.currency || "EUR").toUpperCase(),
+        );
+      }
+    }
+    for (const row of currentBalancesConverted) {
+      const entry = accountsByName.get(row.bank_account);
+      if (entry) entry.balance = entry.balance.plus(toDecimal(row.amount_eur));
     }
     let totalNetPositionDec = toDecimal(0);
     for (const entry of accountsByName.values()) {
@@ -370,6 +400,7 @@ export const banksRepository = {
       total_net_position: roundToCents(totalNetPosition),
       history: historyMap,
       total_history: totalHistory,
+      ...unconvertedFields(unconverted),
     };
   },
 };

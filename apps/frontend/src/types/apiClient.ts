@@ -128,6 +128,8 @@ export interface NetWorthResponse {
     snapshotsTotal?: number;
     snapshotsLimit?: number;
     snapshotsOffset?: number;
+    /** Balances left out for want of a stored rate (ADR-216); empty when none. */
+    unconvertedCurrencies: string[];
 }
 
 export type ChartType = "line" | "bar" | "area";

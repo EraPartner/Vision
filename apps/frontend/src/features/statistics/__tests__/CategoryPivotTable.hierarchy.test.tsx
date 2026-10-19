@@ -44,6 +44,7 @@ const data: StatisticsData = {
     totalSpending: 100,
     averageMonthlySpending: 100,
     averageMonthlyIncome: 0,
+    unconvertedCount: 0,
 };
 
 describe("CategoryPivotTable ordered hierarchy", () => {

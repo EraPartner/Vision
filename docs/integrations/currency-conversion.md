@@ -6,7 +6,7 @@ date: 2026-10-19
 updated: 2026-10-19
 tags: [integration, currency, exchange-rates, phase-0, phase-1, phase-3-1, offline-resilience, network-reachability, startup-optimization, historical-rates, ecb-full-history, purchase-date-rates, fx-attribution, adr-074]
 description: Multi-currency support with automatic conversion to target currencies using ECB and supplementary exchange rates, including date-aware historical conversion and batch grouped conversion (Phase 3.1+). Startup FX warmup is skipped when offline (2026-05-03). 2026-06-11 (ADR-074): ECB full-history tier (daily since 1999), on-or-before weekend convention, one-time repair of fabricated old rates, and bulk-stamp of fx_rate_to_eur on non-EUR portfolio transactions.
-related_code: ["apps/node-backend/src/services/currency/rateFetcher.ts", "apps/node-backend/src/services/currency/currencyConversionService.ts", "apps/node-backend/src/repositories/infoRepositoryHelpers.ts", "apps/node-backend/src/lib/network.ts"]
+related_code: ["apps/node-backend/src/services/currency/rateFetcher.ts", "apps/node-backend/src/services/currency/currencyConversionService.ts", "apps/node-backend/src/lib/unconvertedTally.ts", "apps/node-backend/src/services/currency/latestRateConversion.ts", "apps/node-backend/src/repositories/infoRepositoryHelpers.ts", "apps/node-backend/src/lib/network.ts"]
 ---
 
 # Currency Conversion
@@ -74,14 +74,17 @@ Since 2026-10-19 there is no hard-coded tier
 ([[docs/adr/216-server-owned-domain-calculations|ADR-216]]). With nothing stored, the rate table
 holds only EUR. A currency without a stored rate is unavailable: server totals leave it out and flag
 it, for example `unconverted_currencies` on account balances or `usedFallbackRate` on portfolio
-holdings. Generic helpers that cannot flag an amount (`convertToCurrency`, `convertWithRates`,
-`convertRowsToEur` without a historical date) still return it unconverted, as they always did for
-unknown currencies.
+holdings. The generic helpers never pass such an amount through 1:1: `convertToCurrency` and
+`convertWithRates` return `undefined`, and `convertRowsToEur` returns the row with
+`amount_eur: undefined` (a warning is logged). Every caller decides, per endpoint, whether to leave
+the amount out and count it or keep it with an explicit marker; see
+[[#Unconverted amounts are never added 1:1 (2026-10-19)]].
 
 Date-aware row conversion first uses stored quotes on or before each requested day. Missing prior
 quotes are resolved in batches from the 90-day and full ECB feeds, even when that currency already
 has newer stored quotes. A point lookup's final database tier also excludes future quotes. If no
-prior quote exists, row conversion uses the current-rate fallback and marks it explicitly.
+prior quote exists, row conversion uses the current-rate fallback and marks it explicitly. With no
+current stored rate either, the row is unconverted (`amount_eur: undefined`).
 
 Partial refreshes retain known rates for currencies omitted by either provider. Fresh quotes
 overwrite the retained baseline, with ECB taking precedence on overlap. Only fresh provider quotes
@@ -125,14 +128,42 @@ currency has no stored rate keeps its unconverted figures and sets `usedFallback
 Kinesis USD-to-EUR price conversion also uses stored rates and skips a quote, or keeps the stored
 history, when no rate is stored.
 
-`FALLBACK_RATES` remains only in the Belgian tax dashboards
-(`services/tax/dashboardService.ts`, `services/tax/portfolioDashboardService.ts`), whose `convert`
-callbacks cannot report a missing rate yet. `GET /api/info/exchange-rates` no longer returns
-`fallback_rates`.
+The Belgian tax dashboards (`services/tax/dashboardService.ts`,
+`services/tax/portfolioDashboardService.ts`) also convert at the latest stored rates. The
+`FALLBACK_RATES` constant no longer exists anywhere in the server. `GET /api/info/exchange-rates`
+no longer returns `fallback_rates`.
 
 The web `useCurrencyConverter` hook likewise builds its rate map from stored rates only and no
 longer merges the response's `fallback_rates`; the unused `useExchangeRates` rate-map hook was
 removed (`useFxStatus` remains for the status banner).
+
+### Unconverted amounts are never added 1:1 (2026-10-19)
+
+An amount whose currency has no stored rate is never blended into a total 1:1 or at a constant
+([[docs/adr/216-server-owned-domain-calculations|ADR-216]]). The pure bookkeeping helpers in
+`apps/node-backend/src/lib/unconvertedTally.ts` (`createUnconvertedTally`,
+`noteUnconverted`, `partitionConvertedRows`, `unconvertedFields`) give every caller the same
+shape. Snake_case responses add `unconverted_count` and `unconverted_currencies` (sorted);
+camelCase responses add `unconvertedCurrencies` and, where a count makes sense, `unconvertedCount`.
+All additions are additive; both are zero or empty when every amount converted.
+
+| Surface | Semantics | Fields |
+| --- | --- | --- |
+| `GET /api/aggregations/monthly-summary`, `category-breakdown`, `category-pivot`, `recipient-insights`, `recipient-by-year`, `cashflow-comparison`, `average-vs-current`, `sankey` | Left out of every figure, including transaction counts | `unconverted_count` counts transactions |
+| `GET /api/aggregations/recipient-pivot`, `tag-pivot` | Left out | `conversion.unconvertedCount`, `conversion.unconvertedCurrencies`, beside the existing `usedHistoricalFallback` and `affectedCurrencies` |
+| `GET /api/aggregations/cashflow-forecast-methods`, `cashflow-forecast-rolling` | History and planned rows left out of the forecast inputs | optional `unconverted_count` / `unconverted_currencies` (absent on older cache entries) |
+| `GET /api/aggregations/bank-balances` | The currency partition is left out of the balance, totals and history | per account `unconverted_currencies`; `unconverted_count` counts partitions |
+| `GET /api/info/planned-expenses-next-month` | Left out | `unconverted_count` counts planned rows |
+| `GET /api/info/net-worth` | The balance is left out of `liquid`, `liabilities` and the snapshots | `unconvertedCurrencies` |
+| `POST /api/cross-workspace/rebalance` | The cash partition is not deployable cash | `unconvertedCurrencies`, top level and per `cashAccounts` entry |
+| `GET /api/transactions?normalize_to_eur=true` | Kept, with an explicit marker | per row `amount_eur_unconverted: true` (`amount_eur` is then the native amount); list `unconverted_count` / `unconverted_currencies` |
+| `GET /api/belgian-tax/dashboard`, `/portfolio-dashboard` | Left out of each figure that would include it | `unconvertedCurrencies` and `incompleteFigures` (the response fields that miss an amount) |
+| Tax and portfolio PDF reports | Recorded taxes and dividends without a rate are left out | "Incomplete" warning in the executive summary and Dividend Income sections |
+
+The web app shows these flags in the existing warning style of the Accounts and Owes pages
+(`type-footnote text-warning`): the Statistics page, the Sankey tab, custom charts, the Home
+month-to-date hero, the cash-flow forecast, the bank balances widget, net worth, rebalance and both
+tax pages.
 
 ---
 
@@ -319,7 +350,7 @@ When `useHistoricalRatesByDate: true` and no historical quote exists on or befor
 
 | Field                | Type      | Description                                                                        |
 | -------------------- | --------- | ---------------------------------------------------------------------------------- |
-| `used_fallback_rate` | `boolean` | `true` when historical lookup falls back to a current rate or no rate is available |
+| `used_fallback_rate` | `boolean` | `true` when historical lookup falls back to a current rate or no rate is available (then `amount_eur` is `undefined`) |
 | `fallback_reason`    | `string`  | Always `"historical_rate_missing"` when set                                        |
 
 A `WARN`-level log entry is also emitted: `Historical FX missing, falling back to current rate` with `{ currency, date }` metadata.
@@ -327,8 +358,10 @@ A `WARN`-level log entry is also emitted: `Historical FX missing, falling back t
 These fields remain internal row diagnostics. The recipient-pivot repository now summarizes them into
 the response's root-level `conversion` object: `usedHistoricalFallback` plus sorted
 `affectedCurrencies`. It does not expose or badge individual rows. Saved recipient charts render an
-accessible warning from this explicit aggregate contract. Other repositories still project the row
-diagnostics away. Rows where the rate resolved normally carry neither internal field.
+accessible warning from this explicit aggregate contract. The tag pivot returns the same
+`conversion` object, and both now also carry `unconvertedCount` and `unconvertedCurrencies` for
+rows with no stored rate at all, which are left out of the pivot. Other repositories still project
+the row diagnostics away. Rows where the rate resolved normally carry neither internal field.
 
 **Cache invalidation after backfill:** `backfillPortfolioHistoricalRates()` calls `clearHistoricalCache()` after inserting new rates, ensuring the in-memory historical index reflects the newly stored rows on the next conversion.
 
@@ -403,8 +436,8 @@ Startup triggers a background sparse historical backfill for portfolio transacti
 
 - **API failures**: Uses the stored database rates
 - **Currency without a stored rate**: Unavailable. Server-owned totals leave it out and flag it;
-  the generic helpers return the amount unconverted
-- **Invalid target currencies**: Falls back to EUR conversion behavior
+  the generic helpers return `undefined` (rows: `amount_eur: undefined`), never the amount 1:1
+- **Target currency without a stored rate**: Unavailable in the same way
 - **No stored rates at all**: Only EUR amounts convert; the FX status banner reports it
 
 **Startup Behavior When Offline (May 2026):**

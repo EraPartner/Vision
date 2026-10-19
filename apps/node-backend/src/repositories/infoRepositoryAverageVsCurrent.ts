@@ -23,6 +23,11 @@ import { formatDateToYmd } from '../lib/dateFormat.ts';
 import { extractYearMonth } from '../lib/dateKeys.ts';
 import { convertRowsToEur } from '../services/currency/currencyConversionService.ts';
 import {
+  createUnconvertedTally,
+  partitionConvertedRows,
+  unconvertedFields,
+} from "../lib/unconvertedTally.ts";
+import {
   mapRowsForAmountConversion,
   getIncludeTransfers,
 } from './infoRepositoryHelpers.ts';
@@ -86,7 +91,7 @@ export async function getAverageVsCurrentSpending(targetCurrency = 'EUR') {
   // signed `amount` per row so the existing conversion pipeline and sign
   // checks below work unchanged, and moves the summing where it belongs.
   const sql6m = `
-    SELECT t.date, t.currency, (t.amount < 0) AS is_spending, SUM(t.amount) AS amount
+    SELECT t.date, t.currency, (t.amount < 0) AS is_spending, SUM(t.amount) AS amount, COUNT(*) AS cnt
     FROM transactions t
     WHERE t.is_active = true
       ${transferFilter}
@@ -95,7 +100,7 @@ export async function getAverageVsCurrentSpending(targetCurrency = 'EUR') {
     GROUP BY t.date, t.currency, (t.amount < 0)
   `;
   const sqlCurrent = `
-    SELECT t.date, t.currency, (t.amount < 0) AS is_spending, SUM(t.amount) AS amount
+    SELECT t.date, t.currency, (t.amount < 0) AS is_spending, SUM(t.amount) AS amount, COUNT(*) AS cnt
     FROM transactions t
     WHERE t.is_active = true
       ${transferFilter}
@@ -123,9 +128,16 @@ export async function getAverageVsCurrentSpending(targetCurrency = 'EUR') {
     queryRows(ledgerStartRowSchema, sqlLedgerStart, [todayYmd, WINDOW_MONTHS]),
   ]);
 
-  const past6Converted = await convertRowsToEur(
-    mapRowsForAmountConversion(past6Rows, 'amount', false),
-    targetCurrency
+  // Groups without a stored rate are left out of both windows and counted.
+  const unconverted = createUnconvertedTally();
+  const countOf = (row: { cnt: string }) => parseInt(row.cnt, 10) || 0;
+  const { converted: past6Converted } = partitionConvertedRows(
+    await convertRowsToEur(
+      mapRowsForAmountConversion(past6Rows, 'amount', false),
+      targetCurrency
+    ),
+    countOf,
+    unconverted,
   );
 
   const monthlySpending: Record<string, number> = {};
@@ -174,9 +186,13 @@ export async function getAverageVsCurrentSpending(targetCurrency = 'EUR') {
   const calendarDaysObserved = Math.max(1, Math.round((currentMonthStart.getTime() - observedStart.getTime()) / 86400000));
   const avgDailySpending = totalMonthlySpending / calendarDaysObserved;
 
-  const currentConverted = await convertRowsToEur(
-    mapRowsForAmountConversion(currentRows, 'amount', false),
-    targetCurrency
+  const { converted: currentConverted } = partitionConvertedRows(
+    await convertRowsToEur(
+      mapRowsForAmountConversion(currentRows, 'amount', false),
+      targetCurrency
+    ),
+    countOf,
+    unconverted,
   );
 
   const dailyMap: Record<string, { spending: number, income: number }> = {};
@@ -220,5 +236,6 @@ export async function getAverageVsCurrentSpending(targetCurrency = 'EUR') {
       variance: roundToCents(projectedTotal - avgMonthlySpending),
       pace: avgDailySpending > 0 ? roundToCents((totalCurrentSpending / daysElapsed) / avgDailySpending) : null,
     },
+    ...unconvertedFields(unconverted),
   };
 }

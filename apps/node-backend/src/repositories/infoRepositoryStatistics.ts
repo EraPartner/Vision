@@ -19,6 +19,12 @@ import {
 } from "../lib/money.ts";
 import { convertRowsToEur } from "../services/currency/currencyConversionService.ts";
 import {
+  createUnconvertedTally,
+  partitionConvertedRows,
+  unconvertedFields,
+  type UnconvertedTally,
+} from "../lib/unconvertedTally.ts";
+import {
   mvAvailable,
   mapRowsForAmountConversion,
   buildCategoryFromConvertedRows,
@@ -59,10 +65,15 @@ function parseCountRow(rows: Array<{ count: string }>): number {
 }
 
 export const statisticsRepository = {
+  /**
+   * Category totals in `targetCurrency`. Rows without a stored rate are left
+   * out (count and total) and recorded in `unconverted` when it is given.
+   */
   async getCategoryBreakdown(
     targetCurrency = "EUR",
     ancestorCategoryId: number | undefined = undefined,
     filters: CategoryPivotOptions = {},
+    unconverted: UnconvertedTally = createUnconvertedTally(),
   ): Promise<CategoryTotal[]> {
     const includeTransfers = await getIncludeTransfers();
     const exclusion = buildExclusionClauses({
@@ -108,9 +119,13 @@ export const statisticsRepository = {
       `,
         params,
       );
-      const converted = await convertRowsToEur(
-        mapRowsForAmountConversion(rows, "amount", false),
-        targetCurrency,
+      const { converted } = partitionConvertedRows(
+        await convertRowsToEur(
+          mapRowsForAmountConversion(rows, "amount", false),
+          targetCurrency,
+        ),
+        (row) => parseInt(row.cnt, 10) || 0,
+        unconverted,
       );
       let count = 0;
       let total = toDecimal(0);
@@ -142,11 +157,15 @@ export const statisticsRepository = {
         mvCategoryTotalsRowSchema,
         "SELECT * FROM mv_category_totals ORDER BY count DESC LIMIT 500",
       );
-      const convertedRows = await convertRowsToEur(
-        mapRowsForAmountConversion(catRows, "total", true),
-        targetCurrency,
+      const { converted } = partitionConvertedRows(
+        await convertRowsToEur(
+          mapRowsForAmountConversion(catRows, "total", true),
+          targetCurrency,
+        ),
+        (row) => parseInt(String(row.count), 10) || 0,
+        unconverted,
       );
-      return buildCategoryFromConvertedRows(convertedRows);
+      return buildCategoryFromConvertedRows(converted);
     }
 
     // Live fallback path. Mirror the MV's transfer exclusion (ADR-083) so totals
@@ -185,9 +204,13 @@ export const statisticsRepository = {
       params,
     );
 
-    const catConverted = await convertRowsToEur(
-      mapRowsForAmountConversion(categoryAmountRows, "amount", false),
-      targetCurrency,
+    const { converted: catConverted } = partitionConvertedRows(
+      await convertRowsToEur(
+        mapRowsForAmountConversion(categoryAmountRows, "amount", false),
+        targetCurrency,
+      ),
+      (row) => parseInt(row.cnt, 10) || 0,
+      unconverted,
     );
 
     const catMap: Record<string, CategoryTotal> = {};
@@ -261,6 +284,8 @@ export const statisticsRepository = {
     endDate,
   }: CategoryPivotOptions = {}): Promise<{
     categoryPivot: Record<string, CategoryPivotCell[]>;
+    unconverted_count: number;
+    unconverted_currencies: string[];
   }> {
     const includeTransfers = await getIncludeTransfers();
     // Canonical exclusion clauses (lib/filterBuilder.buildExclusionClauses,
@@ -364,10 +389,15 @@ export const statisticsRepository = {
       }
     }
 
-    const converted = await convertRowsToEur(
-      mapRowsForAmountConversion(convRows, "amount", false),
-      targetCurrency,
-      { useHistoricalRatesByDate: true, dateField: "date" },
+    // A (category, date, currency) group without a stored rate is left out of
+    // every cell; its transactions are counted once, on the income leg.
+    const { converted, unconverted } = partitionConvertedRows(
+      await convertRowsToEur(
+        mapRowsForAmountConversion(convRows, "amount", false),
+        targetCurrency,
+        { useHistoricalRatesByDate: true, dateField: "date" },
+      ),
+      (row) => (row._leg === "income" ? row.cnt : 0),
     );
 
     const periodCatMap: Record<string, Record<string, CategoryPivotCell>> = {};
@@ -431,6 +461,6 @@ export const statisticsRepository = {
         .sort((a, b) => a.total - b.total);
     }
 
-    return { categoryPivot };
+    return { categoryPivot, ...unconvertedFields(unconverted) };
   },
 };

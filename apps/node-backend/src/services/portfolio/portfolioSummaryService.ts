@@ -486,11 +486,11 @@ async function getBrokerageCashFees(
   );
   const currencies = [...new Set(rows.map((row) => row.currency))];
   const historicalIndex = await loadHistoricalRateIndex(currencies, target);
-  const fallbackMultipliers = new Map<string, number>();
+  const fallbackMultipliers = new Map<string, number | undefined>();
   let usedFallbackRate = false;
   const accounts = new Map<number, Decimal>();
   for (const row of rows) {
-    let multiplier = 1;
+    let multiplier: number | undefined = 1;
     if (row.currency !== target) {
       const from = findRateOnOrBeforeInIndex(
         historicalIndex,
@@ -508,9 +508,11 @@ async function getBrokerageCashFees(
             await convertToCurrency(1, row.currency, target),
           );
         }
-        multiplier = fallbackMultipliers.get(row.currency)!;
+        multiplier = fallbackMultipliers.get(row.currency);
       }
     }
+    // No stored rate at all: the fee is left out (flagged above), not 1:1.
+    if (multiplier === undefined) continue;
     const account = Number(row.account_id);
     accounts.set(
       account,

@@ -2,8 +2,8 @@
 title: Cross-Workspace API
 type: endpoint
 status: active
-date: 2026-10-08
-updated: 2026-10-08
+date: 2026-10-19
+updated: 2026-10-19
 tags: [api, endpoint, cross-workspace, portfolio, budgeting, cash]
 description: Rebalancing and commitment-aware candidate cash cap endpoints.
 related_code:
@@ -26,7 +26,7 @@ The response includes `today`, `horizonEnd`, `horizonDays` (90), `currentCash`, 
 
 ## `POST /api/cross-workspace/rebalance`
 
-The request accepts `currency`, `model` or `targetWeights`, and optional `availableCash`. The server clamps the supplied cash cap to the current spendable balance. The body must be a JSON object; an array returns `400 VALIDATION_ERROR`. The other fields stay lenient: a non-string `currency` means `EUR`, and a non-numeric `availableCash` is ignored. It returns `targetWeights`, `actualValues`, `availableCash`, `cashAccounts`, and a per-sleeve `deployment`. This route proposes buys only; it does not execute them.
+The request accepts `currency`, `model` or `targetWeights`, and optional `availableCash`. The server clamps the supplied cash cap to the current spendable balance. The body must be a JSON object; an array returns `400 VALIDATION_ERROR`. The other fields stay lenient: a non-string `currency` means `EUR`, and a non-numeric `availableCash` is ignored. It returns `targetWeights`, `actualValues`, `availableCash`, `cashAccounts`, and a per-sleeve `deployment`. This route proposes buys only; it does not execute them. A cash partition whose currency has no stored rate is not deployable cash: it is left out of `availableCash` and the account's `balance`, never counted 1:1. Additive (2026-10-19): `unconvertedCurrencies` lists those currencies at the top level and on each `cashAccounts` entry.
 
 The Rebalance page obtains the commitment-aware estimate first and supplies the lower of its candidate cap and any custom cap to this route. Direct API callers can still supply their own cap.
 

@@ -38,7 +38,6 @@ export function mockCurrencyConversion(
   overrides: Record<string, unknown> = {},
 ) {
   const module = {
-    FALLBACK_RATES: { EUR: 1 },
     clearMemoryCache: vi.fn(),
     clearHistoricalIndexCache: vi.fn(),
     getHistoricalRateIndex: vi.fn(),
@@ -63,7 +62,6 @@ export function mockCurrencyConversion(
       clearMemoryCache: module.clearMemoryCache,
       listLatestStoredRates: module.listLatestStoredRates,
       backfillPortfolioHistoricalRates: module.backfillPortfolioHistoricalRates,
-      FALLBACK_RATES: module.FALLBACK_RATES,
     },
   };
 }

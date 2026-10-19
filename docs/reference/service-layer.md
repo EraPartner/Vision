@@ -3,7 +3,7 @@ title: Service Layer Reference
 type: reference
 status: active
 date: 2026-10-19
-last_modified: 2026-10-11
+last_modified: 2026-10-19
 tags: [backend, services, reference, business-logic, phase-1, phase-c, import-pipeline, graceful-shutdown, bug-hunt-2026-05-05, error-handling, robustness, route-service-boundary, repo-service-boundary, layering, thin-seams, adr-067]
 description: Reference for backend service responsibilities and route/repository boundaries enforced by the local architecture lint rules.
 aliases: [services, service layer, business logic, backend services]
@@ -168,7 +168,7 @@ directly. See [[docs/integrations/bank-adapters#adding-new-banks|Adding New Bank
 
 | Function                           | Signature                                      | Returns                               |
 | ---------------------------------- | ---------------------------------------------- | ------------------------------------- |
-| `convertToCurrency`                | `(amount, fromCurrency, toCurrency) => number` | Amount in target currency             |
+| `convertToCurrency`                | `(amount, fromCurrency, toCurrency) => number \| undefined` | Amount in target currency; `undefined` without a stored rate |
 | `convertRowsToEur`                 | `(rows, targetCurrency, options?) => Row[]`    | Batch-converted rows                  |
 | `warmCache`                        | `() => Promise<void>`                          | Fetches + merges + persists rates     |
 | `clearMemoryCache`                 | `() => void`                                   | Clears 24h cache + 90-day ECB history |
@@ -180,9 +180,14 @@ directly. See [[docs/integrations/bank-adapters#adding-new-banks|Adding New Bank
 2. **open.er-api.com** — Supplementary rates for gaps
 3. **Database** — Persisted latest and historical rates
 
-`FALLBACK_RATES` no longer feeds any helper here; only the Belgian tax dashboards still read it
-(see [[docs/integrations/currency-conversion|Currency Conversion]]). Server-owned display totals
-use `services/currency/latestRateConversion.ts` (`loadLatestRatesToEur`, `convertAtLatestRates`).
+There is no `FALLBACK_RATES` constant. `convertToCurrency` and `convertWithRates` return
+`undefined`, and `convertRowsToEur` returns `amount_eur: undefined`, when a rate is missing; they
+never pass an amount through 1:1. `lib/unconvertedTally.ts` holds the pure
+bookkeeping callers use to leave such amounts out and report them (`createUnconvertedTally`,
+`noteUnconverted`, `partitionConvertedRows`, `unconvertedFields`). Server-owned display totals and
+the Belgian tax dashboards use `services/currency/latestRateConversion.ts`
+(`loadLatestRatesToEur`, `convertAtLatestRates`). See
+[[docs/integrations/currency-conversion|Currency Conversion]].
 
 ### Key Algorithms
 

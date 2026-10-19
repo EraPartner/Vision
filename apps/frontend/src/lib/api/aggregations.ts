@@ -43,6 +43,9 @@ export function getAggregationMonthlySummary(params?: {
             period_start: string;
             period_end: string;
         };
+        /** Transactions left out for want of a stored rate (ADR-216). */
+        unconverted_count: number;
+        unconverted_currencies: string[];
     }>
 > {
     const qp = new URLSearchParams();
@@ -90,6 +93,9 @@ export function getAggregationRecipientInsights(params?: {
             previousSpend: number;
             changePercent: number;
         }>;
+        /** Transactions left out for want of a stored rate (ADR-216). */
+        unconverted_count: number;
+        unconverted_currencies: string[];
     }>
 > {
     const q = buildExclusionQuery(params);
@@ -118,6 +124,9 @@ export interface AverageVsCurrentData {
         variance: number;
         pace: number | null;
     };
+    /** Transactions left out for want of a stored rate (ADR-216). */
+    unconverted_count: number;
+    unconverted_currencies: string[];
 }
 
 /** Month-to-date spending against the six-month average (Home hero). */
@@ -144,11 +153,16 @@ export function getAggregationBankBalances(params?: {
             transaction_count: number;
             first_transaction: string;
             last_transaction: string;
+            /** Partitions left out of `balance` for want of a stored rate. */
+            unconverted_currencies: string[];
         }>;
         total_net_position: number;
         // Daily balance points (YYYY-MM-DD) over the last 12 months.
         history: Record<string, Array<{ date: string; balance: number }>>;
         total_history: Array<{ date: string; balance: number }>;
+        /** Currency partitions left out for want of a stored rate (ADR-216). */
+        unconverted_count: number;
+        unconverted_currencies: string[];
     }>
 > {
     return requestWithQuery("/api/aggregations/bank-balances", params, {
@@ -176,9 +190,13 @@ export interface RecipientYearlySpending {
     transactionCount: number;
 }
 
+/** A period pivot's conversion contract (recipient and tag pivots). */
 export interface RecipientPivotConversion {
     usedHistoricalFallback: boolean;
     affectedCurrencies: string[];
+    /** Transactions left out for want of any stored rate (ADR-216). */
+    unconvertedCount: number;
+    unconvertedCurrencies: string[];
 }
 
 export function getAggregationCategoryPivot(params?: {
@@ -188,7 +206,12 @@ export function getAggregationCategoryPivot(params?: {
     excluded_category_ids?: number[] | undefined;
     excluded_recipient_ids?: number[] | undefined;
 }): Promise<
-    AggregationEnvelope<{ categoryPivot: Record<string, CategoryPivotItem[]> }>
+    AggregationEnvelope<{
+        categoryPivot: Record<string, CategoryPivotItem[]>;
+        /** Transactions left out for want of a stored rate (ADR-216). */
+        unconverted_count: number;
+        unconverted_currencies: string[];
+    }>
 > {
     const qp = new URLSearchParams();
     if (params?.currency) qp.set("currency", params.currency);
@@ -219,6 +242,9 @@ export function getAggregationRecipientByYear(params?: {
 }): Promise<
     AggregationEnvelope<{
         recipientsByYear: Record<string, RecipientYearlySpending[]>;
+        /** Transactions left out for want of a stored rate (ADR-216). */
+        unconverted_count: number;
+        unconverted_currencies: string[];
     }>
 > {
     const qp = new URLSearchParams();
@@ -299,7 +325,12 @@ export function getAggregationTagPivot(params?: {
     bucket?: "monthly" | "yearly" | undefined;
     start_date?: string | null | undefined;
     end_date?: string | null | undefined;
-}): Promise<AggregationEnvelope<{ tagPivot: Record<string, TagPivotItem[]> }>> {
+}): Promise<
+    AggregationEnvelope<{
+        tagPivot: Record<string, TagPivotItem[]>;
+        conversion: RecipientPivotConversion;
+    }>
+> {
     const qp = new URLSearchParams();
     if (params?.currency) qp.set("currency", params.currency);
     if (params?.bucket) qp.set("bucket", params.bucket);
@@ -333,6 +364,9 @@ export interface SankeyFlowData {
     readonly nodes: SankeyNode[];
     readonly links: SankeyLink[];
     readonly year: number;
+    /** Transactions left out for want of a stored rate (ADR-216). */
+    readonly unconverted_count: number;
+    readonly unconverted_currencies: string[];
 }
 
 // ==================== Cash Flow Forecast Methods ====================
@@ -401,6 +435,9 @@ export interface CashflowForecastMethodsData {
     readonly diagnostics: ForecastDiagnostics | null;
     readonly history_months: number;
     readonly include_planned: boolean;
+    /** Inputs left out for want of a stored rate; absent on older cache entries. */
+    readonly unconverted_count?: number;
+    readonly unconverted_currencies?: string[];
 }
 
 export function getCashflowForecastMethods(params?: {
@@ -460,6 +497,9 @@ export interface CashflowForecastRollingData {
     readonly diagnostics: ForecastDiagnostics | null;
     readonly history_months: number;
     readonly include_planned: boolean;
+    /** Inputs left out for want of a stored rate; absent on older cache entries. */
+    readonly unconverted_count?: number;
+    readonly unconverted_currencies?: string[];
 }
 
 export function getCashflowForecastRolling(params?: {

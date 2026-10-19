@@ -650,6 +650,7 @@ describe.skipIf(!hasTestDatabase())(
             accountCurrency: "EUR",
             balance: 150,
             balanceCurrency: "EUR",
+            unconvertedCurrencies: [],
           },
         ]);
       });

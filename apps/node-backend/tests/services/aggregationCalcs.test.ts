@@ -188,9 +188,18 @@ describe("computeCategoryBreakdown", () => {
   it("returns mv-sourced envelope", async () => {
     repo.getCategoryBreakdown.mockResolvedValue([{ id: 1 }]);
     const env = await computeCategoryBreakdown({ targetCurrency: "EUR" });
-    expect(infoRepository.getCategoryBreakdown).toHaveBeenCalledWith("EUR");
+    expect(infoRepository.getCategoryBreakdown).toHaveBeenCalledWith(
+      "EUR",
+      undefined,
+      {},
+      expect.objectContaining({ count: 0 }),
+    );
     expectEnvelope(env, { source: "mv" });
-    expect(env.data).toEqual({ categories: [{ id: 1 }] });
+    expect(env.data).toEqual({
+      categories: [{ id: 1 }],
+      unconverted_count: 0,
+      unconverted_currencies: [],
+    });
   });
 
   it("requests one live ancestor rollup without changing the default path", async () => {
@@ -201,7 +210,12 @@ describe("computeCategoryBreakdown", () => {
       targetCurrency: "EUR",
       ancestorCategoryId: 12,
     });
-    expect(infoRepository.getCategoryBreakdown).toHaveBeenCalledWith("EUR", 12);
+    expect(infoRepository.getCategoryBreakdown).toHaveBeenCalledWith(
+      "EUR",
+      12,
+      {},
+      expect.objectContaining({ count: 0 }),
+    );
     expect(env.meta.source).toBe("live");
     expect(env.data.categories).toEqual([
       { id: 12, name: "Food", count: 3, total: -60 },
